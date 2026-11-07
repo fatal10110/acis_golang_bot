@@ -73,10 +73,10 @@ boots the servers.
 
 | Item | Scope |
 | --- | --- |
-| P1 (#4525) | Publish a gameserver/loginserver image to GHCR per `main` commit |
-| P2 (#4526) | Non-interactive gameserver registration for compose |
-| P3 (#4527) | Config bundle that does not need the Java tree |
-| P4 (#4528) | A small geodata subset (2-3 test regions) as a CI artifact; `geoengine.properties` lists only those regions |
+| P1 (fatal10110/acis_golang#4525) | Publish a gameserver/loginserver image to GHCR per `main` commit |
+| P2 (fatal10110/acis_golang#4526) | Non-interactive gameserver registration for compose |
+| P3 (fatal10110/acis_golang#4527) | Config bundle that does not need the Java tree |
+| P4 (fatal10110/acis_golang#4528) | A small geodata subset (2-3 test regions) as a CI artifact; `geoengine.properties` lists only those regions |
 
 Server config, not code, for every bot deployment: the accept-filter allowlist
 (`AcceptFilterAllowlist`, both `loginserver.properties` and `server.properties`), a loopback
