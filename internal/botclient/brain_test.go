@@ -176,12 +176,42 @@ func TestBrainEngagedResets(t *testing.T) {
 		{"unselected", TargetUnselected{ObjectID: selfID}, 0},
 		{"combat over", AutoAttackStop{ObjectID: selfID}, 0},
 		{"someone else's combat over", AutoAttackStop{ObjectID: npcID}, npcID},
+		{"click refused", ActionFailed{}, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			b, _ := newTestBrain(t, Persona{})
 			b.engaged = npcID
 			_ = b.handle([]Event{tc.ev}, at(time.Second))
+			if b.engaged != tc.want {
+				t.Fatalf("engaged = %#x, want %#x", b.engaged, tc.want)
+			}
+		})
+	}
+}
+
+// TestBrainEngagedDroppedBySend checks that a move or a sit/stand toggle
+// sent by the bot drops the attack it had in flight, while chat, an emote or
+// a click keep or set it.
+func TestBrainEngagedDroppedBySend(t *testing.T) {
+	tests := []struct {
+		name string
+		a    Action
+		want int32
+	}{
+		{"flee move", moveAction(Point{X: 10}, Point{}), 0},
+		{"sit", sitStandAction(), 0},
+		{"emote", emoteAction(2), npcID},
+		{"say", sayAction("hi"), npcID},
+		{"attack other", attackAction(pcID, Point{}), pcID},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b, _ := newTestBrain(t, Persona{})
+			b.engaged = npcID
+			if ok, err := b.send(tc.a, at(time.Hour)); !ok || err != nil {
+				t.Fatalf("send = %v, %v", ok, err)
+			}
 			if b.engaged != tc.want {
 				t.Fatalf("engaged = %#x, want %#x", b.engaged, tc.want)
 			}

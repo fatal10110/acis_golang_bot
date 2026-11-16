@@ -72,7 +72,8 @@ type Brain struct {
 	// anchor is where idle drift stays around: the arrival point.
 	anchor Point
 	// engaged is the target the bot already attacked; it is not clicked
-	// again.
+	// again until a refusal (ActionFailed), a move or a sit/stand toggle
+	// drops the attack, or the target or combat changes.
 	engaged int32
 	// resting is set while rule 6 has the bot sit until recovered.
 	resting bool
@@ -172,6 +173,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case ServerClose:
 			return errServerClose
 		case ActionFailed:
+			// A refused click leaves no attack in flight: rule 5 may click
+			// the target again.
+			b.engaged = 0
 			if l := &b.logout; l.pending && !l.refused {
 				l.refused = true
 				if grace := now.Add(logoutRefusalGrace); grace.Before(l.deadline) {
@@ -319,7 +323,12 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	switch a.kind {
 	case actAttack:
 		b.engaged = a.object
+	case actMove:
+		// A move replaces the attack intention on the server.
+		b.engaged = 0
 	case actSitStand:
+		// Sitting down drops the attack intention as well.
+		b.engaged = 0
 		b.toggledAt = now
 	}
 	return true, nil

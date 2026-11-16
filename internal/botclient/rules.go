@@ -165,6 +165,9 @@ func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 }
 
 // rulePrompt is rule 2: an open prompt waits for the persona's answer.
+// The restart prompt is the only one the world model tracks today and it
+// opens only while dead, so rule 1 answers first; the slot is kept for the
+// prompts later milestones add (party invite, trade request).
 func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	if !b.world.Prompts.Restart.Open {
 		return Action{}, false
