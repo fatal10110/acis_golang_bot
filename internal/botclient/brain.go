@@ -50,7 +50,11 @@ type BrainConfig struct {
 	ReactMin, ReactMax time.Duration
 	// LogoutTimeout is how long a Logout waits for an answer.
 	LogoutTimeout time.Duration
-	Rand          *rand.Rand
+	// LogoutLimit, when set, bounds a requested logout in all, refusals
+	// included: past it Run returns errLogoutTimeout. Zero plays on until
+	// the server lets the bot out.
+	LogoutLimit time.Duration
+	Rand        *rand.Rand
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -94,6 +98,9 @@ type logoutState struct {
 	deadline time.Time
 	// retryAt is when the next Logout may go out.
 	retryAt time.Time
+	// giveUpAt, when set, ends the loop with errLogoutTimeout
+	// (BrainConfig.LogoutLimit).
+	giveUpAt time.Time
 }
 
 // NewBrain returns the brain of a bot in world w, fed by q and writing to
@@ -117,8 +124,9 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 // refuses (ActionFailed with no LeaveWorld within logoutRefusalGrace).
 //
 // Run returns nil after done closes or after the LeaveWorld that answers a
-// Logout. A LeaveWorld it did not ask for, ServerClose, a Logout left
-// unanswered and a failed send are errors. The session closes the
+// Logout. A LeaveWorld it did not ask for, ServerClose, the connection
+// ending (the session queues connLost), a Logout left unanswered and a
+// failed send are errors. The session closes the
 // connection and joins its reader afterwards in every case.
 func (b *Brain) Run(done, logout <-chan struct{}) error {
 	b.start(b.clock.Now())
@@ -172,6 +180,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			return errLeftWorld
 		case ServerClose:
 			return errServerClose
+		case connLost:
+			return fmt.Errorf("%w: %w", errConnLost, e.err)
 		case ActionFailed:
 			// A refused click leaves no attack in flight: rule 5 may click
 			// the target again.
@@ -237,12 +247,18 @@ func salient(ev Event, self int32) bool {
 func (b *Brain) requestLogout(now time.Time) {
 	b.logout.requested = true
 	b.logout.retryAt = now
+	if b.cfg.LogoutLimit > 0 {
+		b.logout.giveUpAt = now.Add(b.cfg.LogoutLimit)
+	}
 }
 
 // wake runs whatever is due at now: the logout steps, a decision, the
 // keepalive. While a Logout waits for its answer the bot makes no decision.
 func (b *Brain) wake(now time.Time) error {
 	l := &b.logout
+	if !l.giveUpAt.IsZero() && !now.Before(l.giveUpAt) {
+		return errLogoutTimeout
+	}
 	if l.pending {
 		if now.Before(l.deadline) {
 			return nil
@@ -296,15 +312,21 @@ func (b *Brain) decisionAt() time.Time {
 
 // due is when the loop must wake next.
 func (b *Brain) due() time.Time {
-	if b.logout.pending {
-		return b.logout.deadline
+	l := &b.logout
+	var t time.Time
+	if l.pending {
+		t = l.deadline
+	} else {
+		t = b.decisionAt()
+		if l.requested && l.retryAt.Before(t) {
+			t = l.retryAt
+		}
+		if k := b.pace.lastSent.Add(keepaliveAfter); k.Before(t) {
+			t = k
+		}
 	}
-	t := b.decisionAt()
-	if b.logout.requested && b.logout.retryAt.Before(t) {
-		t = b.logout.retryAt
-	}
-	if k := b.pace.lastSent.Add(keepaliveAfter); k.Before(t) {
-		t = k
+	if !l.giveUpAt.IsZero() && l.giveUpAt.Before(t) {
+		t = l.giveUpAt
 	}
 	return t
 }
