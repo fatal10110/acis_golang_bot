@@ -15,6 +15,11 @@ go build ./cmd/bots
 
 The command does nothing yet; the client and personas arrive with the milestones in the plan.
 
+## Deploy
+
+Same-host deployment (source address, accept-filter allowlist, bot cap, systemd limits):
+[`docs/hetzner.md`](docs/hetzner.md).
+
 ## Develop
 
 ```bash

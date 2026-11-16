@@ -101,8 +101,8 @@ func (c *loginConn) read(ctx context.Context) ([]byte, error) {
 // credentials, the server list and server selection. With no ServerList
 // entry for serverID it fails. Each read and write waits at most timeout;
 // ctx ending fails the session at once. The connection is closed on return.
-func Login(ctx context.Context, addr, account, password string, serverID byte, timeout time.Duration) (LoginResult, error) {
-	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", addr)
+func Login(ctx context.Context, addr, account, password string, serverID byte, timeout time.Duration, opts ...DialOption) (LoginResult, error) {
+	conn, err := dial(ctx, addr, timeout, opts)
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("dial login server: %w", err)
 	}
@@ -129,8 +129,8 @@ func login(ctx context.Context, conn net.Conn, account, password string, serverI
 // per-IP ban. With no play keys issued, the server drops the session at once
 // (loginserver/clientlink.go releaseSession), so a game login right after
 // does not meet AccountInUse. Each read and write waits at most timeout.
-func CheckCredentials(ctx context.Context, addr, account, password string, timeout time.Duration) error {
-	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", addr)
+func CheckCredentials(ctx context.Context, addr, account, password string, timeout time.Duration, opts ...DialOption) error {
+	conn, err := dial(ctx, addr, timeout, opts)
 	if err != nil {
 		return fmt.Errorf("dial login server: %w", err)
 	}
