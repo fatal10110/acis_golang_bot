@@ -126,15 +126,6 @@ func TestLoadDirErrors(t *testing.T) {
 			files:   map[string]string{"npcs/a.xml": "<list/>", "spawnlist/a.xml": "<list><territory"},
 			wantErr: "decode",
 		},
-		{
-			name: "duplicate npc id across files",
-			files: map[string]string{
-				"npcs/a.xml":      `<list><npc id="1" name="a"><set name="type" val="Monster"/></npc></list>`,
-				"npcs/b.xml":      `<list><npc id="1" name="b"><set name="type" val="Monster"/></npc></list>`,
-				"spawnlist/a.xml": "<list/>",
-			},
-			wantErr: "npc 1: duplicate id",
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -152,6 +143,53 @@ func TestLoadDirErrors(t *testing.T) {
 			_, err := Load(dir)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("Load error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestLoadNPCsLastDeclarationWins checks that a duplicated id keeps its last
+// declaration, within a file and across sorted files, as the server's
+// template table does.
+func TestLoadNPCsLastDeclarationWins(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  map[int32]NPC
+	}{
+		{
+			name: "within one file",
+			files: map[string]string{
+				"a.xml": `<list><npc id="1" name="first" type="Monster"/><npc id="1" name="second" type="Folk"/></list>`,
+			},
+			want: map[int32]NPC{1: {ID: 1, Name: "second", Type: "Folk", Level: 1}},
+		},
+		{
+			name: "across files",
+			files: map[string]string{
+				"b.xml": `<list><npc id="1" name="later" type="Folk"/><npc id="2" name="other" type="Monster"/></list>`,
+				"a.xml": `<list><npc id="1" name="earlier" type="Monster"/></list>`,
+			},
+			want: map[int32]NPC{
+				1: {ID: 1, Name: "later", Type: "Folk", Level: 1},
+				2: {ID: 2, Name: "other", Type: "Monster", Level: 1},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, body := range tt.files {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := LoadNPCs(dir)
+			if err != nil {
+				t.Fatalf("LoadNPCs: %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("LoadNPCs = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

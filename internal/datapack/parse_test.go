@@ -20,7 +20,6 @@ func TestBuildNPCErrors(t *testing.T) {
 		{"missing type", `<npc id="1" name="a"><set name="level" val="2"/></npc>`, `attribute "type": required`},
 		{"bad level", `<npc id="1" name="a"><set name="type" val="Monster"/><set name="level" val="2.5"/></npc>`, `attribute "level"`},
 		{"bad aggroRange", `<npc id="1" name="a"><set name="type" val="Monster"/><set name="aggroRange" val="x"/></npc>`, `attribute "aggroRange"`},
-		{"duplicate id", `<npc id="1" name="a"><set name="type" val="Monster"/></npc><npc id="01" name="b"><set name="type" val="Folk"/></npc>`, "npc 1: duplicate id"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

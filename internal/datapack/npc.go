@@ -30,9 +30,10 @@ type npcElement struct {
 	Sets  []setElement `xml:"set"`
 }
 
-// LoadNPCs reads every *.xml NPC template file directly under dir. A file
-// that is not well-formed, an <npc> missing or mangling a field bots read,
-// or an id declared twice fails the whole load.
+// LoadNPCs reads every *.xml NPC template file directly under dir, in
+// sorted file order. A file that is not well-formed, or an <npc> missing or
+// mangling a field bots read, fails the whole load. An id declared twice
+// keeps its last declaration, as the server's template table does.
 func LoadNPCs(dir string) (map[int32]NPC, error) {
 	paths, err := xmlFiles(dir, "npc")
 	if err != nil {
@@ -56,9 +57,6 @@ func addNPCs(npcs map[int32]NPC, els []npcElement) error {
 		npc, err := buildNPC(el)
 		if err != nil {
 			return err
-		}
-		if _, dup := npcs[npc.ID]; dup {
-			return fmt.Errorf("npc %d: duplicate id", npc.ID)
 		}
 		npcs[npc.ID] = npc
 	}
