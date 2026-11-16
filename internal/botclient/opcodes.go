@@ -70,3 +70,14 @@ const (
 	opGameRequestCharacterCreate = 0x0b // requestcharactercreate.go
 	opGameRequestGameStart       = 0x0d // requestgamestart.go
 )
+
+// Client to game server, sent by the brain in the world
+// (internal/gameserver/network/clientpackets).
+const (
+	opGameMoveBackwardToLocation = 0x01 // movebackwardtolocation.go
+	opGameAction                 = 0x04 // wiresafe.go, targetaction.go
+	opGameRequestSocialAction    = 0x1b // wiresafe.go, stance_social.go
+	opGameSay2                   = 0x38 // say2.go
+	opGameRequestActionUse       = 0x45 // wiresafe.go, requestactionuse.go
+	opGameValidatePosition       = 0x48 // validateposition.go
+)
