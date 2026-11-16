@@ -31,6 +31,7 @@ type accountsOptions struct {
 	loginAddr string
 	timeout   time.Duration
 	interval  time.Duration
+	localAddr string
 }
 
 // addAccountFlags registers the flags that select a swarm instance's
@@ -51,6 +52,7 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 	fs.StringVar(&o.loginAddr, "login", "127.0.0.1:2106", "login server address (host:port)")
 	fs.DurationVar(&o.timeout, "timeout", 10*time.Second, "longest wait for each login-server read or write")
 	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s", minLoginInterval))
+	fs.StringVar(&o.localAddr, "local-addr", "", "source IP to dial from (for example 127.0.0.2, the one address allowlisted on the servers); default: the OS picks")
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -59,6 +61,9 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 	}
 	if o.interval < minLoginInterval {
 		return o, fmt.Errorf("-interval %s: want at least %s (the login server counts every connection under 1 s after the previous one from the IP and bans the IP on the 4th)", o.interval, minLoginInterval)
+	}
+	if _, err := botclient.ParseLocalAddr(o.localAddr); err != nil {
+		return o, fmt.Errorf("-local-addr: %w", err)
 	}
 	if o.timeout <= 0 {
 		return o, fmt.Errorf("-timeout %s: want a positive duration", o.timeout)
@@ -84,8 +89,9 @@ func runAccounts(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		fmt.Fprintf(stderr, "bots accounts: %v\n", err)
 		return 1
 	}
+	dialOpt, _ := botclient.ParseLocalAddr(o.localAddr) // validated by parseAccountsFlags
 	check := func(ctx context.Context, account, password string) error {
-		return botclient.CheckCredentials(ctx, o.loginAddr, account, password, o.timeout)
+		return botclient.CheckCredentials(ctx, o.loginAddr, account, password, o.timeout, dialOpt)
 	}
 	n, err := provision(ctx, accounts, check, pause(o.interval), stdout)
 	if err != nil {

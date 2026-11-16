@@ -45,8 +45,8 @@ func (g *GameConn) SetRecorder(rec *Recorder) { g.rec = rec }
 // ProtocolVersion/VersionCheck exchange that arms the connection's cipher.
 // Each later Send waits at most timeout; ctx ending fails the handshake at
 // once.
-func DialGame(ctx context.Context, addr string, revision int32, timeout time.Duration) (*GameConn, error) {
-	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", addr)
+func DialGame(ctx context.Context, addr string, revision int32, timeout time.Duration, opts ...DialOption) (*GameConn, error) {
+	conn, err := dial(ctx, addr, timeout, opts)
 	if err != nil {
 		return nil, fmt.Errorf("dial game server: %w", err)
 	}
