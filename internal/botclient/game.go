@@ -147,6 +147,8 @@ func (g *GameConn) Close() error { return g.conn.Close() }
 
 // Self is the bot's own character as the EnterWorld burst described it.
 type Self struct {
+	// Name is the character's, the one selected or created.
+	Name     string
 	ObjectID int32
 	X, Y, Z  int32
 	Heading  int32
@@ -175,21 +177,25 @@ var errServerClose = errors.New("server sent ServerClose")
 var ErrLogoutRefused = errors.New("server refused Logout")
 
 // EnterGame authenticates account with the keys its login session issued,
-// selects the first character (creating charName, a human fighter, when the
-// account has none) and enters the world. ctx ending fails the entry at
-// once. It returns once the burst's UserInfo arrives, with the burst frames
-// before it; the rest of the burst is left unread.
-func EnterGame(ctx context.Context, g *GameConn, account string, keys SessionKeys, charName string) (Self, error) {
+// selects the character named by the first of ch.Names an existing
+// character bears (creating one when none does, see Character) and enters
+// the world. An invalid ch fails before anything is sent. ctx ending fails
+// the entry at once. It returns once the burst's UserInfo arrives, with the
+// burst frames before it; the rest of the burst is left unread.
+func EnterGame(ctx context.Context, g *GameConn, account string, keys SessionKeys, ch Character) (Self, error) {
+	if err := ch.Validate(); err != nil {
+		return Self{}, err
+	}
 	stop := context.AfterFunc(ctx, func() { _ = g.conn.SetDeadline(time.Unix(1, 0)) })
 	defer stop()
-	self, err := g.enterGame(ctx, account, keys, charName)
+	self, err := g.enterGame(ctx, account, keys, ch)
 	if err != nil && ctx.Err() != nil {
 		return Self{}, ctx.Err()
 	}
 	return self, err
 }
 
-func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKeys, charName string) (Self, error) {
+func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKeys, ch Character) (Self, error) {
 	if err := g.send(ctx, encodeAuthLogin(account, keys)); err != nil {
 		return Self{}, fmt.Errorf("send AuthLogin: %w", err)
 	}
@@ -200,27 +206,24 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 	if reply[0] == opGameAuthLoginFail {
 		return Self{}, &GameStartError{Packet: "AuthLoginFail", Reason: wire.NewPacketReader(reply).ReadInt32()}
 	}
-	if wire.NewPacketReader(reply).ReadInt32() == 0 {
-		if err := g.send(ctx, encodeRequestCharacterCreate(charName)); err != nil {
-			return Self{}, fmt.Errorf("send RequestCharacterCreate: %w", err)
-		}
-		reply, err := g.readUntil(ctx, opGameCharCreateOk, opGameCharCreateFail)
-		if err != nil {
-			return Self{}, fmt.Errorf("read CharCreateOk: %w", err)
-		}
-		if reply[0] == opGameCharCreateFail {
-			return Self{}, &GameStartError{Packet: "CharCreateFail", Reason: wire.NewPacketReader(reply).ReadInt32()}
-		}
-		if _, err := g.readUntil(ctx, opGameCharSelectInfo); err != nil {
-			return Self{}, fmt.Errorf("read CharSelectInfo after create: %w", err)
-		}
+	slots, err := decodeCharSelectInfo(reply)
+	if err != nil {
+		return Self{}, err
+	}
+	slot, name, err := g.chooseSlot(ctx, slots, ch)
+	if err != nil {
+		return Self{}, err
 	}
 
-	if err := g.send(ctx, encodeRequestGameStart(0)); err != nil {
+	if err := g.send(ctx, encodeRequestGameStart(slot)); err != nil {
 		return Self{}, fmt.Errorf("send RequestGameStart: %w", err)
 	}
-	if _, err := g.readUntil(ctx, opGameCharSelected); err != nil {
+	selected, err := g.readUntil(ctx, opGameCharSelected)
+	if err != nil {
 		return Self{}, fmt.Errorf("read CharSelected: %w", err)
+	}
+	if got := wire.NewPacketReader(selected).ReadString(); got != name {
+		return Self{}, fmt.Errorf("selected slot %d as %q, server selected %q", slot, name, got)
 	}
 	if err := g.send(ctx, encodeEnterWorld()); err != nil {
 		return Self{}, fmt.Errorf("send EnterWorld: %w", err)
@@ -238,6 +241,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 			if err != nil {
 				return Self{}, err
 			}
+			self.Name = name
 			self.Burst = burst
 			return self, nil
 		case opGameServerClose:

@@ -29,7 +29,7 @@ func TestGameEncoders(t *testing.T) {
 		{"AuthLogin", encodeAuthLogin("bot7", keys), packet(0x08, "bot7", 4, 3, 1, 2)},
 		// name, race, sex, class, six stats, hair style, hair color, face
 		// (requestcharactercreate.go).
-		{"RequestCharacterCreate", encodeRequestCharacterCreate("bot7"), packet(0x0b, "bot7", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)},
+		{"RequestCharacterCreate", encodeRequestCharacterCreate("bot7", HumanFighter, Appearance{HairStyle: 1}), packet(0x0b, "bot7", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)},
 		// slot, uint16, three int32 (requestgamestart.go).
 		{"RequestGameStart", encodeRequestGameStart(2), packet(0x0d, 2, uint16(0), 0, 0, 0)},
 		{"EnterWorld", encodeEnterWorld(), []byte{0x03}},
@@ -149,11 +149,13 @@ func TestNewGameConnRejectsNonVersionCheck(t *testing.T) {
 	}
 }
 
+// testCharacter is a human fighter named bot7 with hair style 1.
+var testCharacter = Character{Names: []string{"bot7"}, Class: HumanFighter, Appearance: Appearance{HairStyle: 1}}
+
 func TestEnterGame(t *testing.T) {
 	const objectID = 0x10000001
 	authLogin := recvStep(packet(0x08, "bot7", 4, 3, 1, 2))
-	// CharSelectInfo leads with the character count (charselectinfo.go).
-	charSelectInfo := func(n int) step { return sendStep(packet(0x13, n, 7, byte(0))) }
+	charSelectInfo := func(names ...string) step { return sendStep(charSelectInfoPacket(named(names...)...)) }
 	gameStart := []step{
 		recvStep(packet(0x0d, 0, uint16(0), 0, 0, 0)),
 		sendStep(packet(0x2f, 1)), // unrelated frames before CharSelected are skipped
@@ -178,32 +180,32 @@ func TestEnterGame(t *testing.T) {
 		want    Self
 		wantErr error // a *GameStartError compared by value, else errors.Is
 	}{
-		{"existing character", true, cat([]step{authLogin, charSelectInfo(1)}, enter), wantSelf, nil},
-		{"crypt off", false, cat([]step{authLogin, charSelectInfo(1)}, enter), wantSelf, nil},
+		{"existing character", true, cat([]step{authLogin, charSelectInfo("bot7")}, enter), wantSelf, nil},
+		{"crypt off", false, cat([]step{authLogin, charSelectInfo("bot7")}, enter), wantSelf, nil},
 		{
 			"new character", true,
 			cat([]step{
-				authLogin, charSelectInfo(0),
+				authLogin, charSelectInfo(),
 				recvStep(packet(0x0b, "bot7", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)),
 				sendStep(packet(0x19, 1)),
-				charSelectInfo(1),
+				charSelectInfo("bot7"),
 			}, enter),
 			wantSelf, nil,
 		},
 		{"auth rejected", true, []step{authLogin, sendStep(packet(0x14, 4))}, Self{}, &GameStartError{Packet: "AuthLoginFail", Reason: 4}},
 		{
 			"name taken", true,
-			[]step{authLogin, charSelectInfo(0), recvStep(packet(0x0b, "bot7", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)), sendStep(packet(0x1a, 2))},
+			[]step{authLogin, charSelectInfo(), recvStep(packet(0x0b, "bot7", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)), sendStep(packet(0x1a, 2))},
 			Self{},
 			&GameStartError{Packet: "CharCreateFail", Reason: 2},
 		},
-		{"ServerClose in burst", true, cat([]step{authLogin, charSelectInfo(1)}, gameStart, []step{sendStep(packet(0x26))}), Self{}, errServerClose},
+		{"ServerClose in burst", true, cat([]step{authLogin, charSelectInfo("bot7")}, gameStart, []step{sendStep(packet(0x26))}), Self{}, errServerClose},
 		{"ServerClose before select", true, []step{authLogin, sendStep(packet(0x26))}, Self{}, errServerClose},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g, done := dialFake(t, tt.crypt, tt.script, tt.wantErr != nil)
-			self, err := EnterGame(t.Context(), g, "bot7", SessionKeys{LoginKey1: 1, LoginKey2: 2, PlayKey1: 3, PlayKey2: 4}, "bot7")
+			self, err := EnterGame(t.Context(), g, "bot7", SessionKeys{LoginKey1: 1, LoginKey2: 2, PlayKey1: 3, PlayKey2: 4}, testCharacter)
 			g.Close()
 			if serr := <-done; serr != nil {
 				t.Fatalf("fake server: %v", serr)
@@ -279,7 +281,7 @@ func TestLogout(t *testing.T) {
 
 func TestGameContextCanceled(t *testing.T) {
 	enterGame := func(ctx context.Context, g *GameConn) error {
-		_, err := EnterGame(ctx, g, "bot7", SessionKeys{}, "bot7")
+		_, err := EnterGame(ctx, g, "bot7", SessionKeys{}, testCharacter)
 		return err
 	}
 	logout := func(ctx context.Context, g *GameConn) error { return g.Logout(ctx) }

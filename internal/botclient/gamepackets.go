@@ -53,17 +53,20 @@ func encodeAuthLogin(account string, k SessionKeys) []byte {
 	return w.Bytes()
 }
 
-// encodeRequestCharacterCreate asks for a human fighter (race, sex and class
-// 0) named name; the six stat fields are ignored by the server.
-func encodeRequestCharacterCreate(name string) []byte {
+// encodeRequestCharacterCreate asks for a character named name of class c
+// with appearance a; the six stat fields are ignored by the server.
+func encodeRequestCharacterCreate(name string, c StartingClass, a Appearance) []byte {
 	w := wire.NewPacketWriter(opGameRequestCharacterCreate)
 	w.WriteString(name)
-	for range 3 + 6 {
+	w.WriteInt32(c.Race)
+	w.WriteInt32(a.Sex)
+	w.WriteInt32(c.ID)
+	for range 6 {
 		w.WriteInt32(0)
 	}
-	w.WriteInt32(1) // hair style
-	w.WriteInt32(0) // hair color
-	w.WriteInt32(0) // face
+	w.WriteInt32(a.HairStyle)
+	w.WriteInt32(a.HairColor)
+	w.WriteInt32(a.Face)
 	return w.Bytes()
 }
 
