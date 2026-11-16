@@ -122,64 +122,104 @@ func login(ctx context.Context, conn net.Conn, account, password string, serverI
 	return res, err
 }
 
-func loginSession(ctx context.Context, conn net.Conn, account, password string, serverID byte, timeout time.Duration) (LoginResult, error) {
+// CheckCredentials runs a login session for account up to the ServerList and
+// closes it without choosing a server: with AutoCreateAccounts on, the first
+// one creates the account with password, and every later one verifies it. A
+// refused credential is a *LoginError; the login server counts it toward its
+// per-IP ban. With no play keys issued, the server drops the session at once
+// (loginserver/clientlink.go releaseSession), so a game login right after
+// does not meet AccountInUse. Each read and write waits at most timeout.
+func CheckCredentials(ctx context.Context, addr, account, password string, timeout time.Duration) error {
+	conn, err := (&net.Dialer{Timeout: timeout}).DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("dial login server: %w", err)
+	}
+	defer conn.Close()
+	return checkCredentials(ctx, conn, account, password, timeout)
+}
+
+// checkCredentials runs CheckCredentials on an established connection. Once
+// ctx has ended, any failure is reported as ctx.Err().
+func checkCredentials(ctx context.Context, conn net.Conn, account, password string, timeout time.Duration) error {
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Unix(1, 0)) })
+	defer stop()
+	_, _, _, err := authenticate(ctx, conn, account, password, timeout)
+	if err != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
+// authenticate runs a login session up to the ServerList: Init, GameGuard,
+// the credentials and, when the server shows the licence, the list request.
+// It returns the connection's crypt state for the server selection that
+// follows.
+func authenticate(ctx context.Context, conn net.Conn, account, password string, timeout time.Duration) (*loginConn, LoginResult, []ServerEntry, error) {
 	var res LoginResult
 	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-		return res, err
+		return nil, res, nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		return res, err
+		return nil, res, nil, err
 	}
 	frames := wire.NewFrameReader(conn)
 	first, err := frames.ReadFrame()
 	if err != nil {
-		return res, fmt.Errorf("read Init: %w", err)
+		return nil, res, nil, fmt.Errorf("read Init: %w", err)
 	}
 	init, err := decodeInit(first)
 	if err != nil {
-		return res, err
+		return nil, res, nil, err
 	}
 	cr, err := logincrypt.NewClientLoginCrypt(init.blowfishKey)
 	if err != nil {
-		return res, err
+		return nil, res, nil, err
 	}
 	res.Connected = time.Now()
 	c := &loginConn{conn: conn, frames: frames, crypt: cr, timeout: timeout}
 
 	if err := c.send(ctx, encodeAuthGameGuard(init.sessionID)); err != nil {
-		return res, fmt.Errorf("send AuthGameGuard: %w", err)
+		return nil, res, nil, fmt.Errorf("send AuthGameGuard: %w", err)
 	}
 	reply, err := c.read(ctx)
 	if err != nil {
-		return res, fmt.Errorf("read GGAuth: %w", err)
+		return nil, res, nil, fmt.Errorf("read GGAuth: %w", err)
 	}
 	if err := expectLoginReply(reply, opLoginGGAuth, "GGAuth"); err != nil {
-		return res, err
+		return nil, res, nil, err
 	}
 
 	if err := c.send(ctx, encodeRequestAuthLogin(init.publicKey, account, password)); err != nil {
-		return res, fmt.Errorf("send RequestAuthLogin: %w", err)
+		return nil, res, nil, fmt.Errorf("send RequestAuthLogin: %w", err)
 	}
 	if reply, err = c.read(ctx); err != nil {
-		return res, fmt.Errorf("read login reply: %w", err)
+		return nil, res, nil, fmt.Errorf("read login reply: %w", err)
 	}
 	// With ShowLicence off the server answers the credentials with the
 	// ServerList itself and does not check the session keys afterwards.
 	if len(reply) > 0 && reply[0] == opLoginOk {
 		if res.Keys.LoginKey1, res.Keys.LoginKey2, err = decodeKeyPair(reply); err != nil {
-			return res, fmt.Errorf("decode LoginOk: %w", err)
+			return nil, res, nil, fmt.Errorf("decode LoginOk: %w", err)
 		}
 		if err := c.send(ctx, encodeRequestServerList(res.Keys.LoginKey1, res.Keys.LoginKey2)); err != nil {
-			return res, fmt.Errorf("send RequestServerList: %w", err)
+			return nil, res, nil, fmt.Errorf("send RequestServerList: %w", err)
 		}
 		if reply, err = c.read(ctx); err != nil {
-			return res, fmt.Errorf("read ServerList: %w", err)
+			return nil, res, nil, fmt.Errorf("read ServerList: %w", err)
 		}
 	}
 	if err := expectLoginReply(reply, opLoginServerList, "ServerList"); err != nil {
-		return res, err
+		return nil, res, nil, err
 	}
 	servers, err := decodeServerList(reply)
+	if err != nil {
+		return nil, res, nil, err
+	}
+	return c, res, servers, nil
+}
+
+func loginSession(ctx context.Context, conn net.Conn, account, password string, serverID byte, timeout time.Duration) (LoginResult, error) {
+	c, res, servers, err := authenticate(ctx, conn, account, password, timeout)
 	if err != nil {
 		return res, err
 	}
@@ -195,7 +235,8 @@ func loginSession(ctx context.Context, conn net.Conn, account, password string, 
 	if err := c.send(ctx, encodeRequestServerLogin(res.Keys.LoginKey1, res.Keys.LoginKey2, serverID)); err != nil {
 		return res, fmt.Errorf("send RequestServerLogin: %w", err)
 	}
-	if reply, err = c.read(ctx); err != nil {
+	reply, err := c.read(ctx)
+	if err != nil {
 		return res, fmt.Errorf("read PlayOk: %w", err)
 	}
 	if err := expectLoginReply(reply, opLoginPlayOk, "PlayOk"); err != nil {
