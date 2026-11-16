@@ -31,7 +31,15 @@ type GameConn struct {
 	timeout time.Duration
 	// logoutGrace is logoutRefusalGrace; tests shorten it.
 	logoutGrace time.Duration
+	// rec is the -record tap; owned like the frame buffer (one reader).
+	rec *Recorder
 }
+
+// SetRecorder makes every later read of the connection (EnterGame, Logout,
+// Read and ReadEvents) pass its decrypted frame to rec; nil turns the tap
+// off. Call it while no read runs, typically right after DialGame, so the
+// handshake's VersionCheck is never recorded.
+func (g *GameConn) SetRecorder(rec *Recorder) { g.rec = rec }
 
 // DialGame connects to a game server and completes the cleartext
 // ProtocolVersion/VersionCheck exchange that arms the connection's cipher.
@@ -130,6 +138,7 @@ func (g *GameConn) read(ctx context.Context, deadline time.Time) ([]byte, error)
 	if len(payload) == 0 {
 		return nil, errors.New("empty game frame")
 	}
+	g.rec.Record(payload)
 	return payload, nil
 }
 
