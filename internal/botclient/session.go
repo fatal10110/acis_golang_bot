@@ -23,6 +23,7 @@ const (
 	loginFailSystemError      int32 = 0x01
 	loginFailPasswordWrong    int32 = 0x02
 	loginFailUserOrPassWrong  int32 = 0x03
+	loginFailAccessFailed     int32 = 0x04
 	loginFailAccountInUse     int32 = 0x07
 	loginFailServerOverloaded int32 = 0x0f
 	loginFailMaintenance      int32 = 0x10
@@ -54,6 +55,14 @@ const (
 	// combat) included; past it the connection is closed and the character
 	// lingers as after a drop.
 	shutdownGrace = 30 * time.Second
+	// kickWait plus a jitter below kickJitter is the least a bot waits to
+	// log in again after the server's ServerClose. A kick by another login
+	// only evicts the holder: the login that caused it was refused with
+	// AccountInUse (server internal/loginserver/clientlink.go, roster.kick),
+	// and its client must log in again. The wait leaves it that time
+	// instead of racing it back into the account.
+	kickWait   = 60 * time.Second
+	kickJitter = 30 * time.Second
 )
 
 var (
@@ -209,7 +218,13 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 	res, err := b.net.login(ctx, b.account, b.password)
 	turn.Dialed(err)
 	if err != nil {
-		return nil, Self{}, fmt.Errorf("login: %w", err)
+		err = fmt.Errorf("login: %w", err)
+		if credentialRefused(err) {
+			// Trip the breaker while the turn is still held: a bot waiting
+			// in Take must not get the turn and send its credentials first.
+			b.cfg.Gate.Halt(fmt.Errorf("account %s: %w", b.account, err))
+		}
+		return nil, Self{}, err
 	}
 	b.inUse, b.kicked = 0, false
 	if err := turn.Dial(ctx); err != nil {
@@ -274,7 +289,7 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 	case errors.As(err, &le) && le.Packet == "LoginFail":
 		switch le.Reason {
 		case loginFailPasswordWrong, loginFailUserOrPassWrong:
-			b.cfg.Gate.Halt(fmt.Errorf("account %s: %w", b.account, err))
+			// enter already tripped the breaker.
 			b.log.Error("credential refused: all logins halted", "err", err)
 			return 0, err
 		case loginFailAccountInUse:
@@ -284,7 +299,10 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 				return 0, fmt.Errorf("%w: %w", ErrAccountTaken, err)
 			}
 			return b.retry.next(b.rng), nil
-		case loginFailSystemError, loginFailServerOverloaded, loginFailMaintenance:
+		case loginFailSystemError, loginFailAccessFailed, loginFailServerOverloaded, loginFailMaintenance:
+			// AccessFailed reports the login server's own failures (a
+			// database error, a login purged past its timeout), none of
+			// which count toward the IP ban.
 			return b.retry.next(b.rng), nil
 		}
 		return 0, err
@@ -323,7 +341,19 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 		b.log.Error("server aborted the session repeatedly: bot stops", "aborts", b.aborts)
 		return 0, fmt.Errorf("%w (%d since the last stable session): %w", ErrRepeatedAborts, b.aborts, err)
 	}
-	return b.retry.next(b.rng), nil
+	d := b.retry.next(b.rng)
+	if b.kicked {
+		d = max(d, kickWait+jitter(b.rng, kickJitter))
+	}
+	return d, nil
+}
+
+// credentialRefused reports a LoginFail the login server counts toward its
+// IP ban (server internal/loginserver/clientlink.go, recordFailedAttempt).
+func credentialRefused(err error) bool {
+	le, ok := errors.AsType[*LoginError](err)
+	return ok && le.Packet == "LoginFail" &&
+		(le.Reason == loginFailPasswordWrong || le.Reason == loginFailUserOrPassWrong)
 }
 
 // wait waits d or until ctx ends, which it reports as false.

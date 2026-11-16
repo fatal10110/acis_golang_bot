@@ -139,6 +139,8 @@ type fakeNet struct {
 	games    []gameScript
 	cancelAt int
 	cancel   context.CancelFunc
+	// onLogin, when set, runs at the start of every login.
+	onLogin func()
 
 	nLogin, nDial, nEnter int
 	// entered counts the entries that reached the world.
@@ -147,6 +149,9 @@ type fakeNet struct {
 }
 
 func (n *fakeNet) login(ctx context.Context, account, password string) (LoginResult, error) {
+	if n.onLogin != nil {
+		n.onLogin()
+	}
 	i := n.nLogin
 	n.nLogin++
 	if i < len(n.logins) && n.logins[i] != nil {
@@ -278,9 +283,10 @@ func TestSessionReconnects(t *testing.T) {
 		{"through a refused dial", []error{errRefused, errRefused}, nil, 1, 3},
 		{"through a retryable LoginFail", []error{
 			&LoginError{Packet: "LoginFail", Reason: loginFailSystemError},
+			&LoginError{Packet: "LoginFail", Reason: loginFailAccessFailed},
 			&LoginError{Packet: "LoginFail", Reason: loginFailServerOverloaded},
 			&LoginError{Packet: "LoginFail", Reason: loginFailMaintenance},
-		}, nil, 1, 4},
+		}, nil, 1, 5},
 		{"through PlayFail", []error{&LoginError{Packet: "PlayFail", Reason: 0x0f}}, nil, 1, 2},
 		{"after a login timeout", []error{os.ErrDeadlineExceeded}, nil, 1, 2},
 	}
@@ -327,7 +333,7 @@ func TestSessionStops(t *testing.T) {
 		{"not persistent, after a kick", false, nil, nil, []gameScript{serverCloseEnd}, errServerClose, 1},
 		{"not persistent, after an abort", false, nil, nil, []gameScript{abortEnd}, errConnLost, 1},
 		{"banned account", true, []error{&LoginError{Packet: "AccountKicked", Reason: 0x20}}, nil, nil, &LoginError{}, 1},
-		{"unknown LoginFail", true, []error{&LoginError{Packet: "LoginFail", Reason: 0x04}}, nil, nil, &LoginError{}, 1},
+		{"unknown LoginFail", true, []error{&LoginError{Packet: "LoginFail", Reason: 0x11}}, nil, nil, &LoginError{}, 1},
 		{"character creation refused", true, nil, []error{charCreateFail}, nil, charCreateFail, 1},
 		{"every name refused", true, nil, []error{fmt.Errorf("all 8 candidate names refused: %w", &GameStartError{Packet: "CharCreateFail", Reason: 2})}, nil, &GameStartError{}, 1},
 		{"character banned", true, nil, []error{fmt.Errorf("character %q (delete timer -1): %w", "x", errCharacterUnplayable)}, nil, errCharacterUnplayable, 1},
@@ -381,6 +387,95 @@ func TestSessionCredentialBreaker(t *testing.T) {
 			}
 			if n.nLogin != 1 || other.nLogin != 0 {
 				t.Errorf("logins = %d, %d; want 1, 0", n.nLogin, other.nLogin)
+			}
+		})
+	}
+}
+
+// TestSessionCredentialBreakerHoldsTurn runs a second bot that waits for the
+// gate's turn while the first one's credential is refused: the breaker trips
+// before the turn passes on, so the second bot never logs in.
+func TestSessionCredentialBreakerHoldsTurn(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	clock := newFakeClock(t0)
+	gate := NewLoginGate(clock, rand.New(rand.NewPCG(3, 4)))
+	other := &fakeNet{t: t, cancelAt: 1, cancel: cancel}
+	ob := newTestBot(t, true, other, gate, clock)
+	errc := make(chan error, 1)
+	n := &fakeNet{t: t, cancel: cancel, logins: []error{&LoginError{Packet: "LoginFail", Reason: loginFailPasswordWrong}}}
+	n.onLogin = func() {
+		started := make(chan struct{})
+		go func() {
+			close(started)
+			errc <- ob.Run(ctx)
+		}()
+		<-started
+		// A slow login: the spacing has passed when the turn passes on.
+		clock.Advance(10 * time.Second)
+	}
+	b := newTestBot(t, true, n, gate, clock)
+	if err := runBot(ctx, b, clock); !credentialRefused(err) {
+		t.Fatalf("Run = %v, want the refused credential", err)
+	}
+	for {
+		select {
+		case err := <-errc:
+			if !errors.Is(err, ErrLoginsHalted) {
+				t.Fatalf("other bot Run = %v, want %v", err, ErrLoginsHalted)
+			}
+			if other.nLogin != 0 {
+				t.Fatalf("other bot logged in %d times after the refused credential", other.nLogin)
+			}
+			return
+		case <-clock.armed:
+			clock.advanceToNext()
+		}
+	}
+}
+
+// TestSessionHaltsInTurn checks that a refused credential trips the breaker
+// before enter returns, while the bot still holds the gate's turn.
+func TestSessionHaltsInTurn(t *testing.T) {
+	clock := newFakeClock(t0)
+	gate := NewLoginGate(clock, rand.New(rand.NewPCG(3, 4)))
+	n := &fakeNet{t: t, logins: []error{&LoginError{Packet: "LoginFail", Reason: loginFailUserOrPassWrong}}}
+	b := newTestBot(t, true, n, gate, clock)
+	turn, err := gate.Take(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer turn.Done()
+	if _, _, err := b.enter(t.Context(), turn); !credentialRefused(err) {
+		t.Fatalf("enter = %v, want the refused credential", err)
+	}
+	if !errors.Is(gate.Err(), ErrLoginsHalted) {
+		t.Fatalf("gate = %v with the turn held, want halted", gate.Err())
+	}
+}
+
+func TestSessionDelayAfterSession(t *testing.T) {
+	lost := fmt.Errorf("%w: EOF", errConnLost)
+	tests := []struct {
+		name     string
+		err      error
+		min, max time.Duration
+	}{
+		{"after a ServerClose", errServerClose, kickWait, kickWait + kickJitter},
+		{"after an unasked LeaveWorld", errLeftWorld, kickWait, kickWait + kickJitter},
+		{"after an abort", lost, retryBase / 2, retryBase},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for seed := range uint64(50) {
+				b := &Bot{cfg: SessionConfig{Persistent: true}, rng: rand.New(rand.NewPCG(seed, 2)), log: discardLog(), retry: backoff{base: retryBase, max: retryMax}}
+				d, err := b.after(true, time.Minute, tt.err)
+				if err != nil {
+					t.Fatalf("seed %d: after = %v, want a retry", seed, err)
+				}
+				if d < tt.min || d >= tt.max {
+					t.Fatalf("seed %d: delay %v, want in [%v, %v)", seed, d, tt.min, tt.max)
+				}
 			}
 		})
 	}
