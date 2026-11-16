@@ -5,8 +5,8 @@
 # Sizing is for the 2 vCPU / 3.8 GB host where the gameserver heap is about
 # 1.4 GB. Raise -bots and MaximumOnlineUsers together (docs/hetzner.md).
 #
-# `bots swarm` is the run command of the swarm PRs (docs/plan.md); until it is
-# merged this unit starts nothing useful.
+# `bots swarm`, the -bots cap and -local-addr on the game dial are tracked in
+# fatal10110/acis_golang_bot#51; until it is merged this unit starts nothing useful.
 [Unit]
 Description=acis_golang bot swarm
 After=network-online.target acis-gameserver.service

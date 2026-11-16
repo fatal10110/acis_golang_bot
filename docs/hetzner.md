@@ -13,11 +13,11 @@ only them, and a login ban or flood on the bots never touches the gameserver's o
 comes from `127.0.0.1`.
 
 - Bots bind `127.0.0.2` with `-local-addr 127.0.0.2` (`bots accounts` has the flag; the swarm
-  command takes the same one). It sets `Dialer.LocalAddr` on both the login and the game dial.
+  command, #51, takes the same one). It sets `Dialer.LocalAddr` on both the login and the game dial.
 - On Linux all of `127.0.0.0/8` is loopback: `127.0.0.2` needs no `ip addr add`.
-- Both dials go to loopback: `-login 127.0.0.1:2106`, and the game address the login server hands
-  out must be loopback too (below), because a loopback source address is not routable to a public
-  destination.
+- Both dials must go to loopback: `-login 127.0.0.1:2106`, and the game address the login server
+  advertises (`Hostname`, section 2) must be loopback too, because a loopback source address is not
+  routable to a public destination.
 
 ## 2. Server configuration
 
@@ -33,15 +33,19 @@ Allowlist exactly the bind address; never a public range. A malformed entry fail
 In `server.properties`:
 
 ```properties
-# Same-host bots dial the address the login server returns in the server list.
-GameserverHostname = 127.0.0.1
+GameserverHostname = *
 # The bot cap (section 4) plus the real players you expect.
 MaximumOnlineUsers = 150
 ```
 
-`GameserverHostname = 127.0.0.1` makes the game port reachable only from the host. Real players
-need a reachable address: if they must still connect, run them on a second address or terminate
-them elsewhere (see the "unreachable hostname" note in `run-servers.md`).
+Keep `GameserverHostname = *`: it only sets the game listener's bind address. The address the
+login server advertises in the ServerList is `Hostname` (`*` means the IP the gameserver link
+connects from). Two ways to give bots a loopback game address:
+
+- (a) Server for bots only: set `Hostname = 127.0.0.1`, or leave `*` and connect the gameserver
+  link over a loopback `LoginHost`.
+- (b) Server shared with real players: keep the public `Hostname`. Bots need a bot-side game
+  address override, which does not exist yet (tracked in #51).
 
 `EnableFloodProtection`, `FastConnection*` and `MaxConnectionPerIP` guard only the
 gameserver-to-loginserver link on port 9014 and need no change for bots.
