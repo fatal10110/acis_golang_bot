@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Runs `go test -json` with the given arguments and keeps the log readable:
+# it prints each package's result line, the output of every test that did not
+# pass or skip (a failure, a race report, or the test a timeout caught
+# running), and then the slowest packages and top-level tests. It exits with
+# go test's status.
+set -uo pipefail
+
+events="$(mktemp)"
+trap 'rm -f "$events"' EXIT
+
+go test -json "$@" >"$events"
+status=$?
+
+# A line that is not a test event (a build error printed before the stream
+# started) is printed as it is. A passed or skipped test's output is dropped
+# only up to its own --- PASS or --- SKIP line: go test hands runtime output
+# that belongs to no test (a timeout panic and its goroutine dump, a panic in
+# a reader or brain goroutine) to whichever test printed last, which in a
+# parallel suite has usually already passed.
+jq -nrj --raw-input '
+  [inputs | fromjson? // {Action: "output", Output: (. + "\n")}] as $events
+  | (reduce range(0; $events | length) as $i ({};
+      $events[$i] as $e
+      | if $e.Test != null and $e.Action == "output"
+           and ($e.Output | test("^\\s*--- (PASS|SKIP): "))
+        then .["\($e.Package) \($e.Test)"] = $i else . end)) as $settled
+  | range(0; $events | length) as $i
+  | $events[$i]
+  | select(.Action == "output" or .Action == "build-output")
+  | select(.Test == null or ($settled["\(.Package) \(.Test)"] // -1) < $i)
+  | .Output
+' "$events"
+
+# The count of skipped tests, so a run where tests stopped running shows up as
+# a jump.
+echo
+echo "Skipped tests: $(jq -n --raw-input '[inputs | fromjson? | select(.Action == "skip" and .Test != null)] | length' "$events")"
+
+# Subtests are left out, so a parent's time is not counted twice.
+echo
+echo "Slowest packages and tests:"
+jq -nr --raw-input --argjson n 15 '
+  [inputs | fromjson? | select(.Action == "pass" and (.Elapsed // 0) > 0)] as $passed
+  | ([$passed[] | select(.Test == null)]
+      | sort_by(-.Elapsed) | .[:$n][] | "package \(.Package) \(.Elapsed)s"),
+    ([$passed[] | select(.Test != null and (.Test | contains("/") | not))]
+      | sort_by(-.Elapsed) | .[:$n][] | "test \(.Package) \(.Test) \(.Elapsed)s")
+' "$events" || true
+
+exit "$status"
