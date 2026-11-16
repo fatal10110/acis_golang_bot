@@ -12,10 +12,18 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
-// minLoginInterval bounds the accounts step's login rate: one connection per
-// interval stays under the login server's accept filter of 3 connections per
-// second per IP (docs/plan.md, "Sessions, reconnect, accounts and host").
-const minLoginInterval = 500 * time.Millisecond
+// minLoginInterval bounds the accounts step's login rate. The login server's
+// accept filter (server internal/commons/netutil/acceptfilter.go,
+// DefaultAcceptFilterConfig) counts a try for every connection from an IP that
+// arrives under 1 s after the previous one, never clears a try on a slower
+// connection, and bans the IP on the 4th such burst connection until 300 s of
+// silence. So no two logins may start within 1 s of each other: the pause runs
+// after each login ends, so successive dials are at least this far apart, and
+// the 250 ms above the window absorbs timer and scheduling jitter.
+const minLoginInterval = 1250 * time.Millisecond
+
+// defaultLoginInterval is the -interval default.
+const defaultLoginInterval = 1500 * time.Millisecond
 
 // accountsOptions are the flags of `bots accounts`.
 type accountsOptions struct {
@@ -42,7 +50,7 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 	addAccountFlags(fs, &o.accounts)
 	fs.StringVar(&o.loginAddr, "login", "127.0.0.1:2106", "login server address (host:port)")
 	fs.DurationVar(&o.timeout, "timeout", 10*time.Second, "longest wait for each login-server read or write")
-	fs.DurationVar(&o.interval, "interval", time.Second, fmt.Sprintf("pause between logins, at least %s", minLoginInterval))
+	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s", minLoginInterval))
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -50,7 +58,7 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 		return o, fmt.Errorf("unexpected arguments %q", fs.Args())
 	}
 	if o.interval < minLoginInterval {
-		return o, fmt.Errorf("-interval %s: want at least %s (login server accepts under 3 connections per second per IP)", o.interval, minLoginInterval)
+		return o, fmt.Errorf("-interval %s: want at least %s (the login server counts every connection under 1 s after the previous one from the IP and bans the IP on the 4th)", o.interval, minLoginInterval)
 	}
 	if o.timeout <= 0 {
 		return o, fmt.Errorf("-timeout %s: want a positive duration", o.timeout)

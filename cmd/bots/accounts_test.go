@@ -46,7 +46,7 @@ func TestParseAccountsFlags(t *testing.T) {
 			args: []string{"-secret-file", "/run/bots.secret", "-prefix", "swarma", "-bots", "20"},
 			want: accountsOptions{
 				accounts:  botaccounts.Config{SecretFile: "/run/bots.secret", Prefix: "swarma", Count: 20},
-				loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: time.Second,
+				loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: 1500 * time.Millisecond,
 			},
 		},
 		{
@@ -58,6 +58,13 @@ func TestParseAccountsFlags(t *testing.T) {
 			},
 		},
 		{name: "interval past the login rate", args: []string{"-interval", "300ms"}, wantErr: "-interval"},
+		{name: "interval inside the burst window", args: []string{"-interval", "1s"}, wantErr: "-interval"},
+		{name: "interval just under the floor", args: []string{"-interval", "1249ms"}, wantErr: "-interval"},
+		{
+			name: "interval at the floor",
+			args: []string{"-interval", "1250ms"},
+			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: 1250 * time.Millisecond},
+		},
 		{name: "zero timeout", args: []string{"-timeout", "0s"}, wantErr: "-timeout"},
 		{name: "stray argument", args: []string{"extra"}, wantErr: "unexpected arguments"},
 		{name: "no secret flag", args: []string{"-secret", "x"}, wantErr: "flag provided but not defined"},
