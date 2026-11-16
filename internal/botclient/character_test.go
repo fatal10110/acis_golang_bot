@@ -215,7 +215,7 @@ func TestCharEnterGame(t *testing.T) {
 	}{
 		{"first candidate in slot 2", slices.Concat([]step{authLogin, list(other, charSlot{Name: "KiaBot"}, charSlot{Name: "DraelBot"})}, enter(2, "DraelBot")), "DraelBot", "", 0},
 		{"later candidate in slot 1", slices.Concat([]step{authLogin, list(other, charSlot{Name: "ThorBot"})}, enter(1, "ThorBot")), "ThorBot", "", 0},
-		{"case differs creates", slices.Concat([]step{authLogin, list(charSlot{Name: "draelbot"}), create("DraelBot"), created, list(charSlot{Name: "draelbot"}, charSlot{Name: "DraelBot"})}, enter(1, "DraelBot")), "DraelBot", "", 0},
+		{"case differs is taken", slices.Concat([]step{authLogin, list(charSlot{Name: "draelbot"}), create("DraelBot"), fail(2), create("KiaBot"), created, list(charSlot{Name: "draelbot"}, charSlot{Name: "KiaBot"})}, enter(1, "KiaBot")), "KiaBot", "", 0},
 		{"created beside others", slices.Concat([]step{authLogin, list(other), create("DraelBot"), created, list(other, charSlot{Name: "DraelBot"})}, enter(1, "DraelBot")), "DraelBot", "", 0},
 		{"taken then refused then created", slices.Concat([]step{authLogin, list(), create("DraelBot"), fail(2), create("KiaBot"), fail(4), create("ThorBot"), created, list(charSlot{Name: "ThorBot"})}, enter(0, "ThorBot")), "ThorBot", "", 0},
 		{"every name taken", []step{authLogin, list(), create("DraelBot"), fail(2), create("KiaBot"), fail(2), create("ThorBot"), fail(2)}, "", "all 3 candidate names refused", 2},

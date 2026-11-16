@@ -227,8 +227,9 @@ func findSlot(slots []charSlot, names []string) (int32, string) {
 }
 
 // chooseSlot picks the slot of the first candidate an existing character
-// bears, creating the character when none does. A banned character or one
-// pending deletion is refused: the server aborts its selection silently.
+// bears, creating the character when none does. A banned character is
+// refused because the server aborts its selection silently; one pending
+// deletion is refused by bot policy (the server would still select it).
 func (g *GameConn) chooseSlot(ctx context.Context, slots []charSlot, ch Character) (int32, string, error) {
 	slot, name := findSlot(slots, ch.Names)
 	if slot < 0 {
