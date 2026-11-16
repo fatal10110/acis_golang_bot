@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<list>
+	<!-- Aggressive monster: nested <ai> and <drops> sets are not template fields. -->
+	<npc id="20001" name="Gremlin" title="" alias="gremlin">
+		<set name="type" val="Monster"/>
+		<set name="level" val="1"/>
+		<set name="radius" val="10.0"/>
+		<set name="aggroRange" val="1000"/>
+		<ai>
+			<set name="type" val="Folk"/>
+			<set name="level" val="99"/>
+		</ai>
+		<drops>
+			<category id="0">
+				<drop itemid="57" min="1" max="2" chance="70.0"/>
+			</category>
+		</drops>
+	</npc>
+	<!-- Passive monster: aggroRange absent reads as 0. -->
+	<npc id="20002" name="Rabbit" title="" alias="rabbit">
+		<set name="type" val="Monster"/>
+		<set name="level" val="3"/>
+	</npc>
+	<!-- A <set name="name"> overrides the attribute; absent level reads as 1. -->
+	<npc id="0x4E85" name="Attribute Name" title="" alias="">
+		<set name="type" val="Folk"/>
+		<set name="name" val="Set Name"/>
+	</npc>
+</list>
