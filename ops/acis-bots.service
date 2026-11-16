@@ -1,0 +1,46 @@
+# Bot swarm on the game host (docs/hetzner.md). Install as
+# /etc/systemd/system/acis-bots.service. The secret file is referenced by path
+# only (mode 0600, owner acis-bots); no secret belongs in this unit.
+#
+# Sizing is for the 2 vCPU / 3.8 GB host where the gameserver heap is about
+# 1.4 GB. Raise -bots and MaximumOnlineUsers together (docs/hetzner.md).
+#
+# `bots swarm`, the -bots cap and -local-addr on the game dial are tracked in
+# fatal10110/acis_golang_bot#51; until it is merged this unit starts nothing useful.
+[Unit]
+Description=acis_golang bot swarm
+After=network-online.target acis-gameserver.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=acis-bots
+ExecStart=/opt/acis-bots/bots swarm \
+    -secret-file /etc/acis-bots/secret \
+    -prefix hz \
+    -bots 50 \
+    -login 127.0.0.1:2106 \
+    -local-addr 127.0.0.2
+Restart=on-failure
+# Restart slowly: a crash loop is a login loop, and the login server bans the IP.
+RestartSec=60
+
+# Resource cap. The slice limits keep the swarm from starving the gameserver.
+CPUQuota=100%
+MemoryMax=1G
+MemorySwapMax=0
+TasksMax=512
+Nice=10
+# The OOM killer takes the bots before the gameserver.
+OOMScoreAdjust=500
+# About 2 descriptors per bot (one socket, one spare for a login dial) plus margin.
+LimitNOFILE=1024
+
+# Hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

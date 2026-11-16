@@ -57,6 +57,12 @@ func TestParseAccountsFlags(t *testing.T) {
 				loginAddr: "10.0.0.1:2106", timeout: 10 * time.Second, interval: 2 * time.Second,
 			},
 		},
+		{
+			name: "local address",
+			args: []string{"-local-addr", "127.0.0.2"},
+			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: 1500 * time.Millisecond, localAddr: "127.0.0.2"},
+		},
+		{name: "local address not an IP", args: []string{"-local-addr", "localhost"}, wantErr: "-local-addr"},
 		{name: "interval past the login rate", args: []string{"-interval", "300ms"}, wantErr: "-interval"},
 		{name: "interval inside the burst window", args: []string{"-interval", "1s"}, wantErr: "-interval"},
 		{name: "interval just under the floor", args: []string{"-interval", "1249ms"}, wantErr: "-interval"},
