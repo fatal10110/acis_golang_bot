@@ -1,0 +1,215 @@
+package wire
+
+import (
+	"bufio"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"sync"
+)
+
+// FrameHeaderSize is the length of a length-prefixed frame's own header,
+// which itself counts toward the length it encodes.
+const FrameHeaderSize = 2
+
+// MaxFrameLength is the largest total frame length the uint16 header can
+// encode. A frame beyond it would write a truncated header and desynchronize
+// every later frame on that connection, so it must be rejected instead.
+const MaxFrameLength = math.MaxUint16
+
+// ErrFrameTooShort reports a frame header whose length is smaller than the
+// header itself. FrameReader has consumed the header when it returns it, so
+// a reader that skips such frames can read on.
+var ErrFrameTooShort = errors.New("wire: frame length is smaller than its header")
+
+func frameLengthError(length int) error {
+	return fmt.Errorf("wire: frame length %d exceeds the %d-byte maximum", length, MaxFrameLength)
+}
+
+// Frame is an outbound byte slice plus an optional release hook for pooled
+// backing storage.
+type Frame struct {
+	bytes   []byte
+	writer  *Writer
+	release func(*Writer)
+	err     error
+}
+
+// InvalidFrame returns a frame that must not be sent.
+func InvalidFrame(err error) Frame {
+	return Frame{err: err}
+}
+
+// Err reports why a frame must not be sent.
+func (f Frame) Err() error {
+	return f.err
+}
+
+// BorrowedFrame returns a frame whose storage is not owned by a pool. A frame
+// too long for its uint16 length header is rejected instead.
+func BorrowedFrame(bytes []byte) Frame {
+	if len(bytes) > MaxFrameLength {
+		return InvalidFrame(frameLengthError(len(bytes)))
+	}
+	return Frame{bytes: bytes}
+}
+
+// OwnedFrame returns a frame whose writer must be released after use. A frame
+// too long for its uint16 length header is rejected instead, still carrying
+// the release hook so its writer returns to the pool.
+func OwnedFrame(bytes []byte, writer *Writer, release func(*Writer)) Frame {
+	if len(bytes) > MaxFrameLength {
+		return Frame{writer: writer, release: release, err: frameLengthError(len(bytes))}
+	}
+	return Frame{bytes: bytes, writer: writer, release: release}
+}
+
+// Bytes returns the frame bytes.
+func (f Frame) Bytes() []byte {
+	return f.bytes
+}
+
+// Footprint is the memory the frame pins until it is released: the capacity
+// of the pooled writer it owns, or its own bytes when it owns none.
+func (f Frame) Footprint() int {
+	if f.writer != nil {
+		return max(f.writer.Cap(), len(f.bytes))
+	}
+	return len(f.bytes)
+}
+
+// Release returns owned backing storage to its pool, if any.
+func (f Frame) Release() {
+	if f.release != nil {
+		f.release(f.writer)
+	}
+}
+
+// FrameBytes returns payload framed behind a little-endian uint16 length
+// header (header included in the count), ready to write or encrypt in
+// place. It reports an error for a payload too long to encode in that
+// header rather than emitting a truncated one.
+func FrameBytes(payload []byte) ([]byte, error) {
+	if length := FrameHeaderSize + len(payload); length > MaxFrameLength {
+		return nil, frameLengthError(length)
+	}
+	return frameBytes(payload), nil
+}
+
+// frameBytes frames payload whose length the caller has already bounded.
+func frameBytes(payload []byte) []byte {
+	frame := make([]byte, FrameHeaderSize+len(payload))
+	binary.LittleEndian.PutUint16(frame, uint16(len(frame)))
+	copy(frame[FrameHeaderSize:], payload)
+	return frame
+}
+
+// ReadFrame reads one length-prefixed frame from r and returns its payload
+// in a fresh allocation. The header is a little-endian uint16 giving the
+// total frame length, header included; the payload is the header size
+// shorter than that. Connection read loops should use a FrameReader
+// instead, which reuses one payload buffer across frames.
+func ReadFrame(r io.Reader) ([]byte, error) {
+	return (&FrameReader{r: r}).ReadFrame()
+}
+
+// FrameReader reads length-prefixed frames from one reader, reusing a
+// single payload buffer across calls so a connection's read loop costs no
+// allocation per frame once the buffer has grown to the connection's usual
+// frame size. Not safe for concurrent use.
+type FrameReader struct {
+	r io.Reader
+	// header is read into a field rather than a local so the read through
+	// the io.Reader interface can't force a per-call heap allocation.
+	header [FrameHeaderSize]byte
+	buf    []byte
+}
+
+// NewFrameReader returns a FrameReader reading frames from r.
+func NewFrameReader(r io.Reader) *FrameReader {
+	return &FrameReader{r: bufio.NewReader(r)}
+}
+
+// ReadFrame reads one length-prefixed frame and returns its payload. The
+// payload aliases the reader's internal buffer and is only valid until the
+// next ReadFrame call; a caller that keeps it longer must copy it.
+func (fr *FrameReader) ReadFrame() ([]byte, error) {
+	if _, err := io.ReadFull(fr.r, fr.header[:]); err != nil {
+		return nil, err
+	}
+
+	length := binary.LittleEndian.Uint16(fr.header[:])
+	if length < FrameHeaderSize {
+		return nil, fmt.Errorf("%w: %d < %d", ErrFrameTooShort, length, FrameHeaderSize)
+	}
+
+	n := int(length) - FrameHeaderSize
+	if cap(fr.buf) < n {
+		fr.buf = make([]byte, n)
+	}
+	payload := fr.buf[:n]
+	if _, err := io.ReadFull(fr.r, payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+// WriteFrame writes payload to w as one length-prefixed frame: a
+// little-endian uint16 header giving the total frame length (header
+// included), followed by payload itself.
+// It reports an error without writing anything when payload is too long for
+// the length header.
+func WriteFrame(w io.Writer, payload []byte) error {
+	frame, err := FrameBytes(payload)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(frame)
+	return err
+}
+
+const (
+	copyFrameWriterCapacity = 256
+	// maxCopyFrameWriterCapacity keeps routine copies pooled while
+	// preventing outliers from pinning buffers near the uint16 frame-size
+	// limit.
+	maxCopyFrameWriterCapacity = 8 * 1024
+)
+
+var copyFramePool = sync.Pool{
+	New: func() any {
+		return NewFrameWriter(copyFrameWriterCapacity)
+	},
+}
+
+func releaseCopyFrameWriter(w *Writer) {
+	if w.Cap() > maxCopyFrameWriterCapacity {
+		return
+	}
+	copyFramePool.Put(w)
+}
+
+// CopyFrame returns an independently owned pooled copy of frame, for a
+// recipient that encrypts or otherwise mutates its outgoing bytes in place.
+// It returns an error instead, wrapping frame's own Err, when frame is
+// invalid or does not contain a complete header.
+func CopyFrame(frame Frame) (Frame, error) {
+	if err := frame.Err(); err != nil {
+		return Frame{}, fmt.Errorf("wire: copy invalid frame: %w", err)
+	}
+	if len(frame.Bytes()) < FrameHeaderSize {
+		return Frame{}, ShortFrameError(len(frame.Bytes()))
+	}
+	w := copyFramePool.Get().(*Writer)
+	w.ResetFrame(copyFrameWriterCapacity)
+	w.WriteBytes(frame.Bytes()[FrameHeaderSize:])
+	return OwnedFrame(w.Frame(), w, releaseCopyFrameWriter), nil
+}
+
+// ShortFrameError describes an outbound frame of length bytes, too short to
+// hold its own length header.
+func ShortFrameError(length int) error {
+	return fmt.Errorf("wire: frame of %d bytes lacks the %d-byte header", length, FrameHeaderSize)
+}
