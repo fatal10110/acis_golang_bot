@@ -112,7 +112,7 @@ func TestReadEventsFiltersAndQueues(t *testing.T) {
 	at := Point{X: 1, Y: 2, Z: 3}
 	src := &scriptedSource{
 		frames: [][]byte{
-			{opGameUserInfo}, // no decoder: dropped unparsed, though far too short
+			{opGameCharSelectInfo}, // no decoder: dropped unparsed, though far too short
 			moveToLocation(5, at, at),
 			{0xfe, 0x01}, // unknown opcode
 			stopMove(5, at, 9),

@@ -44,6 +44,23 @@ const (
 	opGameLeaveWorld         = 0x7e // lifecycle.go
 )
 
+// Game server to client, in-world state (internal/gameserver/network/serverpackets).
+const (
+	opGameCharInfo         = 0x03 // charinfo.go
+	opGameDie              = 0x06 // die.go
+	opGameRevive           = 0x07 // lifecycle.go
+	opGameStatusUpdate     = 0x0e // targeting.go
+	opGameNPCInfo          = 0x16 // npcinfo.go
+	opGameTargetUnselected = 0x2a // targeting.go
+	opGameAutoAttackStart  = 0x2b // stance_social.go
+	opGameAutoAttackStop   = 0x2c // autoattack.go
+	opGameChangeWaitType   = 0x2f // stance_social.go
+	opGameCreatureSay      = 0x4a // creaturesay.go
+	opGameMoveToPawn       = 0x60 // movetopawn.go
+	opGameSystemMessage    = 0x64 // systemmessage.go
+	opGameMyTargetSelected = 0xa6 // targeting.go
+)
+
 // Client to game server (internal/gameserver/network/clientpackets).
 const (
 	opGameProtocolVersion        = 0x00 // protocolversion.go

@@ -16,6 +16,12 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(packet(opGameTeleportToLocation, 1, 2, 3, 4))
 	f.Add(packet(opGameLeaveWorld))
 	f.Add([]byte{opGameUserInfo, 1})
+	f.Add(userInfoPacket(testUserInfo, 120, 80, 1.3, 2))
+	f.Add(charInfoPacket(testCharInfo, 120, 80, 1.3, 1))
+	f.Add(npcInfoPacket(testNPCInfo, 130, 40, 1.5))
+	f.Add(packet(opGameStatusUpdate, 7, 2, 9, 300, 18, 333))
+	f.Add(packet(opGameSystemMessage, 1147, 3, 0, "text", 4, 1216, 2, 7, 1, 2, 3))
+	f.Add(packet(opGameCreatureSay, 7, 1, "bot7", "hello"))
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) == 0 {
 			return // GameConn.Read rejects empty frames
