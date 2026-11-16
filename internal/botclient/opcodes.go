@@ -27,16 +27,21 @@ const (
 
 // Game server to client (internal/gameserver/network/serverpackets).
 const (
-	opGameVersionCheck   = 0x00 // versioncheck.go
-	opGameUserInfo       = 0x04 // userinfo.go
-	opGameCharSelectInfo = 0x13 // charselectinfo.go
-	opGameAuthLoginFail  = 0x14 // authloginfail.go
-	opGameCharSelected   = 0x15 // charselected.go
-	opGameCharCreateOk   = 0x19 // charcreateok.go
-	opGameCharCreateFail = 0x1a // charcreatefail.go
-	opGameActionFailed   = 0x25 // actionfailed.go
-	opGameServerClose    = 0x26 // serverclose.go
-	opGameLeaveWorld     = 0x7e // lifecycle.go
+	opGameVersionCheck       = 0x00 // versioncheck.go
+	opGameMoveToLocation     = 0x01 // movetolocation.go
+	opGameUserInfo           = 0x04 // userinfo.go
+	opGameDeleteObject       = 0x12 // deleteobject.go
+	opGameCharSelectInfo     = 0x13 // charselectinfo.go
+	opGameAuthLoginFail      = 0x14 // authloginfail.go
+	opGameCharSelected       = 0x15 // charselected.go
+	opGameCharCreateOk       = 0x19 // charcreateok.go
+	opGameCharCreateFail     = 0x1a // charcreatefail.go
+	opGameActionFailed       = 0x25 // actionfailed.go
+	opGameServerClose        = 0x26 // serverclose.go
+	opGameTeleportToLocation = 0x28 // teleporttolocation.go
+	opGameStopMove           = 0x47 // movement_control.go
+	opGameValidateLocation   = 0x61 // movement_control.go
+	opGameLeaveWorld         = 0x7e // lifecycle.go
 )
 
 // Client to game server (internal/gameserver/network/clientpackets).
