@@ -1,0 +1,26 @@
+{
+  "tracks": ["A", "B"],
+  "exclusions": "the server checkout (read-only reference, never edited from a lane); epics #1 and #6 (trackers, closed by hand)",
+  "waves": [
+    {
+      "name": "1",
+      "lanes": [
+        {"slug": "skeleton-ci", "track": "A", "issues": [2], "milestone": "M0 - Bootstrap",
+         "note": "Module skeleton and CI first: every later lane builds on its layout and CI jobs.", "hot": ["layout"]},
+        {"slug": "wire-crypt", "track": "A", "issues": [3], "milestone": "M0 - Bootstrap",
+         "note": "Copy wire codecs and login/game crypt per docs/plan.md PR0; copied server halves only as test helpers.", "hot": ["layout"], "deps": ["skeleton-ci"]},
+        {"slug": "e2e-harness", "track": "B", "issues": [5], "milestone": "M0 - Bootstrap",
+         "note": "Harness only, on the published server stack; blocked while the server prerequisites are open: say so and return blocked."}
+      ]
+    },
+    {
+      "name": "2",
+      "lanes": [
+        {"slug": "client", "track": "A", "issues": [4], "milestone": "M0 - Bootstrap",
+         "note": "Login and game client on the copied codecs; the login-enter-logout flow passes e2e.", "deps": ["wire-crypt"]},
+        {"slug": "accounts", "track": "B", "issues": [13], "milestone": "M1 - Core client and brain",
+         "note": "Pre-created accounts with HMAC-derived passwords; independent of the client package.", "implModel": "sonnet", "implEffort": "high"}
+      ]
+    }
+  ]
+}
