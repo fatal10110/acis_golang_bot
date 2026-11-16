@@ -77,7 +77,9 @@ const (
 	opGameMoveBackwardToLocation = 0x01 // movebackwardtolocation.go
 	opGameAction                 = 0x04 // wiresafe.go, targetaction.go
 	opGameRequestSocialAction    = 0x1b // wiresafe.go, stance_social.go
+	opGameAppearing              = 0x30 // wiresafe.go, appearing.go
 	opGameSay2                   = 0x38 // say2.go
 	opGameRequestActionUse       = 0x45 // wiresafe.go, requestactionuse.go
 	opGameValidatePosition       = 0x48 // validateposition.go
+	opGameRequestRestartPoint    = 0x6d // requestrestartpoint.go
 )

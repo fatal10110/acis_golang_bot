@@ -28,7 +28,8 @@ type Persona struct {
 	IdleChance float64
 	IdleRadius int32
 	Emotes     []int32
-	// Death decides for a dead bot (rule 1); a zero Action waits.
+	// Death decides for a dead bot (rule 1); a zero Action waits. A
+	// restart it asks for goes out at most once per restartRetry.
 	Death func(w *World, now time.Time) Action
 	// Answer answers an open prompt (rule 2); a zero Action waits.
 	Answer func(w *World, now time.Time) Action
@@ -38,9 +39,11 @@ type Persona struct {
 }
 
 // DefaultPersona is a passive player that rests when low, fights back when
-// hit and otherwise drifts around where it stands.
+// hit, restarts in town when killed and otherwise drifts around where it
+// stands.
 func DefaultPersona() Persona {
 	return Persona{
+		Death:        restartToVillage,
 		CriticalHP:   20,
 		FleeDistance: 600,
 		SitHP:        40,
@@ -75,9 +78,13 @@ const (
 	actSay
 	actKeepalive
 	actLogout
+	actAppear
+	actRestart
 )
 
-// gate is the reuse gate the action's frame passes.
+// gate is the reuse gate the action's frame passes. Appearing and
+// RequestRestartPoint have no reuse gate on the server: the frame bucket
+// bounds them, and restartRetry spaces a repeated restart.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -108,6 +115,15 @@ func emoteAction(id int32) Action {
 // sayAction says text on the all channel.
 func sayAction(text string) Action {
 	return Action{kind: actSay, payload: encodeSay2(text, chatAll)}
+}
+
+// restartToVillage is the death policy that restarts in the nearest town
+// when the death window offers it, and otherwise waits.
+func restartToVillage(w *World, _ time.Time) Action {
+	if !w.Prompts.Restart.Points.Village {
+		return Action{}
+	}
+	return Action{kind: actRestart, payload: encodeRequestRestartPoint(restartVillage)}
 }
 
 // rule is one row of the decision table. run reports whether the rule
@@ -153,15 +169,20 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	return "", Action{}
 }
 
-// ruleDead is rule 1: a dead bot only follows its death policy.
+// ruleDead is rule 1: a dead bot only follows its death policy. A restart
+// the server left unanswered is asked again only after restartRetry.
 func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 	if !b.world.Self.Dead {
 		return Action{}, false
 	}
-	if b.persona.Death != nil {
-		return b.persona.Death(b.world, now), true
+	if b.persona.Death == nil {
+		return Action{}, true
 	}
-	return Action{}, true
+	a := b.persona.Death(b.world, now)
+	if a.kind == actRestart && !b.restartedAt.IsZero() && now.Sub(b.restartedAt) < restartRetry {
+		return Action{}, true
+	}
+	return a, true
 }
 
 // rulePrompt is rule 2: an open prompt waits for the persona's answer.

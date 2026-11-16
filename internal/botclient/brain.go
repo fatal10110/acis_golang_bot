@@ -18,6 +18,11 @@ const (
 	// logoutRetry is how long a bot whose Logout was refused (in combat)
 	// plays on before it asks again.
 	logoutRetry = 10 * time.Second
+	// restartRetry is how long a dead bot waits for the answer to its
+	// restart request before it asks again: a refused restart answers
+	// nothing, and a siege attacker's request waits out the attacker
+	// respawn delay, dropping repeats meanwhile.
+	restartRetry = 10 * time.Second
 	// toggleSettle is how long a sit/stand toggle waits for its
 	// ChangeWaitType before the brain may toggle again.
 	toggleSettle = 2 * time.Second
@@ -79,7 +84,13 @@ type Brain struct {
 	resting bool
 	// toggledAt is the last sit/stand toggle not yet confirmed.
 	toggledAt time.Time
-	logout    logoutState
+	// appearing is set from the bot's own loading-screen teleport until its
+	// Appearing goes out: the server keeps the character out of the world
+	// until then.
+	appearing bool
+	// restartedAt is the restart request not yet answered by a Revive.
+	restartedAt time.Time
+	logout      logoutState
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 }
@@ -199,8 +210,16 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.toggledAt = time.Time{}
 			}
 		case TeleportToLocation:
+			// A Fast teleport is an in-place correction with no loading
+			// screen: the server never takes the character out of the
+			// world for it (instant_teleport.go), so it asks no Appearing.
 			if e.ObjectID == self {
 				b.anchor = e.Pos
+				b.appearing = b.appearing || !e.Fast
+			}
+		case Revive:
+			if e.ObjectID == self {
+				b.restartedAt = time.Time{}
 			}
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
@@ -241,6 +260,8 @@ func (b *Brain) requestLogout(now time.Time) {
 
 // wake runs whatever is due at now: the logout steps, a decision, the
 // keepalive. While a Logout waits for its answer the bot makes no decision.
+// After a loading-screen teleport the decision is the reaction to it and
+// Appearing goes out first; until it is out, the bot sends nothing else.
 func (b *Brain) wake(now time.Time) error {
 	l := &b.logout
 	if l.pending {
@@ -266,6 +287,16 @@ func (b *Brain) wake(now time.Time) error {
 		}
 	}
 	if !now.Before(b.decisionAt()) {
+		if b.appearing {
+			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
+			if err != nil {
+				return err
+			}
+			if !sent {
+				b.reactAt = now.Add(time.Second / frameRate)
+				return nil
+			}
+		}
 		b.reactAt = time.Time{}
 		b.nextTick = now.Add(b.tickDelay())
 		name, a := b.decide(now)
@@ -276,7 +307,7 @@ func (b *Brain) wake(now time.Time) error {
 			}
 		}
 	}
-	if now.Sub(b.pace.lastSent) >= keepaliveAfter {
+	if !b.appearing && now.Sub(b.pace.lastSent) >= keepaliveAfter {
 		s := &b.world.Self
 		ka := Action{kind: actKeepalive, payload: encodeValidatePosition(s.Position(now), s.Heading)}
 		if _, err := b.send(ka, now); err != nil {
@@ -303,7 +334,7 @@ func (b *Brain) due() time.Time {
 	if b.logout.requested && b.logout.retryAt.Before(t) {
 		t = b.logout.retryAt
 	}
-	if k := b.pace.lastSent.Add(keepaliveAfter); k.Before(t) {
+	if k := b.pace.lastSent.Add(keepaliveAfter); !b.appearing && k.Before(t) {
 		t = k
 	}
 	return t
@@ -330,6 +361,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		// Sitting down drops the attack intention as well.
 		b.engaged = 0
 		b.toggledAt = now
+	case actAppear:
+		b.appearing = false
+	case actRestart:
+		b.restartedAt = now
 	}
 	return true, nil
 }
