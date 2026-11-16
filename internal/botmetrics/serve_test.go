@@ -3,6 +3,8 @@ package botmetrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -91,5 +93,24 @@ func TestMetricsEndpoint(t *testing.T) {
 	var mem struct{ HeapAlloc, Sys uint64 }
 	if err := json.Unmarshal(vars["memstats"], &mem); err != nil || mem.Sys == 0 {
 		t.Errorf("memstats = %s (%v)", vars["memstats"], err)
+	}
+}
+
+// TestServeListenerFailure: a listener that cannot accept makes Serve return
+// the serve error at once, without waiting for its context to end.
+func TestServeListenerFailure(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	if err := ln.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	err = Serve(context.Background(), ln, http.NotFoundHandler())
+	if err == nil {
+		t.Fatal("Serve on a closed listener returned nil")
+	}
+	if !strings.HasPrefix(err.Error(), "metrics serve: ") || !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("Serve error = %v, want \"metrics serve: \" wrapping net.ErrClosed", err)
 	}
 }
