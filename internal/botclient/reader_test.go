@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -120,7 +121,7 @@ func TestReadEventsFiltersAndQueues(t *testing.T) {
 		end: io.EOF,
 	}
 	q := NewEvents(16)
-	err := readEvents(src, q, nil, make(chan struct{}))
+	err := readEvents(src, q, make(chan struct{}))
 	if !errors.Is(err, io.EOF) {
 		t.Fatalf("readEvents = %v, want io.EOF", err)
 	}
@@ -132,7 +133,7 @@ func TestReadEventsFiltersAndQueues(t *testing.T) {
 
 func TestReadEventsMalformedFrameEnds(t *testing.T) {
 	src := &scriptedSource{frames: [][]byte{packet(opGameStopMove, 5)}, end: io.EOF}
-	err := readEvents(src, NewEvents(4), nil, make(chan struct{}))
+	err := readEvents(src, NewEvents(4), make(chan struct{}))
 	if !errors.Is(err, wire.ErrShortPacket) {
 		t.Fatalf("readEvents = %v, want ErrShortPacket", err)
 	}
@@ -159,7 +160,7 @@ func TestReadEventsTeardownFullQueue(t *testing.T) {
 	}
 	q := NewEvents(limit)
 	result := make(chan error, 1)
-	go func() { result <- readEvents(src, q, nil, done) }()
+	go func() { result <- readEvents(src, q, done) }()
 	if err := <-result; err != nil {
 		t.Fatalf("readEvents = %v, want nil after done", err)
 	}
@@ -189,7 +190,7 @@ func TestGameConnReadEvents(t *testing.T) {
 
 	q := NewEvents(4)
 	result := make(chan error, 1)
-	go func() { result <- g.ReadEvents(q, nil, make(chan struct{})) }()
+	go func() { result <- g.ReadEvents(q, make(chan struct{})) }()
 	var got []Event
 	var err error
 	for finished := false; !finished; {
@@ -212,7 +213,49 @@ func TestGameConnReadEvents(t *testing.T) {
 	}
 }
 
-func TestReadEventsRecords(t *testing.T) {
+// TestReadEventsReadErrorAfterDone: the normal teardown. The session
+// closes done, then the connection, so the blocked Read fails; that error
+// is the teardown, not a failure.
+func TestReadEventsReadErrorAfterDone(t *testing.T) {
+	done := make(chan struct{})
+	src := &scriptedSource{frames: [][]byte{stopMove(5, Point{}, 0)}, end: net.ErrClosed}
+	src.onRead = func(n int) {
+		if n == 2 {
+			close(done)
+		}
+	}
+	q := NewEvents(4)
+	if err := readEvents(src, q, done); err != nil {
+		t.Fatalf("readEvents = %v, want nil after done", err)
+	}
+	if got := q.Drain(nil); len(got) != 1 {
+		t.Fatalf("queued %d events, want 1", len(got))
+	}
+}
+
+// TestGameConnReadEventsTeardown: a reader blocked in Read on a quiet
+// connection returns nil once the session closes done and then the
+// connection.
+func TestGameConnReadEventsTeardown(t *testing.T) {
+	g, served := dialFake(t, true, nil, false)
+	done := make(chan struct{})
+	result := make(chan error, 1)
+	go func() { result <- g.ReadEvents(NewEvents(4), done) }()
+	close(done)
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; err != nil {
+		t.Fatalf("ReadEvents = %v, want nil after done", err)
+	}
+	if err := <-served; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGameConnRecords: the tap sits in GameConn's read, so it records the
+// first frame of each opcode whether the reader decodes it or not.
+func TestGameConnRecords(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "rec")
 	rec, err := NewRecorder(dir)
 	if err != nil {
@@ -220,12 +263,14 @@ func TestReadEventsRecords(t *testing.T) {
 	}
 	first := moveToLocation(1, Point{X: 1}, Point{})
 	unknown := []byte{0xfe, 0x01, 0x02}
-	src := &scriptedSource{
-		frames: [][]byte{first, unknown, moveToLocation(2, Point{X: 2}, Point{}), {0xfe, 0x09}},
-		end:    io.EOF,
+	script := []step{sendStep(first), sendStep(unknown), sendStep(moveToLocation(2, Point{X: 2}, Point{})), sendStep([]byte{0xfe, 0x09})}
+	g, served := dialFake(t, true, script, true)
+	g.SetRecorder(rec)
+	if err := g.ReadEvents(NewEvents(8), make(chan struct{})); err == nil {
+		t.Fatal("ReadEvents = nil after the hang-up, want the read error")
 	}
-	if err := readEvents(src, NewEvents(8), rec, make(chan struct{})); !errors.Is(err, io.EOF) {
-		t.Fatalf("readEvents = %v", err)
+	if err := <-served; err != nil {
+		t.Fatal(err)
 	}
 	if err := rec.Err(); err != nil {
 		t.Fatal(err)

@@ -17,8 +17,8 @@ type frameSource interface {
 // ReadEvents is the session's reader. It reads the connection until it
 // fails or done closes, decodes the frames whose opcode has a decoder into
 // events and queues them on q for the brain; every other frame is dropped
-// without parsing. rec, when not nil, is the -record tap and sees every
-// frame after decryption.
+// without parsing. The -record tap (SetRecorder) sees every frame read,
+// decoded or not.
 //
 // Teardown: the session owns done and the connection. It closes done, then
 // closes the connection so a blocked Read returns, and joins ReadEvents
@@ -29,11 +29,11 @@ type frameSource interface {
 // returned.
 //
 // ReadEvents is the connection's only reader while it runs (see GameConn).
-func (g *GameConn) ReadEvents(q *Events, rec *Recorder, done <-chan struct{}) error {
-	return readEvents(g, q, rec, done)
+func (g *GameConn) ReadEvents(q *Events, done <-chan struct{}) error {
+	return readEvents(g, q, done)
 }
 
-func readEvents(src frameSource, q *Events, rec *Recorder, done <-chan struct{}) error {
+func readEvents(src frameSource, q *Events, done <-chan struct{}) error {
 	for {
 		raw, err := src.Read(time.Time{})
 		if err != nil {
@@ -44,7 +44,6 @@ func readEvents(src frameSource, q *Events, rec *Recorder, done <-chan struct{})
 				return fmt.Errorf("read game frame: %w", err)
 			}
 		}
-		rec.Record(raw)
 		ev, ok, err := decodeEvent(raw)
 		if err != nil {
 			return err

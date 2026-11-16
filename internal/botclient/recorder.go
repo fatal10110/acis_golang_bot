@@ -10,8 +10,10 @@ import (
 // Recorder is the -record tap: it writes the first decrypted game payload of
 // each opcode, opcode byte included, to <dir>/<opcode as two hex
 // digits>.bin, the recorded fixtures decoder tests replay. One Recorder
-// serves every session of the process. Only server packets after the
-// handshake pass through it, so no credential reaches a file.
+// serves every session of the process. A GameConn feeds it every server
+// game packet it reads after SetRecorder (the EnterWorld burst, Logout's
+// replies and the reader's frames alike); client packets never pass
+// through it, so no credential reaches a file.
 type Recorder struct {
 	dir string
 
