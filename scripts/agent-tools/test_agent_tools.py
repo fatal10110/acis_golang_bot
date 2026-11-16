@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from pathlib import Path
 
@@ -79,6 +80,19 @@ class WaveMailTools(Base):
         review = self.tmp / "wt" / "review-a"
         review.mkdir()
         self.assertEqual(self.run_py(MB, "stopcheck", review, check=False).returncode, 3)
+
+    def test_stop_banner_ignores_an_older_run_on_the_same_worktree(self):
+        wt = self.tmp / "wt" / "wf-a"
+        wt.mkdir(parents=True)
+        self.mb("state", "--run", "old", "--lane", "a", "--set", f"worktree={wt}")
+        self.mb("stop", "--run", "old")
+        time.sleep(1.1)  # lane state timestamps have one-second resolution
+        self.mb("state", "--run", "new", "--lane", "a", "--set", f"worktree={wt}")
+        self.assertEqual(self.run_py(MB, "stopcheck", wt).returncode, 0, "the abandoned run's STOP is not the new run's")
+        self.mb("stop", "--run", "new")
+        r = self.run_py(MB, "stopcheck", wt, check=False)
+        self.assertEqual(r.returncode, 3)
+        self.assertIn("run new is stopping", r.stdout)
 
     def test_worktree_creates_reuses_and_removes(self):
         origin = self.tmp / "origin.git"
@@ -174,6 +188,19 @@ class LookTool(Base):
         self.assertIn("a.go:11:func Free() {}", out)
         self.assertRegex(out, r"a\.go:2")
         self.assertNotIn("### STOP", out)
+
+    def test_a_failed_godecl_build_costs_only_its_spec(self):
+        src = self.tmp / "src"
+        src.mkdir()
+        (src / "a.go").write_text("package a\n\nfunc Free() {}\n")
+        bin_dir = self.tmp / "bin"  # rg but no go: the godecl build cannot run
+        bin_dir.mkdir()
+        (bin_dir / "rg").symlink_to(shutil.which("rg"))
+        self.env["PATH"] = str(bin_dir)
+        r = self.run_py(LOOK, "--root", src, "go:.:Free", "rg:.:Free", "a.go:3-3")
+        self.assertIn("error: godecl build failed", r.stdout)
+        self.assertIn("a.go:3:func Free() {}", r.stdout)
+        self.assertIn("3\tfunc Free() {}", r.stdout)
 
     def test_caps_long_output(self):
         f = self.tmp / "big.txt"

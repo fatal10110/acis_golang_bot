@@ -158,7 +158,6 @@ class WaveMailTest(unittest.TestCase):
 
     def test_names_reaching_paths_are_validated(self):
         for args in (["answer", "--run", "r", "--id", "../x", "--text", "y"],
-                     ["lock", "acquire", "--run", "r", "--name", "../m", "--owner", "a", "--wait", "0"],
                      ["barrier", "--run", "r", "--wave", "../0", "--track", "A", "--tracks", "A", "--wait", "0"],
                      ["state", "--run", "r", "--lane", "A b"],
                      ["ask", "--run", "r", "--from", "a;b/impl", "--type", "runner", "--question", "x"]):
@@ -172,19 +171,6 @@ class WaveMailTest(unittest.TestCase):
         self.run_cli("finish-track", "--run", "r", "--track", "B")
         r = self.run_cli("take", "--run", "r", "--tracks", "A,B", "--wait", "1")
         self.assertTrue(r["stop"])
-
-    def test_lock_is_exclusive_and_reentrant(self):
-        self.assertTrue(self.run_cli("lock", "acquire", "--run", "r", "--owner", "a")["acquired"])
-        self.assertTrue(self.run_cli("lock", "acquire", "--run", "r", "--owner", "a")["acquired"])
-        self.assertFalse(self.run_cli("lock", "acquire", "--run", "r", "--owner", "b", "--wait", "0.2")["acquired"])
-        self.assertFalse(self.run_cli("lock", "release", "--run", "r", "--owner", "b")["released"])
-        self.assertTrue(self.run_cli("lock", "release", "--run", "r", "--owner", "a")["released"])
-        self.assertTrue(self.run_cli("lock", "acquire", "--run", "r", "--owner", "b", "--wait", "0")["acquired"])
-
-    def test_stale_lock_is_stolen(self):
-        self.run_cli("lock", "acquire", "--run", "r", "--owner", "a")
-        r = self.run_cli("lock", "acquire", "--run", "r", "--owner", "b", "--stale-min", "0", "--wait", "0")
-        self.assertEqual((r["acquired"], r["stole_from"]), (True, "a"))
 
     def test_barrier_passes_when_every_track_arrives(self):
         self.run_cli("state", "--run", "r", "--lane", "x", "--set", "status=merged", "--set", "pr=5")
@@ -225,6 +211,40 @@ class WaveMailTest(unittest.TestCase):
         p.write_text(json.dumps(plan))
         r = self.run_cli("validate", str(p), check=False)
         self.assertTrue(any("bad slug" in e for e in r["errors"]))
+
+    def test_validate_refuses_same_wave_dependency_cycles(self):
+        plan = {"tracks": ["A"], "waves": [
+            {"lanes": [{"slug": "a", "track": "A", "issues": [1], "deps": ["b"]},
+                       {"slug": "b", "track": "A", "issues": [2], "deps": ["a"]},
+                       {"slug": "c", "track": "A", "issues": [3], "deps": ["c"]},
+                       {"slug": "d", "track": "A", "issues": [4], "deps": ["a"]}]}]}
+        p = Path(self.tmp.name) / "plan.json"
+        p.write_text(json.dumps(plan))
+        r = self.run_cli("validate", str(p), check=False)
+        self.assertFalse(r["ok"])
+        self.assertEqual(sorted(r["errors"]), ["wave 0: dependency cycle a -> b -> a", "wave 0: dependency cycle c -> c"])
+        plan["waves"][0]["lanes"][1]["deps"] = []
+        plan["waves"][0]["lanes"][2]["deps"] = []
+        p.write_text(json.dumps(plan))
+        self.assertTrue(self.run_cli("validate", str(p))["ok"], "a chain without a cycle is fine")
+
+    def test_send_unless_ended_skips_a_second_final(self):
+        final = lambda *extra: self.run_cli("send", "--run", "r", "--lane", "a", "--box", "impl", "--kind", "final",
+                                            "--data", '{"reason":"merged"}', *extra)
+        self.assertIn("seq", final("--unless-ended"), "a lane still active gets the runner's final")
+        self.run_cli("state", "--run", "r", "--lane", "a", "--set", "status=active")
+        final("--set", "status=merged")  # the reviewer's final ends the lane
+        self.run_cli("recv", "--run", "r", "--lane", "a", "--box", "impl")  # read before the runner checks
+        self.assertTrue(final("--unless-ended")["skipped"])
+        self.assertEqual(self.run_cli("recv", "--run", "r", "--lane", "a", "--box", "impl", "--wait", "0")["messages"], [])
+
+    def test_resume_clears_stop_and_drain(self):
+        self.run_cli("stop", "--run", "r", "--drain")
+        self.run_cli("stop", "--run", "r")
+        self.assertTrue(self.run_cli("state", "--run", "r", "--lane", "a")["stop"])
+        self.assertEqual(sorted(self.run_cli("resume", "--run", "r")["cleared"]), ["DRAIN", "STOP"])
+        self.assertNotIn("stop", self.run_cli("state", "--run", "r", "--lane", "a"))
+        self.assertEqual(self.run_cli("resume", "--run", "r")["cleared"], [])
 
     def test_bad_ids_are_refused(self):
         r = subprocess.run([sys.executable, str(SCRIPT), "state", "--run", "../x", "--lane", "a"],

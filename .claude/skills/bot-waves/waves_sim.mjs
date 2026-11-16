@@ -43,6 +43,8 @@ function world(cap, scen) {
     if (sc.implNoChange) { post(slug, 'review', 'no_change', { summary: 'already fixed' }); return { status: 'no_change', summary: 'x' } }
     const resume = /RESUME:/.test(prompt)
     sc.prompts = (sc.prompts || []).concat(prompt)
+    // A long first implementation: the first-push watcher times out several times meanwhile.
+    if (sc.slowTicks && !resume) for (let i = 0; i < sc.slowTicks; i++) await tick()
     if (sc.checkpoints) {
       // Checkpoint once before the first push, once right after it, then serve the rounds.
       sc.n = (sc.n || 0) + 1
@@ -67,7 +69,11 @@ function world(cap, scen) {
       if (m.kind === 'review') post(slug, 'review', 'ready', { reason: 'review-fix', head: 'h' + head })
       if (m.kind === 'ci') post(slug, 'review', 'ready', { reason: 'ci-fix', head: 'h' + head })
       if (m.kind === 'conflict') post(slug, 'review', 'ready', { reason: 'conflict', head: 'h' + head, semantic: false })
-      if (m.kind === 'final') return { status: m.data.reason, summary: 'done ' + slug }
+      if (m.kind === 'final') {
+        // A real agent takes a few turns (worklog, worktree) after reading its final.
+        if (sc.slowFinal) for (let i = 0; i < 30; i++) await tick()
+        return { status: m.data.reason, summary: 'done ' + slug }
+      }
     }
   }
 
@@ -119,6 +125,8 @@ function world(cap, scen) {
     }
     if (kind === 'final') {
       const m = prompt.match(/--kind final --data '(.*?)'/)
+      // --unless-ended: the reviewer's final already set a terminal lane status.
+      if (/--unless-ended/.test(prompt) && ['merged', 'unresolved', 'stalled', 'merge_blocked', 'failed'].includes((state[slug] || {}).status)) return 'skipped'
       post(slug, 'impl', 'final', JSON.parse(m[1]))
       return 'ok'
     }
@@ -148,7 +156,7 @@ function world(cap, scen) {
     }
   }
   const parallel = thunks => Promise.all(thunks.map(t => t().catch(() => null)))
-  return { agent, parallel, labels, types, refused, state, rev, models, peak: () => peak, preload: (slug, b, kind) => post(slug, b, kind, {}) }
+  return { agent, parallel, labels, types, refused, state, rev, models, boxes, peak: () => peak, preload: (slug, b, kind) => post(slug, b, kind, {}) }
 }
 
 async function run(args, scen, cap = 2) {
@@ -195,18 +203,23 @@ const count = (w, prefix) => w.labels.filter(l => l === prefix || l.startsWith(p
 
 // 2. Unresolved after maxRounds; the dependents are skipped.
 {
-  const { res } = await run({ run: 'sim', track: 'A', plan, maxRounds: 2 }, { a: { reviewRounds: 9 } })
+  const { res, w } = await run({ run: 'sim', track: 'A', plan, maxRounds: 2 }, { a: { reviewRounds: 9, slowFinal: true }, d: { slowFinal: true } })
   const r = by(res)
   assert.equal(r.a.status, 'unresolved')
   assert.equal(r.b.status, 'skipped')
   assert.equal(r.c.status, 'skipped')
   assert.equal(r.d.status, 'merged')
+  for (const slug of ['a', 'd']) {
+    await tick(20)
+    assert.equal(w.boxes[slug].impl.filter(m => m.kind === 'final').length, 0, slug + ': no stale final left behind the one the reviewer sent')
+  }
 }
 
 // 3. Resume: finished lanes start nothing; a lane saved past impl starts both agents at once.
 {
+  const sb = { pr: 101 }
   const { res, w } = await run({ run: 'sim', track: 'A', plan }, {
-    $status: ['a|merged||100|2', 'b|active|fix|101|1', 'n|no_change|||'], b: { pr: 101 },
+    $status: ['a|merged||100|2', 'b|active|fix|101|1', 'n|no_change|||'], b: sb,
   })
   const r = by(res)
   assert.equal(r.a.resumed, true)
@@ -214,6 +227,15 @@ const count = (w, prefix) => w.labels.filter(l => l === prefix || l.startsWith(p
   assert.equal(r.b.status, 'merged')
   assert.ok(!w.labels.includes('watch:b'), 'a resumed review lane skips the first-push watch')
   assert.equal(count(w, 'review:b'), 1)
+  assert.ok(sb.prompts[0].includes('--box impl --kinds final'), 'a run restart discards finals a previous launch left queued')
+}
+
+// 3b. A long first implementation is not idleness: no stalled cutoff before the first push.
+{
+  const one = { tracks: ['A'], waves: [{ name: '1', lanes: [lane('a', 'A')] }] }
+  const { res, w } = await run({ run: 'sim', track: 'A', plan: one, maxIdleMin: 1 }, { a: { slowTicks: 120 } })
+  assert.equal(res[0].status, 'merged', JSON.stringify(res[0]))
+  assert.ok(count(w, 'watch:a') >= 2, 'the watcher timed out while the implementation agent worked')
 }
 
 // 4. A dying implementation agent (before the first push) and a dying review agent are each replaced once.
@@ -327,6 +349,7 @@ const count = (w, prefix) => w.labels.filter(l => l === prefix || l.startsWith(p
   assert.equal(count(w, 'brief:a'), 1, 'one brief per fresh lane')
   assert.ok(w.labels.indexOf('brief:a') < w.labels.indexOf('impl:a'), 'the brief runs before the implementation agent')
   assert.equal(count(w, 'impl:a'), 3, 'two checkpoints -> three implementation agents')
+  assert.ok(sa.prompts.slice(1).every(pr => !pr.includes('--kinds final')), 'a checkpoint successor keeps a queued final: it is meant for it')
   assert.ok(res[0].history.filter(h => /checkpoint/.test(h)).length === 2)
   const mo = Object.fromEntries(w.models.map(([l, m]) => [l.split('#')[0], m]))
   assert.equal(mo['impl:a'], 'sonnet')

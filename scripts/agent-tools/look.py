@@ -28,7 +28,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import wave_mail  # noqa: E402
 
-TOOLS = Path(wave_mail.DEFAULT_ROOT).parent / ".tools"
+TOOLS = Path(os.environ.get("WAVES_ROOT", wave_mail.DEFAULT_ROOT)).parent / ".tools"
 
 
 def godecl_bin():
@@ -62,7 +62,12 @@ def do_range(path, a, b, maxl):
 
 
 def do_go(path, names, tests, maxl):
-    args = [godecl_bin(), "-max", str(maxl)] + (["-tests"] if tests else []) + [path] + names
+    try:
+        binary = godecl_bin()
+    except (OSError, subprocess.CalledProcessError) as e:
+        # One failed build costs this spec only, never the rest of the batch.
+        return [f"error: godecl build failed ({e}); use rg or gopls for this lookup"]
+    args = [binary, "-max", str(maxl)] + (["-tests"] if tests else []) + [path] + names
     r = subprocess.run(args, capture_output=True, text=True)
     return (r.stdout + r.stderr).rstrip("\n").split("\n")
 

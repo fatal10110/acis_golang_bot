@@ -243,7 +243,7 @@ Pass the same path args (table above) to all four Workflows. Optional args:
 | `reviewCiFixes` | true | a CI fix gets a delta review before the next merge attempt |
 | `waitCalls` | 6 | recv calls (~9.5 min each) per first-push watcher agent |
 | `takeCalls` | 6 | take polls (~9.5 min each) per broker poller agent before it returns |
-| `maxIdleMin` | 240 | minutes without a mailbox message before a lane ends `stalled` |
+| `maxIdleMin` | 240 | minutes without a mailbox message, after the first push, before a lane ends `stalled` (before the push the implementation agent is working, not idle) |
 | `restarts` | 2 | replacements per lane for the review agent, and separately for the implementation side, when an agent dies or exits early (checkpoints do not count) |
 | `researcherPerLane` | 1 | researcher requests per lane (impl and review combined) |
 | `agentTypes` | `{coord: 'wave-coord', deliver: 'wave-deliver', merge: 'wave-merge', impl: 'wave-impl', review: 'wave-review', runner: 'wave-runner', scout: 'wave-scout', researcher: 'wave-researcher', brief: 'wave-brief'}` | agent type per role; `null` for a role falls back to the default workflow subagent |
@@ -274,10 +274,13 @@ Every role's workers inherit the session model unless listed in `models`.
   review agents update their worklog/notes and return `stopped`, the merger and helper end, and
   the tracks stop at their next wait. A merge agent already waiting on CI finishes its merge
   first.
-- **Resume** (after a restart, a stop or a usage limit): delete `<run dir>/STOP` if present, then
-  launch the same four Workflows again with the same args and a **new `epoch`**. Never use
+- **Resume** (after a restart, a stop, a drain or a usage limit): run `<tool> resume --run <run>`
+  (it clears both `STOP` and `DRAIN`; a `DRAIN` left in place makes every lane without a worktree
+  refuse to start), then launch the same four Workflows again with the same args and a **new
+  `epoch`**. Never use
   `resumeFromRunId`: the concurrent lanes break its cache. Each track skips finished lanes and
-  starts replacement agents with a RESUME note for active ones. Put slugs in `retry` to run
+  starts replacement agents with a RESUME note for active ones; a restarted implementation agent
+  first discards any `final` a previous launch left in its mailbox. Put slugs in `retry` to run
   finished lanes again.
 - A merger or helper workflow that died can be relaunched alone with the same `epoch`. Its first
   poll re-serves the requests the dead instance took but never answered. Relaunch a broker only

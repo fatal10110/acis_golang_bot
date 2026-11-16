@@ -5,7 +5,7 @@ Workflow agents cannot spawn subagents or talk to each other, and the workflow
 script cannot touch the filesystem. Every hand-off of a bot-waves run therefore
 goes through this CLI: lane mailboxes (orchestrator <-> long-lived implementation
 agent), the helper-request queue served by the broker workflow, lane state for
-resume, the cross-track merge lock and the wave barrier.
+resume and the wave barrier.
 
 All output is one JSON object on stdout. Waits poll every POLL seconds and are
 capped so one call fits in a 10-minute Bash tool timeout.
@@ -156,19 +156,25 @@ def stop_banner(paths):
     no agent spends a turn of its own checking for it.
     """
     root = Path(os.environ.get("WAVES_ROOT", DEFAULT_ROOT))
-    stopping = [d for d in root.glob("*/STOP")]
-    if not stopping:
+    if not any(root.glob("*/STOP")):
         return ""
+    # Worktree paths depend only on the lane slug, so an abandoned run can name the same path as
+    # a live one: the path belongs to the run whose lane state for it was updated last.
+    owner = {}
+    for st_path in root.glob("*/lanes/*/state.json"):
+        st = read_json(st_path, {})
+        wt = st.get("worktree")
+        if not wt:
+            continue
+        run = st_path.parent.parent.parent.name
+        for cand in (wt, str(Path(wt).parent / ("review-" + st_path.parent.name))):
+            c = os.path.realpath(cand)
+            if c not in owner or st.get("updated", 0) >= owner[c][0]:
+                owner[c] = (st.get("updated", 0), run)
     want = [os.path.realpath(p) for p in paths if p]
-    for stop in stopping:
-        for st in stop.parent.glob("lanes/*/state.json"):
-            wt = read_json(st, {}).get("worktree")
-            if not wt:
-                continue
-            for cand in (wt, str(Path(wt).parent / ("review-" + st.parent.name))):
-                c = os.path.realpath(cand)
-                if any(w == c or w.startswith(c + os.sep) for w in want):
-                    return f"### STOP: run {stop.parent.name} is stopping. Update your worklog, push nothing more, and return status stopped."
+    for c, (_, run) in owner.items():
+        if any(w == c or w.startswith(c + os.sep) for w in want) and (root / run / "STOP").exists():
+            return f"### STOP: run {run} is stopping. Update your worklog, push nothing more, and return status stopped."
     return ""
 
 
@@ -185,6 +191,11 @@ def cmd_send(a):
     bd = box_dir(a.run, a.lane, a.box)
     data = parse_data(a.data)
     with flock(bd / ".seq.lock"):
+        if a.unless_ended:
+            status = read_json(lane_dir(a.run, a.lane) / "state.json", {}).get("status")
+            if status in TERMINAL_STATUSES:
+                out({"skipped": True, "reason": f"lane already ended ({status}); its final was sent with that status"})
+                return
         seq = read_json(bd / ".seq", 0) + 1
         msg = {"seq": seq, "kind": a.kind, "data": data, "ts": round(now())}
         write_atomic(bd / f"{seq:06d}.json", json.dumps(msg, ensure_ascii=False))
@@ -435,41 +446,6 @@ def cmd_request(a):
     out(read_json(p, {"error": "no such request"}))
 
 
-# ---- merge lock -----------------------------------------------------------
-
-def cmd_lock(a):
-    check(a.name, NAME_RE, "lock name")
-    ld = run_dir(a.run) / "locks"
-    ld.mkdir(parents=True, exist_ok=True)
-    owner_file = ld / f"{a.name}.json"
-    with flock(ld / f".{a.name}.lock"):
-        cur = read_json(owner_file, None)
-    if a.action == "release":
-        with flock(ld / f".{a.name}.lock"):
-            cur = read_json(owner_file, None)
-            if cur and (cur["owner"] == a.owner or a.force):
-                owner_file.unlink()
-                out({"released": True})
-            else:
-                out({"released": False, "holder": cur})
-        return
-    deadline = now() + wait_secs(a.wait)
-    while True:
-        with flock(ld / f".{a.name}.lock"):
-            cur = read_json(owner_file, None)
-            stale = cur and now() - cur["ts"] >= a.stale_min * 60
-            if not cur or stale or cur["owner"] == a.owner:
-                write_atomic(owner_file, json.dumps({"owner": a.owner, "ts": now()}))
-                out({"acquired": True, "stole_from": cur["owner"] if stale and cur["owner"] != a.owner else None})
-                return
-        if now() >= deadline:
-            out({"acquired": False, "holder": cur})
-            return
-        time.sleep(POLL)
-
-
-# ---- waves ----------------------------------------------------------------
-
 def cmd_barrier(a):
     tracks = [check(t, NAME_RE, "track") for t in a.tracks.split(",") if t]
     check(a.track, NAME_RE, "track")
@@ -661,6 +637,17 @@ def cmd_stopcheck(a):
         sys.exit(3)
 
 
+def cmd_resume(a):
+    """Clear the STOP and DRAIN markers before relaunching a stopped or drained run."""
+    cleared = []
+    for marker in ("STOP", "DRAIN"):
+        p = run_dir(a.run) / marker
+        if p.exists():
+            p.unlink()
+            cleared.append(marker)
+    out({"resumed": True, "cleared": cleared})
+
+
 def cmd_stop(a):
     if a.drain:
         (run_dir(a.run) / "DRAIN").touch()
@@ -715,6 +702,28 @@ def validate(plan):
             for h in l.get("hot", []):
                 if hot_owner.setdefault(h, l.get("track")) != l.get("track"):
                     errs.append(f"wave {wi}: hot group {h} spans tracks {hot_owner[h]} and {l.get('track')}")
+        errs += dep_cycles(w.get("lanes", []), wi)
+    return errs
+
+
+def dep_cycles(lanes, wi):
+    """Same-wave dependency cycles (a lane listing itself included): each would wait forever."""
+    deps = {l.get("slug"): [d for d in l.get("deps", []) if d in {x.get("slug") for x in lanes}] for l in lanes}
+    errs, state = [], {}  # state: 1 = on the current path, 2 = done
+
+    def visit(s, path):
+        state[s] = 1
+        for d in deps.get(s, []):
+            if state.get(d) == 1:
+                cyc = path[path.index(d):] + [d]
+                errs.append(f"wave {wi}: dependency cycle {' -> '.join(cyc)}")
+            elif state.get(d) is None:
+                visit(d, path + [d])
+        state[s] = 2
+
+    for s in deps:
+        if state.get(s) is None:
+            visit(s, [s])
     return errs
 
 
@@ -743,6 +752,7 @@ def main(argv=None):
     s.add_argument("--kind", required=True)
     s.add_argument("--data", help="JSON object, or - for stdin")
     s.add_argument("--set", action="extend", nargs="+", help="also update lane state: key=value [key=value ...]")
+    s.add_argument("--unless-ended", action="store_true", help="send nothing when the lane state already has a terminal status")
 
     s = add("recv", cmd_recv)
     s.add_argument("--lane", required=True)
@@ -788,14 +798,6 @@ def main(argv=None):
     s = add("request", cmd_request)
     s.add_argument("--id", required=True)
 
-    s = add("lock", cmd_lock)
-    s.add_argument("action", choices=["acquire", "release"])
-    s.add_argument("--name", default="merge")
-    s.add_argument("--owner", required=True)
-    s.add_argument("--wait", type=float, default=MAX_WAIT)
-    s.add_argument("--stale-min", type=float, default=180)
-    s.add_argument("--force", action="store_true")
-
     s = add("barrier", cmd_barrier)
     s.add_argument("--epoch", default="1")
     s.add_argument("--wave", required=True)
@@ -809,6 +811,8 @@ def main(argv=None):
 
     s = add("stop", cmd_stop)
     s.add_argument("--drain", action="store_true", help="let lanes under way finish; a lane without a worktree refuses to start")
+
+    add("resume", cmd_resume)
 
     s = add("worktree", cmd_worktree)
     s.add_argument("--lane", required=True)

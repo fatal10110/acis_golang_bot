@@ -158,7 +158,7 @@ Environment rules (all agents):
 - Merged PRs close their issues: one "Closes #n" line per fully resolved issue, "Part of #n" for partial ones. The PR body ends with the gap audit line CLAUDE.md requires.
 - Commit messages end with a blank line then the Co-Authored-By trailer your lane instructions name (it names the model you run on).
 - PR bodies end with: 🤖 Generated with [Claude Code](https://claude.com/claude-code)
-- Never put model names or IDs in commits, PR text or code.
+- Never put model names or IDs in commit messages, PR text or code, except the Co-Authored-By trailer named above.
 - Put new tests in new or small test files to avoid conflicts between lanes.
 ${PLAN.exclusions ? '- Never touch (other sessions / owner decisions): ' + PLAN.exclusions + '\n' : ''}${PLAN.env ? PLAN.env + '\n' : ''}- Other lanes run concurrently or later; stay within your lane and do not implement what other lanes own: ${ALL_LANES.map(l => l.slug + '=' + l.issues.join('/')).join('; ')}.
 `
@@ -268,9 +268,12 @@ ${resume ? '\nRESUME: ' + resume : ''}
 Return: status, pr_number, closes, summary (what changed, key files, decisions), followups_filed.`
 }
 
-function implResume(L, why) {
+function implResume(L, why, restart) {
   const D = LANE_DIR(L.slug)
-  return `${why} First run ${MB} state --run ${RUN} --lane ${L.slug} --set status=active ; the state it prints (stage, pr, round) is authoritative. Rebuild your context from ${D}/worklog.md, the PR if there is one (pull_request_read get and its unresolved review threads; for the code, \`git -C ${WT}/wf-${L.slug} diff --stat origin/main...HEAD\`, then only the hunks a review item or the worklog points at; never get_diff of the whole PR, which carries generated files), ${D}/reviews/ and ${D}/ci/. Reuse worktree ${WT}/wf-${L.slug} (recreate it from origin/wf/${L.slug} if missing). Then by stage:
+  // After a run restart (resume or retry) a final left by the previous launch would end this agent at
+  // its first recv. Only then: within a launch, a queued final is meant for this lane's agent.
+  const drain = restart ? ` Then discard finals a previous launch left queued: ${MB} drain --run ${RUN} --lane ${L.slug} --box impl --kinds final .` : ''
+  return `${why} First run ${MB} state --run ${RUN} --lane ${L.slug} --set status=active ; the state it prints (stage, pr, round) is authoritative.${drain} Rebuild your context from ${D}/worklog.md, the PR if there is one (pull_request_read get and its unresolved review threads; for the code, \`git -C ${WT}/wf-${L.slug} diff --stat origin/main...HEAD\`, then only the hunks a review item or the worklog points at; never get_diff of the whole PR, which carries generated files), ${D}/reviews/ and ${D}/ci/. Reuse worktree ${WT}/wf-${L.slug} (recreate it from origin/wf/${L.slug} if missing). Then by stage:
 - impl: finish the implementation and continue with the protocol.
 - review or merge: the review agent is working; go straight to recv.
 - fix: the newest review in ${D}/reviews/ may be partly addressed; compare what is pushed with what was asked, finish it, push, send ready reason review-fix.
@@ -356,7 +359,7 @@ Return the last output: messages (seq, kind, and data re-encoded as a JSON strin
 
 function deliverFinalPrompt(L, data) {
   return `Run only this command in one Bash call with timeout 600000, copied exactly, and do nothing else; then return messages [], timeout true:
-${MB} send --run ${RUN} --lane ${L.slug} --box impl --kind final --data '${sq(data)}' --set status=${data.reason}`
+${MB} send --run ${RUN} --lane ${L.slug} --box impl --kind final --data '${sq(data)}' --set status=${data.reason} --unless-ended`
 }
 
 function statusPrompt() {
@@ -504,14 +507,13 @@ async function lifecycle(L, prev, retried) {
     if (typeof b === 'string' && b.trim()) brief = b.trim().slice(0, 24000)
     else if (b && typeof b === 'object' && b.brief) brief = String(b.brief).slice(0, 24000)
   }
-  start('impl', resuming ? implResume(L, 'A previous implementation agent for this lane stopped (run restart).') : null)
+  start('impl', resuming ? implResume(L, 'A previous implementation agent for this lane stopped (run restart).', true) : null)
   // A checkpoint hands the lane to a fresh implementation agent; anything else counts as an early exit.
   const checkpointed = r => r.status === 'checkpoint' && checkpoints < MAX_CHECKPOINTS && ++checkpoints
   const ckptWhy = 'The previous implementation agent of this lane checkpointed to keep its context small; you continue its work with an empty context.'
 
   // Until the first push only the implementation agent runs; a cheap watcher holds the second slot.
   let reviewing = pushed
-  let idleMin = 0
   let watchFails = 0
   let firstWatch = true
   // An implementation agent's exit (a checkpoint above all) posts no mailbox message, so the watcher
@@ -540,7 +542,6 @@ async function lifecycle(L, prev, retried) {
       if (checkpointed(done.impl)) {
         history.push(`impl#${runs.impl} checkpoint`)
         start('impl', implResume(L, ckptWhy))
-        idleMin = 0
         continue
       }
       if (++fails.impl > RESTARTS) {
@@ -556,7 +557,6 @@ async function lifecycle(L, prev, retried) {
       history.push(`impl#${runs.impl} exited before the first push: ${done.impl.status}`)
       log(`${slug}: implementation agent exited (${done.impl.status}); starting a replacement`)
       start('impl', implResume(L, why('impl', done.impl)))
-      idleMin = 0
       continue
     }
     if (!w) {
@@ -567,13 +567,9 @@ async function lifecycle(L, prev, retried) {
       }
       continue
     }
+    // A watcher timeout only means the implementation agent is still working before its first push.
+    // There is no idle cutoff here: the agent's own run ends it, and a real early exit is handled above.
     watchFails = 0
-    idleMin += WAIT_CALLS * 9.5
-    if (idleMin > MAX_IDLE_MIN) {
-      await sendFinal({ reason: 'stalled' })
-      await live.impl
-      return { slug, status: 'stalled', history, impl: done.impl }
-    }
   }
 
   log(`${slug}: first push ready; review agent starting`)

@@ -34,21 +34,31 @@ func main() {
 		os.Exit(2)
 	}
 	fset := token.NewFileSet()
+	type parsed struct {
+		path string
+		src  []byte
+		f    *ast.File
+	}
+	// Each file is read and parsed once, however many names are asked for.
+	var parsedFiles []parsed
+	for _, path := range files {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, src, parser.ParseComments)
+		if err != nil {
+			continue
+		}
+		parsedFiles = append(parsedFiles, parsed{path, src, f})
+	}
 	missing := 0
 	for _, name := range flag.Args()[1:] {
 		found := 0
-		for _, path := range files {
-			src, err := os.ReadFile(path)
-			if err != nil {
-				continue
-			}
-			f, err := parser.ParseFile(fset, path, src, parser.ParseComments)
-			if err != nil {
-				continue
-			}
-			for _, n := range matches(f, name) {
+		for _, pf := range parsedFiles {
+			for _, n := range matches(pf.f, name) {
 				found++
-				print(fset, path, src, n, *maxLines)
+				print(fset, pf.path, pf.src, n, *maxLines)
 			}
 		}
 		if found == 0 {
