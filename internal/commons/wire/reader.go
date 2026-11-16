@@ -111,6 +111,10 @@ func (r *Reader) ReadFloat64() float64 {
 	return math.Float64frombits(uint64(r.ReadInt64()))
 }
 
+// Skip consumes the next n bytes without copying them; a frame shorter
+// than n fails with ErrShortPacket.
+func (r *Reader) Skip(n int) { r.take(n) }
+
 // ReadBytes reads and copies the next n raw bytes.
 func (r *Reader) ReadBytes(n int) []byte {
 	b := r.take(n)

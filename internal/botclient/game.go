@@ -155,6 +155,9 @@ type Self struct {
 	// Burst holds copies of the EnterWorld frames that preceded UserInfo
 	// (objects already in sight among them), in arrival order.
 	Burst [][]byte
+	// UserInfo is a copy of the burst's UserInfo frame. NewWorld replays
+	// it after Burst.
+	UserInfo []byte
 }
 
 // GameStartError reports a game-server rejection before the world was
@@ -243,6 +246,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 			}
 			self.Name = name
 			self.Burst = burst
+			self.UserInfo = append([]byte(nil), raw...)
 			return self, nil
 		case opGameServerClose:
 			return Self{}, errServerClose

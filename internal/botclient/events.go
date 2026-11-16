@@ -59,6 +59,178 @@ type LeaveWorld struct{}
 // ServerClose is the server's last packet before it drops the connection.
 type ServerClose struct{}
 
+// UserInfo is the bot's own character in full. The server sends it on
+// entering the world and again whenever the character changes.
+type UserInfo struct {
+	ObjectID int32
+	Name     string
+	Pos      Point
+	Heading  int32
+	// BaseClass is the class drawn on the model, ClassID the class played.
+	Race, Sex, BaseClass, ClassID int32
+	Level                         int32
+	Exp                           int64
+	SP                            int32
+	HP, MaxHP                     int32
+	MP, MaxMP                     int32
+	CP, MaxCP                     int32
+	// Load and MaxLoad are the carried weight and the weight limit.
+	Load, MaxLoad  int32
+	PvPFlag, Karma int32
+	// RunSpeed and WalkSpeed are effective speeds in world units per
+	// second: the base speed the packet carries times its movement
+	// multiplier, as the client computes them.
+	RunSpeed, WalkSpeed int32
+	Running             bool
+	// StoreType is the private store mode (the server's operate type; 0
+	// for none).
+	StoreType uint8
+	IsGM      bool
+}
+
+// StatusFields is a set of StatusUpdate fields.
+type StatusFields uint16
+
+// The StatusUpdate fields the model keeps; the packet's other attributes
+// (attack and cast speed) are consumed and dropped.
+const (
+	StatusHP StatusFields = 1 << iota
+	StatusMaxHP
+	StatusMP
+	StatusMaxMP
+	StatusCP
+	StatusMaxCP
+	StatusSP
+	StatusLoad
+	StatusMaxLoad
+	StatusKarma
+)
+
+// StatusUpdate reports new values for some of an object's attributes: Set
+// names the fields the packet carried; the others are zero and unchanged.
+type StatusUpdate struct {
+	ObjectID  int32
+	Set       StatusFields
+	HP, MaxHP int32
+	MP, MaxMP int32
+	CP, MaxCP int32
+	SP        int32
+	// Load and MaxLoad are the carried weight and the weight limit.
+	Load, MaxLoad int32
+	Karma         int32
+}
+
+// CharInfo describes another player in sight.
+type CharInfo struct {
+	ObjectID int32
+	Name     string
+	Pos      Point
+	Heading  int32
+	ClassID  int32
+	PvPFlag  int32
+	Karma    int32
+	// RunSpeed and WalkSpeed are effective speeds, as in UserInfo.
+	RunSpeed, WalkSpeed int32
+	Sitting, Running    bool
+	InCombat, Dead      bool
+	// StoreType is the private store mode, as in UserInfo.
+	StoreType uint8
+}
+
+// NPCInfo describes an NPC (a monster, a townsperson or a summon) in sight.
+type NPCInfo struct {
+	ObjectID int32
+	// NPCID is the NPC template id.
+	NPCID      int32
+	Attackable bool
+	Pos        Point
+	Heading    int32
+	// RunSpeed and WalkSpeed are effective speeds, as in UserInfo.
+	RunSpeed, WalkSpeed int32
+	Running, InCombat   bool
+	Dead, Summon        bool
+	PvPFlag, Karma      int32
+}
+
+// MoveToPawn reports an object starting to move from Origin toward
+// TargetID until it is Distance away from it.
+type MoveToPawn struct {
+	ObjectID, TargetID int32
+	Distance           int32
+	Origin             Point
+}
+
+// RestartPoints are the places a dead character may choose to restart at.
+type RestartPoints struct {
+	Village, ClanHall, Castle, SiegeHQ bool
+	// Fixed is a restart in place.
+	Fixed bool
+}
+
+// Die reports an object's death. For the bot's own character, Restart lists
+// the restart points it is offered.
+type Die struct {
+	ObjectID  int32
+	Restart   RestartPoints
+	Sweepable bool
+}
+
+// Revive reports an object brought back to life.
+type Revive struct{ ObjectID int32 }
+
+// MyTargetSelected confirms the bot's own target; Color is the level
+// difference color the client draws.
+type MyTargetSelected struct {
+	ObjectID int32
+	Color    uint16
+}
+
+// TargetUnselected reports that the object ObjectID, standing at Pos,
+// cleared its target.
+type TargetUnselected struct {
+	ObjectID int32
+	Pos      Point
+}
+
+// SystemMessage is a system message by id; its parameters are consumed and
+// dropped.
+type SystemMessage struct{ ID int32 }
+
+// ActionFailed tells the client its last action request was not carried
+// out.
+type ActionFailed struct{}
+
+// CreatureSay is a chat line on channel Type, said by ObjectID (0 for none)
+// under Name.
+type CreatureSay struct {
+	ObjectID, Type int32
+	Name, Text     string
+}
+
+// WaitType is a ChangeWaitType stance.
+type WaitType int32
+
+// The stances ChangeWaitType reports (serverpackets/stance_social.go).
+const (
+	WaitSitting        WaitType = 0
+	WaitStanding       WaitType = 1
+	WaitFakeDeathStart WaitType = 2
+	WaitFakeDeathStop  WaitType = 3
+)
+
+// ChangeWaitType reports an object at Pos changing stance.
+type ChangeWaitType struct {
+	ObjectID int32
+	Type     WaitType
+	Pos      Point
+}
+
+// AutoAttackStart reports an object entering its combat stance.
+type AutoAttackStart struct{ ObjectID int32 }
+
+// AutoAttackStop reports an object leaving its combat stance.
+type AutoAttackStop struct{ ObjectID int32 }
+
 func (MoveToLocation) event()     {}
 func (StopMove) event()           {}
 func (ValidateLocation) event()   {}
@@ -66,6 +238,21 @@ func (TeleportToLocation) event() {}
 func (DeleteObject) event()       {}
 func (LeaveWorld) event()         {}
 func (ServerClose) event()        {}
+func (UserInfo) event()           {}
+func (StatusUpdate) event()       {}
+func (CharInfo) event()           {}
+func (NPCInfo) event()            {}
+func (MoveToPawn) event()         {}
+func (Die) event()                {}
+func (Revive) event()             {}
+func (MyTargetSelected) event()   {}
+func (TargetUnselected) event()   {}
+func (SystemMessage) event()      {}
+func (ActionFailed) event()       {}
+func (CreatureSay) event()        {}
+func (ChangeWaitType) event()     {}
+func (AutoAttackStart) event()    {}
+func (AutoAttackStop) event()     {}
 
 // Events is the bounded queue from one session's reader to its brain, one
 // per session attempt.

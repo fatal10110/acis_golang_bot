@@ -68,6 +68,22 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameStopMove:           decodeStopMove,
 	opGameValidateLocation:   decodeValidateLocation,
 	opGameLeaveWorld:         func(*wire.Reader) Event { return LeaveWorld{} },
+
+	opGameUserInfo:         decodeUserInfoEvent,
+	opGameStatusUpdate:     decodeStatusUpdate,
+	opGameCharInfo:         decodeCharInfo,
+	opGameNPCInfo:          decodeNPCInfo,
+	opGameMoveToPawn:       decodeMoveToPawn,
+	opGameDie:              decodeDie,
+	opGameRevive:           func(r *wire.Reader) Event { return Revive{ObjectID: r.ReadInt32()} },
+	opGameMyTargetSelected: decodeMyTargetSelected,
+	opGameTargetUnselected: decodeTargetUnselected,
+	opGameSystemMessage:    decodeSystemMessage,
+	opGameActionFailed:     func(*wire.Reader) Event { return ActionFailed{} },
+	opGameCreatureSay:      decodeCreatureSay,
+	opGameChangeWaitType:   decodeChangeWaitType,
+	opGameAutoAttackStart:  func(r *wire.Reader) Event { return AutoAttackStart{ObjectID: r.ReadInt32()} },
+	opGameAutoAttackStop:   func(r *wire.Reader) Event { return AutoAttackStop{ObjectID: r.ReadInt32()} },
 }
 
 // decodeEvent decodes a non-empty frame; ok is false for an opcode the
