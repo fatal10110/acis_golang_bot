@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<list>
+	<territory name="gludio02_1922_10" minZ="-3500" maxZ="-3000">
+		<node x="-100" y="-100"/>
+		<node x="100" y="-100"/>
+		<node x="0" y="100"/>
+	</territory>
+	<territory name="gludio02_1922_05b" minZ="-3500" maxZ="-3000">
+		<node x="-10" y="-10"/>
+		<node x="10" y="-10"/>
+		<node x="0" y="10"/>
+	</territory>
+	<!-- Same name, other case: kept in the list, the first one resolves. -->
+	<territory name="GLUDIO02_1922_10" minZ="0" maxZ="10">
+		<node x="0" y="0"/>
+		<node x="1" y="0"/>
+		<node x="0" y="1"/>
+	</territory>
+	<!-- Unbuildable on the server: skipped with a warning. -->
+	<territory name="two_nodes" minZ="0" maxZ="10">
+		<node x="0" y="0"/>
+		<node x="1" y="0"/>
+	</territory>
+	<territory name="inverted_z" minZ="10" maxZ="0">
+		<node x="0" y="0"/>
+		<node x="1" y="0"/>
+		<node x="0" y="1"/>
+	</territory>
+	<npcmaker name="gludio02_1922_1001" territory="gludio02_1922_10" ban="gludio02_1922_05b" maximumNpcs="20">
+		<npc id="20001" total="5" respawn="30sec" respawnRand="10sec"/>
+		<npc id="20002" total="3" respawn="1min"/>
+	</npcmaker>
+	<npcmaker name="ssq_event_maker" territory=" SSQTELEPORT1_1612_31 ; gludio02_1922_10 ;" maximumNpcs="4" event="ssq_seal1_dawn">
+		<npc id="25001" pos="55024;17368;-5412;0;40%;53504;21248;-5496;0;60%;" total="1" respawn="48hour" respawnRand="20hour" dbName="orfen" dbSaving="DEATH_TIME;POS"/>
+	</npcmaker>
+	<npcmaker name="fixed_npc" territory="two_nodes" maximumNpcs="1">
+		<npc id="20002" pos="214880;-116144;-1644;0" total="1" respawn="no"/>
+	</npcmaker>
+	<npcmaker name="partly_missing" territory="gludio02_1922_10;nowhere" ban="nowhere_b" maximumNpcs="2"/>
+</list>

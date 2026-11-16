@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Seven Signs
+ * Dimensional Rift
+-->
+<list>
+	<!--  -->
+	<territory name="ssqteleport1_1612_31" minZ="-6786" maxZ="-6586">
+		<node x="-112364" y="-182829"/>
+		<node x="-111569" y="-182829"/>
+		<node x="-111569" y="-182040"/>
+		<node x="-112364" y="-182040"/>
+	</territory>
+	<npcmaker name="dimension_gap_00" territory="ssqteleport1_1612_31" maximumNpcs="9">
+		<ai type="manage_teleport_dungeon">
+				<set name="manager_npc_name" val="r00_invader_teleport"/>
+		</ai>
+		<npc id="21659" total="2" respawn="90sec">
+			<ai>
+				<set name="CreviceOfDiminsion" val="1"/>
+			</ai>
+		</npc>
+	</npcmaker>
+</list>

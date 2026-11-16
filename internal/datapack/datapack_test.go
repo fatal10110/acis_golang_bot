@@ -1,0 +1,184 @@
+package datapack
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestLoadSamples(t *testing.T) {
+	dp, err := Load(filepath.Join("testdata", "xml"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	wantNPCs := map[int32]NPC{
+		20001: {ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000},
+		20002: {ID: 20002, Name: "Rabbit", Type: "Monster", Level: 3},
+		20101: {ID: 20101, Name: "Set Name", Type: "Folk", Level: 1},
+		25001: {ID: 25001, Name: "Greyclaw Kutus", Type: "RaidBoss", Level: 23, AggroRange: 300},
+	}
+	if !reflect.DeepEqual(dp.NPCs, wantNPCs) {
+		t.Errorf("NPCs = %+v, want %+v", dp.NPCs, wantNPCs)
+	}
+
+	sl := dp.Spawnlist
+	ssq := &Territory{
+		Name: "ssqteleport1_1612_31", MinZ: -6786, MaxZ: -6586,
+		Nodes: []Point{{-112364, -182829}, {-111569, -182829}, {-111569, -182040}, {-112364, -182040}},
+	}
+	gludio := &Territory{
+		Name: "gludio02_1922_10", MinZ: -3500, MaxZ: -3000,
+		Nodes: []Point{{-100, -100}, {100, -100}, {0, 100}},
+	}
+	ban := &Territory{
+		Name: "gludio02_1922_05b", MinZ: -3500, MaxZ: -3000,
+		Nodes: []Point{{-10, -10}, {10, -10}, {0, 10}},
+	}
+	dup := &Territory{
+		Name: "GLUDIO02_1922_10", MinZ: 0, MaxZ: 10,
+		Nodes: []Point{{0, 0}, {1, 0}, {0, 1}},
+	}
+	wantTerritories := []*Territory{ssq, gludio, ban, dup}
+	if !reflect.DeepEqual(sl.Territories, wantTerritories) {
+		t.Errorf("Territories = %+v, want %+v", sl.Territories, wantTerritories)
+	}
+
+	wantMakers := []*Maker{
+		{
+			Name: "dimension_gap_00", Territories: []*Territory{ssq}, MaximumNPCs: 9,
+			Spawns: []Spawn{{NPCID: 21659, Total: 2, Respawn: 90 * time.Second}},
+		},
+		{
+			Name: "gludio02_1922_1001", Territories: []*Territory{gludio}, Banned: []*Territory{ban}, MaximumNPCs: 20,
+			Spawns: []Spawn{
+				{NPCID: 20001, Total: 5, Respawn: 30 * time.Second, RespawnRandom: 10 * time.Second},
+				{NPCID: 20002, Total: 3, Respawn: time.Minute},
+			},
+		},
+		{
+			Name: "ssq_event_maker", Territories: []*Territory{ssq, gludio}, MaximumNPCs: 4, Event: "ssq_seal1_dawn",
+			Spawns: []Spawn{{
+				NPCID: 25001, Total: 1, Respawn: 48 * time.Hour, RespawnRandom: 20 * time.Hour,
+				Positions: []Position{
+					{X: 55024, Y: 17368, Z: -5412, Chance: 40},
+					{X: 53504, Y: 21248, Z: -5496, Chance: 60},
+				},
+			}},
+		},
+		{
+			Name: "fixed_npc", MaximumNPCs: 1,
+			Spawns: []Spawn{{
+				NPCID: 20002, Total: 1, Respawn: NoRespawn,
+				Positions: []Position{{X: 214880, Y: -116144, Z: -1644}},
+			}},
+		},
+		{Name: "partly_missing", MaximumNPCs: 2, Spawns: []Spawn{}},
+	}
+	if len(sl.Makers) != len(wantMakers) {
+		t.Fatalf("got %d makers, want %d", len(sl.Makers), len(wantMakers))
+	}
+	for i, want := range wantMakers {
+		if !reflect.DeepEqual(sl.Makers[i], want) {
+			t.Errorf("Makers[%d] = %+v, want %+v", i, sl.Makers[i], want)
+		}
+	}
+
+	file := filepath.Join("testdata", "xml", "spawnlist", "19_22.xml")
+	wantWarnings := []string{
+		file + `: skipping territory "two_nodes": needs at least 3 nodes`,
+		file + `: skipping territory "inverted_z": maxZ must be >= minZ`,
+		`maker "fixed_npc": territory "two_nodes" does not exist`,
+		`maker "partly_missing": territory "nowhere" does not exist`,
+		`maker "partly_missing": territory "nowhere_b" does not exist`,
+	}
+	if !reflect.DeepEqual(sl.Warnings, wantWarnings) {
+		t.Errorf("Warnings = %q, want %q", sl.Warnings, wantWarnings)
+	}
+}
+
+func TestLoadDirErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		files   map[string]string
+		wantErr string
+	}{
+		{
+			name:    "no npc files",
+			files:   map[string]string{"spawnlist/a.xml": "<list/>"},
+			wantErr: "no npc files",
+		},
+		{
+			name:    "no spawnlist files",
+			files:   map[string]string{"npcs/a.xml": "<list/>"},
+			wantErr: "no spawnlist files",
+		},
+		{
+			name:    "malformed npc file",
+			files:   map[string]string{"npcs/a.xml": "<list><npc>", "spawnlist/a.xml": "<list/>"},
+			wantErr: "decode",
+		},
+		{
+			name:    "malformed spawnlist file",
+			files:   map[string]string{"npcs/a.xml": "<list/>", "spawnlist/a.xml": "<list><territory"},
+			wantErr: "decode",
+		},
+		{
+			name: "duplicate npc id across files",
+			files: map[string]string{
+				"npcs/a.xml":      `<list><npc id="1" name="a"><set name="type" val="Monster"/></npc></list>`,
+				"npcs/b.xml":      `<list><npc id="1" name="b"><set name="type" val="Monster"/></npc></list>`,
+				"spawnlist/a.xml": "<list/>",
+			},
+			wantErr: "npc 1: duplicate id",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, sub := range []string{"npcs", "spawnlist"} {
+				if err := os.Mkdir(filepath.Join(dir, sub), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for name, body := range tt.files {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := Load(dir)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Load error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestLoadShippedDatapack loads a real datapack when BOT_DATAPACK_XML names
+// its data/xml directory (the server checkout's aCis_datapack/data/xml), and
+// skips otherwise: the datapack is not part of this repository.
+func TestLoadShippedDatapack(t *testing.T) {
+	dir := os.Getenv("BOT_DATAPACK_XML")
+	if dir == "" {
+		t.Skip("BOT_DATAPACK_XML not set")
+	}
+	dp, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load(%s): %v", dir, err)
+	}
+	spawns := 0
+	for _, m := range dp.Spawnlist.Makers {
+		spawns += len(m.Spawns)
+	}
+	t.Logf("npcs=%d territories=%d makers=%d spawns=%d warnings=%d",
+		len(dp.NPCs), len(dp.Spawnlist.Territories), len(dp.Spawnlist.Makers), spawns, len(dp.Spawnlist.Warnings))
+	for _, w := range dp.Spawnlist.Warnings {
+		t.Logf("warning: %s", w)
+	}
+	if len(dp.NPCs) == 0 || len(dp.Spawnlist.Territories) == 0 || len(dp.Spawnlist.Makers) == 0 || spawns == 0 {
+		t.Fatal("shipped datapack loaded empty")
+	}
+}
