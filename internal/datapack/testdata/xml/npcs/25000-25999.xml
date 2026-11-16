@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<list>
+	<npc id="25001" name="Greyclaw Kutus" title="" alias="">
+		<set name="type" val="RaidBoss"/>
+		<set name="level" val="23"/>
+		<set name="aggroRange" val="300"/>
+	</npc>
+</list>
