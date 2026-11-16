@@ -272,13 +272,52 @@ func TestLoginSession(t *testing.T) {
 }
 
 func TestLoginContextCanceled(t *testing.T) {
-	client, server := net.Pipe()
-	defer server.Close()
-	defer client.Close()
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	// The server never sends Init: only ctx ends the read.
-	if _, err := login(ctx, client, "bot7", "secret", 1, time.Hour); err == nil {
-		t.Fatal("login with a canceled context succeeded")
+	_, scrambled := newLoginKey(t)
+	key := []byte("0123456789abcdef")
+	decrypt, encrypt := loginCryptFuncs(t, key)
+	first := encryptInit(t, initPayload(0x4242, scrambled, key), 0x01020304)
+	tests := []struct {
+		name string
+		// whileReading cancels once the server holds AuthGameGuard, so
+		// the client is blocked reading GGAuth; else ctx ends before the
+		// session starts and the server never sends Init.
+		whileReading bool
+	}{
+		{"before Init", false},
+		{"while reading GGAuth", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, server := net.Pipe()
+			defer client.Close()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s := newFakeServer(server)
+			s.padded = true
+			done := make(chan error, 1)
+			if tt.whileReading {
+				go func() {
+					if err := s.send(first); err != nil {
+						done <- err
+						return
+					}
+					s.decrypt, s.encrypt = decrypt, encrypt
+					// The server answers nothing: only ctx ends the read.
+					done <- s.run([]step{{check: func([]byte) error { cancel(); return nil }}}, false)
+				}()
+			} else {
+				cancel()
+				go func() { done <- s.run(nil, false) }()
+			}
+
+			_, err := login(ctx, client, "bot7", "secret", 1, time.Hour)
+			client.Close()
+			if serr := <-done; serr != nil {
+				t.Fatalf("fake server: %v", serr)
+			}
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want context.Canceled", err)
+			}
+		})
 	}
 }

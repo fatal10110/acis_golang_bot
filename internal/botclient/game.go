@@ -20,7 +20,10 @@ const logoutRefusalGrace = time.Second
 // GameConn is the client side of one game-server connection. One goroutine
 // may Send while another reads: the cipher keeps separate inbound and
 // outbound keys, and both are armed before DialGame returns. Concurrent
-// Sends must be serialized by the caller.
+// Sends must be serialized by the caller. Read, EnterGame and Logout all read
+// the connection and share its frame buffer and inbound cipher state: at most
+// one of them may run at a time, so a reader goroutine is stopped and joined
+// before EnterGame or Logout, or the call is routed through it.
 type GameConn struct {
 	conn    net.Conn
 	frames  *wire.FrameReader
@@ -241,7 +244,8 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 // logoutRefusalGrace is ErrLogoutRefused: the character stays in the world.
 // The connection closing without LeaveWorld, or no answer within the
 // timeout, is an error too. ctx ending fails the logout at once. The caller
-// closes the connection in every case.
+// closes the connection in every case. Logout reads the connection itself:
+// no other goroutine may be in Read while it runs (see GameConn).
 func (g *GameConn) Logout(ctx context.Context) error {
 	stop := context.AfterFunc(ctx, func() { _ = g.conn.SetDeadline(time.Unix(1, 0)) })
 	defer stop()

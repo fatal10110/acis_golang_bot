@@ -278,25 +278,41 @@ func TestLogout(t *testing.T) {
 }
 
 func TestGameContextCanceled(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
+	enterGame := func(ctx context.Context, g *GameConn) error {
+		_, err := EnterGame(ctx, g, "bot7", SessionKeys{}, "bot7")
+		return err
+	}
+	logout := func(ctx context.Context, g *GameConn) error { return g.Logout(ctx) }
 	tests := []struct {
 		name string
-		run  func(g *GameConn) error
+		run  func(ctx context.Context, g *GameConn) error
+		// whileReading cancels once the server holds the request, so the
+		// client is blocked reading the reply; else ctx ends before the
+		// request is sent.
+		whileReading bool
 	}{
-		{"EnterGame", func(g *GameConn) error {
-			_, err := EnterGame(ctx, g, "bot7", SessionKeys{}, "bot7")
-			return err
-		}},
-		{"Logout", func(g *GameConn) error { return g.Logout(ctx) }},
+		{"EnterGame before send", enterGame, false},
+		{"Logout before send", logout, false},
+		{"EnterGame while reading CharSelectInfo", enterGame, true},
+		{"Logout while reading LeaveWorld", logout, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// The server sends nothing: only ctx ends the call.
-			g, done := dialFake(t, true, nil, false)
-			err := tt.run(g)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			// The server answers nothing: only ctx ends the call.
+			var script []step
+			if tt.whileReading {
+				script = []step{{check: func([]byte) error { cancel(); return nil }}}
+			} else {
+				cancel()
+			}
+			g, done := dialFake(t, true, script, false)
+			err := tt.run(ctx, g)
 			g.Close()
-			<-done
+			if serr := <-done; serr != nil {
+				t.Fatalf("fake server: %v", serr)
+			}
 			if !errors.Is(err, context.Canceled) {
 				t.Fatalf("err = %v, want context.Canceled", err)
 			}

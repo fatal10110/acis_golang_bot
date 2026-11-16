@@ -110,12 +110,20 @@ func Login(ctx context.Context, addr, account, password string, serverID byte, t
 	return login(ctx, conn, account, password, serverID, timeout)
 }
 
-// login runs the login session on an established connection.
+// login runs the login session on an established connection. Once ctx has
+// ended, any failure is reported as ctx.Err().
 func login(ctx context.Context, conn net.Conn, account, password string, serverID byte, timeout time.Duration) (LoginResult, error) {
-	var res LoginResult
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Unix(1, 0)) })
 	defer stop()
+	res, err := loginSession(ctx, conn, account, password, serverID, timeout)
+	if err != nil && ctx.Err() != nil {
+		return LoginResult{}, ctx.Err()
+	}
+	return res, err
+}
 
+func loginSession(ctx context.Context, conn net.Conn, account, password string, serverID byte, timeout time.Duration) (LoginResult, error) {
+	var res LoginResult
 	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 		return res, err
 	}
