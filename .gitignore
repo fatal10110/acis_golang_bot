@@ -1,1 +1,4 @@
 __pycache__/
+
+# go build ./cmd/bots output.
+/bots
