@@ -76,6 +76,24 @@ func (r *attrReader) intDefault(key string, def int) int {
 	return n
 }
 
+// int32Default returns the base-10 value at key, or def when it is
+// absent; a value outside the int32 range fails the load.
+func (r *attrReader) int32Default(key string, def int32) int32 {
+	if r.err != nil {
+		return def
+	}
+	raw, ok := r.vals[key]
+	if !ok {
+		return def
+	}
+	n, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		r.fail(key, err)
+		return def
+	}
+	return int32(n)
+}
+
 // int returns the required base-10 value at key.
 func (r *attrReader) int(key string) int {
 	if r.err != nil {
