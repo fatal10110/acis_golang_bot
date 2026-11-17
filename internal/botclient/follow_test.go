@@ -29,14 +29,14 @@ func followHold(t *testing.T, b *Brain, now time.Time) {
 // until just before, and returns the decision at the due time.
 func repath(t *testing.T, b *Brain, now time.Time) (Action, time.Time) {
 	t.Helper()
-	b.reactAt = time.Time{}
+	b.follow.wake = false
 	followHold(t, b, now)
 	due := b.follow.dueAt
 	if d := due.Sub(now); d < 200*time.Millisecond || d > 800*time.Millisecond {
 		t.Fatalf("re-path due %v after noticing, want 200-800 ms", d)
 	}
-	if !b.reactAt.Equal(due) {
-		t.Fatalf("next decision at %v, want the re-path at %v", b.reactAt.Sub(t0), due.Sub(t0))
+	if !b.follow.wake {
+		t.Fatalf("re-path at %v without its wake-up", due.Sub(t0))
 	}
 	followHold(t, b, due.Add(-time.Millisecond))
 	name, a := b.decide(due)
@@ -109,9 +109,9 @@ func TestFollowRepathCadence(t *testing.T) {
 	b.world.Apply(StopMove{ObjectID: selfID, Pos: slot}, due)
 	gm = Point{X: 2200}
 	b.world.Apply(StopMove{ObjectID: gmID, Pos: gm}, at(3*time.Second))
-	b.reactAt = time.Time{}
+	b.follow.wake = false
 	followHold(t, b, at(4*time.Second))
-	if !b.follow.dueAt.IsZero() || !b.reactAt.IsZero() {
+	if !b.follow.dueAt.IsZero() || b.follow.wake {
 		t.Fatalf("re-path scheduled with the leader 200 units from the anchor")
 	}
 
@@ -167,7 +167,7 @@ func TestFollowOutOfSight(t *testing.T) {
 		now = now.Add(time.Second)
 	}
 	followHold(t, b, now)
-	b.reactAt = time.Time{}
+	b.follow.wake = false
 	followHold(t, b, now.Add(time.Second))
 	if !b.follow.dueAt.IsZero() {
 		t.Fatal("a stuck bot scheduled a re-path while the leader stayed put")

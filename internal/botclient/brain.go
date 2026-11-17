@@ -496,10 +496,14 @@ func (b *Brain) wake(now time.Time) error {
 		}
 	}
 	if !now.Before(b.decisionAt()) {
-		// The assist's wake-up is spent here, before Appearing may
-		// postpone the decision, so it cannot keep decisionAt past due.
+		// The assist's and the re-path's wake-ups are spent here, before
+		// Appearing may postpone the decision, so they cannot keep
+		// decisionAt past due.
 		if !now.Before(b.assist.at) {
 			b.assist.wake = false
+		}
+		if !now.Before(b.follow.dueAt) {
+			b.follow.wake = false
 		}
 		if !now.Before(b.chat.at) {
 			b.chat.wake = false
@@ -537,8 +541,8 @@ func (b *Brain) wake(now time.Time) error {
 }
 
 // decisionAt is when the next decision is due: the reaction to an event
-// or the regular tick, or the leader's assist or a whisper reply when that
-// comes sooner.
+// or the regular tick, or the leader's assist, the follow re-path or a
+// whisper reply when that comes sooner.
 func (b *Brain) decisionAt() time.Time {
 	t := b.nextTick
 	if !b.reactAt.IsZero() {
@@ -546,6 +550,9 @@ func (b *Brain) decisionAt() time.Time {
 	}
 	if b.assist.wake && b.assist.at.Before(t) {
 		t = b.assist.at
+	}
+	if b.follow.wake && b.follow.dueAt.Before(t) {
+		t = b.follow.dueAt
 	}
 	if b.chat.wake && b.chat.at.Before(t) {
 		t = b.chat.at
