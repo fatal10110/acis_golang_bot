@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
@@ -88,6 +89,18 @@ type Brain struct {
 	// again until a refusal (ActionFailed), a move or a sit/stand toggle
 	// drops the attack, or the target or combat changes.
 	engaged int32
+	// castAt is the cast asked for and not yet answered by the bot's own
+	// MagicSkillUse, zero for none (castTimeout bounds the wait).
+	castAt time.Time
+	// progressAt is the last sign an attack is getting somewhere: an
+	// attempt sent, a swing or cast of the bot's own, a move toward the
+	// target. Engaged and still past stuckAfter, the bot side steps.
+	progressAt time.Time
+	// tries counts attacks and casts sent per target since one of the
+	// bot's own swings or casts last landed on it; blacklist holds the
+	// targets given up on until a time (Persona.BlacklistAfter).
+	tries     map[int32]int
+	blacklist map[int32]time.Time
 	// resting is set while rule 6 has the bot sit until recovered.
 	resting bool
 	// toggledAt is the last sit/stand toggle not yet confirmed.
@@ -132,7 +145,10 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
-	return &Brain{world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics}
+	return &Brain{
+		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
+		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
+	}
 }
 
 // Run plays until done closes or the session ends. Closing logout asks the
@@ -241,6 +257,19 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == self {
 				b.restartedAt = time.Time{}
 			}
+		case Attack:
+			if e.AttackerID == self {
+				for _, h := range e.Hits {
+					b.landed(h.TargetID, now)
+				}
+			}
+		case MagicSkillUse:
+			if e.CasterID == self {
+				b.castAt = time.Time{}
+				b.landed(e.TargetID, now.Add(e.HitTime))
+			}
+		case DeleteObject:
+			delete(b.tries, e.ObjectID)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
 			b.reactAt = now.Add(b.reactDelay())
@@ -267,6 +296,13 @@ func salient(ev Event, self int32) bool {
 	case TeleportToLocation:
 		return e.ObjectID == self
 	case MyTargetSelected:
+		return true
+	case Attack:
+		return e.AttackerID != self && slices.ContainsFunc(e.Hits, func(h AttackHit) bool { return h.TargetID == self })
+	case MagicSkillUse:
+		return e.CasterID != self && e.TargetID == self
+	case RelationChanged:
+		// A player flagging or unflagging may change whom the bot fights.
 		return true
 	}
 	return false
@@ -389,6 +425,11 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	switch a.kind {
 	case actAttack:
 		b.engaged = a.object
+		b.attempt(a.object, now)
+	case actCast:
+		b.castAt = now
+		b.attempt(a.object, now)
+		b.world.holdSkill(a.skill, now.Add(castTimeout))
 	case actMove:
 		// A move replaces the attack intention on the server.
 		b.engaged = 0
