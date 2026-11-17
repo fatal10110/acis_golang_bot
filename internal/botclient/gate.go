@@ -38,11 +38,14 @@ var ErrLoginsHalted = errors.New("all logins halted by the credential breaker")
 
 // LoginGate is the process-wide gate every bot passes to dial the login and
 // game servers. A bot takes a turn, during which no other bot dials, and
-// spaces each dial of its turn under the accept filter (dialSpacing). A
-// refused dial backs every bot off. The credential breaker (Halt) stops every
-// later login. All of its methods may be called from any goroutine.
+// spaces each dial of its turn under the accept filter (dialSpacing), unless
+// the gate is unspaced (NewAllowlistedLoginGate). A refused dial backs every
+// bot off. The credential breaker (Halt) stops every later login. All of its
+// methods may be called from any goroutine.
 type LoginGate struct {
 	clock Clock
+	// spaced is set at construction and never changes.
+	spaced bool
 	// turn holds one token: taking it starts a turn, putting it back ends it.
 	turn chan struct{}
 	// halt is closed when the breaker trips.
@@ -58,9 +61,25 @@ type LoginGate struct {
 	err error // the breaker's cause once tripped; guarded by mu
 }
 
-// NewLoginGate returns an open gate timed by clock and jittered by rng; a
-// nil rng is seeded at random.
+// NewLoginGate returns an open gate that spaces dials under the accept
+// filter, timed by clock and jittered by rng; a nil rng is seeded at random.
 func NewLoginGate(clock Clock, rng *rand.Rand) *LoginGate {
+	g := newLoginGate(clock, rng)
+	g.spaced = true
+	return g
+}
+
+// NewAllowlistedLoginGate returns an open gate that does not space dials, for
+// a source address on AcceptFilterAllowlist of both servers: the accept
+// filter skips allowlisted addresses (server internal/commons/netutil/
+// acceptfilter.go), so no burst ban can follow. Turns stay one at a time, so
+// the credential breaker still halts logins on the first refused credential
+// (the credential ban has no allowlist), and refused dials still back off.
+func NewAllowlistedLoginGate(clock Clock, rng *rand.Rand) *LoginGate {
+	return newLoginGate(clock, rng)
+}
+
+func newLoginGate(clock Clock, rng *rand.Rand) *LoginGate {
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
@@ -102,9 +121,10 @@ func (g *LoginGate) Take(ctx context.Context) (*Turn, error) {
 	return &Turn{g: g}, nil
 }
 
-// Dial waits until the turn may start its next dial: dialSpacing plus a
-// jitter after the previous dial start of the process, and past the refused
-// backoff. It fails once the breaker has tripped or ctx ends.
+// Dial waits until the turn may start its next dial: on a spaced gate
+// dialSpacing plus a jitter after the previous dial start of the process,
+// and past the refused backoff. It fails once the breaker has tripped or ctx
+// ends.
 func (t *Turn) Dial(ctx context.Context) error {
 	g := t.g
 	for {
@@ -113,7 +133,10 @@ func (t *Turn) Dial(ctx context.Context) error {
 		}
 		now := g.clock.Now()
 		if !now.Before(g.next) {
-			g.next = now.Add(dialSpacing + jitter(g.rng, dialJitter))
+			g.next = now
+			if g.spaced {
+				g.next = now.Add(dialSpacing + jitter(g.rng, dialJitter))
+			}
 			return nil
 		}
 		timer := g.clock.NewTimer(g.next.Sub(now))

@@ -33,6 +33,8 @@ type swarmOptions struct {
 	localAddr string
 	record    string
 	marker    botnames.Marker
+	// allowlisted makes the login gate unspaced.
+	allowlisted bool
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -48,6 +50,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.record, "record", "", "directory that receives the first frame of every game opcode read (test fixtures); default: record nothing")
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the bots' character names")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
+	addAllowlistedFlag(fs, &o.allowlisted)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -70,6 +73,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	}
 	if _, err := botclient.ParseLocalAddr(o.localAddr); err != nil {
 		return o, fmt.Errorf("-local-addr: %w", err)
+	}
+	if err := checkAllowlisted(o.allowlisted, o.localAddr); err != nil {
+		return o, err
 	}
 	if o.timeout <= 0 {
 		return o, fmt.Errorf("-timeout %s: want a positive duration", o.timeout)
@@ -106,6 +112,9 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	dialOpt, _ := botclient.ParseLocalAddr(o.localAddr) // validated by parseSwarmFlags
 	clock := botclient.SystemClock{}
 	gate := botclient.NewLoginGate(clock, nil)
+	if o.allowlisted {
+		gate = botclient.NewAllowlistedLoginGate(clock, nil)
+	}
 	cfg := botclient.SessionConfig{
 		LoginAddr:  o.loginAddr,
 		GameAddr:   o.gameAddr,
@@ -125,7 +134,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 1
 	}
-	log.Info("swarm starts", "bots", len(bots), "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent)
+	log.Info("swarm starts", "bots", len(bots), "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent, "allowlisted", o.allowlisted)
 	var wg sync.WaitGroup
 	for _, b := range bots {
 		wg.Go(func() {

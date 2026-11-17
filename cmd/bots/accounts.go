@@ -25,6 +25,22 @@ const minLoginInterval = 1250 * time.Millisecond
 // defaultLoginInterval is the -interval default.
 const defaultLoginInterval = 1500 * time.Millisecond
 
+// addAllowlistedFlag registers -allowlisted, shared by every bots command
+// that logs in.
+func addAllowlistedFlag(fs *flag.FlagSet, p *bool) {
+	fs.BoolVar(p, "allowlisted", false, "the -local-addr IP is on AcceptFilterAllowlist of both servers: logins are not spaced (needs -local-addr)")
+}
+
+// checkAllowlisted refuses -allowlisted without -local-addr: only the bots'
+// own source address may be allowlisted (docs/hetzner.md), so an unspaced
+// run from an address the OS picks could get a shared IP banned.
+func checkAllowlisted(allowlisted bool, localAddr string) error {
+	if allowlisted && localAddr == "" {
+		return errors.New("-allowlisted needs -local-addr: allowlist only the bots' own source address, never a shared one")
+	}
+	return nil
+}
+
 // accountsOptions are the flags of `bots accounts`.
 type accountsOptions struct {
 	accounts  botaccounts.Config
@@ -32,6 +48,8 @@ type accountsOptions struct {
 	timeout   time.Duration
 	interval  time.Duration
 	localAddr string
+	// allowlisted drops the interval floor and defaults the interval to 0.
+	allowlisted bool
 }
 
 // addAccountFlags registers the flags that select a swarm instance's
@@ -51,15 +69,28 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 	addAccountFlags(fs, &o.accounts)
 	fs.StringVar(&o.loginAddr, "login", "127.0.0.1:2106", "login server address (host:port)")
 	fs.DurationVar(&o.timeout, "timeout", 10*time.Second, "longest wait for each login-server read or write")
-	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s", minLoginInterval))
+	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s (default 0 and no floor with -allowlisted)", minLoginInterval))
 	fs.StringVar(&o.localAddr, "local-addr", "", "source IP to dial from (for example 127.0.0.2, the one address allowlisted on the servers); default: the OS picks")
+	addAllowlistedFlag(fs, &o.allowlisted)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
 	if fs.NArg() > 0 {
 		return o, fmt.Errorf("unexpected arguments %q", fs.Args())
 	}
-	if o.interval < minLoginInterval {
+	if err := checkAllowlisted(o.allowlisted, o.localAddr); err != nil {
+		return o, err
+	}
+	if o.allowlisted {
+		intervalSet := false
+		fs.Visit(func(f *flag.Flag) { intervalSet = intervalSet || f.Name == "interval" })
+		if !intervalSet {
+			o.interval = 0
+		}
+		if o.interval < 0 {
+			return o, fmt.Errorf("-interval %s: want 0 or more", o.interval)
+		}
+	} else if o.interval < minLoginInterval {
 		return o, fmt.Errorf("-interval %s: want at least %s (the login server counts every connection under 1 s after the previous one from the IP and bans the IP on the 4th)", o.interval, minLoginInterval)
 	}
 	if _, err := botclient.ParseLocalAddr(o.localAddr); err != nil {
@@ -128,9 +159,12 @@ func provision(ctx context.Context, accounts []botaccounts.Account, check checkF
 	return len(accounts), nil
 }
 
-// pause waits d or until ctx ends.
+// pause waits d or until ctx ends; a d of 0 does not wait.
 func pause(d time.Duration) func(context.Context) error {
 	return func(ctx context.Context) error {
+		if d <= 0 {
+			return ctx.Err()
+		}
 		t := time.NewTimer(d)
 		defer t.Stop()
 		select {

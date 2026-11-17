@@ -26,7 +26,7 @@ func TestParseSwarmFlags(t *testing.T) {
 	}{
 		{"defaults", base, func(o swarmOptions) bool {
 			return o.loginAddr == "127.0.0.1:2106" && o.gameAddr == "" && o.serverID == 1 && o.timeout == 10*time.Second &&
-				o.marker == botnames.DefaultMarker && o.record == "" && !o.accounts.Persistent && o.accounts.Count == 3
+				o.marker == botnames.DefaultMarker && o.record == "" && !o.accounts.Persistent && o.accounts.Count == 3 && !o.allowlisted
 		}, ""},
 		{
 			"all set", append(base, "-persistent", "-login", "127.0.0.1:1", "-game", "127.0.0.1:7777", "-server-id", "2",
@@ -37,6 +37,10 @@ func TestParseSwarmFlags(t *testing.T) {
 					o.marker == botnames.Marker{Text: "Npc", Placement: botnames.Prefix}
 			}, "",
 		},
+		{"allowlisted", append(base, "-local-addr", "127.0.0.2", "-allowlisted"), func(o swarmOptions) bool {
+			return o.allowlisted && o.localAddr == "127.0.0.2"
+		}, ""},
+		{"allowlisted without a local address", append(base, "-allowlisted"), nil, "-allowlisted needs -local-addr"},
 		{"bad placement", append(base, "-name-marker-at", "middle"), nil, "-name-marker-at"},
 		{"bad marker", append(base, "-name-marker", "B-t"), nil, "-name-marker"},
 		{"server id 0", append(base, "-server-id", "0"), nil, "-server-id"},
