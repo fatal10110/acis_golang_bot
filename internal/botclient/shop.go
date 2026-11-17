@@ -602,20 +602,24 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 // junk are the object ids of the stacks the bot would sell (ShopPolicy
 // SellAt).
 func (b *Brain) junk() map[int32]Item {
-	p := &b.persona
-	keep := func(id int32) bool {
-		return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
-			slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] || b.shop.unsellable[id] ||
-			slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id })
-	}
 	out := make(map[int32]Item)
 	for id, it := range b.world.Inventory.Items {
-		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || keep(it.TemplateID) {
+		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.shop.unsellable[it.TemplateID] {
 			continue
 		}
 		out[id] = it
 	}
 	return out
+}
+
+// keeps reports whether the bot keeps item template id rather than sell
+// it: adena, Shop.Keep, Potions, Shots, Restock items and spellbooks
+// wanted or held for a learn.
+func (b *Brain) keeps(id int32) bool {
+	p := &b.persona
+	return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
+		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
+		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id })
 }
 
 // sellRows is the sale from window l: every junk stack it lists, whole.

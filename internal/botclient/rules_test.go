@@ -202,14 +202,15 @@ func TestRuleTable(t *testing.T) {
 			wantRule: "store",
 		},
 		{
-			name:     "store persona holds instead of idle drift",
-			persona:  func(p *Persona) { p.Store, p.IdleChance = true, 1 },
+			name:     "store opening holds instead of idle drift",
+			persona:  func(p *Persona) { p.IdleChance = 1 },
+			setup:    func(b *Brain) { b.store.step, b.store.waitUntil = storeAskManage, now },
 			wantRule: "store",
 		},
 		{
-			name:     "store persona still follows the death policy",
-			persona:  func(p *Persona) { p.Store, p.Death = true, hook(emoteAction(3)) },
-			setup:    func(b *Brain) { b.world.Self.Dead = true },
+			name:     "store mode still follows the death policy",
+			persona:  func(p *Persona) { p.Death = hook(emoteAction(3)) },
+			setup:    func(b *Brain) { b.world.Self.Dead, b.world.Self.StoreType = true, storeTypeSell },
 			wantRule: "dead", wantKind: actEmote,
 		},
 	}

@@ -78,6 +78,10 @@ type BrainConfig struct {
 	// shared by every bot of
 	// the process. Nil travels nowhere and visits only NPCs in sight.
 	Travel *TravelMap
+	// Stores, when set, are the towns a merchant opens its store in and
+	// the bot stores open there (rule "store"), shared by every bot of the
+	// process. Nil opens no store.
+	Stores *StoreRegistry
 	// Authority, when set, decides who may command the bot by whisper,
 	// shared by every bot of the process. Nil obeys nobody.
 	Authority *Authority
@@ -152,6 +156,8 @@ type Brain struct {
 	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
+	// store is the merchant's private sell store (rule "store").
+	store storeState
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -221,6 +227,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 func (b *Brain) Run(done, logout <-chan struct{}) error {
 	b.start(b.clock.Now())
 	defer b.leaveSpot()
+	defer b.releaseStore()
 	due := b.due()
 	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()
@@ -310,6 +317,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case ChangeWaitType:
 			if e.ObjectID == self {
 				b.toggledAt = time.Time{}
+				if e.Type == WaitStanding {
+					b.store.stoodAt = now
+				}
 			}
 		case TeleportToLocation:
 			// A Fast teleport is an in-place correction with no loading
@@ -359,6 +369,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			// back on its feet.
 			if e.ObjectID == self {
 				b.leaveSpot()
+				if b.store.active() {
+					b.closeStore(now)
+				}
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
@@ -373,6 +386,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.heard(e, now)
 		case BuyList, SellList, ItemList, InventoryUpdate:
 			b.shopEvent(ev)
+		case PrivateStoreManageListSell:
+			b.storeManageList(e)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
 			b.reactAt = now.Add(b.reactDelay())
@@ -398,7 +413,8 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected, AskJoinParty, ConfirmDlg, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList:
+	case MyTargetSelected, AskJoinParty, ConfirmDlg, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList,
+		PrivateStoreManageListSell:
 		return true
 	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOtherOk:
 		return true
@@ -585,6 +601,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.shop.sent(a, now)
+	b.storeSent(a, now)
 	b.loot.sent(a, now)
 	return true, nil
 }

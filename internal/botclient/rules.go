@@ -11,9 +11,10 @@ import (
 // default, not a safety boundary (D6); the operational limits are in
 // pacing.go. A nil hook does nothing.
 type Persona struct {
-	// Store keeps the brain in store mode (rules 3-10 replaced by holding
-	// still) even while the server reports no store open.
-	Store bool
+	// Store is how a merchant sells its loot in a private sell store (rule
+	// "store"); while it opens one or keeps one open the bot is in store
+	// mode, which replaces rules 3-10.
+	Store StorePolicy
 	// CriticalHP is the HP percent under which a bot in combat drinks the
 	// first of Potions it carries whose reuse has run out, or else heals
 	// itself with a ready heal of Heals, or else flees FleeDistance away
@@ -165,6 +166,7 @@ func DefaultPersona() Persona {
 		Shop:           defaultShopPolicy(),
 		Loot:           defaultLootPolicy(),
 		Trade:          defaultTradePolicy(),
+		Store:          defaultStorePolicy(),
 	}
 }
 
@@ -219,6 +221,10 @@ const (
 	actDrop
 	actDlgAnswer
 	actUserCommand
+	actStoreManage
+	actStoreTitle
+	actStoreList
+	actStoreQuit
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -240,7 +246,12 @@ const (
 // lootRetry spaces the clicks on one item. A whisper (Say2 Tell) has no
 // server gate either (chat.go chatTell): it keeps the chat gate. DlgAnswer
 // and RequestUserCommand have none either: an offer is answered once, and
-// escapeRetry spaces a repeated /unstuck.
+// escapeRetry spaces a repeated /unstuck. The sell store packets
+// (RequestPrivateStoreManageSell, SetPrivateStoreMsgSell,
+// SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
+// protector either (network/privatestore_dispatch.go): an opening sends
+// each once per answer it waits for, and StorePolicy.Retry spaces the
+// openings.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -302,7 +313,10 @@ type rule struct {
 // (getting to the farming spot) and "farm" (attacking a monster there) are
 // rule 9 errands, ahead of the persona's goal: a party member assists its
 // leader, visits its trainer, then follows instead of farming. "loot" is
-// rule 8, after the rebuff and ahead of every errand. "command" sends what
+// rule 8, after the rebuff and ahead of every errand. "store" is the
+// merchant's private store: it opens where the bot stands, ahead of every
+// errand that would walk it away, and puts the bot in store mode
+// (storeRules). "command" sends what
 // a GM's whispered command asks for (a reply, a party withdrawal), and
 // "stay" holds a bot a GM told to stay, ahead of looting and every errand
 // that would move it. "leader" handles a dead or lost leader ahead of
@@ -322,6 +336,7 @@ var playRules = []rule{
 	{"rebuff", (*Brain).ruleRebuff},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
+	{"store", (*Brain).ruleStore},
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"shop", (*Brain).ruleShop},
@@ -335,12 +350,13 @@ var playRules = []rule{
 	{"idle", (*Brain).ruleIdle},
 }
 
-// storeRules replace rules 3-10 in store mode: the bot stays where it is.
+// storeRules replace rules 3-10 in store mode: the bot opens its store
+// and stays seated in it, watching for it to close.
 var storeRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"command", (*Brain).ruleCommand},
-	{"store", func(*Brain, time.Time) (Action, bool) { return Action{}, true }},
+	{"store", (*Brain).ruleStore},
 }
 
 // RuleNames lists every name decide returns for a matching rule, for a
@@ -359,7 +375,7 @@ func RuleNames() []string {
 // name ("" for none) and its action.
 func (b *Brain) decide(now time.Time) (string, Action) {
 	rules := playRules
-	if b.persona.Store || b.world.Self.StoreType != 0 {
+	if b.store.active() || b.world.Self.StoreType != 0 {
 		rules = storeRules
 	}
 	for _, r := range rules {
