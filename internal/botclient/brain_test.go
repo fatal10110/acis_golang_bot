@@ -284,7 +284,8 @@ func TestBrainSoak(t *testing.T) {
 // nothing and checks that it never stays silent near the server's 15 minute
 // idle timeout.
 func TestBrainKeepalive(t *testing.T) {
-	b, out := newTestBrain(t, Persona{Store: true})
+	b, out := newTestBrain(t, Persona{})
+	b.world.Self.StoreType = storeTypeSell
 	var sends []time.Time
 	for now := t0; now.Before(at(2 * time.Hour)); now = b.due() {
 		before := len(out.frames)

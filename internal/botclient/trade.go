@@ -300,7 +300,7 @@ func (p *TradePolicy) exempt(w *World, partner int32) bool {
 // not as a quest item.
 func (b *Brain) tradeGoods(rows []TradeItem) (TradeItem, bool) {
 	for _, row := range rows {
-		if _, priced := b.persona.Trade.Prices[row.TemplateID]; !priced || row.Count <= 0 {
+		if _, priced := b.tradePrice(row.TemplateID); !priced || row.Count <= 0 {
 			continue
 		}
 		it, ok := b.world.Inventory.Items[row.ObjectID]
@@ -334,12 +334,12 @@ func (b *Brain) ruleTrade(now time.Time) (Action, bool) {
 }
 
 // acceptTrade decides a request of the player partner: declined in store
-// mode (the server forbids it), in combat, from a player out of sight, and
+// mode, an opening included (the server forbids it), in combat, from a player out of sight, and
 // unless the partner is exempt, within Every of its last accepted request
 // or with no goods for sale.
 func (b *Brain) acceptTrade(partner int32, now time.Time) bool {
 	w, p := b.world, &b.persona.Trade
-	if b.persona.Store || w.Self.StoreType != 0 || w.Self.InCombat {
+	if b.store.active() || w.Self.StoreType != 0 || w.Self.InCombat {
 		return false
 	}
 	if o := w.Objects[partner]; o == nil || o.Kind != KindPlayer {
@@ -427,13 +427,25 @@ func (b *Brain) tradeReceivable(exempt bool) bool {
 	return true
 }
 
+// tradePrice is the unit price the bot sells template id at in a trade:
+// the policy's price, or else its store's price of that loot, so its store
+// and its trades sell at the same prices.
+func (b *Brain) tradePrice(id int32) (int32, bool) {
+	if p, ok := b.persona.Trade.Prices[id]; ok {
+		return p, true
+	}
+	p, ok := b.store.prices[id]
+	return p, ok
+}
+
 // tradePaid reports whether the partner's adena covers the price of the
 // bot's offer.
 func (b *Brain) tradePaid() bool {
 	t := &b.world.Trade
 	var price, paid int64
 	for _, it := range t.Own {
-		price += int64(b.persona.Trade.Prices[it.TemplateID]) * int64(it.Count)
+		unit, _ := b.tradePrice(it.TemplateID)
+		price += int64(unit) * int64(it.Count)
 	}
 	for _, it := range t.Other {
 		if it.TemplateID == adenaID {
