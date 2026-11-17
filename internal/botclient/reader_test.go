@@ -325,7 +325,7 @@ func TestRecorderKeepsFirstWriteError(t *testing.T) {
 var recordedMustDecode = []byte{
 	opGameMoveToLocation, opGameUserInfo, opGameStatusUpdate, opGameDeleteObject,
 	opGameCharSelectInfo, opGameNPCInfo, opGameActionFailed, opGameChangeWaitType,
-	opGameSystemMessage, opGameLeaveWorld, opGameItemList,
+	opGameSystemMessage, opGameLeaveWorld, opGameSkillList, opGameSkillCoolTime, opGameItemList,
 }
 
 // TestRecordedFixtures replays the -record captures checked in under

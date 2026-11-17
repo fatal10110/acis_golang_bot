@@ -84,6 +84,23 @@ const (
 	opGameRequestRestartPoint    = 0x6d // requestrestartpoint.go
 )
 
+// Game server to client, combat and skills
+// (internal/gameserver/network/serverpackets).
+const (
+	opGameAttack             = 0x05 // attack.go
+	opGameMagicSkillUse      = 0x48 // magic_skill.go
+	opGameSkillList          = 0x58 // skilllist.go
+	opGameMagicSkillLaunched = 0x76 // magic_skill.go
+	opGameSkillCoolTime      = 0xc1 // skillcooltime.go
+	opGameRelationChanged    = 0xce // relationchanged.go
+)
+
+// Client to game server, combat (internal/gameserver/network/clientpackets).
+const (
+	opGameAttackRequest        = 0x0a // wiresafe.go, targetaction.go
+	opGameRequestMagicSkillUse = 0x2f // wiresafe.go, magic_skill_use.go
+)
+
 // Party, both directions (internal/gameserver/network/serverpackets/party.go
 // and clientpackets/party.go).
 const (
