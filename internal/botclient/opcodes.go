@@ -125,6 +125,25 @@ const (
 	opGameRequestWithdrawParty   = 0x2b
 )
 
+// Player trade, both directions (serverpackets/shop_trade.go,
+// clientpackets/wiresafe.go and shop_trade.go). TradeUpdate and
+// TradeItemUpdate share opcode 0x74.
+const (
+	opGameTradeStart        = 0x1e
+	opGameTradeOwnAdd       = 0x20
+	opGameTradeOtherAdd     = 0x21
+	opGameSendTradeDone     = 0x22
+	opGameSendTradeRequest  = 0x5e
+	opGameTradeItemUpdate   = 0x74
+	opGameTradePressOwnOk   = 0x75
+	opGameTradePressOtherOk = 0x7c
+
+	opGameTradeRequest       = 0x15
+	opGameAddTradeItem       = 0x16
+	opGameTradeDone          = 0x17
+	opGameAnswerTradeRequest = 0x44
+)
+
 // Items, both directions: ItemList and InventoryUpdate
 // (internal/gameserver/network/serverpackets/itemlist.go,
 // inventoryupdate.go), the extended ExAutoSoulShot (exautosoulshot.go,

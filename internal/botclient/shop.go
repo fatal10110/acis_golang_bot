@@ -29,10 +29,6 @@ const (
 	shopMaxRows = 80
 )
 
-// subCategoryQuest is the item subcategory of a quest item
-// (model/item/item.go SubCategoryQuest).
-const subCategoryQuest uint16 = 3
-
 // mysticClasses are the mystic class ids, every profession of the four
 // mystic base classes (aCis_datapack/data/xml/classes/*Mystic.xml).
 var mysticClasses = []int32{
