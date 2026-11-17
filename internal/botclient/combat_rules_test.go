@@ -254,6 +254,48 @@ func TestCombatRules(t *testing.T) {
 			wantRule: "attacked", wantKind: actSelect, wantObject: pcID,
 		},
 		{
+			name: "hit only by a blacklisted attacker: flee from it",
+			setup: func(b *Brain) {
+				fighting(b)
+				hitBy(b, npcID, 10)
+				b.world.Target = npcID
+				b.blacklist[npcID] = now.Add(time.Minute)
+			},
+			wantRule: "attacked", wantKind: actMove,
+			check: func(t *testing.T, b *Brain, a Action) {
+				npc := b.world.Objects[npcID].Position(now)
+				if to := moveTarget(a.payload); to.X*npc.X+to.Y*npc.Y >= 0 {
+					t.Errorf("flee to %+v, want away from the NPC at %+v", to, npc)
+				}
+			},
+		},
+		{
+			name: "the engaged target dies: no step, the next attacker is selected",
+			setup: func(b *Brain) {
+				fighting(b)
+				flag(b, pcID)
+				hitBy(b, npcID, 10)
+				hitBy(b, pcID, 5)
+				b.world.Target, b.engaged, b.progressAt = npcID, npcID, now
+				if err := b.handle([]Event{Die{ObjectID: npcID}}, t0); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantRule: "attacked", wantKind: actSelect, wantObject: pcID,
+		},
+		{
+			name: "the engaged target dies alone: the bot holds",
+			setup: func(b *Brain) {
+				fighting(b)
+				hitBy(b, npcID, 10)
+				b.world.Target, b.engaged, b.progressAt = npcID, npcID, now
+				if err := b.handle([]Event{Die{ObjectID: npcID}}, t0); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantRule: "attacked", wantKind: actHold,
+		},
+		{
 			name:     "blacklist 0 never gives up",
 			persona:  func(p *Persona) { p.BlacklistAfter = 0 },
 			setup:    func(b *Brain) { fighting(b); hitBy(b, npcID, 10); b.world.Target = npcID; b.tries[npcID] = 100 },

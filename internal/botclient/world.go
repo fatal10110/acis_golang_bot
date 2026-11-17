@@ -31,6 +31,7 @@ type World struct {
 	skillReady map[int32]time.Time
 	// Attackers are the creatures that hit the bot recently, by object id.
 	Attackers map[int32]*Attacker
+	Party     Party
 }
 
 // SelfState is the bot's own character.
@@ -107,6 +108,9 @@ func (o *Object) Moving(now time.Time) bool { return o.move.moving(now) }
 type Prompts struct {
 	// Restart is open while the bot's character is dead.
 	Restart RestartPrompt
+	// Party is open from a party invitation until the bot answers it or
+	// joins a party.
+	Party PartyInvite
 }
 
 // RestartPrompt is the restart-point choice offered to a dead character.
@@ -336,12 +340,17 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applySkillList(e)
 	case SkillCoolTime:
 		for _, t := range e.Timers {
-			w.skillReady[t.SkillID] = now.Add(t.Remaining)
+			// The server truncates the remaining time to whole seconds
+			// (character_flow.go skillCoolTimePacket): round up.
+			w.skillReady[t.SkillID] = now.Add(t.Remaining + time.Second)
 		}
 	case RelationChanged:
 		if o := w.object(e.ObjectID); o != nil {
 			o.Karma, o.PvPFlag = e.Karma, e.PvPFlag
 		}
+	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
+		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
+		w.applyParty(ev, now)
 	}
 }
 

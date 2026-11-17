@@ -90,6 +90,26 @@ func (b *Brain) attackers(now time.Time) []int32 {
 	return ids
 }
 
+// unfought is the hardest hitter among the live creatures attacking the
+// bot at now that it blacklisted, or 0 when there is none. A player the PvP
+// policy leaves alone is not one: holding is that policy's answer.
+func (b *Brain) unfought(now time.Time) int32 {
+	var (
+		id     int32
+		damage int64
+	)
+	for k, a := range b.world.Attackers {
+		o := b.world.object(k)
+		if o == nil || o.Dead || !b.world.attacking(k, now) || !now.Before(b.blacklist[k]) {
+			continue
+		}
+		if id == 0 || a.Damage > damage || a.Damage == damage && k < id {
+			id, damage = k, a.Damage
+		}
+	}
+	return id
+}
+
 // ruleOutnumbered is rule 4: hit by two or more attackers, flee from the
 // hardest hitter with HP under OutmatchedHP, else fight it. A target that
 // is one of the attackers is kept until the hardest hitter has dealt more

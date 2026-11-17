@@ -268,6 +268,12 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.castAt = time.Time{}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 			}
+		case Die:
+			// A dead target ends the attack in flight: there is nothing
+			// to disengage from.
+			if e.ObjectID == b.engaged {
+				b.engaged = 0
+			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
 		}
@@ -295,7 +301,7 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected:
+	case MyTargetSelected, AskJoinParty:
 		return true
 	case Attack:
 		return e.AttackerID != self && slices.ContainsFunc(e.Hits, func(h AttackHit) bool { return h.TargetID == self })
@@ -441,6 +447,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.appearing = false
 	case actRestart:
 		b.restartedAt = now
+	case actAnswerParty:
+		// The server takes the invitation with the first answer.
+		b.world.Prompts.Party = PartyInvite{}
 	}
 	return true, nil
 }

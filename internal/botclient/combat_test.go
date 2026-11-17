@@ -240,8 +240,9 @@ func TestWorldCombat(t *testing.T) {
 				{time.Second, SkillList{Skills: []KnownSkill{{ID: 1177}, {ID: 2, Passive: true}, {ID: 3, Disabled: true}}}},
 			},
 			check: func(t *testing.T, w *World) {
-				if w.SkillReady(1177, at(3*time.Second)) || !w.SkillReady(1177, at(4*time.Second)) {
-					t.Error("cool time not kept")
+				// 4 s remaining may be up to 4.999 s: the server truncates.
+				if w.SkillReady(1177, at(4999*time.Millisecond)) || !w.SkillReady(1177, at(5*time.Second)) {
+					t.Error("cool time not kept and rounded up")
 				}
 				if w.SkillReady(2, t0) || w.SkillReady(3, t0) || w.SkillReady(99, t0) {
 					t.Error("a passive, disabled or unknown skill is ready")
