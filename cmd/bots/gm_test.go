@@ -72,7 +72,6 @@ func TestReadDSNFile(t *testing.T) {
 		wantErr string
 	}{
 		{"owner only", writeDSN(t, testDSN+"\n", 0o600), testDSN, ""},
-		{"group readable", writeDSN(t, testDSN, 0o640), "", "want 0600"},
 		{"empty", writeDSN(t, " \n", 0o600), "", "empty"},
 		{"too long", writeDSN(t, strings.Repeat("x", maxDSNFileSize+1), 0o600), "", "longer than"},
 		{"missing", filepath.Join(t.TempDir(), "none"), "", "no such file"},

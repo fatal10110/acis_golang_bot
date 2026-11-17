@@ -130,6 +130,33 @@ with `-gm-dsn-file`. If the tunnel is down, GM commands are refused and the bots
   distribution down, which ends the swarm like a crash.
 - A Windows sleep suspends the WSL2 VM: the bots wake on dead lines, and section 5 applies.
 
+### Native Windows
+
+Without WSL2, run `bots-windows-amd64.exe` from a GitHub release: every published release carries
+it, `bots-linux-amd64` and `SHA256SUMS` (compare with `certutil -hashfile bots-windows-amd64.exe
+SHA256`). Flags and commands are the same as on Linux.
+
+- Windows has no mode bits, so the secret file (and a `-gm-dsn-file`) is checked by its ACL
+  instead of `0600`: it is refused when anyone but its owner, the user running the bots, SYSTEM and
+  Administrators may access it. Keep it under the profile and drop the inherited entries:
+
+  ```
+  mkdir %AppData%\acis-bots
+  rem copy the secret to %AppData%\acis-bots\secret, then:
+  icacls %AppData%\acis-bots\secret /inheritance:r /grant:r "%USERNAME%:F"
+  ```
+
+  A file under `C:\` or a shared folder inherits Users or Authenticated Users entries and is
+  refused until `icacls` drops them.
+- `bots ui` keeps its registry in `%AppData%\acis-bots` unless `-data-dir` names another
+  directory. A second `bots ui` on the same directory is refused while the first runs; a killed
+  panel leaves no lock behind.
+- The panel (`127.0.0.1:8090`) and the metrics endpoint listen on loopback only, so they need no
+  firewall rule; if Windows Defender Firewall asks anyway, allow nothing. The bots' outbound
+  connections need no rule either.
+- The 60 s `TCP_USER_TIMEOUT` of section 5 is Linux's: on Windows the keepalive alone ends an idle
+  dead line, and a line that dies with data in flight ends on Windows' own retransmission timeout.
+
 ## 8. Control panel
 
 `bots ui` runs the bots in-process under a web panel (plan section 8) instead of a fixed swarm:
