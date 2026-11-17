@@ -127,6 +127,8 @@ type Brain struct {
 	// buffedAt is when the bot last cast each buff on each target
 	// (buffRetry).
 	buffedAt map[buffKey]time.Time
+	// follow is the slot behind the party leader (rule 9 errand).
+	follow followState
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -505,6 +507,8 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.usedAt[a.item] = now
 	case actAutoShot:
 		b.shotAskedAt[a.item] = now
+	case actWalkRun:
+		b.follow.runToggledAt = now
 	}
 	b.train.sent(a, now)
 	return true, nil

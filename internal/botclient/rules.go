@@ -88,6 +88,9 @@ type Persona struct {
 	// Spots is how the bot picks and keeps its farming spot when the brain
 	// has a spot registry (BrainConfig.Spots, rule 9 errand "spot").
 	Spots SpotPolicy
+	// Follow is how the bot follows the leader of its party (rule
+	// "follow").
+	Follow FollowPolicy
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -96,7 +99,8 @@ type Persona struct {
 // DefaultPersona is a support player that rests when low, fights back when
 // hit, restarts in town when killed, learns the support skills of a mystic
 // at its trainer, heals and buffs its party with them, assists its party
-// leader and otherwise drifts around where it stands.
+// leader, follows the leader of a party it joined and otherwise drifts
+// around where it stands.
 func DefaultPersona() Persona {
 	return Persona{
 		Death:          restartToVillage,
@@ -125,6 +129,7 @@ func DefaultPersona() Persona {
 		RebuffBefore:   time.Minute,
 		AssistMin:      500 * time.Millisecond,
 		AssistMax:      1500 * time.Millisecond,
+		Follow:         defaultFollowPolicy(),
 	}
 }
 
@@ -167,6 +172,7 @@ const (
 	actBypass
 	actSkillInfo
 	actLearnSkill
+	actWalkRun
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -232,11 +238,13 @@ type rule struct {
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
 // the party, ahead of fighting so a support in combat still heals;
-// "assist" (the leader's target), "train" (the trainer) and "spot"
-// (getting to the farming spot) are rule 9, ahead of the persona's goal.
-// Rule 8 (loot) needs the loot model of #29. The shot toggle is set-up,
-// not a plan rule: it runs once per shot template carried, ahead of the
-// fight it serves, after the flee rules so it never delays one.
+// "assist" (the leader's target), "train" (the trainer), "follow" (the
+// slot behind the party leader) and "spot" (getting to the farming spot)
+// are rule 9 errands, ahead of the persona's goal: a party member assists
+// its leader, visits its trainer, then follows instead of farming. Rule 8
+// (loot) needs the loot model of #29. The shot toggle is set-up, not a
+// plan rule: it runs once per shot template carried, ahead of the fight it
+// serves, after the flee rules so it never delays one.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -249,6 +257,7 @@ var playRules = []rule{
 	{"rebuff", (*Brain).ruleRebuff},
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
+	{"follow", (*Brain).ruleFollow},
 	{"spot", (*Brain).ruleSpot},
 	{"goal", (*Brain).ruleGoal},
 	{"idle", (*Brain).ruleIdle},

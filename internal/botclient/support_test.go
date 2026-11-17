@@ -425,6 +425,7 @@ func TestSupportRules(t *testing.T) {
 			p := DefaultPersona()
 			p.IdleChance, p.AttackSkills = 0, []int32{1177}
 			p.AssistMin, p.AssistMax = assistMinTest, assistMinTest
+			p.Follow = FollowPolicy{} // following the leader is #18's, not checked here
 			b, _ := newTestBrain(t, p)
 			tc.setup(b)
 			rule, a := b.decide(now)
