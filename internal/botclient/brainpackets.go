@@ -7,6 +7,8 @@ import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 const (
 	// actionSitStand is the RequestActionUse id that toggles sitting.
 	actionSitStand int32 = 0
+	// actionWalkRun is the RequestActionUse id that toggles running.
+	actionWalkRun int32 = 1
 	// chatAll is the Say2 channel heard around the speaker.
 	chatAll int32 = 0
 	// moveByMouse is the MoveBackwardToLocation movement field of a click.
