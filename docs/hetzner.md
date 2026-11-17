@@ -12,8 +12,8 @@ one bans the IP) is keyed by source IP. Give the bots their own address so the a
 only them, and a login ban or flood on the bots never touches the gameserver's own link, which
 comes from `127.0.0.1`.
 
-- Bots bind `127.0.0.2` with `-local-addr 127.0.0.2` (`bots accounts` has the flag; the swarm
-  command, #51, takes the same one). It sets `Dialer.LocalAddr` on both the login and the game dial.
+- Bots bind `127.0.0.2` with `-local-addr 127.0.0.2` (`bots accounts` and `bots swarm` both take
+  it). It sets `Dialer.LocalAddr` on both the login and the game dial.
 - On Linux all of `127.0.0.0/8` is loopback: `127.0.0.2` needs no `ip addr add`.
 - Both dials must go to loopback: `-login 127.0.0.1:2106`, and the game address the login server
   advertises (`Hostname`, section 2) must be loopback too, because a loopback source address is not
@@ -44,25 +44,31 @@ connects from). Two ways to give bots a loopback game address:
 
 - (a) Server for bots only: set `Hostname = 127.0.0.1`, or leave `*` and connect the gameserver
   link over a loopback `LoginHost`.
-- (b) Server shared with real players: keep the public `Hostname`. Bots need a bot-side game
-  address override, which does not exist yet (tracked in #51).
+- (b) Server shared with real players: keep the public `Hostname`, and give the swarm the
+  loopback game address with `-game 127.0.0.1:7777` (the gameserver's port): it replaces the
+  advertised address on every game dial.
 
 `EnableFloodProtection`, `FastConnection*` and `MaxConnectionPerIP` guard only the
 gameserver-to-loginserver link on port 9014 and need no change for bots.
 
 ## 3. Pacing and bans
 
-- Bots log in no faster than one per 1.25 s (`-interval`, floor enforced), under the filter's
-  burst limit.
+- `bots accounts` logs in no faster than one per 1.25 s (`-interval`, floor enforced), under the
+  filter's burst limit. `bots swarm` starts every login and game dial of the process at least
+  1.25 s plus a random jitter of up to 0.5 s after the previous one, and backs all bots off
+  exponentially while the servers refuse connections.
 - Three credential failures in a row ban the IP for 10 minutes (plan, "Login pacing"), so the bots'
-  credential breaker halts logins first. On the bots' own address that ban cuts nothing else.
+  credential breaker halts logins first: the first refused credential stops every later login
+  of the swarm, and the swarm exits with code 3 once its bots are done, which the unit does not
+  restart. On the bots' own address that ban cuts nothing else.
 - Remote runs from a home or carrier-shared IP are not allowlisted: they stay under the burst
   limit with the same pacing. Never allowlist a shared IP.
 
 ## 4. Fixed bot cap
 
 Pick a number of bots (`-bots N`, 50 in the unit) and raise `MaximumOnlineUsers` by the same
-number. There is no dynamic log-off: bots cannot see the live player count, so a full server
+number. The swarm runs exactly one bot per account, `PREFIX1` to `PREFIXN`, each with one session
+at a time, so it never holds more than N characters in the world. There is no dynamic log-off: bots cannot see the live player count, so a full server
 refuses the bots' logins instead of the cap adapting. Size the cap against memory: leave the
 gameserver its 1.4 GB heap plus the OS, and the swarm inside `MemoryMax`.
 

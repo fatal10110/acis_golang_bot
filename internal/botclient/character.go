@@ -153,6 +153,10 @@ const (
 // created or selected.
 var errNoCharacterSlot = errors.New("character not in CharSelectInfo")
 
+// errCharacterUnplayable reports a character the bot will not select: one
+// banned or pending deletion.
+var errCharacterUnplayable = errors.New("character banned or pending deletion")
+
 // charSlot is what EnterGame needs of one CharSelectInfo slot.
 type charSlot struct {
 	Name string
@@ -242,7 +246,7 @@ func (g *GameConn) chooseSlot(ctx context.Context, slots []charSlot, ch Characte
 		}
 	}
 	if t := slots[slot].DeleteTimer; t != 0 {
-		return 0, "", fmt.Errorf("character %q is banned or pending deletion (delete timer %d)", name, t)
+		return 0, "", fmt.Errorf("character %q (delete timer %d): %w", name, t, errCharacterUnplayable)
 	}
 	return slot, name, nil
 }
