@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
@@ -22,7 +21,7 @@ import (
 const (
 	// FileName is the registry file in the data directory.
 	FileName = "bots.json"
-	// LockName is the file the panel holds its flock on. It is not
+	// LockName is the file the panel holds its lock on. It is not
 	// FileName, which every save replaces.
 	LockName = "bots.lock"
 	// Version is the registry file format this package reads and writes.
@@ -114,9 +113,9 @@ func Open(dir string) (*Registry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("registry lock: %w", err)
 	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := tryLock(lock); err != nil {
 		_ = lock.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
+		if errors.Is(err, ErrLocked) {
 			return nil, fmt.Errorf("%s: %w", dir, ErrLocked)
 		}
 		return nil, fmt.Errorf("registry lock %s: %w", dir, err)

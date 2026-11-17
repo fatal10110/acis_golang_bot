@@ -130,6 +130,33 @@ with `-gm-dsn-file`. If the tunnel is down, GM commands are refused and the bots
   distribution down, which ends the swarm like a crash.
 - A Windows sleep suspends the WSL2 VM: the bots wake on dead lines, and section 5 applies.
 
+### Native Windows
+
+Without WSL2, run `bots-windows-amd64.exe` from a GitHub release: every published release carries
+it, `bots-linux-amd64` and `SHA256SUMS` (compare with `certutil -hashfile bots-windows-amd64.exe
+SHA256`). Flags and commands are the same as on Linux.
+
+- Windows has no mode bits, so the secret file (and a `-gm-dsn-file`) is checked by its ACL
+  instead of `0600`: it is refused when anyone but its owner, the user running the bots, SYSTEM and
+  Administrators may access it. Keep it under the profile and drop the inherited entries:
+
+  ```
+  mkdir %AppData%\acis-bots
+  rem copy the secret to %AppData%\acis-bots\secret, then:
+  icacls %AppData%\acis-bots\secret /inheritance:r /grant:r "%USERNAME%:F"
+  ```
+
+  A file under `C:\` or a shared folder inherits Users or Authenticated Users entries and is
+  refused until `icacls` drops them.
+- `bots ui` keeps its registry in `%AppData%\acis-bots` unless `-data-dir` names another
+  directory. A second `bots ui` on the same directory is refused while the first runs; a killed
+  panel leaves no lock behind.
+- The panel (`127.0.0.1:8090`) and the metrics endpoint listen on loopback only, so they need no
+  firewall rule; if Windows Defender Firewall asks anyway, allow nothing. The bots' outbound
+  connections need no rule either.
+- The 60 s `TCP_USER_TIMEOUT` of section 5 is Linux's: on Windows the keepalive alone ends an idle
+  dead line, and a line that dies with data in flight ends on Windows' own retransmission timeout.
+
 ## 8. Control panel
 
 `bots ui` runs the bots in-process under a web panel (plan section 8) instead of a fixed swarm:
@@ -142,11 +169,19 @@ bots ui -secret-file ~/.config/acis-bots/secret -prefix home -login <server>:210
 - The panel serves on `-listen` (default `127.0.0.1:8090`; a loopback IP only, any other address
   is refused) and answers only requests whose `Host` is loopback and that come from its own page.
   Open `http://127.0.0.1:8090/`.
-- Pages: Bots (create, spawn, despawn, change persona, delete, import), a bot's detail (its
-  snapshot, commands `stay`, `go <spot>`, `follow <player>`, `assist <player>`, `leave`, `logout`,
-  and its log), Dashboard (login gate and breaker with "resume logins", the metrics), Logs. Live
-  state comes over server-sent events; nothing needs Node.
+- Pages: Bots (sort, filter, bulk spawn and despawn, create, import), a bot's detail (its
+  snapshot with HP, MP and CP, persona change, spawn, despawn, delete, commands `stay`,
+  `go <spot>` from a spot picker, `follow <player>`, `assist <player>`, `leave`, `logout`, each
+  answered in a toast, and its log), Dashboard (login gate and breaker with "resume logins",
+  online count against `-max-online`, the metrics and their charts), Logs (filter, search,
+  pause). Live state comes over server-sent events; the header shows when the stream reconnects.
+  Light and dark themes follow the system until toggled.
+- The page is a React application (`web/`). Release binaries embed it. A binary built from source
+  embeds it only after `make ui` (Node.js 22 and npm), run before `go build ./cmd/bots`; without
+  it the panel serves a page that says so, and the API still works. `npm run dev` in `web/`
+  serves the page with hot reload against a `bots ui` on the default `-listen`.
 - The registry lives in `-data-dir` (default `acis-bots` under the user's config directory); a
   restart on the same directory logs back in every bot marked online, as the same characters.
-- `town` and `merchant` are offered only with `-datapack`.
+- `town` and `merchant` are offered only with `-datapack`; without it they are listed disabled.
+  The spot picker lists the datapack's spots, so it is empty without `-datapack`.
 - No password, secret or GM DSN reaches the API, the page or the logs.

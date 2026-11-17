@@ -274,8 +274,7 @@ func (g *rig) noSecret() {
 		hay = append(hay, l.Text)
 	}
 	hay = append(hay, g.stderr.String())
-	page := g.want(http.StatusOK, "GET", "/", nil) + g.want(http.StatusOK, "GET", "/app.js", nil)
-	hay = append(hay, page)
+	hay = append(hay, g.pages()...)
 	for _, h := range hay {
 		for _, n := range needles {
 			if strings.Contains(h, n) {

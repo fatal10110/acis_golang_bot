@@ -66,7 +66,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	var o uiOptions
 	fs := flag.NewFlagSet("bots ui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.StringVar(&o.secretFile, "secret-file", "", "path of the secret file (mode 0600) the per-bot passwords derive from")
+	fs.StringVar(&o.secretFile, "secret-file", "", "path of the secret file (mode 0600, or an owner-only ACL on Windows) the per-bot passwords derive from")
 	fs.StringVar(&o.dataDir, "data-dir", "", "directory of the bot registry (bots.json), locked while the panel runs; default: "+botregistry.DefaultDirName+" under the user's config directory")
 	fs.StringVar(&o.prefix, "prefix", "", "the panel's account prefix for new bots, lowercase letters and digits ending in a letter; required when the registry is created, then stored")
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the panel's new bots' character names (with -prefix, when the registry is created)")
@@ -324,6 +324,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		Metrics:    metrics,
 		MaxOnline:  o.maxOnline,
 		Presets:    offeredPresets(o.datapack),
+		Spots:      runner.shared.spots,
 		Logs:       ring,
 		Log:        log,
 	})
@@ -363,15 +364,16 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	return err
 }
 
-// offeredPresets are the presets of the catalog the panel offers: those
-// that need the datapack only with it.
+// offeredPresets are the presets of the catalog the panel lists: those that
+// need the datapack are disabled, with the reason, without it.
 func offeredPresets(datapack string) []botpanel.Preset {
 	var out []botpanel.Preset
 	for _, p := range presets {
+		bp := botpanel.Preset{Name: p.name, Help: p.help}
 		if p.datapack && datapack == "" {
-			continue
+			bp.Disabled = "needs -datapack"
 		}
-		out = append(out, botpanel.Preset{Name: p.name, Help: p.help})
+		out = append(out, bp)
 	}
 	return out
 }

@@ -1,0 +1,63 @@
+name: Release
+
+# Builds the bots when someone publishes a GitHub release and attaches the
+# binaries to it; the release's tag selects the commit. Modeled on
+# acis_golang's deploy.yml, without its deploy step: the owner runs the
+# binaries at home (docs/home.md). The workflow takes no repository secret.
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+# One release build at a time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Attaches the binaries to the release.
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # The panel's page (docs/plan.md D12), embedded by both binaries.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+
+      - name: Build the panel page
+        run: |
+          make ui
+          test -f internal/botpanel/web/app/index.html
+
+      # Static builds: CGO off, so the binaries need no C library at home.
+      - name: Build binaries
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          GOOS=linux GOARCH=amd64 go build -trimpath -o dist/bots-linux-amd64 ./cmd/bots
+          GOOS=windows GOARCH=amd64 go build -trimpath -o dist/bots-windows-amd64.exe ./cmd/bots
+
+      - name: Checksum the binaries
+        run: (cd dist && sha256sum bots-linux-amd64 bots-windows-amd64.exe > SHA256SUMS)
+
+      # A re-run replaces the assets.
+      - name: Attach the release assets
+        run: gh release upload "$TAG" dist/* --clobber

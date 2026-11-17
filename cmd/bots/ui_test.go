@@ -162,14 +162,19 @@ func TestRunUIRefusesALockedDataDir(t *testing.T) {
 }
 
 func TestOfferedPresets(t *testing.T) {
+	// names lists the offered presets, and the disabled ones as name:reason.
 	names := func(ps []botpanel.Preset) (out []string) {
 		for _, p := range ps {
+			if p.Disabled != "" {
+				out = append(out, p.Name+":"+p.Disabled)
+				continue
+			}
 			out = append(out, p.Name)
 		}
 		return out
 	}
-	if got := names(offeredPresets("")); !slices.Equal(got, []string{"support"}) {
-		t.Fatalf("without a datapack offered %q, want support only", got)
+	if got := names(offeredPresets("")); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack"}) {
+		t.Fatalf("without a datapack offered %q, want support only, the others disabled", got)
 	}
 	if got := names(offeredPresets("dp")); !slices.Equal(got, []string{"support", "town", "merchant"}) {
 		t.Fatalf("with a datapack offered %q", got)

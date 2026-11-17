@@ -21,6 +21,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/fatal10110/acis_golang_bot/internal/ownerfile"
 )
 
 // MaxAccountLen is the longest account name: the login credential block
@@ -39,9 +41,10 @@ const MinSecretLen = 16
 const maxSecretFileSize = 4096
 
 var (
-	// ErrSecretMode reports a secret file readable or writable by group or
-	// others.
-	ErrSecretMode = errors.New("secret file mode allows group or other access, want 0600")
+	// ErrSecretMode reports a secret file others than its owner may access:
+	// a group or other mode bit on unix, a wider DACL on Windows. It is
+	// ownerfile.ErrShared.
+	ErrSecretMode = ownerfile.ErrShared
 	// ErrWeakSecret reports a secret persistent mode refuses: too short, one
 	// repeated character, or a placeholder.
 	ErrWeakSecret = errors.New("secret is too weak or a placeholder")
@@ -65,8 +68,9 @@ var passwordEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 // Secret is the key the passwords derive from. Its zero value has no key.
 type Secret struct{ key []byte }
 
-// LoadSecret reads the secret from path: a regular file of mode 0600 (or
-// stricter) holding at most 4 KiB. Surrounding whitespace, such as the
+// LoadSecret reads the secret from path: a regular file private to its
+// owner (ownerfile.Check: mode 0600 or stricter, on Windows an owner-only
+// DACL) holding at most 4 KiB. Surrounding whitespace, such as the
 // trailing newline of `echo`, is not part of the secret. An empty secret is
 // refused; persistent mode also wants Strong.
 func LoadSecret(path string) (Secret, error) {
@@ -82,8 +86,8 @@ func LoadSecret(path string) (Secret, error) {
 	if !fi.Mode().IsRegular() {
 		return Secret{}, fmt.Errorf("secret file %s: not a regular file", path)
 	}
-	if perm := fi.Mode().Perm(); perm&0o077 != 0 {
-		return Secret{}, fmt.Errorf("secret file %s: mode %#o: %w", path, perm, ErrSecretMode)
+	if err := ownerfile.Check(f); err != nil {
+		return Secret{}, fmt.Errorf("secret file %s: %w", path, err)
 	}
 	b, err := io.ReadAll(io.LimitReader(f, maxSecretFileSize+1))
 	if err != nil {

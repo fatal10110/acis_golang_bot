@@ -46,7 +46,7 @@ type accountsOptions struct {
 // accounts; every bots command that logs in shares them. The secret is
 // named by its file's path only: never pass a secret on the command line.
 func addAccountFlags(fs *flag.FlagSet, c *botaccounts.Config) {
-	fs.StringVar(&c.SecretFile, "secret-file", "", "path of the secret file (mode 0600) the per-bot passwords derive from")
+	fs.StringVar(&c.SecretFile, "secret-file", "", "path of the secret file (mode 0600, or an owner-only ACL on Windows) the per-bot passwords derive from")
 	fs.StringVar(&c.Prefix, "prefix", "", "this swarm instance's account prefix: lowercase letters and digits ending in a letter")
 	fs.IntVar(&c.Count, "bots", 0, "number of bot accounts: PREFIX1 to PREFIXN")
 	fs.BoolVar(&c.Persistent, "persistent", false, "persistent swarm: keeps bots in the world, refuses a weak or placeholder secret")
