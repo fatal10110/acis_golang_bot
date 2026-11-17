@@ -107,8 +107,10 @@ func slotOf(part int32) gearSlot {
 // gearItem is a weapon or armor template the bot may wear.
 type gearItem struct {
 	part int32
-	// kind is a weapon's type and a body or legs piece's armor type; ""
-	// for a head, gloves or feet piece, which fits any.
+	// kind is a weapon's type, with "/MAGIC" for a magical one (a
+	// mystic's weapon never replaces a fighter's, nor the other way), and a
+	// body or legs piece's armor type; "" for a head, gloves or feet piece,
+	// which fits any.
 	kind  string
 	grade int32
 	price int32
@@ -132,6 +134,9 @@ func indexGear(items map[int32]datapack.Item, cheapest map[int32]int32) (map[int
 				continue
 			}
 			g.kind = it.Kind
+			if it.Magical {
+				g.kind += "/MAGIC"
+			}
 		case slotBody, slotLegs:
 			if it.Type != "Armor" || !slices.Contains([]string{"LIGHT", "HEAVY", "MAGIC"}, it.Kind) {
 				continue
@@ -266,7 +271,7 @@ func (b *Brain) wearsNext(it Item) bool {
 	return b.upgrade(it, &w)
 }
 
-// ruleGear is a rule 9 errand: out of combat and trade, the bot uses the
+// ruleGear is a rule 9 errand: standing, out of combat and trade, the bot uses the
 // best carried piece that beats the one worn in its slot (UseItem equips
 // it), the first slot first. One UseItem is waited for at a time, up to
 // gearTimeout; a template the server leaves unequipped is refused for
@@ -274,7 +279,10 @@ func (b *Brain) wearsNext(it Item) bool {
 // frame pacer bounds the rest.
 func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 	g, self := &b.gear, &b.world.Self
-	if !b.persona.Gear.Equip || b.cfg.Travel == nil || self.Dead || self.InCombat || b.world.Trade.Open() {
+	// Never while moving: a weapon used during a cast's approach is
+	// toggled again on arrival (use_item_intention.go), leaving the bot
+	// unarmed.
+	if !b.persona.Gear.Equip || b.cfg.Travel == nil || self.Dead || self.InCombat || self.Moving(now) || b.world.Trade.Open() {
 		return Action{}, false
 	}
 	if g.obj != 0 {

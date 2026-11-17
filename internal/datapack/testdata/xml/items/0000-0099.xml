@@ -11,6 +11,14 @@
 			<set stat="pAtk" val="8" />
 		</for>
 	</item>
+	<!-- A mystic's weapon. -->
+	<item id="6" type="Weapon" name="Apprentice's Wand">
+		<set name="is_magical" val="true" />
+		<set name="default_action" val="equip" />
+		<set name="weapon_type" val="BLUNT" />
+		<set name="bodypart" val="rhand" />
+		<set name="price" val="138" />
+	</item>
 	<item id="49" type="Armor" name="Gloves">
 		<set name="default_action" val="equip" />
 		<set name="bodypart" val="gloves" />

@@ -15,6 +15,7 @@ func TestLoadItems(t *testing.T) {
 	}
 	want := map[int32]Item{
 		1:    {ID: 1, Name: "Short Sword", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 768},
+		6:    {ID: 6, Name: "Apprentice's Wand", Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138},
 		49:   {ID: 49, Name: "Gloves", Type: "Armor", BodyPart: "gloves", Price: 2650},
 		398:  {ID: 398, Name: "Plate Leather", Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Grade: 1, Price: 74600},
 		6611: {ID: 6611, Name: "Infinity Blade", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Conditional: true},

@@ -25,6 +25,9 @@ const (
 	salamanderMail int32 = 396
 	leatherHelmet  int32 = 44
 	leatherBoots   int32 = 40
+	club           int32 = 4
+	apprenticeWand int32 = 6
+	wandOfAdept    int32 = 747
 	// gearMerchant sells weapons and armor.
 	gearMerchant int32 = 30001
 )
@@ -45,6 +48,9 @@ var gearTemplates = map[int32]datapack.Item{
 	salamanderMail: {ID: salamanderMail, Type: "Armor", BodyPart: "fullarmor", Kind: "LIGHT", Grade: 1, Price: 429000},
 	leatherHelmet:  {ID: leatherHelmet, Type: "Armor", BodyPart: "head", Price: 10200},
 	leatherBoots:   {ID: leatherBoots, Type: "Armor", BodyPart: "feet", Grade: 1, Price: 20900},
+	club:           {ID: club, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Price: 768},
+	apprenticeWand: {ID: apprenticeWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138},
+	wandOfAdept:    {ID: wandOfAdept, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 25500},
 	// Never worn: a hero weapon, a shadow weapon, a fishing rod, a pet's
 	// armor, a necklace, a shield and a priceless weapon.
 	6611: {ID: 6611, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Price: 1, Conditional: true},
@@ -93,12 +99,15 @@ func newGearBrain(t *testing.T, expertise int32, items ...Item) *Brain {
 
 func TestIndexGear(t *testing.T) {
 	gear, sold := indexGear(gearTemplates, map[int32]int32{longSword: 1, falchion: 1, leatherHelmet: 1, squireShirt: 1, woodenGaiters: 1, 6611: 1, lesserHealingPotion: 1})
-	want := []int32{shortSword, longSword, falchion, twoHanded, artisansSword, squireShirt, squirePants, leatherShirt22, bronzePlate, woodenGaiters, salamanderMail, leatherHelmet, leatherBoots}
+	want := []int32{shortSword, longSword, falchion, twoHanded, artisansSword, squireShirt, squirePants, leatherShirt22, bronzePlate, woodenGaiters, salamanderMail, leatherHelmet, leatherBoots, club, apprenticeWand, wandOfAdept}
 	if got := slices.Sorted(maps.Keys(gear)); !reflect.DeepEqual(got, slices.Sorted(slices.Values(want))) {
 		t.Errorf("gear = %v, want %v", got, want)
 	}
 	if g := gear[twoHanded]; g != (gearItem{part: partLRHand, kind: "BIGSWORD", grade: 1, price: 967000}) {
 		t.Errorf("two-handed sword = %+v", g)
+	}
+	if g := gear[apprenticeWand]; g.kind != "BLUNT/MAGIC" {
+		t.Errorf("wand kind = %q, want a magical blunt", g.kind)
 	}
 	if g := gear[leatherHelmet]; g.kind != "" || g.part != partHead {
 		t.Errorf("helmet = %+v, want a head piece of any kind", g)
@@ -113,6 +122,7 @@ func TestIndexGear(t *testing.T) {
 func TestGearBeats(t *testing.T) {
 	std := []Item{wornSword, wornShirt, wornPants}
 	mail := Item{ObjectID: 204, TemplateID: salamanderMail, Count: 1, Equipped: true, BodySlot: partFullArmor}
+	wand := Item{ObjectID: 205, TemplateID: apprenticeWand, Count: 1, Equipped: true, BodySlot: partRHand}
 	tests := []struct {
 		name      string
 		worn      []Item
@@ -131,6 +141,9 @@ func TestGearBeats(t *testing.T) {
 		{name: "enchanted sword kept", worn: []Item{{ObjectID: 201, TemplateID: shortSword, Equipped: true, BodySlot: partRHand, Enchant: 3}}, id: longSword},
 		{name: "unknown worn sword kept", worn: []Item{{ObjectID: 201, TemplateID: 2369, Equipped: true, BodySlot: partRHand}}, id: longSword},
 		{name: "unarmed", worn: []Item{wornShirt}, id: longSword},
+		{name: "physical blunt over a wand", worn: []Item{wand}, id: club},
+		{name: "better wand", worn: []Item{wand}, id: wandOfAdept, want: true},
+		{name: "wand over a sword", worn: std, id: wandOfAdept},
 		{name: "heavy over light", worn: std, id: bronzePlate},
 		{name: "better shirt", worn: std, id: leatherShirt22, want: true},
 		{name: "full armor over shirt and pants", worn: std, expertise: 1, id: salamanderMail, want: true},
@@ -195,6 +208,50 @@ func TestBrainGearEquip(t *testing.T) {
 	}
 	if b.gear.obj != 0 {
 		t.Errorf("gear wait = %d, want none", b.gear.obj)
+	}
+}
+
+// TestBrainGearNotMoving holds the UseItem while the bot moves: a weapon
+// toggled during a cast's approach is toggled again on arrival.
+func TestBrainGearNotMoving(t *testing.T) {
+	b := newGearBrain(t, 0, wornSword, newSword)
+	b.world.Apply(MoveToLocation{ObjectID: selfID, Origin: Point{}, Dest: Point{X: 3000}}, at(time.Second))
+	if !b.world.Self.Moving(at(time.Second)) {
+		t.Fatal("the bot is not moving")
+	}
+	if a, ok := b.ruleGear(at(time.Second)); ok {
+		t.Fatalf("moving: ruleGear = %+v, want no match", a)
+	}
+	if b.world.Self.Moving(at(time.Hour)) {
+		t.Fatal("the bot never arrives")
+	}
+	if a, ok := b.ruleGear(at(time.Hour)); !ok || a.object != newSword.ObjectID {
+		t.Fatalf("arrived: ruleGear = %+v, %v, want the long sword", a, ok)
+	}
+}
+
+// TestGearStoreLoot keeps a looted upgrade no merchant sells out of the
+// private store, and stores the pieces it replaced once they are off.
+func TestGearStoreLoot(t *testing.T) {
+	mail := Item{ObjectID: 220, TemplateID: salamanderMail, Count: 1, BodySlot: partFullArmor}
+	b := newGearBrain(t, 1, wornSword, wornShirt, wornPants, mail)
+	if b.storeLoot(mail) {
+		t.Error("the mail to wear is store loot")
+	}
+	if b.storeLoot(wornShirt) || b.storeLoot(wornPants) {
+		t.Error("worn pieces are store loot")
+	}
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{
+		{ItemModified, Item{ObjectID: 220, TemplateID: salamanderMail, Count: 1, Equipped: true, BodySlot: partFullArmor}},
+		{ItemModified, Item{ObjectID: 202, TemplateID: squireShirt, Count: 1, BodySlot: partChest}},
+		{ItemModified, Item{ObjectID: 203, TemplateID: squirePants, Count: 1, BodySlot: partLegs}},
+	}}, at(time.Second))
+	inv := b.world.Inventory.Items
+	if !b.storeLoot(inv[202]) || !b.storeLoot(inv[203]) {
+		t.Error("the replaced shirt and pants are not store loot")
+	}
+	if b.storeLoot(inv[220]) {
+		t.Error("the worn mail is store loot")
 	}
 }
 

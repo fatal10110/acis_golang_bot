@@ -19,6 +19,9 @@ type Item struct {
 	// piece's armor_type (LIGHT, HEAVY, MAGIC, ...); "" when the file sets
 	// none.
 	Kind string
+	// Magical is a weapon's is_magical: a mystic's weapon (wands, magic
+	// blunts and swords), whose attacks the server scales by M. Atk.
+	Magical bool
 	// Grade is the crystal grade: 0 for none, then 1 for D up to 5 for S,
 	// the level of the Expertise skill that wears it without a penalty.
 	Grade int
@@ -100,6 +103,7 @@ func buildItem(el itemElement) (Item, bool, error) {
 	}
 	it.BodyPart = a.strDefault("bodypart", "")
 	it.Kind = a.strDefault(kindKey, "")
+	it.Magical = a.boolDefault("is_magical", false)
 	it.Price = a.int32Default("price", 0)
 	it.Duration = a.intDefault("duration", 0)
 	grade, ok := grades[a.strDefault("crystal_type", "NONE")]
