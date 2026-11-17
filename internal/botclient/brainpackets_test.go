@@ -53,6 +53,10 @@ func TestBrainPacketEncoders(t *testing.T) {
 			le(byte(0x45), 0, 0, byte(0)),
 		},
 		{
+			"RequestActionUse walk/run", encodeRequestActionUse(actionWalkRun),
+			le(byte(0x45), 1, 0, byte(0)),
+		},
+		{
 			"RequestSocialAction", encodeRequestSocialAction(7),
 			le(byte(0x1b), 7),
 		},
