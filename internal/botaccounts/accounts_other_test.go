@@ -26,3 +26,12 @@ func TestLoadSecretMode(t *testing.T) {
 		})
 	}
 }
+
+// TestConfigAccountsRefusesALooseSecretFile: Accounts loads the secret
+// through LoadSecret, so a 0644 secret file stops it.
+func TestConfigAccountsRefusesALooseSecretFile(t *testing.T) {
+	cfg := Config{SecretFile: writeSecret(t, genSecret(t), 0o644), Prefix: "bot", Count: 3, Persistent: true}
+	if _, err := cfg.Accounts(); !errors.Is(err, ErrSecretMode) {
+		t.Fatalf("err = %v, want ErrSecretMode", err)
+	}
+}

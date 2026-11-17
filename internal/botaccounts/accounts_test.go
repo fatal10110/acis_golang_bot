@@ -249,13 +249,6 @@ func TestConfigAccounts(t *testing.T) {
 			wantErr: "no secret file",
 		},
 		{
-			name: "loose mode",
-			cfg: func(t *testing.T) Config {
-				return Config{SecretFile: writeSecret(t, strong, 0o644), Prefix: "bot", Count: 3, Persistent: true}
-			},
-			is: ErrSecretMode,
-		},
-		{
 			name: "bad prefix",
 			cfg: func(t *testing.T) Config {
 				return Config{SecretFile: writeSecret(t, strong, 0o600), Prefix: "Bot", Count: 3}

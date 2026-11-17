@@ -203,7 +203,7 @@ func TestRunAccountsRefusesBeforeLogin(t *testing.T) {
 	}{
 		{"persistent, default secret", []string{"-persistent", "-secret-file", weak, "-prefix", "bot", "-bots", "2"}, 1, "persistent mode"},
 		{"persistent, no secret file", []string{"-persistent", "-prefix", "bot", "-bots", "2"}, 1, "no secret file"},
-		{"persistent, missing secret file", []string{"-persistent", "-secret-file", filepath.Join(dir, "absent"), "-prefix", "bot", "-bots", "2"}, 1, "no such file"},
+		{"persistent, missing secret file", []string{"-persistent", "-secret-file", filepath.Join(dir, "absent"), "-prefix", "bot", "-bots", "2"}, 1, notExistText(t)},
 		{"bad flag", []string{"-interval", "1ms"}, 2, "-interval"},
 	}
 	for _, tt := range tests {
