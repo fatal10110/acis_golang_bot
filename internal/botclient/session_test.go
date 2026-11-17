@@ -141,6 +141,10 @@ type fakeNet struct {
 	cancel   context.CancelFunc
 	// onLogin, when set, runs at the start of every login.
 	onLogin func()
+	// onEnter, when set, runs at the start of every game entry with its
+	// index, the character asked for and the entry's chosen callback; an
+	// error it returns fails the entry.
+	onEnter func(i int, ch Character, chosen func(string, int32)) error
 
 	nLogin, nDial, nEnter int
 	// entered counts the entries that reached the world.
@@ -187,25 +191,40 @@ func (n *fakeNet) dialGame(ctx context.Context, addr string) (gameSession, error
 	return g, nil
 }
 
-func (n *fakeNet) enterGame(ctx context.Context, g gameSession, account string, keys SessionKeys, ch Character) (Self, error) {
+func (n *fakeNet) enterGame(ctx context.Context, g gameSession, account string, keys SessionKeys, ch Character, chosen func(string, int32)) (Self, error) {
 	i := n.nEnter
 	n.nEnter++
+	if n.onEnter != nil {
+		if err := n.onEnter(i, ch, chosen); err != nil {
+			return Self{}, err
+		}
+	}
 	if i < len(n.enters) && n.enters[i] != nil {
 		return Self{}, n.enters[i]
 	}
+	name := ch.Name
+	if name == "" {
+		name = ch.Names[0]
+	}
+	chosen(name, 0)
 	g.(*fakeGame).entered = true
 	n.entered++
 	if n.entered == n.cancelAt {
 		n.cancel()
 	}
-	return Self{ObjectID: selfID, Name: ch.Names[0]}, nil
+	return Self{ObjectID: selfID, Name: name}, nil
 }
 
 // newTestBot returns a bot over net sharing gate, timed by clock.
 func newTestBot(t *testing.T, persistent bool, n *fakeNet, gate *LoginGate, clock *fakeClock) *Bot {
 	t.Helper()
-	cfg := SessionConfig{Persistent: persistent, Marker: botnames.DefaultMarker, Clock: clock, Gate: gate}
-	b, err := NewBot(cfg, "bot1", "not-a-secret", rand.New(rand.NewPCG(1, 2)))
+	cfg := SessionConfig{Persistent: persistent, Clock: clock, Gate: gate}
+	rng := rand.New(rand.NewPCG(1, 2))
+	ch, err := NewCharacter(botnames.DefaultMarker, "bot1", rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := NewBot(cfg, "bot1", "not-a-secret", BotConfig{Character: ch}, rng)
 	if err != nil {
 		t.Fatal(err)
 	}

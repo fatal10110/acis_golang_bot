@@ -14,7 +14,7 @@ func startMetricsBot(t *testing.T, n *fakeNet) (*Bot, *botmetrics.Registry, *fak
 	t.Helper()
 	b, clock, ctx := startBot(t, true, n)
 	reg := botmetrics.NewRegistry(RuleNames()...)
-	b.cfg.Brain.Metrics = reg.NewBot()
+	b.brain.Metrics = reg.NewBot()
 	b.cfg.Gate.ReportBreaker(reg)
 	return b, reg, clock, func() error { return runBot(ctx, b, clock) }
 }

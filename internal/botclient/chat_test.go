@@ -37,23 +37,25 @@ func TestBrainChatHeard(t *testing.T) {
 	tests := []struct {
 		name    string
 		ev      CreatureSay
-		marker  botnames.Marker
+		markers botnames.Markers
 		noLines bool
 		want    bool
 	}{
-		{"player whisper", whisper(pcID, "Alden", "hi there"), botnames.Marker{}, false, true},
-		{"marked sender", whisper(pcID, "AldenBot", "hi"), botnames.Marker{}, false, false},
-		{"marked sender in any case", whisper(pcID, "aldenBOT", "hi"), botnames.Marker{}, false, false},
-		{"configured prefix marker", whisper(pcID, "X1Alden", "hi"), prefixed, false, false},
-		{"default suffix under a prefix marker", whisper(pcID, "AldenBot", "hi"), prefixed, false, true},
-		{"all channel", CreatureSay{ObjectID: pcID, Type: chatAll, Name: "Alden", Text: "hi"}, botnames.Marker{}, false, false},
-		{"shout", CreatureSay{ObjectID: pcID, Type: chatShout, Name: "Alden", Text: "hi"}, botnames.Marker{}, false, false},
-		{"trade", CreatureSay{ObjectID: pcID, Type: chatTrade, Name: "Alden", Text: "hi"}, botnames.Marker{}, false, false},
-		{"echo of the bot's whisper", whisper(pcID, "->Alden", "hi"), botnames.Marker{}, false, false},
-		{"own line", whisper(selfID, "Self", "hi"), botnames.Marker{}, false, false},
-		{"no speaker", whisper(0, "Alden", "hi"), botnames.Marker{}, false, false},
-		{"command", whisper(pcID, "Alden", "follow"), botnames.Marker{}, false, false},
-		{"no reply lines", whisper(pcID, "Alden", "hi"), botnames.Marker{}, true, false},
+		{"player whisper", whisper(pcID, "Alden", "hi there"), nil, false, true},
+		{"marked sender", whisper(pcID, "AldenBot", "hi"), nil, false, false},
+		{"marked sender in any case", whisper(pcID, "aldenBOT", "hi"), nil, false, false},
+		{"configured prefix marker", whisper(pcID, "X1Alden", "hi"), botnames.Markers{prefixed}, false, false},
+		{"default suffix under a prefix marker", whisper(pcID, "AldenBot", "hi"), botnames.Markers{prefixed}, false, true},
+		{"first of two markers", whisper(pcID, "AldenBot", "hi"), botnames.Markers{botnames.DefaultMarker, prefixed}, false, false},
+		{"second of two markers", whisper(pcID, "X1Alden", "hi"), botnames.Markers{botnames.DefaultMarker, prefixed}, false, false},
+		{"all channel", CreatureSay{ObjectID: pcID, Type: chatAll, Name: "Alden", Text: "hi"}, nil, false, false},
+		{"shout", CreatureSay{ObjectID: pcID, Type: chatShout, Name: "Alden", Text: "hi"}, nil, false, false},
+		{"trade", CreatureSay{ObjectID: pcID, Type: chatTrade, Name: "Alden", Text: "hi"}, nil, false, false},
+		{"echo of the bot's whisper", whisper(pcID, "->Alden", "hi"), nil, false, false},
+		{"own line", whisper(selfID, "Self", "hi"), nil, false, false},
+		{"no speaker", whisper(0, "Alden", "hi"), nil, false, false},
+		{"command", whisper(pcID, "Alden", "follow"), nil, false, false},
+		{"no reply lines", whisper(pcID, "Alden", "hi"), nil, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,8 +64,8 @@ func TestBrainChatHeard(t *testing.T) {
 				p.Chat.Replies = nil
 			}
 			b, _ := newTestBrain(t, p)
-			if tt.marker.Text != "" {
-				b.cfg.marker = tt.marker
+			if tt.markers != nil {
+				b.cfg.markers = tt.markers
 			}
 			if err := b.handle([]Event{tt.ev}, t0); err != nil {
 				t.Fatal(err)

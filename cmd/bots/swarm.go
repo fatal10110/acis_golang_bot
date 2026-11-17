@@ -109,11 +109,14 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if err := o.gm.validate(); err != nil {
 		return o, err
 	}
-	if err := o.store.validate(o.datapack); err != nil {
+	if err := o.store.validate(); err != nil {
 		return o, err
 	}
 	if err := validatePersona(o.persona, o.datapack); err != nil {
 		return o, err
+	}
+	if p, _ := findPreset(o.persona); !p.store && flagSet(fs, "store-budget") {
+		return o, fmt.Errorf("-store-budget applies to -persona merchant, not %s", o.persona)
 	}
 	if o.metrics != "" {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
@@ -166,19 +169,22 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Dial:       []botclient.DialOption{dialOpt},
 		Recorder:   rec,
 		Persistent: o.accounts.Persistent,
-		Marker:     o.marker,
+		Markers:    botnames.Markers{o.marker},
 		Clock:      clock,
 		Gate:       gate,
 		Log:        log,
 	}
+	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
+	sh := shared{claims: botclient.NewPartyClaims(), storeBudget: o.store.budget}
 	if o.datapack != "" {
-		if cfg.Brain.Spots, cfg.Brain.Travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
+		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
+		if p.store {
+			sh.stores = o.store.registry(sh.travel, log)
+		}
 	}
-	applyPersona(o.persona, &cfg.Brain)
-	o.store.apply(&cfg.Brain, log)
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
@@ -187,13 +193,13 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	// Deferred first, so it runs after the metrics endpoint stopped and
 	// every bot returned.
 	defer stopAuth()
-	applyPartyAndAuthority(&cfg.Brain, auth)
+	sh.auth = auth
 	var reg *botmetrics.Registry
 	if o.metrics != "" {
 		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
 		gate.ReportBreaker(reg)
 	}
-	bots, err := newBots(cfg, accounts, reg)
+	bots, err := newBots(cfg, p.brain(sh), o.marker, accounts, reg)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 1
@@ -272,16 +278,24 @@ func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.Spo
 	return botclient.NewSpotRegistry(spots, multiplier), travel, nil
 }
 
-// newBots returns one bot per account, each counting into its own Bot of
-// reg (a slot: its sessions share it); a nil reg counts nothing.
-func newBots(cfg botclient.SessionConfig, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
+// newBots returns one new bot per account, each with a copy of brain and
+// its character named with marker (botclient.NewCharacter), counting into
+// its own Bot of reg (a slot: its sessions share it); a nil reg counts
+// nothing.
+func newBots(cfg botclient.SessionConfig, brain botclient.BrainConfig, marker botnames.Marker, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	bots := make([]*botclient.Bot, 0, len(accounts))
 	for _, a := range accounts {
+		bot := botclient.BotConfig{Brain: brain}
 		if reg != nil {
-			cfg.Brain.Metrics = reg.NewBot()
+			bot.Brain.Metrics = reg.NewBot()
 		}
-		b, err := botclient.NewBot(cfg, a.Name, a.Password(), rng)
+		ch, err := botclient.NewCharacter(marker, a.Name, rng)
+		if err != nil {
+			return nil, fmt.Errorf("account %s: %w", a.Name, err)
+		}
+		bot.Character = ch
+		b, err := botclient.NewBot(cfg, a.Name, a.Password(), bot, rng)
 		if err != nil {
 			return nil, err
 		}
@@ -300,15 +314,9 @@ func swarmExit(ctxErr, breaker error) int {
 	return exitStopped
 }
 
-// applyPartyAndAuthority points cfg at one party leader claim table for
-// every bot of the process, and at auth when set. The claim limits the
-// persona's own party hook, which auth's hooks ask only for a requester auth
-// does not know as a GM: a GM's invitation is never limited. Without auth no
-// GM is known, and every invitation is limited.
-func applyPartyAndAuthority(cfg *botclient.BrainConfig, auth *botclient.Authority) {
-	botclient.NewPartyClaims().Apply(cfg)
-	if auth != nil {
-		cfg.Authority = auth
-		cfg.Persona = auth.Hooks(cfg.Persona)
-	}
+// flagSet reports whether the command line set the flag named name.
+func flagSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }

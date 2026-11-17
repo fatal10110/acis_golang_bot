@@ -108,14 +108,33 @@ type SessionConfig struct {
 	// Persistent bots reconnect after a session in the world ends; others
 	// stop.
 	Persistent bool
-	// Marker marks the bots' character names.
-	Marker botnames.Marker
-	// Brain configures each session's brain; Rand is replaced per session.
-	Brain BrainConfig
-	Clock Clock
-	Gate  *LoginGate
+	// Markers are the markers of every bot name the process knows: no
+	// brain answers a whisper from a name one of them marks, so bots of
+	// different prefixes see each other as bots. None takes
+	// botnames.DefaultMarker. Each bot names its own character with one
+	// marker, through its Character.
+	Markers botnames.Markers
+	Clock   Clock
+	Gate    *LoginGate
 	// Log receives the bot's reports; nil discards them.
 	Log *slog.Logger
+}
+
+// BotConfig is what is a bot's own: its character, its brain and who hears
+// of the character it learns.
+type BotConfig struct {
+	// Character is the bot's character (see Character); the Bot pins its
+	// name once a session chose or created it.
+	Character Character
+	// Brain configures each session's brain, from the bot's preset; Rand,
+	// LogoutLimit and the markers are replaced per session. Its Metrics
+	// also count the bot's reconnects and server aborts.
+	Brain BrainConfig
+	// Learned, when set, is called once per Bot, on Run's goroutine, with
+	// the name and class id of the character it learned: one chosen or
+	// created by a session of a bot whose Character had no known name. It
+	// is called before the session enters the world, and must not block.
+	Learned func(name string, classID int32)
 }
 
 // Bot is one account's player: a loop of session attempts, one at a time,
@@ -123,14 +142,18 @@ type SessionConfig struct {
 // Run is its goroutine.
 type Bot struct {
 	cfg      SessionConfig
+	brain    BrainConfig
+	learned  func(name string, classID int32)
 	account  string
 	password string
-	char     Character
 	net      sessionNet
 	rng      *rand.Rand
 	log      *slog.Logger
 
 	// Owned by Run.
+	//
+	// char is the bot's character; its name is pinned once known (pin).
+	char  Character
 	retry backoff
 	// inUseSince is when the first AccountInUse since the last good login
 	// came; zero while none came.
@@ -145,20 +168,10 @@ type Bot struct {
 	chat *chatLog
 }
 
-// NewBot returns the bot of account. Its character's names derive from the
-// account (botnames.AccountSource), so every session finds the character
-// the first one created; class and appearance are drawn from rng once.
-func NewBot(cfg SessionConfig, account, password string, rng *rand.Rand) (*Bot, error) {
-	gen, err := botnames.New(cfg.Marker, botnames.AccountSource(account))
-	if err != nil {
-		return nil, err
-	}
-	classes := StartingClasses()
-	ch := Character{
-		Names:      gen.Names(MaxNameCandidates),
-		Class:      classes[rng.IntN(len(classes))],
-		Appearance: RandomAppearance(rng),
-	}
+// NewBot returns the bot of account, playing bot's character with bot's
+// brain. A character that could not be played fails here.
+func NewBot(cfg SessionConfig, account, password string, bot BotConfig, rng *rand.Rand) (*Bot, error) {
+	ch := bot.Character
 	if err := ch.Validate(); err != nil {
 		return nil, fmt.Errorf("account %s: %w", account, err)
 	}
@@ -168,6 +181,8 @@ func NewBot(cfg SessionConfig, account, password string, rng *rand.Rand) (*Bot, 
 	}
 	b := &Bot{
 		cfg:      cfg,
+		brain:    bot.Brain,
+		learned:  bot.Learned,
 		account:  account,
 		password: password,
 		char:     ch,
@@ -186,7 +201,9 @@ func (b *Bot) Account() string { return b.account }
 // Run plays sessions until ctx ends, which logs the bot out and returns nil,
 // or until the bot stops for good, which returns why: the credential
 // breaker (ErrLoginsHalted), a refused credential, a banned account or
-// character, a character that cannot be created, ErrAccountTaken,
+// character, a character that cannot be created, a character choice that
+// stops (ErrCharacterMissing, ErrAccountHasCharacters,
+// ErrNoCharacterToAdopt), ErrAccountTaken,
 // ErrRepeatedAborts, ErrCommandedLogout, or, for a bot not persistent, the
 // end of its session.
 func (b *Bot) Run(ctx context.Context) error {
@@ -203,7 +220,7 @@ func (b *Bot) Run(ctx context.Context) error {
 		if !b.wait(ctx, delay) {
 			return nil
 		}
-		b.cfg.Brain.Metrics.Reconnect()
+		b.brain.Metrics.Reconnect()
 	}
 }
 
@@ -252,12 +269,28 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 	if err != nil {
 		return nil, Self{}, err
 	}
-	self, err := b.net.enterGame(ctx, g, b.account, res.Keys, b.char)
+	self, err := b.net.enterGame(ctx, g, b.account, res.Keys, b.char, b.pin)
 	if err != nil {
 		g.Close()
 		return nil, Self{}, fmt.Errorf("enter game: %w", err)
 	}
 	return g, self, nil
+}
+
+// pin makes the character a session chose or created the bot's known one:
+// every later attempt of the run, reconnects included, selects it by name
+// and never creates one. A name the bot did not know is reported to its
+// owner once (BotConfig.Learned). It runs on Run's goroutine, inside
+// enterGame.
+func (b *Bot) pin(name string, classID int32) {
+	if b.char.Name != "" {
+		return
+	}
+	b.char = Character{Name: name}
+	b.log.Info("character pinned", "name", name, "class_id", classID)
+	if b.learned != nil {
+		b.learned(name, classID)
+	}
 }
 
 // play runs one session in the world: a fresh world model and event queue,
@@ -279,10 +312,10 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 			q.push(connLost{err: err}, done)
 		}
 	}()
-	cfg := b.cfg.Brain
+	cfg := b.brain
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
-	cfg.marker, cfg.chat = b.cfg.Marker, b.chat
+	cfg.markers, cfg.chat = b.cfg.Markers, b.chat
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })
 	err = brain.Run(done, logout)
@@ -326,7 +359,10 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 		return 0, err
 	case errors.As(err, &ge) && ge.Packet == "CharCreateFail",
 		errors.Is(err, errCharacterUnplayable),
-		errors.Is(err, errNoCharacterSlot):
+		errors.Is(err, errNoCharacterSlot),
+		errors.Is(err, ErrCharacterMissing),
+		errors.Is(err, ErrAccountHasCharacters),
+		errors.Is(err, ErrNoCharacterToAdopt):
 		return 0, err
 	case isRefused(err):
 		// The gate already backs every bot off.
@@ -368,7 +404,7 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 	dead := deadLine(err)
 	if !b.kicked && !dead {
 		b.aborts++
-		b.cfg.Brain.Metrics.Abort()
+		b.brain.Metrics.Abort()
 	}
 	b.log.Warn("session ended", "played", played.Round(time.Second), "kicked", b.kicked, "deadLine", dead, "err", err)
 	switch {
@@ -423,7 +459,7 @@ func (b *Bot) wait(ctx context.Context, d time.Duration) bool {
 type sessionNet interface {
 	login(ctx context.Context, account, password string) (LoginResult, error)
 	dialGame(ctx context.Context, addr string) (gameSession, error)
-	enterGame(ctx context.Context, g gameSession, account string, keys SessionKeys, ch Character) (Self, error)
+	enterGame(ctx context.Context, g gameSession, account string, keys SessionKeys, ch Character, chosen func(string, int32)) (Self, error)
 }
 
 // gameSession is a game connection: *GameConn.
@@ -449,6 +485,6 @@ func (n netDialer) dialGame(ctx context.Context, addr string) (gameSession, erro
 	return g, nil
 }
 
-func (n netDialer) enterGame(ctx context.Context, g gameSession, account string, keys SessionKeys, ch Character) (Self, error) {
-	return EnterGame(ctx, g.(*GameConn), account, keys, ch)
+func (n netDialer) enterGame(ctx context.Context, g gameSession, account string, keys SessionKeys, ch Character, chosen func(string, int32)) (Self, error) {
+	return EnterGame(ctx, g.(*GameConn), account, keys, ch, chosen)
 }
