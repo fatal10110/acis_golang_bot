@@ -108,3 +108,22 @@ is missing off-host).
 After starting, `systemctl status acis-bots` shows the cgroup limits, and `ss -tn src 127.0.0.2`
 lists the bot connections. The guide is done when a run on the host stays inside these limits and
 the gameserver is untouched; that run is the owner's step on issue #15.
+
+## 8. Metrics endpoint
+
+The swarm serves live counters as `expvar` JSON on loopback only (`internal/botmetrics`). The
+`bots swarm -metrics 127.0.0.1:6060` flag that turns it on is wired in #55; it is off by default.
+
+- The address must be a loopback IP and port (`127.0.0.0/8` or `[::1]`). An empty host
+  (`:6060`), `0.0.0.0`, `::`, any other IP and any host name are refused before binding, and a
+  listener bound anywhere else is closed. Never expose it with a proxy or a firewall rule.
+- Read it on the host: `curl -s http://127.0.0.1:6060/debug/vars | jq`.
+- `bots` is the swarm total, summed from per-bot counters on a period (its `at` field): events
+  drained, packets sent and held by the pacer, rule hits, reconnects, server aborts, whether the
+  credential breaker is open, and two histograms with power-of-two buckets (`queue_depth`: events
+  per brain wakeup; `wake_lag_us`: how late timed wakeups ran, which grows when `CPUQuota` starves
+  the swarm). No account name or secret appears; `cmdline` is not served.
+- `memstats` is the Go runtime's: `HeapAlloc` (live heap) and `Sys` (memory from the OS). The
+  RSS against `MemoryMax` is `systemctl show -p MemoryCurrent acis-bots`, or `VmRSS` in
+  `/proc/$(systemctl show -p MainPID --value acis-bots)/status`. Once every bot is in the world,
+  both should stay flat over a long `-persistent` run; a steady climb is a leak.
