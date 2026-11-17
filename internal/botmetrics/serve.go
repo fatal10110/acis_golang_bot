@@ -29,7 +29,7 @@ const VarsPath = "/debug/vars"
 // unspecified address, any other IP and any host name are refused, and so
 // is a listener the system bound anywhere but loopback.
 func Listen(addr string) (net.Listener, error) {
-	if err := checkLoopback(addr); err != nil {
+	if err := CheckAddr(addr); err != nil {
 		return nil, err
 	}
 	ln, err := net.Listen("tcp", addr)
@@ -43,7 +43,9 @@ func Listen(addr string) (net.Listener, error) {
 	return ln, nil
 }
 
-func checkLoopback(addr string) error {
+// CheckAddr reports why Listen would refuse addr before binding: it must be
+// a loopback IP literal and port. Flag parsing calls it to fail early.
+func CheckAddr(addr string) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return fmt.Errorf("metrics address %q: %w", addr, err)

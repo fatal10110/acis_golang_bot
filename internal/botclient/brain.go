@@ -50,7 +50,9 @@ type Sender interface {
 // Rand is seeded at random.
 type BrainConfig struct {
 	Persona Persona
-	// Metrics, when set, counts what the brain does; nil counts nothing.
+	// Metrics, when set, counts what the brain does, and the session loop
+	// of a Bot counts its reconnects and server aborts there; one per bot,
+	// shared by its sessions. Nil counts nothing.
 	Metrics *botmetrics.Bot
 	// Tick is the base time between decisions; each adds a uniform
 	// jitter up to TickJitter.
