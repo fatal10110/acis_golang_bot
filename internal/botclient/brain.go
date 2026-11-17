@@ -127,8 +127,12 @@ type Brain struct {
 	// Appearing goes out: the server keeps the character out of the world
 	// until then.
 	appearing bool
-	// restartedAt is the restart request not yet answered by a Revive.
+	// restartedAt is the restart request or resurrection answer not yet
+	// answered by a Revive.
 	restartedAt time.Time
+	// lead is the party leader the bot follows and its loss (rule
+	// "leader").
+	lead leaderWatch
 	// train is the trainer visit (rule 9 errand).
 	train trainerVisit
 	// spot is the farming spot (rule 9 errand).
@@ -265,6 +269,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 	self := b.world.Self.ObjectID
 	for _, ev := range batch {
 		b.world.Apply(ev, now)
+		b.leaderEvent(ev, now)
 		switch e := ev.(type) {
 		case LeaveWorld:
 			switch {
@@ -393,7 +398,7 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected, AskJoinParty, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList:
+	case MyTargetSelected, AskJoinParty, ConfirmDlg, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList:
 		return true
 	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOtherOk:
 		return true
@@ -552,6 +557,16 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.appearing = false
 	case actRestart:
 		b.restartedAt = now
+	case actDlgAnswer:
+		// The server closes the offer with the first answer; an accepted
+		// one revives the bot at once.
+		b.world.Prompts.Resurrect = ResurrectOffer{}
+		b.restartedAt = now
+	case actUserCommand:
+		b.lead.escapeAt = now
+	case actLeaveParty:
+		// A party the bot left on its own loses it no leader.
+		b.lead = leaderWatch{}
 	case actAnswerParty:
 		// The server takes the invitation with the first answer.
 		b.world.Prompts.Party = PartyInvite{}
