@@ -66,6 +66,9 @@ type Persona struct {
 	// Trainers are the NPC template ids of the trainers of each class id;
 	// the bot visits the nearest one in sight.
 	Trainers map[int32][]int32
+	// Spots is how the bot picks and keeps its farming spot when the brain
+	// has a spot registry (BrainConfig.Spots, rule 9 errand "spot").
+	Spots SpotPolicy
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -95,6 +98,7 @@ func DefaultPersona() Persona {
 		Emotes:         []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
 		LearnSkills:    defaultLearnSkills(),
 		Trainers:       defaultTrainers(),
+		Spots:          defaultSpotPolicy(),
 	}
 }
 
@@ -197,8 +201,9 @@ type rule struct {
 	run  func(b *Brain, now time.Time) (Action, bool)
 }
 
-// playRules are rules 1-10, first match wins; "train" is the rule 9 errand
-// at the trainer, ahead of the persona's goal. Rules 7 (rebuff) and 8
+// playRules are rules 1-10, first match wins; "train" (the trainer) and
+// "spot" (getting to the farming spot) are rule 9 errands, ahead of the
+// persona's goal. Rules 7 (rebuff) and 8
 // (loot) need events and models that land with buffs (#22) and loot (#29);
 // rule 3 drinks a potion or flees until heals (#22) exist. The shot toggle
 // is set-up, not a plan rule: it runs once per shot template carried,
@@ -212,6 +217,7 @@ var playRules = []rule{
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
 	{"train", (*Brain).ruleTrain},
+	{"spot", (*Brain).ruleSpot},
 	{"goal", (*Brain).ruleGoal},
 	{"idle", (*Brain).ruleIdle},
 }

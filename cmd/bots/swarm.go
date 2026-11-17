@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"net"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // exitStopped is the exit code of a swarm that stopped by itself: the
@@ -44,6 +46,11 @@ type swarmOptions struct {
 	// metrics is the loopback address of the metrics endpoint; empty
 	// serves none.
 	metrics string
+	// datapack is the server datapack's XML directory the bots pick
+	// farming spots from; empty farms nowhere. spawnMultiplier is the
+	// server's SpawnMultiplier, which scales each spot's bot cap.
+	datapack        string
+	spawnMultiplier float64
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -60,6 +67,8 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the bots' character names")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
 	addAllowlistedFlag(fs, &o.allowlisted)
+	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
+	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
 	if err := fs.Parse(args); err != nil {
 		return o, err
@@ -90,6 +99,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if o.timeout <= 0 {
 		return o, fmt.Errorf("-timeout %s: want a positive duration", o.timeout)
 	}
+	if o.spawnMultiplier <= 0 || math.IsNaN(o.spawnMultiplier) || math.IsInf(o.spawnMultiplier, 1) {
+		return o, fmt.Errorf("-spawn-multiplier %g: want a positive number", o.spawnMultiplier)
+	}
 	if o.metrics != "" {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
@@ -103,6 +115,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 // a signal, which logs every bot out. Every login and game dial of the
 // process passes one LoginGate (see botclient). Reports go to stderr. With
 // -metrics it serves the bots' metrics on loopback until every bot returned.
+// With -datapack the bots pick farming spots from one registry they share.
 func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	o, err := parseSwarmFlags(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
@@ -144,6 +157,12 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Clock:      clock,
 		Gate:       gate,
 		Log:        log,
+	}
+	if o.datapack != "" {
+		if cfg.Brain.Spots, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
+			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			return 1
+		}
 	}
 	var reg *botmetrics.Registry
 	if o.metrics != "" {
@@ -206,6 +225,22 @@ func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry
 		cancel()
 		wg.Wait()
 	}
+}
+
+// loadSpots reads the datapack whose XML directory is dir and returns the
+// spot registry every bot of the process shares. The datapack itself is
+// dropped once its spots are built.
+func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.SpotRegistry, error) {
+	dp, err := datapack.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range dp.Spawnlist.Warnings {
+		log.Debug("datapack", "warning", w)
+	}
+	spots := dp.Spots()
+	log.Info("farming spots", "spots", len(spots), "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
+	return botclient.NewSpotRegistry(spots, multiplier), nil
 }
 
 // newBots returns one bot per account, each counting into its own Bot of
