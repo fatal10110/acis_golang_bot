@@ -32,7 +32,7 @@ server code or a focused reproduction, and report what you could not verify.
 1. **Scope.** Read the issue and its comments live, its epic, and the plan row. Name the packets
    the change reads or sends, the goroutines it touches, the server rules it must respect (flood
    gates, distance checks, timeouts, bans), and the operational risk (login rate, credentials,
-   resource use on the shared host).
+   resource use on the owner's machine).
 2. **Gaps first.** List everything the issue needs that is not there yet: a server feature not
    ported (track it in `fatal10110/acis_golang` per the plan's "Gap handling"), a dependency issue
    not merged, an owner decision missing. Search before filing; amend instead of duplicating.

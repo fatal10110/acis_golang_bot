@@ -81,7 +81,11 @@ func TestParseAccountsFlags(t *testing.T) {
 			args: []string{"-local-addr", "127.0.0.2", "-allowlisted", "-interval", "100ms"},
 			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: 100 * time.Millisecond, localAddr: "127.0.0.2", allowlisted: true},
 		},
-		{name: "allowlisted without a local address", args: []string{"-allowlisted"}, wantErr: "-allowlisted needs -local-addr"},
+		{
+			name: "allowlisted without a local address",
+			args: []string{"-allowlisted"},
+			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, allowlisted: true},
+		},
 		{name: "allowlisted negative interval", args: []string{"-local-addr", "127.0.0.2", "-allowlisted", "-interval", "-1s"}, wantErr: "-interval"},
 		{name: "zero interval needs the allowlist", args: []string{"-local-addr", "127.0.0.2", "-interval", "0s"}, wantErr: "-interval"},
 		{name: "zero timeout", args: []string{"-timeout", "0s"}, wantErr: "-timeout"},

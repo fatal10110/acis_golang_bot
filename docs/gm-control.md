@@ -66,8 +66,10 @@ it, and the driver's own logger is off. Format (go-sql-driver/mysql):
 acisbot:PASSWORD@tcp(127.0.0.1:3306)/DATABASE
 ```
 
-On the Hetzner host (`docs/hetzner.md`) the bots and MariaDB share the machine, so the DSN points
-at `127.0.0.1:3306` directly.
+The bots run on the owner's machine (`docs/home.md`) and reach MariaDB through the SSH tunnel
+below, so the DSN points at the tunnel's local port. On the retired Hetzner host run
+(`docs/hetzner.md`, archived) the bots and MariaDB shared the machine and the DSN pointed at
+`127.0.0.1:3306` directly.
 
 ## Database user
 

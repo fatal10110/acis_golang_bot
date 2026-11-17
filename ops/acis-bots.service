@@ -1,3 +1,6 @@
+# ARCHIVED: the Hetzner host run is retired; the bots run from the owner's
+# machine (docs/home.md, which lists the steps to stop and disable this unit).
+#
 # Bot swarm on the game host (docs/hetzner.md). Install as
 # /etc/systemd/system/acis-bots.service. The secret file is referenced by path
 # only (mode 0600, owner acis-bots); no secret belongs in this unit.
