@@ -8,6 +8,10 @@
 //	bots swarm -secret-file PATH -prefix PREFIX -bots N [-persistent] ...
 //
 // plays them until a signal (see swarm.go).
+//
+//	bots ui -secret-file PATH [-data-dir DIR] [-prefix PREFIX] [-max-online N] ...
+//
+// runs the bots of a registry, the control panel's (see ui.go).
 package main
 
 import (
@@ -34,8 +38,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return runAccounts(ctx, args[1:], stdout, stderr)
 		case "swarm":
 			return runSwarm(ctx, args[1:], stderr)
+		case "ui":
+			return runUI(ctx, args[1:], stderr)
 		}
 	}
-	fmt.Fprintln(stderr, "usage: bots accounts|swarm [flags]")
+	fmt.Fprintln(stderr, "usage: bots accounts|swarm|ui [flags]")
 	return 2
 }
