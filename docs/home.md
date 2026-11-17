@@ -123,8 +123,30 @@ with `-gm-dsn-file`. If the tunnel is down, GM commands are refused and the bots
 - Outbound connections leave through Windows, so the servers see the home public IP: the provider
   range in section 2 is what matters, not the WSL2 address.
 - Localhost forwarding (`localhostForwarding=true` in `%UserProfile%\.wslconfig`, the default)
-  makes the metrics endpoint (`127.0.0.1:6060`) readable from Windows too. Run the SSH tunnel
+  makes the metrics endpoint (`127.0.0.1:6060`) and the control panel (`http://127.0.0.1:8090/`,
+  section 8) reachable from a Windows browser too. Run the SSH tunnel
   inside the distribution, next to the swarm, so `127.0.0.1:13306` in the DSN is the tunnel's port.
 - Keep the WSL2 window (or a `tmux` session in it) open while the swarm runs: WSL may shut an idle
   distribution down, which ends the swarm like a crash.
 - A Windows sleep suspends the WSL2 VM: the bots wake on dead lines, and section 5 applies.
+
+## 8. Control panel
+
+`bots ui` runs the bots in-process under a web panel (plan section 8) instead of a fixed swarm:
+
+```
+bots ui -secret-file ~/.config/acis-bots/secret -prefix home -login <server>:2106 -max-online 10 \
+  -datapack <aCis_datapack/data/xml> [-import-prefix hz -import 20]
+```
+
+- The panel serves on `-listen` (default `127.0.0.1:8090`; a loopback IP only, any other address
+  is refused) and answers only requests whose `Host` is loopback and that come from its own page.
+  Open `http://127.0.0.1:8090/`.
+- Pages: Bots (create, spawn, despawn, change persona, delete, import), a bot's detail (its
+  snapshot, commands `stay`, `go <spot>`, `follow <player>`, `assist <player>`, `leave`, `logout`,
+  and its log), Dashboard (login gate and breaker with "resume logins", the metrics), Logs. Live
+  state comes over server-sent events; nothing needs Node.
+- The registry lives in `-data-dir` (default `acis-bots` under the user's config directory); a
+  restart on the same directory logs back in every bot marked online, as the same characters.
+- `town` and `merchant` are offered only with `-datapack`.
+- No password, secret or GM DSN reaches the API, the page or the logs.
