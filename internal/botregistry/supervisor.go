@@ -299,7 +299,8 @@ func (s *Supervisor) online() int {
 	return n
 }
 
-// start starts a run of account's bot, which has none live.
+// start starts a run of account's bot, which has none live. When it cannot,
+// the bot is stopped and its run state, halted or cooling down, is dropped.
 func (s *Supervisor) start(account string) {
 	b, ok := s.cfg.Registry.Bot(account)
 	if !ok {
@@ -308,6 +309,7 @@ func (s *Supervisor) start(account string) {
 	ch, err := s.character(b)
 	if err != nil {
 		s.log.Error("bot not started", "account", account, "err", err)
+		delete(s.runs, account)
 		s.stopped(account, false, err.Error())
 		return
 	}
