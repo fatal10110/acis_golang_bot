@@ -141,7 +141,10 @@ type Brain struct {
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
 	shotAskedAt map[int32]time.Time
-	logout      logoutState
+	// tradedAt is when the bot last accepted each partner's trade request,
+	// by partner object id (TradePolicy.Every).
+	tradedAt map[int32]time.Time
+	logout   logoutState
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -179,7 +182,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
-		buffedAt: make(map[buffKey]time.Time),
+		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
 	}
 }
 
@@ -360,6 +363,8 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case MyTargetSelected, AskJoinParty, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 		return true
+	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOtherOk:
+		return true
 	case Attack:
 		return e.AttackerID != self && slices.ContainsFunc(e.Hits, func(h AttackHit) bool { return h.TargetID == self })
 	case MagicSkillUse:
@@ -525,6 +530,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actWalkRun:
 		b.follow.runToggledAt = now
 	}
+	b.tradeSent(a, now)
 	b.train.sent(a, now)
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
