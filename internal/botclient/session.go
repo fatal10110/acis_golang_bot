@@ -189,6 +189,7 @@ func (b *Bot) Run(ctx context.Context) error {
 		if !b.wait(ctx, delay) {
 			return nil
 		}
+		b.cfg.Brain.Metrics.Reconnect()
 	}
 }
 
@@ -332,6 +333,7 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 	b.kicked = errors.Is(err, errServerClose) || errors.Is(err, errLeftWorld)
 	if !b.kicked {
 		b.aborts++
+		b.cfg.Brain.Metrics.Abort()
 	}
 	b.log.Warn("session ended", "played", played.Round(time.Second), "kicked", b.kicked, "err", err)
 	switch {
