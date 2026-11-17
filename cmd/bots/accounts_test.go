@@ -223,3 +223,25 @@ func TestRunAccountsRefusesBeforeLogin(t *testing.T) {
 		})
 	}
 }
+
+func TestPause(t *testing.T) {
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	tests := []struct {
+		name string
+		d    time.Duration
+		ctx  context.Context
+		want error
+	}{
+		{"zero on a live context returns at once", 0, t.Context(), nil},
+		{"zero on a canceled context reports it", 0, canceled, context.Canceled},
+		{"positive on a canceled context reports it", time.Hour, canceled, context.Canceled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := pause(tt.d)(tt.ctx); !errors.Is(err, tt.want) {
+				t.Fatalf("pause(%s) = %v, want %v", tt.d, err, tt.want)
+			}
+		})
+	}
+}

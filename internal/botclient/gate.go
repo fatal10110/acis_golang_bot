@@ -20,10 +20,11 @@ const (
 	// previous one, never clears a try on a slower connection, and bans the
 	// IP on the burst connection after BurstLimit (3) tries until 300 s pass
 	// with no connection. Every bot of a process dials from the same source
-	// address, so every login and game dial starts at least this long after
-	// the previous one and no connection ever counts a try: tries left by an
-	// earlier `bots accounts` run never add up. The 250 ms above the window
-	// absorb timer and scheduling lag; dialJitter is added on top.
+	// address, so on a spaced gate every login and game dial starts at least
+	// this long after the previous one and no connection ever counts a try:
+	// tries left by an earlier `bots accounts` run never add up. The 250 ms
+	// above the window absorb timer and scheduling lag; dialJitter is added on
+	// top. An allowlisted gate skips the spacing (NewAllowlistedLoginGate).
 	dialSpacing = 1250 * time.Millisecond
 	dialJitter  = 500 * time.Millisecond
 	// refusedBase and refusedMax bound the process-wide backoff while the

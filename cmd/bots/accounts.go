@@ -69,7 +69,7 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 	addAccountFlags(fs, &o.accounts)
 	fs.StringVar(&o.loginAddr, "login", "127.0.0.1:2106", "login server address (host:port)")
 	fs.DurationVar(&o.timeout, "timeout", 10*time.Second, "longest wait for each login-server read or write")
-	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s (default 0 and no floor with -allowlisted)", minLoginInterval))
+	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s; with -allowlisted any value from 0 and 0 when unset", minLoginInterval))
 	fs.StringVar(&o.localAddr, "local-addr", "", "source IP to dial from (for example 127.0.0.2, the one address allowlisted on the servers); default: the OS picks")
 	addAllowlistedFlag(fs, &o.allowlisted)
 	if err := fs.Parse(args); err != nil {
