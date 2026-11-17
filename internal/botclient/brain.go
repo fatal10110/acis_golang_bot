@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 )
 
 // Brain timing defaults and fixed waits.
@@ -47,6 +49,8 @@ type Sender interface {
 // Rand is seeded at random.
 type BrainConfig struct {
 	Persona Persona
+	// Metrics, when set, counts what the brain does; nil counts nothing.
+	Metrics *botmetrics.Bot
 	// Tick is the base time between decisions; each adds a uniform
 	// jitter up to TickJitter.
 	Tick, TickJitter time.Duration
@@ -97,6 +101,8 @@ type Brain struct {
 	logout      logoutState
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
+	// metrics is written only by this loop (BrainConfig.Metrics).
+	metrics *botmetrics.Bot
 }
 
 // logoutState is a logout run inside the loop.
@@ -126,7 +132,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
-	return &Brain{world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg}
+	return &Brain{world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics}
 }
 
 // Run plays until done closes or the session ends. Closing logout asks the
@@ -141,7 +147,8 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 // connection and joins its reader afterwards in every case.
 func (b *Brain) Run(done, logout <-chan struct{}) error {
 	b.start(b.clock.Now())
-	timer := b.clock.NewTimer(b.due().Sub(b.clock.Now()))
+	due := b.due()
+	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()
 	batch := make([]Event, 0, 64)
 	for {
@@ -154,10 +161,13 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 			b.requestLogout(b.clock.Now())
 		case <-b.events.Ready():
 			batch = b.events.Drain(batch[:0])
+			b.metrics.Drained(len(batch))
 			err = b.handle(batch, b.clock.Now())
 			clear(batch)
 		case <-timer.C():
-			err = b.wake(b.clock.Now())
+			now := b.clock.Now()
+			b.metrics.WakeLag(now.Sub(due))
+			err = b.wake(now)
 		}
 		if errors.Is(err, errLoggedOut) {
 			return nil
@@ -165,8 +175,8 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 		if err != nil {
 			return err
 		}
-		now := b.clock.Now()
-		timer.Reset(max(b.due().Sub(now), 0))
+		due = b.due()
+		timer.Reset(max(due.Sub(b.clock.Now()), 0))
 	}
 }
 
@@ -317,6 +327,7 @@ func (b *Brain) wake(now time.Time) error {
 		b.nextTick = now.Add(b.tickDelay())
 		name, a := b.decide(now)
 		b.lastRule = name
+		b.metrics.Rule(name)
 		if a.kind != actHold {
 			if _, err := b.send(a, now); err != nil {
 				return err
@@ -367,12 +378,14 @@ func (b *Brain) due() time.Time {
 func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	g := a.gate()
 	if !b.pace.allow(g, now) {
+		b.metrics.Paced()
 		return false, nil
 	}
 	if err := b.out.Send(a.payload); err != nil {
 		return false, fmt.Errorf("send game packet: %w", err)
 	}
 	b.pace.sent(g, now)
+	b.metrics.Sent()
 	switch a.kind {
 	case actAttack:
 		b.engaged = a.object

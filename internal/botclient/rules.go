@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"math"
+	"slices"
 	"time"
 )
 
@@ -152,6 +153,18 @@ var storeRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"store", func(*Brain, time.Time) (Action, bool) { return Action{}, true }},
+}
+
+// RuleNames lists every name decide returns for a matching rule, for a
+// metrics registry (botmetrics.NewRegistry).
+func RuleNames() []string {
+	var names []string
+	for _, r := range slices.Concat(playRules, storeRules) {
+		if !slices.Contains(names, r.name) {
+			names = append(names, r.name)
+		}
+	}
+	return names
 }
 
 // decide runs the decision table at now and returns the matching rule's
