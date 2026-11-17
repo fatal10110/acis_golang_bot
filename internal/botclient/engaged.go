@@ -9,9 +9,12 @@ import "time"
 // makes this a heuristic.
 
 // monster reports whether id is an attackable NPC in sight that is alive.
+// A player's summon is not one: the server marks it attackable when its
+// owner is flagged, has karma or stands in a PvP zone (visibility.go
+// AttackableWithoutForceBy), and hitting it is PvP.
 func (w *World) monster(id int32) bool {
 	o := w.object(id)
-	return o != nil && o.Kind == KindNPC && o.Attackable && !o.Dead
+	return o != nil && o.Kind == KindNPC && o.Attackable && !o.Summon && !o.Dead
 }
 
 // engage records at now that a and b were seen fighting, when one of them

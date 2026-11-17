@@ -24,6 +24,10 @@ func TestWorldEngaged(t *testing.T) {
 		w.Party = Party{LeaderID: selfID, Members: map[int32]*PartyMate{pcID: {}}}
 	}
 	const outsider = int32(0x20000013)
+	const summonID = int32(0x20000014)
+	summon := func(w *World) {
+		w.Apply(NPCInfo{ObjectID: summonID, NPCID: 12077, Attackable: true, Summon: true, Pos: Point{X: 900}}, t0)
+	}
 	tests := []struct {
 		name  string
 		setup func(w *World)
@@ -70,6 +74,8 @@ func TestWorldEngaged(t *testing.T) {
 			steps: []step{{0, Attack{AttackerID: pcID, Hits: hit(npcID)}}, {time.Second, PartySmallWindowDeleteAll{}}},
 			check: 2 * time.Second, want: true,
 		},
+		{name: "a flagged player's summon hits a monster", setup: summon, steps: []step{{0, Attack{AttackerID: summonID, Hits: hit(npcID)}}}, check: time.Second, want: true},
+		{name: "a monster chasing a flagged player's summon", setup: summon, steps: []step{{0, MoveToPawn{ObjectID: npcID, TargetID: summonID}}}, check: time.Second, want: true},
 		{name: "monster minion following its master", steps: []step{{0, MoveToPawn{ObjectID: mob2ID, TargetID: npcID}}}, check: time.Second},
 		{name: "player walks to a peaceful NPC", steps: []step{{0, MoveToPawn{ObjectID: pcID, TargetID: peacefulID}}}, mob: peacefulID, check: time.Second},
 		{name: "dead monster", steps: []step{{0, Die{ObjectID: npcID}}, {0, MoveToPawn{ObjectID: pcID, TargetID: npcID}}}, check: time.Second},
@@ -190,6 +196,15 @@ func TestRuleFarm(t *testing.T) {
 				delete(b.world.Objects, npcID)
 				delete(b.world.Objects, mob2ID)
 				b.world.Apply(NPCInfo{ObjectID: far, NPCID: 20003, Attackable: true, Pos: Point{X: 1600}}, now)
+			},
+			wantRule: "",
+		},
+		{
+			name: "a flagged player's summon is no farm target",
+			setup: func(b *Brain) {
+				delete(b.world.Objects, npcID)
+				delete(b.world.Objects, mob2ID)
+				b.world.Apply(NPCInfo{ObjectID: far, NPCID: 12077, Attackable: true, Summon: true, Pos: Point{X: 200}}, now)
 			},
 			wantRule: "",
 		},
