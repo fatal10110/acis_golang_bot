@@ -51,10 +51,10 @@ invitations go to the persona. Such a GM is also exempt from the trade policy.
 
 At most one bot of a swarm joins each other leader's party. The swarm holds one claim per leader
 name. The first bot that accepts claims that leader, and later bots decline that leader until the
-claim is released. The claim is released when that bot's party ends, when no party window
-follows its acceptance within the 15 s invitation timeout, or when its session ends. If the party
-leader changes, the claim moves to the new leader, or is released when the new leader is
-already held or is the bot itself. A GM's invitations take no claim and are never limited.
+claim is released. The claim is released when that bot's party ends or its leader changes, when
+no party window follows its acceptance within the 15 s invitation timeout, or when its session
+ends. After a leader change the bot stays in the party without a claim, so another bot may join
+the new leader. A GM's invitations take no claim and are never limited.
 Without a GM configuration (`-commanders` or `-gm-dsn-file`), no GM is known, so every
 invitation is limited.
 

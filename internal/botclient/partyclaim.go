@@ -93,55 +93,35 @@ func (c *PartyClaims) release(bot int32) {
 	}
 }
 
-// tidyPartyClaim keeps the bot's claim to the party it is in, so that no
-// claim outlives its party. Outside a party, a claim the server did not
-// answer with a party window within partyInviteTimeout is given back: the
-// invitation lapsed, or the server refused the join (a busy inviter, a full
-// party). In a party, the claim follows its leader: a leader change moves it
-// to the new leader, or gives it back when the bot leads now, the new
-// leader's name is unknown, or another bot holds the new leader. A bot that
-// joined without a claim (a GM's party) takes none on a leader change.
+// tidyPartyClaim gives back a claim the server did not answer with a party
+// window within partyInviteTimeout, so that no claim outlives its
+// invitation: the invitation lapsed, or the server refused the join (a busy
+// inviter, a full party). A claim the bot joined a party with is kept until
+// that party ends (partyClaimEvent).
 func (b *Brain) tidyPartyClaim(now time.Time) {
 	c, self := b.cfg.PartyClaims, b.world.Self.ObjectID
-	if c == nil {
+	if c == nil || b.world.Party.In() {
 		return
 	}
-	leader, at, ok := c.held(self)
-	if !ok {
-		return
-	}
-	p := &b.world.Party
-	if !p.In() {
-		if now.Sub(at) >= partyInviteTimeout {
-			c.release(self)
-		}
-		return
-	}
-	var name string
-	if m := p.Members[p.LeaderID]; m != nil {
-		name = m.Name
-	}
-	switch {
-	case p.LeaderID == self || name == "":
-		c.release(self)
-	case name != leader && !c.claim(name, self, now):
+	if _, at, ok := c.held(self); ok && now.Sub(at) >= partyInviteTimeout {
 		c.release(self)
 	}
 }
 
-// partyClaimEvent gives the claim back when the bot left its party or the
-// party ended (PartySmallWindowDeleteAll), and follows a new party window.
-func (b *Brain) partyClaimEvent(ev Event, now time.Time) {
-	switch ev.(type) {
-	case PartySmallWindowDeleteAll:
+// partyClaimEvent gives the claim back on PartySmallWindowDeleteAll: the bot
+// left its party, the party ended, or its leader changed. The server sends a
+// leader change as PartySmallWindowDeleteAll then PartySmallWindowAll to
+// every member (party Registry.changeLeader), so a claim never follows a new
+// leader: the bot stays in the party unclaimed, and the new leader is free
+// for another bot.
+func (b *Brain) partyClaimEvent(ev Event) {
+	if _, ok := ev.(PartySmallWindowDeleteAll); ok {
 		b.releasePartyClaim()
-	case PartySmallWindowAll, PartySmallWindowAdd:
-		b.tidyPartyClaim(now)
 	}
 }
 
 // releasePartyClaim gives back the leader the bot holds, if any: when its
-// party ends and when the brain stops.
+// party ends or its leader changes, and when the brain stops.
 func (b *Brain) releasePartyClaim() {
 	if c := b.cfg.PartyClaims; c != nil {
 		c.release(b.world.Self.ObjectID)

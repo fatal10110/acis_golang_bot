@@ -46,8 +46,8 @@ func partyWindow(leader int32) PartySmallWindowAll {
 
 // TestPartyClaims checks that at most one bot of a process joins each
 // non-GM leader's party, that a GM is never limited, and that the claim is
-// given back when the party ends, the invitation lapses, the leader changes
-// or the bot leads.
+// given back when the party ends, the invitation lapses or the leader
+// changes.
 func TestPartyClaims(t *testing.T) {
 	type step struct {
 		bot int // 0 or 1
@@ -100,29 +100,28 @@ func TestPartyClaims(t *testing.T) {
 			{bot: 0, at: 30 * time.Second},
 			{bot: 1, at: 32 * time.Second, ev: invite("Leader"), want: false},
 		}, 1},
-		{"leader change moves the claim", []step{
+		// The server sends a leader change as PartySmallWindowDeleteAll then
+		// PartySmallWindowAll (party Registry.changeLeader).
+		{"leader change gives the claim back", []step{
 			{bot: 0, at: 1 * time.Second, ev: invite("Leader"), want: true},
 			{bot: 0, at: 4 * time.Second, ev: partyWindow(claimLeaderID)},
+			{bot: 0, at: 6 * time.Second, ev: PartySmallWindowDeleteAll{}},
 			{bot: 0, at: 6 * time.Second, ev: partyWindow(claimOtherID)},
-			{bot: 1, at: 8 * time.Second, ev: invite("Other"), want: false},
-			{bot: 1, at: 10 * time.Second, ev: invite("Leader"), want: true},
-		}, 2},
-		{"leader change to a held leader gives the claim back", []step{
-			{bot: 1, at: 1 * time.Second, ev: invite("Other"), want: true},
-			{bot: 0, at: 3 * time.Second, ev: invite("Leader"), want: true},
-			{bot: 0, at: 5 * time.Second, ev: partyWindow(claimLeaderID)},
-			{bot: 0, at: 7 * time.Second, ev: partyWindow(claimOtherID)},
-			{bot: 1, at: 9 * time.Second, ev: invite("Leader"), want: true},
+			{bot: 0, at: 30 * time.Second},
+			{bot: 1, at: 32 * time.Second, ev: invite("Leader"), want: true},
+			{bot: 1, at: 34 * time.Second, ev: invite("Other"), want: true},
 		}, 1},
-		{"bot leading gives the claim back", []step{
+		{"bot leading holds no claim", []step{
 			{bot: 0, at: 1 * time.Second, ev: invite("Leader"), want: true},
 			{bot: 0, at: 4 * time.Second, ev: partyWindow(claimLeaderID)},
+			{bot: 0, at: 6 * time.Second, ev: PartySmallWindowDeleteAll{}},
 			{bot: 0, at: 6 * time.Second, ev: partyWindow(claimBot0)},
 			{bot: 1, at: 8 * time.Second, ev: invite("Leader"), want: true},
 		}, 1},
 		{"GM party takes no claim on a leader change", []step{
 			{bot: 0, at: 1 * time.Second, ev: invite("Gm"), want: true},
 			{bot: 0, at: 4 * time.Second, ev: partyWindow(claimGMID)},
+			{bot: 0, at: 6 * time.Second, ev: PartySmallWindowDeleteAll{}},
 			{bot: 0, at: 6 * time.Second, ev: partyWindow(claimLeaderID)},
 			{bot: 1, at: 8 * time.Second, ev: invite("Leader"), want: true},
 		}, 1},

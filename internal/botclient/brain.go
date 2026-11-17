@@ -88,8 +88,8 @@ type BrainConfig struct {
 	Authority *Authority
 	// PartyClaims, when set, are the party leaders the bots of the process
 	// joined (PartyClaims.Apply), shared by every bot of the process: the
-	// brain gives its claim back when its party ends, moves it on a leader
-	// change, and gives it back when it stops. Nil claims no leader.
+	// brain gives its claim back when its party ends or its leader changes,
+	// and when it stops. Nil claims no leader.
 	PartyClaims *PartyClaims
 
 	// marker marks the bots' names: the brain answers no whisper from a
@@ -302,7 +302,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 	for _, ev := range batch {
 		b.world.Apply(ev, now)
 		b.leaderEvent(ev, now)
-		b.partyClaimEvent(ev, now)
+		b.partyClaimEvent(ev)
 		switch e := ev.(type) {
 		case LeaveWorld:
 			switch {
