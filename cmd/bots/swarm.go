@@ -199,7 +199,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
 		gate.ReportBreaker(reg)
 	}
-	bots, err := newBots(cfg, p.brain(sh), o.marker, accounts, reg)
+	bots, err := newBots(cfg, p.name, p.brain(sh), o.marker, accounts, reg)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 1
@@ -278,15 +278,15 @@ func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.Spo
 	return botclient.NewSpotRegistry(spots, multiplier), travel, nil
 }
 
-// newBots returns one new bot per account, each with a copy of brain and
-// its character named with marker (botclient.NewCharacter), counting into
-// its own Bot of reg (a slot: its sessions share it); a nil reg counts
-// nothing.
-func newBots(cfg botclient.SessionConfig, brain botclient.BrainConfig, marker botnames.Marker, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
+// newBots returns one new bot per account playing preset, each with a copy
+// of brain and its character named with marker (botclient.NewCharacter),
+// counting into its own Bot of reg (a slot: its sessions share it); a nil
+// reg counts nothing.
+func newBots(cfg botclient.SessionConfig, preset string, brain botclient.BrainConfig, marker botnames.Marker, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	bots := make([]*botclient.Bot, 0, len(accounts))
 	for _, a := range accounts {
-		bot := botclient.BotConfig{Brain: brain}
+		bot := botclient.BotConfig{Brain: brain, Preset: preset}
 		if reg != nil {
 			bot.Brain.Metrics = reg.NewBot()
 		}

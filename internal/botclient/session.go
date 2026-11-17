@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"sync"
 	"syscall"
 	"time"
 
@@ -135,11 +136,14 @@ type BotConfig struct {
 	// created by a session of a bot whose Character had no known name. It
 	// is called before the session enters the world, and must not block.
 	Learned func(name string, classID int32)
+	// Preset names the persona preset the bot plays, for its status.
+	Preset string
 }
 
 // Bot is one account's player: a loop of session attempts, one at a time,
 // each with its own connection, world model, event queue, reader and brain.
-// Run is its goroutine.
+// Run is its goroutine, called once. Status and Command are safe from any
+// goroutine.
 type Bot struct {
 	cfg      SessionConfig
 	brain    BrainConfig
@@ -166,6 +170,18 @@ type Bot struct {
 	// chat is the whisper replies of every session, for the chat caps;
 	// each session's brain owns it while it runs.
 	chat *chatLog
+	// reconnects counts the attempts after the first.
+	reconnects int
+
+	// link is the bot's mailbox, standing order and status board; Run
+	// and each session's brain own the order and write the board.
+	link botLink
+
+	// mu guards stopped, set once Run returned, and inSession, set while
+	// a session's brain runs (Command).
+	mu        sync.Mutex
+	stopped   bool
+	inSession bool
 }
 
 // NewBot returns the bot of account, playing bot's character with bot's
@@ -192,6 +208,8 @@ func NewBot(cfg SessionConfig, account, password string, bot BotConfig, rng *ran
 		chat:     newChatLog(),
 	}
 	b.net = netDialer{cfg: &b.cfg}
+	b.link.mail = make(chan mail, mailboxSize)
+	b.link.board.store(Status{State: StateNew, Character: ch.Name, Preset: bot.Preset})
 	return b, nil
 }
 
@@ -205,8 +223,13 @@ func (b *Bot) Account() string { return b.account }
 // stops (ErrCharacterMissing, ErrAccountHasCharacters,
 // ErrNoCharacterToAdopt), ErrAccountTaken,
 // ErrRepeatedAborts, ErrCommandedLogout, or, for a bot not persistent, the
-// end of its session.
-func (b *Bot) Run(ctx context.Context) error {
+// end of its session. It publishes the bot's state on the way (Status);
+// once it returns the bot is stopped and refuses commands.
+func (b *Bot) Run(ctx context.Context) (err error) {
+	defer func() {
+		b.publish(StateStopped, cmp.Or(err, ctx.Err()))
+		b.stop()
+	}()
 	for {
 		entered, played, err := b.attempt(ctx)
 		if ctx.Err() != nil {
@@ -217,9 +240,11 @@ func (b *Bot) Run(ctx context.Context) error {
 			return stop
 		}
 		b.log.Info("bot reconnects", "in", delay.Round(time.Millisecond), "after", err)
+		b.publish(StateReconnecting, err)
 		if !b.wait(ctx, delay) {
 			return nil
 		}
+		b.reconnects++
 		b.brain.Metrics.Reconnect()
 	}
 }
@@ -228,10 +253,12 @@ func (b *Bot) Run(ctx context.Context) error {
 // then play. entered reports a session that reached the world, played how
 // long it stayed.
 func (b *Bot) attempt(ctx context.Context) (entered bool, played time.Duration, err error) {
+	b.publish(StateWaiting, nil)
 	turn, err := b.cfg.Gate.Take(ctx)
 	if err != nil {
 		return false, 0, err
 	}
+	b.publish(StateEntering, nil)
 	g, self, err := b.enter(ctx, turn)
 	turn.Done()
 	if err != nil {
@@ -315,10 +342,12 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 	cfg := b.brain
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
-	cfg.markers, cfg.chat = b.cfg.Markers, b.chat
+	cfg.markers, cfg.chat, cfg.link = b.cfg.Markers, b.chat, &b.link
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })
+	b.setInSession(true)
 	err = brain.Run(done, logout)
+	b.setInSession(false)
 	stop()
 	close(done)
 	g.Close()

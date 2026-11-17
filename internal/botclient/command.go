@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -97,8 +98,9 @@ func tellAction(target, text string) Action {
 	return Action{kind: actTell, payload: encodeSay2Tell(target, text)}
 }
 
-// orders are the GM commands in force, owned by the brain goroutine. They
-// last for the session.
+// orders are the commands in force, owned by the brain goroutine: the GM
+// whispered ones last for the session, the panel's standing ones are set
+// again at each session start (applyStanding).
 type orders struct {
 	// stay holds the bot where it stands (rule "stay").
 	stay bool
@@ -142,17 +144,22 @@ func (b *Brain) obey(v verdict, now time.Time) {
 	}
 	o := &b.orders
 	switch v.cmd.kind {
+	case cmdFollow, cmdAssist, cmdStay, cmdGo:
+		// A whispered order replaces the panel's standing one for the
+		// session.
+		b.orderPending = false
+	}
+	switch v.cmd.kind {
 	case cmdFollow:
 		o.stay, o.roam, o.follow = false, false, v.sender
 	case cmdAssist:
 		o.stay, o.assist = false, v.sender
 	case cmdStay:
-		*o = orders{stay: true, reply: o.reply}
-		b.assist = assistPlan{}
+		b.holdStill()
 	case cmdGo:
 		o.stay, o.roam, o.follow = false, true, 0
-		if text := b.goToSpot(v.cmd.spot, now); text != "" {
-			o.reply = tellAction(v.name, text)
+		if err := b.goToSpot(v.cmd.spot, now); err != nil {
+			o.reply = tellAction(v.name, spotReply(err))
 		}
 	case cmdInviteMe:
 		if p := &b.world.Party; !p.In() || p.LeaderID != v.sender {
@@ -173,27 +180,35 @@ func (b *Brain) obey(v verdict, now time.Time) {
 	b.wakeBy(now.Add(b.reactDelay()))
 }
 
+// spotReply is the whispered reply to a go goToSpot refused with err.
+func spotReply(err error) string {
+	if errors.Is(err, ErrNoSpots) {
+		return replyNoSpots
+	}
+	return err.Error()
+}
+
 // goToSpot makes the farming spot named name (a spawnlist maker, in any
-// case) the bot's spot, within the spot's cap. It returns the reply when
-// it cannot.
-func (b *Brain) goToSpot(name string, now time.Time) string {
+// case) the bot's spot, within the spot's cap. It returns why it cannot
+// (ErrNoSpots, ErrUnknownSpot, ErrSpotFull).
+func (b *Brain) goToSpot(name string, now time.Time) error {
 	r := b.cfg.Spots
 	if r == nil {
-		return replyNoSpots
+		return ErrNoSpots
 	}
 	i, ok := r.index(name)
 	switch {
 	case !ok:
-		return replyUnknownSpot
+		return ErrUnknownSpot
 	case b.spot.held && b.spot.idx == i:
-		return ""
+		return nil
 	}
 	if _, ok := r.claim([]int{i}); !ok {
-		return replySpotFull
+		return ErrSpotFull
 	}
 	b.leaveSpot()
 	b.spot.idx, b.spot.held, b.spot.retryAt = i, true, now
-	return ""
+	return nil
 }
 
 // ruleCommand sends the one-off packet a command asked for, ahead of every

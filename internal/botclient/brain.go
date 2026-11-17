@@ -99,6 +99,9 @@ type BrainConfig struct {
 	// chat is the bot's whisper replies for the caps, carried from session
 	// to session by its Bot; nil starts an empty one.
 	chat *chatLog
+	// link is the Bot's mailbox, standing order and status board; nil
+	// takes no panel command and publishes no status.
+	link *botLink
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -186,6 +189,13 @@ type Brain struct {
 	// commands the authority checks in the database.
 	orders   orders
 	verdicts chan verdict
+	// mail is the Bot's mailbox (BrainConfig.link), nil for none.
+	mail <-chan mail
+	// orderPending is set while the standing follow or assist waits for
+	// its player to come in sight (resolveOrder).
+	orderPending bool
+	// towns are the travel map's towns, for the status (nearestTown).
+	towns []Point
 	// chat is the whisper reply waiting for its time (rule "chat").
 	chat chatReply
 	// lastRule is the rule that matched the latest decision.
@@ -228,13 +238,17 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
-	return &Brain{
+	b := &Brain{
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
 		verdicts: make(chan verdict, verdictQueue),
 	}
+	if cfg.link != nil {
+		b.mail = cfg.link.mail
+	}
+	return b
 }
 
 // Run plays until done closes or the session ends. Closing logout asks the
@@ -272,6 +286,8 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 			clear(batch)
 		case v := <-b.verdicts:
 			b.obey(v, b.clock.Now())
+		case m := <-b.mail:
+			b.command(m, b.clock.Now())
 		case <-timer.C():
 			now := b.clock.Now()
 			b.metrics.WakeLag(now.Sub(due))
@@ -293,6 +309,8 @@ func (b *Brain) start(now time.Time) {
 	b.pace = newPacer(now)
 	b.nextTick = now.Add(b.tickDelay())
 	b.anchor = b.world.Self.Position(now)
+	b.applyStanding(now)
+	b.publishStatus(now, true)
 }
 
 // handle applies a batch of events received at now. The first event about
@@ -521,9 +539,11 @@ func (b *Brain) wake(now time.Time) error {
 		b.reactAt = time.Time{}
 		b.nextTick = now.Add(b.tickDelay())
 		b.tidyPartyClaim(now)
+		b.resolveOrder()
 		name, a := b.decide(now)
 		b.lastRule = name
 		b.metrics.Rule(name)
+		b.publishStatus(now, false)
 		if a.kind != actHold {
 			if _, err := b.send(a, now); err != nil {
 				return err
