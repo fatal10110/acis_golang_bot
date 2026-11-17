@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"cmp"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -55,19 +56,62 @@ func (b *Brain) bowArrows() int32 {
 	return 0
 }
 
+// nextBowArrows is the arrow template of the bow the gear errand wears
+// next: the best carried weapon that beats the worn one, in ruleGear's
+// order, when it is a bow; 0 otherwise.
+func (b *Brain) nextBowArrows() int32 {
+	if b.cfg.Travel == nil {
+		return 0
+	}
+	w := b.worn()
+	var best Item
+	var bestG gearItem
+	for _, it := range b.world.Inventory.Items {
+		g, ok := b.gearItem(it.TemplateID)
+		if !ok || slotOf(g.part) != slotWeapon || !b.upgrade(it, &w) {
+			continue
+		}
+		if best.ObjectID == 0 || cmp.Or(cmp.Compare(bestG.price, g.price), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
+			best, bestG = it, g
+		}
+	}
+	return b.cfg.Travel.arrows[best.TemplateID]
+}
+
+// bowWaits reports whether carried item it is a bow the bot carries no
+// arrows of its grade for: the server would refuse its every attack
+// (NotEnoughArrows, attack/controller.go CheckAndEquipArrows), so the gear
+// errand keeps what the bot wields until the shop errand has bought them
+// (arrowWants), with the bow or after it.
+func (b *Brain) bowWaits(it Item) bool {
+	a, ok := b.cfg.Travel.arrows[it.TemplateID]
+	return ok && b.carried(a) == 0
+}
+
 // arrowWants is the arrow purchase of the shop errand
 // (ShopPolicy.ArrowsMin, ArrowsMax): the arrows the wielded bow shoots,
-// up to ArrowsMax, once fewer than ArrowsMin are carried, worn or not.
+// then the ones of the bow the gear errand wears next (nextBowArrows),
+// each up to ArrowsMax once fewer than ArrowsMin are carried, worn or not.
 func (b *Brain) arrowWants() []buyRow {
+	var rows []buyRow
+	worn, next := b.bowArrows(), b.nextBowArrows()
+	if r, ok := b.arrowRow(worn); ok {
+		rows = append(rows, r)
+	}
+	if r, ok := b.arrowRow(next); ok && next != worn {
+		rows = append(rows, r)
+	}
+	return rows
+}
+
+// arrowRow is the purchase of arrow template id: up to ShopPolicy.ArrowsMax
+// once fewer than ArrowsMin are carried; ok false for none or id 0.
+func (b *Brain) arrowRow(id int32) (buyRow, bool) {
 	p := &b.persona.Shop
-	id := b.bowArrows()
-	if id == 0 {
-		return nil
+	if have := b.carried(id); id != 0 && have < p.ArrowsMin && p.ArrowsMax > have {
+		return buyRow{item: id, count: p.ArrowsMax - have}, true
 	}
-	if have := b.carried(id); have < p.ArrowsMin && p.ArrowsMax > have {
-		return []buyRow{{item: id, count: p.ArrowsMax - have}}
-	}
-	return nil
+	return buyRow{}, false
 }
 
 // armedBow lets the shop errand start its next visit at once when the gear
@@ -78,7 +122,8 @@ func (b *Brain) arrowWants() []buyRow {
 // (it ends with the next one due), else the next one is due now. The wear
 // happens once per bow, so this adds at most one visit per bow worn.
 func (b *Brain) armedBow(it Item) {
-	if _, ok := b.cfg.Travel.arrows[it.TemplateID]; !ok || len(b.arrowWants()) == 0 {
+	a, ok := b.cfg.Travel.arrows[it.TemplateID]
+	if _, short := b.arrowRow(a); !ok || !short {
 		return
 	}
 	if b.shop.v.active() {

@@ -87,8 +87,11 @@ type ShopPolicy struct {
 	Restock []Restock
 	// ArrowsMin and ArrowsMax restock the arrows the bow the bot wields
 	// shoots, the ones of its grade (bowArrows), after Restock: under
-	// ArrowsMin carried, worn or not, the bot buys up to ArrowsMax. They
-	// are never junk; a zero ArrowsMax buys none.
+	// ArrowsMin carried, worn or not, the bot buys up to ArrowsMax. So
+	// they do for the bow the gear errand wears next (nextBowArrows), and
+	// for a bow a visit buys, in the same purchase: the gear errand wears
+	// no bow without its arrows. They are never junk; a zero ArrowsMax
+	// buys none.
 	ArrowsMin, ArrowsMax int32
 	// Books buys the spellbooks a trainer asked for and the bot lacks
 	// (AcquireSkillInfo requirements), ahead of Restock.
@@ -557,7 +560,7 @@ func (b *Brain) carried(item int32) int32 {
 
 // shopWants are the items the bot buys now and how many: the wanted
 // spellbooks it lacks, by id, then the restocks of its class under their
-// minimum, in persona order, then the wielded bow's arrows (arrowWants),
+// minimum, in persona order, then the bows' arrows (arrowWants),
 // then the gear it buys (gearWants). Unless
 // anyAdena, only what the bot's adena past KeepAdena buys one of at a
 // merchant's base price is listed.
@@ -595,12 +598,14 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 // buyRows is the purchase from window l: per wanted item it sells at a
 // price, as many as the window's stock and the adena past KeepAdena allow;
 // of the gear, the first piece per slot the adena past GearPolicy.KeepAdena
-// buys.
+// buys, a bow followed by its arrows (arrowRow) unless already wanted.
 func (b *Brain) buyRows(l BuyList) []buyRow {
 	budget := int64(l.Money) - int64(b.persona.Shop.KeepAdena)
 	var rows []buyRow
 	var bought [slotCount]bool
-	for _, w := range b.shopWants(true) {
+	wants := b.shopWants(true)
+	for i := 0; i < len(wants); i++ {
+		w := wants[i]
 		slot, limit := slotNone, budget
 		if g, ok := b.gearItem(w.item); ok {
 			if slot = slotOf(g.part); bought[slot] {
@@ -624,6 +629,12 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 		bought[slot] = true
 		budget -= n * int64(it.Price)
 		rows = append(rows, buyRow{item: w.item, count: int32(n)})
+		if slot == slotWeapon {
+			r, ok := b.arrowRow(b.cfg.Travel.arrows[w.item])
+			if ok && !slices.ContainsFunc(wants, func(x buyRow) bool { return x.item == r.item }) {
+				wants = slices.Insert(wants, i+1, r)
+			}
+		}
 		if len(rows) == shopMaxRows {
 			break
 		}
@@ -648,13 +659,14 @@ func (b *Brain) junk() map[int32]Item {
 
 // keeps reports whether the bot keeps item template id rather than sell
 // it: adena, Shop.Keep, Potions, Shots, Restock items, the arrows the
-// wielded bow shoots and spellbooks wanted or held for a learn.
+// wielded bow and the one worn next shoot and spellbooks wanted or held
+// for a learn.
 func (b *Brain) keeps(id int32) bool {
 	p := &b.persona
 	return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
-		id == b.bowArrows()
+		id == b.bowArrows() || id == b.nextBowArrows()
 }
 
 // sellRows is the sale from window l: every junk stack it lists, whole.

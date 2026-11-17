@@ -84,11 +84,15 @@ var gearShop = []datapack.Product{
 
 // newGearBrain is newShopBrain with no restocks, Expertise at level
 // expertise, and a travel map of merchant 30001 (list 1, gearShop) spawned
-// at (5000, 0) and the gear templates.
+// at (5000, 0) and the gear templates. Its mystic wears the fighter's gear
+// of the gear tests: its class entry lists no weapon type, so a worn
+// weapon is matched by its type only (the class rules have their own
+// tests, over defaultGearClasses).
 func newGearBrain(t *testing.T, expertise int32, items ...Item) *Brain {
 	t.Helper()
 	b := newShopBrain(t, items...)
 	b.persona.Shop.Restock = nil
+	b.persona.Gear.Classes = append([]GearClass{{Classes: []int32{classHumanMystic}, Armor: "MAGIC"}}, defaultGearClasses()...)
 	if expertise > 0 {
 		b.world.Apply(SkillList{Skills: []KnownSkill{{ID: expertiseSkill, Level: expertise, Passive: true}}}, t0)
 	}
