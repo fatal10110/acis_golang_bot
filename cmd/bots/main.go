@@ -4,6 +4,10 @@
 //	bots accounts -secret-file PATH -prefix PREFIX -bots N [-persistent] ...
 //
 // creates or verifies one swarm instance's accounts (see accounts.go).
+//
+//	bots swarm -secret-file PATH -prefix PREFIX -bots N [-persistent] ...
+//
+// plays them until a signal (see swarm.go).
 package main
 
 import (
@@ -24,9 +28,14 @@ func main() {
 
 // run dispatches a subcommand and returns the exit code.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) > 0 && args[0] == "accounts" {
-		return runAccounts(ctx, args[1:], stdout, stderr)
+	if len(args) > 0 {
+		switch args[0] {
+		case "accounts":
+			return runAccounts(ctx, args[1:], stdout, stderr)
+		case "swarm":
+			return runSwarm(ctx, args[1:], stderr)
+		}
 	}
-	fmt.Fprintln(stderr, "usage: bots accounts [flags] (the swarm run is not implemented yet)")
+	fmt.Fprintln(stderr, "usage: bots accounts|swarm [flags]")
 	return 2
 }
