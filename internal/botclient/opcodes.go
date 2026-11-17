@@ -211,3 +211,21 @@ const (
 	opGameRequestSellItem = 0x1e
 	opGameRequestBuyItem  = 0x1f
 )
+
+// Private sell store, both directions: PrivateStoreManageListSell,
+// PrivateStoreListSell and PrivateStoreMsgSell
+// (serverpackets/privatestore.go), RequestPrivateStoreManageSell,
+// SetPrivateStoreListSell, RequestPrivateStoreQuitSell,
+// SetPrivateStoreMsgSell and RequestPrivateStoreBuy
+// (clientpackets/privatestore.go).
+const (
+	opGamePrivateStoreManageListSell = 0x9a
+	opGamePrivateStoreListSell       = 0x9b
+	opGamePrivateStoreMsgSell        = 0x9c
+
+	opGameRequestPrivateStoreManageSell = 0x73
+	opGameSetPrivateStoreListSell       = 0x74
+	opGameRequestPrivateStoreQuitSell   = 0x76
+	opGameSetPrivateStoreMsgSell        = 0x77
+	opGameRequestPrivateStoreBuy        = 0x79
+)

@@ -234,7 +234,7 @@ func TestTradeRule(t *testing.T) {
 			}, want: decline, wantRule: "prompt",
 		},
 		{name: "store mode declines", setup: func(b *Brain) { b.world.Self.StoreType = 1; request(b) }, want: decline, wantRule: "prompt"},
-		{name: "store persona declines", persona: func(p *Persona) { p.Store = true }, setup: request, want: decline, wantRule: "prompt"},
+		{name: "store opening declines", setup: func(b *Brain) { b.store.step = storeAskManage; request(b) }, want: decline, wantRule: "prompt"},
 		{name: "in combat declines", setup: func(b *Brain) { b.world.Self.InCombat = true; request(b) }, want: decline, wantRule: "prompt"},
 		{name: "partner out of sight declines", setup: func(b *Brain) { delete(b.world.Objects, pcID); request(b) }, want: decline, wantRule: "prompt"},
 		{name: "partner traded recently declines", setup: func(b *Brain) { b.tradedAt[pcID] = t0; request(b) }, want: decline, wantRule: "prompt"},

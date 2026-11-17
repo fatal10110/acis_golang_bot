@@ -52,6 +52,7 @@ type swarmOptions struct {
 	datapack        string
 	spawnMultiplier float64
 	gm              gmOptions
+	store           storeOptions
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -69,6 +70,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
 	addAllowlistedFlag(fs, &o.allowlisted)
 	addGMFlags(fs, &o.gm)
+	addStoreFlags(fs, &o.store)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
@@ -105,6 +107,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 		return o, fmt.Errorf("-spawn-multiplier %g: want a positive number", o.spawnMultiplier)
 	}
 	if err := o.gm.validate(); err != nil {
+		return o, err
+	}
+	if err := o.store.validate(o.datapack); err != nil {
 		return o, err
 	}
 	if o.metrics != "" {
@@ -169,6 +174,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
+		o.store.apply(&cfg.Brain, log)
 	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
 	if err != nil {

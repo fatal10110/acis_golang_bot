@@ -526,6 +526,9 @@ func (w *World) applyTeleport(e TeleportToLocation) {
 	}
 	*m = stopAt(e.Pos)
 	if e.ObjectID == w.Self.ObjectID && !e.Fast {
+		// The landing closes the bot's store and says nothing
+		// (network/privatestore.go closeStoreOnTeleport).
+		w.Self.StoreType = 0
 		clear(w.Objects)
 		clear(w.Attackers)
 		clear(w.Engaged)

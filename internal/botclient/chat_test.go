@@ -110,9 +110,8 @@ func TestBrainChatReply(t *testing.T) {
 // TestBrainChatGate checks that a reply waits for the chat gate a whisper
 // just passed, and that store mode replies too.
 func TestBrainChatGate(t *testing.T) {
-	p := chatPersona()
-	p.Store = true
-	b, _ := newTestBrain(t, p)
+	b, _ := newTestBrain(t, chatPersona())
+	b.world.Self.StoreType = 1
 	if err := b.handle([]Event{whisper(pcID, "Alden", "hi")}, t0); err != nil {
 		t.Fatal(err)
 	}
@@ -122,6 +121,30 @@ func TestBrainChatGate(t *testing.T) {
 	}
 	if name, _ := b.decide(at(chatDelay - time.Second + chatGap)); name != "chat" {
 		t.Fatalf("after the chat gate: rule %q, want chat", name)
+	}
+}
+
+// TestBrainChatAfterSurvival checks that a due reply never delays a
+// critical-HP flee: "critical" wins and the reply stays pending until the
+// survival rules pass.
+func TestBrainChatAfterSurvival(t *testing.T) {
+	p := chatPersona()
+	p.CriticalHP, p.FleeDistance = 20, 600
+	b, _ := newTestBrain(t, p)
+	if err := b.handle([]Event{whisper(pcID, "Alden", "hi")}, t0); err != nil {
+		t.Fatal(err)
+	}
+	s := &b.world.Self
+	s.InCombat, s.HP, s.MaxHP = true, 10, 100
+	if name, _ := b.decide(at(chatDelay)); name != "critical" {
+		t.Fatalf("critical HP with a reply due: rule %q, want critical", name)
+	}
+	if b.chat.reply.kind != actChatReply {
+		t.Fatal("reply dropped while fleeing")
+	}
+	s.InCombat, s.HP = false, 100
+	if name, _ := b.decide(at(chatDelay)); name != "chat" {
+		t.Fatalf("after the flee: rule %q, want chat", name)
 	}
 }
 
