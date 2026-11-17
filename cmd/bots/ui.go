@@ -23,10 +23,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
 )
 
-// dataDirName is the data directory of `bots ui` under os.UserConfigDir
-// when -data-dir is not given.
-const dataDirName = "acis-bots"
-
 // defaultListen is the web panel's address when -listen is not given.
 const defaultListen = "127.0.0.1:8090"
 
@@ -36,7 +32,7 @@ const logLines = 5000
 // uiOptions are the flags of `bots ui`.
 type uiOptions struct {
 	secretFile string
-	// dataDir holds the registry; empty is dataDirName under the user's
+	// dataDir holds the registry; empty is botregistry.DefaultDirName under the user's
 	// config directory.
 	dataDir string
 	// prefix and marker are the panel's own prefix and marker, given when
@@ -71,7 +67,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	fs := flag.NewFlagSet("bots ui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.StringVar(&o.secretFile, "secret-file", "", "path of the secret file (mode 0600, or an owner-only ACL on Windows) the per-bot passwords derive from")
-	fs.StringVar(&o.dataDir, "data-dir", "", "directory of the bot registry (bots.json), locked while the panel runs; default: "+dataDirName+" under the user's config directory")
+	fs.StringVar(&o.dataDir, "data-dir", "", "directory of the bot registry (bots.json), locked while the panel runs; default: "+botregistry.DefaultDirName+" under the user's config directory")
 	fs.StringVar(&o.prefix, "prefix", "", "the panel's account prefix for new bots, lowercase letters and digits ending in a letter; required when the registry is created, then stored")
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the panel's new bots' character names (with -prefix, when the registry is created)")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
@@ -253,7 +249,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("no -data-dir: %w", err)
 		}
-		dir = filepath.Join(base, dataDirName)
+		dir = filepath.Join(base, botregistry.DefaultDirName)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("data dir: %w", err)

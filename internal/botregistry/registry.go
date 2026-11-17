@@ -128,6 +128,23 @@ func Open(dir string) (*Registry, error) {
 	return r, nil
 }
 
+// DefaultDirName is the data directory of `bots ui` under
+// os.UserConfigDir when it is given none.
+const DefaultDirName = "acis-bots"
+
+// PanelPrefix reads the panel's own prefix from dir's registry without
+// locking it, for a process that must only stay clear of the panel's
+// accounts (the e2e harness): "" when dir holds no registry or the registry
+// has no panel prefix yet. A registry is saved by rename, so the read never
+// sees half a file.
+func PanelPrefix(dir string) (string, error) {
+	r := &Registry{dir: dir, data: file{Version: Version}}
+	if err := r.load(); err != nil {
+		return "", err
+	}
+	return r.data.Panel, nil
+}
+
 // Close releases the data directory.
 func (r *Registry) Close() error { return r.lock.Close() }
 

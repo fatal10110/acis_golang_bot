@@ -148,7 +148,10 @@ func (g *GameConn) Close() error { return g.conn.Close() }
 // Self is the bot's own character as the EnterWorld burst described it.
 type Self struct {
 	// Name is the character's, the one selected or created.
-	Name     string
+	Name string
+	// Slots is how many characters the account held once this one was
+	// chosen: CharSelectInfo's count, after the creation if there was one.
+	Slots    int
 	ObjectID int32
 	X, Y, Z  int32
 	Heading  int32
@@ -215,10 +218,11 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 	if err != nil {
 		return Self{}, err
 	}
-	slot, s, err := g.chooseSlot(ctx, slots, ch)
+	slot, slots, err := g.chooseSlot(ctx, slots, ch)
 	if err != nil {
 		return Self{}, err
 	}
+	s := slots[slot]
 	name := s.Name
 	if chosen != nil {
 		chosen(name, s.ClassID)
@@ -251,6 +255,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 				return Self{}, err
 			}
 			self.Name = name
+			self.Slots = len(slots)
 			self.Burst = burst
 			self.UserInfo = append([]byte(nil), raw...)
 			return self, nil

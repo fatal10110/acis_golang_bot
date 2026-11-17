@@ -164,7 +164,7 @@ func TestEnterGame(t *testing.T) {
 	}
 	npcInfo := packet(0x16, 0x10000002, 20101)
 	enter := append(gameStart[:4:4], sendStep(npcInfo), sendStep(userInfo(-71000, 258000, -3100, 49152, objectID)))
-	wantSelf := Self{ObjectID: objectID, X: -71000, Y: 258000, Z: -3100, Heading: 49152, Burst: [][]byte{npcInfo}}
+	wantSelf := Self{ObjectID: objectID, X: -71000, Y: 258000, Z: -3100, Heading: 49152, Burst: [][]byte{npcInfo}, Slots: 1}
 	cat := func(parts ...[]step) []step {
 		var out []step
 		for _, p := range parts {
