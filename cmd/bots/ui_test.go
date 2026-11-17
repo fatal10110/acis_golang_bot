@@ -9,11 +9,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botpanel"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
 )
 
@@ -28,7 +30,7 @@ func TestParseUIFlags(t *testing.T) {
 	}{
 		{"defaults", base, func(o uiOptions) bool {
 			return o.dataDir == "" && o.prefix == "" && o.marker == botnames.DefaultMarker && o.maxOnline == 10 &&
-				o.importPrefix == "" && o.importCount == 0 && o.loginAddr == "127.0.0.1:2106" && o.serverID == 1
+				o.importPrefix == "" && o.importCount == 0 && o.loginAddr == "127.0.0.1:2106" && o.serverID == 1 && o.listen == defaultListen
 		}, ""},
 		{
 			"panel prefix and marker", append(base, "-data-dir", "d", "-prefix", "home", "-name-marker", "Npc", "-name-marker-at", "prefix", "-max-online", "40"),
@@ -55,6 +57,9 @@ func TestParseUIFlags(t *testing.T) {
 		{"bad import placement", append(base, "-import-marker-at", "middle"), nil, "-import-marker-at"},
 		{"bad import prefix", append(base, "-import-prefix", "h-z", "-import", "2"), nil, "-import-prefix"},
 		{"server id 0", append(base, "-server-id", "0"), nil, "-server-id"},
+		{"panel address", append(base, "-listen", "[::1]:9000"), func(o uiOptions) bool { return o.listen == "[::1]:9000" }, ""},
+		{"panel on every interface", append(base, "-listen", "0.0.0.0:8090"), nil, "-listen"},
+		{"panel on a host name", append(base, "-listen", "localhost:8090"), nil, "-listen"},
 		{"stray argument", append(base, "extra"), nil, "unexpected"},
 	}
 	for _, tt := range tests {
@@ -153,5 +158,20 @@ func TestRunUIRefusesALockedDataDir(t *testing.T) {
 	var stderr bytes.Buffer
 	if code := runUI(ctx, args, &stderr); code != 1 || !strings.Contains(stderr.String(), "in use by another process") {
 		t.Fatalf("second panel on a held data dir: exit %d, %s", code, stderr.String())
+	}
+}
+
+func TestOfferedPresets(t *testing.T) {
+	names := func(ps []botpanel.Preset) (out []string) {
+		for _, p := range ps {
+			out = append(out, p.Name)
+		}
+		return out
+	}
+	if got := names(offeredPresets("")); !slices.Equal(got, []string{"support"}) {
+		t.Fatalf("without a datapack offered %q, want support only", got)
+	}
+	if got := names(offeredPresets("dp")); !slices.Equal(got, []string{"support", "town", "merchant"}) {
+		t.Fatalf("with a datapack offered %q", got)
 	}
 }

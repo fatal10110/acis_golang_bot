@@ -9,20 +9,29 @@ import (
 	"log/slog"
 	"math"
 	"math/rand/v2"
+	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botpanel"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
 )
 
 // dataDirName is the data directory of `bots ui` under os.UserConfigDir
 // when -data-dir is not given.
 const dataDirName = "acis-bots"
+
+// defaultListen is the web panel's address when -listen is not given.
+const defaultListen = "127.0.0.1:8090"
+
+// logLines is how many recent log lines the panel keeps.
+const logLines = 5000
 
 // uiOptions are the flags of `bots ui`.
 type uiOptions struct {
@@ -42,13 +51,15 @@ type uiOptions struct {
 	importCount  int
 	importMarker botnames.Marker
 
-	loginAddr       string
-	gameAddr        string
-	serverID        uint
-	timeout         time.Duration
-	localAddr       string
-	allowlisted     bool
-	metrics         string
+	loginAddr   string
+	gameAddr    string
+	serverID    uint
+	timeout     time.Duration
+	localAddr   string
+	allowlisted bool
+	metrics     string
+	// listen is the panel's loopback address.
+	listen          string
 	datapack        string
 	spawnMultiplier float64
 	gm              gmOptions
@@ -79,7 +90,8 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	addStoreFlags(fs, &o.store)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml); the presets town and merchant and farming need it")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
-	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
+	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
+	fs.StringVar(&o.listen, "listen", defaultListen, "loopback address the web panel serves on (open http://ADDR/ in a browser)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -141,6 +153,9 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 			return o, fmt.Errorf("-metrics: %w", err)
 		}
 	}
+	if err := botpanel.CheckAddr(o.listen); err != nil {
+		return o, fmt.Errorf("-listen: %w", err)
+	}
 	return o, nil
 }
 
@@ -191,9 +206,12 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 	brain := p.brain(u.shared)
 	brain.Metrics = r.Metrics
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
-	b, err := botclient.NewBot(cfg, r.Account, u.secret.Password(r.Account), botclient.BotConfig{Character: r.Character, Brain: brain, Learned: r.Learned}, rng)
+	b, err := botclient.NewBot(cfg, r.Account, u.secret.Password(r.Account), botclient.BotConfig{Character: r.Character, Brain: brain, Learned: r.Learned, Preset: r.Preset}, rng)
 	if err != nil {
 		return err
+	}
+	if r.Live != nil {
+		r.Live(b)
 	}
 	return b.Run(ctx)
 }
@@ -202,8 +220,9 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 // and runs the supervisor, which logs back in every bot marked online (up to
 // -max-online, each with its own preset, all persistent) until a signal,
 // which logs every bot out and keeps them marked online for the next start.
-// Every login passes one LoginGate. The web panel that drives the
-// supervisor's requests is not served yet.
+// Every login passes one LoginGate. The web panel (botpanel) on -listen
+// drives the supervisor's requests and shows the bots, the gate, the metrics
+// and the latest log lines.
 func runUI(ctx context.Context, args []string, stderr io.Writer) int {
 	o, err := parseUIFlags(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
@@ -244,7 +263,8 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		return err
 	}
 	defer reg.Close()
-	log := slog.New(slog.NewTextHandler(stderr, nil))
+	ring := botpanel.NewRing(logLines)
+	log := slog.New(ring.Handler(slog.NewTextHandler(stderr, nil), nil))
 	if err := prepareRegistry(reg, o, log); err != nil {
 		return err
 	}
@@ -285,11 +305,10 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	// every bot returned.
 	defer stopAuth()
 	runner.shared.auth = auth
-	var metrics *botmetrics.Registry
-	if o.metrics != "" {
-		metrics = botmetrics.NewRegistry(botclient.RuleNames()...)
-		gate.ReportBreaker(metrics)
-	}
+	// The dashboard shows the metrics: the registry runs with or without
+	// -metrics, which only adds their endpoint.
+	metrics := botmetrics.NewRegistry(botclient.RuleNames()...)
+	gate.ReportBreaker(metrics)
 	sup, err := botregistry.New(botregistry.Config{
 		Registry:    reg,
 		Run:         runner.run,
@@ -303,18 +322,60 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if metrics != nil {
-		ln, err := botmetrics.Listen(o.metrics)
-		if err != nil {
+	panel, err := botpanel.New(botpanel.Config{
+		Supervisor: sup,
+		Gate:       gate,
+		Metrics:    metrics,
+		MaxOnline:  o.maxOnline,
+		Presets:    offeredPresets(o.datapack),
+		Logs:       ring,
+		Log:        log,
+	})
+	if err != nil {
+		return err
+	}
+	var metricsLn net.Listener
+	if o.metrics != "" {
+		if metricsLn, err = botmetrics.Listen(o.metrics); err != nil {
 			return err
 		}
-		tick := time.NewTicker(metricsPeriod)
-		defer tick.Stop()
-		defer serveMetrics(ctx, ln, metrics, tick.C, log)()
-		log.Info("metrics serve", "addr", ln.Addr().String(), "path", botmetrics.VarsPath)
+		log.Info("metrics serve", "addr", metricsLn.Addr().String(), "path", botmetrics.VarsPath)
 	}
-	log.Info("panel starts", "data_dir", dir, "max_online", o.maxOnline, "allowlisted", o.allowlisted)
+	tick := time.NewTicker(metricsPeriod)
+	defer tick.Stop()
+	defer serveMetrics(ctx, metricsLn, metrics, tick.C, log)()
+	ln, err := botpanel.Listen(o.listen)
+	if err != nil {
+		return err
+	}
+	// A panel that fails to serve stops the bots too; the supervisor's stop
+	// ends the panel. Both are joined before playUI returns.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := panel.Serve(ctx, ln); err != nil {
+			log.Error("panel failed", "err", err)
+			cancel()
+		}
+	})
+	log.Info("panel starts", "url", "http://"+ln.Addr().String()+"/", "data_dir", dir, "max_online", o.maxOnline, "allowlisted", o.allowlisted)
 	err = sup.Run(ctx)
+	cancel()
+	wg.Wait()
 	log.Info("panel stopped")
 	return err
+}
+
+// offeredPresets are the presets of the catalog the panel offers: those
+// that need the datapack only with it.
+func offeredPresets(datapack string) []botpanel.Preset {
+	var out []botpanel.Preset
+	for _, p := range presets {
+		if p.datapack && datapack == "" {
+			continue
+		}
+		out = append(out, botpanel.Preset{Name: p.name, Help: p.help})
+	}
+	return out
 }

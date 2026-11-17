@@ -241,18 +241,20 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	return code
 }
 
-// serveMetrics serves reg on ln and collects it on every tick, on two
-// goroutines that outlive ctx's cancellation (the endpoint keeps serving
-// while the bots log out). The returned stop ends both and joins them; it
-// closes ln.
+// serveMetrics serves reg on ln, unless ln is nil, and collects it on every
+// tick, on goroutines that outlive ctx's cancellation (the endpoint keeps
+// serving while the bots log out). The returned stop ends them and joins
+// them; it closes ln.
 func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry, tick <-chan time.Time, log *slog.Logger) (stop func()) {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	var wg sync.WaitGroup
-	wg.Go(func() {
-		if err := botmetrics.Serve(ctx, ln, botmetrics.Handler(reg)); err != nil {
-			log.Error("metrics endpoint failed", "err", err)
-		}
-	})
+	if ln != nil {
+		wg.Go(func() {
+			if err := botmetrics.Serve(ctx, ln, botmetrics.Handler(reg)); err != nil {
+				log.Error("metrics endpoint failed", "err", err)
+			}
+		})
+	}
 	wg.Go(func() { reg.Run(ctx, tick) })
 	return func() {
 		cancel()

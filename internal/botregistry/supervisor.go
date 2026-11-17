@@ -45,6 +45,9 @@ var (
 	ErrOnline = errors.New("bot is online")
 	// ErrOffline refuses a respawn of a bot not online.
 	ErrOffline = errors.New("bot is offline")
+	// ErrNoRun refuses a command to a bot with no run playing: offline,
+	// stopped, halted, cooling down, or logging out for a respawn.
+	ErrNoRun = errors.New("bot is not running")
 )
 
 // Run is one run of a registry bot: what a RunFunc plays.
@@ -66,6 +69,11 @@ type Run struct {
 	// handles one request or report at a time, so it waits at most for one
 	// registry save.
 	Learned func(name string, classID int32)
+	// Live hands the supervisor the run's bot once the RunFunc built it,
+	// before it runs: until the run reports its end, the supervisor reads
+	// its status (Status.Live) and passes it commands (Command). It returns
+	// once the supervisor took it, as Learned does.
+	Live func(b *botclient.Bot)
 }
 
 // RunFunc plays one run until ctx ends, which returns nil, or the bot stops
@@ -120,6 +128,9 @@ type Status struct {
 	Run RunState
 	// RestartAt is when a cooling-down bot restarts.
 	RestartAt time.Time
+	// Live is the latest snapshot of the bot of its live run
+	// (botclient.Bot.Status); nil while no run handed one over (Run.Live).
+	Live *botclient.Status
 }
 
 // runState is a bot's run, owned by the supervisor goroutine. A bot without
@@ -133,6 +144,9 @@ type runState struct {
 	halted            bool
 	// retryAt is when a cooling-down bot restarts; zero otherwise.
 	retryAt time.Time
+	// bot is the live run's bot once it handed it over (Run.Live), nil
+	// otherwise.
+	bot *botclient.Bot
 }
 
 func (st *runState) state() RunState {
@@ -151,9 +165,11 @@ func (st *runState) state() RunState {
 	return RunNone
 }
 
-// event is a run's report: the character it learned, or its end.
+// event is a run's report: its bot, the character it learned, or its end.
 type event struct {
 	account string
+	// bot is set for the run's bot handed over (Run.Live).
+	bot *botclient.Bot
 	// learned is set for a learned character, with name and class.
 	learned bool
 	name    string
@@ -163,7 +179,8 @@ type event struct {
 
 // Supervisor owns the registry, its file and every bot's run (docs/plan.md
 // section 8, "Ownership"). Run is its goroutine; the request methods (List,
-// Create, Import, Spawn, Despawn, Respawn, SetPreset, Delete, ResumeLogins)
+// Create, Import, Spawn, Despawn, Respawn, SetPreset, Delete, ResumeLogins,
+// Command)
 // are safe from any goroutine and answer at once, without waiting on a run.
 // It sends no packet: every run logs in through the login gate, which paces
 // it.
@@ -329,6 +346,9 @@ func (s *Supervisor) start(account string) {
 		Learned: func(name string, classID int32) {
 			s.events <- event{account: account, learned: true, name: name, class: classID}
 		},
+		Live: func(b *botclient.Bot) {
+			s.events <- event{account: account, bot: b}
+		},
 	}
 	s.wg.Go(func() {
 		err := s.cfg.Run(ctx, r)
@@ -384,6 +404,12 @@ func (s *Supervisor) update(account string, fn func(*Bot)) {
 
 // handle applies a run's report.
 func (s *Supervisor) handle(e event) {
+	if e.bot != nil {
+		// A run hands its bot over before it reports its end, so its run
+		// state is live.
+		s.runs[e.account].bot = e.bot
+		return
+	}
 	if e.learned {
 		class := e.class
 		s.update(e.account, func(b *Bot) { b.Name, b.Class = e.name, &class })
@@ -393,6 +419,11 @@ func (s *Supervisor) handle(e event) {
 	st := s.runs[e.account]
 	st.cancel()
 	st.cancel = nil
+	if st.bot != nil {
+		snap := st.bot.Status()
+		s.update(e.account, func(b *Bot) { keepProgress(b, snap) })
+		st.bot = nil
+	}
 	if s.closing {
 		delete(s.runs, e.account)
 		return
@@ -409,6 +440,17 @@ func (s *Supervisor) handle(e event) {
 		return
 	}
 	s.ended(e.account, st, e.err)
+}
+
+// keepProgress copies the level and position of a run's last snapshot into
+// its registry bot (docs/plan.md section 8, "Status"); a snapshot of a bot
+// that never entered the world (level 0) keeps the stored ones.
+func keepProgress(b *Bot, st botclient.Status) {
+	if st.Level <= 0 {
+		return
+	}
+	b.Level = st.Level
+	b.Position = &Position{X: st.Position.X, Y: st.Position.Y, Z: st.Position.Z}
 }
 
 // ended maps the end of a run the supervisor did not cancel to the bot's
@@ -517,6 +559,10 @@ func (s *Supervisor) List(ctx context.Context) ([]Status, error) {
 			v := Status{Bot: b, Run: st.state()}
 			if v.Run == RunCoolingDown {
 				v.RestartAt = st.retryAt
+			}
+			if st != nil && st.bot != nil {
+				snap := st.bot.Status()
+				v.Live = &snap
 			}
 			out = append(out, v)
 		}
@@ -706,4 +752,26 @@ func (s *Supervisor) request(ctx context.Context, fn func() error) error {
 		return derr
 	}
 	return err
+}
+
+// Command hands c to the bot of account's live run (botclient.Bot.Command)
+// and returns the channel its one answer comes on. It never waits for the
+// bot: a full mailbox answers botclient.ErrBusy, and a bot with no run
+// playing ErrNoRun. No command sends a whisper; the bot's brain paces every
+// packet it causes.
+func (s *Supervisor) Command(ctx context.Context, account string, c botclient.Command) (<-chan error, error) {
+	var answer <-chan error
+	err := s.request(ctx, func() error {
+		if _, ok := s.cfg.Registry.Bot(account); !ok {
+			return ErrNoBot
+		}
+		st := s.runs[account]
+		if st == nil || st.bot == nil || st.stopping {
+			return ErrNoRun
+		}
+		var err error
+		answer, err = st.bot.Command(c)
+		return err
+	})
+	return answer, err
 }
