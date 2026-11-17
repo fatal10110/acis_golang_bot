@@ -319,10 +319,20 @@ func TestRecorderKeepsFirstWriteError(t *testing.T) {
 	none.Record([]byte{opGameStopMove}) // a nil Recorder is off
 }
 
+// recordedMustDecode pins the recorded opcodes whose decoder must run: a
+// decoder dropped later, or a fixture deleted, fails the test instead of
+// passing silently.
+var recordedMustDecode = []byte{
+	opGameMoveToLocation, opGameUserInfo, opGameStatusUpdate, opGameDeleteObject,
+	opGameCharSelectInfo, opGameNPCInfo, opGameActionFailed, opGameChangeWaitType,
+	opGameSystemMessage, opGameLeaveWorld,
+}
+
 // TestRecordedFixtures replays the -record captures checked in under
 // testdata/recorded: every payload with a decoder must decode with exactly
 // len(payload) consumed and carry a plausible object id. Ids, coordinates
-// and times vary between runs and are not pinned.
+// and times vary between runs and are not pinned. A payload with no decoder
+// yet is skipped, not passed.
 func TestRecordedFixtures(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("testdata", "recorded", "*.bin"))
 	if err != nil {
@@ -331,6 +341,11 @@ func TestRecordedFixtures(t *testing.T) {
 	if len(paths) == 0 {
 		t.Skip("no recorded fixtures yet: they need a live server (#5)")
 	}
+	pinned := map[byte]bool{}
+	for _, op := range recordedMustDecode {
+		pinned[op] = true
+	}
+	decoded := map[byte]bool{}
 	for _, path := range paths {
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			raw, err := os.ReadFile(path)
@@ -340,16 +355,32 @@ func TestRecordedFixtures(t *testing.T) {
 			if len(raw) == 0 || filepath.Base(path) != fmt.Sprintf("%02x.bin", raw[0]) {
 				t.Fatalf("fixture name does not match its opcode")
 			}
+			if raw[0] == opGameCharSelectInfo { // read in the handshake, not by the reader
+				if _, err := decodeCharSelectInfo(raw); err != nil {
+					t.Fatal(err)
+				}
+				decoded[raw[0]] = true
+				return
+			}
 			ev, ok, err := decodeEvent(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !ok {
-				return // recorded for a decoder not written yet
+				if pinned[raw[0]] {
+					t.Fatalf("opcode %#02x is pinned but has no decoder", raw[0])
+				}
+				t.Skipf("no decoder for opcode %#02x yet", raw[0])
 			}
+			decoded[raw[0]] = true
 			if oid := reflect.ValueOf(ev).FieldByName("ObjectID"); oid.IsValid() && oid.Int() == 0 {
 				t.Errorf("%T has object id 0", ev)
 			}
 		})
+	}
+	for _, op := range recordedMustDecode {
+		if !decoded[op] {
+			t.Errorf("pinned opcode %#02x was not decoded from a fixture", op)
+		}
 	}
 }
