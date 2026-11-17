@@ -128,12 +128,17 @@ type Prompts struct {
 	// Trade is open from a trade request until the bot answers it or a
 	// trade window opens.
 	Trade TradeInvite
+	// Resurrect is open from a resurrection offered to the dead bot until
+	// it answers the offer or revives.
+	Resurrect ResurrectOffer
 }
 
-// RestartPrompt is the restart-point choice offered to a dead character.
+// RestartPrompt is the restart-point choice offered to a dead character
+// since At.
 type RestartPrompt struct {
 	Open   bool
 	Points RestartPoints
+	At     time.Time
 }
 
 // motion is a straight move from from to to at speed world units per
@@ -339,6 +344,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 		if e.ObjectID == w.Self.ObjectID {
 			w.Self.Dead = false
 			w.Prompts.Restart = RestartPrompt{}
+			w.Prompts.Resurrect = ResurrectOffer{}
 		} else if o := w.object(e.ObjectID); o != nil {
 			o.Dead = false
 		}
@@ -372,6 +378,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		}
 	case NpcHtmlMessage:
 		w.Dialog = Dialog{ObjectID: e.ObjectID, Links: dialogLinks(e.HTML)}
+	case ConfirmDlg:
+		w.applyConfirmDlg(e)
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)
@@ -535,7 +543,7 @@ func (w *World) applyDie(e Die, now time.Time) {
 		w.Self.move = stopAt(w.Self.move.at(now))
 		w.Self.castEnd = time.Time{}
 		clear(w.Attackers)
-		w.Prompts.Restart = RestartPrompt{Open: true, Points: e.Restart}
+		w.Prompts.Restart = RestartPrompt{Open: true, Points: e.Restart, At: now}
 		return
 	}
 	delete(w.Attackers, e.ObjectID)

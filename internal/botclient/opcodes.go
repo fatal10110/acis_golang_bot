@@ -139,6 +139,16 @@ const (
 	opGameRequestWithdrawParty   = 0x2b
 )
 
+// Questions and slash commands, both directions: ConfirmDlg
+// (serverpackets/confirmdlg.go), DlgAnswer (clientpackets/wiresafe.go,
+// dlganswer.go) and RequestUserCommand (clientpackets/usercommand.go).
+const (
+	opGameConfirmDlg = 0xed
+
+	opGameDlgAnswer          = 0xc5
+	opGameRequestUserCommand = 0xaa
+)
+
 // Player trade, both directions (serverpackets/shop_trade.go,
 // clientpackets/wiresafe.go and shop_trade.go). TradeUpdate and
 // TradeItemUpdate share opcode 0x74.

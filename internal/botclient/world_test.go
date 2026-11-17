@@ -200,7 +200,7 @@ func TestWorldState(t *testing.T) {
 			"own death opens the restart prompt",
 			[]Event{Die{ObjectID: selfID, Restart: RestartPoints{Village: true, Fixed: true}}},
 			func(t *testing.T, w *World) {
-				want := RestartPrompt{Open: true, Points: RestartPoints{Village: true, Fixed: true}}
+				want := RestartPrompt{Open: true, Points: RestartPoints{Village: true, Fixed: true}, At: t0}
 				if !w.Self.Dead || w.Prompts.Restart != want {
 					t.Fatalf("dead %v, prompt %+v", w.Self.Dead, w.Prompts.Restart)
 				}
