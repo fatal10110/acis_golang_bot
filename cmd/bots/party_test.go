@@ -40,7 +40,7 @@ func TestApplyPartyAndAuthority(t *testing.T) {
 			if tt.auth {
 				auth = botclient.NewAuthority(botclient.AuthorityConfig{Commanders: []int32{gmID}})
 			}
-			applyPartyAndAuthority(&cfg, auth)
+			applyPartyAndAuthority(&cfg, botclient.NewPartyClaims(), auth)
 			if cfg.PartyClaims == nil || cfg.Authority != auth {
 				t.Fatalf("PartyClaims %p, Authority %p, want a table and %p", cfg.PartyClaims, cfg.Authority, auth)
 			}

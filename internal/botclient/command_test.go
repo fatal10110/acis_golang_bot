@@ -207,7 +207,7 @@ func TestSessionCommandedLogout(t *testing.T) {
 	for _, persistent := range []bool{true, false} {
 		reg := botmetrics.NewRegistry()
 		m := reg.NewBot()
-		b := &Bot{cfg: SessionConfig{Persistent: persistent, Brain: BrainConfig{Metrics: m}}, rng: rand.New(rand.NewPCG(1, 2)), log: discardLog(), retry: backoff{base: retryBase, max: retryMax}}
+		b := &Bot{cfg: SessionConfig{Persistent: persistent}, brain: BrainConfig{Metrics: m}, rng: rand.New(rand.NewPCG(1, 2)), log: discardLog(), retry: backoff{base: retryBase, max: retryMax}}
 		for range maxAborts {
 			d, err := b.after(true, time.Minute, ErrCommandedLogout)
 			if d != 0 || !errors.Is(err, ErrCommandedLogout) {

@@ -115,7 +115,7 @@ func chatReplyAction(target, text string) Action {
 func (b *Brain) chatHeard(e CreatureSay, now time.Time) {
 	p := &b.persona.Chat
 	if len(p.Replies) == 0 || p.Total <= 0 || e.Name == "" || b.chat.reply.kind != actHold ||
-		b.cfg.marker.Marks(e.Name) || !b.cfg.chat.allows(e.ObjectID, now, p) {
+		b.cfg.markers.Marks(e.Name) || !b.cfg.chat.allows(e.ObjectID, now, p) {
 		return
 	}
 	delay := p.DelayMin + time.Duration(b.rng.Int64N(int64(max(p.DelayMax-p.DelayMin, 0))+1))

@@ -205,7 +205,7 @@ func TestEnterGame(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g, done := dialFake(t, tt.crypt, tt.script, tt.wantErr != nil)
-			self, err := EnterGame(t.Context(), g, "bot7", SessionKeys{LoginKey1: 1, LoginKey2: 2, PlayKey1: 3, PlayKey2: 4}, testCharacter)
+			self, err := EnterGame(t.Context(), g, "bot7", SessionKeys{LoginKey1: 1, LoginKey2: 2, PlayKey1: 3, PlayKey2: 4}, testCharacter, nil)
 			g.Close()
 			if serr := <-done; serr != nil {
 				t.Fatalf("fake server: %v", serr)
@@ -281,7 +281,7 @@ func TestLogout(t *testing.T) {
 
 func TestGameContextCanceled(t *testing.T) {
 	enterGame := func(ctx context.Context, g *GameConn) error {
-		_, err := EnterGame(ctx, g, "bot7", SessionKeys{}, testCharacter)
+		_, err := EnterGame(ctx, g, "bot7", SessionKeys{}, testCharacter, nil)
 		return err
 	}
 	logout := func(ctx context.Context, g *GameConn) error { return g.Logout(ctx) }
