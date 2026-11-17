@@ -204,6 +204,30 @@ func TestRuleSpot(t *testing.T) {
 			wantRule: "spot", wantSpot: -1,
 		},
 		{
+			name: "co-holders under the cap are no crowd",
+			setup: func(b *Brain) {
+				// Spot 3 takes 3 bots; the 2 others holding it stand there
+				// with 3 strangers: 5 in sight, 3 that count.
+				b.cfg.Spots.claim([]int{3})
+				b.cfg.Spots.claim([]int{3})
+				b.world.Self.move = stopAt(Point{X: 3900})
+				for i := range int32(5) {
+					b.world.Apply(CharInfo{ObjectID: pcID + 1 + i, Name: "p", Pos: Point{X: 4000}}, t0)
+				}
+			},
+			wantHeld: 3, wantSpot: 3,
+		},
+		{
+			name: "players beyond the leash are no crowd",
+			setup: func(b *Brain) {
+				b.world.Self.move = stopAt(Point{X: 3900})
+				for i := range int32(4) {
+					b.world.Apply(CharInfo{ObjectID: pcID + 1 + i, Name: "p", Pos: Point{X: 4000, Y: 1600}}, t0)
+				}
+			},
+			wantSpot: 3,
+		},
+		{
 			name: "party members are no crowd",
 			setup: func(b *Brain) {
 				b.world.Self.move = stopAt(Point{X: 3900})
@@ -289,6 +313,34 @@ func TestSpotCrowdMovesOn(t *testing.T) {
 	}
 	if got, want := moveTarget(a.payload), (Point{Y: 2000}); got != want {
 		t.Fatalf("move to %+v, want %+v", got, want)
+	}
+}
+
+// TestSpotTeleportWalksBack checks an own teleport away from the spot keeps
+// the claim and walks back to the spot's centre, the leg count starting over.
+func TestSpotTeleportWalksBack(t *testing.T) {
+	b := newSpotBrain(t, 3, testSpot("near", 4000, 0, 1, 3, 9))
+	b.world.Objects = map[int32]*Object{}
+	b.world.Self.move = stopAt(Point{X: 3950})
+	b.decide(at(time.Second))
+	b.spot.lastDist, b.spot.stalls = 50, 2
+	if !b.spot.held || !b.spot.arrived {
+		t.Fatalf("not at the spot: held %v arrived %v", b.spot.held, b.spot.arrived)
+	}
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 9000}}}, at(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if b.spot.arrived || b.spot.lastDist != 0 || b.spot.stalls != 0 || !b.spot.held || b.cfg.Spots.Held(0) != 1 {
+		t.Fatalf("after teleport: %+v held %d, want the claim kept and the walk reset", b.spot, b.cfg.Spots.Held(0))
+	}
+	b.world.Self.move = stopAt(Point{X: 9000})
+	b.appearing = false // the Appearing the teleport asks went out
+	rule, a := b.decide(at(3 * time.Second))
+	if rule != "spot" || a.kind != actMove {
+		t.Fatalf("after teleport = %q %d, want a leg to the spot", rule, a.kind)
+	}
+	if got, want := moveTarget(a.payload), (Point{X: 6000}); got != want {
+		t.Fatalf("leg to %+v, want %+v", got, want)
 	}
 }
 

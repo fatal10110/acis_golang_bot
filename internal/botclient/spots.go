@@ -25,7 +25,8 @@ type SpotPolicy struct {
 	// MaxTravel is the farthest spot the bot picks, from where it stands:
 	// a new character stands in its race's newbie zone, so it farms there.
 	MaxTravel int32
-	// Crowd is the number of other players in sight, party members aside,
+	// Crowd is the number of other players within Leash of the spot's
+	// centre, party members and the bots sharing the spot's claim aside,
 	// that makes a spot crowded on arrival: the bot moves on and avoids the
 	// spot for AvoidFor, as it does a spot it cannot walk to. 0 never
 	// finds one crowded.
@@ -117,7 +118,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		}
 		v.arrived, v.lastDist, v.stalls = true, 0, 0
 		b.anchor = from
-		if b.crowded() {
+		if b.crowded(dest, now) {
 			b.moveOn(now)
 			return Action{}, true
 		}
@@ -164,20 +165,26 @@ func legToward(from, to Point, d float64) Point {
 	}
 }
 
-// crowded reports whether Persona.Spots.Crowd players or more are in
-// sight, party members aside.
-func (b *Brain) crowded() bool {
-	limit := b.persona.Spots.Crowd
-	if limit <= 0 {
+// crowded reports whether Persona.Spots.Crowd players or more stand within
+// Leash of the spot's centre at, party members aside and less the other bots
+// holding the spot: the registry's cap already counts those, so a spot under
+// its cap is not crowded by its own holders.
+func (b *Brain) crowded(at Point, now time.Time) bool {
+	p := &b.persona.Spots
+	if p.Crowd <= 0 {
 		return false
 	}
+	leash := int64(p.Leash) * int64(p.Leash)
 	n := 0
 	for id, o := range b.world.Objects {
-		if o.Kind == KindPlayer && !o.Dead && b.world.Party.Members[id] == nil {
+		if o.Kind != KindPlayer || o.Dead || b.world.Party.Members[id] != nil {
+			continue
+		}
+		if dist2(o.Position(now), at) <= leash {
 			n++
 		}
 	}
-	return n >= limit
+	return n-(b.cfg.Spots.Held(b.spot.idx)-1) >= p.Crowd
 }
 
 // outleveled reports whether the bot's level is past its spot's highest
