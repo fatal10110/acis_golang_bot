@@ -3,6 +3,7 @@ package botclient
 import (
 	"bytes"
 	"errors"
+	"maps"
 	"reflect"
 	"testing"
 	"time"
@@ -365,5 +366,44 @@ func TestBrainTrade(t *testing.T) {
 	}
 	if b.world.Trade.Open() || b.world.Prompts.Trade.Open {
 		t.Fatalf("trade %+v, prompt %+v after the end", b.world.Trade, b.world.Prompts.Trade)
+	}
+}
+
+// TestTradeSentPrunesTradedAt checks that an accepted trade request sent
+// through Brain.send forgets partners whose Every passed, keeps the rest
+// and records the new partner, and that a decline records nothing.
+func TestTradeSentPrunesTradedAt(t *testing.T) {
+	const stale, fresh, partner int32 = 0x5001, 0x5002, 0x5003
+	now := at(5 * time.Minute)
+	tests := []struct {
+		name   string
+		accept bool
+		want   map[int32]time.Time
+	}{
+		{
+			name: "accept prunes stale and records partner", accept: true,
+			want: map[int32]time.Time{fresh: now.Add(-time.Minute + time.Millisecond), partner: now},
+		},
+		{
+			name: "decline leaves map unchanged",
+			want: map[int32]time.Time{stale: now.Add(-time.Minute), fresh: now.Add(-time.Minute + time.Millisecond)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := tradeBrain(t, nil)
+			every := b.persona.Trade.Every
+			if every != time.Minute {
+				t.Fatalf("Every = %v, want 1m", every)
+			}
+			b.tradedAt[stale] = now.Add(-every)
+			b.tradedAt[fresh] = now.Add(-every + time.Millisecond)
+			if sent, err := b.send(answerTradeAction(tt.accept, partner), now); err != nil || !sent {
+				t.Fatalf("send = %v, %v; want sent", sent, err)
+			}
+			if !maps.Equal(b.tradedAt, tt.want) {
+				t.Fatalf("tradedAt = %v, want %v", b.tradedAt, tt.want)
+			}
+		})
 	}
 }
