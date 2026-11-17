@@ -29,8 +29,10 @@ type GearPolicy struct {
 	// (gearSlot): of the worn piece's weapon type and hands or armor type,
 	// of a grade the bot wears without penalty, of a higher reference
 	// price, and not over an enchanted piece. An empty slot takes what the
-	// bot's class wears (Classes). The piece it replaces is junk the shop
-	// errand sells.
+	// bot's class wears (Classes), and so does a worn weapon of a type the
+	// class does not wield (GearClass.Weapons). The piece it replaces is
+	// junk the shop errand sells once the new one is worn. A bow waits
+	// until the bot carries arrows of its grade (ShopPolicy.ArrowsMin).
 	Equip bool
 	// Jewelry wears a necklace, two earrings and two rings the same way.
 	// With both of a pair worn, the bot takes the lesser one off before it
@@ -74,6 +76,13 @@ type GearClass struct {
 	// other when both are listed: a two-handed weapon is worth more than
 	// the one-handed weapon and the shield it takes off, a one-handed one
 	// more than the two-handed weapon less the best shield the bot carries.
+	// A worn weapon of a type not listed (an archer's dagger from its
+	// dagger days) gives way to any listed one, whatever the prices, the
+	// best the bot carries or buys first; nothing unlisted replaces it, and
+	// nothing unlisted replaces a listed one, so the bot never swaps back.
+	// An enchanted one is kept, as is a shield that is enchanted or unknown
+	// a two-handed weapon would take off. A class listing none keeps
+	// whatever it wields.
 	Weapons []string
 	// Armor is the armor type (LIGHT, HEAVY or MAGIC) of the body and
 	// legs pieces a bot wearing neither wears.
@@ -387,6 +396,9 @@ func (b *Brain) beats(id int32, w *worn) bool {
 	if !ok || cur.Enchant > 0 {
 		return false
 	}
+	if s == slotWeapon && len(class.Weapons) > 0 && !slices.Contains(class.Weapons, c.kind) {
+		return b.leavesUnlisted(g, w, &class)
+	}
 	gain, value := int64(g.price), int64(c.price)
 	switch {
 	case s == slotWeapon && c.part != g.part:
@@ -424,6 +436,20 @@ func (b *Brain) beats(id int32, w *worn) bool {
 		value += int64(legs.price)
 	}
 	return gain > value
+}
+
+// leavesUnlisted reports whether weapon g replaces a worn weapon of a type
+// class does not wield (GearClass.Weapons): g is of a type it does, and
+// takes no enchanted or unknown shield off.
+func (b *Brain) leavesUnlisted(g gearItem, w *worn, class *GearClass) bool {
+	if !slices.Contains(class.Weapons, g.kind) {
+		return false
+	}
+	if sh := w[slotShield]; g.part == partLRHand && sh.ObjectID != 0 {
+		_, ok := b.gearItem(sh.TemplateID)
+		return ok && sh.Enchant == 0
+	}
+	return true
 }
 
 // swaps reports whether weapon types a and b are a one-handed type and its
@@ -467,7 +493,8 @@ func (b *Brain) wearsNext(it Item) bool {
 // it), the first slot first. For an earring or ring with both sides worn
 // it first uses the piece it replaces (UseItem takes it off,
 // network/inventory.go toggleEquipItem), and wears the new one in the
-// freed side next. One UseItem is waited for at a time, up to
+// freed side next. A bow waits for arrows of its grade (bowWaits). One
+// UseItem is waited for at a time, up to
 // gearTimeout; a template the server leaves unequipped, or does not make
 // room for, is refused for good, so each template is used at most once
 // more than it is worn. The frame pacer bounds the rest.
@@ -501,7 +528,7 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 	var best Item
 	var bestG gearItem
 	for _, it := range b.world.Inventory.Items {
-		if !b.upgrade(it, &w) {
+		if !b.upgrade(it, &w) || b.bowWaits(it) {
 			continue
 		}
 		gi, _ := b.gearItem(it.TemplateID)
@@ -548,7 +575,7 @@ func (b *Brain) gearWants() []buyRow {
 	for _, id := range b.cfg.Travel.shopGear {
 		g := b.cfg.Travel.gear[id]
 		price := b.cfg.Travel.cheapest[id]
-		if held[slotOf(g.part)] || price <= 0 || int64(price) > budget || !b.beats(id, &w) {
+		if held[slotOf(g.part)] || price <= 0 || int64(price) > budget || b.unarmedBow(id) || !b.beats(id, &w) {
 			continue
 		}
 		rows = append(rows, buyRow{item: id, count: 1})

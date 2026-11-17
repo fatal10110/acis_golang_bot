@@ -53,6 +53,7 @@ var (
 	wornStrongBow  = Item{ObjectID: 302, TemplateID: strengthenedBow, Count: 1, Equipped: true, BodySlot: partLRHand}
 	carriedBow     = Item{ObjectID: 303, TemplateID: plainBow, Count: 1, BodySlot: partLRHand}
 	carriedArrows  = Item{ObjectID: 310, TemplateID: woodenArrow, Count: 500, BodySlot: partLHand}
+	fewArrows      = Item{ObjectID: 310, TemplateID: woodenArrow, Count: 50, BodySlot: partLHand}
 	boneArrowsOf   = func(n int32) Item { return Item{ObjectID: 311, TemplateID: boneArrow, Count: n, BodySlot: partLHand} }
 	wornBoneArrows = func(n int32) Item {
 		return Item{ObjectID: 311, TemplateID: boneArrow, Count: n, Equipped: true, BodySlot: partLHand}
@@ -102,7 +103,8 @@ func TestArrowWants(t *testing.T) {
 		want  []buyRow
 	}{
 		{name: "no bow", items: []Item{wornSword, carriedArrows}},
-		{name: "bow carried, not worn", items: []Item{carriedBow}},
+		{name: "bow carried, worn next", items: []Item{carriedBow}, want: []buyRow{{item: woodenArrow, count: 1000}}},
+		{name: "bow carried, not worn next", items: []Item{carriedBow}, edit: func(b *Brain) { b.world.Self.ClassID = classTreasureHunter }},
 		{name: "no-grade bow, no arrows", items: []Item{wornShortBow}, want: []buyRow{{item: woodenArrow, count: 1000}}},
 		{name: "D bow, a few of its arrows", items: []Item{wornStrongBow, boneArrowsOf(150)}, want: []buyRow{{item: boneArrow, count: 850}}},
 		{name: "D bow, arrows worn count", items: []Item{wornStrongBow, wornBoneArrows(150)}, want: []buyRow{{item: boneArrow, count: 850}}},
@@ -194,9 +196,9 @@ func TestBrainArcherGear(t *testing.T) {
 
 // TestBrainArmedBowShops drives a bow bought on a visit: the visit ends
 // (no next one before shopRetry), or is still to end after its last
-// ItemList, the gear errand wears the bow, and the shop errand starts a
-// visit for its arrows at once; with arrows enough carried it keeps
-// waiting.
+// ItemList, the gear errand wears the bow, and with a few of its arrows
+// carried the shop errand starts a visit for more at once; with arrows
+// enough carried it keeps waiting.
 func TestBrainArmedBowShops(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -204,9 +206,9 @@ func TestBrainArmedBowShops(t *testing.T) {
 		active bool
 		shop   bool
 	}{
-		{"no arrows", []Item{carriedBow, adenaStack(30000)}, false, true},
+		{"few arrows", []Item{carriedBow, fewArrows, adenaStack(30000)}, false, true},
 		{"arrows carried", []Item{carriedBow, carriedArrows, adenaStack(30000)}, false, false},
-		{"visit active, no arrows", []Item{carriedBow, adenaStack(30000)}, true, true},
+		{"visit active, few arrows", []Item{carriedBow, fewArrows, adenaStack(30000)}, true, true},
 		{"visit active, arrows carried", []Item{carriedBow, carriedArrows, adenaStack(30000)}, true, false},
 	}
 	for _, tt := range tests {
@@ -241,7 +243,7 @@ func TestBrainArmedBowShops(t *testing.T) {
 			if !tt.shop {
 				return
 			}
-			want := buyRow{item: woodenArrow, count: b.persona.Shop.ArrowsMax}
+			want := buyRow{item: woodenArrow, count: b.persona.Shop.ArrowsMax - fewArrows.Count}
 			if got := b.shopWants(false); !slices.Contains(got, want) {
 				t.Errorf("shopWants = %v, want %v among them", got, want)
 			}
