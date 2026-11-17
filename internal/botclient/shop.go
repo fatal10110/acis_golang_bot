@@ -540,8 +540,9 @@ func (b *Brain) carried(item int32) int32 {
 
 // shopWants are the items the bot buys now and how many: the wanted
 // spellbooks it lacks, by id, then the restocks of its class under their
-// minimum, in persona order. Unless anyAdena, only what the bot's adena
-// past KeepAdena buys one of at a merchant's base price is listed.
+// minimum, in persona order, then the gear it buys (gearWants). Unless
+// anyAdena, only what the bot's adena past KeepAdena buys one of at a
+// merchant's base price is listed.
 func (b *Brain) shopWants(anyAdena bool) []buyRow {
 	p := &b.persona.Shop
 	var rows []buyRow
@@ -561,6 +562,7 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 			rows = append(rows, buyRow{item: r.Item, count: r.Max - have})
 		}
 	}
+	rows = append(rows, b.gearWants()...)
 	if anyAdena || b.cfg.Travel == nil {
 		return rows
 	}
@@ -572,11 +574,21 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 }
 
 // buyRows is the purchase from window l: per wanted item it sells at a
-// price, as many as the window's stock and the adena past KeepAdena allow.
+// price, as many as the window's stock and the adena past KeepAdena allow;
+// of the gear, the first piece per slot the adena past GearPolicy.KeepAdena
+// buys.
 func (b *Brain) buyRows(l BuyList) []buyRow {
 	budget := int64(l.Money) - int64(b.persona.Shop.KeepAdena)
 	var rows []buyRow
+	var bought [slotCount]bool
 	for _, w := range b.shopWants(true) {
+		slot, limit := slotNone, budget
+		if g, ok := b.gearItem(w.item); ok {
+			if slot = slotOf(g.part); bought[slot] {
+				continue
+			}
+			limit -= b.gearReserve()
+		}
 		i := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.item })
 		if i < 0 || l.Items[i].Price <= 0 {
 			continue
@@ -586,10 +598,11 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 		if it.Count > 0 {
 			n = min(n, int64(it.Count))
 		}
-		n = min(n, budget/int64(it.Price))
+		n = min(n, limit/int64(it.Price))
 		if n < 1 {
 			continue
 		}
+		bought[slot] = true
 		budget -= n * int64(it.Price)
 		rows = append(rows, buyRow{item: w.item, count: int32(n)})
 		if len(rows) == shopMaxRows {
@@ -600,11 +613,13 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 }
 
 // junk are the object ids of the stacks the bot would sell (ShopPolicy
-// SellAt).
+// SellAt). A piece the gear errand wears next is not junk; the one it
+// replaced is.
 func (b *Brain) junk() map[int32]Item {
 	out := make(map[int32]Item)
+	w := b.worn()
 	for id, it := range b.world.Inventory.Items {
-		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.shop.unsellable[it.TemplateID] {
+		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) {
 			continue
 		}
 		out[id] = it

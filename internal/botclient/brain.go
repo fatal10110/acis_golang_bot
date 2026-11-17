@@ -167,6 +167,8 @@ type Brain struct {
 	shop shopVisit
 	// store is the merchant's private sell store (rule "store").
 	store storeState
+	// gear is the gear errand (rule 9 errand "gear").
+	gear gearState
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -627,6 +629,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.shop.sent(a, now)
+	b.gear.sent(a, now)
 	b.storeSent(a, now)
 	b.loot.sent(a, now)
 	return true, nil

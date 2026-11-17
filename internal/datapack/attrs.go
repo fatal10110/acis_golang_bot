@@ -59,6 +59,17 @@ func (r *attrReader) strDefault(key, def string) string {
 	return def
 }
 
+// boolDefault returns the value at key as a bool, or def when it is
+// absent. Like the server's loader (data/xml/attrvalues.go), any spelling
+// but a case-insensitive "true" reads as false.
+func (r *attrReader) boolDefault(key string, def bool) bool {
+	raw, ok := r.vals[key]
+	if !ok {
+		return def
+	}
+	return strings.EqualFold(raw, "true")
+}
+
 // intDefault returns the base-10 value at key, or def when it is absent.
 func (r *attrReader) intDefault(key string, def int) int {
 	if r.err != nil {
