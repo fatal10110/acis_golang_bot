@@ -91,6 +91,8 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameSkillList:                 decodeSkillList,
 	opGameSkillCoolTime:             decodeSkillCoolTime,
 	opGameRelationChanged:           decodeRelationChanged,
+	opGameAbnormalStatusUpdate:      decodeAbnormalStatusUpdate,
+	opGamePartySpelled:              decodePartySpelled,
 	opGameAskJoinParty:              decodeAskJoinParty,
 	opGameJoinParty:                 func(r *wire.Reader) Event { return JoinParty{Response: r.ReadInt32()} },
 	opGamePartySmallWindowAll:       decodePartySmallWindowAll,

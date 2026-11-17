@@ -120,6 +120,11 @@ type Brain struct {
 	train trainerVisit
 	// spot is the farming spot (rule 9 errand).
 	spot spotVisit
+	// assist is the creature the party leader attacked (rule 9 assist).
+	assist assistPlan
+	// buffedAt is when the bot last cast each buff on each target
+	// (buffRetry).
+	buffedAt map[buffKey]time.Time
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -162,6 +167,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
+		buffedAt: make(map[buffKey]time.Time),
 	}
 }
 
@@ -280,11 +286,17 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					b.landed(h.TargetID, now)
 				}
 			}
+			// The first hit is the swing's target; a pole's others are
+			// splash.
+			if len(e.Hits) > 0 {
+				b.leaderHit(e.AttackerID, e.Hits[0].TargetID, now)
+			}
 		case MagicSkillUse:
 			if e.CasterID == self {
 				b.castAt = time.Time{}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 			}
+			b.leaderHit(e.CasterID, e.TargetID, now)
 		case Die:
 			// A dead target ends the attack in flight: there is nothing
 			// to disengage from.
@@ -460,6 +472,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.castAt = now
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
+		b.buffSent(a, now)
 	case actMove:
 		// A move replaces the attack intention on the server.
 		b.engaged = 0

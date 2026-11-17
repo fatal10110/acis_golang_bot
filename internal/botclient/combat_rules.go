@@ -152,7 +152,11 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 		return Action{}
 	}
 	forced := b.forced(id)
-	for _, skill := range b.persona.AttackSkills {
+	var skills []int32
+	if !below(s.MP, s.MaxMP, b.persona.MPReserve) {
+		skills = b.persona.AttackSkills
+	}
+	for _, skill := range skills {
 		if b.world.SkillReady(skill, now) {
 			if b.exhausted(id, now) {
 				return Action{}
