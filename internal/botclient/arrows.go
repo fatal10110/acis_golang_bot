@@ -73,15 +73,17 @@ func (b *Brain) arrowWants() []buyRow {
 // armedBow lets the shop errand start its next visit at once when the gear
 // errand has just worn bow it and the bot carries too few of the arrows it
 // shoots: the server refuses every attack of a bow without them
-// (NotEnoughArrows), and a visit that bought the bow ended before it was
-// worn, holding the next one off for shopRetry. The wear happens once per
-// bow, so this adds at most one visit per bow worn; a visit in progress is
-// left alone.
+// (NotEnoughArrows), and the visit that bought the bow, ended or ending,
+// would hold the next one off for shopRetry. A visit in progress is armed
+// (it ends with the next one due), else the next one is due now. The wear
+// happens once per bow, so this adds at most one visit per bow worn.
 func (b *Brain) armedBow(it Item) {
-	if _, ok := b.cfg.Travel.arrows[it.TemplateID]; !ok || b.shop.v.active() {
+	if _, ok := b.cfg.Travel.arrows[it.TemplateID]; !ok || len(b.arrowWants()) == 0 {
 		return
 	}
-	if len(b.arrowWants()) > 0 {
-		b.shop.nextAt = time.Time{}
+	if b.shop.v.active() {
+		b.shop.armed = true
+		return
 	}
+	b.shop.nextAt = time.Time{}
 }

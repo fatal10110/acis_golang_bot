@@ -193,22 +193,32 @@ func TestBrainArcherGear(t *testing.T) {
 }
 
 // TestBrainArmedBowShops drives a bow bought on a visit: the visit ends
-// (no next one before shopRetry), the gear errand wears the bow, and the
-// shop errand starts a visit for its arrows at once; with arrows enough
-// carried it keeps waiting.
+// (no next one before shopRetry), or is still to end after its last
+// ItemList, the gear errand wears the bow, and the shop errand starts a
+// visit for its arrows at once; with arrows enough carried it keeps
+// waiting.
 func TestBrainArmedBowShops(t *testing.T) {
 	tests := []struct {
-		name  string
-		items []Item
-		shop  bool
+		name   string
+		items  []Item
+		active bool
+		shop   bool
 	}{
-		{"no arrows", []Item{carriedBow, adenaStack(30000)}, true},
-		{"arrows carried", []Item{carriedBow, carriedArrows, adenaStack(30000)}, false},
+		{"no arrows", []Item{carriedBow, adenaStack(30000)}, false, true},
+		{"arrows carried", []Item{carriedBow, carriedArrows, adenaStack(30000)}, false, false},
+		{"visit active, no arrows", []Item{carriedBow, adenaStack(30000)}, true, true},
+		{"visit active, arrows carried", []Item{carriedBow, carriedArrows, adenaStack(30000)}, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newArcherBrain(t, 0, tt.items...)
-			b.shop.end(at(0), false)
+			if tt.active {
+				// The buy's ItemList dropped the last list; the visit
+				// ends at the next ruleShop.
+				b.shop.v = npcVisit{npcID: gearMerchant, at: Point{X: 5000}, obj: 900}
+			} else {
+				b.shop.end(at(0), false)
+			}
 			a, ok := b.ruleGear(at(time.Second))
 			if !ok || a.object != carriedBow.ObjectID {
 				t.Fatalf("ruleGear = %+v %v, want the bow used", a, ok)
@@ -219,6 +229,11 @@ func TestBrainArmedBowShops(t *testing.T) {
 			b.world.Inventory.Items[carriedBow.ObjectID] = bow
 			if a, ok := b.ruleGear(at(2 * time.Second)); ok {
 				t.Fatalf("bow worn: ruleGear = %+v, want no UseItem", a)
+			}
+			if tt.active {
+				if a, ok := b.ruleShop(at(3 * time.Second)); ok || b.shop.v.active() {
+					t.Fatalf("ruleShop = %+v %v, want the visit ended", a, ok)
+				}
 			}
 			if got := b.startShop(at(3 * time.Second)); got != tt.shop {
 				t.Fatalf("startShop = %v, want %v", got, tt.shop)

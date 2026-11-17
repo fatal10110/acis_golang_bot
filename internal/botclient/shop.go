@@ -312,6 +312,10 @@ type shopVisit struct {
 	asked int
 	// nextAt is when the bot may start the next visit.
 	nextAt time.Time
+	// armed is set when the gear errand wore a bow during the visit and
+	// the bot carries too few of its arrows (armedBow): the visit ends
+	// with the next one due at once instead of after shopRetry.
+	armed bool
 	// shunned are the merchants, by template id, not at their spawn or
 	// whose page had none of the links the bot needed, until a time.
 	shunned map[int32]time.Time
@@ -325,7 +329,7 @@ type shopVisit struct {
 }
 
 // end ends the visit; shun leaves its merchant alone for visitShunFor. No
-// visit starts before shopRetry.
+// visit starts before shopRetry, unless the visit is armed.
 func (sh *shopVisit) end(now time.Time, shun bool) {
 	if shun {
 		if sh.shunned == nil {
@@ -333,7 +337,11 @@ func (sh *shopVisit) end(now time.Time, shun bool) {
 		}
 		sh.shunned[sh.v.npcID] = now.Add(visitShunFor)
 	}
-	*sh = shopVisit{nextAt: now.Add(shopRetry), shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held}
+	next := now.Add(shopRetry)
+	if sh.armed {
+		next = now
+	}
+	*sh = shopVisit{nextAt: next, shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held}
 }
 
 // dropList leaves the first buylist of the visit out of it.
