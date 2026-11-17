@@ -53,10 +53,16 @@ gameserver-to-loginserver link on port 9014 and need no change for bots.
 
 ## 3. Pacing and bans
 
-- `bots accounts` logs in no faster than one per 1.25 s (`-interval`, floor enforced), under the
-  filter's burst limit. `bots swarm` starts every login and game dial of the process at least
-  1.25 s plus a random jitter of up to 0.5 s after the previous one, and backs all bots off
-  exponentially while the servers refuse connections.
+- With `-allowlisted` (the `-local-addr` IP is on `AcceptFilterAllowlist` of both servers, as in
+  section 2), logins are not spaced: the accept filter skips that address, so no burst ban can
+  follow. `bots accounts` then defaults `-interval` to 0, and `bots swarm` dials as soon as the
+  previous bot has entered the world. Bots still log in one at a time, so the credential breaker
+  below still stops at the first refused credential, and refused dials still back off.
+  `-allowlisted` needs `-local-addr`: never pass it for an address the servers do not allowlist.
+- Without `-allowlisted`, `bots accounts` logs in no faster than one per 1.25 s (`-interval`,
+  floor enforced), under the filter's burst limit, and `bots swarm` starts every login and game
+  dial of the process at least 1.25 s plus a random jitter of up to 0.5 s after the previous one.
+- `bots swarm` backs all bots off exponentially while the servers refuse connections.
 - Three credential failures in a row ban the IP for 10 minutes (plan, "Login pacing"), so the bots'
   credential breaker halts logins first: the first refused credential stops every later login
   of the swarm, and the swarm exits with code 3 once its bots are done, which the unit does not

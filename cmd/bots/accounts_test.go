@@ -71,6 +71,19 @@ func TestParseAccountsFlags(t *testing.T) {
 			args: []string{"-interval", "1250ms"},
 			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: 1250 * time.Millisecond},
 		},
+		{
+			name: "allowlisted drops the interval",
+			args: []string{"-local-addr", "127.0.0.2", "-allowlisted"},
+			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, localAddr: "127.0.0.2", allowlisted: true},
+		},
+		{
+			name: "allowlisted keeps an explicit interval",
+			args: []string{"-local-addr", "127.0.0.2", "-allowlisted", "-interval", "100ms"},
+			want: accountsOptions{loginAddr: "127.0.0.1:2106", timeout: 10 * time.Second, interval: 100 * time.Millisecond, localAddr: "127.0.0.2", allowlisted: true},
+		},
+		{name: "allowlisted without a local address", args: []string{"-allowlisted"}, wantErr: "-allowlisted needs -local-addr"},
+		{name: "allowlisted negative interval", args: []string{"-local-addr", "127.0.0.2", "-allowlisted", "-interval", "-1s"}, wantErr: "-interval"},
+		{name: "zero interval needs the allowlist", args: []string{"-local-addr", "127.0.0.2", "-interval", "0s"}, wantErr: "-interval"},
 		{name: "zero timeout", args: []string{"-timeout", "0s"}, wantErr: "-timeout"},
 		{name: "stray argument", args: []string{"extra"}, wantErr: "unexpected arguments"},
 		{name: "no secret flag", args: []string{"-secret", "x"}, wantErr: "flag provided but not defined"},
@@ -206,6 +219,28 @@ func TestRunAccountsRefusesBeforeLogin(t *testing.T) {
 			}
 			if stdout.Len() != 0 {
 				t.Fatalf("stdout %q: no account may be checked", stdout.String())
+			}
+		})
+	}
+}
+
+func TestPause(t *testing.T) {
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	tests := []struct {
+		name string
+		d    time.Duration
+		ctx  context.Context
+		want error
+	}{
+		{"zero on a live context returns at once", 0, t.Context(), nil},
+		{"zero on a canceled context reports it", 0, canceled, context.Canceled},
+		{"positive on a canceled context reports it", time.Hour, canceled, context.Canceled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := pause(tt.d)(tt.ctx); !errors.Is(err, tt.want) {
+				t.Fatalf("pause(%s) = %v, want %v", tt.d, err, tt.want)
 			}
 		})
 	}
