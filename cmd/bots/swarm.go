@@ -51,6 +51,7 @@ type swarmOptions struct {
 	// server's SpawnMultiplier, which scales each spot's bot cap.
 	datapack        string
 	spawnMultiplier float64
+	gm              gmOptions
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -67,6 +68,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the bots' character names")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
 	addAllowlistedFlag(fs, &o.allowlisted)
+	addGMFlags(fs, &o.gm)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
@@ -102,6 +104,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if o.spawnMultiplier <= 0 || math.IsNaN(o.spawnMultiplier) || math.IsInf(o.spawnMultiplier, 1) {
 		return o, fmt.Errorf("-spawn-multiplier %g: want a positive number", o.spawnMultiplier)
 	}
+	if err := o.gm.validate(); err != nil {
+		return o, err
+	}
 	if o.metrics != "" {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
@@ -116,6 +121,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 // process passes one LoginGate (see botclient). Reports go to stderr. With
 // -metrics it serves the bots' metrics on loopback until every bot returned.
 // With -datapack the bots pick farming spots from one registry they share.
+// With -commanders or -gm-dsn-file they obey whispered GM commands.
 func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	o, err := parseSwarmFlags(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
@@ -164,6 +170,18 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 			return 1
 		}
 	}
+	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
+	if err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
+	}
+	// Deferred first, so it runs after the metrics endpoint stopped and
+	// every bot returned.
+	defer stopAuth()
+	if auth != nil {
+		cfg.Brain.Authority = auth
+		cfg.Brain.Persona = auth.Hooks(cfg.Brain.Persona)
+	}
 	var reg *botmetrics.Registry
 	if o.metrics != "" {
 		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
@@ -192,7 +210,10 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	var wg sync.WaitGroup
 	for _, b := range bots {
 		wg.Go(func() {
-			if err := b.Run(ctx); err != nil {
+			switch err := b.Run(ctx); {
+			case errors.Is(err, botclient.ErrCommandedLogout):
+				log.Info("bot stopped", "account", b.Account(), "err", err)
+			case err != nil:
 				log.Error("bot stopped", "account", b.Account(), "err", err)
 			}
 		})

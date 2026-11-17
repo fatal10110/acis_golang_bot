@@ -179,6 +179,7 @@ func TestRuleLoot(t *testing.T) {
 		want     []byte
 	}{
 		{name: "own kill's drop is picked up", evs: kill(adenaOnGround), wantRule: "loot", want: encodeAction(adenaDrop, Point{})},
+		{name: "a bot told to stay leaves the drop", setup: func(b *Brain) { b.orders.stay = true }, evs: kill(adenaOnGround), wantRule: "stay"},
 		{
 			name:     "drop of a monster that hit the bot",
 			evs:      []timed{{0, Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}}, {0, Die{ObjectID: npcID}}, {0, DropItem{DropperID: npcID, Item: adenaOnGround}}},

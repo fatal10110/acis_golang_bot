@@ -164,13 +164,14 @@ type assistPlan struct {
 	wake bool
 }
 
-// leaderHit records the party leader's attack or hostile cast on target at
-// now, which the bot assists after the persona's assist delay. A target
-// the bot may not fight (a party member healed, a player the PvP policy
-// leaves alone) is no assist.
+// leaderHit records the attack or hostile cast on target at now of the one
+// the bot assists (assisted: its party leader, or a commander), which the
+// bot assists after the persona's assist delay. A target the bot may not
+// fight (a party member healed, a player the PvP policy leaves alone) is no
+// assist.
 func (b *Brain) leaderHit(attacker, target int32, now time.Time) {
-	p, self := &b.world.Party, b.world.Self.ObjectID
-	if b.persona.AssistMax <= 0 || !p.In() || p.LeaderID == self || attacker != p.LeaderID || !b.mayFight(target, now) {
+	lead := b.assisted()
+	if b.persona.AssistMax <= 0 || lead == 0 || attacker != lead || !b.mayFight(target, now) {
 		return
 	}
 	if b.assist.target == target {
@@ -188,7 +189,7 @@ func (b *Brain) assistTarget(now time.Time) int32 {
 	if a.target == 0 || now.Before(a.at) {
 		return 0
 	}
-	if now.Sub(a.seen) > attackerWindow || !b.world.Party.In() || !b.mayFight(a.target, now) {
+	if now.Sub(a.seen) > attackerWindow || b.assisted() == 0 || !b.mayFight(a.target, now) {
 		b.assist = assistPlan{}
 		return 0
 	}

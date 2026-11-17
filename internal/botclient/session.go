@@ -72,6 +72,9 @@ var (
 	// ErrRepeatedAborts stops a bot the server aborted maxAborts times in a
 	// row.
 	ErrRepeatedAborts = errors.New("server aborted the session repeatedly")
+	// ErrCommandedLogout stops a bot a GM's whispered "logout" logged out:
+	// it stays out until the swarm restarts, and the session is no abort.
+	ErrCommandedLogout = errors.New("logged out on a GM command")
 	// errConnLost reports a game connection that ended under the brain.
 	errConnLost = errors.New("game connection lost")
 )
@@ -174,7 +177,8 @@ func (b *Bot) Account() string { return b.account }
 // or until the bot stops for good, which returns why: the credential
 // breaker (ErrLoginsHalted), a refused credential, a banned account or
 // character, a character that cannot be created, ErrAccountTaken,
-// ErrRepeatedAborts, or, for a bot not persistent, the end of its session.
+// ErrRepeatedAborts, ErrCommandedLogout, or, for a bot not persistent, the
+// end of its session.
 func (b *Bot) Run(ctx context.Context) error {
 	for {
 		entered, played, err := b.attempt(ctx)
@@ -323,9 +327,14 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 	return b.retry.next(b.rng), nil
 }
 
-// afterSession decides after a session in the world: the server's
-// ServerClose (a GM kick, a kick by another login, a shutdown) or an abort.
+// afterSession decides after a session in the world: a logout a GM
+// commanded, the server's ServerClose (a GM kick, a kick by another login,
+// a shutdown) or an abort.
 func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, error) {
+	if errors.Is(err, ErrCommandedLogout) {
+		b.log.Info("logged out on a GM command: bot stops", "played", played.Round(time.Second))
+		return 0, err
+	}
 	if played >= stableSession {
 		b.retry.reset()
 		b.aborts = 0

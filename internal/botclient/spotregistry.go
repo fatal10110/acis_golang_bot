@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -75,4 +76,14 @@ func (r *SpotRegistry) release(i int) {
 	if r.held[i] > 0 {
 		r.held[i]--
 	}
+}
+
+// index is the spot of the maker named name, in any case.
+func (r *SpotRegistry) index(name string) (int, bool) {
+	for i := range r.spots {
+		if strings.EqualFold(r.spots[i].Maker, name) {
+			return i, true
+		}
+	}
+	return 0, false
 }

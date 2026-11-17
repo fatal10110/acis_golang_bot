@@ -29,6 +29,9 @@ const (
 	// toggleSettle is how long a sit/stand toggle waits for its
 	// ChangeWaitType before the brain may toggle again.
 	toggleSettle = 2 * time.Second
+	// verdictQueue is how many database verdicts on the bot's commands may
+	// wait for the loop; one past it is dropped.
+	verdictQueue = 4
 )
 
 var (
@@ -75,6 +78,9 @@ type BrainConfig struct {
 	// shared by every bot of
 	// the process. Nil travels nowhere and visits only NPCs in sight.
 	Travel *TravelMap
+	// Authority, when set, decides who may command the bot by whisper,
+	// shared by every bot of the process. Nil obeys nobody.
+	Authority *Authority
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -150,6 +156,10 @@ type Brain struct {
 	// by partner object id (TradePolicy.Every).
 	tradedAt map[int32]time.Time
 	logout   logoutState
+	// orders are the GM commands in force; verdicts brings the answers to
+	// commands the authority checks in the database.
+	orders   orders
+	verdicts chan verdict
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -158,8 +168,9 @@ type Brain struct {
 
 // logoutState is a logout run inside the loop.
 type logoutState struct {
-	// requested is set once the session asked to log out.
-	requested bool
+	// requested is set once the session or a GM command asked to log out,
+	// commanded once a GM command did.
+	requested, commanded bool
 	// pending is set while a Logout waits for its answer until deadline.
 	pending  bool
 	refused  bool
@@ -188,6 +199,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
+		verdicts: make(chan verdict, verdictQueue),
 	}
 }
 
@@ -197,7 +209,8 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 // refuses (ActionFailed with no LeaveWorld within logoutRefusalGrace).
 //
 // Run returns nil after done closes or after the LeaveWorld that answers a
-// Logout. A LeaveWorld it did not ask for, ServerClose, the connection
+// Logout, ErrCommandedLogout when a GM command asked for that Logout. A
+// LeaveWorld it did not ask for, ServerClose, the connection
 // ending (the session queues connLost), a Logout left unanswered and a
 // failed send are errors. The session closes the
 // connection and joins its reader afterwards in every case.
@@ -221,6 +234,8 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 			b.metrics.Drained(len(batch))
 			err = b.handle(batch, b.clock.Now())
 			clear(batch)
+		case v := <-b.verdicts:
+			b.obey(v, b.clock.Now())
 		case <-timer.C():
 			now := b.clock.Now()
 			b.metrics.WakeLag(now.Sub(due))
@@ -252,7 +267,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.world.Apply(ev, now)
 		switch e := ev.(type) {
 		case LeaveWorld:
-			if b.logout.requested {
+			switch {
+			case b.logout.commanded:
+				return ErrCommandedLogout
+			case b.logout.requested:
 				return errLoggedOut
 			}
 			return errLeftWorld
@@ -346,6 +364,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.shopEvent(ev)
 		case AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 			b.trainEvent(ev, now)
+		case CreatureSay:
+			b.heard(e, now)
 		case BuyList, SellList, ItemList, InventoryUpdate:
 			b.shopEvent(ev)
 		}
@@ -541,6 +561,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.shotAskedAt[a.item] = now
 	case actWalkRun:
 		b.follow.runToggledAt = now
+	}
+	if a.kind == b.orders.reply.kind {
+		b.orders.reply = Action{}
 	}
 	b.tradeSent(a, now)
 	b.train.sent(a, now)
