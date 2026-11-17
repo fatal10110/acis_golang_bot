@@ -69,9 +69,14 @@ type Persona struct {
 	IdleChance float64
 	IdleRadius int32
 	Emotes     []int32
-	// Death decides for a dead bot (rule 1); a zero Action waits. A
-	// restart it asks for goes out at most once per restartRetry.
+	// Death decides for a dead bot (rule 1) once Recover lets it; a zero
+	// Action waits. A restart it asks for goes out at most once per
+	// restartRetry.
 	Death func(w *World, now time.Time) Action
+	// Recover is how the bot answers a resurrection offer, how long it
+	// waits for one, and how it handles a dead or lost leader (rules
+	// "dead" and "leader").
+	Recover RecoverPolicy
 	// Answer answers an open prompt (rule 2); a zero Action waits.
 	Answer func(w *World, now time.Time) Action
 	// JoinParty decides whether to accept the party invitation of the
@@ -118,13 +123,16 @@ type Persona struct {
 }
 
 // DefaultPersona is a support player that rests when low, fights back when
-// hit, restarts in town when killed, learns the support skills of a mystic
+// hit, takes a resurrection when killed or restarts in town after a while,
+// sits by its dead leader, falls back to town when the leader is gone,
+// learns the support skills of a mystic
 // at its trainer, heals and buffs its party with them, assists its party
 // leader, follows the leader of a party it joined and otherwise drifts
 // around where it stands.
 func DefaultPersona() Persona {
 	return Persona{
 		Death:          restartToVillage,
+		Recover:        defaultRecoverPolicy(),
 		JoinParty:      acceptParty,
 		CriticalHP:     20,
 		FleeDistance:   600,
@@ -209,6 +217,8 @@ const (
 	actTell
 	actPickup
 	actDrop
+	actDlgAnswer
+	actUserCommand
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -228,7 +238,9 @@ const (
 // answered once, and a trade gets one add, one confirm and one cancel
 // (Trade.added, confirmed, cancelAt). A pickup click (Action) has none:
 // lootRetry spaces the clicks on one item. A whisper (Say2 Tell) has no
-// server gate either (chat.go chatTell): it keeps the chat gate.
+// server gate either (chat.go chatTell): it keeps the chat gate. DlgAnswer
+// and RequestUserCommand have none either: an offer is answered once, and
+// escapeRetry spaces a repeated /unstuck.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -293,7 +305,8 @@ type rule struct {
 // rule 8, after the rebuff and ahead of every errand. "command" sends what
 // a GM's whispered command asks for (a reply, a party withdrawal), and
 // "stay" holds a bot a GM told to stay, ahead of looting and every errand
-// that would move it. The shot toggle is set-up, not a plan
+// that would move it. "leader" handles a dead or lost leader ahead of
+// following it. The shot toggle is set-up, not a plan
 // rule: it runs once per shot template carried, ahead of the fight it
 // serves, after the flee rules so it never delays one.
 var playRules = []rule{
@@ -312,6 +325,7 @@ var playRules = []rule{
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"shop", (*Brain).ruleShop},
+	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},
 	{"travel", (*Brain).ruleTravel},
@@ -356,11 +370,21 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	return "", Action{}
 }
 
-// ruleDead is rule 1: a dead bot only follows its death policy. A restart
-// the server left unanswered is asked again only after restartRetry.
+// ruleDead is rule 1: a dead bot answers a resurrection offer first (the
+// rule 2 prompt that only a dead bot gets), per Recover; in a party it
+// waits Recover.ResurrectWait from its death for one; then it follows its
+// death policy. A restart the server left unanswered is asked again only
+// after restartRetry, which an answered offer starts as well.
 func (b *Brain) ruleDead(now time.Time) (Action, bool) {
-	if !b.world.Self.Dead {
+	w, r := b.world, &b.persona.Recover
+	if !w.Self.Dead {
 		return Action{}, false
+	}
+	if o := w.Prompts.Resurrect; o.Open {
+		return answerResurrectAction(o, r.AcceptResurrection), true
+	}
+	if w.Party.In() && now.Sub(w.Prompts.Restart.At) < r.ResurrectWait {
+		return Action{}, true
 	}
 	if b.persona.Death == nil {
 		return Action{}, true
