@@ -64,11 +64,14 @@ var mysticSkills = map[int32][]int32{
 // mysticTrainers are the NPC template ids of the trainers that teach each
 // mystic base class: the datapack NPCs whose teachTo lists it
 // (data/xml/npcs). A trainer for another class opens its no-skills page.
+// Grand Magister Celes (32098) teaches human mystics too but is left out:
+// its first page (data/html/villagemaster/32098.htm) has no skill list
+// link, so a visit would only end in a shun.
 var mysticTrainers = map[int32][]int32{
 	classHumanMystic: {
 		30022, 30030, 30032, 30033, 30034, 30035, 30036, 30067, 30069, 30110, 30111, 30114,
 		30116, 30117, 30118, 30171, 30188, 30190, 30344, 30695, 30696, 30715, 30855, 30858,
-		30859, 30906, 30907, 31280, 31281, 31282, 31329, 31332, 31969, 32098,
+		30859, 30906, 30907, 31280, 31281, 31282, 31329, 31332, 31969,
 	},
 	classElvenMystic: {
 		30068, 30112, 30113, 30119, 30157, 30158, 30189, 30293, 30345, 30375, 30376, 30461,
@@ -300,7 +303,12 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	switch t.step {
 	case trainOpen:
-		return bypassAction(skillListBypass(t.npc)), true
+		if b.world.Dialog.Has(skillListBypass(t.npc)) {
+			return bypassAction(skillListBypass(t.npc)), true
+		}
+		// Another page replaced the trainer's: the server would refuse
+		// the link, so talk again.
+		t.step = trainTalk
 	case trainPick:
 		sk, ok := b.nextSkill()
 		if !ok {

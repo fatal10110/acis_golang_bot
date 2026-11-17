@@ -320,6 +320,18 @@ func TestBrainTrainerRetries(t *testing.T) {
 			{name: "talk again", at: time.Second + trainerReplyTimeout, wantRule: "train", wantKind: actTalk},
 		})
 	})
+	t.Run("a page replaced before the link talks again", func(t *testing.T) {
+		b := newTrainerBrain(t, 500)
+		b.world.Target = trainerObj
+		runTrainerSteps(t, b, []trainerStep{
+			{name: "talk", wantRule: "train", wantKind: actTalk},
+			{
+				name: "another page replaces the trainer's", at: time.Second,
+				events:   []Event{NpcHtmlMessage{ObjectID: trainerObj, HTML: trainerPage(trainerObj)}, NpcHtmlMessage{ObjectID: npcID, HTML: trainerPage(npcID)}},
+				wantRule: "train", wantKind: actTalk,
+			},
+		})
+	})
 	t.Run("no-skills page shuns the trainer", func(t *testing.T) {
 		b := newTrainerBrain(t, 500)
 		b.world.Target = trainerObj
@@ -414,6 +426,9 @@ func TestDefaultPersonaSkills(t *testing.T) {
 		if len(p.Trainers[c]) == 0 {
 			t.Errorf("class %d has no trainers", c)
 		}
+	}
+	if slices.Contains(p.Trainers[classHumanMystic], 32098) {
+		t.Error("human mystic trainers list 32098, whose page has no skill list link")
 	}
 	p.LearnSkills[classHumanMystic] = nil
 	if len(DefaultPersona().LearnSkills[classHumanMystic]) == 0 {
