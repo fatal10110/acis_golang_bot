@@ -50,6 +50,9 @@ type followState struct {
 	anchored bool
 	// dueAt is when the pending re-path goes out, zero for none.
 	dueAt time.Time
+	// wake is set until a decision runs at or after dueAt: the re-path's
+	// own wake-up, which pulls decisionAt earlier and never later.
+	wake bool
 	// dest is the slot the bot is on its way to while traveling;
 	// lastDist and stalls track the legs as rule "spot" does. A stuck
 	// bot that gave up waits for the leader to move on.
@@ -114,8 +117,7 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	far := max(int64(p.MaxDist)+int64(p.Repath), 0)
 	drifted := !v.traveling && !v.stuck && !s.Moving(now) && dist2(from, lead.pos) > far*far
 	if (moved || drifted) && v.dueAt.IsZero() {
-		v.dueAt = now.Add(b.followDelay())
-		b.wakeBy(v.dueAt)
+		v.dueAt, v.wake = now.Add(b.followDelay()), true
 	}
 	if !v.dueAt.IsZero() {
 		if now.Before(v.dueAt) {
