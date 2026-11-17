@@ -70,7 +70,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	var o uiOptions
 	fs := flag.NewFlagSet("bots ui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.StringVar(&o.secretFile, "secret-file", "", "path of the secret file (mode 0600) the per-bot passwords derive from")
+	fs.StringVar(&o.secretFile, "secret-file", "", "path of the secret file (mode 0600, or an owner-only ACL on Windows) the per-bot passwords derive from")
 	fs.StringVar(&o.dataDir, "data-dir", "", "directory of the bot registry (bots.json), locked while the panel runs; default: "+dataDirName+" under the user's config directory")
 	fs.StringVar(&o.prefix, "prefix", "", "the panel's account prefix for new bots, lowercase letters and digits ending in a letter; required when the registry is created, then stored")
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the panel's new bots' character names (with -prefix, when the registry is created)")

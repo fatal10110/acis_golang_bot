@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -64,6 +66,18 @@ func writeDSN(t *testing.T, content string, perm os.FileMode) string {
 	return path
 }
 
+// notExistText is the OS's message for a missing file: "no such file or
+// directory" on unix, another text on Windows.
+func notExistText(t *testing.T) string {
+	t.Helper()
+	_, err := os.Open(filepath.Join(t.TempDir(), "absent"))
+	var pe *fs.PathError
+	if !errors.As(err, &pe) {
+		t.Fatalf("open a missing file: %v", err)
+	}
+	return pe.Err.Error()
+}
+
 func TestReadDSNFile(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -72,10 +86,9 @@ func TestReadDSNFile(t *testing.T) {
 		wantErr string
 	}{
 		{"owner only", writeDSN(t, testDSN+"\n", 0o600), testDSN, ""},
-		{"group readable", writeDSN(t, testDSN, 0o640), "", "want 0600"},
 		{"empty", writeDSN(t, " \n", 0o600), "", "empty"},
 		{"too long", writeDSN(t, strings.Repeat("x", maxDSNFileSize+1), 0o600), "", "longer than"},
-		{"missing", filepath.Join(t.TempDir(), "none"), "", "no such file"},
+		{"missing", filepath.Join(t.TempDir(), "none"), "", notExistText(t)},
 		{"directory", t.TempDir(), "", "not a regular file"},
 	}
 	for _, tt := range tests {
@@ -111,7 +124,6 @@ func TestStartAuthority(t *testing.T) {
 		{"commanders", gmOptions{commanders: []int32{7}}, true, ""},
 		{"database", gmOptions{dsnFile: writeDSN(t, testDSN, 0o600), minLevel: 7}, true, ""},
 		{"malformed database", gmOptions{dsnFile: writeDSN(t, "acisbot:hunter2@tcp(127.0.0.1", 0o600)}, false, "malformed"},
-		{"open file", gmOptions{dsnFile: writeDSN(t, testDSN, 0o644)}, false, "want 0600"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

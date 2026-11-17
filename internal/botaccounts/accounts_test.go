@@ -91,9 +91,6 @@ func TestLoadSecret(t *testing.T) {
 		{name: "0600", path: func(t *testing.T) string { return writeSecret(t, good, 0o600) }},
 		{name: "0400", path: func(t *testing.T) string { return writeSecret(t, good, 0o400) }},
 		{name: "trailing newline", path: func(t *testing.T) string { return writeSecret(t, good+"\n", 0o600) }},
-		{name: "0644", path: func(t *testing.T) string { return writeSecret(t, good, 0o644) }, is: ErrSecretMode},
-		{name: "0640", path: func(t *testing.T) string { return writeSecret(t, good, 0o640) }, is: ErrSecretMode},
-		{name: "0602", path: func(t *testing.T) string { return writeSecret(t, good, 0o602) }, is: ErrSecretMode},
 		{name: "missing", path: func(t *testing.T) string { return filepath.Join(t.TempDir(), "absent") }, is: fs.ErrNotExist},
 		{name: "directory", path: func(t *testing.T) string { return t.TempDir() }, wantErr: "not a regular file"},
 		{name: "empty", path: func(t *testing.T) string { return writeSecret(t, "", 0o600) }, wantErr: "empty"},
@@ -250,13 +247,6 @@ func TestConfigAccounts(t *testing.T) {
 				return Config{Prefix: "bot", Count: 3}
 			},
 			wantErr: "no secret file",
-		},
-		{
-			name: "loose mode",
-			cfg: func(t *testing.T) Config {
-				return Config{SecretFile: writeSecret(t, strong, 0o644), Prefix: "bot", Count: 3, Persistent: true}
-			},
-			is: ErrSecretMode,
 		},
 		{
 			name: "bad prefix",

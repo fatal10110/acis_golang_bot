@@ -83,6 +83,32 @@ jobs:
             ~/go/pkg/mod
           key: go-${{ runner.os }}-test-${{ github.sha }}
 
+  # The release ships a Windows build (release.yml): it must compile, and the
+  # code that differs on Windows (the registry lock, the secret file's DACL
+  # check) runs its unit tests here. No -race: it needs cgo.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          # As in test: setup-go's go.sum-keyed cache is never refreshed.
+          cache: false
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -count=1 ./internal/ownerfile ./internal/botregistry ./internal/botaccounts ./cmd/bots
+
   # Runs the linters and the gofumpt formatter from .golangci.yml.
   lint:
     runs-on: ubuntu-latest

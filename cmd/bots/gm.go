@@ -15,6 +15,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/gmdb"
+	"github.com/fatal10110/acis_golang_bot/internal/ownerfile"
 )
 
 // maxDSNFileSize bounds the data source name file read.
@@ -26,7 +27,7 @@ const maxDSNFileSize = 4096
 // refused.
 type gmOptions struct {
 	commanders []int32
-	// dsnFile is the path of the file (mode 0600) holding the data source
+	// dsnFile is the path of the file (mode 0600, or an owner-only ACL on Windows) holding the data source
 	// name: the name is a secret and never a flag value.
 	dsnFile  string
 	minLevel int
@@ -39,7 +40,7 @@ func addGMFlags(fs *flag.FlagSet, o *gmOptions) {
 		o.commanders = ids
 		return err
 	})
-	fs.StringVar(&o.dsnFile, "gm-dsn-file", "", "path of the file (mode 0600) holding the game database's data source name the bots check a whispering GM's access level in (docs/gm-control.md); excludes -commanders")
+	fs.StringVar(&o.dsnFile, "gm-dsn-file", "", "path of the file (mode 0600, or an owner-only ACL on Windows) holding the game database's data source name the bots check a whispering GM's access level in (docs/gm-control.md); excludes -commanders")
 	fs.IntVar(&o.minLevel, "gm-min-level", 0, "access level from which a character commands the bots (1-8) in place of the server's isGM levels; needs -gm-dsn-file")
 }
 
@@ -77,7 +78,7 @@ func (o gmOptions) validate() error {
 }
 
 // readDSNFile reads the data source name from path, which only its owner
-// may read. Errors never carry the file's content.
+// may read (ownerfile.Check). Errors never carry the file's content.
 func readDSNFile(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -91,8 +92,8 @@ func readDSNFile(path string) (string, error) {
 	if !fi.Mode().IsRegular() {
 		return "", fmt.Errorf("gm dsn file %s: not a regular file", path)
 	}
-	if perm := fi.Mode().Perm(); perm&0o077 != 0 {
-		return "", fmt.Errorf("gm dsn file %s: mode %#o: want 0600", path, perm)
+	if err := ownerfile.Check(f); err != nil {
+		return "", fmt.Errorf("gm dsn file %s: %w", path, err)
 	}
 	b, err := io.ReadAll(io.LimitReader(f, maxDSNFileSize+1))
 	if err != nil {
