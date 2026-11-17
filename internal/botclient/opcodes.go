@@ -83,3 +83,20 @@ const (
 	opGameValidatePosition       = 0x48 // validateposition.go
 	opGameRequestRestartPoint    = 0x6d // requestrestartpoint.go
 )
+
+// Party, both directions (internal/gameserver/network/serverpackets/party.go
+// and clientpackets/party.go).
+const (
+	opGameAskJoinParty              = 0x39
+	opGameJoinParty                 = 0x3a
+	opGamePartySmallWindowAll       = 0x4e
+	opGamePartySmallWindowAdd       = 0x4f
+	opGamePartySmallWindowDeleteAll = 0x50
+	opGamePartySmallWindowDelete    = 0x51
+	opGamePartySmallWindowUpdate    = 0x52
+	opGamePartyMemberPosition       = 0xa7
+
+	opGameRequestJoinParty       = 0x29
+	opGameRequestAnswerJoinParty = 0x2a
+	opGameRequestWithdrawParty   = 0x2b
+)

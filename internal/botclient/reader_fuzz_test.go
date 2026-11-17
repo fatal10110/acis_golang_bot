@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/testsupport/decodefuzz"
@@ -22,6 +23,10 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(packet(opGameStatusUpdate, 7, 2, 9, 300, 18, 333))
 	f.Add(packet(opGameSystemMessage, 1147, 3, 0, "text", 4, 1216, 2, 7, 1, 2, 3))
 	f.Add(packet(opGameCreatureSay, 7, 1, "bot7", "hello"))
+	f.Add(packet(opGameAskJoinParty, "GM", 1))
+	f.Add(partyWindowAll(gmID, 1, []int32{0, 3}, gmRow, mateRow))
+	f.Add(packet(opGamePartySmallWindowUpdate, vitals(gmRow)...))
+	f.Add(packet(opGamePartyMemberPosition, 2, selfID, 1, 2, 3, gmID, -4, 5, -6))
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) == 0 {
 			return // GameConn.Read rejects empty frames
@@ -32,7 +37,7 @@ func FuzzDecodeEvent(f *testing.F) {
 			return
 		}
 		again, _, _ := decodeEvent(raw)
-		if again != ev {
+		if !reflect.DeepEqual(again, ev) {
 			t.Fatalf("decodeEvent not repeatable: %v then %v", ev, again)
 		}
 	})

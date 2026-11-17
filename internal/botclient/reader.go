@@ -84,6 +84,15 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameChangeWaitType:   decodeChangeWaitType,
 	opGameAutoAttackStart:  func(r *wire.Reader) Event { return AutoAttackStart{ObjectID: r.ReadInt32()} },
 	opGameAutoAttackStop:   func(r *wire.Reader) Event { return AutoAttackStop{ObjectID: r.ReadInt32()} },
+
+	opGameAskJoinParty:              decodeAskJoinParty,
+	opGameJoinParty:                 func(r *wire.Reader) Event { return JoinParty{Response: r.ReadInt32()} },
+	opGamePartySmallWindowAll:       decodePartySmallWindowAll,
+	opGamePartySmallWindowAdd:       decodePartySmallWindowAdd,
+	opGamePartySmallWindowDeleteAll: func(*wire.Reader) Event { return PartySmallWindowDeleteAll{} },
+	opGamePartySmallWindowDelete:    decodePartySmallWindowDelete,
+	opGamePartySmallWindowUpdate:    func(r *wire.Reader) Event { return PartySmallWindowUpdate{Member: readPartyMember(r)} },
+	opGamePartyMemberPosition:       decodePartyMemberPosition,
 }
 
 // decodeEvent decodes a non-empty frame; ok is false for an opcode the

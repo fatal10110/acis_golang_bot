@@ -34,6 +34,9 @@ type Persona struct {
 	Death func(w *World, now time.Time) Action
 	// Answer answers an open prompt (rule 2); a zero Action waits.
 	Answer func(w *World, now time.Time) Action
+	// JoinParty decides whether to accept the party invitation of the
+	// player named requester (rule 2); nil declines every invitation.
+	JoinParty func(w *World, requester string, now time.Time) bool
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -45,6 +48,7 @@ type Persona struct {
 func DefaultPersona() Persona {
 	return Persona{
 		Death:        restartToVillage,
+		JoinParty:    acceptParty,
 		CriticalHP:   20,
 		FleeDistance: 600,
 		SitHP:        40,
@@ -81,11 +85,14 @@ const (
 	actLogout
 	actAppear
 	actRestart
+	actAnswerParty
+	actLeaveParty
 )
 
-// gate is the reuse gate the action's frame passes. Appearing and
-// RequestRestartPoint have no reuse gate on the server: the frame bucket
-// bounds them, and restartRetry spaces a repeated restart.
+// gate is the reuse gate the action's frame passes. Appearing,
+// RequestRestartPoint, RequestAnswerJoinParty and RequestWithdrawParty have
+// no reuse gate on the server: the frame bucket bounds them, restartRetry
+// spaces a repeated restart, and an invitation is answered once.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -198,11 +205,16 @@ func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 	return a, true
 }
 
-// rulePrompt is rule 2: an open prompt waits for the persona's answer.
-// The restart prompt is the only one the world model tracks today and it
-// opens only while dead, so rule 1 answers first; the slot is kept for the
-// prompts later milestones add (party invite, trade request).
+// rulePrompt is rule 2: an open prompt waits for the persona's answer. A
+// party invitation still answerable is accepted or declined at once, per
+// the persona; the restart prompt opens only while dead, so rule 1 answers
+// it first. The slot is kept for the prompts later milestones add (trade
+// request).
 func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
+	if inv := b.world.Prompts.Party; inv.Pending(now) {
+		join := b.persona.JoinParty
+		return answerPartyAction(join != nil && join(b.world, inv.Requester, now)), true
+	}
 	if !b.world.Prompts.Restart.Open {
 		return Action{}, false
 	}

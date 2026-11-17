@@ -266,7 +266,7 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected:
+	case MyTargetSelected, AskJoinParty:
 		return true
 	}
 	return false
@@ -400,6 +400,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.appearing = false
 	case actRestart:
 		b.restartedAt = now
+	case actAnswerParty:
+		// The server takes the invitation with the first answer.
+		b.world.Prompts.Party = PartyInvite{}
 	}
 	return true, nil
 }
