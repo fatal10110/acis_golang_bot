@@ -96,6 +96,34 @@ func TestLoginGateSpacesDials(t *testing.T) {
 	}
 }
 
+func TestAllowlistedLoginGate(t *testing.T) {
+	clock := newFakeClock(t0)
+	g := NewAllowlistedLoginGate(clock, rand.New(rand.NewPCG(1, 2)))
+	turn, err := g.Take(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3 {
+		if err := turn.Dial(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if now := clock.Now(); !now.Equal(t0) {
+			t.Fatalf("dial %d started at +%s, want no wait", i, now.Sub(t0))
+		}
+		turn.Dialed(nil)
+	}
+	// Turns stay exclusive, so the breaker sees one login at a time.
+	if len(g.turn) != 0 {
+		t.Fatal("the turn token is free during a turn")
+	}
+	// A refused dial still backs every bot off.
+	turn.Dialed(errRefused)
+	if wait := g.next.Sub(t0); wait < refusedBase/2 || wait >= refusedBase {
+		t.Errorf("after a refusal the next dial is in %s, want in [%s, %s)", wait, refusedBase/2, refusedBase)
+	}
+	turn.Done()
+}
+
 func TestLoginGateRefusedBackoff(t *testing.T) {
 	clock := newFakeClock(t0)
 	g := NewLoginGate(clock, rand.New(rand.NewPCG(1, 2)))
