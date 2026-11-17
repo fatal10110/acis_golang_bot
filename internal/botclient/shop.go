@@ -314,6 +314,9 @@ type shopVisit struct {
 	unsellable map[int32]bool
 	// books are the spellbooks a trainer asked for and the bot lacks.
 	books map[int32]bool
+	// held are the bought spellbooks the bot carries until a learn uses
+	// them; they are never junk.
+	held map[int32]bool
 }
 
 // end ends the visit; shun leaves its merchant alone for visitShunFor. No
@@ -325,7 +328,7 @@ func (sh *shopVisit) end(now time.Time, shun bool) {
 		}
 		sh.shunned[sh.v.npcID] = now.Add(visitShunFor)
 	}
-	*sh = shopVisit{nextAt: now.Add(shopRetry), shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books}
+	*sh = shopVisit{nextAt: now.Add(shopRetry), shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held}
 }
 
 // dropList leaves the first buylist of the visit out of it.
@@ -606,7 +609,7 @@ func (b *Brain) junk() map[int32]Item {
 	p := &b.persona
 	keep := func(id int32) bool {
 		return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
-			slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.unsellable[id] ||
+			slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] || b.shop.unsellable[id] ||
 			slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id })
 	}
 	out := make(map[int32]Item)
@@ -688,12 +691,23 @@ func (b *Brain) shopEvent(ev Event) {
 	}
 }
 
-// booksArrived drops the wanted spellbooks the bot now carries and makes a
-// trainer visit due again for them.
+// booksArrived moves the wanted spellbooks the bot now carries to held,
+// kept out of junk, and makes a trainer visit due again for them. A held
+// book the bot no longer carries, used by a learn, is held no more.
 func (b *Brain) booksArrived() {
-	for id := range b.shop.books {
+	sh := &b.shop
+	for id := range sh.held {
+		if b.carried(id) == 0 {
+			delete(sh.held, id)
+		}
+	}
+	for id := range sh.books {
 		if b.carried(id) > 0 {
-			delete(b.shop.books, id)
+			delete(sh.books, id)
+			if sh.held == nil {
+				sh.held = make(map[int32]bool)
+			}
+			sh.held[id] = true
 			b.train.doneLevel = 0
 		}
 	}

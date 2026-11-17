@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -339,6 +340,14 @@ func TestShopGivesUp(t *testing.T) {
 		{ObjectID: 204, TemplateID: 1871, Count: 1},
 	}
 	page := NpcHtmlMessage{ObjectID: merchantObj, HTML: merchantPage(merchantObj, 14)}
+	window := SellList{Money: 5000}
+	var sale []sellRow
+	for _, it := range junk[3:] {
+		window.Items = append(window.Items, ShopItem{ObjectID: it.ObjectID, TemplateID: it.TemplateID, Count: it.Count, Price: 1})
+		sale = append(sale, sellRow{it.ObjectID, it.TemplateID, it.Count})
+	}
+	// The server refuses a sale in silence (network/sell.go
+	// requestSellItem): neither the window nor the sale is answered.
 	tests := []struct {
 		name      string
 		items     []Item
@@ -346,6 +355,37 @@ func TestShopGivesUp(t *testing.T) {
 		wantShun  bool
 		wantUnsel bool
 	}{
+		{
+			name: "sell window never opens", items: junk,
+			steps: []trainerStep{
+				{name: "talk", at: time.Second, setup: inSight, wantRule: "shop", wantKind: actTalk},
+				{name: "sell link", at: 2 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(sellCommand(merchantObj))},
+				{name: "waiting", at: 2*time.Second + shopReplyTimeout - 1, wantRule: "shop"},
+				{name: "no buy list: given up", at: 2*time.Second + shopReplyTimeout},
+			},
+		},
+		{
+			name: "sale unanswered", items: junk,
+			steps: []trainerStep{
+				{name: "talk", at: time.Second, setup: inSight, wantRule: "shop", wantKind: actTalk},
+				{name: "sell link", at: 2 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass},
+				{name: "sell", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem, wantPayload: encodeRequestSellItem(0, sale)},
+				{name: "waiting", at: 3*time.Second + shopReplyTimeout - 1, wantRule: "shop"},
+				{name: "no buy list: given up", at: 3*time.Second + shopReplyTimeout},
+			},
+		},
+		{
+			name: "sale unanswered, then the buy list", items: append(slices.Clone(low), junk[3:]...),
+			steps: []trainerStep{
+				{name: "talk", at: time.Second, setup: inSight, wantRule: "shop", wantKind: actTalk},
+				{name: "sell link", at: 2 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass},
+				{name: "sell", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem},
+				{name: "waiting", at: 3*time.Second + shopReplyTimeout - 1, wantRule: "shop"},
+				{name: "talk again for the buy list", at: 3*time.Second + shopReplyTimeout, wantRule: "shop", wantKind: actTalk},
+				{name: "buy link", at: 4*time.Second + shopReplyTimeout, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(buyCommand(merchantObj, 14))},
+				{name: "given up", at: 4*time.Second + 2*shopReplyTimeout},
+			},
+		},
 		{
 			name: "purchase unanswered", items: low,
 			steps: []trainerStep{
@@ -455,5 +495,47 @@ func TestTrainerLearnsWithBook(t *testing.T) {
 	}
 	if rule, a := b.decide(at(time.Second)); rule != "train" || a.kind != actLearnSkill {
 		t.Fatalf("decide = %q %d, want a learn", rule, a.kind)
+	}
+}
+
+// TestShopKeepsBoughtBook checks a bought spellbook is not junk while the
+// bot carries it with no trainer in sight, and is held no more once a learn
+// uses it.
+func TestShopKeepsBoughtBook(t *testing.T) {
+	book := Item{ObjectID: 300, TemplateID: healBook, Count: 1}
+	var junk []Item
+	window := SellList{Money: 5000}
+	var sale []sellRow
+	for i := range 5 {
+		it := Item{ObjectID: 200 + int32(i), TemplateID: 1867 + int32(i), Count: 1, SubCategory: 5}
+		junk = append(junk, it)
+		window.Items = append(window.Items, ShopItem{ObjectID: it.ObjectID, TemplateID: it.TemplateID, Count: 1, Price: 1})
+		sale = append(sale, sellRow{it.ObjectID, it.TemplateID, 1})
+	}
+	window.Items = append(window.Items, ShopItem{ObjectID: book.ObjectID, TemplateID: healBook, Count: 1, Price: 55})
+	carrying := append([]Item{adenaStack(5000), potionsOf(20), spiritsOf(100), book}, junk...)
+	b := newShopBrain(t)
+	b.shop.wantBook(healBook)
+	runTrainerSteps(t, b, []trainerStep{
+		{name: "book bought", events: []Event{ItemList{Items: carrying}}, wantRule: "shop", wantKind: actMove},
+		{
+			name: "talk", at: time.Second,
+			setup: func(b *Brain) {
+				b.world.Apply(NPCInfo{ObjectID: merchantObj, NPCID: 30004, Pos: Point{X: 200}}, t0)
+				b.world.Target = merchantObj
+			},
+			wantRule: "shop", wantKind: actTalk,
+		},
+		{name: "sell link", at: 2 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: merchantObj, HTML: merchantPage(merchantObj, 14)}}, wantRule: "shop", wantKind: actBypass},
+		{name: "the junk sold, the book kept", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem, wantPayload: encodeRequestSellItem(0, sale)},
+	})
+	if !b.shop.held[healBook] || len(b.shop.books) != 0 {
+		t.Fatalf("held %v, books %v: want the book held, none wanted", b.shop.held, b.shop.books)
+	}
+	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, book}}}}, at(4*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if b.shop.held[healBook] {
+		t.Errorf("held %v after the learn used the book, want it empty", b.shop.held)
 	}
 }
