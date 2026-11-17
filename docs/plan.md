@@ -20,7 +20,7 @@ repository.
 | M3 - Farmer persona | #25 | #26-#29 |
 | M4 - Town, trade and merchant | #30 | #31-#36 |
 | M5 - Progression | #37 | #38-#40 |
-| M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
+| M6 - Home run and control panel | #89 | #90-#96 (PR breakdown, rows 6a-6d) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
