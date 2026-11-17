@@ -61,6 +61,13 @@ func (r *SpotRegistry) claim(order []int) (int, bool) {
 	return 0, false
 }
 
+// hasRoom reports whether spot i is below its cap.
+func (r *SpotRegistry) hasRoom(i int) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.held[i] < r.caps[i]
+}
+
 // release gives back a spot claim took.
 func (r *SpotRegistry) release(i int) {
 	r.mu.Lock()

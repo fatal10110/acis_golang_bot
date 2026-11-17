@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Samples from aCis_datapack/data/xml/teleports.xml (Roxxy 30006, Newbie Guide 30598). -->
+<list>
+	<telPosList npcId="30006">
+		<loc desc="The Village of Gludin" type="STANDARD" priceId="57" priceCount="18000" x="-80749" y="149834" z="-3043" />
+		<loc desc="Clan Hall" type="CHF_LEVEL_1" priceId="57" priceCount="500" x="-84000" y="244000" z="-3700" />
+		<loc desc="Elven Ruins" priceId="57" priceCount="830" x="-112367" y="234703" z="-3688" />
+	</telPosList>
+	<telPosList npcId="30598">
+		<loc desc="Dark Elf Village" type="NEWBIE_TOKEN" priceId="8542" priceCount="1" x="9716" y="15502" z="-4500" />
+	</telPosList>
+</list>

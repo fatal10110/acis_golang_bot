@@ -1,6 +1,6 @@
 // Package datapack reads the parts of the server's XML datapack the bots plan
-// with: NPC templates (npcs/*.xml) and spawn territories and makers
-// (spawnlist/*.xml). Parse rules follow the server's loaders
+// with: NPC templates (npcs/*.xml), spawn territories and makers
+// (spawnlist/*.xml) and gatekeeper destinations (teleports.xml). Parse rules follow the server's loaders
 // (acis_golang internal/gameserver/data/xml npc.go and spawnlist.go), reduced
 // to the fields bots use.
 //
@@ -22,11 +22,13 @@ type Datapack struct {
 	NPCs map[int32]NPC
 	// Spawnlist holds the spawn territories and makers.
 	Spawnlist *Spawnlist
+	// Teleports maps a gatekeeper's NPC template id to its destinations.
+	Teleports map[int32][]Teleport
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml and spawnlist/*.xml file directly
-// under it. xmlDir is configuration; the bot ships no datapack of its own.
+// under it, and its teleports.xml. xmlDir is configuration; the bot ships no datapack of its own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
 	if err != nil {
@@ -36,7 +38,11 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Datapack{NPCs: npcs, Spawnlist: spawns}, nil
+	teleports, err := LoadTeleports(filepath.Join(xmlDir, "teleports.xml"))
+	if err != nil {
+		return nil, err
+	}
+	return &Datapack{NPCs: npcs, Spawnlist: spawns, Teleports: teleports}, nil
 }
 
 // xmlFiles lists the *.xml files directly under dir in file name order, the

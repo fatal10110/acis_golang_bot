@@ -72,6 +72,13 @@ type Persona struct {
 	// Follow is how the bot follows the leader of its party (rule
 	// "follow").
 	Follow FollowPolicy
+	// Newbie is when the bot asks a Newbie Guide for the newbie buffs
+	// (rule 9 errand "newbie").
+	Newbie NewbiePolicy
+	// Travel is how the bot travels by gatekeeper to a spot out of walking
+	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
+	// errand "travel").
+	Travel TravelPolicy
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -104,6 +111,8 @@ func DefaultPersona() Persona {
 		Trainers:       defaultTrainers(),
 		Spots:          defaultSpotPolicy(),
 		Follow:         defaultFollowPolicy(),
+		Newbie:         defaultNewbiePolicy(),
+		Travel:         defaultTravelPolicy(),
 	}
 }
 
@@ -208,9 +217,11 @@ type rule struct {
 }
 
 // playRules are rules 1-10, first match wins; "train" (the trainer),
-// "follow" (the slot behind the party leader) and "spot" (getting to the
-// farming spot) are rule 9 errands, ahead of the persona's goal: a party
-// member visits its trainer, then follows instead of farming. Rules 7 (rebuff) and 8
+// "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's
+// buffs), "travel" (a gatekeeper trip to a spot out of walking reach) and
+// "spot" (getting to the farming spot) are rule 9 errands, ahead of the
+// persona's goal: a party member visits its trainer, then follows instead
+// of farming or wandering off. Rules 7 (rebuff) and 8
 // (loot) need events and models that land with buffs (#22) and loot (#29);
 // rule 3 drinks a potion or flees until heals (#22) exist. The shot toggle
 // is set-up, not a plan rule: it runs once per shot template carried,
@@ -225,6 +236,8 @@ var playRules = []rule{
 	{"rest", (*Brain).ruleRest},
 	{"train", (*Brain).ruleTrain},
 	{"follow", (*Brain).ruleFollow},
+	{"newbie", (*Brain).ruleNewbie},
+	{"travel", (*Brain).ruleTravel},
 	{"spot", (*Brain).ruleSpot},
 	{"goal", (*Brain).ruleGoal},
 	{"idle", (*Brain).ruleIdle},

@@ -196,7 +196,8 @@ func (b *Brain) outleveled() bool {
 
 // pickSpot claims the nearest spot within reach that fits the bot's level,
 // is not avoided and has room, in place of the one it holds; with none, it
-// keeps what it holds and looks again after spotRetry.
+// keeps what it holds, looks again after spotRetry and plans a trip by
+// gatekeeper to a spot out of walking reach (rule "travel").
 func (b *Brain) pickSpot(now time.Time) {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	level, from := int(b.world.Self.Level), b.world.Self.Position(now)
@@ -223,6 +224,7 @@ func (b *Brain) pickSpot(now time.Time) {
 	i, ok := r.claim(order)
 	if !ok {
 		v.retryAt = now.Add(spotRetry)
+		b.planTrip(now)
 		return
 	}
 	b.leaveSpot()
