@@ -51,14 +51,15 @@ var gearTemplates = map[int32]datapack.Item{
 	club:           {ID: club, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Price: 768},
 	apprenticeWand: {ID: apprenticeWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138},
 	wandOfAdept:    {ID: wandOfAdept, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 25500},
+	// A necklace and a shield.
+	906: {ID: 906, Type: "Armor", BodyPart: "neck", Price: 1},
+	18:  {ID: 18, Type: "Armor", BodyPart: "lhand", Price: 1},
 	// Never worn: a hero weapon, a shadow weapon, a fishing rod, a pet's
-	// armor, a necklace, a shield and a priceless weapon.
+	// armor and a priceless weapon.
 	6611: {ID: 6611, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Price: 1, Conditional: true},
 	6702: {ID: 6702, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 1, Duration: 120},
 	6529: {ID: 6529, Type: "Weapon", BodyPart: "lrhand", Kind: "FISHINGROD", Price: 1},
 	7001: {ID: 7001, Type: "Armor", BodyPart: "chest", Kind: "PET", Price: 1},
-	906:  {ID: 906, Type: "Armor", BodyPart: "neck", Price: 1},
-	18:   {ID: 18, Type: "Armor", BodyPart: "lhand", Kind: "SIGIL", Price: 1},
 	7:    {ID: 7, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD"},
 }
 
@@ -99,7 +100,7 @@ func newGearBrain(t *testing.T, expertise int32, items ...Item) *Brain {
 
 func TestIndexGear(t *testing.T) {
 	gear, sold := indexGear(gearTemplates, map[int32]int32{longSword: 1, falchion: 1, leatherHelmet: 1, squireShirt: 1, woodenGaiters: 1, 6611: 1, lesserHealingPotion: 1})
-	want := []int32{shortSword, longSword, falchion, twoHanded, artisansSword, squireShirt, squirePants, leatherShirt22, bronzePlate, woodenGaiters, salamanderMail, leatherHelmet, leatherBoots, club, apprenticeWand, wandOfAdept}
+	want := []int32{shortSword, longSword, falchion, twoHanded, artisansSword, squireShirt, squirePants, leatherShirt22, bronzePlate, woodenGaiters, salamanderMail, leatherHelmet, leatherBoots, club, apprenticeWand, wandOfAdept, 906, 18}
 	if got := slices.Sorted(maps.Keys(gear)); !reflect.DeepEqual(got, slices.Sorted(slices.Values(want))) {
 		t.Errorf("gear = %v, want %v", got, want)
 	}
