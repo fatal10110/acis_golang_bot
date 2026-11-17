@@ -37,7 +37,7 @@ func (o storeOptions) validate(datapack string) error {
 	case o.perTown < 1:
 		return fmt.Errorf("-stores-per-town %d: want 1 or more", o.perTown)
 	case o.spacing < 0 || o.spacing > math.MaxInt32:
-		return fmt.Errorf("-store-spacing %d: want 0 or more", o.spacing)
+		return fmt.Errorf("-store-spacing %d: want 0 to %d", o.spacing, math.MaxInt32)
 	}
 	return nil
 }

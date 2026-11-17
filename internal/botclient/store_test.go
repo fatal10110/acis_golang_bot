@@ -313,6 +313,18 @@ func TestStoreStart(t *testing.T) {
 			},
 		},
 		{name: "standing up", setup: func(b *Brain) { b.store.stoodAt = now.Add(-time.Second) }},
+		{name: "following", setup: func(b *Brain) { b.orders.follow = pcID }},
+		{name: "assisting", setup: func(b *Brain) { b.orders.assist = pcID }},
+		{
+			name: "party member", setup: func(b *Brain) {
+				b.world.Party = Party{LeaderID: pcID, Members: map[int32]*PartyMate{pcID: {}}}
+			},
+		},
+		{
+			name: "party leader", open: true, setup: func(b *Brain) {
+				b.world.Party = Party{LeaderID: b.world.Self.ObjectID, Members: map[int32]*PartyMate{pcID: {}}}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

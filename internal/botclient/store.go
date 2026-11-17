@@ -362,6 +362,11 @@ func (b *Brain) storeReady(now time.Time) bool {
 	if b.shop.v.active() || b.trip.v.active() || b.newbie.v.active() || b.train.npc != 0 {
 		return false
 	}
+	// A bot that follows or assists another player (a GM order or its party
+	// leader) stays with it: a seated store would leave it behind.
+	if f := b.followed(); (f != 0 && f != s.ObjectID) || b.assisted() != 0 {
+		return false
+	}
 	for _, it := range w.Inventory.Items {
 		if b.storeLoot(it) {
 			return true
