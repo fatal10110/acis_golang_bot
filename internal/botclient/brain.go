@@ -95,8 +95,10 @@ type Brain struct {
 	// drops the attack, or the target or combat changes.
 	engaged int32
 	// castAt is the cast asked for and not yet answered by the bot's own
-	// MagicSkillUse, zero for none (castTimeout bounds the wait).
-	castAt time.Time
+	// MagicSkillUse, zero for none (castTimeout bounds the wait); castSkill
+	// is its skill.
+	castAt    time.Time
+	castSkill int32
 	// progressAt is the last sign an attack is getting somewhere: an
 	// attempt sent, a swing or cast of the bot's own, a move toward the
 	// target. Engaged and still past stuckAfter, the bot side steps.
@@ -250,6 +252,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					l.deadline = grace
 				}
 			}
+		case SystemMessage:
+			b.castRefused(e.ID, now)
 		case MyTargetSelected:
 			if e.ObjectID != b.engaged {
 				b.engaged = 0
@@ -391,6 +395,11 @@ func (b *Brain) wake(now time.Time) error {
 		}
 	}
 	if !now.Before(b.decisionAt()) {
+		// The assist's wake-up is spent here, before Appearing may
+		// postpone the decision, so it cannot keep decisionAt past due.
+		if !now.Before(b.assist.at) {
+			b.assist.wake = false
+		}
 		if b.appearing {
 			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
 			if err != nil {
@@ -422,12 +431,17 @@ func (b *Brain) wake(now time.Time) error {
 	return nil
 }
 
-// decisionAt is when the next decision is due.
+// decisionAt is when the next decision is due: the reaction to an event
+// or the regular tick, or the leader's assist when that comes sooner.
 func (b *Brain) decisionAt() time.Time {
+	t := b.nextTick
 	if !b.reactAt.IsZero() {
-		return b.reactAt
+		t = b.reactAt
 	}
-	return b.nextTick
+	if b.assist.wake && b.assist.at.Before(t) {
+		t = b.assist.at
+	}
+	return t
 }
 
 // due is when the loop must wake next.
@@ -469,7 +483,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.engaged = a.object
 		b.attempt(a.object, now)
 	case actCast:
-		b.castAt = now
+		b.castAt, b.castSkill = now, a.skill
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
 		b.buffSent(a, now)

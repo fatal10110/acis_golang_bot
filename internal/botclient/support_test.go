@@ -255,6 +255,22 @@ func TestSupportRules(t *testing.T) {
 			wantRule: "rest",
 		},
 		{
+			name: "a standing bot short of MP rests instead of healing",
+			setup: func(b *Brain) {
+				healer(b, 50, 100)
+				b.world.Self.MP = 20
+			},
+			wantRule: "rest", wantKind: actSitStand,
+		},
+		{
+			name: "in combat a bot short of MP still heals",
+			setup: func(b *Brain) {
+				healer(b, 50, 100)
+				b.world.Self.InCombat, b.world.Self.MP = true, 20
+			},
+			wantRule: "heal", wantKind: actSelect, wantObject: pcID,
+		},
+		{
 			name: "heals before fighting back",
 			setup: func(b *Brain) {
 				healer(b, 50, 100)
@@ -450,13 +466,14 @@ func TestBrainSupportFlow(t *testing.T) {
 	b.world.Apply(PartySpelled{ObjectID: pcID, Effects: []Effect{{SkillID: skillMight, Left: time.Hour}}}, t0)
 
 	b.handleOne(t, Attack{AttackerID: pcID, Hits: []AttackHit{{TargetID: npcID, Damage: 30}}}, at(time.Second))
-	if d := b.reactAt.Sub(at(time.Second)); d < p.AssistMin || d > p.AssistMax {
+	b.nextTick = at(time.Minute)
+	if d := b.decisionAt().Sub(at(time.Second)); d < p.AssistMin || d > p.AssistMax {
 		t.Fatalf("assist wakes %v after the hit, want %v-%v", d, p.AssistMin, p.AssistMax)
 	}
-	if b.assist.at != b.reactAt {
-		t.Fatalf("wake %v, assist due %v", b.reactAt, b.assist.at)
+	if b.assist.at != b.decisionAt() {
+		t.Fatalf("wake %v, assist due %v", b.decisionAt(), b.assist.at)
 	}
-	if err := b.wake(b.reactAt); err != nil {
+	if err := b.wake(b.decisionAt()); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(out.frames); n != 1 || out.frames[0][0] != opGameAction {

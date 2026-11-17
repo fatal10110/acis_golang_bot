@@ -159,6 +159,9 @@ var (
 type assistPlan struct {
 	target   int32
 	at, seen time.Time
+	// wake is set until a decision runs at or after at: the plan's own
+	// wake-up, which pulls decisionAt earlier and never later.
+	wake bool
 }
 
 // leaderHit records the party leader's attack or hostile cast on target at
@@ -176,10 +179,7 @@ func (b *Brain) leaderHit(attacker, target int32, now time.Time) {
 	}
 	lo := b.persona.AssistMin
 	delay := lo + time.Duration(b.rng.Int64N(int64(max(b.persona.AssistMax-lo, 0))+1))
-	b.assist = assistPlan{target: target, at: now.Add(delay), seen: now}
-	if b.reactAt.IsZero() || b.assist.at.Before(b.reactAt) {
-		b.reactAt = b.assist.at
-	}
+	b.assist = assistPlan{target: target, at: now.Add(delay), seen: now, wake: true}
 }
 
 // assistTarget is the creature to assist the leader against at now, or 0.
@@ -277,12 +277,13 @@ func (b *Brain) heal(id int32, now time.Time) (Action, bool) {
 }
 
 // ruleHeal is the rule 3 heal of the party: the first patient under a
-// ready heal's HP percent is healed, in or out of combat. A bot sitting
-// with MP under SitMP stays seated: it could not pay for the heal, and
-// standing for it would only toggle it up and down against rule 6.
+// ready heal's HP percent is healed, in or out of combat. With MP under
+// SitMP a bot out of combat, or sitting, leaves it to rule 6: it likely
+// could not pay for the heal, and standing for it would only toggle it up
+// and down against the rest.
 func (b *Brain) ruleHeal(now time.Time) (Action, bool) {
 	s := &b.world.Self
-	if len(b.persona.Heals) == 0 || s.Sitting && below(s.MP, s.MaxMP, b.persona.SitMP) {
+	if len(b.persona.Heals) == 0 || (s.Sitting || !s.InCombat) && below(s.MP, s.MaxMP, b.persona.SitMP) {
 		return Action{}, false
 	}
 	ids := b.patients(now)

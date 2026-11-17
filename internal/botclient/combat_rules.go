@@ -17,7 +17,8 @@ const (
 	// castTimeout is how long a RequestMagicSkillUse waits for the bot's
 	// own MagicSkillUse before the bot acts again. The skill stays held as
 	// long, so a refused cast (no target, MP short, muted: magic_skill.go
-	// attemptMagicSkill) is not asked again sooner. A cast asked during a
+	// attemptMagicSkill) is not asked again sooner; a refusal with a
+	// reason message ends the wait at once (castRefused). A cast asked during a
 	// swing is deferred and still answered ActionFailed (magic_skill.go
 	// handleRequestMagicSkillUse), so ActionFailed does not end the wait.
 	castTimeout = 3 * time.Second
@@ -188,6 +189,39 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 func (b *Brain) forced(id int32) bool {
 	o := b.world.object(id)
 	return o != nil && o.Kind == KindPlayer && !flagged(o)
+}
+
+// Cast refusals: the system messages the server answers a player's cast
+// with when it fails its cost or target checks, with no MagicSkillUse and
+// no ActionFailed (magic_skill.go sendMagicCastFailureReason,
+// sendTargetCastRejection; ids from serverpackets/systemmessage.go). A
+// datapack condition's own message is not listed: castTimeout bounds that
+// wait.
+const (
+	msgNotEnoughHP   = 23
+	msgNotEnoughMP   = 24
+	msgInvalidTarget = 109
+	msgCannotBeUsed  = 113
+	msgCantSeeTarget = 181
+)
+
+// castRefusedHold is how long a refused skill is not asked again: MP or HP
+// short, or the target out of sight, does not change within castTimeout,
+// so the bot fights or rests meanwhile instead of re-asking every
+// castTimeout.
+const castRefusedHold = 10 * time.Second
+
+// castRefused ends the cast in flight on the server's refusal message id
+// at now and holds its skill for castRefusedHold.
+func (b *Brain) castRefused(id int32, now time.Time) {
+	if !b.castPending(now) {
+		return
+	}
+	switch id {
+	case msgNotEnoughHP, msgNotEnoughMP, msgInvalidTarget, msgCannotBeUsed, msgCantSeeTarget:
+		b.castAt = time.Time{}
+		b.world.holdSkill(b.castSkill, now.Add(castRefusedHold))
+	}
 }
 
 // castPending reports whether a cast asked for is still waiting for its
