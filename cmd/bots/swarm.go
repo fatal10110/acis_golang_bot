@@ -8,11 +8,13 @@ import (
 	"io"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"sync"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 )
 
@@ -22,6 +24,10 @@ import (
 // aborts). The systemd unit does not restart on it
 // (RestartPreventExitStatus): a restart loop is a login loop.
 const exitStopped = 3
+
+// metricsPeriod is how often the swarm sums its bots' metrics for the
+// endpoint.
+const metricsPeriod = 10 * time.Second
 
 // swarmOptions are the flags of `bots swarm`.
 type swarmOptions struct {
@@ -35,6 +41,9 @@ type swarmOptions struct {
 	marker    botnames.Marker
 	// allowlisted makes the login gate unspaced.
 	allowlisted bool
+	// metrics is the loopback address of the metrics endpoint; empty
+	// serves none.
+	metrics string
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -51,6 +60,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the bots' character names")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
 	addAllowlistedFlag(fs, &o.allowlisted)
+	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -80,13 +90,19 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if o.timeout <= 0 {
 		return o, fmt.Errorf("-timeout %s: want a positive duration", o.timeout)
 	}
+	if o.metrics != "" {
+		if err := botmetrics.CheckAddr(o.metrics); err != nil {
+			return o, fmt.Errorf("-metrics: %w", err)
+		}
+	}
 	return o, nil
 }
 
 // runSwarm is `bots swarm`: it plays one bot per account of the swarm
 // instance (-bots N of them, never more, each one session at a time) until
 // a signal, which logs every bot out. Every login and game dial of the
-// process passes one LoginGate (see botclient). Reports go to stderr.
+// process passes one LoginGate (see botclient). Reports go to stderr. With
+// -metrics it serves the bots' metrics on loopback until every bot returned.
 func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	o, err := parseSwarmFlags(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
@@ -129,10 +145,29 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Gate:       gate,
 		Log:        log,
 	}
-	bots, err := newBots(cfg, accounts)
+	var reg *botmetrics.Registry
+	if o.metrics != "" {
+		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
+		gate.ReportBreaker(reg)
+	}
+	bots, err := newBots(cfg, accounts, reg)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 1
+	}
+	if reg != nil {
+		// Bound before any login: a taken port fails the run, not the bots.
+		ln, err := botmetrics.Listen(o.metrics)
+		if err != nil {
+			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			return 1
+		}
+		tick := time.NewTicker(metricsPeriod)
+		defer tick.Stop()
+		// Deferred after tick.Stop, so it runs first: the endpoint serves
+		// until every bot returned, then both goroutines are joined.
+		defer serveMetrics(ctx, ln, reg, tick.C, log)()
+		log.Info("metrics serve", "addr", ln.Addr().String(), "path", botmetrics.VarsPath)
 	}
 	log.Info("swarm starts", "bots", len(bots), "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent, "allowlisted", o.allowlisted)
 	var wg sync.WaitGroup
@@ -154,11 +189,34 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	return code
 }
 
-// newBots returns one bot per account.
-func newBots(cfg botclient.SessionConfig, accounts []botaccounts.Account) ([]*botclient.Bot, error) {
+// serveMetrics serves reg on ln and collects it on every tick, on two
+// goroutines that outlive ctx's cancellation (the endpoint keeps serving
+// while the bots log out). The returned stop ends both and joins them; it
+// closes ln.
+func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry, tick <-chan time.Time, log *slog.Logger) (stop func()) {
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := botmetrics.Serve(ctx, ln, botmetrics.Handler(reg)); err != nil {
+			log.Error("metrics endpoint failed", "err", err)
+		}
+	})
+	wg.Go(func() { reg.Run(ctx, tick) })
+	return func() {
+		cancel()
+		wg.Wait()
+	}
+}
+
+// newBots returns one bot per account, each counting into its own Bot of
+// reg (a slot: its sessions share it); a nil reg counts nothing.
+func newBots(cfg botclient.SessionConfig, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	bots := make([]*botclient.Bot, 0, len(accounts))
 	for _, a := range accounts {
+		if reg != nil {
+			cfg.Brain.Metrics = reg.NewBot()
+		}
 		b, err := botclient.NewBot(cfg, a.Name, a.Password(), rng)
 		if err != nil {
 			return nil, err

@@ -103,25 +103,50 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameAcquireSkillList:          decodeAcquireSkillList,
 	opGameAcquireSkillInfo:          decodeAcquireSkillInfo,
 	opGameAcquireSkillDone:          func(*wire.Reader) Event { return AcquireSkillDone{} },
+
+	opGameItemList:        decodeItemList,
+	opGameInventoryUpdate: decodeInventoryUpdate,
 }
 
-// decodeEvent decodes a non-empty frame; ok is false for an opcode the
-// brain does not consume. A frame shorter or longer than its layout is an
-// error: each decoder consumes exactly len(raw).
+// extEventDecoders holds a decoder per extended (0xfe) sub-opcode the brain
+// consumes, like eventDecoders; every other extended frame is dropped.
+var extEventDecoders = map[uint16]func(*wire.Reader) Event{
+	opGameExAutoSoulShot: decodeExAutoSoulShot,
+}
+
+// decodeEvent decodes a non-empty frame; ok is false for an opcode, or an
+// extended sub-opcode, the brain does not consume, and for an extended frame
+// too short to carry its sub-opcode. A frame shorter or longer than its
+// layout is an error: each decoder consumes exactly len(raw).
 func decodeEvent(raw []byte) (ev Event, ok bool, err error) {
 	decode := eventDecoders[raw[0]]
+	if raw[0] == opGameExtended && len(raw) >= 3 {
+		decode = extEventDecoders[uint16(raw[1])|uint16(raw[2])<<8]
+	}
 	if decode == nil {
 		return nil, false, nil
 	}
 	r := wire.NewPacketReader(raw)
+	if raw[0] == opGameExtended {
+		r.Skip(2) // the sub-opcode, read above
+	}
 	ev = decode(r)
 	if err := r.Err(); err != nil {
-		return nil, false, fmt.Errorf("decode opcode %#02x: %w", raw[0], err)
+		return nil, false, fmt.Errorf("decode opcode %s: %w", opcodeName(raw), err)
 	}
 	if n := r.Remaining(); n != 0 {
-		return nil, false, fmt.Errorf("decode opcode %#02x: %w (%d)", raw[0], errTrailingBytes, n)
+		return nil, false, fmt.Errorf("decode opcode %s: %w (%d)", opcodeName(raw), errTrailingBytes, n)
 	}
 	return ev, true, nil
+}
+
+// opcodeName names a decoded frame's opcode for an error: the opcode byte,
+// and the sub-opcode of an extended frame.
+func opcodeName(raw []byte) string {
+	if raw[0] == opGameExtended {
+		return fmt.Sprintf("%#02x:%#04x", raw[0], uint16(raw[1])|uint16(raw[2])<<8)
+	}
+	return fmt.Sprintf("%#02x", raw[0])
 }
 
 func readPoint(r *wire.Reader) Point {

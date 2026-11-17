@@ -50,7 +50,9 @@ type Sender interface {
 // Rand is seeded at random.
 type BrainConfig struct {
 	Persona Persona
-	// Metrics, when set, counts what the brain does; nil counts nothing.
+	// Metrics, when set, counts what the brain does, and the session loop
+	// of a Bot counts its reconnects and server aborts there; one per bot,
+	// shared by its sessions. Nil counts nothing.
 	Metrics *botmetrics.Bot
 	// Tick is the base time between decisions; each adds a uniform
 	// jitter up to TickJitter.
@@ -112,8 +114,12 @@ type Brain struct {
 	// restartedAt is the restart request not yet answered by a Revive.
 	restartedAt time.Time
 	// train is the trainer visit (rule 9 errand).
-	train  trainerVisit
-	logout logoutState
+	train trainerVisit
+	// usedAt is when the bot last used (UseItem) each item template.
+	usedAt map[int32]time.Time
+	// shotAskedAt is when the bot last asked auto use of each shot template.
+	shotAskedAt map[int32]time.Time
+	logout      logoutState
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -150,6 +156,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	return &Brain{
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
+		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
 	}
 }
 
@@ -454,6 +461,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actAnswerParty:
 		// The server takes the invitation with the first answer.
 		b.world.Prompts.Party = PartyInvite{}
+	case actUseItem:
+		b.usedAt[a.item] = now
+	case actAutoShot:
+		b.shotAskedAt[a.item] = now
 	}
 	b.train.sent(a, now)
 	return true, nil

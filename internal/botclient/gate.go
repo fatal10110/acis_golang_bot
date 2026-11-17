@@ -9,6 +9,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 )
 
 // Login gate timing.
@@ -60,6 +62,8 @@ type LoginGate struct {
 
 	mu  sync.Mutex
 	err error // the breaker's cause once tripped; guarded by mu
+	// metrics records the open breaker; guarded by mu, nil records nothing.
+	metrics *botmetrics.Registry
 }
 
 // NewLoginGate returns an open gate that spaces dials under the accept
@@ -189,6 +193,17 @@ func (g *LoginGate) Halt(cause error) {
 	}
 	g.err = fmt.Errorf("%w: %w", ErrLoginsHalted, cause)
 	close(g.halt)
+	if g.metrics != nil {
+		g.metrics.SetBreaker(true)
+	}
+}
+
+// ReportBreaker makes Halt record the open breaker in r. Call it before the
+// first Take.
+func (g *LoginGate) ReportBreaker(r *botmetrics.Registry) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.metrics = r
 }
 
 // Err is the breaker's error once it tripped, else nil.

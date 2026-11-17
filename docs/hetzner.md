@@ -117,8 +117,10 @@ the gameserver is untouched; that run is the owner's step on issue #15.
 
 ## 8. Metrics endpoint
 
-The swarm serves live counters as `expvar` JSON on loopback only (`internal/botmetrics`). The
-`bots swarm -metrics 127.0.0.1:6060` flag that turns it on is wired in #55; it is off by default.
+The swarm serves live counters as `expvar` JSON on loopback only (`internal/botmetrics`) when it
+runs with `-metrics 127.0.0.1:6060` (the unit in `ops/acis-bots.service` sets it); it is off by
+default. The endpoint binds before the first login, a bind failure stops the run (exit 1), and it
+keeps serving until every bot has logged out.
 
 - The address must be a loopback IP and port (`127.0.0.0/8` or `[::1]`). An empty host
   (`:6060`), `0.0.0.0`, `::`, any other IP and any host name are refused before binding, and a

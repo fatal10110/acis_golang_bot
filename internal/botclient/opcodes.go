@@ -118,6 +118,25 @@ const (
 	opGameRequestWithdrawParty   = 0x2b
 )
 
+// Items, both directions: ItemList and InventoryUpdate
+// (internal/gameserver/network/serverpackets/itemlist.go,
+// inventoryupdate.go), the extended ExAutoSoulShot (exautosoulshot.go,
+// exsendmanorlist.go), UseItem (clientpackets/useitem.go) and the extended
+// RequestAutoSoulShot (clientpackets/item_ops.go, extended.go).
+const (
+	opGameItemList        = 0x1b
+	opGameInventoryUpdate = 0x27
+	// opGameExtended leads a server packet whose uint16 sub-opcode follows.
+	opGameExtended              = 0xfe
+	opGameExAutoSoulShot uint16 = 0x0012
+
+	opGameUseItem = 0x14
+	// opGameClientExtended leads a client packet whose uint16 sub-opcode
+	// follows.
+	opGameClientExtended             = 0xd0
+	opGameRequestAutoSoulShot uint16 = 0x0005
+)
+
 // Dialogs and the class trainer, both directions
 // (serverpackets/npchtmlmessage.go and acquireskill.go,
 // clientpackets/wiresafe.go).

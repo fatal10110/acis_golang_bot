@@ -30,6 +30,10 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(packet(opGameNpcHtmlMessage, trainerObj, trainerPage(trainerObj), 0))
 	f.Add(skillList(AcquirableSkill{1011, 1, 160}, AcquirableSkill{1068, 1, 470}))
 	f.Add(packet(opGameAcquireSkillInfo, 1011, 1, 160, 0, 1, 99, 1152, 1, 50))
+	f.Add(itemList(1, potionRow, swordRow))
+	f.Add(inventoryUpdate(ItemChange{ItemAdded, shotRow}, ItemChange{ItemRemoved, potionRow}))
+	f.Add(exAutoSoulShot(1835, 1))
+	f.Add([]byte{0xfe, 0x2e, 0x00})
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) == 0 {
 			return // GameConn.Read rejects empty frames

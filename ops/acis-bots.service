@@ -2,6 +2,7 @@
 # /etc/systemd/system/acis-bots.service. The secret file is referenced by path
 # only (mode 0600, owner acis-bots); no secret belongs in this unit.
 # -allowlisted assumes AcceptFilterAllowlist = 127.0.0.2 on both servers.
+# -metrics serves live counters on loopback only (docs/hetzner.md, section 8).
 #
 # Sizing is for the 2 vCPU / 3.8 GB host where the gameserver heap is about
 # 1.4 GB. Raise -bots and MaximumOnlineUsers together (docs/hetzner.md).
@@ -25,7 +26,8 @@ ExecStart=/opt/acis-bots/bots swarm \
     -bots 50 \
     -login 127.0.0.1:2106 \
     -local-addr 127.0.0.2 \
-    -allowlisted
+    -allowlisted \
+    -metrics 127.0.0.1:6060
 Restart=on-failure
 RestartPreventExitStatus=3
 # Restart slowly: a crash loop is a login loop, and the login server bans the IP.
