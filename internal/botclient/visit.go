@@ -92,28 +92,8 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 	if v.obj == 0 {
 		v.obj = b.nearestNPC(v.npcID, v.at, now)
 	}
-	from := s.Position(now)
 	if v.obj == 0 {
-		d := math.Sqrt(float64(dist2(from, v.at)))
-		if d <= visitArrive {
-			return Action{}, false
-		}
-		if s.Moving(now) {
-			return Action{}, true
-		}
-		if s.Sitting {
-			return b.toggle(now), true
-		}
-		if v.lastDist > 0 && v.lastDist-d < spotProgress {
-			v.stalls++
-		} else {
-			v.stalls = 0
-		}
-		if v.stalls >= spotStalls {
-			return Action{}, false
-		}
-		v.lastDist = d
-		return moveAction(legToward(from, v.at, d), from), true
+		return b.walkTo(v, now)
 	}
 	if !v.waitUntil.IsZero() && now.Before(v.waitUntil) {
 		return Action{}, true
@@ -126,10 +106,40 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 	if s.Sitting {
 		return b.toggle(now), true
 	}
+	from := s.Position(now)
 	if b.world.Target != v.obj {
 		return selectAction(v.obj, from), true
 	}
 	return talkAction(v.obj, from), true
+}
+
+// walkTo is the next leg of visit v toward its NPC's spawn, the bot
+// standing up first. It reports false once the bot is within visitArrive
+// of the spawn, or when the legs got nowhere. Legs go through the frame
+// pacer like the spot rule's.
+func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
+	s := &b.world.Self
+	from := s.Position(now)
+	d := math.Sqrt(float64(dist2(from, v.at)))
+	if d <= visitArrive {
+		return Action{}, false
+	}
+	if s.Moving(now) {
+		return Action{}, true
+	}
+	if s.Sitting {
+		return b.toggle(now), true
+	}
+	if v.lastDist > 0 && v.lastDist-d < spotProgress {
+		v.stalls++
+	} else {
+		v.stalls = 0
+	}
+	if v.stalls >= spotStalls {
+		return Action{}, false
+	}
+	v.lastDist = d
+	return moveAction(legToward(from, v.at, d), from), true
 }
 
 // nearestNPC is the object id of the live NPC of template npcID in sight

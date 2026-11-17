@@ -162,6 +162,9 @@ type travelTrip struct {
 	// shunned are the gatekeepers that took the bot nowhere, by index in
 	// the travel map, until a time.
 	shunned map[int]time.Time
+	// hopAt is when the next town hop is due (planHop), zero before the
+	// idle spell to it started.
+	hopAt time.Time
 }
 
 // end ends the trip at now; a positive shunFor leaves its gatekeeper alone
@@ -200,7 +203,8 @@ func teleportBypass(obj int32, index int) string {
 }
 
 // ruleTravel is a rule 9 errand ahead of the spot rule: on a trip the spot
-// rule planned (planTrip), the bot walks to the gatekeeper, talks to it,
+// rule planned (planTrip), or a town hop it plans itself when one is due
+// (planHop), the bot walks to the gatekeeper, talks to it,
 // opens its teleport list and sends the destination's link; its own
 // teleport ends the trip (the brain sends Appearing) and the spot rule
 // picks again where it lands. A gatekeeper that takes it nowhere is
@@ -209,7 +213,7 @@ func teleportBypass(obj int32, index int) string {
 func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 	tr := &b.trip
 	v := &tr.v
-	if !v.active() || b.world.Self.InCombat {
+	if b.world.Self.InCombat || (!v.active() && !b.planHop(now)) {
 		return Action{}, false
 	}
 	if tr.step == tripGone {
