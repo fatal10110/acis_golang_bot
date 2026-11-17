@@ -55,7 +55,8 @@ export interface Histogram {
   count: number;
   sum: number;
   max: number;
-  buckets: number[];
+  /** Only the non-empty buckets, each with the largest value it holds (le) and its count (n). */
+  buckets: { le: number; n: number }[];
 }
 
 export interface Metrics {

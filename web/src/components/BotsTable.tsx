@@ -36,8 +36,11 @@ const columns: { key: SortKey; label: string; className?: string }[] = [
 export interface BotsTableProps {
   bots: readonly Bot[];
   names: ClassNames;
-  /** Runs a bulk action on the selected accounts. */
-  onBulk: (action: "spawn" | "despawn", accounts: string[]) => void;
+  /**
+   * Asks for a bulk action on the selected accounts. The caller calls done once the action
+   * runs (after its confirmation), so a cancelled confirmation keeps the selection.
+   */
+  onBulk: (action: "spawn" | "despawn", accounts: string[], done: () => void) => void;
 }
 
 /** BotsTable lists the bots: sortable, filtered, selectable for bulk spawn and despawn. */
@@ -70,8 +73,9 @@ export function BotsTable({ bots, names, onBulk }: BotsTableProps) {
     });
   };
   const bulk = (action: "spawn" | "despawn") => {
-    onBulk(action, chosen);
-    setSelected(new Set());
+    onBulk(action, chosen, () => {
+      setSelected(new Set());
+    });
   };
 
   return (

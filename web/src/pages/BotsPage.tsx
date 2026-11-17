@@ -35,7 +35,7 @@ export function BotsPage({ bots, ask }: { bots: Bot[] | undefined; ask: (c: Conf
     setDialog(null);
   };
 
-  const onBulk = (action: "spawn" | "despawn", accounts: string[]) => {
+  const onBulk = (action: "spawn" | "despawn", accounts: string[], done: () => void) => {
     ask({
       title: `${action === "spawn" ? "Spawn" : "Despawn"} ${accounts.length} bots?`,
       body:
@@ -45,6 +45,7 @@ export function BotsPage({ bots, ask }: { bots: Bot[] | undefined; ask: (c: Conf
       action: action === "spawn" ? "Spawn" : "Despawn",
       danger: action === "despawn",
       run: () => {
+        done();
         void runBulk(action, accounts).then((failed) => {
           toast(
             failed.length === 0

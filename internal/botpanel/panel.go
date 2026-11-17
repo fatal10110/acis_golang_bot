@@ -46,7 +46,7 @@ const (
 	DefaultCommandWait = 5 * time.Second
 )
 
-//go:embed web
+//go:embed all:web
 var webFS embed.FS
 
 // contentSecurityPolicy is sent with every response: the page loads only
