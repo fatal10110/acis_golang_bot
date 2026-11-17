@@ -46,7 +46,8 @@ unavailable, report it as unavailable, never as passed.
 
 PR CI does not gate the e2e scenarios (`test-strategy.md`). A change to the protocol client,
 login or game sessions, reconnect, a codec, or a behavior a scenario asserts runs the related
-scenarios locally against the stack with `BOT_REQUIRE_E2E=1`, scoped with `-run` and `-v`.
+scenarios locally against the live server (`docs/e2e-live.md`) or the stack with
+`BOT_REQUIRE_E2E=1`, scoped with `-run` and `-v`.
 Confirm in the output that they ran: a SKIP verifies nothing. Report them in the PR body as an
 "E2E scenarios (local)" line with each result, "none related", or "not run: <reason>".
 

@@ -239,6 +239,12 @@ func TestCharEnterGame(t *testing.T) {
 				if err != nil || self.Name != tt.wantName || self.ObjectID != objectID {
 					t.Fatalf("EnterGame = %+v, %v; want %q", self, err, tt.wantName)
 				}
+				// Slots counts the list the character was chosen from: after
+				// the creation when there was one.
+				wantSlots := map[string]int{"first candidate in slot 2": 3, "later candidate in slot 1": 2, "taken then refused then created": 1}[tt.name]
+				if self.Slots != wantSlots {
+					t.Fatalf("Slots = %d, want %d", self.Slots, wantSlots)
+				}
 				return
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {

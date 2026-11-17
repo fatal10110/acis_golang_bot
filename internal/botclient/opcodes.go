@@ -82,6 +82,9 @@ const (
 	opGameRequestActionUse       = 0x45 // wiresafe.go, requestactionuse.go
 	opGameValidatePosition       = 0x48 // validateposition.go
 	opGameRequestRestartPoint    = 0x6d // requestrestartpoint.go
+	// opGameSendBypassBuildCmd is a GM's admin command; only the e2e
+	// harness's GM client sends it (EncodeSendBypassBuildCmd).
+	opGameSendBypassBuildCmd = 0x5b // admin.go
 )
 
 // Game server to client, combat and skills

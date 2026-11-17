@@ -2,3 +2,6 @@ __pycache__/
 
 # go build ./cmd/bots output.
 /bots
+
+# Live e2e config: the secret and GM files (docs/e2e-live.md).
+/.e2e/

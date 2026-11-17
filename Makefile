@@ -1,6 +1,6 @@
 GO ?= go
 
-.PHONY: hooks build test test-race lint
+.PHONY: hooks build test test-race lint e2e-live e2e-live-loginfail
 
 # Enable the formatting and lint pre-commit hook for this clone.
 hooks:
@@ -21,3 +21,16 @@ test-race:
 lint:
 	golangci-lint fmt --diff
 	golangci-lint run
+
+# The live e2e scenarios against the server BOT_E2E_LOGIN names
+# (docs/e2e-live.md); never in CI. One package at a time (-p 1): each test
+# process has its own login gate, and two dialing at once would burst the
+# accept filter. The wrong-password scenario trips the credential breaker,
+# so it runs alone (e2e-live-loginfail).
+E2E_LIVE_PKGS = ./internal/e2e/ ./cmd/bots/
+
+e2e-live:
+	BOT_REQUIRE_E2E=1 $(GO) test -p 1 -count=1 -v -timeout 60m -run '^TestLive' -skip '^TestLiveWrongPassword$$' $(E2E_LIVE_PKGS)
+
+e2e-live-loginfail:
+	BOT_REQUIRE_E2E=1 BOT_E2E_ALLOW_LOGINFAIL=1 $(GO) test -count=1 -v -timeout 5m -run '^TestLiveWrongPassword$$' ./internal/e2e/

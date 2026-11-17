@@ -25,22 +25,31 @@ Table-driven, no shared fixtures, no network, no wall clock, no build tags.
 
 ## Tier 2: e2e scenarios (local and nightly, not gated by PR CI)
 
-Real bots against the published server stack (server image, non-interactive registration, config
-bundle, geodata subset: the plan's server prerequisites P1-P4).
+Real bots against a real server: the live server (`docs/e2e-live.md`, #107) today, the published
+server stack (server image, non-interactive registration, config bundle, geodata subset: the
+plan's server prerequisites P1-P4, #5) once it exists, both through the same harness.
 
-- Config for the stack: `AutoCreateAccounts = True`, `MaximumOnlineUsers` and `LoginTryBeforeBan`
-  raised, the accept filter off or the Docker gateway allowlisted (host bots appear as the gateway
-  IP), project-scoped container names and ports.
-- **Seeding** stays minimal: create the GM character over the protocol, then one
-  `UPDATE characters SET accesslevel = 7` while it is offline; everything else through admin
-  commands the GM sends (`//set level`, `//skill set`, `//spawn`, `//kill`, `//heal`). Direct SQL
-  couples the suite to the server schema: keep it to the statements the plan names.
-- **Time** is real, with a timeout per scenario. Scenarios run next to a town, spawn fresh monsters
-  per scenario (spawnlist respawn is 60 s ± 20 s), and use a warm geodata cache volume.
-- **Gating.** An e2e test skips when the stack is not reachable, and fails instead of skipping when
-  `BOT_REQUIRE_E2E=1` is set; agents set it whenever they claim a scenario ran. The exact package
-  location and the variables that point at the stack are fixed by the e2e harness issue (#5); keep
-  this section in sync with it.
+- **Harness.** Package `internal/e2e`: the target (`e2e.Live`), its safety envelope (the bot's
+  login gate and credential breaker, at most 4 e2e characters online, the GM command filter, the
+  bot's pacer) and the scenarios, its `*_live_test.go` files; M6 panel scenarios live in
+  `cmd/bots/ui_live_test.go`. No build tag hides them.
+- **Target.** Environment variables that point at files only, never a secret: `BOT_E2E_LOGIN`,
+  `BOT_E2E_SECRET_FILE`, `BOT_E2E_GM_FILE` (both default to the primary checkout's gitignored
+  `.e2e/`), `BOT_E2E_PREFIX` (default `e2e`; refused when it overlaps `hz` or the owner's panel
+  prefix), `BOT_E2E_ALLOWLISTED`, `BOT_E2E_DATAPACK`, `BOT_E2E_ALLOW_LOGINFAIL`.
+- **Server config:** `AutoCreateAccounts = True`, `MaximumOnlineUsers` headroom for 4 more
+  characters, and an existing GM character (access level 7).
+- **Seeding** goes through GM commands only, never the database (no DSN, tunnel or SQL):
+  `//teleport`, `//teleportto`, `//recall`, `//kick`, `//kill`, `//spawn` and `//delete` on the
+  run's own characters and monsters (`e2e.Scope`). **Assertions** use the packets the bot or the
+  GM client receives: CharSelectInfo slot count, UserInfo, Die, Revive, TeleportToLocation,
+  CharInfo, AutoAttackStart.
+- **Time** is real, with a deadline per scenario. Scenarios spawn their own monsters (a `//spawn`
+  never respawns) and delete them in cleanup.
+- **Gating.** A scenario skips when its config is missing (each declares what it needs: login,
+  GM, datapack), and fails instead of skipping when `BOT_REQUIRE_E2E=1` is set; agents set it
+  whenever they claim a scenario ran. Run them with `make e2e-live` (`-p 1`: one login gate at a
+  time); the wrong-password scenario trips the breaker and runs alone (`make e2e-live-loginfail`).
 - One shared stack per machine; never bring up a second one next to it.
 - The nightly run against the server's `main` files a protocol-drift issue on failure.
 

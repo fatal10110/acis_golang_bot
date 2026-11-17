@@ -1,0 +1,128 @@
+package e2e
+
+import (
+	"context"
+	"errors"
+	"hash/fnv"
+	"math/rand/v2"
+	"testing"
+	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+)
+
+// Helpers of the live scenarios. Time is real here: every scenario bounds
+// itself with a context deadline.
+
+// gremlin is an aggressive level 1 monster of the datapack
+// (data/xml/npcs/20000-20999.xml, id 20001).
+const gremlin int32 = 20001
+
+func scenarioCtx(t *testing.T, d time.Duration) context.Context {
+	ctx, cancel := context.WithTimeout(t.Context(), d)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+// character is a new character of account named as a bot's, of class when
+// set; its draws derive from the account, so a rerun asks for the same one.
+func character(t *testing.T, account string, class *botclient.StartingClass) botclient.Character {
+	t.Helper()
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(account))
+	ch, err := botclient.NewCharacter(botnames.DefaultMarker, account, rand.New(rand.NewPCG(h.Sum64(), 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if class != nil {
+		ch.Class = *class
+	}
+	return ch
+}
+
+// enter enters the world as ch on account, retrying while the account is
+// still in use, and logs the character out when the test ends.
+func enter(t *testing.T, ctx context.Context, tg *Target, account string, ch botclient.Character, rec *botclient.Recorder) *Client {
+	t.Helper()
+	c, err := tg.EnterWhenFree(ctx, account, ch, rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoutAtEnd(t, c)
+	return c
+}
+
+// logoutAtEnd logs c out once the test ends, after its combat stance (15 s)
+// when the first logout is refused.
+func logoutAtEnd(t *testing.T, c *Client) {
+	t.Cleanup(func() {
+		if c.Closed() {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		err := c.Logout(ctx)
+		if errors.Is(err, botclient.ErrLogoutRefused) {
+			time.Sleep(16 * time.Second)
+			err = c.Logout(ctx)
+		}
+		if err != nil {
+			t.Logf("cleanup: logout %s: %v", c.Account, err)
+		}
+		c.Close()
+	})
+}
+
+// enterGM logs the GM in; when the test ends it deletes every monster the
+// run spawned and still owns, then logs out.
+func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
+	t.Helper()
+	gm, err := tg.EnterGM(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		for _, id := range gm.Spawned() {
+			if err := gm.Delete(ctx, id); err != nil {
+				t.Logf("cleanup: delete monster %d: %v", id, err)
+			}
+		}
+		if err := gm.Logout(ctx); err != nil {
+			t.Logf("cleanup: GM logout: %v", err)
+		}
+		gm.Close()
+	})
+	return gm
+}
+
+func teleportOf(id int32) func(botclient.Event) bool {
+	return func(ev botclient.Event) bool {
+		tp, ok := ev.(botclient.TeleportToLocation)
+		return ok && tp.ObjectID == id
+	}
+}
+
+func charInfoOf(id int32) func(botclient.Event) bool {
+	return func(ev botclient.Event) bool {
+		ci, ok := ev.(botclient.CharInfo)
+		return ok && ci.ObjectID == id
+	}
+}
+
+// waitFor polls cond every half second until it holds, or fails the test
+// once ctx ends.
+func waitFor(t *testing.T, ctx context.Context, what string, cond func() bool) {
+	t.Helper()
+	tick := time.NewTicker(500 * time.Millisecond)
+	defer tick.Stop()
+	for !cond() {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("waiting for %s: %v", what, ctx.Err())
+		case <-tick.C:
+		}
+	}
+}
