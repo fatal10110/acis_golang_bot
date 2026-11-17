@@ -28,7 +28,7 @@ type Datapack struct {
 	Teleports map[int32][]Teleport
 	// BuyLists are the merchant buylists in file order.
 	BuyLists []BuyList
-	// Items maps a weapon or armor template id to its template.
+	// Items maps a weapon, armor or arrow template id to its template.
 	Items map[int32]Item
 }
 

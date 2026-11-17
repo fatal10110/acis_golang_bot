@@ -5,19 +5,19 @@ import (
 	"fmt"
 )
 
-// Item is the part of a weapon or armor template (items/*.xml) bots pick
-// gear with. Etc items are not read.
+// Item is the part of a weapon, armor or arrow template (items/*.xml) bots
+// pick gear and ammunition with. Other etc items are not read.
 type Item struct {
 	ID   int32
 	Name string
-	// Type is "Weapon" or "Armor".
+	// Type is "Weapon", "Armor" or "EtcItem" (arrows only).
 	Type string
 	// BodyPart is the paperdoll part as the file names it: rhand, lrhand,
 	// chest, fullarmor, legs, head, gloves, feet and so on; "" for none.
 	BodyPart string
-	// Kind is a weapon's weapon_type (SWORD, BLUNT, BOW, ...) and an armor
-	// piece's armor_type (LIGHT, HEAVY, MAGIC, ...); "" when the file sets
-	// none.
+	// Kind is a weapon's weapon_type (SWORD, BLUNT, BOW, ...), an armor
+	// piece's armor_type (LIGHT, HEAVY, MAGIC, ...) and an etc item's
+	// etcitem_type (ARROW); "" when the file sets none.
 	Kind string
 	// Magical is a weapon's is_magical: a mystic's weapon (wands, magic
 	// blunts and swords), whose attacks the server scales by M. Atk.
@@ -52,8 +52,8 @@ type itemElement struct {
 }
 
 // LoadItems reads every *.xml item template file directly under dir, in
-// sorted file order, keeping the weapons and armor. A file that is not
-// well-formed, or a weapon or armor template missing or mangling a field
+// sorted file order, keeping the weapons, armor and arrows. A file that is
+// not well-formed, or a template kept missing or mangling a field
 // bots read, fails the whole load. An id declared twice keeps its last
 // declaration.
 func LoadItems(dir string) (map[int32]Item, error) {
@@ -80,8 +80,8 @@ func LoadItems(dir string) (map[int32]Item, error) {
 	return items, nil
 }
 
-// buildItem reads a weapon or armor template, reporting false for any
-// other type: id, type and name are required, price and duration default
+// buildItem reads a weapon, armor or arrow template, reporting false for
+// any other: id, type and name are required, price and duration default
 // to 0, crystal_type to none.
 func buildItem(el itemElement) (Item, bool, error) {
 	a := foldAttrs(el.Attrs)
@@ -98,6 +98,13 @@ func buildItem(el itemElement) (Item, bool, error) {
 		kindKey = "weapon_type"
 	case "Armor":
 		kindKey = "armor_type"
+	case "EtcItem":
+		// Arrows only: a bow shoots the ones of its grade
+		// (itemcontainer/inventory.go arrowIDForCrystal).
+		if a.strDefault("etcitem_type", "") != "ARROW" {
+			return Item{}, false, nil
+		}
+		kindKey = "etcitem_type"
 	default:
 		return Item{}, false, nil
 	}

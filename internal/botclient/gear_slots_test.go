@@ -268,8 +268,14 @@ func TestGearClassesDefault(t *testing.T) {
 		if !slices.Contains([]string{"LIGHT", "HEAVY", "MAGIC"}, c.Armor) {
 			t.Errorf("entry %d armor %q", i, c.Armor)
 		}
-		if len(c.Weapons) == 0 || slices.Contains(c.Weapons, "BOW") {
-			t.Errorf("entry %d weapons %v: want some, no bow (arrows)", i, c.Weapons)
+		if len(c.Weapons) == 0 {
+			t.Errorf("entry %d weapons %v: want some", i, c.Weapons)
+		}
+		bows := slices.Contains(c.Weapons, "BOW")
+		for _, id := range c.Classes {
+			if archer := slices.Contains([]int32{9, 24, 37, 92, 102, 109}, id); archer != bows {
+				t.Errorf("class %d: bow %v, want %v (archers only)", id, bows, archer)
+			}
 		}
 	}
 }

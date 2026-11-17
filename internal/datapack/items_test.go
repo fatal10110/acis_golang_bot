@@ -16,6 +16,7 @@ func TestLoadItems(t *testing.T) {
 	want := map[int32]Item{
 		1:    {ID: 1, Name: "Short Sword", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 768},
 		6:    {ID: 6, Name: "Apprentice's Wand", Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138},
+		17:   {ID: 17, Name: "Wooden Arrow", Type: "EtcItem", BodyPart: "lhand", Kind: "ARROW", Price: 2},
 		49:   {ID: 49, Name: "Gloves", Type: "Armor", BodyPart: "gloves", Price: 2650},
 		398:  {ID: 398, Name: "Plate Leather", Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Grade: 1, Price: 74600},
 		6611: {ID: 6611, Name: "Infinity Blade", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Conditional: true},
@@ -33,6 +34,7 @@ func TestLoadItemsRejects(t *testing.T) {
 		{"grade", `<item id="1" type="Weapon" name="x"><set name="crystal_type" val="Z"/></item>`, "crystal_type"},
 		{"no id", `<item type="Armor" name="x"/>`, `"id"`},
 		{"price", `<item id="1" type="Armor" name="x"><set name="price" val="many"/></item>`, `"price"`},
+		{"arrow grade", `<item id="1" type="EtcItem" name="x"><set name="etcitem_type" val="ARROW"/><set name="crystal_type" val="Z"/></item>`, "crystal_type"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
