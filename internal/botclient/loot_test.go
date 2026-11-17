@@ -191,6 +191,30 @@ func TestRuleLoot(t *testing.T) {
 		},
 		{name: "drop of a monster the bot never fought", evs: []timed{{0, Die{ObjectID: npcID}}, {0, DropItem{DropperID: npcID, Item: adenaOnGround}}}},
 		{
+			name: "drop of a player who buffed the bot",
+			evs:  []timed{{0, MagicSkillUse{CasterID: pcID, TargetID: selfID, SkillID: 1068}}, {0, DropItem{DropperID: pcID, Item: adenaOnGround}}},
+		},
+		{
+			name: "drop of a player the bot healed",
+			evs:  []timed{{0, MagicSkillUse{CasterID: selfID, TargetID: pcID, SkillID: 1011}}, {0, DropItem{DropperID: pcID, Item: adenaOnGround}}},
+		},
+		{
+			// ForceAttack lets the bot fight any player, but never its own party.
+			name:    "drop of a party member the bot healed",
+			persona: func(p *Persona) { p.PvP.ForceAttack = true },
+			setup: func(b *Brain) {
+				b.world.Party = Party{LeaderID: selfID, Loot: 1, Members: map[int32]*PartyMate{pcID: {}}}
+			},
+			evs: []timed{{0, MagicSkillUse{CasterID: selfID, TargetID: pcID, SkillID: 1011}}, {0, DropItem{DropperID: pcID, Item: adenaOnGround}}},
+		},
+		{
+			name:     "drop of a flagged player the bot fought",
+			persona:  func(p *Persona) { p.PvP.FightFlagged = true },
+			setup:    func(b *Brain) { b.world.Objects[pcID].PvPFlag = 1 },
+			evs:      []timed{{0, Attack{AttackerID: pcID, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}}, {0, Die{ObjectID: pcID}}, {0, DropItem{DropperID: pcID, Item: adenaOnGround}}},
+			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+		},
+		{
 			name: "drop of a monster fought too long ago",
 			evs: []timed{
 				{-lootFoughtFor - time.Millisecond, Attack{AttackerID: selfID, Hits: []AttackHit{{TargetID: npcID, Damage: 30}}}},

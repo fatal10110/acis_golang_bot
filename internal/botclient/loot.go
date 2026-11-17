@@ -243,9 +243,18 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 	}
 }
 
-// fought records a blow between the bot and creature id at now.
+// fought records a blow between the bot and creature id at now. Only a
+// creature the bot may fight counts: a heal or buff exchanged with a party
+// member or a friendly player is no fight, so that player's dropped junk is
+// never queued.
 func (b *Brain) fought(id int32, now time.Time) {
 	if id == 0 || id == b.world.Self.ObjectID {
+		return
+	}
+	if _, mate := b.world.Party.Members[id]; mate {
+		return
+	}
+	if o := b.world.object(id); o == nil || !b.persona.PvP.MayFight(o) {
 		return
 	}
 	l := &b.loot
