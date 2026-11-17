@@ -149,6 +149,7 @@ func TestGearSlotsBeats(t *testing.T) {
 		{name: "cheaper shield", class: classHumanFight, items: []Item{sword, shield(buckler)}, id: smallShield},
 		{name: "enchanted shield kept", class: classHumanFight, items: []Item{sword, {ObjectID: 204, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: buckler},
 		{name: "two-hander over sword and shield", class: classWarrior, items: []Item{sword, shield(buckler)}, id: redSunsetSword, want: true},
+		{name: "two-hander under sword and carried shield", class: classWarrior, items: []Item{wornAt(201, testSword24000, partRHand), carried(220, buckler, partLHand)}, id: redSunsetSword},
 		{name: "two-hander under long sword", class: classWarrior, items: []Item{wornAt(201, longSword, partRHand)}, id: redSunsetSword},
 		{name: "two-hander under sword and enchanted shield", class: classWarrior, items: []Item{sword, {ObjectID: 204, TemplateID: buckler, Equipped: true, BodySlot: partLHand, Enchant: 2}}, id: redSunsetSword},
 		{name: "no two-hander for a first fighter", class: classHumanFight, items: []Item{sword}, id: redSunsetSword},

@@ -394,13 +394,22 @@ func (b *Brain) beats(id int32, w *worn) bool {
 		if !class.swaps(c.kind, g.kind) {
 			return false
 		}
-		if sh := w[slotShield]; g.part == partLRHand && sh.ObjectID != 0 {
-			shield, ok := b.gearItem(sh.TemplateID)
-			if !ok || sh.Enchant > 0 {
-				return false
+		// Both directions value the one-handed side with the best shield
+		// it would hold, worn or carried, so the trade-off never flips.
+		if g.part == partLRHand {
+			var shield int64
+			if sh := w[slotShield]; sh.ObjectID != 0 {
+				worn, ok := b.gearItem(sh.TemplateID)
+				if !ok || sh.Enchant > 0 {
+					return false
+				}
+				shield = int64(worn.price)
 			}
-			value += int64(shield.price)
-		} else if g.part != partLRHand && class.Shield {
+			if class.Shield {
+				shield = max(shield, b.carriedShield())
+			}
+			value += shield
+		} else if class.Shield {
 			gain += b.carriedShield()
 		}
 	case c.kind != g.kind:
