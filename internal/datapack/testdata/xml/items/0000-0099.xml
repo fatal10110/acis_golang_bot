@@ -19,6 +19,14 @@
 		<set name="bodypart" val="rhand" />
 		<set name="price" val="138" />
 	</item>
+	<!-- An arrow: the one etc item type kept. -->
+	<item id="17" type="EtcItem" name="Wooden Arrow">
+		<set name="default_action" val="equip" />
+		<set name="etcitem_type" val="ARROW" />
+		<set name="bodypart" val="lhand" />
+		<set name="price" val="2" />
+		<set name="is_stackable" val="true" />
+	</item>
 	<item id="49" type="Armor" name="Gloves">
 		<set name="default_action" val="equip" />
 		<set name="bodypart" val="gloves" />

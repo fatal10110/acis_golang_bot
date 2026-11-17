@@ -83,9 +83,9 @@ type GearClass struct {
 }
 
 // defaultGearClasses is the class table of the default persona: mystics
-// wield magical one-handed weapons and staves in robes; dagger users and
-// archers (a bow needs arrows, which the bot does not handle) daggers in
-// light armor; monks fists in light armor; gladiators and bladedancers
+// wield magical one-handed weapons and staves in robes; dagger users
+// daggers and archers bows (the shop errand restocks their arrows,
+// ShopPolicy.ArrowsMin) in light armor; monks fists in light armor; gladiators and bladedancers
 // duals, warlords polearms and destroyers two-handed weapons, in heavy
 // armor; the first fighter classes swords or blunts in light armor (their
 // starting set) with a shield; every other fighter swords, blunts or
@@ -94,7 +94,8 @@ type GearClass struct {
 func defaultGearClasses() []GearClass {
 	return []GearClass{
 		{Classes: slices.Clone(mysticClasses), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC"},
-		{Classes: []int32{7, 8, 9, 22, 23, 24, 35, 36, 37, 92, 93, 101, 102, 108, 109}, Weapons: []string{"DAGGER"}, Armor: "LIGHT"},
+		{Classes: []int32{7, 8, 22, 23, 35, 36, 93, 101, 108}, Weapons: []string{"DAGGER"}, Armor: "LIGHT"},
+		{Classes: []int32{9, 24, 37, 92, 102, 109}, Weapons: []string{"BOW"}, Armor: "LIGHT"},
 		{Classes: []int32{47, 48, 114}, Weapons: []string{"DUALFIST"}, Armor: "LIGHT"},
 		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY"},
 		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY"},
@@ -483,6 +484,9 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 		switch {
 		case !ok || it.Equipped == (g.room == 0):
 			g.obj = 0
+			if ok && it.Equipped {
+				b.armedBow(it)
+			}
 		case now.Before(g.until):
 			return Action{}, false
 		default:

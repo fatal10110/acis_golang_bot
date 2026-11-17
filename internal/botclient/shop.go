@@ -85,13 +85,19 @@ type ShopPolicy struct {
 	// Restock are the items the bot keeps in stock, first listed bought
 	// first.
 	Restock []Restock
+	// ArrowsMin and ArrowsMax restock the arrows the bow the bot wields
+	// shoots, the ones of its grade (bowArrows), after Restock: under
+	// ArrowsMin carried, worn or not, the bot buys up to ArrowsMax. They
+	// are never junk; a zero ArrowsMax buys none.
+	ArrowsMin, ArrowsMax int32
 	// Books buys the spellbooks a trainer asked for and the bot lacks
 	// (AcquireSkillInfo requirements), ahead of Restock.
 	Books bool
 	// SellAt is how many junk stacks make a visit to sell them due; a
 	// visit to buy sells any junk too. 0 never sells. Junk is what the bot
 	// carries unequipped, past Keep, adena, quest items, augmented items,
-	// Persona.Potions, Persona.Shots, Restock items and wanted books; only
+	// Persona.Potions, Persona.Shots, Restock items, the wielded bow's
+	// arrows and wanted books; only
 	// what the merchant's sell window lists is sold.
 	SellAt int
 	// Keep are item templates the bot never sells.
@@ -104,9 +110,10 @@ type ShopPolicy struct {
 	Reach int32
 }
 
-// defaultShopPolicy restocks Lesser Healing Potions, and no-grade
-// soulshots or spiritshots by class, buys spellbooks and sells junk at a
-// merchant nearby (docs/plan.md, town persona).
+// defaultShopPolicy restocks Lesser Healing Potions, no-grade soulshots or
+// spiritshots by class and the arrows of a wielded bow (weight 6 each at
+// most), buys spellbooks and sells junk at a merchant nearby (docs/plan.md,
+// town persona).
 func defaultShopPolicy() ShopPolicy {
 	return ShopPolicy{
 		Restock: []Restock{
@@ -114,6 +121,8 @@ func defaultShopPolicy() ShopPolicy {
 			{Item: soulshotNoGrade, Min: 100, Max: 500, For: FighterClasses},
 			{Item: spiritshotNoGrade, Min: 50, Max: 200, For: MysticClasses},
 		},
+		ArrowsMin: 200,
+		ArrowsMax: 1000,
 		Books:     true,
 		SellAt:    5,
 		KeepAdena: 1000,
@@ -303,6 +312,10 @@ type shopVisit struct {
 	asked int
 	// nextAt is when the bot may start the next visit.
 	nextAt time.Time
+	// armed is set when the gear errand wore a bow during the visit and
+	// the bot carries too few of its arrows (armedBow): the visit ends
+	// with the next one due at once instead of after shopRetry.
+	armed bool
 	// shunned are the merchants, by template id, not at their spawn or
 	// whose page had none of the links the bot needed, until a time.
 	shunned map[int32]time.Time
@@ -316,7 +329,7 @@ type shopVisit struct {
 }
 
 // end ends the visit; shun leaves its merchant alone for visitShunFor. No
-// visit starts before shopRetry.
+// visit starts before shopRetry, unless the visit is armed.
 func (sh *shopVisit) end(now time.Time, shun bool) {
 	if shun {
 		if sh.shunned == nil {
@@ -324,7 +337,11 @@ func (sh *shopVisit) end(now time.Time, shun bool) {
 		}
 		sh.shunned[sh.v.npcID] = now.Add(visitShunFor)
 	}
-	*sh = shopVisit{nextAt: now.Add(shopRetry), shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held}
+	next := now.Add(shopRetry)
+	if sh.armed {
+		next = now
+	}
+	*sh = shopVisit{nextAt: next, shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held}
 }
 
 // dropList leaves the first buylist of the visit out of it.
@@ -540,7 +557,8 @@ func (b *Brain) carried(item int32) int32 {
 
 // shopWants are the items the bot buys now and how many: the wanted
 // spellbooks it lacks, by id, then the restocks of its class under their
-// minimum, in persona order, then the gear it buys (gearWants). Unless
+// minimum, in persona order, then the wielded bow's arrows (arrowWants),
+// then the gear it buys (gearWants). Unless
 // anyAdena, only what the bot's adena past KeepAdena buys one of at a
 // merchant's base price is listed.
 func (b *Brain) shopWants(anyAdena bool) []buyRow {
@@ -562,6 +580,7 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 			rows = append(rows, buyRow{item: r.Item, count: r.Max - have})
 		}
 	}
+	rows = append(rows, b.arrowWants()...)
 	rows = append(rows, b.gearWants()...)
 	if anyAdena || b.cfg.Travel == nil {
 		return rows
@@ -628,13 +647,14 @@ func (b *Brain) junk() map[int32]Item {
 }
 
 // keeps reports whether the bot keeps item template id rather than sell
-// it: adena, Shop.Keep, Potions, Shots, Restock items and spellbooks
-// wanted or held for a learn.
+// it: adena, Shop.Keep, Potions, Shots, Restock items, the arrows the
+// wielded bow shoots and spellbooks wanted or held for a learn.
 func (b *Brain) keeps(id int32) bool {
 	p := &b.persona
 	return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
-		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id })
+		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
+		id == b.bowArrows()
 }
 
 // sellRows is the sale from window l: every junk stack it lists, whole.
