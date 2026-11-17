@@ -192,7 +192,7 @@ type Action struct {
 	kind    actionKind
 	payload []byte
 	// object is the object an attack, a selection or a cast acts on, or
-	// the carried item a gear UseItem equips.
+	// the item a gear UseItem puts on or takes off.
 	object int32
 	// item is the template id of the item a UseItem or RequestAutoSoulShot
 	// acts on.
