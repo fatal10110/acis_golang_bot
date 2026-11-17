@@ -48,8 +48,10 @@ plan's server prerequisites P1-P4, #5) once it exists, both through the same har
   never respawns) and delete them in cleanup.
 - **Gating.** A scenario skips when its config is missing (each declares what it needs: login,
   GM, datapack), and fails instead of skipping when `BOT_REQUIRE_E2E=1` is set; agents set it
-  whenever they claim a scenario ran. Run them with `make e2e-live` (`-p 1`: one login gate at a
-  time); the wrong-password scenario trips the breaker and runs alone (`make e2e-live-loginfail`).
+  whenever they claim a scenario ran. Run them with `make e2e-live` (one package after the other:
+  one login gate at a time). A refused credential leaves `.e2e/halted`, which fails every later
+  run until the owner fixes the secret and deletes it; the wrong-password scenario trips the
+  breaker without the marker and runs alone (`make e2e-live-loginfail`).
 - One shared stack per machine; never bring up a second one next to it.
 - The nightly run against the server's `main` files a protocol-drift issue on failure.
 

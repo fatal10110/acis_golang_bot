@@ -23,14 +23,16 @@ lint:
 	golangci-lint run
 
 # The live e2e scenarios against the server BOT_E2E_LOGIN names
-# (docs/e2e-live.md); never in CI. One package at a time (-p 1): each test
-# process has its own login gate, and two dialing at once would burst the
-# accept filter. The wrong-password scenario trips the credential breaker,
-# so it runs alone (e2e-live-loginfail).
-E2E_LIVE_PKGS = ./internal/e2e/ ./cmd/bots/
+# (docs/e2e-live.md); never in CI. One package after the other, the second
+# only when the first passed: each test process has its own login gate, two
+# dialing at once would burst the accept filter, and a refused credential
+# leaves the breaker's marker that fails every later run until it is
+# deleted. The wrong-password scenario trips the breaker, so it runs alone
+# (e2e-live-loginfail).
+E2E_LIVE_RUN = BOT_REQUIRE_E2E=1 $(GO) test -count=1 -v -timeout 60m -run '^TestLive' -skip '^TestLiveWrongPassword$$'
 
 e2e-live:
-	BOT_REQUIRE_E2E=1 $(GO) test -p 1 -count=1 -v -timeout 60m -run '^TestLive' -skip '^TestLiveWrongPassword$$' $(E2E_LIVE_PKGS)
+	$(E2E_LIVE_RUN) ./internal/e2e/ && $(E2E_LIVE_RUN) ./cmd/bots/
 
 e2e-live-loginfail:
 	BOT_REQUIRE_E2E=1 BOT_E2E_ALLOW_LOGINFAIL=1 $(GO) test -count=1 -v -timeout 5m -run '^TestLiveWrongPassword$$' ./internal/e2e/

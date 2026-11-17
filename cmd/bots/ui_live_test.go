@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/e2e"
 )
@@ -149,6 +150,14 @@ func TestLivePanelBots(t *testing.T) {
 		args = append(args, "-allowlisted")
 	}
 	listen := freeLoopback(t)
+
+	// The panel's gate covers only its own process: check its first
+	// account through the run's gate first, so a stale secret trips the
+	// run's breaker and leaves its marker before the panel logs in.
+	first := botaccounts.Names(cfg.Prefix+"p", 1)[0]
+	if err := tg.CheckCredentials(ctx, first, tg.Password(first)); err != nil {
+		t.Fatalf("panel account %s: %v", first, err)
+	}
 
 	p := startLivePanel(t, args, listen)
 	var a, b liveBotView

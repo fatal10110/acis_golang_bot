@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
 // The environment variables of the harness. None carries a secret: the
@@ -85,6 +86,41 @@ func ConfigFromEnv(getenv func(string) string, dir string) Config {
 		c.GMFile = cmp.Or(c.GMFile, filepath.Join(dir, "gm"))
 	}
 	return c
+}
+
+// HaltFileName is the credential breaker's marker, next to the secret file:
+// a refused credential leaves it, and while it exists no run logs in
+// (NewTarget). The login server counts failed logins per address over every
+// account and keeps the count for at least an hour; only a good login of the
+// same account takes one back, which a stale secret never gives. So a run
+// halted by a refusal halts every later one until the owner fixes the secret
+// and deletes the marker.
+const HaltFileName = "halted"
+
+// HaltFile is the breaker's marker for c: HaltFileName in the secret file's
+// folder, or "" without a secret file.
+func (c Config) HaltFile() string {
+	if c.SecretFile == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(c.SecretFile), HaltFileName)
+}
+
+// checkHalt reports the marker an earlier run's refused credential left at
+// path, wrapping botclient.ErrLoginsHalted; nil when there is none.
+func checkHalt(path string) error {
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("credential breaker marker: %w", err)
+	}
+	return fmt.Errorf("%w by an earlier run (%s: %s): fix the secret file, then delete the marker",
+		botclient.ErrLoginsHalted, path, strings.TrimSpace(string(b)))
 }
 
 // DefaultDir is the ConfigDirName folder at the root of the primary

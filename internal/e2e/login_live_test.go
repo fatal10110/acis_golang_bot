@@ -112,7 +112,10 @@ func TestLiveLogoutRefusedInCombat(t *testing.T) {
 	}
 
 	bot.Close() // the socket drops in the combat stance
-	_, err = tg.Enter(ctx, account, tg.Password(account), botclient.Character{Name: bot.Self.Name}, nil)
+	early, err := tg.Enter(ctx, account, tg.Password(account), botclient.Character{Name: bot.Self.Name}, nil)
+	if err == nil {
+		logoutAtEnd(t, early) // give its place back
+	}
 	if !InUse(err) {
 		t.Fatalf("login right after the drop = %v, want AccountInUse", err)
 	}

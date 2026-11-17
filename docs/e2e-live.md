@@ -46,17 +46,24 @@ BOT_E2E_LOGIN=l2-login.iterharbor.com:2106 make e2e-live-loginfail   # alone: it
 ```
 
 One group at a time: `go test -count=1 -v -run '^TestLiveRecall' ./internal/e2e/` with the same
-variables and `BOT_REQUIRE_E2E=1`. Packages run one after the other (`-p 1`): each test process
-has its own login gate.
+variables and `BOT_REQUIRE_E2E=1`. `make e2e-live` runs the packages one after the other, the
+second only when the first passed: each test process has its own login gate.
 
 ## Safety envelope
 
 Operational limits, not persona defaults; unit-tested with a fake target (`internal/e2e`):
 
-- **Login pacing and the credential breaker:** every login of a test process passes one
-  `botclient.LoginGate`, spaced under the accept filter unless allowlisted. The first refused
-  credential halts every later login of the process. The wrong password is sent at most once a
-  run, and only with `BOT_E2E_ALLOW_LOGINFAIL=1`.
+- **Login pacing and the credential breaker:** every harness login of a test process passes one
+  `botclient.LoginGate`, spaced under the accept filter unless allowlisted. The panel scenario's
+  bots log in through the panel's own gate and breaker; the scenario first checks the panel's
+  first account through the run's gate. The first refused credential halts every later login of
+  the process and leaves the marker `halted` next to the secret file (account and reason, never a
+  password). While the marker exists every scenario fails before it logs in: the login server
+  counts failed logins per address over all accounts for at least an hour, only a good login of
+  the same account takes one back, and 3 ban the address (`LoginTryBeforeBan`). After a refusal,
+  fix the secret file, then delete `.e2e/halted`. The wrong password is sent at most once a run,
+  only with `BOT_E2E_ALLOW_LOGINFAIL=1`, after a good login of the same account, and leaves no
+  marker: the next good login of that account takes its failure back.
 - **Cap:** at most 4 characters of a run online at once, the GM's and a panel's bots included;
   every scenario logs its characters out in cleanup.
 - **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:

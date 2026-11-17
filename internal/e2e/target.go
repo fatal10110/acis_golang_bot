@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,7 +51,8 @@ func (n netDialer) dialGame(ctx context.Context, addr string) (*botclient.GameCo
 // Target is one run against a server: every login of the run passes its
 // login gate, spaced under the accept filter unless the config says the
 // source address is allowlisted, and its credential breaker, which the
-// first refused credential trips for the rest of the run. At most MaxOnline
+// first refused credential trips for the rest of the run and, through the
+// marker it leaves (Config.HaltFile), for every later run. At most MaxOnline
 // characters of the run are online at once (Hold). Its methods may be
 // called from any goroutine.
 type Target struct {
@@ -70,9 +72,13 @@ type Target struct {
 
 // NewTarget opens a run against cfg's server: it refuses a prefix that
 // overlaps the old swarm's or panel (the owner's `bots ui` prefix, "" for
-// none), and a secret that is missing, readable by others or weak.
+// none), the breaker's marker an earlier run left (Config.HaltFile), and a
+// secret that is missing, readable by others or weak.
 func NewTarget(cfg Config, panel string) (*Target, error) {
 	if err := CheckPrefix(cfg.Prefix, panel); err != nil {
+		return nil, err
+	}
+	if err := checkHalt(cfg.HaltFile()); err != nil {
 		return nil, err
 	}
 	secret, err := botaccounts.LoadSecret(cfg.SecretFile)
@@ -213,7 +219,7 @@ func (t *Target) enter(ctx context.Context, account, password string, ch botclie
 	if err != nil {
 		if botclient.CredentialRefused(err) {
 			// Trip the breaker while the turn is held, as a Bot does.
-			t.gate.Halt(fmt.Errorf("account %s: %w", account, err))
+			err = errors.Join(err, t.trip(account, err, true))
 		}
 		return nil, botclient.Self{}, fmt.Errorf("login: %w", err)
 	}
@@ -238,6 +244,12 @@ func (t *Target) enter(ctx context.Context, account, password string, ch botclie
 // through the gate: the first one creates the account (AutoCreateAccounts).
 // A refused credential trips the breaker.
 func (t *Target) CheckCredentials(ctx context.Context, account, password string) error {
+	return t.checkCredentials(ctx, account, password, true)
+}
+
+// checkCredentials is CheckCredentials; a refusal leaves the breaker's
+// marker only when persist is set.
+func (t *Target) checkCredentials(ctx context.Context, account, password string, persist bool) error {
 	turn, err := t.gate.Take(ctx)
 	if err != nil {
 		return err
@@ -249,14 +261,34 @@ func (t *Target) CheckCredentials(ctx context.Context, account, password string)
 	err = t.net.checkCredentials(ctx, account, password)
 	turn.Dialed(err)
 	if botclient.CredentialRefused(err) {
-		t.gate.Halt(fmt.Errorf("account %s: %w", account, err))
+		err = errors.Join(err, t.trip(account, err, persist))
 	}
 	return err
 }
 
+// trip halts every later login of the run after account's credential was
+// refused with err and, when persist is set, leaves the breaker's marker
+// (Config.HaltFile) that halts every later run. It returns the error of
+// writing the marker, nil when it was written or not wanted.
+func (t *Target) trip(account string, err error, persist bool) error {
+	halt := fmt.Errorf("account %s: %w", account, err)
+	t.gate.Halt(halt)
+	path := t.cfg.HaltFile()
+	if !persist || path == "" {
+		return nil
+	}
+	line := t.clock.Now().UTC().Format(time.RFC3339) + " " + halt.Error() + "\n"
+	if werr := os.WriteFile(path, []byte(line), 0o600); werr != nil {
+		return fmt.Errorf("credential breaker marker: %w", werr)
+	}
+	return nil
+}
+
 // WrongPassword sends account's credentials with a wrong password, once per
 // run and only when the config allows it. The login server's refusal trips
-// the breaker: no later login of the run goes out.
+// the breaker: no later login of the run goes out. It leaves no marker: the
+// refusal is the one asked for, and the next good login of account takes
+// its failure back on the server.
 func (t *Target) WrongPassword(ctx context.Context, account string) error {
 	if !t.cfg.AllowLoginFail {
 		return fmt.Errorf("%s=1 unset", EnvAllowLoginFail)
@@ -264,7 +296,7 @@ func (t *Target) WrongPassword(ctx context.Context, account string) error {
 	if t.loginFail.Swap(true) {
 		return ErrLoginFailUsed
 	}
-	return t.CheckCredentials(ctx, account, "wrong"+t.secret.Password(account))
+	return t.checkCredentials(ctx, account, "wrong"+t.secret.Password(account), false)
 }
 
 // Client is a character of the run online on a connection the scenario
