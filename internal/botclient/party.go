@@ -208,14 +208,18 @@ type Party struct {
 // In reports whether the bot is in a party.
 func (p *Party) In() bool { return p.LeaderID != 0 }
 
-// PartyMate is another member of the bot's party: its latest vitals row
-// and its last reported position.
+// PartyMate is another member of the bot's party: its latest vitals row,
+// its last reported position and its effects.
 type PartyMate struct {
 	PartyMember
 	// Pos is where PartyMemberPosition last reported the member, at PosAt;
 	// PosAt is zero until the first report.
 	Pos   Point
 	PosAt time.Time
+	// Buffs are its effects as its last PartySpelled listed them; nil
+	// until one arrives, which the server sends only for a member who
+	// ever held an effect.
+	Buffs Buffs
 }
 
 // applyParty updates the prompt and the party model with a party event.
@@ -226,9 +230,15 @@ func (w *World) applyParty(ev Event, now time.Time) {
 		w.Prompts.Party = PartyInvite{Open: true, Requester: e.Requester, Loot: e.Loot, At: now}
 	case PartySmallWindowAll:
 		w.Prompts.Party = PartyInvite{}
+		old := p.Members
 		*p = Party{LeaderID: e.LeaderID, Loot: e.Loot, Members: make(map[int32]*PartyMate, maxPartyMembers)}
 		for _, m := range e.Members {
-			p.Members[m.ObjectID] = &PartyMate{PartyMember: m}
+			mate := &PartyMate{PartyMember: m}
+			if o := old[m.ObjectID]; o != nil {
+				// A leader change resends the window, not the effects.
+				mate.Buffs = o.Buffs
+			}
+			p.Members[m.ObjectID] = mate
 		}
 	case PartySmallWindowAdd:
 		if p.Members == nil {

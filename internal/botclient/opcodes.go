@@ -95,6 +95,13 @@ const (
 	opGameRelationChanged    = 0xce // relationchanged.go
 )
 
+// Game server to client, effect icons
+// (internal/gameserver/network/serverpackets).
+const (
+	opGameAbnormalStatusUpdate = 0x7f // status_effects.go
+	opGamePartySpelled         = 0xee // status_effects.go
+)
+
 // Client to game server, combat (internal/gameserver/network/clientpackets).
 const (
 	opGameAttackRequest        = 0x0a // wiresafe.go, targetaction.go

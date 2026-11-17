@@ -36,6 +36,8 @@ type World struct {
 	Dialog Dialog
 	// Inventory is what the bot carries.
 	Inventory Inventory
+	// Buffs are the bot's own effects (AbnormalStatusUpdate).
+	Buffs Buffs
 }
 
 // SelfState is the bot's own character.
@@ -359,6 +361,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyParty(ev, now)
 	case ItemList, InventoryUpdate, ExAutoSoulShot:
 		w.applyItems(ev)
+	case AbnormalStatusUpdate, PartySpelled:
+		w.applyEffects(ev, now)
 	}
 }
 

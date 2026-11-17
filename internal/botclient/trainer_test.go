@@ -186,6 +186,7 @@ func newTrainerBrain(t *testing.T, sp int32) *Brain {
 	t.Helper()
 	p := DefaultPersona()
 	p.IdleChance = 0
+	p.Buffs = nil // a skill learned would be cast at once (rule 7)
 	b, _ := newTestBrain(t, p)
 	s := &b.world.Self
 	s.ClassID, s.Level, s.SP = classHumanMystic, 15, sp

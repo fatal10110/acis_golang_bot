@@ -95,8 +95,10 @@ type Brain struct {
 	// drops the attack, or the target or combat changes.
 	engaged int32
 	// castAt is the cast asked for and not yet answered by the bot's own
-	// MagicSkillUse, zero for none (castTimeout bounds the wait).
-	castAt time.Time
+	// MagicSkillUse, zero for none (castTimeout bounds the wait); castSkill
+	// is its skill.
+	castAt    time.Time
+	castSkill int32
 	// progressAt is the last sign an attack is getting somewhere: an
 	// attempt sent, a swing or cast of the bot's own, a move toward the
 	// target. Engaged and still past stuckAfter, the bot side steps.
@@ -120,6 +122,11 @@ type Brain struct {
 	train trainerVisit
 	// spot is the farming spot (rule 9 errand).
 	spot spotVisit
+	// assist is the creature the party leader attacked (rule 9 assist).
+	assist assistPlan
+	// buffedAt is when the bot last cast each buff on each target
+	// (buffRetry).
+	buffedAt map[buffKey]time.Time
 	// follow is the slot behind the party leader (rule 9 errand).
 	follow followState
 	// usedAt is when the bot last used (UseItem) each item template.
@@ -164,6 +171,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
+		buffedAt: make(map[buffKey]time.Time),
 	}
 }
 
@@ -246,6 +254,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					l.deadline = grace
 				}
 			}
+		case SystemMessage:
+			b.castRefused(e.ID, now)
 		case MyTargetSelected:
 			if e.ObjectID != b.engaged {
 				b.engaged = 0
@@ -282,11 +292,17 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					b.landed(h.TargetID, now)
 				}
 			}
+			// The first hit is the swing's target; a pole's others are
+			// splash.
+			if len(e.Hits) > 0 {
+				b.leaderHit(e.AttackerID, e.Hits[0].TargetID, now)
+			}
 		case MagicSkillUse:
 			if e.CasterID == self {
 				b.castAt = time.Time{}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 			}
+			b.leaderHit(e.CasterID, e.TargetID, now)
 		case Die:
 			// A dead target ends the attack in flight: there is nothing
 			// to disengage from.
@@ -381,6 +397,11 @@ func (b *Brain) wake(now time.Time) error {
 		}
 	}
 	if !now.Before(b.decisionAt()) {
+		// The assist's wake-up is spent here, before Appearing may
+		// postpone the decision, so it cannot keep decisionAt past due.
+		if !now.Before(b.assist.at) {
+			b.assist.wake = false
+		}
 		if b.appearing {
 			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
 			if err != nil {
@@ -412,12 +433,17 @@ func (b *Brain) wake(now time.Time) error {
 	return nil
 }
 
-// decisionAt is when the next decision is due.
+// decisionAt is when the next decision is due: the reaction to an event
+// or the regular tick, or the leader's assist when that comes sooner.
 func (b *Brain) decisionAt() time.Time {
+	t := b.nextTick
 	if !b.reactAt.IsZero() {
-		return b.reactAt
+		t = b.reactAt
 	}
-	return b.nextTick
+	if b.assist.wake && b.assist.at.Before(t) {
+		t = b.assist.at
+	}
+	return t
 }
 
 // due is when the loop must wake next.
@@ -459,9 +485,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.engaged = a.object
 		b.attempt(a.object, now)
 	case actCast:
-		b.castAt = now
+		b.castAt, b.castSkill = now, a.skill
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
+		b.buffSent(a, now)
 	case actMove:
 		// A move replaces the attack intention on the server.
 		b.engaged = 0
