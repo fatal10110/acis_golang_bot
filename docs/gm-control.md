@@ -49,6 +49,15 @@ The party and trade hooks never query the database. A bot accepts the party invi
 knows: a commander, or a GM whose command a check confirmed in the last 10 minutes. Other
 invitations go to the persona. Such a GM is also exempt from the trade policy.
 
+At most one bot of a swarm joins each other leader's party. The swarm holds one claim per leader
+name. The first bot that accepts claims that leader, and later bots decline that leader until the
+claim is released. The claim is released when that bot's party ends, when no party window
+follows its acceptance within the 15 s invitation timeout, or when its session ends. If the party
+leader changes, the claim moves to the new leader, or is released when the new leader is
+already held or is the bot itself. A GM's invitations take no claim and are never limited.
+Without a GM configuration (`-commanders` or `-gm-dsn-file`), no GM is known, so every
+invitation is limited.
+
 The data source name is a secret. It lives in a file only its owner can read (mode 0600, as the
 secret file). It never goes in a flag, and the swarm never logs it. Driver errors are cleaned of
 it, and the driver's own logger is off. Format (go-sql-driver/mysql):
