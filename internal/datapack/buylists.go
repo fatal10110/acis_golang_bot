@@ -51,7 +51,7 @@ func LoadBuyLists(path string) ([]BuyList, error) {
 		list.Products = make([]Product, 0, len(l.Products))
 		for _, p := range l.Products {
 			r := foldAttrs(p.Attrs)
-			prod := Product{ItemID: r.int32("id"), Price: int32(r.intDefault("price", 0)), Count: int32(r.intDefault("count", -1))}
+			prod := Product{ItemID: r.int32("id"), Price: r.int32Default("price", 0), Count: r.int32Default("count", -1)}
 			if r.err != nil {
 				return nil, fmt.Errorf("datapack: %s: buyList %d: product: %w", path, list.ID, r.err)
 			}

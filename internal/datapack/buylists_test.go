@@ -40,6 +40,8 @@ func TestLoadBuyListsErrors(t *testing.T) {
 		{"no npcId", `<list><buyList id="1"/></list>`, `"npcId"`},
 		{"product without id", `<list><buyList id="1" npcId="2"><product price="3"/></buyList></list>`, `"id"`},
 		{"bad price", `<list><buyList id="1" npcId="2"><product id="3" price="x"/></buyList></list>`, `"price"`},
+		{"price past int32", `<list><buyList id="1" npcId="2"><product id="3" price="2147483648"/></buyList></list>`, `"price"`},
+		{"count past int32", `<list><buyList id="1" npcId="2"><product id="3" count="-2147483649"/></buyList></list>`, `"count"`},
 		{"bad count", `<list><buyList id="1" npcId="2"><product id="3" count="x"/></buyList></list>`, `"count"`},
 	}
 	for _, tt := range tests {
