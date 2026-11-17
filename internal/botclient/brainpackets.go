@@ -11,6 +11,9 @@ const (
 	chatAll int32 = 0
 	// moveByMouse is the MoveBackwardToLocation movement field of a click.
 	moveByMouse int32 = 1
+	// restartVillage is the RequestRestartPoint type of the nearest town
+	// (restart_selection.go).
+	restartVillage int32 = 0
 )
 
 // encodeMoveBackwardToLocation asks to walk or run to to from origin, as a
@@ -73,4 +76,18 @@ func writePoint(w *wire.Writer, p Point) {
 	w.WriteInt32(p.X)
 	w.WriteInt32(p.Y)
 	w.WriteInt32(p.Z)
+}
+
+// encodeAppearing tells the server the client has loaded the destination of
+// a teleport, which puts the character back in the world.
+func encodeAppearing() []byte {
+	return wire.NewPacketWriter(opGameAppearing).Bytes()
+}
+
+// encodeRequestRestartPoint asks a dead character to restart at the point
+// of type kind.
+func encodeRequestRestartPoint(kind int32) []byte {
+	w := wire.NewPacketWriter(opGameRequestRestartPoint)
+	w.WriteInt32(kind)
+	return w.Bytes()
 }
