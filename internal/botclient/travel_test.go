@@ -211,15 +211,16 @@ func TestTravelPlan(t *testing.T) {
 				}
 				return
 			}
-			if b.trip.v.npcID != tt.wantGK || b.trip.dest.index != tt.wantIndex || b.trip.spot != 1 {
-				t.Fatalf("trip = %+v, want gatekeeper %d destination %d spot 1", b.trip, tt.wantGK, tt.wantIndex)
+			if b.trip.v.npcID != tt.wantGK || b.trip.dest.index != tt.wantIndex {
+				t.Fatalf("trip = %+v, want gatekeeper %d destination %d", b.trip, tt.wantGK, tt.wantIndex)
 			}
 		})
 	}
 }
 
 // TestTravelGivesUp checks the trips that end without a teleport shun
-// their gatekeeper, and that another teleport ends a trip unshunned.
+// their gatekeeper (one whose page lacks the links for
+// tripNoLinkShunFor), and that another teleport ends a trip unshunned.
 func TestTravelGivesUp(t *testing.T) {
 	inSight := func(b *Brain) {
 		b.world.Self.move = stopAt(Point{X: 1900})
@@ -227,9 +228,9 @@ func TestTravelGivesUp(t *testing.T) {
 		b.world.Target = gkObj
 	}
 	tests := []struct {
-		name  string
-		steps []trainerStep
-		shun  bool
+		name    string
+		steps   []trainerStep
+		shunFor time.Duration
 	}{
 		{
 			name: "teleport link unanswered",
@@ -240,7 +241,7 @@ func TestTravelGivesUp(t *testing.T) {
 				{name: "wait", at: 3*time.Second + tripDepartTimeout - time.Millisecond, wantRule: "travel"},
 				{name: "refused", at: 3*time.Second + tripDepartTimeout},
 			},
-			shun: true,
+			shunFor: visitShunFor,
 		},
 		{
 			name: "page without the links",
@@ -249,7 +250,7 @@ func TestTravelGivesUp(t *testing.T) {
 				{name: "talk", at: 2 * time.Second, wantRule: "travel", wantKind: actTalk},
 				{name: "no link", at: 3 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkList(gkObj, 0)}}},
 			},
-			shun: true,
+			shunFor: tripNoLinkShunFor,
 		},
 		{
 			name: "gatekeeper not at its spawn",
@@ -257,7 +258,7 @@ func TestTravelGivesUp(t *testing.T) {
 				{name: "plan", at: time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1800}) }},
 				{name: "nobody there", at: 2 * time.Second},
 			},
-			shun: true,
+			shunFor: visitShunFor,
 		},
 		{
 			name: "talks unanswered",
@@ -271,7 +272,7 @@ func TestTravelGivesUp(t *testing.T) {
 				{name: "talk 6", at: 107 * time.Second, wantRule: "travel", wantKind: actTalk},
 				{name: "clicks spent", at: 128 * time.Second},
 			},
-			shun: true,
+			shunFor: visitShunFor,
 		},
 		{
 			name: "teleported elsewhere",
@@ -290,8 +291,12 @@ func TestTravelGivesUp(t *testing.T) {
 			if b.trip.v.active() || b.trip.endedAt.IsZero() {
 				t.Fatalf("trip %+v, want it ended", b.trip)
 			}
-			if shunned := !b.trip.shunned[0].IsZero(); shunned != tt.shun {
-				t.Fatalf("gatekeeper shunned = %v, want %v", shunned, tt.shun)
+			var shunFor time.Duration
+			if until, ok := b.trip.shunned[0]; ok {
+				shunFor = until.Sub(b.trip.endedAt)
+			}
+			if shunFor != tt.shunFor {
+				t.Fatalf("gatekeeper shunned for %v, want %v", shunFor, tt.shunFor)
 			}
 		})
 	}

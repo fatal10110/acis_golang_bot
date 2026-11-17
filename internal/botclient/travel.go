@@ -115,6 +115,15 @@ func defaultTravelPolicy() TravelPolicy {
 // system message (adena short, a besieged castle).
 const tripDepartTimeout = 10 * time.Second
 
+// tripNoLinkShunFor is how long a gatekeeper whose page has neither the
+// teleport list link nor the destination's link is left alone. Its page
+// does not change while the bot plays on: the scripted gatekeepers 31376
+// Kurfa and 31383 Teranu answer a bot outside the Ketra or Varka alliance
+// with their "-no" page (server script ketraorcsupport.go and
+// varkasilenossupport.go onFirstTalk), so a short shun would walk the bot
+// back to them over and over.
+const tripNoLinkShunFor = 24 * time.Hour
+
 // tripStep is where a trip stands once the gatekeeper's page is open.
 type tripStep uint8
 
@@ -134,11 +143,10 @@ const (
 type travelTrip struct {
 	v    npcVisit
 	step tripStep
-	// gk is the gatekeeper's index in the travel map, dest the destination
-	// and spot the farming spot the trip heads for.
+	// gk is the gatekeeper's index in the travel map and dest the
+	// destination the trip heads for.
 	gk   int
 	dest destination
-	spot int
 	// endedAt is when the last trip ended, zero before one.
 	endedAt time.Time
 	// shunned are the gatekeepers that took the bot nowhere, by index in
@@ -146,16 +154,16 @@ type travelTrip struct {
 	shunned map[int]time.Time
 }
 
-// end ends the trip at now; shun leaves its gatekeeper alone for
-// visitShunFor.
-func (tr *travelTrip) end(now time.Time, shun bool) {
-	if shun {
+// end ends the trip at now; a positive shunFor leaves its gatekeeper alone
+// for that long.
+func (tr *travelTrip) end(now time.Time, shunFor time.Duration) {
+	if shunFor > 0 {
 		if tr.shunned == nil {
 			tr.shunned = make(map[int]time.Time)
 		}
-		tr.shunned[tr.gk] = now.Add(visitShunFor)
+		tr.shunned[tr.gk] = now.Add(shunFor)
 	}
-	tr.v, tr.step, tr.dest, tr.spot, tr.endedAt = npcVisit{}, tripTalk, destination{}, 0, now
+	tr.v, tr.step, tr.dest, tr.endedAt = npcVisit{}, tripTalk, destination{}, now
 }
 
 // sent records a packet of the trip that went out at now.
@@ -199,7 +207,7 @@ func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 			return Action{}, true
 		}
 		// No teleport: the server refused the trip.
-		tr.end(now, true)
+		tr.end(now, visitShunFor)
 		return Action{}, false
 	}
 	if tr.step != tripTalk {
@@ -219,14 +227,15 @@ func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 	}
 	a, ok := b.approach(v, now)
 	if !ok {
-		tr.end(now, true)
+		tr.end(now, visitShunFor)
 		return Action{}, false
 	}
 	return a, true
 }
 
 // tripPage moves the trip on with the gatekeeper's page: its destination's
-// link, else its list link; a page with neither ends the trip.
+// link, else its list link; a page with neither ends the trip and shuns the
+// gatekeeper for tripNoLinkShunFor.
 func (b *Brain) tripPage(ev NpcHtmlMessage, now time.Time) {
 	tr := &b.trip
 	if !tr.v.active() || tr.step == tripGone || !tr.v.page(ev) {
@@ -238,7 +247,7 @@ func (b *Brain) tripPage(ev NpcHtmlMessage, now time.Time) {
 	case b.world.Dialog.Has(teleportListBypass(obj)):
 		tr.step = tripList
 	default:
-		tr.end(now, true)
+		tr.end(now, tripNoLinkShunFor)
 	}
 }
 
@@ -249,7 +258,7 @@ func (b *Brain) tripTeleported(now time.Time) {
 	if !b.trip.v.active() {
 		return
 	}
-	b.trip.end(now, false)
+	b.trip.end(now, 0)
 	b.spot.retryAt = time.Time{}
 }
 
@@ -271,7 +280,6 @@ func (b *Brain) planTrip(now time.Time) {
 	from := b.world.Self.Position(now)
 	best, bestScore := -1, math.Inf(1)
 	var bestDest destination
-	var bestSpot int
 	for gi := range m.gatekeepers {
 		g := &m.gatekeepers[gi]
 		dg := dist2(from, g.at)
@@ -282,12 +290,12 @@ func (b *Brain) planTrip(now time.Time) {
 			if d.price > budget {
 				continue
 			}
-			si, ds, ok := b.spotNear(d.at, reach, now)
+			ds, ok := b.spotNear(d.at, reach, now)
 			if !ok {
 				continue
 			}
 			if score := math.Sqrt(float64(dg)) + math.Sqrt(float64(ds)); score < bestScore {
-				best, bestScore, bestDest, bestSpot = gi, score, d, si
+				best, bestScore, bestDest = gi, score, d
 			}
 		}
 	}
@@ -296,13 +304,13 @@ func (b *Brain) planTrip(now time.Time) {
 	}
 	g := &m.gatekeepers[best]
 	tr.v = npcVisit{npcID: g.npcID, at: g.at}
-	tr.step, tr.gk, tr.dest, tr.spot = tripTalk, best, bestDest, bestSpot
+	tr.step, tr.gk, tr.dest = tripTalk, best, bestDest
 }
 
-// spotNear is the spot nearest to at, within reach (squared) of it, that
-// fits the bot's level, is not avoided and has room, with its squared
-// distance.
-func (b *Brain) spotNear(at Point, reach int64, now time.Time) (int, int64, bool) {
+// spotNear is the squared distance from at to the nearest spot within
+// reach (squared) of it that fits the bot's level, is not avoided and has
+// room; false when there is none.
+func (b *Brain) spotNear(at Point, reach int64, now time.Time) (int64, bool) {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	level := int(b.world.Self.Level)
 	best, bestDist := -1, int64(0)
@@ -317,5 +325,5 @@ func (b *Brain) spotNear(at Point, reach int64, now time.Time) (int, int64, bool
 		}
 		best, bestDist = i, d
 	}
-	return best, bestDist, best >= 0
+	return bestDist, best >= 0
 }
