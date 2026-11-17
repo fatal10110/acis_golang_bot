@@ -210,7 +210,10 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	var wg sync.WaitGroup
 	for _, b := range bots {
 		wg.Go(func() {
-			if err := b.Run(ctx); err != nil {
+			switch err := b.Run(ctx); {
+			case errors.Is(err, botclient.ErrCommandedLogout):
+				log.Info("bot stopped", "account", b.Account(), "err", err)
+			case err != nil:
 				log.Error("bot stopped", "account", b.Account(), "err", err)
 			}
 		})

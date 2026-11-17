@@ -166,8 +166,9 @@ type Brain struct {
 
 // logoutState is a logout run inside the loop.
 type logoutState struct {
-	// requested is set once the session asked to log out.
-	requested bool
+	// requested is set once the session or a GM command asked to log out,
+	// commanded once a GM command did.
+	requested, commanded bool
 	// pending is set while a Logout waits for its answer until deadline.
 	pending  bool
 	refused  bool
@@ -206,7 +207,8 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 // refuses (ActionFailed with no LeaveWorld within logoutRefusalGrace).
 //
 // Run returns nil after done closes or after the LeaveWorld that answers a
-// Logout. A LeaveWorld it did not ask for, ServerClose, the connection
+// Logout, ErrCommandedLogout when a GM command asked for that Logout. A
+// LeaveWorld it did not ask for, ServerClose, the connection
 // ending (the session queues connLost), a Logout left unanswered and a
 // failed send are errors. The session closes the
 // connection and joins its reader afterwards in every case.
@@ -263,7 +265,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.world.Apply(ev, now)
 		switch e := ev.(type) {
 		case LeaveWorld:
-			if b.logout.requested {
+			switch {
+			case b.logout.commanded:
+				return ErrCommandedLogout
+			case b.logout.requested:
 				return errLoggedOut
 			}
 			return errLeftWorld

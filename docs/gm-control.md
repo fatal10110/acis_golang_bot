@@ -11,8 +11,8 @@ authority check. The sender is the object id the server writes into the line, ne
 | `stay` | Stops where it stands, and drops `follow` and `assist`. It still heals, buffs and fights back. |
 | `go <spot>` | Walks to the farming spot of that spawnlist maker (any case) within the spot's cap, and stops following its party leader. It whispers back `unknown spot`, `that spot is full` or `I know no spots` when it cannot. |
 | `invite me` | Whispers `invite me` back. The bot invites nobody, so the GM invites it and stays the leader. |
-| `leave` | Leaves its party. |
-| `logout` | Logs out. |
+| `leave` | Leaves its party (nothing is sent outside a party). |
+| `logout` | Logs out and stops the bot: it stays out until the swarm restarts. |
 
 `follow`, `assist` and `go` cancel `stay`; `follow` cancels `go`. Orders last until the bot's
 session ends.

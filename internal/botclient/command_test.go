@@ -2,9 +2,12 @@ package botclient
 
 import (
 	"bytes"
+	"errors"
+	"math/rand/v2"
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -128,6 +131,7 @@ func TestBrainCommandReplies(t *testing.T) {
 		{"invite me", "invite me", false, encodeSay2Tell("GM", inviteMeText)},
 		{"invite me in its party", "invite me", true, nil},
 		{"leave", "leave", true, encodeRequestWithdrawParty()},
+		{"leave outside a party", "leave", false, nil},
 		{"go without spots", "go wolves", false, encodeSay2Tell("GM", replyNoSpots)},
 	}
 	for _, tt := range tests {
@@ -173,6 +177,46 @@ func TestBrainCommandLogout(t *testing.T) {
 	}
 	if len(out.frames) == 0 || out.frames[0][0] != opGameLogout {
 		t.Fatalf("sent % x, want Logout first", out.frames)
+	}
+	if err := b.handle([]Event{LeaveWorld{}}, at(2*time.Second)); !errors.Is(err, ErrCommandedLogout) {
+		t.Fatalf("handle(LeaveWorld) = %v, want ErrCommandedLogout", err)
+	}
+}
+
+// TestRuleCommandChatGate checks that a whisper reply held back by the chat
+// gate lets the survival rules run, and goes out once the gate opens.
+func TestRuleCommandChatGate(t *testing.T) {
+	b, _ := newCommandBrain(t, Persona{CriticalHP: 20, FleeDistance: 600})
+	b.start(t0)
+	b.pace.sent(gateChat, t0)
+	s := &b.world.Self
+	s.InCombat, s.HP, s.MaxHP = true, 10, 100
+	b.orders.reply = tellAction("GM", inviteMeText)
+	if name, _ := b.decide(at(chatGap - time.Millisecond)); name != "critical" {
+		t.Fatalf("inside the chat gate: rule %q, want critical", name)
+	}
+	s.InCombat, s.HP = false, 100
+	if name, _ := b.decide(at(chatGap)); name != "command" {
+		t.Fatalf("after the chat gate: rule %q, want command", name)
+	}
+}
+
+// TestSessionCommandedLogout checks that a session a GM's "logout" ended
+// stops the bot, persistent or not, and never counts as an abort.
+func TestSessionCommandedLogout(t *testing.T) {
+	for _, persistent := range []bool{true, false} {
+		reg := botmetrics.NewRegistry()
+		m := reg.NewBot()
+		b := &Bot{cfg: SessionConfig{Persistent: persistent, Brain: BrainConfig{Metrics: m}}, rng: rand.New(rand.NewPCG(1, 2)), log: discardLog(), retry: backoff{base: retryBase, max: retryMax}}
+		for range maxAborts {
+			d, err := b.after(true, time.Minute, ErrCommandedLogout)
+			if d != 0 || !errors.Is(err, ErrCommandedLogout) {
+				t.Fatalf("persistent %v: after = %v, %v; want 0, ErrCommandedLogout", persistent, d, err)
+			}
+		}
+		if b.aborts != 0 || reg.Collect(t0).Aborts != 0 {
+			t.Fatalf("persistent %v: %d aborts counted", persistent, b.aborts)
+		}
 	}
 }
 
@@ -318,8 +362,8 @@ func TestBrainRunVerdict(t *testing.T) {
 	if got[0] != opGameLogout {
 		t.Fatalf("sent % x, want Logout", got)
 	}
-	close(done)
-	if err := <-errc; err != nil {
-		t.Fatal(err)
+	b.events.push(LeaveWorld{}, done)
+	if err := <-errc; !errors.Is(err, ErrCommandedLogout) {
+		t.Fatalf("Run = %v, want ErrCommandedLogout", err)
 	}
 }

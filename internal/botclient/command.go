@@ -108,7 +108,8 @@ type orders struct {
 	// place of its party leader, 0 for none.
 	follow, assist int32
 	// reply is a one-off packet a command asks for (a whisper back, a
-	// party withdrawal), sent by rule "command".
+	// party withdrawal), sent by rule "command". It is a single slot: a
+	// later command's reply replaces one not yet sent.
 	reply Action
 }
 
@@ -152,8 +153,13 @@ func (b *Brain) obey(v verdict, now time.Time) {
 			o.reply = tellAction(v.name, inviteMeText)
 		}
 	case cmdLeave:
-		o.reply = leavePartyAction()
+		// The server ignores a withdrawal from no party (server
+		// internal/gameserver/network/partymatch.go, withdrawParty).
+		if b.world.Party.In() {
+			o.reply = leavePartyAction()
+		}
 	case cmdLogout:
+		b.logout.commanded = true
 		if !b.logout.requested {
 			b.requestLogout(now)
 		}
@@ -185,10 +191,14 @@ func (b *Brain) goToSpot(name string, now time.Time) string {
 }
 
 // ruleCommand sends the one-off packet a command asked for, ahead of every
-// errand.
-func (b *Brain) ruleCommand(time.Time) (Action, bool) {
+// errand. While the pacer holds it back (a whisper inside the chat gate) it
+// passes, so the survival rules below it still run.
+func (b *Brain) ruleCommand(now time.Time) (Action, bool) {
 	r := b.orders.reply
-	return r, r.kind != actHold
+	if r.kind == actHold || !b.pace.allow(r.gate(), now) {
+		return Action{}, false
+	}
+	return r, true
 }
 
 // ruleStay holds a bot told to stay where it stands: it stops a move under
