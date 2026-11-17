@@ -36,23 +36,21 @@ const (
 )
 
 // ErrLoginsHalted reports that the credential breaker tripped: no bot of the
-// process logs in again.
+// process logs in again until the breaker is reset (LoginGate.Reset).
 var ErrLoginsHalted = errors.New("all logins halted by the credential breaker")
 
 // LoginGate is the process-wide gate every bot passes to dial the login and
 // game servers. A bot takes a turn, during which no other bot dials, and
 // spaces each dial of its turn under the accept filter (dialSpacing), unless
 // the gate is unspaced (NewAllowlistedLoginGate). A refused dial backs every
-// bot off. The credential breaker (Halt) stops every later login. All of its
-// methods may be called from any goroutine.
+// bot off. The credential breaker (Halt) stops every later login until Reset.
+// All of its methods may be called from any goroutine.
 type LoginGate struct {
 	clock Clock
 	// spaced is set at construction and never changes.
 	spaced bool
 	// turn holds one token: taking it starts a turn, putting it back ends it.
 	turn chan struct{}
-	// halt is closed when the breaker trips.
-	halt chan struct{}
 
 	// rng, next and refused are owned by the turn holder.
 	rng *rand.Rand
@@ -60,8 +58,13 @@ type LoginGate struct {
 	next    time.Time
 	refused backoff
 
-	mu  sync.Mutex
-	err error // the breaker's cause once tripped; guarded by mu
+	// mu guards the breaker's current generation, the pair halt and err, and
+	// metrics. Halt sets err before it closes halt, so a waiter woken by a
+	// closed halt that is still current reads a non-nil err; Reset installs a
+	// new open pair, so a waiter woken by a stale halt waits on the new one.
+	mu   sync.Mutex
+	halt chan struct{} // closed when the generation trips
+	err  error         // the generation's cause once tripped
 	// metrics records the open breaker; guarded by mu, nil records nothing.
 	metrics *botmetrics.Registry
 }
@@ -107,33 +110,37 @@ type Turn struct {
 }
 
 // Take waits for the gate. It fails once the breaker has tripped or ctx
-// ends.
+// ends; a breaker that trips and is reset while Take waits does not fail it.
 func (g *LoginGate) Take(ctx context.Context) (*Turn, error) {
-	if err := cmp.Or(g.Err(), ctx.Err()); err != nil {
-		return nil, err
+	for {
+		halt, err := g.breaker()
+		if err := cmp.Or(err, ctx.Err()); err != nil {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-halt:
+			continue // fail on the generation if it is still current
+		case <-g.turn:
+		}
+		if err := g.Err(); err != nil {
+			g.turn <- struct{}{}
+			return nil, err
+		}
+		return &Turn{g: g}, nil
 	}
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-g.halt:
-		return nil, g.Err()
-	case <-g.turn:
-	}
-	if err := g.Err(); err != nil {
-		g.turn <- struct{}{}
-		return nil, err
-	}
-	return &Turn{g: g}, nil
 }
 
 // Dial waits until the turn may start its next dial: on a spaced gate
 // dialSpacing plus a jitter after the previous dial start of the process,
 // and past the refused backoff. It fails once the breaker has tripped or ctx
-// ends.
+// ends; a breaker that trips and is reset while Dial waits does not fail it.
 func (t *Turn) Dial(ctx context.Context) error {
 	g := t.g
 	for {
-		if err := cmp.Or(g.Err(), ctx.Err()); err != nil {
+		halt, err := g.breaker()
+		if err := cmp.Or(err, ctx.Err()); err != nil {
 			return err
 		}
 		now := g.clock.Now()
@@ -149,7 +156,7 @@ func (t *Turn) Dial(ctx context.Context) error {
 		case <-ctx.Done():
 			timer.Stop()
 			return ctx.Err()
-		case <-g.halt:
+		case <-halt: // fail on the generation if it is still current
 		case <-timer.C():
 		}
 		timer.Stop()
@@ -184,10 +191,16 @@ func (t *Turn) Done() {
 // refused credentials in a row from it (server internal/loginserver/
 // clientlink.go, DefaultLoginTryBeforeBan) for 10 minutes, and counts per IP,
 // not per account. So the first refused credential stops every later login
-// of the process. Later calls keep the first cause.
+// of the process until Reset. Later calls keep the first cause.
 func (g *LoginGate) Halt(cause error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.haltLocked(cause)
+}
+
+// haltLocked trips the current generation unless it already tripped; the
+// caller holds mu.
+func (g *LoginGate) haltLocked(cause error) {
 	if g.err != nil {
 		return
 	}
@@ -198,6 +211,36 @@ func (g *LoginGate) Halt(cause error) {
 	}
 }
 
+// Reset closes a tripped breaker: a new generation starts, logins resume, and
+// the next Halt trips it again with its own cause. Bots a halt already ended
+// stay ended; bots still waiting in Take or Dial wait on. Reset of an
+// untripped breaker does nothing.
+func (g *LoginGate) Reset() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.resetLocked()
+}
+
+// resetLocked starts a new generation if the current one tripped; the caller
+// holds mu.
+func (g *LoginGate) resetLocked() {
+	if g.err == nil {
+		return
+	}
+	g.halt, g.err = make(chan struct{}), nil
+	if g.metrics != nil {
+		g.metrics.SetBreaker(false)
+	}
+}
+
+// breaker returns the current generation: its halt channel and its cause,
+// nil until it trips.
+func (g *LoginGate) breaker() (<-chan struct{}, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.halt, g.err
+}
+
 // ReportBreaker makes Halt record the open breaker in r. Call it before the
 // first Take.
 func (g *LoginGate) ReportBreaker(r *botmetrics.Registry) {
@@ -206,7 +249,7 @@ func (g *LoginGate) ReportBreaker(r *botmetrics.Registry) {
 	g.metrics = r
 }
 
-// Err is the breaker's error once it tripped, else nil.
+// Err is the breaker's error once the current generation tripped, else nil.
 func (g *LoginGate) Err() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()

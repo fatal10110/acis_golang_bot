@@ -461,10 +461,8 @@ to avoid: both would log in the same accounts and kick each other.
 - A bot whose run ends by itself gets a state by its reason (`Bot.after` and `afterSession`): a
   `logout` command (`ErrCommandedLogout`) is offline; a bot ended by the tripped credential breaker
   (`ErrLoginsHalted`) stays online and comes back when the owner presses "resume logins", which
-  resets the breaker. Today's breaker is one-shot (`LoginGate.Halt` closes `halt` for good, and
-  `Take` and `Dial` read it without the lock), so the breaker becomes a generation: a `{halt, err}`
-  pair under the gate's mutex whose err is set before its channel closes, and a reset installs a new
-  pair. `Take` and `Dial` fetch the current pair under the mutex; when a fired pair is no longer
+  resets the breaker (`LoginGate.Reset`). The breaker is a generation: a `{halt, err}` pair under
+  the gate's mutex whose err is set before its channel closes, and a reset installs a new pair. `Take` and `Dial` fetch the current pair under the mutex; when a fired pair is no longer
   current (a reset came in between), they wait on the new one instead of failing, so no bot gets a
   nil error or a stale `ErrLoginsHalted` after a reset. A halted report that still reaches the
   supervisor while the gate is open restarts that bot at once; repeated server aborts
