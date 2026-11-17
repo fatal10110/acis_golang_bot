@@ -70,6 +70,10 @@ type BrainConfig struct {
 	// Spots, when set, are the farming spots the bot picks from (rule
 	// "spot"), shared by every bot of the process. Nil farms nowhere.
 	Spots *SpotRegistry
+	// Travel, when set, is the travel map the bot finds gatekeepers and
+	// NPC spawns on (rules "travel" and "newbie"), shared by every bot of
+	// the process. Nil travels nowhere and visits only NPCs in sight.
+	Travel *TravelMap
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -129,6 +133,10 @@ type Brain struct {
 	buffedAt map[buffKey]time.Time
 	// follow is the slot behind the party leader (rule 9 errand).
 	follow followState
+	// newbie is the Newbie Guide visit and trip the gatekeeper trip (rule
+	// 9 errands).
+	newbie newbieVisit
+	trip   travelTrip
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -281,6 +289,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.appearing = b.appearing || !e.Fast
 				// Somewhere else: walk to the spot again.
 				b.spot.arrived, b.spot.lastDist, b.spot.stalls = false, 0, 0
+				if !e.Fast {
+					b.tripTeleported(now)
+				}
 			}
 		case Revive:
 			if e.ObjectID == self {
@@ -316,7 +327,11 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
-		case NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
+		case NpcHtmlMessage:
+			b.trainEvent(ev, now)
+			b.tripPage(e, now)
+			b.newbiePage(e)
+		case AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 			b.trainEvent(ev, now)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
@@ -511,6 +526,8 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.follow.runToggledAt = now
 	}
 	b.train.sent(a, now)
+	b.trip.sent(a, now)
+	b.newbie.sent(a, now, b.world.Self.Level)
 	return true, nil
 }
 

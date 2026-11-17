@@ -159,7 +159,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Log:        log,
 	}
 	if o.datapack != "" {
-		if cfg.Brain.Spots, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
+		if cfg.Brain.Spots, cfg.Brain.Travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
@@ -228,19 +228,21 @@ func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry
 }
 
 // loadSpots reads the datapack whose XML directory is dir and returns the
-// spot registry every bot of the process shares. The datapack itself is
-// dropped once its spots are built.
-func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.SpotRegistry, error) {
+// spot registry and the travel map every bot of the process shares. The
+// datapack itself is dropped once they are built.
+func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, error) {
 	dp, err := datapack.Load(dir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, w := range dp.Spawnlist.Warnings {
 		log.Debug("datapack", "warning", w)
 	}
 	spots := dp.Spots()
 	log.Info("farming spots", "spots", len(spots), "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
-	return botclient.NewSpotRegistry(spots, multiplier), nil
+	travel := botclient.NewTravelMap(dp)
+	log.Info("travel map", "gatekeepers", travel.Gatekeepers())
+	return botclient.NewSpotRegistry(spots, multiplier), travel, nil
 }
 
 // newBots returns one bot per account, each counting into its own Bot of

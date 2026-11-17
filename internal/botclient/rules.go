@@ -97,6 +97,13 @@ type Persona struct {
 	// Follow is how the bot follows the leader of its party (rule
 	// "follow").
 	Follow FollowPolicy
+	// Newbie is when the bot asks a Newbie Guide for the newbie buffs
+	// (rule 9 errand "newbie").
+	Newbie NewbiePolicy
+	// Travel is how the bot travels by gatekeeper to a spot out of walking
+	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
+	// errand "travel").
+	Travel TravelPolicy
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -137,6 +144,8 @@ func DefaultPersona() Persona {
 		AssistMin:      500 * time.Millisecond,
 		AssistMax:      1500 * time.Millisecond,
 		Follow:         defaultFollowPolicy(),
+		Newbie:         defaultNewbiePolicy(),
+		Travel:         defaultTravelPolicy(),
 	}
 }
 
@@ -246,13 +255,14 @@ type rule struct {
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
 // the party, ahead of fighting so a support in combat still heals;
 // "assist" (the leader's target), "train" (the trainer), "follow" (the
-// slot behind the party leader), "spot" (getting to the farming spot) and
-// "farm" (attacking a monster there) are rule 9 errands, ahead of the
-// persona's goal: a party member assists its leader, visits its trainer,
-// then follows instead of farming. Rule 8 (loot) needs the loot model of
-// #29. The shot toggle is set-up, not a plan rule: it runs once per shot
-// template carried, ahead of the fight it serves, after the flee rules so
-// it never delays one.
+// slot behind the party leader), "newbie" (the Newbie Guide's buffs),
+// "travel" (a gatekeeper trip to a spot out of walking reach), "spot"
+// (getting to the farming spot) and "farm" (attacking a monster there) are
+// rule 9 errands, ahead of the persona's goal: a party member assists its
+// leader, visits its trainer, then follows instead of farming. Rule 8
+// (loot) needs the loot model of #29. The shot toggle is set-up, not a plan
+// rule: it runs once per shot template carried, ahead of the fight it
+// serves, after the flee rules so it never delays one.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -266,6 +276,8 @@ var playRules = []rule{
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"follow", (*Brain).ruleFollow},
+	{"newbie", (*Brain).ruleNewbie},
+	{"travel", (*Brain).ruleTravel},
 	{"spot", (*Brain).ruleSpot},
 	{"farm", (*Brain).ruleFarm},
 	{"goal", (*Brain).ruleGoal},
