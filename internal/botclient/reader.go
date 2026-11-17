@@ -85,6 +85,12 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameAutoAttackStart:  func(r *wire.Reader) Event { return AutoAttackStart{ObjectID: r.ReadInt32()} },
 	opGameAutoAttackStop:   func(r *wire.Reader) Event { return AutoAttackStop{ObjectID: r.ReadInt32()} },
 
+	opGameAttack:                    decodeAttack,
+	opGameMagicSkillUse:             decodeMagicSkillUse,
+	opGameMagicSkillLaunched:        decodeMagicSkillLaunched,
+	opGameSkillList:                 decodeSkillList,
+	opGameSkillCoolTime:             decodeSkillCoolTime,
+	opGameRelationChanged:           decodeRelationChanged,
 	opGameAskJoinParty:              decodeAskJoinParty,
 	opGameJoinParty:                 func(r *wire.Reader) Event { return JoinParty{Response: r.ReadInt32()} },
 	opGamePartySmallWindowAll:       decodePartySmallWindowAll,

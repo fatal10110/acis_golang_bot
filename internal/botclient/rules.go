@@ -18,6 +18,20 @@ type Persona struct {
 	// FleeDistance away from its target (rule 3); 0 never flees.
 	CriticalHP   int
 	FleeDistance int32
+	// OutmatchedHP is the HP percent under which a bot hit by two or more
+	// attackers flees from the hardest hitter instead of fighting it (rule
+	// 4); 0 always fights.
+	OutmatchedHP int
+	// AttackSkills are the skills the bot casts at its combat target before
+	// melee, first ready one first: known (SkillList), enabled and out of
+	// reuse.
+	AttackSkills []int32
+	// BlacklistAfter is how many attempts on a target with no swing or cast
+	// landing in between make the bot leave it alone for BlacklistFor; 0
+	// never does.
+	BlacklistAfter int
+	BlacklistFor   time.Duration
+	PvP            PvPPolicy
 	// SitHP and SitMP are the percents under which a bot out of combat sits
 	// to rest; it stands once both reach StandHP and StandMP (rule 6). 0
 	// never sits for that resource.
@@ -47,17 +61,21 @@ type Persona struct {
 // stands.
 func DefaultPersona() Persona {
 	return Persona{
-		Death:        restartToVillage,
-		JoinParty:    acceptParty,
-		CriticalHP:   20,
-		FleeDistance: 600,
-		SitHP:        40,
-		SitMP:        30,
-		StandHP:      90,
-		StandMP:      90,
-		IdleChance:   0.1,
-		IdleRadius:   250,
-		Emotes:       []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
+		Death:          restartToVillage,
+		JoinParty:      acceptParty,
+		CriticalHP:     20,
+		FleeDistance:   600,
+		OutmatchedHP:   50,
+		BlacklistAfter: 4,
+		BlacklistFor:   3 * time.Minute,
+		PvP:            PvPPolicy{FightFlagged: true},
+		SitHP:          40,
+		SitMP:          30,
+		StandHP:        90,
+		StandMP:        90,
+		IdleChance:     0.1,
+		IdleRadius:     250,
+		Emotes:         []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
 	}
 }
 
@@ -68,8 +86,10 @@ const turnStep = 40
 type Action struct {
 	kind    actionKind
 	payload []byte
-	// object is the object an attack acts on.
+	// object is the object an attack, a selection or a cast acts on.
 	object int32
+	// skill is the skill a cast casts.
+	skill int32
 }
 
 type actionKind uint8
@@ -85,6 +105,8 @@ const (
 	actLogout
 	actAppear
 	actRestart
+	actSelect
+	actCast
 	actAnswerParty
 	actLeaveParty
 )
@@ -141,14 +163,15 @@ type rule struct {
 	run  func(b *Brain, now time.Time) (Action, bool)
 }
 
-// playRules are rules 1-10, first match wins. Rules 4 (two or more
-// attackers), 7 (rebuff) and 8 (loot) need events and models that land with
-// combat (#20), buffs (#22) and loot (#29); rule 3 only flees until
+// playRules are rules 1-10, first match wins. Rules 7 (rebuff) and 8
+// (loot) need events and models that land with buffs (#22) and loot (#29);
+// rule 3 only flees until
 // potions (#23) and heals (#22) exist.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"critical", (*Brain).ruleCritical},
+	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
 	{"goal", (*Brain).ruleGoal},
@@ -231,25 +254,34 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	if !s.InCombat || !below(s.HP, s.MaxHP, b.persona.CriticalHP) {
 		return Action{}, false
 	}
+	return b.flee(b.world.Target, now), true
+}
+
+// flee runs FleeDistance away from object id, or in a random direction
+// when id is not in sight, standing up first.
+func (b *Brain) flee(id int32, now time.Time) Action {
+	s := &b.world.Self
 	if s.Sitting {
-		return b.toggle(now), true
+		return b.toggle(now)
 	}
 	if s.Moving(now) {
-		return Action{}, true
+		return Action{}
 	}
 	from := s.Position(now)
 	angle := b.rng.Float64() * 2 * math.Pi
-	if o := b.world.object(b.world.Target); o != nil {
+	if o := b.world.object(id); o != nil {
 		if t := o.Position(now); t.X != from.X || t.Y != from.Y {
 			angle = math.Atan2(float64(from.Y-t.Y), float64(from.X-t.X))
 		}
 	}
-	return moveAction(offset(from, angle, b.persona.FleeDistance), from), true
+	return moveAction(offset(from, angle, b.persona.FleeDistance), from)
 }
 
-// ruleAttacked is rule 5: in combat, stand up and attack the selected
-// monster once (the server repeats the swing). Players are left to the PvP
-// defaults of #20.
+// ruleAttacked is rule 5: in combat, stand up and fight back. The selected
+// target is fought while the PvP policy allows it and nothing else is
+// hitting the bot; otherwise the hardest hitter is selected. An attack on a
+// target the policy no longer allows (a player who unflagged) is dropped.
+// Hit only by creatures it may not fight (blacklisted), the bot runs away.
 func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
@@ -259,8 +291,18 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 		return b.toggle(now), true
 	}
 	id := b.world.Target
-	if o := b.world.object(id); o != nil && o.Kind == KindNPC && o.Attackable && !o.Dead && b.engaged != id {
-		return attackAction(id, s.Position(now)), true
+	fightable := b.mayFight(id, now)
+	hits := b.attackers(now)
+	switch {
+	case !fightable && id != 0 && b.engaged == id:
+		return b.disengage(now), true
+	case fightable && (len(hits) == 0 || b.world.attacking(id, now)):
+		return b.fight(id, now), true
+	case len(hits) > 0:
+		return b.fight(hits[0], now), true
+	}
+	if id := b.unfought(now); id != 0 {
+		return b.flee(id, now), true
 	}
 	return Action{}, true
 }

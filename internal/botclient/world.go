@@ -24,7 +24,14 @@ type World struct {
 	// for none.
 	Target  int32
 	Prompts Prompts
-	Party   Party
+	// Skills are the character's skills by id (SkillList); skillReady is
+	// when each skill's reuse ends, kept apart because SkillCoolTime and
+	// the bot's own casts set it whether or not the list came first.
+	Skills     map[int32]KnownSkill
+	skillReady map[int32]time.Time
+	// Attackers are the creatures that hit the bot recently, by object id.
+	Attackers map[int32]*Attacker
+	Party     Party
 }
 
 // SelfState is the bot's own character.
@@ -48,6 +55,8 @@ type SelfState struct {
 	Sitting, InCombat, Dead, Running bool
 	RunSpeed, WalkSpeed, Heading     int32
 	move                             motion
+	// castEnd is when the bot's own cast in progress hits.
+	castEnd time.Time
 }
 
 // Position is where the character is at now, dead reckoned along its
@@ -201,8 +210,11 @@ func short(from, to Point, dist int32) Point {
 func NewWorld(self Self, now time.Time) (*World, error) {
 	pos := Point{X: self.X, Y: self.Y, Z: self.Z}
 	w := &World{
-		Self:    SelfState{ObjectID: self.ObjectID, Name: self.Name, Heading: self.Heading, move: stopAt(pos)},
-		Objects: make(map[int32]*Object),
+		Self:       SelfState{ObjectID: self.ObjectID, Name: self.Name, Heading: self.Heading, move: stopAt(pos)},
+		Objects:    make(map[int32]*Object),
+		Skills:     make(map[int32]KnownSkill),
+		skillReady: make(map[int32]time.Time),
+		Attackers:  make(map[int32]*Attacker),
 	}
 	for _, raw := range append(self.Burst[:len(self.Burst):len(self.Burst)], self.UserInfo) {
 		if len(raw) == 0 {
@@ -295,6 +307,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyTeleport(e)
 	case DeleteObject:
 		delete(w.Objects, e.ObjectID)
+		delete(w.Attackers, e.ObjectID)
 		if w.Target == e.ObjectID {
 			w.Target = 0
 		}
@@ -319,6 +332,22 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.setCombat(e.ObjectID, true)
 	case AutoAttackStop:
 		w.setCombat(e.ObjectID, false)
+	case Attack:
+		w.applyAttack(e, now)
+	case MagicSkillUse:
+		w.applyMagicSkillUse(e, now)
+	case SkillList:
+		w.applySkillList(e)
+	case SkillCoolTime:
+		for _, t := range e.Timers {
+			// The server truncates the remaining time to whole seconds
+			// (character_flow.go skillCoolTimePacket): round up.
+			w.skillReady[t.SkillID] = now.Add(t.Remaining + time.Second)
+		}
+	case RelationChanged:
+		if o := w.object(e.ObjectID); o != nil {
+			o.Karma, o.PvPFlag = e.Karma, e.PvPFlag
+		}
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)
@@ -458,6 +487,7 @@ func (w *World) applyTeleport(e TeleportToLocation) {
 	*m = stopAt(e.Pos)
 	if e.ObjectID == w.Self.ObjectID && !e.Fast {
 		clear(w.Objects)
+		clear(w.Attackers)
 		w.Target = 0
 	}
 }
@@ -466,9 +496,12 @@ func (w *World) applyDie(e Die, now time.Time) {
 	if e.ObjectID == w.Self.ObjectID {
 		w.Self.Dead = true
 		w.Self.move = stopAt(w.Self.move.at(now))
+		w.Self.castEnd = time.Time{}
+		clear(w.Attackers)
 		w.Prompts.Restart = RestartPrompt{Open: true, Points: e.Restart}
 		return
 	}
+	delete(w.Attackers, e.ObjectID)
 	if o := w.object(e.ObjectID); o != nil {
 		o.Dead = true
 		o.move = stopAt(o.move.at(now))

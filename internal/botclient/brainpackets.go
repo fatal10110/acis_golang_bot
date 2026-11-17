@@ -91,3 +91,29 @@ func encodeRequestRestartPoint(kind int32) []byte {
 	w.WriteInt32(kind)
 	return w.Bytes()
 }
+
+// encodeAttackRequest force-attacks objectID from origin, as a ctrl-click:
+// on the selected object the server attacks it whatever its PvP state, on
+// any other object it only selects it (client_ingame.go
+// handleAttackRequest). It has Action's layout.
+func encodeAttackRequest(objectID int32, origin Point) []byte {
+	w := wire.NewPacketWriter(opGameAttackRequest)
+	w.WriteInt32(objectID)
+	writePoint(w, origin)
+	w.WriteUint8(0) // shift not held
+	return w.Bytes()
+}
+
+// encodeRequestMagicSkillUse casts skill id at the selected target, ctrl
+// held for a forced cast, shift released (magic_skill_use.go).
+func encodeRequestMagicSkillUse(id int32, ctrl bool) []byte {
+	w := wire.NewPacketWriter(opGameRequestMagicSkillUse)
+	w.WriteInt32(id)
+	var c int32
+	if ctrl {
+		c = 1
+	}
+	w.WriteInt32(c)
+	w.WriteUint8(0) // shift
+	return w.Bytes()
+}

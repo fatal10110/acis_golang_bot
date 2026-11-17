@@ -111,8 +111,10 @@ func TestRuleTable(t *testing.T) {
 			},
 		},
 		{
-			name:     "attacked clicks a monster once",
-			setup:    func(b *Brain) { b.world.Self.InCombat, b.world.Target, b.engaged = true, npcID, npcID },
+			name: "attacked clicks a monster once",
+			setup: func(b *Brain) {
+				b.world.Self.InCombat, b.world.Target, b.engaged, b.progressAt = true, npcID, npcID, now
+			},
 			wantRule: "attacked",
 		},
 		{
