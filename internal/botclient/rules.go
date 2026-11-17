@@ -85,6 +85,8 @@ type Persona struct {
 	JoinParty func(w *World, requester string, now time.Time) bool
 	// Trade is how the bot answers trade requests and trades (rule 2).
 	Trade TradePolicy
+	// Chat is how the bot answers whispers (rule "chat").
+	Chat ChatPolicy
 	// LearnSkills are the skills the bot learns with SP at a trainer, by
 	// class id, first listed first (rule 9 errand); a class with none never
 	// visits one. A visit is due once per level and when the SP reaches the
@@ -171,6 +173,7 @@ func DefaultPersona() Persona {
 		Loot:           defaultLootPolicy(),
 		Trade:          defaultTradePolicy(),
 		Store:          defaultStorePolicy(),
+		Chat:           defaultChatPolicy(),
 	}
 }
 
@@ -230,6 +233,7 @@ const (
 	actStoreTitle
 	actStoreList
 	actStoreQuit
+	actChatReply
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -248,10 +252,11 @@ const (
 // have no reuse gate either (no flood protector covers them): a request is
 // answered once, and a trade gets one add, one confirm and one cancel
 // (Trade.added, confirmed, cancelAt). A pickup click (Action) has none:
-// lootRetry spaces the clicks on one item. A whisper (Say2 Tell) has no
-// server gate either (chat.go chatTell): it keeps the chat gate. DlgAnswer
-// and RequestUserCommand have none either: an offer is answered once, and
-// escapeRetry spaces a repeated /unstuck. The sell store packets
+// lootRetry spaces the clicks on one item. A whisper (Say2 Tell), a GM
+// command's reply or a chat reply, has no server gate either (chat.go
+// chatTell): it keeps the chat gate. DlgAnswer and RequestUserCommand have
+// none either: an offer is answered once, and escapeRetry spaces a repeated
+// /unstuck. The sell store packets
 // (RequestPrivateStoreManageSell, SetPrivateStoreMsgSell,
 // SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
 // protector either (network/privatestore_dispatch.go): an opening sends
@@ -261,7 +266,7 @@ func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
-	case actSay, actTell:
+	case actSay, actTell, actChatReply:
 		return gateChat
 	case actBypass:
 		return gateBypass
@@ -313,22 +318,23 @@ type rule struct {
 // the party, ahead of fighting so a support in combat still heals;
 // "assist" (the leader's target), "train" (the trainer), "gear" (wearing
 // better gear, ahead of the shop so a bought piece is worn before the next
-// sale), "shop" (a merchant's buy and sell windows), "follow" (the
-// slot behind the party leader), "newbie" (the Newbie Guide's buffs),
-// "travel" (a gatekeeper trip to a spot out of walking reach), "spot"
-// (getting to the farming spot) and "farm" (attacking a monster there) are
-// rule 9 errands, ahead of the persona's goal: a party member assists its
-// leader, visits its trainer, then follows instead of farming. "loot" is
-// rule 8, after the rebuff and ahead of every errand. "store" is the
-// merchant's private store: it opens where the bot stands, ahead of every
-// errand that would walk it away, and puts the bot in store mode
-// (storeRules). "command" sends what
-// a GM's whispered command asks for (a reply, a party withdrawal), and
-// "stay" holds a bot a GM told to stay, ahead of looting and every errand
-// that would move it. "leader" handles a dead or lost leader ahead of
-// following it. The shot toggle is set-up, not a plan
-// rule: it runs once per shot template carried, ahead of the fight it
-// serves, after the flee rules so it never delays one.
+// sale), "shop" (a merchant's buy and sell windows), "follow" (the slot
+// behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
+// (a gatekeeper trip to a spot out of walking reach), "spot" (getting to the
+// farming spot) and "farm" (attacking a monster there) are rule 9 errands,
+// ahead of the persona's goal: a party member assists its leader, visits its
+// trainer, then follows instead of farming. "loot" is rule 8, after the
+// rebuff and ahead of every errand. "store" is the merchant's private store:
+// it opens where the bot stands, ahead of every errand that would walk it
+// away, and puts the bot in store mode (storeRules). "command" sends what a
+// GM's whispered command asks for (a reply, a party withdrawal), and "stay"
+// holds a bot a GM told to stay, ahead of looting and every errand that
+// would move it. "chat" whispers a delayed reply to a player's whisper
+// (ChatPolicy), after the flee and heal rules so it never delays one; a
+// due reply waits for them. "leader" handles a dead or lost leader ahead of
+// following it. The shot toggle is set-up, not a plan rule: it runs once
+// per shot template carried, ahead of the fight it serves, after the flee
+// rules so it never delays one.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -336,6 +342,7 @@ var playRules = []rule{
 	{"critical", (*Brain).ruleCritical},
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
+	{"chat", (*Brain).ruleChat},
 	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
@@ -363,6 +370,7 @@ var storeRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"command", (*Brain).ruleCommand},
+	{"chat", (*Brain).ruleChat},
 	{"store", (*Brain).ruleStore},
 }
 
