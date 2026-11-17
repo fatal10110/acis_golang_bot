@@ -40,6 +40,8 @@ type World struct {
 	Dialog Dialog
 	// Inventory is what the bot carries.
 	Inventory Inventory
+	// Trade is the bot's open trade window.
+	Trade Trade
 	// Buffs are the bot's own effects (AbnormalStatusUpdate).
 	Buffs Buffs
 }
@@ -121,6 +123,9 @@ type Prompts struct {
 	// Party is open from a party invitation until the bot answers it or
 	// joins a party.
 	Party PartyInvite
+	// Trade is open from a trade request until the bot answers it or a
+	// trade window opens.
+	Trade TradeInvite
 }
 
 // RestartPrompt is the restart-point choice offered to a dead character.
@@ -368,6 +373,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyParty(ev, now)
 	case ItemList, InventoryUpdate, ExAutoSoulShot:
 		w.applyItems(ev)
+	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOwnOk, TradePressOtherOk, SendTradeDone:
+		w.applyTrade(ev, now)
 	case AbnormalStatusUpdate, PartySpelled:
 		w.applyEffects(ev, now)
 	}

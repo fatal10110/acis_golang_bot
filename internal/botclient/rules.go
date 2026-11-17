@@ -77,6 +77,8 @@ type Persona struct {
 	// JoinParty decides whether to accept the party invitation of the
 	// player named requester (rule 2); nil declines every invitation.
 	JoinParty func(w *World, requester string, now time.Time) bool
+	// Trade is how the bot answers trade requests and trades (rule 2).
+	Trade TradePolicy
 	// LearnSkills are the skills the bot learns with SP at a trainer, by
 	// class id, first listed first (rule 9 errand); a class with none never
 	// visits one. A visit is due once per level and when the SP reaches the
@@ -146,6 +148,7 @@ func DefaultPersona() Persona {
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
+		Trade:          defaultTradePolicy(),
 	}
 }
 
@@ -189,6 +192,10 @@ const (
 	actSkillInfo
 	actLearnSkill
 	actWalkRun
+	actAnswerTrade
+	actTradeAdd
+	actTradeConfirm
+	actTradeCancel
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -201,7 +208,10 @@ const (
 // skill request per server answer. RequestMagicSkillUse (attack, heal and
 // buff casts) has none either: a cast waits for the one before it
 // (castPending, castTimeout) and its skill's reuse, and buffRetry spaces
-// one buff on one target.
+// one buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone
+// have no reuse gate either (no flood protector covers them): a request is
+// answered once, and a trade gets one add, one confirm and one cancel
+// (Trade.added, confirmed, cancelAt).
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -336,13 +346,16 @@ func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 
 // rulePrompt is rule 2: an open prompt waits for the persona's answer. A
 // party invitation still answerable is accepted or declined at once, per
-// the persona; the restart prompt opens only while dead, so rule 1 answers
-// it first. The slot is kept for the prompts later milestones add (trade
-// request).
+// the persona, then a trade request, and an open trade holds the bot
+// (ruleTrade); the restart prompt opens only while dead, so rule 1 answers
+// it first.
 func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	if inv := b.world.Prompts.Party; inv.Pending(now) {
 		join := b.persona.JoinParty
 		return answerPartyAction(join != nil && join(b.world, inv.Requester, now)), true
+	}
+	if a, ok := b.ruleTrade(now); ok {
+		return a, true
 	}
 	if !b.world.Prompts.Restart.Open {
 		return Action{}, false

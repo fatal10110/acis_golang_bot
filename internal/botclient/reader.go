@@ -108,6 +108,15 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 
 	opGameItemList:        decodeItemList,
 	opGameInventoryUpdate: decodeInventoryUpdate,
+
+	opGameSendTradeRequest:  func(r *wire.Reader) Event { return SendTradeRequest{SenderID: r.ReadInt32()} },
+	opGameTradeStart:        decodeTradeStart,
+	opGameTradeOwnAdd:       decodeTradeOwnAdd,
+	opGameTradeOtherAdd:     decodeTradeOtherAdd,
+	opGameTradeItemUpdate:   decodeTradeItemUpdate,
+	opGameTradePressOwnOk:   func(*wire.Reader) Event { return TradePressOwnOk{} },
+	opGameTradePressOtherOk: func(*wire.Reader) Event { return TradePressOtherOk{} },
+	opGameSendTradeDone:     func(r *wire.Reader) Event { return SendTradeDone{Success: r.ReadInt32() == 1} },
 }
 
 // extEventDecoders holds a decoder per extended (0xfe) sub-opcode the brain
