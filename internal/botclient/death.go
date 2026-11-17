@@ -207,9 +207,14 @@ func (b *Brain) watchLeader(now time.Time) {
 	}
 }
 
+// msgExpelledFromParty is the system message the server sends a member the
+// leader expels from a party that outlives it (server party/party.go remove).
+const msgExpelledFromParty = 202
+
 // leaderEvent notes the followed party leader's own teleport, a loading
 // screen jump that takes it out of the bot's sight, and its coming back in
-// sight; and the bot's own landing in town once its leader is lost.
+// sight; the bot's expulsion from the party; and the bot's own landing in
+// town once its leader is lost.
 func (b *Brain) leaderEvent(ev Event, now time.Time) {
 	v, self := &b.lead, b.world.Self.ObjectID
 	switch e := ev.(type) {
@@ -223,6 +228,13 @@ func (b *Brain) leaderEvent(ev Event, now time.Time) {
 	case CharInfo:
 		if e.ObjectID == v.id && v.teleported {
 			v.seen = true
+		}
+	case SystemMessage:
+		// The leader expelling the bot from a party of three or more sends
+		// this before PartySmallWindowDeleteAll: the bot was let go, its
+		// leader is not lost.
+		if e.ID == msgExpelledFromParty {
+			*v = leaderWatch{}
 		}
 	case PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowDelete, PartySmallWindowDeleteAll:
 		b.watchLeader(now)

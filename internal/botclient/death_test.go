@@ -326,6 +326,9 @@ func TestLeaderLossEdges(t *testing.T) {
 			}
 			deathApply(t, b, at(2*time.Second), PartySmallWindowDeleteAll{})
 		}, false},
+		{"bot expelled from a big party", func(b *Brain) {
+			deathApply(t, b, at(time.Second), SystemMessage{ID: msgExpelledFromParty}, PartySmallWindowDeleteAll{})
+		}, false},
 		{"leader logged out of a big party, another took over", func(b *Brain) {
 			deathApply(t, b, at(time.Second), PartySmallWindowDeleteAll{}, PartySmallWindowAll{LeaderID: mateID, Members: []PartyMember{mateRow}})
 		}, false},
