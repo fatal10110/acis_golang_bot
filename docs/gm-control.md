@@ -17,6 +17,17 @@ authority check. The sender is the object id the server writes into the line, ne
 `follow`, `assist` and `go` cancel `stay`; `follow` cancels `go`. Orders last until the bot's
 session ends.
 
+## Chat replies
+
+A whisper that is not a command may get a short reply (rule `chat`, `ChatPolicy` in the persona):
+one line picked at random, sent back as a whisper 3 to 12 seconds later. Defaults: at most one
+reply per sender per 10 minutes and 5 per bot per hour, counted across the bot's sessions; one
+reply waits at a time, and a whisper heard meanwhile gets none. The bot never replies to the all,
+shout or trade channels, to its own lines, to a command (even one the authority refuses), or to a
+name carrying the bot marker (`-name-marker`, either placement, any case), so two bots never keep
+a chat going. Whispers have no server flood gate, so the reply also waits for the 3 second chat
+gate every whisper of the bot shares.
+
 ## Who may command
 
 Pick one of two flags of `bots swarm`. With neither, every command is refused.

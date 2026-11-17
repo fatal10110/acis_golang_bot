@@ -62,6 +62,22 @@ func (m Marker) Validate() error {
 	return nil
 }
 
+// Marks reports whether name carries the marker where m places it, in any
+// case: the bots answer no whisper from a marked name, so two bots never
+// keep a chat going between them (docs/plan.md, "Names and human feel"). A
+// player whose name only happens to end or start that way is refused too;
+// that costs a reply, never a loop. An empty marker marks nothing.
+func (m Marker) Marks(name string) bool {
+	n := len(m.Text)
+	if n == 0 || len(name) < n {
+		return false
+	}
+	if m.Placement == Prefix {
+		return strings.EqualFold(name[:n], m.Text)
+	}
+	return strings.EqualFold(name[len(name)-n:], m.Text)
+}
+
 // onsets and nuclei build syllables of two to four letters: a consonant
 // onset, then a vowel nucleus.
 var (

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 )
 
 // Brain timing defaults and fixed waits.
@@ -85,6 +86,14 @@ type BrainConfig struct {
 	// Authority, when set, decides who may command the bot by whisper,
 	// shared by every bot of the process. Nil obeys nobody.
 	Authority *Authority
+
+	// marker marks the bots' names: the brain answers no whisper from a
+	// marked name. A Bot sets its SessionConfig.Marker; zero takes
+	// botnames.DefaultMarker.
+	marker botnames.Marker
+	// chat is the bot's whisper replies for the caps, carried from session
+	// to session by its Bot; nil starts an empty one.
+	chat *chatLog
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -170,6 +179,8 @@ type Brain struct {
 	// commands the authority checks in the database.
 	orders   orders
 	verdicts chan verdict
+	// chat is the whisper reply waiting for its time (rule "chat").
+	chat chatReply
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -200,6 +211,12 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	cfg.ReactMin = cmp.Or(cfg.ReactMin, defaultReactMin)
 	cfg.ReactMax = max(cmp.Or(cfg.ReactMax, defaultReactMax), cfg.ReactMin)
 	cfg.LogoutTimeout = cmp.Or(cfg.LogoutTimeout, defaultLogoutTimeout)
+	if cfg.marker.Text == "" {
+		cfg.marker = botnames.DefaultMarker
+	}
+	if cfg.chat == nil {
+		cfg.chat = newChatLog()
+	}
 	rng := cfg.Rand
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
@@ -475,6 +492,9 @@ func (b *Brain) wake(now time.Time) error {
 		if !now.Before(b.assist.at) {
 			b.assist.wake = false
 		}
+		if !now.Before(b.chat.at) {
+			b.chat.wake = false
+		}
 		if b.appearing {
 			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
 			if err != nil {
@@ -507,7 +527,8 @@ func (b *Brain) wake(now time.Time) error {
 }
 
 // decisionAt is when the next decision is due: the reaction to an event
-// or the regular tick, or the leader's assist when that comes sooner.
+// or the regular tick, or the leader's assist or a whisper reply when that
+// comes sooner.
 func (b *Brain) decisionAt() time.Time {
 	t := b.nextTick
 	if !b.reactAt.IsZero() {
@@ -515,6 +536,9 @@ func (b *Brain) decisionAt() time.Time {
 	}
 	if b.assist.wake && b.assist.at.Before(t) {
 		t = b.assist.at
+	}
+	if b.chat.wake && b.chat.at.Before(t) {
+		t = b.chat.at
 	}
 	return t
 }
@@ -592,6 +616,8 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.shotAskedAt[a.item] = now
 	case actWalkRun:
 		b.follow.runToggledAt = now
+	case actChatReply:
+		b.chatSent(now)
 	}
 	if a.kind == b.orders.reply.kind {
 		b.orders.reply = Action{}

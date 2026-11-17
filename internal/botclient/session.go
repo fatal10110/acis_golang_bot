@@ -134,6 +134,9 @@ type Bot struct {
 	// kicked is set while the last session ended on the server's
 	// ServerClose and no login has succeeded since.
 	kicked bool
+	// chat is the whisper replies of every session, for the chat caps;
+	// each session's brain owns it while it runs.
+	chat *chatLog
 }
 
 // NewBot returns the bot of account. Its character's names derive from the
@@ -165,6 +168,7 @@ func NewBot(cfg SessionConfig, account, password string, rng *rand.Rand) (*Bot, 
 		rng:      rand.New(rand.NewPCG(rng.Uint64(), rng.Uint64())),
 		log:      log.With("account", account),
 		retry:    backoff{base: retryBase, max: retryMax},
+		chat:     newChatLog(),
 	}
 	b.net = netDialer{cfg: &b.cfg}
 	return b, nil
@@ -270,6 +274,7 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 	cfg := b.cfg.Brain
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
+	cfg.marker, cfg.chat = b.cfg.Marker, b.chat
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })
 	err = brain.Run(done, logout)
