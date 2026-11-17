@@ -32,6 +32,8 @@ type World struct {
 	// Attackers are the creatures that hit the bot recently, by object id.
 	Attackers map[int32]*Attacker
 	Party     Party
+	// Dialog is the last dialog page the server sent.
+	Dialog Dialog
 }
 
 // SelfState is the bot's own character.
@@ -348,6 +350,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		if o := w.object(e.ObjectID); o != nil {
 			o.Karma, o.PvPFlag = e.Karma, e.PvPFlag
 		}
+	case NpcHtmlMessage:
+		w.Dialog = Dialog{ObjectID: e.ObjectID, Links: dialogLinks(e.HTML)}
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)

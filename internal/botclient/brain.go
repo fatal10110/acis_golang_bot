@@ -111,7 +111,9 @@ type Brain struct {
 	appearing bool
 	// restartedAt is the restart request not yet answered by a Revive.
 	restartedAt time.Time
-	logout      logoutState
+	// train is the trainer visit (rule 9 errand).
+	train  trainerVisit
+	logout logoutState
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -276,6 +278,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
+		case NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
+			b.trainEvent(ev, now)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
 			b.reactAt = now.Add(b.reactDelay())
@@ -301,7 +305,7 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected, AskJoinParty:
+	case MyTargetSelected, AskJoinParty, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 		return true
 	case Attack:
 		return e.AttackerID != self && slices.ContainsFunc(e.Hits, func(h AttackHit) bool { return h.TargetID == self })
@@ -451,6 +455,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		// The server takes the invitation with the first answer.
 		b.world.Prompts.Party = PartyInvite{}
 	}
+	b.train.sent(a, now)
 	return true, nil
 }
 

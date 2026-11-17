@@ -117,3 +117,17 @@ const (
 	opGameRequestAnswerJoinParty = 0x2a
 	opGameRequestWithdrawParty   = 0x2b
 )
+
+// Dialogs and the class trainer, both directions
+// (serverpackets/npchtmlmessage.go and acquireskill.go,
+// clientpackets/wiresafe.go).
+const (
+	opGameNpcHtmlMessage   = 0x0f
+	opGameAcquireSkillList = 0x8a
+	opGameAcquireSkillInfo = 0x8b
+	opGameAcquireSkillDone = 0x8e
+
+	opGameRequestBypassToServer   = 0x21
+	opGameRequestAcquireSkillInfo = 0x6b
+	opGameRequestAcquireSkill     = 0x6c
+)

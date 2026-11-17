@@ -99,6 +99,10 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGamePartySmallWindowDelete:    decodePartySmallWindowDelete,
 	opGamePartySmallWindowUpdate:    func(r *wire.Reader) Event { return PartySmallWindowUpdate{Member: readPartyMember(r)} },
 	opGamePartyMemberPosition:       decodePartyMemberPosition,
+	opGameNpcHtmlMessage:            decodeNpcHtmlMessage,
+	opGameAcquireSkillList:          decodeAcquireSkillList,
+	opGameAcquireSkillInfo:          decodeAcquireSkillInfo,
+	opGameAcquireSkillDone:          func(*wire.Reader) Event { return AcquireSkillDone{} },
 }
 
 // decodeEvent decodes a non-empty frame; ok is false for an opcode the

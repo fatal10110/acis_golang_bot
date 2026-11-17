@@ -51,14 +51,22 @@ type Persona struct {
 	// JoinParty decides whether to accept the party invitation of the
 	// player named requester (rule 2); nil declines every invitation.
 	JoinParty func(w *World, requester string, now time.Time) bool
+	// LearnSkills are the skills the bot learns with SP at a trainer, by
+	// class id, first listed first (rule 9 errand); a class with none never
+	// visits one. A visit is due once per level and when the SP reaches the
+	// cheapest wanted skill the last visit could not afford.
+	LearnSkills map[int32][]int32
+	// Trainers are the NPC template ids of the trainers of each class id;
+	// the bot visits the nearest one in sight.
+	Trainers map[int32][]int32
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
 }
 
 // DefaultPersona is a passive player that rests when low, fights back when
-// hit, restarts in town when killed and otherwise drifts around where it
-// stands.
+// hit, restarts in town when killed, learns the support skills of a mystic
+// at its trainer and otherwise drifts around where it stands.
 func DefaultPersona() Persona {
 	return Persona{
 		Death:          restartToVillage,
@@ -76,6 +84,8 @@ func DefaultPersona() Persona {
 		IdleChance:     0.1,
 		IdleRadius:     250,
 		Emotes:         []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
+		LearnSkills:    defaultLearnSkills(),
+		Trainers:       defaultTrainers(),
 	}
 }
 
@@ -109,18 +119,26 @@ const (
 	actCast
 	actAnswerParty
 	actLeaveParty
+	actTalk
+	actBypass
+	actSkillInfo
+	actLearnSkill
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
-// RequestRestartPoint, RequestAnswerJoinParty and RequestWithdrawParty have
-// no reuse gate on the server: the frame bucket bounds them, restartRetry
-// spaces a repeated restart, and an invitation is answered once.
+// RequestRestartPoint, RequestAnswerJoinParty, RequestWithdrawParty,
+// RequestAcquireSkillInfo and RequestAcquireSkill have no reuse gate on the
+// server: the frame bucket bounds them, restartRetry spaces a repeated
+// restart, an invitation is answered once, and a trainer visit sends one
+// skill request per server answer.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
 	case actSay:
 		return gateChat
+	case actBypass:
+		return gateBypass
 	}
 	return gateNone
 }
@@ -163,7 +181,8 @@ type rule struct {
 	run  func(b *Brain, now time.Time) (Action, bool)
 }
 
-// playRules are rules 1-10, first match wins. Rules 7 (rebuff) and 8
+// playRules are rules 1-10, first match wins; "train" is the rule 9 errand
+// at the trainer, ahead of the persona's goal. Rules 7 (rebuff) and 8
 // (loot) need events and models that land with buffs (#22) and loot (#29);
 // rule 3 only flees until
 // potions (#23) and heals (#22) exist.
@@ -174,6 +193,7 @@ var playRules = []rule{
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
+	{"train", (*Brain).ruleTrain},
 	{"goal", (*Brain).ruleGoal},
 	{"idle", (*Brain).ruleIdle},
 }
