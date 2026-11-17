@@ -17,7 +17,8 @@ func TestParsePersonaFlag(t *testing.T) {
 		wantErr string
 	}{
 		{"default", base, personaSupport, ""},
-		{"town", append(base, "-persona", "town"), personaTown, ""},
+		{"town", append(base, "-persona", "town", "-datapack", "dp"), personaTown, ""},
+		{"town without datapack", append(base, "-persona", "town"), "", "-datapack"},
 		{"support", append(base, "-persona", "support"), personaSupport, ""},
 		{"unknown", append(base, "-persona", "merchant"), "", "-persona"},
 	}

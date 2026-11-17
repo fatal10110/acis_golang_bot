@@ -386,12 +386,12 @@ func (b *Brain) startVisit(now time.Time) bool {
 // startTrainerWalk keeps or starts the walk to the nearest spawn of a
 // trainer of the bot's class within Persona.TrainerReach, reporting
 // whether one runs. A walk the bot left the reach of (a teleport) is
-// dropped. A party member stays with its party: it walks to no trainer out
-// of sight.
+// dropped. A party member stays with its party and a bot told to follow
+// stays with its commander: neither walks to a trainer out of sight.
 func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 	t, m := &b.train, b.cfg.Travel
 	reach := int64(b.persona.TrainerReach) * int64(b.persona.TrainerReach)
-	if m == nil || reach == 0 || b.world.Party.In() {
+	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 {
 		t.walk = npcVisit{}
 		return false
 	}

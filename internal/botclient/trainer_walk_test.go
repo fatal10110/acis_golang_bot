@@ -55,6 +55,7 @@ func TestTrainerWalkDue(t *testing.T) {
 		{name: "persona walks to none", setup: func(b *Brain) { b.persona.TrainerReach = 0 }},
 		{name: "no travel map", setup: func(b *Brain) { b.cfg.Travel = nil }},
 		{name: "in a party", setup: func(b *Brain) { b.world.Party.LeaderID = selfID }},
+		{name: "told to follow a commander", setup: func(b *Brain) { b.orders.follow = 7 }},
 		{name: "visited at this level", setup: func(b *Brain) { b.train.doneLevel = 15 }},
 		{name: "SP reached a wanted skill", setup: func(b *Brain) { b.train.doneLevel, b.train.needSP = 15, 5000 }, wantWalk: true},
 		{name: "class learns nothing", setup: func(b *Brain) { b.world.Self.ClassID = 0 }},

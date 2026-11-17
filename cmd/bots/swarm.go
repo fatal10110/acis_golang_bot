@@ -115,7 +115,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if err := o.store.validate(o.datapack); err != nil {
 		return o, err
 	}
-	if err := validatePersona(o.persona); err != nil {
+	if err := validatePersona(o.persona, o.datapack); err != nil {
 		return o, err
 	}
 	if o.metrics != "" {
