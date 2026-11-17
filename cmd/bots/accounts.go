@@ -28,17 +28,7 @@ const defaultLoginInterval = 1500 * time.Millisecond
 // addAllowlistedFlag registers -allowlisted, shared by every bots command
 // that logs in.
 func addAllowlistedFlag(fs *flag.FlagSet, p *bool) {
-	fs.BoolVar(p, "allowlisted", false, "the -local-addr IP is on AcceptFilterAllowlist of both servers: logins are not spaced (needs -local-addr)")
-}
-
-// checkAllowlisted refuses -allowlisted without -local-addr: only the bots'
-// own source address may be allowlisted (docs/hetzner.md), so an unspaced
-// run from an address the OS picks could get a shared IP banned.
-func checkAllowlisted(allowlisted bool, localAddr string) error {
-	if allowlisted && localAddr == "" {
-		return errors.New("-allowlisted needs -local-addr: allowlist only the bots' own source address, never a shared one")
-	}
-	return nil
+	fs.BoolVar(p, "allowlisted", false, "the bots' source address (-local-addr, or the one the OS picks) is on AcceptFilterAllowlist of both servers: logins are not spaced (docs/home.md)")
 }
 
 // accountsOptions are the flags of `bots accounts`.
@@ -70,16 +60,13 @@ func parseAccountsFlags(args []string, stderr io.Writer) (accountsOptions, error
 	fs.StringVar(&o.loginAddr, "login", "127.0.0.1:2106", "login server address (host:port)")
 	fs.DurationVar(&o.timeout, "timeout", 10*time.Second, "longest wait for each login-server read or write")
 	fs.DurationVar(&o.interval, "interval", defaultLoginInterval, fmt.Sprintf("pause between the end of one login and the next dial, at least %s; with -allowlisted any value from 0 and 0 when unset", minLoginInterval))
-	fs.StringVar(&o.localAddr, "local-addr", "", "source IP to dial from (for example 127.0.0.2, the one address allowlisted on the servers); default: the OS picks")
+	fs.StringVar(&o.localAddr, "local-addr", "", "source IP to dial from, when the host has several and only one is allowlisted on the servers; default: the OS picks")
 	addAllowlistedFlag(fs, &o.allowlisted)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
 	if fs.NArg() > 0 {
 		return o, fmt.Errorf("unexpected arguments %q", fs.Args())
-	}
-	if err := checkAllowlisted(o.allowlisted, o.localAddr); err != nil {
-		return o, err
 	}
 	if o.allowlisted {
 		intervalSet := false

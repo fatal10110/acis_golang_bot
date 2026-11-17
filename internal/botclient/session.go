@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"syscall"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
@@ -41,16 +42,20 @@ const (
 	stableSession = 10 * time.Minute
 	// maxAborts is how many sessions in a row the server may abort (close
 	// with no ServerClose: the 2 MiB outbound cap of a slow reader, server
-	// internal/gameserver/network/conn.go outboundHighWater) before the bot
-	// stops.
+	// internal/gameserver/network/conn.go outboundHighWater; or a reset or
+	// EOF) before the bot stops. A dead line the dialer's timeouts end
+	// (deadLine) is no abort.
 	maxAborts = 3
-	// maxInUse is how many AccountInUse replies in a row a bot takes before
-	// it counts the account as taken by another login. Each such login
-	// makes the login server kick the character in game (server
-	// internal/loginserver/clientlink.go, roster.kick), which detaches at
-	// once: the bot's own lingering character (100 ms, or 15 s in combat,
-	// after a lost connection) is gone by the next try.
-	maxInUse = 2
+	// inUseWindow is how long a bot keeps retrying AccountInUse, from the
+	// first one after a run start or an end that was not a kick. After a
+	// dead line the server holds the old session; each AccountInUse makes
+	// the login server kick it (server internal/loginserver/clientlink.go,
+	// roster.kick), and its writer closes within about a minute (its write
+	// deadline to the dead peer). Past the window the account counts as
+	// taken by another login.
+	inUseWindow = 3 * time.Minute
+	// inUseRetryMax caps the backoff between AccountInUse retries.
+	inUseRetryMax = 30 * time.Second
 	// shutdownGrace bounds the logout a canceled bot runs, refusals (in
 	// combat) included; past it the connection is closed and the character
 	// lingers as after a drop.
@@ -150,8 +155,9 @@ type Bot struct {
 	// char is the bot's character; its name is pinned once known (pin).
 	char  Character
 	retry backoff
-	// inUse counts AccountInUse replies in a row.
-	inUse int
+	// inUseSince is when the first AccountInUse since the last good login
+	// came; zero while none came.
+	inUseSince time.Time
 	// aborts counts sessions aborted since the last stable one.
 	aborts int
 	// kicked is set while the last session ended on the server's
@@ -252,7 +258,9 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 		}
 		return nil, Self{}, err
 	}
-	b.inUse, b.kicked = 0, false
+	// What ends this attempt now is a kick or not (a failed game entry is
+	// not): either starts a new AccountInUse window.
+	b.inUseSince, b.kicked = time.Time{}, false
 	if err := turn.Dial(ctx); err != nil {
 		return nil, Self{}, err
 	}
@@ -336,12 +344,7 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 			b.log.Error("credential refused: all logins halted", "err", err)
 			return 0, err
 		case loginFailAccountInUse:
-			b.inUse++
-			if b.kicked || b.inUse >= maxInUse {
-				b.log.Warn("account taken by another login: bot stops", "err", err)
-				return 0, fmt.Errorf("%w: %w", ErrAccountTaken, err)
-			}
-			return b.retry.next(b.rng), nil
+			return b.afterInUse(err)
 		case loginFailSystemError, loginFailAccessFailed, loginFailServerOverloaded, loginFailMaintenance:
 			// AccessFailed reports the login server's own failures (a
 			// database error, a login purged past its timeout), none of
@@ -368,9 +371,26 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 	return b.retry.next(b.rng), nil
 }
 
+// afterInUse decides after an AccountInUse. After the server's ServerClose
+// another login holds the account: the bot stops at once. Otherwise the
+// server may still hold the bot's own session of a dead line, which each
+// AccountInUse evicts: the bot retries, at most inUseRetryMax apart, until
+// inUseWindow has passed since the first one.
+func (b *Bot) afterInUse(err error) (time.Duration, error) {
+	now := b.cfg.Clock.Now()
+	if b.inUseSince.IsZero() {
+		b.inUseSince = now
+	}
+	if in := now.Sub(b.inUseSince); b.kicked || in >= inUseWindow {
+		b.log.Warn("account taken by another login: bot stops", "kicked", b.kicked, "for", in.Round(time.Second), "err", err)
+		return 0, fmt.Errorf("%w: %w", ErrAccountTaken, err)
+	}
+	return min(b.retry.next(b.rng), inUseRetryMax), nil
+}
+
 // afterSession decides after a session in the world: a logout a GM
 // commanded, the server's ServerClose (a GM kick, a kick by another login,
-// a shutdown) or an abort.
+// a shutdown), a dead line or an abort.
 func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, error) {
 	if errors.Is(err, ErrCommandedLogout) {
 		b.log.Info("logged out on a GM command: bot stops", "played", played.Round(time.Second))
@@ -381,11 +401,12 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 		b.aborts = 0
 	}
 	b.kicked = errors.Is(err, errServerClose) || errors.Is(err, errLeftWorld)
-	if !b.kicked {
+	dead := deadLine(err)
+	if !b.kicked && !dead {
 		b.aborts++
 		b.brain.Metrics.Abort()
 	}
-	b.log.Warn("session ended", "played", played.Round(time.Second), "kicked", b.kicked, "err", err)
+	b.log.Warn("session ended", "played", played.Round(time.Second), "kicked", b.kicked, "deadLine", dead, "err", err)
 	switch {
 	case !b.cfg.Persistent:
 		return 0, fmt.Errorf("session ended: %w", err)
@@ -398,6 +419,16 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 		d = max(d, kickWait+jitter(b.rng, kickJitter))
 	}
 	return d, nil
+}
+
+// deadLine reports a connection the kernel ended because the dialer's
+// keepalive or user timeout found the line dead: ETIMEDOUT, or the ICMP
+// unreachable error the kernel saw first (Linux tcp_write_err reports
+// sk_err_soft when set). A reset or EOF is not one: the peer answered.
+func deadLine(err error) bool {
+	return errors.Is(err, syscall.ETIMEDOUT) ||
+		errors.Is(err, syscall.EHOSTUNREACH) ||
+		errors.Is(err, syscall.ENETUNREACH)
 }
 
 // credentialRefused reports a LoginFail the login server counts toward its

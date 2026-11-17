@@ -17,8 +17,9 @@ The command does nothing yet; the client and personas arrive with the milestones
 
 ## Deploy
 
-Same-host deployment (source address, accept-filter allowlist, bot cap, systemd limits):
-[`docs/hetzner.md`](docs/hetzner.md).
+Home run (provider range on the accept-filter allowlist, public game address, swarm flags, secret
+file, GM control over SSH, WSL2): [`docs/home.md`](docs/home.md). The retired same-host run is
+archived in [`docs/hetzner.md`](docs/hetzner.md).
 
 ## Develop
 

@@ -40,7 +40,9 @@ func TestParseSwarmFlags(t *testing.T) {
 		{"allowlisted", append(base, "-local-addr", "127.0.0.2", "-allowlisted"), func(o swarmOptions) bool {
 			return o.allowlisted && o.localAddr == "127.0.0.2"
 		}, ""},
-		{"allowlisted without a local address", append(base, "-allowlisted"), nil, "-allowlisted needs -local-addr"},
+		{"allowlisted without a local address", append(base, "-allowlisted"), func(o swarmOptions) bool {
+			return o.allowlisted && o.localAddr == ""
+		}, ""},
 		{"bad placement", append(base, "-name-marker-at", "middle"), nil, "-name-marker-at"},
 		{"bad marker", append(base, "-name-marker", "B-t"), nil, "-name-marker"},
 		{"server id 0", append(base, "-server-id", "0"), nil, "-server-id"},

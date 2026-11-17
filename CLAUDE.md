@@ -40,7 +40,7 @@ follow the plan or the server and record the conflict on the issue.
 - **Protocol fidelity, no races, operational safety** outrank speed, elegance, diff size and
   schedule. Operational safety means: the bots never get the host's IP banned (login pacing and the
   credential breaker), never flood the server past its limits, never leak secrets, and stay inside
-  their resource cap on the shared host.
+  their resource cap on the owner's machine (`docs/home.md`).
 - Write idiomatic Go: concrete types, interfaces only at a second implementation or a real test
   seam, no speculative layers.
 - Never edit the server checkout, and never import server packages. A server behavior the bot

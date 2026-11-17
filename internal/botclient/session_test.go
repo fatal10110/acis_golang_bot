@@ -347,7 +347,6 @@ func TestSessionStops(t *testing.T) {
 		wantLogins int
 	}{
 		{"kick by another login is not fought", true, []error{nil, errInUse}, nil, []gameScript{serverCloseEnd}, ErrAccountTaken, 2},
-		{"AccountInUse twice in a row", true, []error{errInUse, errInUse}, nil, nil, ErrAccountTaken, 2},
 		{"repeated aborts", true, nil, nil, []gameScript{abortEnd, abortEnd, abortEnd}, ErrRepeatedAborts, 3},
 		{"not persistent, after a kick", false, nil, nil, []gameScript{serverCloseEnd}, errServerClose, 1},
 		{"not persistent, after an abort", false, nil, nil, []gameScript{abortEnd}, errConnLost, 1},

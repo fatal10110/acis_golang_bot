@@ -1,4 +1,9 @@
-# Running the bots on the Hetzner host
+# Running the bots on the Hetzner host (archived)
+
+> **Archived.** This run is retired (`docs/plan.md`, D9): the bots now run on the owner's
+> machine, see [`docs/home.md`](home.md), which also lists the retirement steps (stop and disable
+> `acis-bots`, replace the `127.0.0.2` allowlist entry). `-allowlisted` no longer needs
+> `-local-addr`. The rest of this page records the old setup.
 
 The host is 2 vCPU / 3.8 GB, and the gameserver heap takes about 1.4 GB. The bots must never get
 the host's IP banned, flood the server, or push the gameserver into the OOM killer. This guide
@@ -58,7 +63,8 @@ gameserver-to-loginserver link on port 9014 and need no change for bots.
   follow. `bots accounts` then defaults `-interval` to 0, and `bots swarm` dials as soon as the
   previous bot has entered the world. Bots still log in one at a time, so the credential breaker
   below still stops at the first refused credential, and refused dials still back off.
-  `-allowlisted` needs `-local-addr`: never pass it for an address the servers do not allowlist.
+  This run passed `-allowlisted` with `-local-addr` only: never pass it for an address the servers
+  do not allowlist.
 - Without `-allowlisted`, `bots accounts` logs in no faster than one per 1.25 s (`-interval`,
   floor enforced), under the filter's burst limit, and `bots swarm` starts every login and game
   dial of the process at least 1.25 s plus a random jitter of up to 0.5 s after the previous one.

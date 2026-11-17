@@ -66,7 +66,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.gameAddr, "game", "", "game server address (host:port) to dial instead of the one the login server advertises")
 	fs.UintVar(&o.serverID, "server-id", 1, "game server id to play on")
 	fs.DurationVar(&o.timeout, "timeout", 10*time.Second, "longest wait for each read or write of a login or game entry")
-	fs.StringVar(&o.localAddr, "local-addr", "", "source IP of every login and game dial (for example 127.0.0.2, the one address allowlisted on the servers); default: the OS picks")
+	fs.StringVar(&o.localAddr, "local-addr", "", "source IP of every login and game dial, when the host has several and only one is allowlisted on the servers; default: the OS picks")
 	fs.StringVar(&o.record, "record", "", "directory that receives the first frame of every game opcode read (test fixtures); default: record nothing")
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the bots' character names")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
@@ -99,9 +99,6 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	}
 	if _, err := botclient.ParseLocalAddr(o.localAddr); err != nil {
 		return o, fmt.Errorf("-local-addr: %w", err)
-	}
-	if err := checkAllowlisted(o.allowlisted, o.localAddr); err != nil {
-		return o, err
 	}
 	if o.timeout <= 0 {
 		return o, fmt.Errorf("-timeout %s: want a positive duration", o.timeout)
