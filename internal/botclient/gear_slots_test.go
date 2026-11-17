@@ -69,6 +69,7 @@ var slotTemplates = func() map[int32]datapack.Item {
 func newSlotsBrain(t *testing.T, class int32, items ...Item) *Brain {
 	t.Helper()
 	b := newGearBrain(t, 0, items...)
+	b.persona.Gear.Classes = defaultGearClasses()
 	b.cfg.Travel.gear, b.cfg.Travel.shopGear = indexGear(slotTemplates, b.cfg.Travel.cheapest)
 	b.world.Self.ClassID = class
 	return b
