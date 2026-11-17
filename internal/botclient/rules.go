@@ -107,8 +107,9 @@ const (
 // RequestRestartPoint, RequestAnswerJoinParty, RequestWithdrawParty, UseItem
 // and RequestAutoSoulShot have no reuse gate on the server: the frame
 // bucket bounds them, restartRetry spaces a repeated restart, an invitation
-// is answered once, potionReuse spaces the uses of a potion template (the
-// item's own reuse delay) and shotRetry the toggles of a shot template.
+// is answered once, potionReuse spaces the potions the bot drinks (the
+// potions' shared heal over time) and shotRetry the toggles of a shot
+// template.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:

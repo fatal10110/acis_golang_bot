@@ -6,13 +6,17 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
-// potionReuse is how long the bot leaves a potion template alone after it
-// drank one: the reuse_delay of the healing potions the default persona
-// drinks (items 1060, 1061 and 1539 in the server datapack). The server
-// silently drops a UseItem while the item's reuse cools
-// (live.ItemDisabled, network/inventory.go), so a use sent sooner would
-// only spend a frame.
-const potionReuse = 10 * time.Second
+// potionReuse is how long the bot drinks no potion after it drank one. The
+// default persona's potions (items 1060, 1061 and 1539 in the server
+// datapack) each have a 10 s reuse_delay, in separate shared reuse groups,
+// so the server would accept one of each in a row; but their skills (2031,
+// 2032, 2037) are all a HealOverTime of stack type hp_recover, 7 ticks of
+// 2 s, and each replaces the one before (aCis_datapack skills/2000-2099.xml).
+// One cooldown across every persona potion, as long as the heal, keeps the
+// bot from wasting the potions the heal already covers. The server also
+// silently drops a UseItem while the item's reuse cools (live.ItemDisabled,
+// network/inventory.go).
+const potionReuse = 14 * time.Second
 
 // shotRetry is how long a RequestAutoSoulShot waits for its ExAutoSoulShot
 // before the bot asks again: the server ignores the request, answering
@@ -176,7 +180,7 @@ type Inventory struct {
 	Items map[int32]Item
 	// AutoShots are the shot templates the server reported an auto-use
 	// state for (ExAutoSoulShot), with that state. A template leaves it with
-	// its last stack.
+	// its last stack, and a disabled one when its stock grows.
 	AutoShots map[int32]bool
 }
 
@@ -211,7 +215,9 @@ func (w *World) applyItems(ev Event) {
 		for _, c := range e.Changes {
 			switch c.State {
 			case ItemAdded, ItemModified:
+				prev := inv.Items[c.Item.ObjectID]
 				inv.Items[c.Item.ObjectID] = c.Item
+				inv.restockShot(c.Item.TemplateID, c.Item.Count-prev.Count)
 			case ItemRemoved:
 				delete(inv.Items, c.Item.ObjectID)
 				inv.forgetShot(c.Item.TemplateID)
@@ -233,18 +239,29 @@ func (inv *Inventory) forgetShot(templateID int32) {
 	}
 }
 
-// drinkPotion is the persona's first potion carried whose reuse has run out
-// at now; false when none is.
+// restockShot drops a disabled auto-use state of templateID when its
+// carried count grew by added. The server disables auto use while a short
+// stack is still carried (ShotNotEnoughItems, network/item_shot_use.go) and
+// shots stack, so a restock arrives as an ItemModified of that same stack:
+// the template is turned on again.
+func (inv *Inventory) restockShot(templateID, added int32) {
+	if on, known := inv.AutoShots[templateID]; known && !on && added > 0 {
+		delete(inv.AutoShots, templateID)
+	}
+}
+
+// drinkPotion is the persona's first potion carried, once potionReuse has
+// run out at now since the bot drank any of them; false when none is.
 func (b *Brain) drinkPotion(now time.Time) (Action, bool) {
 	for _, id := range b.persona.Potions {
-		it, ok := b.world.Inventory.ByTemplate(id)
-		if !ok || it.Count <= 0 {
-			continue
-		}
 		if at, used := b.usedAt[id]; used && now.Sub(at) < potionReuse {
-			continue
+			return Action{}, false
 		}
-		return useItemAction(it), true
+	}
+	for _, id := range b.persona.Potions {
+		if it, ok := b.world.Inventory.ByTemplate(id); ok && it.Count > 0 {
+			return useItemAction(it), true
+		}
 	}
 	return Action{}, false
 }

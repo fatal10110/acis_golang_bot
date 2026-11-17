@@ -220,9 +220,19 @@ func TestBrainPotion(t *testing.T) {
 	}{
 		{name: "best potion first", items: []Item{lesser, greater}, want: actUseItem, wantObj: greater.ObjectID},
 		{
-			name: "next potion while the best cools", items: []Item{lesser, greater},
+			name: "no other potion while one heals", items: []Item{lesser, greater},
 			setup: func(b *Brain) { b.usedAt[1539] = at(time.Second) },
-			want:  actUseItem, wantObj: lesser.ObjectID,
+			want:  actMove,
+		},
+		{
+			name: "no potion while a lesser one heals", items: []Item{lesser, greater},
+			setup: func(b *Brain) { b.usedAt[1060] = at(10*time.Second - potionReuse + time.Millisecond) },
+			want:  actMove,
+		},
+		{
+			name: "best potion again once the heal ran out", items: []Item{lesser, greater},
+			setup: func(b *Brain) { b.usedAt[1060] = at(10*time.Second - potionReuse) },
+			want:  actUseItem, wantObj: greater.ObjectID,
 		},
 		{
 			name: "reuse over drinks again", items: []Item{greater},
@@ -272,9 +282,9 @@ func TestBrainPotion(t *testing.T) {
 			if len(out.frames) != 1 || b.usedAt[a.item] != now {
 				t.Fatalf("sent %d frames, usedAt %v", len(out.frames), b.usedAt)
 			}
-			// The potion just drunk is not drunk again during its reuse.
-			if _, again := b.decide(now.Add(potionReuse - time.Millisecond)); again.kind == actUseItem && again.item == a.item {
-				t.Fatal("drank the same potion again during its reuse")
+			// No potion, the one just drunk or another, during its reuse.
+			if _, again := b.decide(now.Add(potionReuse - time.Millisecond)); again.kind == actUseItem {
+				t.Fatalf("drank potion %d during the reuse of %d", again.item, a.item)
 			}
 		})
 	}
@@ -327,18 +337,28 @@ func TestBrainShots(t *testing.T) {
 		t.Fatalf("no retry after shotRetry: rule %q", rule)
 	}
 	b.world.Apply(ExAutoSoulShot{TemplateID: 2509, Enabled: true}, at(time.Minute))
-	// The server disables 1835 at empty stock: it stays off.
+	// The server disables 1835 on a short stack, still carried: it stays
+	// off while the stack does not grow.
+	short := shotRow
+	short.Count = 1
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, short}}}, at(time.Minute))
 	b.world.Apply(ExAutoSoulShot{TemplateID: 1835}, at(time.Minute))
 	if rule := step(at(2 * time.Minute)); rule != "" {
 		t.Fatalf("re-enabled a disabled shot: rule %q", rule)
 	}
+	// A restock of the same stack turns it on again.
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, shotRow}}}, at(2*time.Minute))
+	if rule := step(at(2*time.Minute + time.Second)); rule != "shots" {
+		t.Fatalf("restocked shot not turned on: rule %q", rule)
+	}
+	b.world.Apply(ExAutoSoulShot{TemplateID: 1835}, at(2*time.Minute))
 	// The last stack leaves, a new one arrives: it is turned on again.
 	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, shotRow}}}, at(2*time.Minute))
 	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemAdded, shotRow}}}, at(2*time.Minute))
 	if rule := step(at(3 * time.Minute)); rule != "shots" {
 		t.Fatalf("new stack not turned on: rule %q", rule)
 	}
-	if got := toggles(); !reflect.DeepEqual(got, []int32{1835, 2509, 2509, 1835}) {
-		t.Fatalf("toggled %v, want [1835 2509 2509 1835]", got)
+	if got := toggles(); !reflect.DeepEqual(got, []int32{1835, 2509, 2509, 1835, 1835}) {
+		t.Fatalf("toggled %v, want [1835 2509 2509 1835 1835]", got)
 	}
 }
