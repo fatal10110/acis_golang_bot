@@ -190,10 +190,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	// Deferred first, so it runs after the metrics endpoint stopped and
 	// every bot returned.
 	defer stopAuth()
-	if auth != nil {
-		cfg.Brain.Authority = auth
-		cfg.Brain.Persona = auth.Hooks(cfg.Brain.Persona)
-	}
+	applyPartyAndAuthority(&cfg.Brain, auth)
 	var reg *botmetrics.Registry
 	if o.metrics != "" {
 		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
@@ -304,4 +301,17 @@ func swarmExit(ctxErr, breaker error) int {
 		return 0
 	}
 	return exitStopped
+}
+
+// applyPartyAndAuthority points cfg at one party leader claim table for
+// every bot of the process, and at auth when set. The claim limits the
+// persona's own party hook, which auth's hooks ask only for a requester auth
+// does not know as a GM: a GM's invitation is never limited. Without auth no
+// GM is known, and every invitation is limited.
+func applyPartyAndAuthority(cfg *botclient.BrainConfig, auth *botclient.Authority) {
+	botclient.NewPartyClaims().Apply(cfg)
+	if auth != nil {
+		cfg.Authority = auth
+		cfg.Persona = auth.Hooks(cfg.Persona)
+	}
 }

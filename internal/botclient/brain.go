@@ -86,6 +86,11 @@ type BrainConfig struct {
 	// Authority, when set, decides who may command the bot by whisper,
 	// shared by every bot of the process. Nil obeys nobody.
 	Authority *Authority
+	// PartyClaims, when set, are the party leaders the bots of the process
+	// joined (PartyClaims.Apply), shared by every bot of the process: the
+	// brain gives its claim back when its party ends or its leader changes,
+	// and when it stops. Nil claims no leader.
+	PartyClaims *PartyClaims
 
 	// marker marks the bots' names: the brain answers no whisper from a
 	// marked name. A Bot sets its SessionConfig.Marker; zero takes
@@ -247,6 +252,7 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 	b.start(b.clock.Now())
 	defer b.leaveSpot()
 	defer b.releaseStore()
+	defer b.releasePartyClaim()
 	due := b.due()
 	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()
@@ -296,6 +302,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 	for _, ev := range batch {
 		b.world.Apply(ev, now)
 		b.leaderEvent(ev, now)
+		b.partyClaimEvent(ev)
 		switch e := ev.(type) {
 		case LeaveWorld:
 			switch {
@@ -513,6 +520,7 @@ func (b *Brain) wake(now time.Time) error {
 		}
 		b.reactAt = time.Time{}
 		b.nextTick = now.Add(b.tickDelay())
+		b.tidyPartyClaim(now)
 		name, a := b.decide(now)
 		b.lastRule = name
 		b.metrics.Rule(name)
