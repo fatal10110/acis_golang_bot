@@ -20,7 +20,7 @@ type Teleport struct {
 	// base count: the server halves an adena price in weekend core time and
 	// never raises it (travel.Teleport.CalculatedPrice).
 	PriceID    int32
-	PriceCount int
+	PriceCount int32
 	X, Y, Z    int32
 }
 
@@ -47,7 +47,7 @@ func LoadTeleports(path string) (map[int32][]Teleport, error) {
 	out := make(map[int32][]Teleport, len(f.Lists))
 	for _, l := range f.Lists {
 		a := foldAttrs(l.Attrs)
-		npcID := int32(a.int("npcId"))
+		npcID := a.int32("npcId")
 		if a.err != nil {
 			return nil, fmt.Errorf("datapack: %s: telPosList: %w", path, a.err)
 		}
@@ -57,11 +57,11 @@ func LoadTeleports(path string) (map[int32][]Teleport, error) {
 			t := Teleport{
 				Desc:       r.str("desc"),
 				Kind:       r.strDefault("type", TeleportStandard),
-				PriceID:    int32(r.int("priceId")),
-				PriceCount: r.int("priceCount"),
-				X:          int32(r.int("x")),
-				Y:          int32(r.int("y")),
-				Z:          int32(r.int("z")),
+				PriceID:    r.int32("priceId"),
+				PriceCount: r.int32("priceCount"),
+				X:          r.int32("x"),
+				Y:          r.int32("y"),
+				Z:          r.int32("z"),
 			}
 			if r.err != nil {
 				return nil, fmt.Errorf("datapack: %s: telPosList %d: %w", path, npcID, r.err)

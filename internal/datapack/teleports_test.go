@@ -47,6 +47,7 @@ func TestLoadTeleportsErrors(t *testing.T) {
 		{"no desc", loc(`priceId="57" priceCount="1" x="1" y="2" z="3"`), `"desc"`},
 		{"bad price", loc(`desc="d" priceId="57" priceCount="x" x="1" y="2" z="3"`), `"priceCount"`},
 		{"no z", loc(`desc="d" priceId="57" priceCount="1" x="1" y="2"`), `"z"`},
+		{"x out of int32 range", loc(`desc="d" priceId="57" priceCount="1" x="2147483648" y="2" z="3"`), `"x"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

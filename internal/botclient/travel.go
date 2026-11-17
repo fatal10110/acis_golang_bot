@@ -77,7 +77,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 			if t.Kind != datapack.TeleportStandard || t.PriceID != adenaID {
 				continue
 			}
-			dests = append(dests, destination{index: i, at: Point{X: t.X, Y: t.Y, Z: t.Z}, price: int32(t.PriceCount)})
+			dests = append(dests, destination{index: i, at: Point{X: t.X, Y: t.Y, Z: t.Z}, price: t.PriceCount})
 		}
 		if len(dests) == 0 {
 			continue
