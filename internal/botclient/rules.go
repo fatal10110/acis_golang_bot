@@ -115,6 +115,9 @@ type Persona struct {
 	// Shop is what the bot buys and sells at merchants (rule 9 errand
 	// "shop").
 	Shop ShopPolicy
+	// Gear is how the bot wears and buys better weapons and armor (rule 9
+	// errand "gear", and the shop errand).
+	Gear GearPolicy
 	// Loot is what the bot picks up after a fight and drops when
 	// overweight (rule 8).
 	Loot LootPolicy
@@ -164,6 +167,7 @@ func DefaultPersona() Persona {
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
+		Gear:           defaultGearPolicy(),
 		Loot:           defaultLootPolicy(),
 		Trade:          defaultTradePolicy(),
 		Store:          defaultStorePolicy(),
@@ -177,7 +181,8 @@ const turnStep = 40
 type Action struct {
 	kind    actionKind
 	payload []byte
-	// object is the object an attack, a selection or a cast acts on.
+	// object is the object an attack, a selection or a cast acts on, or
+	// the carried item a gear UseItem equips.
 	object int32
 	// item is the template id of the item a UseItem or RequestAutoSoulShot
 	// acts on.
@@ -306,8 +311,9 @@ type rule struct {
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
 // the party, ahead of fighting so a support in combat still heals;
-// "assist" (the leader's target), "train" (the trainer), "shop" (a
-// merchant's buy and sell windows), "follow" (the
+// "assist" (the leader's target), "train" (the trainer), "gear" (wearing
+// better gear, ahead of the shop so a bought piece is worn before the next
+// sale), "shop" (a merchant's buy and sell windows), "follow" (the
 // slot behind the party leader), "newbie" (the Newbie Guide's buffs),
 // "travel" (a gatekeeper trip to a spot out of walking reach), "spot"
 // (getting to the farming spot) and "farm" (attacking a monster there) are
@@ -339,6 +345,7 @@ var playRules = []rule{
 	{"store", (*Brain).ruleStore},
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
+	{"gear", (*Brain).ruleGear},
 	{"shop", (*Brain).ruleShop},
 	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},

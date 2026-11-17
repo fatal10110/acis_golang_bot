@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// spotsNPCs, spotsSpawnlist and spotsTeleports are a datapack with one
-// farming spot and one gatekeeper.
+// spotsNPCs, spotsSpawnlist, spotsTeleports, spotsItems and spotsBuyLists
+// are a datapack with one farming spot, one gatekeeper and one merchant.
 const (
 	spotsNPCs = `<?xml version="1.0" encoding="utf-8"?>
 <list>
@@ -45,6 +45,15 @@ const (
 	</telPosList>
 </list>
 `
+	spotsItems = `<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<item id="1" type="Weapon" name="Short Sword">
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="rhand" />
+		<set name="price" val="768" />
+	</item>
+</list>
+`
 	spotsBuyLists = `<?xml version="1.0" encoding="utf-8"?>
 <list>
 	<buyList id="14" npcId="30004">
@@ -56,7 +65,7 @@ const (
 
 func TestLoadSpots(t *testing.T) {
 	dir := t.TempDir()
-	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists} {
+	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems} {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)

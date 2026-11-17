@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/items, stat blocks reduced. -->
+	<item id="1" type="Weapon" name="Short Sword">
+		<set name="default_action" val="equip" />
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="rhand" />
+		<set name="weight" val="1600" />
+		<set name="price" val="768" />
+		<for>
+			<set stat="pAtk" val="8" />
+		</for>
+	</item>
+	<item id="49" type="Armor" name="Gloves">
+		<set name="default_action" val="equip" />
+		<set name="bodypart" val="gloves" />
+		<set name="price" val="2650" />
+	</item>
+	<item id="57" type="EtcItem" name="Adena">
+		<set name="is_stackable" val="true" />
+	</item>
+	<item id="398" type="Armor" name="Plate Leather">
+		<set name="bodypart" val="chest" />
+		<set name="armor_type" val="LIGHT" />
+		<set name="crystal_type" val="D" />
+		<set name="price" val="74600" />
+	</item>
+	<!-- A use condition: the server may refuse to equip it. -->
+	<item id="6611" type="Weapon" name="Infinity Blade">
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="rhand" />
+		<set name="crystal_type" val="S" />
+		<set name="price" val="0" />
+		<cond msgId="1518">
+			<player isHero="true" />
+		</cond>
+	</item>
+	<!-- A shadow item: its mana runs out. -->
+	<item id="6702" type="Weapon" name="Shadow Item: Falchion">
+		<set name="weapon_type" val="SWORD" />
+		<set name="bodypart" val="rhand" />
+		<set name="duration" val="120" />
+		<set name="price" val="0" />
+		<set name="equip_condition" val="{{ec_academy;1}}" />
+	</item>
+</list>

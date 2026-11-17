@@ -1,9 +1,10 @@
 // Package datapack reads the parts of the server's XML datapack the bots plan
 // with: NPC templates (npcs/*.xml), spawn territories and makers
-// (spawnlist/*.xml), gatekeeper destinations (teleports.xml) and merchant
-// buylists (buyLists.xml). Parse rules follow the server's loaders
-// (acis_golang internal/gameserver/data/xml npc.go and spawnlist.go), reduced
-// to the fields bots use.
+// (spawnlist/*.xml), gatekeeper destinations (teleports.xml), merchant
+// buylists (buyLists.xml) and weapon and armor templates (items/*.xml).
+// Parse rules follow the server's loaders (acis_golang
+// internal/gameserver/data/xml npc.go, spawnlist.go and item.go), reduced to
+// the fields bots use.
 //
 // Load runs once per process. The returned Datapack is never mutated after
 // Load returns, so any number of goroutines may read it without locking.
@@ -27,11 +28,13 @@ type Datapack struct {
 	Teleports map[int32][]Teleport
 	// BuyLists are the merchant buylists in file order.
 	BuyLists []BuyList
+	// Items maps a weapon or armor template id to its template.
+	Items map[int32]Item
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
-// aCis_datapack/data/xml): every npcs/*.xml and spawnlist/*.xml file directly
-// under it, its teleports.xml and its buyLists.xml. xmlDir is configuration; the bot ships no datapack of its own.
+// aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml and items/*.xml
+// file directly under it, its teleports.xml and its buyLists.xml. xmlDir is configuration; the bot ships no datapack of its own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
 	if err != nil {
@@ -49,7 +52,11 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Datapack{NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists}, nil
+	items, err := LoadItems(filepath.Join(xmlDir, "items"))
+	if err != nil {
+		return nil, err
+	}
+	return &Datapack{NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists, Items: items}, nil
 }
 
 // xmlFiles lists the *.xml files directly under dir in file name order, the

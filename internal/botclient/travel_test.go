@@ -105,7 +105,7 @@ func TestTravelMapShipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := NewTravelMap(dp)
-	t.Logf("gatekeepers=%d", m.Gatekeepers())
+	t.Logf("gatekeepers=%d gear=%d sold gear=%d", m.Gatekeepers(), len(m.gear), len(m.shopGear))
 	for _, g := range m.gatekeepers {
 		if g.npcID != 30006 {
 			continue
