@@ -92,10 +92,10 @@ type BrainConfig struct {
 	// and when it stops. Nil claims no leader.
 	PartyClaims *PartyClaims
 
-	// marker marks the bots' names: the brain answers no whisper from a
-	// marked name. A Bot sets its SessionConfig.Marker; zero takes
-	// botnames.DefaultMarker.
-	marker botnames.Marker
+	// markers mark the bots' names: the brain answers no whisper from a
+	// name any of them marks. A Bot sets its SessionConfig.Markers; none
+	// takes botnames.DefaultMarker.
+	markers botnames.Markers
 	// chat is the bot's whisper replies for the caps, carried from session
 	// to session by its Bot; nil starts an empty one.
 	chat *chatLog
@@ -218,8 +218,8 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	cfg.ReactMin = cmp.Or(cfg.ReactMin, defaultReactMin)
 	cfg.ReactMax = max(cmp.Or(cfg.ReactMax, defaultReactMax), cfg.ReactMin)
 	cfg.LogoutTimeout = cmp.Or(cfg.LogoutTimeout, defaultLogoutTimeout)
-	if cfg.marker.Text == "" {
-		cfg.marker = botnames.DefaultMarker
+	if len(cfg.markers) == 0 {
+		cfg.markers = botnames.Markers{botnames.DefaultMarker}
 	}
 	if cfg.chat == nil {
 		cfg.chat = newChatLog()

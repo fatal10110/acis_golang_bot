@@ -180,25 +180,27 @@ var errServerClose = errors.New("server sent ServerClose")
 var ErrLogoutRefused = errors.New("server refused Logout")
 
 // EnterGame authenticates account with the keys its login session issued,
-// selects the character named by the first of ch.Names an existing
-// character bears (creating one when none does, see Character) and enters
-// the world. An invalid ch fails before anything is sent. ctx ending fails
-// the entry at once. It returns once the burst's UserInfo arrives, with the
-// burst frames before it; the rest of the burst is left unread.
-func EnterGame(ctx context.Context, g *GameConn, account string, keys SessionKeys, ch Character) (Self, error) {
+// selects ch's character (creating it when the rules of Character allow)
+// and enters the world. chosen, when set, is called on the caller's
+// goroutine with the character's name and class id once its slot is chosen
+// or it is created, before RequestGameStart: a later failure of the entry
+// does not lose it. An invalid ch fails before anything is sent. ctx ending
+// fails the entry at once. It returns once the burst's UserInfo arrives,
+// with the burst frames before it; the rest of the burst is left unread.
+func EnterGame(ctx context.Context, g *GameConn, account string, keys SessionKeys, ch Character, chosen func(name string, classID int32)) (Self, error) {
 	if err := ch.Validate(); err != nil {
 		return Self{}, err
 	}
 	stop := context.AfterFunc(ctx, func() { _ = g.conn.SetDeadline(time.Unix(1, 0)) })
 	defer stop()
-	self, err := g.enterGame(ctx, account, keys, ch)
+	self, err := g.enterGame(ctx, account, keys, ch, chosen)
 	if err != nil && ctx.Err() != nil {
 		return Self{}, ctx.Err()
 	}
 	return self, err
 }
 
-func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKeys, ch Character) (Self, error) {
+func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKeys, ch Character, chosen func(string, int32)) (Self, error) {
 	if err := g.send(ctx, encodeAuthLogin(account, keys)); err != nil {
 		return Self{}, fmt.Errorf("send AuthLogin: %w", err)
 	}
@@ -213,9 +215,13 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 	if err != nil {
 		return Self{}, err
 	}
-	slot, name, err := g.chooseSlot(ctx, slots, ch)
+	slot, s, err := g.chooseSlot(ctx, slots, ch)
 	if err != nil {
 		return Self{}, err
+	}
+	name := s.Name
+	if chosen != nil {
+		chosen(name, s.ClassID)
 	}
 
 	if err := g.send(ctx, encodeRequestGameStart(slot)); err != nil {

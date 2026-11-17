@@ -78,6 +78,20 @@ func (m Marker) Marks(name string) bool {
 	return strings.EqualFold(name[len(name)-n:], m.Text)
 }
 
+// Markers is a set of markers: those of every bot prefix a process knows,
+// each bot naming its characters with one of them.
+type Markers []Marker
+
+// Marks reports whether any marker of ms marks name (Marker.Marks).
+func (ms Markers) Marks(name string) bool {
+	for _, m := range ms {
+		if m.Marks(name) {
+			return true
+		}
+	}
+	return false
+}
+
 // onsets and nuclei build syllables of two to four letters: a consonant
 // onset, then a vowel nucleus.
 var (

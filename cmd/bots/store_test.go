@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
 func TestParseStoreFlags(t *testing.T) {
@@ -19,13 +17,14 @@ func TestParseStoreFlags(t *testing.T) {
 		want    storeOptions
 		wantErr string
 	}{
-		{"defaults", base, storeOptions{perTown: 5, spacing: 150}, ""},
+		{"defaults", base, storeOptions{budget: defaultStoreBudget, perTown: 5, spacing: 150}, ""},
 		{
-			"merchants", append(base, "-datapack", "xml", "-store-budget", "50000", "-stores-per-town", "3", "-store-spacing", "200"),
-			storeOptions{budget: 50000, perTown: 3, spacing: 200},
+			"merchants", append(base, "-persona", "merchant", "-datapack", "xml", "-store-budget", "70000", "-stores-per-town", "3", "-store-spacing", "200"),
+			storeOptions{budget: 70000, perTown: 3, spacing: 200},
 			"",
 		},
-		{"budget without datapack", append(base, "-store-budget", "1"), storeOptions{}, "-store-budget needs -datapack"},
+		{"budget of another preset", append(base, "-datapack", "xml", "-store-budget", "1"), storeOptions{}, "-store-budget applies to -persona merchant"},
+		{"zero budget", append(base, "-persona", "merchant", "-datapack", "xml", "-store-budget", "0"), storeOptions{}, "-store-budget 0"},
 		{"negative budget", append(base, "-store-budget", "-1"), storeOptions{}, "-store-budget"},
 		{"no store per town", append(base, "-stores-per-town", "0"), storeOptions{}, "-stores-per-town"},
 		{"negative spacing", append(base, "-store-spacing", "-1"), storeOptions{}, "-store-spacing"},
@@ -46,9 +45,9 @@ func TestParseStoreFlags(t *testing.T) {
 	}
 }
 
-// TestStoreApply makes the bots merchants over the towns of the spots
-// fixture's travel map, one gatekeeper.
-func TestStoreApply(t *testing.T) {
+// TestStoreRegistry builds the merchants' store registry over the towns of
+// the spots fixture's travel map, one gatekeeper.
+func TestStoreRegistry(t *testing.T) {
 	dir := t.TempDir()
 	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems} {
 		path := filepath.Join(dir, name)
@@ -64,13 +63,7 @@ func TestStoreApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := botclient.BrainConfig{Persona: botclient.DefaultPersona(), Travel: travel}
-	storeOptions{perTown: 5, spacing: 150}.apply(&cfg, log)
-	if cfg.Stores != nil || cfg.Persona.Store.Budget != 0 {
-		t.Fatalf("no budget: stores %v, budget %d, want none", cfg.Stores, cfg.Persona.Store.Budget)
-	}
-	storeOptions{budget: 50000, perTown: 5, spacing: 150}.apply(&cfg, log)
-	if cfg.Stores == nil || cfg.Stores.Towns() != 1 || cfg.Persona.Store.Budget != 50000 {
-		t.Fatalf("stores %v, budget %d, want one town and 50000", cfg.Stores, cfg.Persona.Store.Budget)
+	if stores := (storeOptions{budget: 50000, perTown: 5, spacing: 150}).registry(travel, log); stores.Towns() != 1 {
+		t.Fatalf("store towns %d, want 1", stores.Towns())
 	}
 }

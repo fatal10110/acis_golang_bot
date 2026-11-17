@@ -46,7 +46,7 @@ func charSelectInfoPacket(slots ...charSlot) []byte {
 		w.WriteFloat64(120) // max hp
 		w.WriteFloat64(60)  // max mp
 		w.WriteInt32(s.DeleteTimer)
-		w.WriteInt32(next()) // class id
+		w.WriteInt32(s.ClassID)
 		w.WriteInt32(int32(i % 2))
 		w.WriteUint8(3)      // weapon enchant
 		w.WriteInt32(next()) // augmentation
@@ -55,7 +55,7 @@ func charSelectInfoPacket(slots ...charSlot) []byte {
 }
 
 func TestCharSelectInfoDecode(t *testing.T) {
-	three := []charSlot{{Name: "AldenBot"}, {Name: "GraeBot", DeleteTimer: 3600}, {Name: "x", DeleteTimer: -1}}
+	three := []charSlot{{Name: "AldenBot", ClassID: 18}, {Name: "GraeBot", DeleteTimer: 3600, ClassID: 1}, {Name: "x", DeleteTimer: -1}}
 	full := charSelectInfoPacket(three...)
 	tests := []struct {
 		name    string
@@ -215,11 +215,11 @@ func TestCharEnterGame(t *testing.T) {
 	}{
 		{"first candidate in slot 2", slices.Concat([]step{authLogin, list(other, charSlot{Name: "KiaBot"}, charSlot{Name: "DraelBot"})}, enter(2, "DraelBot")), "DraelBot", "", 0},
 		{"later candidate in slot 1", slices.Concat([]step{authLogin, list(other, charSlot{Name: "ThorBot"})}, enter(1, "ThorBot")), "ThorBot", "", 0},
-		{"case differs is taken", slices.Concat([]step{authLogin, list(charSlot{Name: "draelbot"}), create("DraelBot"), fail(2), create("KiaBot"), created, list(charSlot{Name: "draelbot"}, charSlot{Name: "KiaBot"})}, enter(1, "KiaBot")), "KiaBot", "", 0},
-		{"created beside others", slices.Concat([]step{authLogin, list(other), create("DraelBot"), created, list(other, charSlot{Name: "DraelBot"})}, enter(1, "DraelBot")), "DraelBot", "", 0},
+		{"case differs is another character", []step{authLogin, list(charSlot{Name: "draelbot"})}, "", "account has characters", 0},
+		{"only other characters", []step{authLogin, list(other)}, "", "account has characters", 0},
 		{"taken then refused then created", slices.Concat([]step{authLogin, list(), create("DraelBot"), fail(2), create("KiaBot"), fail(4), create("ThorBot"), created, list(charSlot{Name: "ThorBot"})}, enter(0, "ThorBot")), "ThorBot", "", 0},
 		{"every name taken", []step{authLogin, list(), create("DraelBot"), fail(2), create("KiaBot"), fail(2), create("ThorBot"), fail(2)}, "", "all 3 candidate names refused", 2},
-		{"too many characters", []step{authLogin, list(other), create("DraelBot"), fail(1)}, "", "CharCreateFail", 1},
+		{"too many characters", []step{authLogin, list(), create("DraelBot"), fail(1)}, "", "CharCreateFail", 1},
 		{"creation failed", []step{authLogin, list(), create("DraelBot"), fail(0)}, "", "CharCreateFail", 0},
 		{"created but not listed", []step{authLogin, list(), create("DraelBot"), created, list(other)}, "", "not in CharSelectInfo", 0},
 		{"pending deletion", []step{authLogin, list(charSlot{Name: "DraelBot", DeleteTimer: 3600})}, "", "pending deletion", 0},
@@ -230,7 +230,7 @@ func TestCharEnterGame(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g, done := dialFake(t, true, tt.script, tt.wantErr != "")
-			self, err := EnterGame(t.Context(), g, "bot7", SessionKeys{LoginKey1: 1, LoginKey2: 2, PlayKey1: 3, PlayKey2: 4}, ch)
+			self, err := EnterGame(t.Context(), g, "bot7", SessionKeys{LoginKey1: 1, LoginKey2: 2, PlayKey1: 3, PlayKey2: 4}, ch, nil)
 			g.Close()
 			if serr := <-done; serr != nil {
 				t.Fatalf("fake server: %v", serr)
@@ -255,7 +255,7 @@ func TestCharEnterGame(t *testing.T) {
 // TestCharEnterGameInvalid: an invalid Character fails before AuthLogin.
 func TestCharEnterGameInvalid(t *testing.T) {
 	g, done := dialFake(t, true, nil, false)
-	_, err := EnterGame(t.Context(), g, "bot7", SessionKeys{}, Character{Names: []string{"bad name"}, Class: HumanFighter})
+	_, err := EnterGame(t.Context(), g, "bot7", SessionKeys{}, Character{Names: []string{"bad name"}, Class: HumanFighter}, nil)
 	g.Close()
 	if serr := <-done; serr != nil {
 		t.Fatalf("fake server: %v", serr)
