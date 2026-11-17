@@ -575,7 +575,7 @@ func (b *Brain) gearWants() []buyRow {
 	for _, id := range b.cfg.Travel.shopGear {
 		g := b.cfg.Travel.gear[id]
 		price := b.cfg.Travel.cheapest[id]
-		if held[slotOf(g.part)] || price <= 0 || int64(price) > budget || !b.beats(id, &w) {
+		if held[slotOf(g.part)] || price <= 0 || int64(price) > budget || b.unarmedBow(id) || !b.beats(id, &w) {
 			continue
 		}
 		rows = append(rows, buyRow{item: id, count: 1})

@@ -88,6 +88,19 @@ func (b *Brain) bowWaits(it Item) bool {
 	return ok && b.carried(a) == 0
 }
 
+// unarmedBow reports whether gear id is a bow the bot carries none of the
+// arrows of and the shop errand never buys them for (ShopPolicy.ArrowsMin
+// or ArrowsMax 0): bowWaits would keep it off for good, so the gear
+// errand does not buy it.
+func (b *Brain) unarmedBow(id int32) bool {
+	a, ok := b.cfg.Travel.arrows[id]
+	if !ok || b.carried(a) != 0 {
+		return false
+	}
+	_, buys := b.arrowRow(a)
+	return !buys
+}
+
 // arrowWants is the arrow purchase of the shop errand
 // (ShopPolicy.ArrowsMin, ArrowsMax): the arrows the wielded bow shoots,
 // then the ones of the bow the gear errand wears next (nextBowArrows),

@@ -184,3 +184,29 @@ func TestBuyRowsArrowsFollowBow(t *testing.T) {
 		t.Errorf("buyRows = %v, want %v", got, want)
 	}
 }
+
+// TestGearWantsUnarmedBow checks that a bow is not bought while the bot
+// carries none of its arrows and the shop errand never buys them
+// (ArrowsMax 0): bowWaits would never let the bot wear it.
+func TestGearWantsUnarmedBow(t *testing.T) {
+	tests := []struct {
+		name  string
+		items []Item
+		max   int32
+		want  bool
+	}{
+		{name: "arrows bought with the bow", max: 1000, want: true},
+		{name: "no arrows bought", max: 0},
+		{name: "no arrows bought, looted ones carried", items: []Item{carriedArrows}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newDaggerArcher(t, append(tt.items, wornAt(220, dagger, partRHand), adenaStack(30000))...)
+			b.persona.Shop.ArrowsMax = tt.max
+			got := slices.Contains(b.gearWants(), buyRow{item: plainBow, count: 1})
+			if got != tt.want {
+				t.Errorf("gearWants has the bow = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
