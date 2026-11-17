@@ -28,6 +28,10 @@ type TravelMap struct {
 	// the lowest base price of each item they sell.
 	shops    map[int32][]shopList
 	cheapest map[int32]int32
+	// gear are the weapon and armor templates bots may wear, and shopGear
+	// the ones merchants sell, by slot then price, best first.
+	gear     map[int32]gearItem
+	shopGear []int32
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -52,10 +56,11 @@ type destination struct {
 // NewTravelMap builds the travel map of dp: every gatekeeper template with
 // a fixed spawn outside an event, with its standard adena-priced
 // destinations (the ones its list page shows), and the fixed spawn points
-// of every NPC template, and the merchants' buylists.
+// of every NPC template, the merchants' buylists and the gear bots wear.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
+	m.gear, m.shopGear = indexGear(dp.Items, m.cheapest)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue
