@@ -15,8 +15,9 @@ type Persona struct {
 	// still) even while the server reports no store open.
 	Store bool
 	// CriticalHP is the HP percent under which a bot in combat drinks the
-	// first of Potions it carries whose reuse has run out, or else flees
-	// FleeDistance away from its target (rule 3); 0 never does either.
+	// first of Potions it carries whose reuse has run out, or else heals
+	// itself with a ready heal of Heals, or else flees FleeDistance away
+	// from its target (rule 3); 0 never does any.
 	CriticalHP   int
 	FleeDistance int32
 	// Potions are the healing potion template ids rule 3 drinks, best
@@ -31,8 +32,26 @@ type Persona struct {
 	OutmatchedHP int
 	// AttackSkills are the skills the bot casts at its combat target before
 	// melee, first ready one first: known (SkillList), enabled and out of
-	// reuse.
+	// reuse; none while its MP is under MPReserve.
 	AttackSkills []int32
+	// MPReserve is the MP percent kept for heals and buffs: under it the
+	// bot casts no AttackSkills. 0 keeps none.
+	MPReserve int
+	// Heals are the heals the bot casts on a party member, itself
+	// included, whose HP is under the heal's percent, first ready one
+	// first, so the strongest goes first (rule 3). The leader is healed
+	// first, then the bot, then the others. Only known skills are cast.
+	Heals []Heal
+	// Buffs are the buffs the bot keeps on itself and on the party members
+	// in sight, the leader first, renewed out of combat once missing or
+	// with under RebuffBefore left (rule 7). Only known skills are cast.
+	Buffs        []Buff
+	RebuffBefore time.Duration
+	// AssistMin and AssistMax bound the delay after the party leader's
+	// attack or hostile cast on a creature the bot may fight before the
+	// bot attacks it too (rule 9 assist); a bare selection by the leader
+	// is no assist. AssistMax 0 never assists.
+	AssistMin, AssistMax time.Duration
 	// BlacklistAfter is how many attempts on a target with no swing or cast
 	// landing in between make the bot leave it alone for BlacklistFor; 0
 	// never does.
@@ -84,10 +103,11 @@ type Persona struct {
 	Goal func(w *World, now time.Time) (Action, bool)
 }
 
-// DefaultPersona is a passive player that rests when low, fights back when
+// DefaultPersona is a support player that rests when low, fights back when
 // hit, restarts in town when killed, learns the support skills of a mystic
-// at its trainer, follows the leader of a party it joined and otherwise
-// drifts around where it stands.
+// at its trainer, heals and buffs its party with them, assists its party
+// leader, follows the leader of a party it joined and otherwise drifts
+// around where it stands.
 func DefaultPersona() Persona {
 	return Persona{
 		Death:          restartToVillage,
@@ -110,6 +130,12 @@ func DefaultPersona() Persona {
 		LearnSkills:    defaultLearnSkills(),
 		Trainers:       defaultTrainers(),
 		Spots:          defaultSpotPolicy(),
+		MPReserve:      50,
+		Heals:          defaultHeals,
+		Buffs:          defaultBuffs,
+		RebuffBefore:   time.Minute,
+		AssistMin:      500 * time.Millisecond,
+		AssistMax:      1500 * time.Millisecond,
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
@@ -165,7 +191,10 @@ const (
 // spaces a repeated restart, an invitation is answered once, potionReuse
 // spaces the potions the bot drinks (the potions' shared heal over time),
 // shotRetry the toggles of a shot template, and a trainer visit sends one
-// skill request per server answer.
+// skill request per server answer. RequestMagicSkillUse (attack, heal and
+// buff casts) has none either: a cast waits for the one before it
+// (castPending, castTimeout) and its skill's reuse, and buffRetry spaces
+// one buff on one target.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -216,24 +245,28 @@ type rule struct {
 	run  func(b *Brain, now time.Time) (Action, bool)
 }
 
-// playRules are rules 1-10, first match wins; "train" (the trainer),
-// "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's
-// buffs), "travel" (a gatekeeper trip to a spot out of walking reach) and
-// "spot" (getting to the farming spot) are rule 9 errands, ahead of the
-// persona's goal: a party member visits its trainer, then follows instead
-// of farming or wandering off. Rules 7 (rebuff) and 8
-// (loot) need events and models that land with buffs (#22) and loot (#29);
-// rule 3 drinks a potion or flees until heals (#22) exist. The shot toggle
-// is set-up, not a plan rule: it runs once per shot template carried,
-// ahead of the fight it serves, after the flee rules so it never delays one.
+// playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
+// the party, ahead of fighting so a support in combat still heals;
+// "assist" (the leader's target), "train" (the trainer), "follow" (the
+// slot behind the party leader), "newbie" (the Newbie Guide's buffs),
+// "travel" (a gatekeeper trip to a spot out of walking reach) and "spot"
+// (getting to the farming spot) are rule 9 errands, ahead of the persona's
+// goal: a party member assists its leader, visits its trainer, then follows
+// instead of farming. Rule 8 (loot) needs the loot model of #29. The shot
+// toggle is set-up, not a plan rule: it runs once per shot template
+// carried, ahead of the fight it serves, after the flee rules so it never
+// delays one.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"critical", (*Brain).ruleCritical},
+	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
+	{"rebuff", (*Brain).ruleRebuff},
+	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},
@@ -313,7 +346,8 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 }
 
 // ruleCritical is rule 3: in combat with HP critical, stand up, then drink
-// a potion whose reuse has run out, else flee away from the target.
+// a potion whose reuse has run out, else heal itself, else flee away from
+// the target.
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat || !below(s.HP, s.MaxHP, b.persona.CriticalHP) {
@@ -323,6 +357,9 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 		if a, ok := b.drinkPotion(now); ok {
 			return a, true
 		}
+	}
+	if a, ok := b.heal(s.ObjectID, now); ok {
+		return a, true
 	}
 	return b.flee(b.world.Target, now), true
 }
@@ -352,6 +389,7 @@ func (b *Brain) flee(id int32, now time.Time) Action {
 // hitting the bot; otherwise the hardest hitter is selected. An attack on a
 // target the policy no longer allows (a player who unflagged) is dropped.
 // Hit only by creatures it may not fight (blacklisted), the bot runs away.
+// With no one left to fight, it assists the party leader.
 func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
@@ -373,6 +411,9 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 	}
 	if id := b.unfought(now); id != 0 {
 		return b.flee(id, now), true
+	}
+	if id := b.assistTarget(now); id != 0 {
+		return b.fight(id, now), true
 	}
 	return Action{}, true
 }
