@@ -138,6 +138,8 @@ type Brain struct {
 	// 9 errands).
 	newbie newbieVisit
 	trip   travelTrip
+	// loot is the loot queue (rule 8).
+	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
 	// usedAt is when the bot last used (UseItem) each item template.
@@ -314,12 +316,16 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if len(e.Hits) > 0 {
 				b.leaderHit(e.AttackerID, e.Hits[0].TargetID, now)
 			}
+			b.lootEvent(ev, now)
 		case MagicSkillUse:
 			if e.CasterID == self {
 				b.castAt = time.Time{}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 			}
 			b.leaderHit(e.CasterID, e.TargetID, now)
+			b.lootEvent(ev, now)
+		case DropItem:
+			b.lootEvent(ev, now)
 		case Die:
 			// A dead target ends the attack in flight: there is nothing
 			// to disengage from.
@@ -541,6 +547,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.shop.sent(a, now)
+	b.loot.sent(a, now)
 	return true, nil
 }
 

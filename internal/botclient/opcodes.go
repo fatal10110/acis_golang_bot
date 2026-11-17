@@ -108,6 +108,20 @@ const (
 	opGameRequestMagicSkillUse = 0x2f // wiresafe.go, magic_skill_use.go
 )
 
+// Game server to client, ground items
+// (internal/gameserver/network/serverpackets).
+const (
+	opGameSpawnItem = 0x0b // grounditems.go
+	opGameDropItem  = 0x0c // grounditems.go
+	opGameGetItem   = 0x0d // grounditems.go
+)
+
+// Client to game server, ground items
+// (internal/gameserver/network/clientpackets).
+const (
+	opGameRequestDropItem = 0x12 // wiresafe.go, item_ops.go
+)
+
 // Party, both directions (internal/gameserver/network/serverpackets/party.go
 // and clientpackets/party.go).
 const (

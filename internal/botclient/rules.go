@@ -109,6 +109,9 @@ type Persona struct {
 	// Shop is what the bot buys and sells at merchants (rule 9 errand
 	// "shop").
 	Shop ShopPolicy
+	// Loot is what the bot picks up after a fight and drops when
+	// overweight (rule 8).
+	Loot LootPolicy
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -152,6 +155,7 @@ func DefaultPersona() Persona {
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
+		Loot:           defaultLootPolicy(),
 		Trade:          defaultTradePolicy(),
 	}
 }
@@ -202,6 +206,8 @@ const (
 	actTradeAdd
 	actTradeConfirm
 	actTradeCancel
+	actPickup
+	actDrop
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -219,7 +225,8 @@ const (
 // one buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone
 // have no reuse gate either (no flood protector covers them): a request is
 // answered once, and a trade gets one add, one confirm and one cancel
-// (Trade.added, confirmed, cancelAt).
+// (Trade.added, confirmed, cancelAt). A pickup click (Action) has none:
+// lootRetry spaces the clicks on one item.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -228,6 +235,8 @@ func (a Action) gate() gate {
 		return gateChat
 	case actBypass:
 		return gateBypass
+	case actDrop:
+		return gateDrop
 	}
 	return gateNone
 }
@@ -278,8 +287,9 @@ type rule struct {
 // "travel" (a gatekeeper trip to a spot out of walking reach), "spot"
 // (getting to the farming spot) and "farm" (attacking a monster there) are
 // rule 9 errands, ahead of the persona's goal: a party member assists its
-// leader, visits its trainer, then follows instead of farming. Rule 8
-// (loot) needs the loot model of #29. The shot toggle is set-up, not a plan
+// leader, visits its trainer, then follows instead of farming. "loot" is
+// rule 8, after the rebuff and ahead of every errand. The shot toggle is
+// set-up, not a plan
 // rule: it runs once per shot template carried, ahead of the fight it
 // serves, after the flee rules so it never delays one.
 var playRules = []rule{
@@ -292,6 +302,7 @@ var playRules = []rule{
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
+	{"loot", (*Brain).ruleLoot},
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"shop", (*Brain).ruleShop},
@@ -420,7 +431,8 @@ func (b *Brain) flee(id int32, now time.Time) Action {
 // hitting the bot; otherwise the hardest hitter is selected. An attack on a
 // target the policy no longer allows (a player who unflagged) is dropped.
 // Hit only by creatures it may not fight (blacklisted), the bot runs away.
-// With no one left to fight, it assists the party leader.
+// With no one left to fight, it assists the party leader, or else leaves
+// the turn to the loot it queued (rule 8).
 func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
@@ -446,7 +458,9 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 	if id := b.assistTarget(now); id != 0 {
 		return b.fight(id, now), true
 	}
-	return Action{}, true
+	// The combat stance outlasts the kill: queued loot goes to rule 8 now,
+	// while it is still locked to the bot (the server's killrewards.go).
+	return Action{}, !b.lootQueued(now)
 }
 
 // ruleRest is rule 6: out of combat with HP or MP low, sit until both

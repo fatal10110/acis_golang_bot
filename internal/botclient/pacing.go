@@ -28,6 +28,10 @@ const (
 	// (client_ingame.go handleRequestBypassToServer); a dialog link is
 	// clicked at a human pace.
 	bypassGap = 500 * time.Millisecond
+	// dropGap spaces RequestDropItem. The server silently ignores a drop
+	// within DropItemTime (1 s by default) of the previous one
+	// (config_gates.go handleRequestDropItem).
+	dropGap = 2 * time.Second
 	// keepaliveAfter is how long the brain may stay silent before it sends
 	// ValidatePosition. The server closes an authenticated connection that
 	// sends nothing for 15 minutes (session.go clientReadIdleTimeout).
@@ -42,11 +46,12 @@ const (
 	gateEmote
 	gateChat
 	gateBypass
+	gateDrop
 	gateCount
 )
 
 // gateGaps is the least time between two frames of one gate.
-var gateGaps = [gateCount]time.Duration{gateEmote: emoteGap, gateChat: chatGap, gateBypass: bypassGap}
+var gateGaps = [gateCount]time.Duration{gateEmote: emoteGap, gateChat: chatGap, gateBypass: bypassGap, gateDrop: dropGap}
 
 // pacer applies the send limits. It is owned by the brain goroutine, the
 // connection's only writer while the brain runs.

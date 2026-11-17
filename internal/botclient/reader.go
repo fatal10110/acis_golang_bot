@@ -111,6 +111,10 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameItemList:        decodeItemList,
 	opGameInventoryUpdate: decodeInventoryUpdate,
 
+	opGameSpawnItem: decodeSpawnItem,
+	opGameDropItem:  decodeDropItem,
+	opGameGetItem:   decodeGetItem,
+
 	opGameSendTradeRequest:  func(r *wire.Reader) Event { return SendTradeRequest{SenderID: r.ReadInt32()} },
 	opGameTradeStart:        decodeTradeStart,
 	opGameTradeOwnAdd:       decodeTradeOwnAdd,
