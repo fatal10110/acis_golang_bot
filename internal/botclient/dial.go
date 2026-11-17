@@ -13,7 +13,8 @@ import (
 // and retransmits for about 15 minutes (tcp_retries2), so the dialer sets
 // both: keepalive probes for an idle connection, and the user timeout
 // (Linux TCP_USER_TIMEOUT, lineSockopts) for unacknowledged data. Either one
-// ends the connection with ETIMEDOUT (deadLine), which is no abort.
+// ends the connection with ETIMEDOUT, or with EHOSTUNREACH or ENETUNREACH when
+// an ICMP unreachable arrived first (deadLine), which is no abort.
 const (
 	keepAliveIdle     = 30 * time.Second
 	keepAliveInterval = 10 * time.Second

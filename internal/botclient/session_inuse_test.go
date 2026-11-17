@@ -103,6 +103,8 @@ func TestSessionDeadLineNoAbort(t *testing.T) {
 	}{
 		{name: "dead line (keepalive or user timeout)", err: readErr(syscall.ETIMEDOUT)},
 		{name: "dead line on a send", err: fmt.Errorf("send game packet: %w", &net.OpError{Op: "write", Net: "tcp", Err: os.NewSyscallError("write", syscall.ETIMEDOUT)})},
+		{name: "dead line after an ICMP host unreachable", err: readErr(syscall.EHOSTUNREACH)},
+		{name: "dead line after an ICMP net unreachable", err: readErr(syscall.ENETUNREACH)},
 		{name: "reset", err: readErr(syscall.ECONNRESET), wantAborts: maxAborts, wantStop: true},
 		{name: "EOF", err: fmt.Errorf("%w: %w", errConnLost, fmt.Errorf("read game frame: %w", io.EOF)), wantAborts: maxAborts, wantStop: true},
 		{name: "kick", err: errServerClose},

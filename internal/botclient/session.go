@@ -370,7 +370,7 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 		b.aborts++
 		b.cfg.Brain.Metrics.Abort()
 	}
-	b.log.Warn("session ended", "played", played.Round(time.Second), "kicked", b.kicked, "dead line", dead, "err", err)
+	b.log.Warn("session ended", "played", played.Round(time.Second), "kicked", b.kicked, "deadLine", dead, "err", err)
 	switch {
 	case !b.cfg.Persistent:
 		return 0, fmt.Errorf("session ended: %w", err)
@@ -385,11 +385,14 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 	return d, nil
 }
 
-// deadLine reports a connection the kernel ended with ETIMEDOUT: the
-// dialer's keepalive or user timeout found the line dead. A reset or EOF
-// is not one: the peer answered.
+// deadLine reports a connection the kernel ended because the dialer's
+// keepalive or user timeout found the line dead: ETIMEDOUT, or the ICMP
+// unreachable error the kernel saw first (Linux tcp_write_err reports
+// sk_err_soft when set). A reset or EOF is not one: the peer answered.
 func deadLine(err error) bool {
-	return errors.Is(err, syscall.ETIMEDOUT)
+	return errors.Is(err, syscall.ETIMEDOUT) ||
+		errors.Is(err, syscall.EHOSTUNREACH) ||
+		errors.Is(err, syscall.ENETUNREACH)
 }
 
 // credentialRefused reports a LoginFail the login server counts toward its
