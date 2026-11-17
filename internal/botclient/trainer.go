@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"maps"
+	"math"
 	"strconv"
 	"time"
 
@@ -221,12 +222,18 @@ type trainerVisit struct {
 	// shunned are the trainers that taught the bot nothing, by object id,
 	// until a time.
 	shunned map[int32]time.Time
+	// walk is the walk to a trainer's spawn while none is in sight (zero
+	// for none); walkShunned are the trainer templates whose spawn the bot
+	// reached without finding one, or could not reach, until a time.
+	walk        npcVisit
+	walkShunned map[int32]time.Time
 }
 
 // reset ends the visit in progress.
 func (t *trainerVisit) reset() {
 	t.npc, t.step, t.waitUntil, t.clicks = 0, trainTalk, time.Time{}, 0
 	t.offer, t.pending, t.skipped, t.short = nil, AcquirableSkill{}, nil, 0
+	t.walk = npcVisit{}
 }
 
 // finish ends a visit that got the trainer's list as far as it could go at
@@ -282,14 +289,20 @@ func skillListBypass(id int32) string {
 	return "npc_" + strconv.Itoa(int(id)) + "_" + skillListCommand
 }
 
-// ruleTrain is a rule 9 errand: with a visit due and a trainer of its
-// class in sight, the bot talks to the trainer, opens its skill list and
-// learns the wanted skills it can afford, one request at a time, each after
-// the server's answer to the last.
+// ruleTrain is a rule 9 errand: with a visit due, the bot walks to the
+// nearest spawn of a trainer of its class until one is in sight, talks to
+// the trainer, opens its skill list and learns the wanted skills it can
+// afford, one request at a time, each after the server's answer to the
+// last. Legs pass the frame pacer like the spot rule's.
 func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	t := &b.train
-	if t.npc == 0 && !b.startVisit(now) {
-		return Action{}, false
+	if t.npc == 0 {
+		if !b.startVisit(now) {
+			return Action{}, false
+		}
+		if t.npc == 0 {
+			return b.trainerLeg(now)
+		}
 	}
 	o := b.world.object(t.npc)
 	if o == nil || o.Dead {
@@ -338,14 +351,15 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	return talkAction(t.npc, s.Position(now)), true
 }
 
-// startVisit starts a visit at the nearest trainer of the bot's class in
-// sight when one is due, reporting whether it did.
+// startVisit starts a visit when one is due: at the nearest trainer of the
+// bot's class in sight, else by a walk to the nearest spawn of one within
+// Persona.TrainerReach (from the travel map), reporting whether a visit or
+// walk runs.
 func (b *Brain) startVisit(now time.Time) bool {
 	t, s := &b.train, &b.world.Self
-	if len(b.persona.LearnSkills[s.ClassID]) == 0 {
-		return false
-	}
-	if t.doneLevel != 0 && s.Level <= t.doneLevel && (t.needSP == 0 || s.SP < t.needSP) {
+	if len(b.persona.LearnSkills[s.ClassID]) == 0 ||
+		(t.doneLevel != 0 && s.Level <= t.doneLevel && (t.needSP == 0 || s.SP < t.needSP)) {
+		t.walk = npcVisit{}
 		return false
 	}
 	from := s.Position(now)
@@ -361,12 +375,59 @@ func (b *Brain) startVisit(now time.Time) bool {
 			}
 		}
 	}
-	if best == 0 {
+	if best != 0 {
+		t.reset()
+		t.npc = best
+		return true
+	}
+	return b.startTrainerWalk(from, now)
+}
+
+// startTrainerWalk keeps or starts the walk to the nearest spawn of a
+// trainer of the bot's class within Persona.TrainerReach, reporting
+// whether one runs. A walk the bot left the reach of (a teleport) is
+// dropped. A party member stays with its party: it walks to no trainer out
+// of sight.
+func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
+	t, m := &b.train, b.cfg.Travel
+	reach := int64(b.persona.TrainerReach) * int64(b.persona.TrainerReach)
+	if m == nil || reach == 0 || b.world.Party.In() {
+		t.walk = npcVisit{}
 		return false
 	}
-	t.reset()
-	t.npc = best
-	return true
+	if t.walk.active() && dist2(from, t.walk.at) <= reach {
+		return true
+	}
+	var best npcVisit
+	bestDist := int64(math.MaxInt64)
+	for _, npcID := range b.persona.Trainers[b.world.Self.ClassID] {
+		if now.Before(t.walkShunned[npcID]) {
+			continue
+		}
+		for _, at := range m.spawns[npcID] {
+			if d := dist2(from, at); d <= reach && d < bestDist {
+				best, bestDist = npcVisit{npcID: npcID, at: at}, d
+			}
+		}
+	}
+	t.walk = best
+	return best.active()
+}
+
+// trainerLeg is the next leg of the walk to a trainer's spawn. Arrived
+// with no trainer in sight, or getting nowhere, the bot leaves that
+// trainer template alone for visitShunFor.
+func (b *Brain) trainerLeg(now time.Time) (Action, bool) {
+	t := &b.train
+	if a, ok := b.walkTo(&t.walk, now); ok {
+		return a, true
+	}
+	if t.walkShunned == nil {
+		t.walkShunned = make(map[int32]time.Time)
+	}
+	t.walkShunned[t.walk.npcID] = now.Add(visitShunFor)
+	t.walk = npcVisit{}
+	return Action{}, false
 }
 
 // dist2 is the squared horizontal distance between a and b.

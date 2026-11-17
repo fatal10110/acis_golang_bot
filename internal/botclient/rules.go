@@ -93,8 +93,11 @@ type Persona struct {
 	// cheapest wanted skill the last visit could not afford.
 	LearnSkills map[int32][]int32
 	// Trainers are the NPC template ids of the trainers of each class id;
-	// the bot visits the nearest one in sight.
-	Trainers map[int32][]int32
+	// the bot visits the nearest one in sight, else walks to the nearest
+	// spawn of one within TrainerReach (from the travel map,
+	// BrainConfig.Travel); 0 visits only one in sight.
+	Trainers     map[int32][]int32
+	TrainerReach int32
 	// Spots is how the bot picks and keeps its farming spot when the brain
 	// has a spot registry (BrainConfig.Spots, rule 9 errand "spot").
 	Spots SpotPolicy
@@ -114,6 +117,9 @@ type Persona struct {
 	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
 	// errand "travel").
 	Travel TravelPolicy
+	// Town is when the bot takes a gatekeeper to another town between idle
+	// spells (rule "travel"); the zero TownPolicy never does.
+	Town TownPolicy
 	// Shop is what the bot buys and sells at merchants (rule 9 errand
 	// "shop").
 	Shop ShopPolicy
@@ -154,6 +160,7 @@ func DefaultPersona() Persona {
 		Emotes:         []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
 		LearnSkills:    defaultLearnSkills(),
 		Trainers:       defaultTrainers(),
+		TrainerReach:   8000,
 		Spots:          defaultSpotPolicy(),
 		EngagedWindow:  10 * time.Second,
 		MPReserve:      50,
