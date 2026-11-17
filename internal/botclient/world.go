@@ -44,6 +44,8 @@ type World struct {
 	Trade Trade
 	// Buffs are the bot's own effects (AbnormalStatusUpdate).
 	Buffs Buffs
+	// Ground are the items on the ground in sight by object id.
+	Ground map[int32]GroundItem
 }
 
 // SelfState is the bot's own character.
@@ -231,6 +233,7 @@ func NewWorld(self Self, now time.Time) (*World, error) {
 		skillReady: make(map[int32]time.Time),
 		Attackers:  make(map[int32]*Attacker),
 		Engaged:    make(map[int32]map[int32]time.Time),
+		Ground:     make(map[int32]GroundItem),
 	}
 	for _, raw := range append(self.Burst[:len(self.Burst):len(self.Burst)], self.UserInfo) {
 		if len(raw) == 0 {
@@ -326,6 +329,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 		delete(w.Objects, e.ObjectID)
 		delete(w.Attackers, e.ObjectID)
 		delete(w.Engaged, e.ObjectID)
+		delete(w.Ground, e.ObjectID)
 		if w.Target == e.ObjectID {
 			w.Target = 0
 		}
@@ -377,6 +381,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyTrade(ev, now)
 	case AbnormalStatusUpdate, PartySpelled:
 		w.applyEffects(ev, now)
+	case SpawnItem, DropItem, GetItem:
+		w.applyGround(ev)
 	}
 }
 
@@ -515,6 +521,7 @@ func (w *World) applyTeleport(e TeleportToLocation) {
 		clear(w.Objects)
 		clear(w.Attackers)
 		clear(w.Engaged)
+		clear(w.Ground)
 		w.Target = 0
 	}
 }
