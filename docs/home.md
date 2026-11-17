@@ -169,11 +169,19 @@ bots ui -secret-file ~/.config/acis-bots/secret -prefix home -login <server>:210
 - The panel serves on `-listen` (default `127.0.0.1:8090`; a loopback IP only, any other address
   is refused) and answers only requests whose `Host` is loopback and that come from its own page.
   Open `http://127.0.0.1:8090/`.
-- Pages: Bots (create, spawn, despawn, change persona, delete, import), a bot's detail (its
-  snapshot, commands `stay`, `go <spot>`, `follow <player>`, `assist <player>`, `leave`, `logout`,
-  and its log), Dashboard (login gate and breaker with "resume logins", the metrics), Logs. Live
-  state comes over server-sent events; nothing needs Node.
+- Pages: Bots (sort, filter, bulk spawn and despawn, create, import), a bot's detail (its
+  snapshot with HP, MP and CP, persona change, spawn, despawn, delete, commands `stay`,
+  `go <spot>` from a spot picker, `follow <player>`, `assist <player>`, `leave`, `logout`, each
+  answered in a toast, and its log), Dashboard (login gate and breaker with "resume logins",
+  online count against `-max-online`, the metrics and their charts), Logs (filter, search,
+  pause). Live state comes over server-sent events; the header shows when the stream reconnects.
+  Light and dark themes follow the system until toggled.
+- The page is a React application (`web/`). Release binaries embed it. A binary built from source
+  embeds it only after `make ui` (Node.js 22 and npm), run before `go build ./cmd/bots`; without
+  it the panel serves a page that says so, and the API still works. `npm run dev` in `web/`
+  serves the page with hot reload against a `bots ui` on the default `-listen`.
 - The registry lives in `-data-dir` (default `acis-bots` under the user's config directory); a
   restart on the same directory logs back in every bot marked online, as the same characters.
-- `town` and `merchant` are offered only with `-datapack`.
+- `town` and `merchant` are offered only with `-datapack`; without it they are listed disabled.
+  The spot picker lists the datapack's spots, so it is empty without `-datapack`.
 - No password, secret or GM DSN reaches the API, the page or the logs.

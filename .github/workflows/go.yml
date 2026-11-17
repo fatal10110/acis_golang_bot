@@ -109,6 +109,53 @@ jobs:
       - name: Test
         run: go test -count=1 ./internal/ownerfile ./internal/botregistry ./internal/botaccounts ./cmd/bots
 
+  # The control panel's page (web/, docs/plan.md D12): the only job with Node.
+  # The Go jobs build and test against the placeholder page; this one builds
+  # the page and runs the panel's HTTP tests over the built assets (CSP, no
+  # secret in any served file).
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Serve the built page
+        working-directory: .
+        run: |
+          test -f internal/botpanel/web/app/index.html
+          go test -count=1 ./internal/botpanel/ -run 'TestPanelSecurityHeaders|TestPanelDisabledPreset|TestPanelPlaceholderShipped'
+
   # Runs the linters and the gofumpt formatter from .golangci.yml.
   lint:
     runs-on: ubuntu-latest

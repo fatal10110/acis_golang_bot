@@ -328,6 +328,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		Metrics:    metrics,
 		MaxOnline:  o.maxOnline,
 		Presets:    offeredPresets(o.datapack),
+		Spots:      runner.shared.spots,
 		Logs:       ring,
 		Log:        log,
 	})
@@ -367,15 +368,16 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	return err
 }
 
-// offeredPresets are the presets of the catalog the panel offers: those
-// that need the datapack only with it.
+// offeredPresets are the presets of the catalog the panel lists: those that
+// need the datapack are disabled, with the reason, without it.
 func offeredPresets(datapack string) []botpanel.Preset {
 	var out []botpanel.Preset
 	for _, p := range presets {
+		bp := botpanel.Preset{Name: p.name, Help: p.help}
 		if p.datapack && datapack == "" {
-			continue
+			bp.Disabled = "needs -datapack"
 		}
-		out = append(out, botpanel.Preset{Name: p.name, Help: p.help})
+		out = append(out, bp)
 	}
 	return out
 }

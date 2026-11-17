@@ -37,6 +37,16 @@ jobs:
           go-version-file: go.mod
           cache: false
 
+      # The panel's page (docs/plan.md D12), embedded by both binaries.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+
+      - name: Build the panel page
+        run: |
+          make ui
+          test -f internal/botpanel/web/app/index.html
+
       # Static builds: CGO off, so the binaries need no C library at home.
       - name: Build binaries
         env:
