@@ -38,6 +38,8 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(itemList(1, potionRow, swordRow))
 	f.Add(inventoryUpdate(ItemChange{ItemAdded, shotRow}, ItemChange{ItemRemoved, potionRow}))
 	f.Add(exAutoSoulShot(1835, 1))
+	f.Add(shopWindow(opGameBuyList, 5000, 29, 3, bookOffer, potionOffer))
+	f.Add(shopWindow(opGameSellList, 300, 0, 1, skinRow))
 	f.Add([]byte{0xfe, 0x2e, 0x00})
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) == 0 {

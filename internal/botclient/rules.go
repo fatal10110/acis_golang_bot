@@ -106,6 +106,9 @@ type Persona struct {
 	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
 	// errand "travel").
 	Travel TravelPolicy
+	// Shop is what the bot buys and sells at merchants (rule 9 errand
+	// "shop").
+	Shop ShopPolicy
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -148,6 +151,7 @@ func DefaultPersona() Persona {
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
+		Shop:           defaultShopPolicy(),
 		Trade:          defaultTradePolicy(),
 	}
 }
@@ -192,6 +196,8 @@ const (
 	actSkillInfo
 	actLearnSkill
 	actWalkRun
+	actBuyItem
+	actSellItem
 	actAnswerTrade
 	actTradeAdd
 	actTradeConfirm
@@ -206,7 +212,9 @@ const (
 // spaces a repeated restart, an invitation is answered once, potionReuse
 // spaces the potions the bot drinks (the potions' shared heal over time),
 // shotRetry the toggles of a shot template, and a trainer visit sends one
-// skill request per server answer. RequestMagicSkillUse (attack, heal and
+// skill request per server answer. RequestBuyItem and RequestSellItem have
+// none either: a shop visit sends one per BuyList or SellList it opened.
+// RequestMagicSkillUse (attack, heal and
 // buff casts) has none either: a cast waits for the one before it
 // (castPending, castTimeout) and its skill's reuse, and buffRetry spaces
 // one buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone
@@ -266,7 +274,8 @@ type rule struct {
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
 // the party, ahead of fighting so a support in combat still heals;
-// "assist" (the leader's target), "train" (the trainer), "follow" (the
+// "assist" (the leader's target), "train" (the trainer), "shop" (a
+// merchant's buy and sell windows), "follow" (the
 // slot behind the party leader), "newbie" (the Newbie Guide's buffs),
 // "travel" (a gatekeeper trip to a spot out of walking reach), "spot"
 // (getting to the farming spot) and "farm" (attacking a monster there) are
@@ -291,6 +300,7 @@ var playRules = []rule{
 	{"stay", (*Brain).ruleStay},
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
+	{"shop", (*Brain).ruleShop},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},
 	{"travel", (*Brain).ruleTravel},
