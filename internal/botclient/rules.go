@@ -84,6 +84,8 @@ type Persona struct {
 	JoinParty func(w *World, requester string, now time.Time) bool
 	// Trade is how the bot answers trade requests and trades (rule 2).
 	Trade TradePolicy
+	// Chat is how the bot answers whispers (rule "chat").
+	Chat ChatPolicy
 	// LearnSkills are the skills the bot learns with SP at a trainer, by
 	// class id, first listed first (rule 9 errand); a class with none never
 	// visits one. A visit is due once per level and when the SP reaches the
@@ -165,6 +167,7 @@ func DefaultPersona() Persona {
 		Shop:           defaultShopPolicy(),
 		Loot:           defaultLootPolicy(),
 		Trade:          defaultTradePolicy(),
+		Chat:           defaultChatPolicy(),
 	}
 }
 
@@ -219,6 +222,7 @@ const (
 	actDrop
 	actDlgAnswer
 	actUserCommand
+	actChatReply
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -237,15 +241,16 @@ const (
 // have no reuse gate either (no flood protector covers them): a request is
 // answered once, and a trade gets one add, one confirm and one cancel
 // (Trade.added, confirmed, cancelAt). A pickup click (Action) has none:
-// lootRetry spaces the clicks on one item. A whisper (Say2 Tell) has no
-// server gate either (chat.go chatTell): it keeps the chat gate. DlgAnswer
+// lootRetry spaces the clicks on one item. A whisper (Say2 Tell), a GM
+// command's reply or a chat reply, has no server gate either (chat.go
+// chatTell): it keeps the chat gate. DlgAnswer
 // and RequestUserCommand have none either: an offer is answered once, and
 // escapeRetry spaces a repeated /unstuck.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
-	case actSay, actTell:
+	case actSay, actTell, actChatReply:
 		return gateChat
 	case actBypass:
 		return gateBypass
@@ -305,7 +310,8 @@ type rule struct {
 // rule 8, after the rebuff and ahead of every errand. "command" sends what
 // a GM's whispered command asks for (a reply, a party withdrawal), and
 // "stay" holds a bot a GM told to stay, ahead of looting and every errand
-// that would move it. "leader" handles a dead or lost leader ahead of
+// that would move it. "chat" whispers a delayed reply to a player's
+// whisper (ChatPolicy), after the command replies. "leader" handles a dead or lost leader ahead of
 // following it. The shot toggle is set-up, not a plan
 // rule: it runs once per shot template carried, ahead of the fight it
 // serves, after the flee rules so it never delays one.
@@ -313,6 +319,7 @@ var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"command", (*Brain).ruleCommand},
+	{"chat", (*Brain).ruleChat},
 	{"critical", (*Brain).ruleCritical},
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
@@ -340,6 +347,7 @@ var storeRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"command", (*Brain).ruleCommand},
+	{"chat", (*Brain).ruleChat},
 	{"store", func(*Brain, time.Time) (Action, bool) { return Action{}, true }},
 }
 

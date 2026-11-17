@@ -114,14 +114,20 @@ type orders struct {
 }
 
 // heard takes a chat line at now: a whisper from another player that
-// parses as a command goes to the authority, other lines never do. The
-// sender is the line's object id, which the server fills from the speaker.
+// parses as a command goes to the authority, other lines never do; any
+// other whisper may get a chat reply (chatHeard), a command never does,
+// whoever sent it. The sender is the line's object id, which the server
+// fills from the speaker.
 func (b *Brain) heard(e CreatureSay, now time.Time) {
 	if e.Type != chatTell || e.ObjectID == 0 || e.ObjectID == b.world.Self.ObjectID || strings.HasPrefix(e.Name, echoPrefix) {
 		return
 	}
 	cmd, ok := parseCommand(e.Text)
-	if !ok || b.cfg.Authority == nil {
+	if !ok {
+		b.chatHeard(e, now)
+		return
+	}
+	if b.cfg.Authority == nil {
 		return
 	}
 	if v, done := b.cfg.Authority.ask(tell{sender: e.ObjectID, name: e.Name, cmd: cmd}, now, b.verdicts); done {
