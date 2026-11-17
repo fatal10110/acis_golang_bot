@@ -113,6 +113,8 @@ type Brain struct {
 	appearing bool
 	// restartedAt is the restart request not yet answered by a Revive.
 	restartedAt time.Time
+	// train is the trainer visit (rule 9 errand).
+	train trainerVisit
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -283,6 +285,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
+		case NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
+			b.trainEvent(ev, now)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
 			b.reactAt = now.Add(b.reactDelay())
@@ -308,7 +312,7 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected, AskJoinParty:
+	case MyTargetSelected, AskJoinParty, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 		return true
 	case Attack:
 		return e.AttackerID != self && slices.ContainsFunc(e.Hits, func(h AttackHit) bool { return h.TargetID == self })
@@ -462,6 +466,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actAutoShot:
 		b.shotAskedAt[a.item] = now
 	}
+	b.train.sent(a, now)
 	return true, nil
 }
 

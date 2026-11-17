@@ -23,6 +23,11 @@ const (
 	// GlobalChatTime, defaults to 0 (chat.go chatAll); a human pace keeps
 	// bots from flooding the chat of the players around them.
 	chatGap = 3 * time.Second
+	// bypassGap spaces RequestBypassToServer. The server silently drops a
+	// bypass within ServerBypassTime (100 ms by default) of the previous one
+	// (client_ingame.go handleRequestBypassToServer); a dialog link is
+	// clicked at a human pace.
+	bypassGap = 500 * time.Millisecond
 	// keepaliveAfter is how long the brain may stay silent before it sends
 	// ValidatePosition. The server closes an authenticated connection that
 	// sends nothing for 15 minutes (session.go clientReadIdleTimeout).
@@ -36,11 +41,12 @@ const (
 	gateNone gate = iota
 	gateEmote
 	gateChat
+	gateBypass
 	gateCount
 )
 
 // gateGaps is the least time between two frames of one gate.
-var gateGaps = [gateCount]time.Duration{gateEmote: emoteGap, gateChat: chatGap}
+var gateGaps = [gateCount]time.Duration{gateEmote: emoteGap, gateChat: chatGap, gateBypass: bypassGap}
 
 // pacer applies the send limits. It is owned by the brain goroutine, the
 // connection's only writer while the brain runs.
