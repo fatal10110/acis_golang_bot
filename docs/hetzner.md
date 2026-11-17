@@ -135,3 +135,10 @@ keeps serving until every bot has logged out.
   RSS against `MemoryMax` is `systemctl show -p MemoryCurrent acis-bots`, or `VmRSS` in
   `/proc/$(systemctl show -p MainPID --value acis-bots)/status`. Once every bot is in the world,
   both should stay flat over a long `-persistent` run; a steady climb is a leak.
+
+## 9. GM control
+
+GMs command the bots by whisper when the swarm runs with `-commanders` or `-gm-dsn-file`. The
+DSN file is a secret like the secret file: install it as `/etc/acis-bots/gm-dsn` with mode 0600
+and owner `acis-bots`. The database user, the commands and running from a laptop are in
+`docs/gm-control.md`.

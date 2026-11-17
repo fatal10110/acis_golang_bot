@@ -29,6 +29,9 @@ const (
 	// toggleSettle is how long a sit/stand toggle waits for its
 	// ChangeWaitType before the brain may toggle again.
 	toggleSettle = 2 * time.Second
+	// verdictQueue is how many database verdicts on the bot's commands may
+	// wait for the loop; one past it is dropped.
+	verdictQueue = 4
 )
 
 var (
@@ -74,6 +77,9 @@ type BrainConfig struct {
 	// NPC spawns on (rules "travel" and "newbie"), shared by every bot of
 	// the process. Nil travels nowhere and visits only NPCs in sight.
 	Travel *TravelMap
+	// Authority, when set, decides who may command the bot by whisper,
+	// shared by every bot of the process. Nil obeys nobody.
+	Authority *Authority
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -145,6 +151,10 @@ type Brain struct {
 	// by partner object id (TradePolicy.Every).
 	tradedAt map[int32]time.Time
 	logout   logoutState
+	// orders are the GM commands in force; verdicts brings the answers to
+	// commands the authority checks in the database.
+	orders   orders
+	verdicts chan verdict
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -183,6 +193,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
+		verdicts: make(chan verdict, verdictQueue),
 	}
 }
 
@@ -216,6 +227,8 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 			b.metrics.Drained(len(batch))
 			err = b.handle(batch, b.clock.Now())
 			clear(batch)
+		case v := <-b.verdicts:
+			b.obey(v, b.clock.Now())
 		case <-timer.C():
 			now := b.clock.Now()
 			b.metrics.WakeLag(now.Sub(due))
@@ -336,6 +349,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.newbiePage(e)
 		case AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 			b.trainEvent(ev, now)
+		case CreatureSay:
+			b.heard(e, now)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
 			b.reactAt = now.Add(b.reactDelay())
@@ -529,6 +544,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.shotAskedAt[a.item] = now
 	case actWalkRun:
 		b.follow.runToggledAt = now
+	}
+	if a.kind == b.orders.reply.kind {
+		b.orders.reply = Action{}
 	}
 	b.tradeSent(a, now)
 	b.train.sent(a, now)

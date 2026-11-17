@@ -71,7 +71,7 @@ type leaderView struct {
 }
 
 // ruleFollow keeps a party member in its slot behind a leader other than
-// itself: it takes the slot when it joins, and again only once the leader
+// itself, or any bot behind the commander a GM told it to follow (followed): it takes the slot when it joins, and again only once the leader
 // moved Repath away from where it stood then (or the bot drifted farther
 // than MaxDist+Repath from it, after a fight), DelayMin to DelayMax after
 // noticing. It matches the leader's walk or run, and stands up before it
@@ -88,8 +88,8 @@ type leaderView struct {
 // moves on.
 func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	p, w, v := &b.persona.Follow, b.world, &b.follow
-	id := w.Party.LeaderID
-	if p.MaxDist <= 0 || !w.Party.In() || id == w.Self.ObjectID {
+	id := b.followed()
+	if p.MaxDist <= 0 || id == 0 || id == w.Self.ObjectID {
 		v.leader = 0
 		return Action{}, false
 	}

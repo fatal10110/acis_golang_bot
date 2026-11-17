@@ -196,6 +196,7 @@ const (
 	actTradeAdd
 	actTradeConfirm
 	actTradeCancel
+	actTell
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -211,12 +212,13 @@ const (
 // one buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone
 // have no reuse gate either (no flood protector covers them): a request is
 // answered once, and a trade gets one add, one confirm and one cancel
-// (Trade.added, confirmed, cancelAt).
+// (Trade.added, confirmed, cancelAt). A whisper (Say2 Tell) has no server
+// gate either (chat.go chatTell): it keeps the chat gate.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
-	case actSay:
+	case actSay, actTell:
 		return gateChat
 	case actBypass:
 		return gateBypass
@@ -270,12 +272,15 @@ type rule struct {
 // (getting to the farming spot) and "farm" (attacking a monster there) are
 // rule 9 errands, ahead of the persona's goal: a party member assists its
 // leader, visits its trainer, then follows instead of farming. Rule 8
-// (loot) needs the loot model of #29. The shot toggle is set-up, not a plan
+// (loot) needs the loot model of #29. "command" sends what a GM's whispered
+// command asks for (a reply, a party withdrawal), and "stay" holds a bot a GM
+// told to stay, ahead of every errand that would move it. The shot toggle is set-up, not a plan
 // rule: it runs once per shot template carried, ahead of the fight it
 // serves, after the flee rules so it never delays one.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
+	{"command", (*Brain).ruleCommand},
 	{"critical", (*Brain).ruleCritical},
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
@@ -283,6 +288,7 @@ var playRules = []rule{
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
+	{"stay", (*Brain).ruleStay},
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"follow", (*Brain).ruleFollow},
@@ -298,6 +304,7 @@ var playRules = []rule{
 var storeRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
+	{"command", (*Brain).ruleCommand},
 	{"store", func(*Brain, time.Time) (Action, bool) { return Action{}, true }},
 }
 
