@@ -42,8 +42,8 @@ const (
 
 // Marker is the text that marks a name as a bot's (D7) and where it goes.
 type Marker struct {
-	Text      string
-	Placement Placement
+	Text      string    `json:"text"`
+	Placement Placement `json:"placement"`
 }
 
 // DefaultMarker is the marker used when none is configured: a suffix
