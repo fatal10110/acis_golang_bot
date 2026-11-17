@@ -47,6 +47,12 @@ func TestParseSwarmFlags(t *testing.T) {
 		{"server id 256", append(base, "-server-id", "256"), nil, "-server-id"},
 		{"bad local address", append(base, "-local-addr", "localhost"), nil, "-local-addr"},
 		{"no timeout", append(base, "-timeout", "0s"), nil, "-timeout"},
+		{"spots", append(base, "-datapack", "xml", "-spawn-multiplier", "1.5"), func(o swarmOptions) bool {
+			return o.datapack == "xml" && o.spawnMultiplier == 1.5
+		}, ""},
+		{"no spots by default", base, func(o swarmOptions) bool { return o.datapack == "" && o.spawnMultiplier == 1 }, ""},
+		{"zero spawn multiplier", append(base, "-spawn-multiplier", "0"), nil, "-spawn-multiplier"},
+		{"NaN spawn multiplier", append(base, "-spawn-multiplier", "NaN"), nil, "-spawn-multiplier"},
 		{"stray argument", append(base, "extra"), nil, "unexpected"},
 	}
 	for _, tt := range tests {

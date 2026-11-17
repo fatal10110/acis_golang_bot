@@ -67,6 +67,9 @@ type BrainConfig struct {
 	// the server lets the bot out.
 	LogoutLimit time.Duration
 	Rand        *rand.Rand
+	// Spots, when set, are the farming spots the bot picks from (rule
+	// "spot"), shared by every bot of the process. Nil farms nowhere.
+	Spots *SpotRegistry
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -115,6 +118,8 @@ type Brain struct {
 	restartedAt time.Time
 	// train is the trainer visit (rule 9 errand).
 	train trainerVisit
+	// spot is the farming spot (rule 9 errand).
+	spot spotVisit
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
@@ -172,6 +177,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 // connection and joins its reader afterwards in every case.
 func (b *Brain) Run(done, logout <-chan struct{}) error {
 	b.start(b.clock.Now())
+	defer b.leaveSpot()
 	due := b.due()
 	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()
@@ -261,6 +267,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == self {
 				b.anchor = e.Pos
 				b.appearing = b.appearing || !e.Fast
+				// Somewhere else: walk to the spot again.
+				b.spot.arrived, b.spot.lastDist, b.spot.stalls = false, 0, 0
 			}
 		case Revive:
 			if e.ObjectID == self {
@@ -282,6 +290,11 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			// to disengage from.
 			if e.ObjectID == b.engaged {
 				b.engaged = 0
+			}
+			// A dead bot frees its spot for another; it picks again once
+			// back on its feet.
+			if e.ObjectID == self {
+				b.leaveSpot()
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)

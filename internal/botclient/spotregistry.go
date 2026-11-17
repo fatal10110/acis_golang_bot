@@ -1,0 +1,71 @@
+package botclient
+
+import (
+	"math"
+	"sync"
+
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+)
+
+// SpotRegistry is the farming spots of a process and how many of its bots
+// hold each one; every bot of the process shares one. The spots and caps are
+// read-only after NewSpotRegistry; mu owns the counts.
+type SpotRegistry struct {
+	spots []datapack.Spot
+	caps  []int
+
+	mu   sync.Mutex
+	held []int
+}
+
+// NewSpotRegistry returns a registry over spots (datapack.Datapack.Spots).
+// multiplier is the server's SpawnMultiplier (npcs.properties, 1 by
+// default): the server scales a maker's maximumNpcs by it, rounded, and a
+// spot takes a third of that many bots, at least one.
+func NewSpotRegistry(spots []datapack.Spot, multiplier float64) *SpotRegistry {
+	r := &SpotRegistry{spots: spots, caps: make([]int, len(spots)), held: make([]int, len(spots))}
+	for i, s := range spots {
+		r.caps[i] = spotCap(s.MaximumNPCs, multiplier)
+	}
+	return r
+}
+
+// spotCap is the number of bots a spot of a maker with maximumNPCs takes
+// under the spawn multiplier: a third of the live NPC cap the server
+// applies (spawn/maker.go scaleBySpawnMultiplier), at least one.
+func spotCap(maximumNPCs int, multiplier float64) int {
+	return max(1, int(math.Round(float64(maximumNPCs)*multiplier))/3)
+}
+
+// Len is the number of spots.
+func (r *SpotRegistry) Len() int { return len(r.spots) }
+
+// Held is the number of bots holding spot i.
+func (r *SpotRegistry) Held(i int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.held[i]
+}
+
+// claim takes the first spot of order (indices, best first) below its cap
+// and reports which; none when every one is full.
+func (r *SpotRegistry) claim(order []int) (int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, i := range order {
+		if r.held[i] < r.caps[i] {
+			r.held[i]++
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// release gives back a spot claim took.
+func (r *SpotRegistry) release(i int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.held[i] > 0 {
+		r.held[i]--
+	}
+}
