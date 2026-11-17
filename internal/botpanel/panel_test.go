@@ -352,6 +352,7 @@ func TestPanelCreateSpawnDespawnPreset(t *testing.T) {
 
 	// Import and the dashboard.
 	g.want(http.StatusBadRequest, "POST", "/api/import", map[string]any{"prefix": "hy", "count": 0})
+	g.want(http.StatusBadRequest, "POST", "/api/import", map[string]any{"prefix": "hy", "count": maxImport + 1})
 	g.want(http.StatusBadRequest, "POST", "/api/import", map[string]any{"prefix": "hy", "count": 2, "marker_at": "middle"})
 	if b := g.want(http.StatusOK, "POST", "/api/import", map[string]any{"prefix": "hy", "count": 2}); !strings.Contains(b, `"added":2`) {
 		t.Fatalf("import answered %s", b)

@@ -296,13 +296,13 @@ func (p *Panel) importBots(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	switch {
-	case req.Count < 1 || req.Count > maxImport:
-		err = fmt.Errorf("count %d: want 1 to %d", req.Count, maxImport)
-	default:
-		err = errors.Join(botaccounts.ValidatePrefix(req.Prefix, req.Count), m.Validate())
+	// The bound is checked on its own, before anything sizes a slice by
+	// Count: the registry allocates one name per bot.
+	if req.Count < 1 || req.Count > maxImport {
+		writeErr(w, badRequest(fmt.Errorf("count %d: want 1 to %d", req.Count, maxImport)))
+		return
 	}
-	if err != nil {
+	if err := errors.Join(botaccounts.ValidatePrefix(req.Prefix, req.Count), m.Validate()); err != nil {
 		writeErr(w, badRequest(err))
 		return
 	}
