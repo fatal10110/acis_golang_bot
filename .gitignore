@@ -2,3 +2,7 @@ __pycache__/
 
 # go build ./cmd/bots output.
 /bots
+
+# The panel's page: npm's packages and the build `make ui` embeds.
+/web/node_modules/
+/internal/botpanel/web/app/

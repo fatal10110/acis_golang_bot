@@ -26,6 +26,8 @@ const maxImport = 1000
 
 func (p *Panel) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/presets", p.presets)
+	mux.HandleFunc("GET /api/classes", p.classes)
+	mux.HandleFunc("GET /api/spots", p.spots)
 	mux.HandleFunc("GET /api/bots", p.bots)
 	mux.HandleFunc("POST /api/bots", p.create)
 	mux.HandleFunc("GET /api/bots/{account}", p.bot)
@@ -123,6 +125,31 @@ func (p *Panel) presets(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"presets": p.cfg.Presets, "classes": ids})
 }
 
+func (p *Panel) classes(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, classList())
+}
+
+// spotView is a farming spot in the API: name is the argument of "go".
+type spotView struct {
+	Name       string `json:"name"`
+	MinLevel   int    `json:"min_level"`
+	MaxLevel   int    `json:"max_level"`
+	AggroLevel int    `json:"aggro_level"`
+	Cap        int    `json:"cap"`
+	Held       int    `json:"held"`
+}
+
+// spots lists the farming spots, how many bots each takes and holds; none
+// without -datapack.
+func (p *Panel) spots(w http.ResponseWriter, _ *http.Request) {
+	st := p.cfg.Spots.Statuses()
+	out := make([]spotView, len(st))
+	for i, s := range st {
+		out[i] = spotView(s)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (p *Panel) list(r *http.Request) ([]botView, error) {
 	l, err := p.cfg.Supervisor.List(r.Context())
 	if err != nil {
@@ -160,8 +187,12 @@ func (p *Panel) bot(w http.ResponseWriter, r *http.Request) {
 
 // offered refuses a preset the panel does not offer.
 func (p *Panel) offered(preset string) error {
-	if !slices.ContainsFunc(p.cfg.Presets, func(o Preset) bool { return o.Name == preset }) {
+	i := slices.IndexFunc(p.cfg.Presets, func(o Preset) bool { return o.Name == preset })
+	switch {
+	case i < 0:
 		return badRequest(fmt.Errorf("preset %q is not offered", preset))
+	case p.cfg.Presets[i].Disabled != "":
+		return badRequest(fmt.Errorf("preset %q is not offered: %s", preset, p.cfg.Presets[i].Disabled))
 	}
 	return nil
 }

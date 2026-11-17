@@ -48,6 +48,33 @@ func (r *SpotRegistry) Held(i int) int {
 	return r.held[i]
 }
 
+// SpotStatus is a spot of the registry as the control panel lists it: its
+// maker name (the argument of "go"), its monsters' levels, its cap and how
+// many bots hold it.
+type SpotStatus struct {
+	Name                           string
+	MinLevel, MaxLevel, AggroLevel int
+	Cap, Held                      int
+}
+
+// Statuses returns every spot in registry order with its held count; nil
+// for a nil registry (no datapack).
+func (r *SpotRegistry) Statuses() []SpotStatus {
+	if r == nil {
+		return nil
+	}
+	out := make([]SpotStatus, len(r.spots))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, s := range r.spots {
+		out[i] = SpotStatus{
+			Name: s.Maker, MinLevel: s.MinLevel, MaxLevel: s.MaxLevel, AggroLevel: s.AggroLevel,
+			Cap: r.caps[i], Held: r.held[i],
+		}
+	}
+	return out
+}
+
 // claim takes the first spot of order (indices, best first) below its cap
 // and reports which; none when every one is full.
 func (r *SpotRegistry) claim(order []int) (int, bool) {

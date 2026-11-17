@@ -2,8 +2,13 @@
 // section 8): a JSON API over the supervisor, server-sent events for live
 // updates, the log ring, and a plain HTML and JavaScript page embedded in the
 // binary. It serves on loopback only. No password, secret or DSN reaches it:
-// it sees the registry, the bots' snapshots, the gate, the metrics and the
-// log lines, none of which carries one.
+// it sees the registry, the bots' snapshots, the gate, the metrics, the
+// spots and the log lines, none of which carries one.
+//
+// The page is a React application built from web/ at the repository root
+// (`make ui`) into web/app here, which git ignores. A binary built without it
+// serves web/placeholder, a page that says how to build it; the API works
+// either way.
 package botpanel
 
 import (
@@ -44,10 +49,18 @@ const (
 //go:embed web
 var webFS embed.FS
 
-// Preset is a persona preset the panel offers.
+// contentSecurityPolicy is sent with every response: the page loads only
+// its own scripts, styles and connections, and nothing frames it.
+const contentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+	"font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+// Preset is a persona preset the panel lists.
 type Preset struct {
 	Name string `json:"name"`
 	Help string `json:"help"`
+	// Disabled is why the panel does not offer the preset (it needs
+	// -datapack); empty when it does.
+	Disabled string `json:"disabled,omitempty"`
 }
 
 // Config is what a Panel serves.
@@ -61,9 +74,12 @@ type Config struct {
 	Metrics *botmetrics.Registry
 	// MaxOnline is the supervisor's online cap, for the dashboard.
 	MaxOnline int
-	// Presets are the presets offered: the catalog's, those that need the
-	// datapack only with it.
+	// Presets are the catalog's presets; those that need the datapack are
+	// Disabled without it.
 	Presets []Preset
+	// Spots are the farming spots the bots share, for the "go" spot picker;
+	// nil without -datapack.
+	Spots *botclient.SpotRegistry
 	// Logs is the ring the log pages read; nil serves none.
 	Logs *Ring
 	// Every is the update period of an event stream; zero is DefaultEvery.
@@ -104,7 +120,7 @@ func New(cfg Config) (*Panel, error) {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	p := &Panel{cfg: cfg, quit: make(chan struct{})}
-	web, err := fs.Sub(webFS, "web")
+	web, err := site(webFS)
 	if err != nil {
 		return nil, err
 	}
@@ -114,8 +130,31 @@ func New(cfg Config) (*Panel, error) {
 	// A page of another site the owner's browser shows must not drive the
 	// panel: cross-origin writes are refused, and so is a Host that is not
 	// loopback (DNS rebinding).
-	p.handler = loopbackHost(http.NewCrossOriginProtection().Handler(mux))
+	p.handler = secureHeaders(loopbackHost(http.NewCrossOriginProtection().Handler(mux)))
 	return p, nil
+}
+
+// site returns the page root (web/app, the built application) of root, or
+// web/placeholder when the application was not built.
+func site(root fs.FS) (fs.FS, error) {
+	dir := "web/placeholder"
+	if _, err := fs.Stat(root, "web/app/index.html"); err == nil {
+		dir = "web/app"
+	}
+	return fs.Sub(root, dir)
+}
+
+// secureHeaders sets the content security policy and its companions on
+// every response.
+func secureHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hd := w.Header()
+		hd.Set("Content-Security-Policy", contentSecurityPolicy)
+		hd.Set("X-Content-Type-Options", "nosniff")
+		hd.Set("Referrer-Policy", "no-referrer")
+		hd.Set("X-Frame-Options", "DENY")
+		h.ServeHTTP(w, r)
+	})
 }
 
 // ServeHTTP serves the panel's page and API.
