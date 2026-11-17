@@ -31,7 +31,11 @@ type World struct {
 	skillReady map[int32]time.Time
 	// Attackers are the creatures that hit the bot recently, by object id.
 	Attackers map[int32]*Attacker
-	Party     Party
+	// Engaged are the monsters in sight others were seen fighting (the
+	// anti-KS record, engaged.go): by monster object id, when each one
+	// last did so, by its object id.
+	Engaged map[int32]map[int32]time.Time
+	Party   Party
 	// Dialog is the last dialog page the server sent.
 	Dialog Dialog
 	// Inventory is what the bot carries.
@@ -221,6 +225,7 @@ func NewWorld(self Self, now time.Time) (*World, error) {
 		Skills:     make(map[int32]KnownSkill),
 		skillReady: make(map[int32]time.Time),
 		Attackers:  make(map[int32]*Attacker),
+		Engaged:    make(map[int32]map[int32]time.Time),
 	}
 	for _, raw := range append(self.Burst[:len(self.Burst):len(self.Burst)], self.UserInfo) {
 		if len(raw) == 0 {
@@ -302,6 +307,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 			}
 			*m = motion{from: from, to: dest, start: now, speed: w.speedOf(e.ObjectID)}
 		}
+		w.engage(e.ObjectID, e.TargetID, now)
 	case StopMove:
 		w.stop(e.ObjectID, e.Pos, e.Heading)
 	case ValidateLocation:
@@ -314,6 +320,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case DeleteObject:
 		delete(w.Objects, e.ObjectID)
 		delete(w.Attackers, e.ObjectID)
+		delete(w.Engaged, e.ObjectID)
 		if w.Target == e.ObjectID {
 			w.Target = 0
 		}
@@ -500,6 +507,7 @@ func (w *World) applyTeleport(e TeleportToLocation) {
 	if e.ObjectID == w.Self.ObjectID && !e.Fast {
 		clear(w.Objects)
 		clear(w.Attackers)
+		clear(w.Engaged)
 		w.Target = 0
 	}
 }
@@ -514,6 +522,7 @@ func (w *World) applyDie(e Die, now time.Time) {
 		return
 	}
 	delete(w.Attackers, e.ObjectID)
+	delete(w.Engaged, e.ObjectID)
 	if o := w.object(e.ObjectID); o != nil {
 		o.Dead = true
 		o.move = stopAt(o.move.at(now))
