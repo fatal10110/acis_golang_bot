@@ -48,6 +48,7 @@ func TestGearBeatsUnlistedWeapon(t *testing.T) {
 		{name: "archer: enchanted dagger kept", class: classHawkeye, items: []Item{{ObjectID: 220, TemplateID: dagger, Equipped: true, BodySlot: partRHand, Enchant: 1}}, id: plainBow},
 		{name: "archer: bow above expertise", class: classHawkeye, items: []Item{wornDagger}, id: strengthenedBow},
 		{name: "archer: bow takes a shield off", class: classHawkeye, items: []Item{wornDagger, wornAt(221, leatherShield, partLHand)}, id: plainBow, want: true},
+		{name: "archer: unknown shield kept", class: classHawkeye, items: []Item{wornDagger, wornAt(221, 99999, partLHand)}, id: plainBow},
 		{name: "archer: enchanted shield kept", class: classHawkeye, items: []Item{wornDagger, {ObjectID: 221, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: plainBow},
 		{name: "dagger user: dagger over a bow", class: classTreasureHunter, items: []Item{wornShortBow}, id: dagger, want: true},
 		{name: "dagger user: better dagger as before", class: classTreasureHunter, items: []Item{wornDagger}, id: pricyDagger, want: true},
@@ -138,5 +139,48 @@ func TestArrowsOfNextBow(t *testing.T) {
 	}
 	if got := b.junk(); len(got) != 0 {
 		t.Errorf("junk = %v, want none", got)
+	}
+}
+
+// TestBuyRowsBowArrowsOnce checks that a bought bow brings no second row of
+// arrows the shop errand already wants for the wielded bow (arrowWants):
+// one row, up to ArrowsMax.
+func TestBuyRowsBowArrowsOnce(t *testing.T) {
+	b := newArcherBrain(t, 0, wornShortBow, fewArrows, adenaStack(30000))
+	b.persona.Shop.KeepAdena = 0
+	window := BuyList{Money: 30000, Items: []ShopItem{{TemplateID: plainBow, Price: 12500}, {TemplateID: woodenArrow, Price: 2}}}
+	got := b.buyRows(window)
+	if !slices.Contains(got, buyRow{item: plainBow, count: 1}) {
+		t.Errorf("buyRows = %v, want the bow among them", got)
+	}
+	var arrows []buyRow
+	for _, r := range got {
+		if r.item == woodenArrow {
+			arrows = append(arrows, r)
+		}
+	}
+	want := []buyRow{{item: woodenArrow, count: b.persona.Shop.ArrowsMax - fewArrows.Count}}
+	if !slices.Equal(arrows, want) {
+		t.Errorf("buyRows arrow rows = %v, want %v", arrows, want)
+	}
+}
+
+// TestBuyRowsArrowsFollowBow checks that the bow's arrows are bought right
+// after the bow whatever the order the window lists its items in.
+func TestBuyRowsArrowsFollowBow(t *testing.T) {
+	b := newDaggerArcher(t, wornAt(220, dagger, partRHand), adenaStack(1000000))
+	b.persona.Shop.KeepAdena = 0
+	gear := b.gearWants()
+	bowAt := slices.Index(gear, buyRow{item: plainBow, count: 1})
+	if bowAt < 0 || bowAt == len(gear)-1 {
+		t.Fatalf("gearWants = %v, want the bow before another piece", gear)
+	}
+	window := BuyList{Money: 1000000}
+	for _, p := range slices.Backward(arrowShop) {
+		window.Items = append(window.Items, ShopItem{TemplateID: p.ItemID, Price: p.Price})
+	}
+	want := slices.Insert(slices.Clone(gear), bowAt+1, buyRow{item: woodenArrow, count: b.persona.Shop.ArrowsMax})
+	if got := b.buyRows(window); !slices.Equal(got, want) {
+		t.Errorf("buyRows = %v, want %v", got, want)
 	}
 }

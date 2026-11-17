@@ -613,11 +613,11 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 			}
 			limit -= b.gearReserve()
 		}
-		i := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.item })
-		if i < 0 || l.Items[i].Price <= 0 {
+		j := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.item })
+		if j < 0 || l.Items[j].Price <= 0 {
 			continue
 		}
-		it := l.Items[i]
+		it := l.Items[j]
 		n := int64(w.count)
 		if it.Count > 0 {
 			n = min(n, int64(it.Count))
