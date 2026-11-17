@@ -25,6 +25,8 @@ type World struct {
 	Target  int32
 	Prompts Prompts
 	Party   Party
+	// Inventory is what the bot carries.
+	Inventory Inventory
 }
 
 // SelfState is the bot's own character.
@@ -322,6 +324,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)
+	case ItemList, InventoryUpdate, ExAutoSoulShot:
+		w.applyItems(ev)
 	}
 }
 

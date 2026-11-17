@@ -14,10 +14,17 @@ type Persona struct {
 	// Store keeps the brain in store mode (rules 3-10 replaced by holding
 	// still) even while the server reports no store open.
 	Store bool
-	// CriticalHP is the HP percent under which a bot in combat flees
-	// FleeDistance away from its target (rule 3); 0 never flees.
+	// CriticalHP is the HP percent under which a bot in combat drinks the
+	// first of Potions it carries whose reuse has run out, or else flees
+	// FleeDistance away from its target (rule 3); 0 never does either.
 	CriticalHP   int
 	FleeDistance int32
+	// Potions are the healing potion template ids rule 3 drinks, best
+	// first; none drinks nothing.
+	Potions []int32
+	// Shots are the shot template ids whose auto use the bot turns on when
+	// it carries them (rule "shots"); none turns none on.
+	Shots []int32
 	// SitHP and SitMP are the percents under which a bot out of combat sits
 	// to rest; it stands once both reach StandHP and StandMP (rule 6). 0
 	// never sits for that resource.
@@ -51,6 +58,8 @@ func DefaultPersona() Persona {
 		JoinParty:    acceptParty,
 		CriticalHP:   20,
 		FleeDistance: 600,
+		Potions:      healingPotions,
+		Shots:        shotTemplates,
 		SitHP:        40,
 		SitMP:        30,
 		StandHP:      90,
@@ -70,6 +79,9 @@ type Action struct {
 	payload []byte
 	// object is the object an attack acts on.
 	object int32
+	// item is the template id of the item a UseItem or RequestAutoSoulShot
+	// acts on.
+	item int32
 }
 
 type actionKind uint8
@@ -87,12 +99,16 @@ const (
 	actRestart
 	actAnswerParty
 	actLeaveParty
+	actUseItem
+	actAutoShot
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
-// RequestRestartPoint, RequestAnswerJoinParty and RequestWithdrawParty have
-// no reuse gate on the server: the frame bucket bounds them, restartRetry
-// spaces a repeated restart, and an invitation is answered once.
+// RequestRestartPoint, RequestAnswerJoinParty, RequestWithdrawParty, UseItem
+// and RequestAutoSoulShot have no reuse gate on the server: the frame
+// bucket bounds them, restartRetry spaces a repeated restart, an invitation
+// is answered once, potionReuse spaces the uses of a potion template (the
+// item's own reuse delay) and shotRetry the toggles of a shot template.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -143,12 +159,14 @@ type rule struct {
 
 // playRules are rules 1-10, first match wins. Rules 4 (two or more
 // attackers), 7 (rebuff) and 8 (loot) need events and models that land with
-// combat (#20), buffs (#22) and loot (#29); rule 3 only flees until
-// potions (#23) and heals (#22) exist.
+// combat (#20), buffs (#22) and loot (#29); rule 3 drinks a potion or flees
+// until heals (#22) exist. The shot toggle is set-up, not a plan rule: it
+// runs once per shot template carried, ahead of the fight it serves.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"critical", (*Brain).ruleCritical},
+	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
 	{"goal", (*Brain).ruleGoal},
@@ -224,8 +242,8 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	return Action{}, true
 }
 
-// ruleCritical is rule 3: in combat with HP critical, flee away from the
-// target, standing up first.
+// ruleCritical is rule 3: in combat with HP critical, stand up, then drink
+// a potion whose reuse has run out, else flee away from the target.
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat || !below(s.HP, s.MaxHP, b.persona.CriticalHP) {
@@ -233,6 +251,9 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	}
 	if s.Sitting {
 		return b.toggle(now), true
+	}
+	if a, ok := b.drinkPotion(now); ok {
+		return a, true
 	}
 	if s.Moving(now) {
 		return Action{}, true

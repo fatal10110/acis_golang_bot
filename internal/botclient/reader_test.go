@@ -178,7 +178,7 @@ func TestGameConnReadEvents(t *testing.T) {
 	for oid := range int32(50) {
 		at := Point{X: oid, Y: -oid, Z: 7}
 		script = append(script,
-			sendStep(packet(0x1b, oid, "burst noise")), // ItemList-like: dropped
+			sendStep(packet(opGameCharSelectInfo, oid, "burst noise")), // no decoder: dropped
 			sendStep(moveToLocation(oid+1, at, Point{})),
 			sendStep(packet(opGameTeleportToLocation, oid+1, at.X, at.Y, at.Z, 1)),
 		)
@@ -325,7 +325,7 @@ func TestRecorderKeepsFirstWriteError(t *testing.T) {
 var recordedMustDecode = []byte{
 	opGameMoveToLocation, opGameUserInfo, opGameStatusUpdate, opGameDeleteObject,
 	opGameCharSelectInfo, opGameNPCInfo, opGameActionFailed, opGameChangeWaitType,
-	opGameSystemMessage, opGameLeaveWorld,
+	opGameSystemMessage, opGameLeaveWorld, opGameItemList,
 }
 
 // TestRecordedFixtures replays the -record captures checked in under

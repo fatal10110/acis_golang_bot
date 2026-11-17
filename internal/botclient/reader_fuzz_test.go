@@ -27,6 +27,10 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(partyWindowAll(gmID, 1, []int32{0, 3}, gmRow, mateRow))
 	f.Add(packet(opGamePartySmallWindowUpdate, vitals(gmRow)...))
 	f.Add(packet(opGamePartyMemberPosition, 2, selfID, 1, 2, 3, gmID, -4, 5, -6))
+	f.Add(itemList(1, potionRow, swordRow))
+	f.Add(inventoryUpdate(ItemChange{ItemAdded, shotRow}, ItemChange{ItemRemoved, potionRow}))
+	f.Add(exAutoSoulShot(1835, 1))
+	f.Add([]byte{0xfe, 0x2e, 0x00})
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) == 0 {
 			return // GameConn.Read rejects empty frames
