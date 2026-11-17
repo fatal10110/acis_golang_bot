@@ -264,9 +264,10 @@ func (w *World) applyTrade(ev Event, now time.Time) {
 type TradePolicy struct {
 	// Prices are the goods the bot sells, the unit price in adena by
 	// template id. A trade offers the whole stack of the first priced item
-	// TradeStart lists that is neither equipped nor a quest item. None
-	// sells nothing, so every request but an exempt partner's is
-	// declined.
+	// TradeStart lists that is neither equipped nor a quest item. An
+	// item without a price here sells at its store price when it is loot
+	// the bot's store would sell (Brain.tradePrice); with neither, every
+	// request but an exempt partner's is declined.
 	Prices map[int32]int32
 	// Exempt reports whether the player partner is exempt (a GM): the bot
 	// accepts the partner's requests whatever its goods and the rate limit,
@@ -296,15 +297,19 @@ func (p *TradePolicy) exempt(w *World, partner int32) bool {
 }
 
 // tradeGoods is the item the bot sells in a trade: the first of rows,
-// in their order, the policy prices and the inventory holds unequipped and
-// not as a quest item.
+// in their order, the inventory holds unequipped and not as a quest item,
+// priced by the policy, or else loot its store would sell (storeLoot) at
+// the store's price.
 func (b *Brain) tradeGoods(rows []TradeItem) (TradeItem, bool) {
 	for _, row := range rows {
-		if _, priced := b.tradePrice(row.TemplateID); !priced || row.Count <= 0 {
+		if _, priced := b.tradePrice(row.TemplateID); !priced || row.Count <= 0 || row.SubCategory == subCategoryQuest {
 			continue
 		}
 		it, ok := b.world.Inventory.Items[row.ObjectID]
-		if ok && !it.Equipped && it.SubCategory != subCategoryQuest && row.SubCategory != subCategoryQuest {
+		if !ok || it.Equipped || it.SubCategory == subCategoryQuest {
+			continue
+		}
+		if _, fixed := b.persona.Trade.Prices[row.TemplateID]; fixed || b.storeLoot(it) {
 			return row, true
 		}
 	}
@@ -428,14 +433,30 @@ func (b *Brain) tradeReceivable(exempt bool) bool {
 }
 
 // tradePrice is the unit price the bot sells template id at in a trade:
-// the policy's price, or else its store's price of that loot, so its store
-// and its trades sell at the same prices.
+// the policy's price, or else its store's price of that loot (storePrice):
+// the one its store's manage lists showed, else the one of the travel
+// map's reference price, so its store and its trades sell at the same
+// prices. An item an NPC shop sells, or the bot keeps, has no store price.
 func (b *Brain) tradePrice(id int32) (int32, bool) {
 	if p, ok := b.persona.Trade.Prices[id]; ok {
 		return p, true
 	}
-	p, ok := b.store.prices[id]
-	return p, ok
+	if p, ok := b.store.prices[id]; ok {
+		return p, true
+	}
+	m := b.cfg.Travel
+	if m == nil || b.keeps(id) {
+		return 0, false
+	}
+	if _, shopSells := m.cheapest[id]; shopSells {
+		return 0, false
+	}
+	ref, ok := m.prices[id]
+	if !ok {
+		return 0, false
+	}
+	p := b.storePrice(ref)
+	return p, p > 0
 }
 
 // tradePaid reports whether the partner's adena covers the price of the

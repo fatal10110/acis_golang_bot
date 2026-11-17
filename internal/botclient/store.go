@@ -272,8 +272,12 @@ func (st *storeState) active() bool { return st.step != storeIdle }
 // ruleStore is the merchant's store: it opens a private sell store of the
 // bot's loot where it stands, then holds the bot seated in it until it
 // closes. It also holds a bot the server shows in a store it did not open.
+// A bot told to follow or assist another player leaves its store.
 func (b *Brain) ruleStore(now time.Time) (Action, bool) {
 	st, s := &b.store, &b.world.Self
+	if b.called() {
+		b.leaveStore(now)
+	}
 	switch st.step {
 	case storeIdle:
 		if s.StoreType != 0 {
@@ -362,9 +366,7 @@ func (b *Brain) storeReady(now time.Time) bool {
 	if b.shop.v.active() || b.trip.v.active() || b.newbie.v.active() || b.train.npc != 0 {
 		return false
 	}
-	// A bot that follows or assists another player (a GM order or its party
-	// leader) stays with it: a seated store would leave it behind.
-	if f := b.followed(); (f != 0 && f != s.ObjectID) || b.assisted() != 0 {
+	if b.called() {
 		return false
 	}
 	for _, it := range w.Inventory.Items {
@@ -375,13 +377,40 @@ func (b *Brain) storeReady(now time.Time) bool {
 	return false
 }
 
+// called reports whether the bot follows or assists another player (a GM
+// order or its party leader): it stays with that player, and a seated store
+// would leave it behind.
+func (b *Brain) called() bool {
+	f := b.followed()
+	return (f != 0 && f != b.world.Self.ObjectID) || b.assisted() != 0
+}
+
+// leaveStore takes the store down at now for a bot called away (called):
+// an opening under way or an open store quits, counting what it sold, and
+// so does a store the server shows that the bot did not open, once Retry
+// after the last quit. The server leaves the bot seated
+// (privatestore.go quitPrivateStore); once it shows the store closed, the
+// follow and assist rules stand the bot up and take over. A store that
+// closed already ends in ruleStore without a quit.
+func (b *Brain) leaveStore(now time.Time) {
+	st, s := &b.store, &b.world.Self
+	switch {
+	case st.step == storeQuit, st.step == storeOpen && s.StoreType == 0:
+	case st.step != storeIdle:
+		b.countSold()
+		st.step = storeQuit
+	case s.StoreType != 0 && !now.Before(st.nextAt):
+		st.step = storeQuit
+	}
+}
+
 // storeLoot reports whether the bot sells it in its store: loot, never an
 // item an NPC shop sells (the travel map's buylists), equipped, a quest
 // item, adena, augmented or an item the bot keeps (Persona.Potions, Shots,
 // Shop.Keep and Restock, wanted spellbooks) or wears next (the gear
-// errand).
+// errand). A bot without a travel map sells nothing.
 func (b *Brain) storeLoot(it Item) bool {
-	if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.wearsNext(it) {
+	if b.cfg.Travel == nil || it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.wearsNext(it) {
 		return false
 	}
 	_, shopSells := b.cfg.Travel.cheapest[it.TemplateID]
@@ -490,13 +519,19 @@ func (b *Brain) storeSent(a Action, now time.Time) {
 
 // closeStore ends a store that closed at now, counting what it sold.
 func (b *Brain) closeStore(now time.Time) {
+	b.countSold()
+	b.endStore(now)
+}
+
+// countSold adds what an open or listed store brought in to the session's
+// sales.
+func (b *Brain) countSold() {
 	st := &b.store
 	if st.step == storeOpen || st.step == storeListed {
 		if it, ok := b.world.Inventory.ByTemplate(adenaID); ok {
 			st.sold += max(int64(it.Count)-st.adenaAtOpen, 0)
 		}
 	}
-	b.endStore(now)
 }
 
 // endStore ends the opening or the store: the registry claim goes back and
