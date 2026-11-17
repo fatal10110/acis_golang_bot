@@ -18,12 +18,16 @@ const npcTypeGatekeeper = "Gatekeeper"
 
 // TravelMap is what the datapack says about getting around: where the
 // gatekeepers stand and where they take a bot for how much adena, and where
-// the NPCs with a fixed spawn stand. It is read-only after NewTravelMap, so
+// the NPCs with a fixed spawn stand, and what the merchants sell. It is read-only after NewTravelMap, so
 // every bot of a process shares one.
 type TravelMap struct {
 	gatekeepers []gatekeeper
 	// spawns are the fixed spawn points of each NPC template.
 	spawns map[int32][]Point
+	// shops are the buylists of each merchant NPC template, and cheapest
+	// the lowest base price of each item they sell.
+	shops    map[int32][]shopList
+	cheapest map[int32]int32
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -48,9 +52,10 @@ type destination struct {
 // NewTravelMap builds the travel map of dp: every gatekeeper template with
 // a fixed spawn outside an event, with its standard adena-priced
 // destinations (the ones its list page shows), and the fixed spawn points
-// of every NPC template.
+// of every NPC template, and the merchants' buylists.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
+	m.shops, m.cheapest = indexShops(dp.BuyLists)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue

@@ -115,6 +115,10 @@ type AcquireSkillInfo struct {
 	Requirements          []SkillRequirement
 }
 
+// spellbookRequirement is the requirement type of a spellbook
+// (serverpackets/acquireskill.go).
+const spellbookRequirement int32 = 99
+
 // AcquireSkillDone closes the learn window: the trainer has nothing left to
 // teach the bot at its level.
 type AcquireSkillDone struct{}
@@ -427,6 +431,17 @@ func (b *Brain) trainEvent(ev Event, now time.Time) {
 		if sp := b.world.Self.SP; e.Cost > sp {
 			t.skip(p, e.Cost, sp)
 			t.pending = AcquirableSkill{}
+			return
+		}
+		if r, ok := b.missingItem(e.Requirements); ok {
+			// The server refuses the learn without the item
+			// (ItemMissingToLearnSkill); a spellbook goes on the shop
+			// list, and its purchase makes the visit due again.
+			t.skip(p, 0, 0)
+			t.pending = AcquirableSkill{}
+			if r.Type == spellbookRequirement {
+				b.shop.wantBook(r.ItemID)
+			}
 			return
 		}
 		t.step = trainLearn

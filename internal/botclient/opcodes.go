@@ -157,3 +157,14 @@ const (
 	opGameRequestAcquireSkillInfo = 0x6b
 	opGameRequestAcquireSkill     = 0x6c
 )
+
+// Merchants, both directions: SellList and BuyList
+// (serverpackets/shop_trade.go), RequestSellItem and RequestBuyItem
+// (clientpackets/wiresafe.go, shop_trade.go).
+const (
+	opGameSellList = 0x10
+	opGameBuyList  = 0x11
+
+	opGameRequestSellItem = 0x1e
+	opGameRequestBuyItem  = 0x1f
+)

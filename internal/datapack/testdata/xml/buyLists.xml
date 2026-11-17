@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Samples from aCis_datapack/data/xml/buyLists.xml (grocer 30004 list 14, reduced; a limited-stock product; a game master's list). -->
+<list>
+	<buyList id="14" npcId="30004">
+		<product id="1835" price="8"/>
+		<product id="2509" price="17"/>
+		<product id="1060" price="103"/>
+	</buyList>
+	<buyList id="29" npcId="30094">
+		<product id="1048" price="110"/>
+		<product id="5900" price="11000" count="1" restockDelay="180"/>
+		<product id="1"/>
+	</buyList>
+	<buyList id="900" npcId="0">
+		<product id="57" price="1"/>
+	</buyList>
+</list>
