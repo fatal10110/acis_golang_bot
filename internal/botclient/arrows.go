@@ -1,6 +1,10 @@
 package botclient
 
-import "github.com/fatal10110/acis_golang_bot/internal/datapack"
+import (
+	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+)
 
 // indexArrows maps every bow template to the arrow template it shoots: the
 // arrow of the bow's crystal grade, the only one the server arms it with
@@ -64,4 +68,20 @@ func (b *Brain) arrowWants() []buyRow {
 		return []buyRow{{item: id, count: p.ArrowsMax - have}}
 	}
 	return nil
+}
+
+// armedBow lets the shop errand start its next visit at once when the gear
+// errand has just worn bow it and the bot carries too few of the arrows it
+// shoots: the server refuses every attack of a bow without them
+// (NotEnoughArrows), and a visit that bought the bow ended before it was
+// worn, holding the next one off for shopRetry. The wear happens once per
+// bow, so this adds at most one visit per bow worn; a visit in progress is
+// left alone.
+func (b *Brain) armedBow(it Item) {
+	if _, ok := b.cfg.Travel.arrows[it.TemplateID]; !ok || b.shop.v.active() {
+		return
+	}
+	if len(b.arrowWants()) > 0 {
+		b.shop.nextAt = time.Time{}
+	}
 }

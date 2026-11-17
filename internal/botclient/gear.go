@@ -484,6 +484,9 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 		switch {
 		case !ok || it.Equipped == (g.room == 0):
 			g.obj = 0
+			if ok && it.Equipped {
+				b.armedBow(it)
+			}
 		case now.Before(g.until):
 			return Action{}, false
 		default:

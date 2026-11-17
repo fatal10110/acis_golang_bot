@@ -191,3 +191,45 @@ func TestBrainArcherGear(t *testing.T) {
 		t.Errorf("unarmed archer: gearWants = %v, want %v among them", got, want)
 	}
 }
+
+// TestBrainArmedBowShops drives a bow bought on a visit: the visit ends
+// (no next one before shopRetry), the gear errand wears the bow, and the
+// shop errand starts a visit for its arrows at once; with arrows enough
+// carried it keeps waiting.
+func TestBrainArmedBowShops(t *testing.T) {
+	tests := []struct {
+		name  string
+		items []Item
+		shop  bool
+	}{
+		{"no arrows", []Item{carriedBow, adenaStack(30000)}, true},
+		{"arrows carried", []Item{carriedBow, carriedArrows, adenaStack(30000)}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newArcherBrain(t, 0, tt.items...)
+			b.shop.end(at(0), false)
+			a, ok := b.ruleGear(at(time.Second))
+			if !ok || a.object != carriedBow.ObjectID {
+				t.Fatalf("ruleGear = %+v %v, want the bow used", a, ok)
+			}
+			b.gear.sent(a, at(time.Second))
+			bow := b.world.Inventory.Items[carriedBow.ObjectID]
+			bow.Equipped = true
+			b.world.Inventory.Items[carriedBow.ObjectID] = bow
+			if a, ok := b.ruleGear(at(2 * time.Second)); ok {
+				t.Fatalf("bow worn: ruleGear = %+v, want no UseItem", a)
+			}
+			if got := b.startShop(at(3 * time.Second)); got != tt.shop {
+				t.Fatalf("startShop = %v, want %v", got, tt.shop)
+			}
+			if !tt.shop {
+				return
+			}
+			want := buyRow{item: woodenArrow, count: b.persona.Shop.ArrowsMax}
+			if got := b.shopWants(false); !slices.Contains(got, want) {
+				t.Errorf("shopWants = %v, want %v among them", got, want)
+			}
+		})
+	}
+}
