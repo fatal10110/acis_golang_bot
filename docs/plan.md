@@ -2,7 +2,9 @@
 
 Status: draft. Revised after five aspect reviews (feasibility, concurrency and scale, security and
 abuse, repo rules and scope, gameplay), the owner's answers of 2026-11-07, and three re-reviews
-(separate-repo feasibility, consistency, operations and abuse under D6).
+(separate-repo feasibility, consistency, operations and abuse under D6). Extended on 2026-11-17 with
+the owner's decisions D9-D11 (milestone M6: run from the owner's machine, gameplay control panel
+with a local bot registry).
 
 Code paths in this document (`internal/...`, `cmd/...`, `docs/...`, `ops/...`) refer to the server
 repository [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang) unless they name this
@@ -18,16 +20,19 @@ repository.
 | M3 - Farmer persona | #25 | #26-#29 |
 | M4 - Town, trade and merchant | #30 | #31-#36 |
 | M5 - Progression | #37 | #38-#40 |
+| M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
-milestones M0-M5 (PR2a and PR2b are both M2).
+milestones M0-M6 (PR2a and PR2b are both M2; PR6a-PR6d are all M6).
 
 ## Goal
 
 Bots that play like real users so people have fun playing alongside them: follow and assist a
-player, farm, loot, rest, die and come back, party, trade, sell in town, level up. Launched en masse
-from a local machine or from the Hetzner host. Load testing (#260) is not the goal.
+player, farm, loot, rest, die and come back, party, trade, sell in town, level up. Run from the
+owner's machine (D9) and spawned one by one, each with its own persona, from a local control panel
+(D10); the Hetzner host deployment is retired. Load testing (#260) is not
+the goal.
 
 ## Owner decisions
 
@@ -41,6 +46,9 @@ from a local machine or from the Hetzner host. Load testing (#260) is not the go
 | D6 | What bots may do | Any game action (trade, private store, drop, party, PvP); they exist for players' fun, not as a safety boundary. Persona defaults below are configurable and never restrict D6 |
 | D7 | How bots are marked | A nickname marker only; no title marker, no separate player count |
 | D8 | Java server | Not targeted |
+| D9 | Where the bots run | On the owner's machine, dialing the server's public login address. The owner's home IP is dynamic, so the owner's provider range (CIDR) is on `AcceptFilterAllowlist` of both servers, and the bots run `-allowlisted` (no login spacing). The bots know nothing of the range |
+| D10 | How bots are run | A control panel on the owner's machine: bots are spawned one by one or in small batches, each with its own persona. Every bot created is stored locally, and the panel logs existing bots back in (on reconnect, on respawn, after its own restart) instead of creating new ones. Gameplay bots, not load testing |
+| D11 | Ban and security risk on the home run | Accepted by the owner: it is the owner's private server. M6 adds no ban or abuse handling beyond what the bots already have (login gate, credential breaker), and the panel is a local tool |
 
 ## Consequences of a separate repository (D5)
 
@@ -79,8 +87,11 @@ boots the servers.
 | P4 (fatal10110/acis_golang#4528) | A small geodata subset (2-3 test regions) as a CI artifact; `geoengine.properties` lists only those regions |
 
 Server config, not code, for every bot deployment: the accept-filter allowlist
-(`AcceptFilterAllowlist`, both `loginserver.properties` and `server.properties`), a loopback
-`GameserverHostname` for same-host bots, and `MaximumOnlineUsers` raised by the bot cap.
+(`AcceptFilterAllowlist`, both `loginserver.properties` and `server.properties`; the owner's
+provider range for the home run of D9), the advertised game address (`Hostname` in
+`server.properties`, public for the home run), `AutoCreateAccounts = True` in
+`loginserver.properties` (the default; the panel's new bots create their accounts on first login),
+and `MaximumOnlineUsers` raised by the bot cap. The e2e stack sets its own values (Test strategy).
 
 ## Starting point
 
@@ -273,23 +284,64 @@ These keep the server and the bot host working; they are operational, not player
 - One session object per attempt: join its reader before dialing again; start a fresh world model.
 - A dropped character stays in the world 100 ms, or 15 s in combat; login meanwhile answers
   AccountInUse, which is retryable with backoff.
-- One process-wide login rate limit with jitter, under the accept filter's 3 per second per IP.
+- One process-wide login rate limit with jitter: each login and game dial starts at least 1.25 s
+  plus up to 0.5 s of jitter after the previous one, under the accept filter's burst window; with
+  `-allowlisted` the dials are not spaced.
   While the server is down (connection refused) all bots back off exponentially, re-jittered.
 - Process-wide credential breaker: the login ban counts failures per IP, not per bot (3 in a row ban
-  the IP for 10 minutes, and on one host that ban also cuts the gameserver link). The first
-  credential `LoginFail` halts all logins and alerts.
+  the IP for 10 minutes; under D9 that is the home IP, so the ban also locks out the owner's own
+  game client). The first credential `LoginFail` halts all logins and alerts.
 - Stop reconnecting a bot after repeated server aborts (the 2 MiB outbound cap) and report it.
-- Accounts are pre-created (a `bots accounts` step), each with its own password derived as
-  HMAC(secret, account) from a 0600 secret file. Each swarm instance uses its own account prefix. A
-  kick caused by another login is reported, not fought.
-- On the Hetzner host bots connect from a dedicated source address (for example 127.0.0.2,
-  `Dialer.LocalAddr` on both the login and game dials) to a loopback game address; only that address
-  is on the allowlist. Remote runs from a home or carrier-shared IP pace under the burst limit.
+- Accounts are pre-created for a swarm (a `bots accounts` step); the control panel's accounts are
+  created on their first login instead (`AutoCreateAccounts`, section 8). Each has its own password
+  derived as HMAC(secret, account) from a 0600 secret file. Each swarm instance or panel uses its
+  own account prefix. A kick caused by another login is reported, not fought.
+- Home run (D9): bots run on the owner's machine and dial the server's public login address. The
+  game address is the server's `Hostname` (`server.properties`, advertised in the ServerList),
+  which must be public as for real players, or the bots replace it with `-game <public host:port>`.
+  The owner's provider range is on `AcceptFilterAllowlist` of both servers (read at boot only: a
+  change needs a restart of both), and the bots run with `-allowlisted`, which no longer needs
+  `-local-addr`. Ban risks on this run are accepted (D11).
+- Reconnects. The panel runs every bot persistent: after a dropped session it logs back in with
+  backoff, to the same account and character (section 8). If only the bot process crashes, the
+  kernel closes its sockets and the character lingers 100 ms, or 15 s in combat. After a dead line
+  or a lost machine the server holds the old session until its 15-minute read idle deadline, unless
+  a login evicts it: each AccountInUse answer also kicks the old session, whose writer then closes
+  within about a minute (its write deadline to the dead peer). So the bot must keep retrying logins,
+  not wait, and the login server answers AccountInUse until the eviction completes. Today two
+  AccountInUse in a row stop the bot as `ErrAccountTaken` (`maxInUse`,
+  `internal/botclient/session.go` in this repository). For the home run, AccountInUse is retried
+  with backoff (capped at 30 s while it lasts) for 3 minutes counted from the first AccountInUse,
+  when that answer follows a run start (a process start, a spawn, a respawn, a persona change) or
+  any end that was not a kick, a failed game entry after a good login included; the bot stops as
+  taken at the first AccountInUse after a `ServerClose` kick (another login took the account, as
+  today) or once that window has passed. Every session that ends without a kick counts one abort
+  toward `maxAborts` (3), and a session that played at least `stableSession` (10 minutes) resets the
+  count first (`afterSession`, `internal/botclient/session.go` in this repository). A dead line
+  found by the timeouts below costs nothing; a reset or EOF (a home IP change, or a long PC sleep
+  after which the server has dropped the idle client and the first write meets a reset) costs a
+  long-running bot one abort, and only a line that keeps dropping short sessions stops it, after
+  which the panel restarts it by itself after a cool-down (section 8).
+- Dead sessions end fast. Today a session on a dead line (PC sleep, home IP change) can linger for
+  many minutes: the in-world reader has no read deadline, Linux sends no keepalive probe while sent
+  data is unacknowledged, retransmissions run for about 15 minutes (`tcp_retries2`), and writes into
+  the kernel buffer succeed. The dialer (`internal/botclient/dial.go` in this repository) therefore
+  sets `TCP_USER_TIMEOUT` (through `Dialer.Control` with a local constant in a Linux-only file; the
+  standard `syscall` package does not name it, and no new dependency is needed) and a
+  `KeepAliveConfig` (for example 30 s idle, 10 s interval, 3 probes),
+  so such a session ends within about a minute and the bot reconnects. A session ended by those
+  timeouts is not counted as an abort; an RST (which a home IP change often brings) still counts.
+- The Hetzner host run is retired (D9): its unit is stopped and disabled before the first home run
+  (both would log in the same accounts and kick each other), and its `127.0.0.2` allowlist entry is
+  replaced by the provider range. `docs/hetzner.md` in this repository keeps the old setup as an
+  archive with `ops/acis-bots.service` (in this repository) and points to `docs/home.md` (in this
+  repository). The agent rules that place the bots' resource cap "on the shared host" (`CLAUDE.md`
+  and `.claude/skills/bot-issue/SKILL.md` in this repository) are updated to the owner's machine.
 - A fixed bot cap; `MaximumOnlineUsers` is raised by the same number. Bots cannot see the live
-  player count, so there is no dynamic log-off.
-- The host is small (2 vCPU, 3.8 GB; server heap about 1.4 GB). Bots run in a systemd slice with
-  `CPUQuota`, `MemoryMax`, `Nice` and `OOMScoreAdjust=+500`, so the OOM killer takes bots, not the
-  gameserver.
+  player count, so there is no dynamic log-off. With the control panel (section 8) the cap is its
+  `-max-online` setting, not the size of its registry.
+- On the owner's machine the bot cap and `GOMEMLIMIT` bound the bot process; the gameserver no
+  longer shares a host with it.
 
 ### 6. In-game control (D3)
 
@@ -315,6 +367,157 @@ These keep the server and the bot host working; they are operational, not player
 
 Per-bot counters summed periodically, histograms instead of unbounded latency slices, channel depth,
 and a live `expvar` endpoint bound to loopback.
+
+### 8. Control panel (D10)
+
+A new `bots ui` command: one long-running process on the owner's machine that serves a web panel on
+`127.0.0.1` and runs the bots in-process. `bots swarm` stays for headless runs and is built on the
+same pieces. `bots ui` holds an OS advisory lock (`flock`, released when the process dies, so a
+crash never blocks a restart) on its data directory (`-data-dir`) for its whole run, so two panels
+never share a registry. Running a swarm on a prefix the panel's registry holds is the owner's call
+to avoid: both would log in the same accounts and kick each other.
+
+- Personas are presets in one catalog: `support`, `town`, and `merchant` (`support` with a store
+  budget: it farms the datapack's spots for loot and sells it in a town store; a `town` bot loots
+  nothing, so it has nothing to sell), extended as personas land. A preset is a persona plus its
+  options. Presets that need the datapack (`town`, `merchant`, farming spots) are offered only when
+  the panel started with one. `bots swarm -persona` takes one preset name from the same catalog.
+- Each bot gets its own `BrainConfig` from its preset: today `SessionConfig.Brain` is one field of
+  the config every bot shares, so `Brain` moves out of `SessionConfig` and `NewBot` takes the
+  preset's `BrainConfig` (with the bot's `Character`). The party-claims table is created once (today
+  `applyPartyAndAuthority`, `cmd/bots/swarm.go` in this repository, creates it inside) and applied,
+  with the GM authority hooks, to each preset's `BrainConfig`, so one bot per non-GM party leader
+  holds across presets. The process-wide pieces stay one instance shared by every bot: the login
+  gate and credential breaker, the spot registry, travel map, store registry, party claims, the GM
+  authority and the metrics registry. A preset may still leave a piece out, as `town` leaves out the
+  spot registry (farming runs only with it, `internal/botclient/farm.go` in this repository). The
+  metrics registry never frees a slot, so each bot of the registry gets one slot when it is first
+  run, reused by every later run.
+- Bot registry. Every bot the panel creates is stored locally, in `bots.json` in a data directory
+  (`acis-bots` under `os.UserConfigDir` by default, `-data-dir` to change it; tests use their own),
+  written atomically (temp file and rename). Per prefix it records the marker and an account
+  counter. Per bot it records the prefix and account, the character name once known, the class, the
+  "never create" flag (set for imported bots), the preset, whether it should be online, its last
+  known level and position, and when it stopped and why. It holds no secret: passwords stay derived
+  from the secret file.
+- New bot: the panel takes the next account of its own prefix from a counter in the registry that
+  only grows: an account is never handed out twice, and deleting a bot keeps a tombstone of its
+  account. The server's `AutoCreateAccounts` creates the account on its first login, as `bots
+  accounts` does today. The bot creates its character with the chosen class (random if none, drawn
+  once and stored in the registry); an account that already holds characters is skipped (below).
+- Online cap: `-max-online` bounds the bots online at once; the supervisor refuses a spawn past it
+  and restores at most that many on start, and the server's `MaximumOnlineUsers` is raised by the
+  same number (a login past it gets `PlayFail`, which the bot retries forever).
+- Character pinning. The known name, the stored class and a "never create" flag go in the bot's
+  `Character` (`internal/botclient/character.go` in this repository), and `NewBot` takes that
+  `Character` from the supervisor instead of building it: today `NewBot` derives the names from the
+  account and `-name-marker` and draws class and appearance itself, and a session finds its
+  character only through the derived names (`chooseSlot`). The rules:
+  - a bot with a known name selects that character in `CharSelectInfo` and never creates one; if it
+    is gone (deleted or renamed on the server), the bot stops as "character missing";
+  - every adoption records the class of the chosen slot from `CharSelectInfo` (today its class id
+    is read and discarded), replacing the class the bot drew;
+  - the class and appearance checks (`Character.Validate`, run by `NewBot` and `enterGame` today)
+    apply only to a bot that may create a character; a known-name or "never create" bot carries no
+    starting class (an imported one learns its class at first entry) and is not refused for it;
+  - a new bot (no known name) first adopts a character bearing one of its derived names (its own,
+    created by an earlier attempt that dropped before entering the world, or one an older swarm
+    left on the prefix), then creates one on an empty account; on an account holding only other
+    characters it stops as "account has characters", and the supervisor drops that account (a
+    tombstone) and retries the new bot on the next one;
+  - an imported bot (no known name, "never create") adopts the character bearing a derived name, or
+    stops as "no character to adopt";
+  - as soon as the slot is chosen or the character created (before `RequestGameStart`), a callback
+    that `enterGame` fires hands the name to the `Bot` (today `enterGame` returns `Self{}` on every
+    later error, so the name would be lost), and the `Bot` pins it as known, so every later attempt
+    of that run, reconnects included, is a known-name login;
+  - at the same moment the `Bot` reports the name and the slot's class id to the supervisor (a run
+    event on the same channel as its end report), and the supervisor saves both to the registry at
+    once, so a drop, crash or restart before the first entry never loses it.
+- The derived names depend on the name marker, so the registry stores each prefix with its marker
+  and placement, and the panel always uses the stored ones. Each bot gets its prefix's marker for
+  its names (with its `Character`), while the brain's bot filter (no chat reply to a name carrying a
+  bot marker) matches every marker the registry holds, so bots of different prefixes still see each
+  other as bots; today `SessionConfig.Marker` serves both and is one per process. New bots go under
+  the panel's own prefix and marker, given once when the registry is created (`bots ui -prefix P`,
+  with `-name-marker` and `-name-marker-at` as in `bots swarm`).
+- Accounts made before the registry (a prefix's accounts 1 to N from `bots accounts` or the swarm)
+  are imported only on request (`-import-prefix P -import N`, with `-import-marker` and
+  `-import-marker-at` when not the default, or the panel's import action with the same fields) into
+  the registry under prefix P with that swarm's marker (the Hetzner unit ran prefix `hz` with the
+  default marker), which the registry records. Passwords are derived from the secret file, so the
+  home run imports with the secret file that swarm used (the Hetzner host's `/etc/acis-bots/secret`,
+  copied to the owner's machine with mode 0600); another secret would make every imported login a
+  refused credential. Imported bots have no known name, the "never create" flag and the `support`
+  preset (what that swarm ran); the first login adopts the character with a derived name and records
+  its name and its class, read from `CharSelectInfo` (today the class id there is read and
+  discarded). The import moves prefix P's counter past N, also when P is the panel's own prefix, and
+  a new bot never takes an account the registry already holds.
+- The panel runs every bot persistent. Restarting the panel logs back in every bot marked online,
+  each with its own preset, through the login gate. Despawn logs a bot out and marks it offline; it
+  stays in the registry and can be spawned again later. A persona change logs the bot out and back
+  in with the new preset. One run per account at a time: a new run of a bot starts only after its
+  previous run reported its end, so the server never sees the account twice.
+- A bot whose run ends by itself gets a state by its reason (`Bot.after` and `afterSession`): a
+  `logout` command (`ErrCommandedLogout`) is offline; a bot ended by the tripped credential breaker
+  (`ErrLoginsHalted`) stays online and comes back when the owner presses "resume logins", which
+  resets the breaker. Today's breaker is one-shot (`LoginGate.Halt` closes `halt` for good, and
+  `Take` and `Dial` read it without the lock), so the breaker becomes a generation: a `{halt, err}`
+  pair under the gate's mutex whose err is set before its channel closes, and a reset installs a new
+  pair. `Take` and `Dial` fetch the current pair under the mutex; when a fired pair is no longer
+  current (a reset came in between), they wait on the new one instead of failing, so no bot gets a
+  nil error or a stale `ErrLoginsHalted` after a reset. A halted report that still reaches the
+  supervisor while the gate is open restarts that bot at once; repeated server aborts
+  (`ErrRepeatedAborts`, which a run of home line drops can cause for every bot at once) restart the
+  bot by itself after a 10-minute cool-down; every other end (a refused credential, a taken or
+  banned account, a character that cannot be created or is missing, any other error) is stopped with
+  its reason until the owner starts it again. A kick is not an end: a persistent bot reconnects.
+- Operator commands: `stay`, `go <spot>`, `leave` and `logout` reuse the whispered commands. The
+  whispered `follow` and `assist` take no argument and target the GM who whispered (an object id,
+  `internal/botclient/command.go` in this repository), so the panel's `follow <player>` and
+  `assist <player>` are a new brain-side order: the brain resolves the name to a player in sight in
+  its world model and refuses when none is. No panel command ever sends a Tell: the whispered
+  replies (`unknown spot`, `that spot is full`, `I know no spots`) go back to the panel as the
+  command's answer instead.
+- Standing orders survive reconnects. Today orders belong to the brain and last for its session,
+  and every session builds a new brain, so the `Bot` keeps the panel's standing order (`stay`,
+  `go <spot>`, `follow` or `assist <player>`) next to its mailbox, re-applies it at each session
+  start, and shows it in the snapshot; `leave` and `logout` are one-off. A standing `follow` or
+  `assist` keeps its target's name and object id (stable for a character) and is re-resolved when
+  that player comes in sight, since at session start the world model has not seen the player yet;
+  only an order the panel sends to a running session is refused when the player is not in sight.
+- Ownership: one supervisor goroutine owns the registry, its file and every bot's cancel func; HTTP
+  handlers send it requests on a channel and get an answer at once. Each run sends its events
+  (character learned, with its name and class id, then `{account, err}` at its end) on one channel
+  the supervisor always selects on; a respawn or persona change of a running bot marks it stopping,
+  cancels the run and starts the new one when that report arrives. Stopping the panel cancels every
+  run, keeps draining reports until all have arrived, and joins every goroutine (bots, HTTP server,
+  event streams, metrics); a bot's reader is joined before its next dial as today.
+- Status: a new brain is built for every session, so the snapshot belongs to the `Bot`, which
+  outlives its sessions, and the `Bot`'s goroutine (which also runs each session's brain) is its
+  only writer. The brain publishes an immutable snapshot (character, class, level, HP/MP/CP,
+  position (and the nearest town of the travel map when the panel has a datapack; the world model
+  has no zone), preset, current rule, party, session state, reconnects, last error) through the
+  `Bot`'s atomic pointer at most once a second, timed by the injected clock; between sessions the
+  `Bot` publishes its offline state (reconnecting, waiting for the gate, stopped and why). The panel
+  only reads the snapshots; the supervisor copies level and position into the registry.
+- Commands: each `Bot` has a small bounded mailbox that outlives its sessions (an event queue
+  exists only during a session and its push blocks when full). The supervisor never blocks on it: a
+  full mailbox answers "busy". Each session's brain selects on the mailbox next to its event queue,
+  as it does for authority verdicts, and every packet still goes through the per-connection pacer
+  (frames per second, chat, bypass and emote gates). A command that arrives between sessions waits
+  for the next one, or is refused when the bot is stopped.
+- HTTP: bound to `127.0.0.1`; a JSON API plus server-sent events for live updates. The page is
+  plain HTML and JavaScript embedded with `go:embed`: no Node toolchain in the module or CI.
+  Passwords, the HMAC secret and the GM DSN never reach the API, the page or the logs.
+- Logs: a `slog` handler keeps a bounded ring of recent lines (filterable per bot) for the panel,
+  next to stderr.
+- Pages: Bots (every bot of the registry with preset, class, level, HP/MP, position or town,
+  activity and state; create new, spawn existing, despawn, change persona, delete from the
+  registry), Bot detail (snapshot, commands, its log), Dashboard (gate and breaker with "resume
+  logins", the metrics of section 7), Logs.
+- On WSL2 the Windows browser reaches the panel through WSL's localhost forwarding.
+- Later, not in M6: saved spawn presets with custom persona values, a map of bot positions.
 
 ## Test strategy (bot repository)
 
@@ -345,14 +548,21 @@ and a live `expvar` endpoint bound to loopback.
 | 3 | Farmer persona, datapack readers (NPC templates, spawnlist territories), spot registry, loot queue, drop, anti-KS, stuck and blacklist | Kills a monster, loot row in `items`, exp grew; a monster engaged by another player is skipped |
 | 4 | Town and merchant personas: merchant buy and sell, gatekeeper, Newbie Helper buffs, trade defaults, private store with registry and pricing | Adena and items change in DB after buy, sell, a player trade and a store sale; teleport reaches the spot and the bot reappears |
 | 5 | Progression: better spots by level, more skills at the trainer, equip bought gear | Bot learns a skill it can now afford; skill row in DB |
+| 6a | Home run (D9): `-allowlisted` without `-local-addr` in `bots accounts` and `bots swarm`; dialer with `TCP_USER_TIMEOUT` and a `KeepAliveConfig` so dead sessions end in about a minute, and sessions ended by those timeouts not counted as aborts; AccountInUse retried for 3 minutes from the first AccountInUse after a run start or any non-kick end (failed entries included); `docs/home.md` in this repository (provider range on both servers, public `Hostname` or `-game`, `AutoCreateAccounts` on, swarm flags, secret file and account prefix on the owner's machine (the Hetzner host's secret file copied over to re-use its `hz` bots), local datapack copy, GM control over the SSH tunnel, WSL2 notes); retiring the Hetzner run (all paths in this repository: `docs/hetzner.md` and `ops/acis-bots.service` kept as an archive pointing to `docs/home.md`; the owner's steps in `docs/home.md`: stop and disable the unit, replace the `127.0.0.2` allowlist entry; `README.md`, `docs/gm-control.md` and the "shared host" lines of `CLAUDE.md` and `.claude/skills/bot-issue/SKILL.md` updated) | Unit: `-allowlisted` accepted without `-local-addr`; the dialer's socket options (user timeout and keepalive) come from a plain function tested on its own, with the `setsockopt` call behind a small seam, so the test needs no network and no build tag; a session ended by a timeout is not counted as an abort, EOF and a reset are; the window starts at the first AccountInUse, however late it comes after a run start or a non-kick end (failed entry included), retries come at most 30 s apart, and only after 3 minutes of AccountInUse does the bot stop, while after a kick the first one stops it as today. e2e on the shared stack (its Docker gateway is allowlisted): `-allowlisted` without `-local-addr` logs in unspaced |
+| 6b | Persona catalog and per-bot `BrainConfig` out of `SessionConfig`, with the authority and party-claims wrapping per preset; starting class per bot; known character name, stored class and "never create" flag in the per-bot `Character`, which `NewBot` now takes instead of building; the pinning rules of section 8 (select a known name or stop as missing; a new bot adopts its derived-name character or creates on an empty account; pin and report the name through a callback that `enterGame` fires after `chooseSlot` or the creation, before `RequestGameStart`); `bots swarm` on the catalog | Unit: each preset yields its persona; shared registries and the party-claims table are one instance across presets and `town` gets no spot registry; a set class reaches `RequestCharacterCreate`; a known name selects its slot and sends no `RequestCharacterCreate`; a known name absent from `CharSelectInfo` stops the bot as character missing; a known-name or never-create bot with no starting class passes `NewBot` and `enterGame`; a new bot adopts its derived-name character first and records that slot's class, creates only on an empty account and stops on one holding only other characters; the name is pinned and reported once the slot is chosen or created, before entry, so a drop between `CharCreateOk` and `UserInfo` and a retry or restart reuse that character; an imported bot adopts a derived-name character or stops; a reconnect after the name was pinned logs in by it even if the character was deleted meanwhile (it stops instead of creating); the learned name is reported once. e2e: `bots swarm -persona merchant` farms and opens a store |
+| 6c | Bot registry file; `-data-dir` and its advisory lock in `bots ui`; supervisor (account counter with tombstones, `-max-online`, new, existing and imported bots, saving the learned name at once, restore on start, despawn, persona change, end-reason states); resettable breaker; status snapshot owned by `Bot`; per-`Bot` command mailbox | Unit (injected clock, fake bot runner, temporary data directory): a new bot takes the next account from the counter, never a deleted bot's account, skips an account holding characters, and the registry holds its character name as soon as the run reports it; `-import-prefix P -import N` adds P's accounts 1 to N with the never-create flag and moves P's counter past N, the panel's own prefix included; a new bot never takes an account the registry holds; the chat filter matches the markers of every prefix; an imported bot not yet adopted keeps its flag across a restart and never creates; spawns and restores stop at `-max-online`; an existing bot relogs into its stored character; a restart logs back in the bots marked online with their presets and creates no character; imported accounts record the name found on first login; a respawn starts only after the previous run reported, and a respawn whose previous session the server still holds rides out AccountInUse instead of stopping; each end reason maps to its state; "resume logins" brings back the bots ended by the breaker, a reset racing `Take` and `Dial` passes `-race`, and a `Take` or `Dial` whose halt fired before a reset waits on the new generation instead of failing, and a halted report arriving after the reset restarts its bot at once; the learned-character event carries the class id and the registry saves it; the registry keeps the marker and an import with it adopts the old characters and learns their class; a second `bots ui` on the same data directory is refused by the lock, and a lock file left by a killed process does not block a restart; a bot ended by repeated aborts restarts by itself after the cool-down (injected clock); `follow <player>` resolves a player in sight and is refused otherwise; a `stay`, `go` or `follow <player>` from the panel is still in force after a reconnect and shows in the snapshot, the follow target resolving once the player comes in sight; a panel `go` to an unknown spot answers the panel and sends no Tell; a full mailbox answers busy without blocking; every goroutine joined on stop. e2e driving the supervisor in-process: create a bot, stop the supervisor, start a second one on the same data directory: the same character logs back in and no new character row appears |
+| 6d | `bots ui`: loopback HTTP server, JSON API, event stream, log ring, embedded page | Unit (`httptest`): the API creates, spawns, despawns and changes presets through the supervisor; no secret appears in any response or log line. e2e: create two bots of different presets from the API, despawn one, spawn it again: it comes back as the same character |
 
 Class change is out of scope: the class master NPC is not in the shipped spawnlist and the village
 master path needs quest items. Revisit when bots can run quests.
 
-A live control API is deferred: flags and GM whispers cover D1. If built: a 0600 unix socket
-forwarded with `ssh -L`, or a bearer token; Host check; JSON POST only; capped spawn count.
+The live control API deferred here before is the control panel of section 8 (D10).
 
 ## Server-side work for D2 (acis_golang)
+
+Under D9 the bots no longer share the server's host, so S2 (a unix-socket listener, which needs
+bots on the same host) does not apply; it would need its own host decision first. S1 stays useful
+as server measurement.
 
 | Item | Scope |
 | --- | --- |
