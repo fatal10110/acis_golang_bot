@@ -89,7 +89,7 @@ type spotVisit struct {
 // registry, the bot claims the nearest fitting spot with room, walks there
 // in legs, moves on when it finds the spot crowded, walks back when a fight
 // left it beyond the leash, and picks a new spot once it outlevels its own.
-// At its spot it leaves the turn to the goal.
+// At its spot it leaves the turn to rule "farm".
 //
 // Each leg is one MoveBackwardToLocation through the frame pacer (gateNone);
 // a spot that spotStalls legs bring no closer is avoided, and a fruitless
