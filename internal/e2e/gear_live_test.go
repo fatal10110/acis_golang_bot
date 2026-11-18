@@ -16,6 +16,10 @@ import (
 // second, a merchant visit in the village a minute or two.
 const gearBound = 5 * time.Minute
 
+// gearAdena is the adena a buying scenario's bot carries at least when it
+// logs in (stripEnd).
+const gearAdena int32 = 30000
+
 // warriorGear is the persona's class table cut to the entry a warrior
 // (class 1) plays by default, the one of every fighter the table does not
 // name: swords, blunts and their two-handed kinds, with a shield. The
@@ -43,7 +47,7 @@ func TestLiveGearWear(t *testing.T) {
 	travel, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("gw", 1)
-	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, squiresSword, squiresShirt, squiresPants)
+	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, stripEnd{}, squiresSword, squiresShirt, squiresPants)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		warriorGear(p)
 		// Wearing only: what it is given, never what it could buy.
@@ -100,8 +104,9 @@ func TestLiveGearBuy(t *testing.T) {
 	rogueAcc, _ := tg.Account("gb", 2)
 	// The buyer wears pieces a merchant buys back once they are replaced
 	// (live, 30000 adena buys it better armor before a better sword).
-	strip(t, ctx, tg, gm, items, buyerAcc, &botclient.HumanFighter, shortSword, shirt, pants)
-	strip(t, ctx, tg, gm, items, rogueAcc, &botclient.HumanFighter, squiresShirt, squiresPants)
+	strip(t, ctx, tg, gm, items, buyerAcc, &botclient.HumanFighter, stripEnd{at: tiArmory, adena: gearAdena}, shortSword, shirt, pants)
+	// The rogue's first visit is the weapon merchant's: the nearer one.
+	strip(t, ctx, tg, gm, items, rogueAcc, &botclient.HumanFighter, stripEnd{at: tiWeapons, adena: gearAdena}, squiresShirt, squiresPants)
 	starting := []int32{shortSword, shirt, pants}
 
 	buyer := runTownBot(t, ctx, tg, buyerAcc, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
@@ -113,9 +118,6 @@ func TestLiveGearBuy(t *testing.T) {
 		p.Shop.Restock = nil
 	})
 	for _, f := range []*farmer{buyer, rogue} {
-		gmRecall(t, ctx, gm, f, tiArmory)
-		gmOn(t, ctx, gm, f)
-		gmAdena(t, ctx, gm, f, 3)
 		t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 	}
 

@@ -25,21 +25,19 @@ func TestLiveArrows(t *testing.T) {
 	var f *farmer
 	t.Cleanup(func() { forgetKilled(gm, f) }) // after the archer stops, before the GM deletes
 	account, _ := tg.Account("ar", 1)
-	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, squiresSword, squiresShirt, squiresPants)
+	// Next to the weapon merchant, whose visit is the first.
+	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, stripEnd{at: tiWeapons, adena: gearAdena}, squiresSword, squiresShirt, squiresPants)
 	minArrows := botclient.DefaultPersona().Shop.ArrowsMin
 	f = runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		p.Gear.Classes = []botclient.GearClass{{Weapons: []string{"BOW"}, Armor: "LIGHT"}}
 		// Bow and arrows only.
 		p.Shop.Restock = nil
 	})
-	gmRecall(t, ctx, gm, f, tiArmory)
-	gmOn(t, ctx, gm, f)
-	gmAdena(t, ctx, gm, f, 3)
 	t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 
-	// The bow at the weapon merchant, then the arrows next to the grocer:
-	// live, the server's walk to a merchant across the village (a click's
-	// MoveToPawn) stops at a wall short of it (#BOTGAP).
+	// The bow at the weapon merchant, then, five minutes on (shopRetry),
+	// the arrows next to the grocer: the village's merchants stand too
+	// far apart for the merchant in sight to be the right one.
 	wctx, cancel := context.WithTimeout(ctx, 2*gearBound)
 	defer cancel()
 	until(t, wctx, f.name+" buys a bow", func() string {
