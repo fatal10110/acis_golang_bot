@@ -21,8 +21,13 @@ import (
 // Templates the scenarios seed, buy or assert (aCis_datapack/data/xml).
 const (
 	// A human mystic learns Heal (skillHeal) levels 1-3 at level 7, 4-6 at
-	// 14 and 7-9 at 20 (classes/humanMystic.xml).
-	healAt20 int32 = 7
+	// 14 and 7-9 at 20 (classes/humanMystic.xml). A level change pulls a
+	// skill down to the highest level learnable up to 9 levels above the
+	// new level (skill/leveling.go correctInvalidSkills): at level 1 the
+	// mystic keeps Heal 3 at most, which level 10 adds nothing to, and
+	// level 15 offers 4. Higher levels belong to the Cleric (class 15).
+	healAt1  int32 = 3
+	healAt15 int32 = 4
 	// spellbookHeal is Spellbook: Heal, which learning Heal's first level
 	// takes when the server needs spellbooks (spellbooks.xml).
 	spellbookHeal int32 = 1152
@@ -43,7 +48,7 @@ const (
 	// attack without arrows (network/attack_refusal.go).
 	msgNotEnoughArrows int32 = 112
 	// trainerSP is the SP the GM sets for a trainer visit: more than
-	// every level of the support persona's skills up to level 20 costs.
+	// every level of the support persona's skills up to level 15 costs.
 	trainerSP = 20000
 )
 

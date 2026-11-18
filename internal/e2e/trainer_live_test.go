@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,12 +13,13 @@ import (
 )
 
 // TestLiveTrainer runs a human mystic in the Talking Island village next to
-// its trainers. Set to level 15 with SP, it talks to a trainer, opens its
-// skill list and learns Heal; when the trainer asks for Heal's spellbook
-// the GM gives it, the bot asks again and the server takes the book (#21).
-// Set to level 20 with SP again, it goes back and learns Heal's level 7,
-// offered from level 20 on (#39). The GM sets the mystic back to level 1,
-// which takes Heal away, at the start and at the end.
+// its trainers. Set to level 10 with SP, it talks to a trainer and opens
+// its skill list, which offers no Heal level it lacks (on the run that
+// creates the character, Heal 1-3, whose spellbook the GM gives when the
+// trainer asks for it; the server takes the book with the learn). Set to
+// level 15, it goes back and learns Heal's level 4, offered from level 14
+// on (#21, #39). The GM sets the mystic back to level 1, which pulls Heal
+// down to level 3, at the start and at the end.
 func TestLiveTrainer(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
@@ -29,69 +32,99 @@ func TestLiveTrainer(t *testing.T) {
 	})
 	t.Cleanup(func() { gmReset(t, gm, f) })
 
-	// Level 1 forgets Heal (the server drops the skills a level no longer
-	// allows, skill/leveling.go correctInvalidSkills); the visit the bot
-	// may make at level 1 finds nothing to learn.
+	// Level 1 pulls Heal down to level 3 (healAt1); the visit the bot may
+	// make at level 1 finds nothing to learn.
 	gmOn(t, ctx, gm, f, "set level 1", "set sp 0")
 	gmRecall(t, ctx, gm, f, tiTrainers)
 	forgot, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	until(t, forgot, f.name+" forgets Heal at level 1", func() string {
-		if lv := skillLevel(f, skillHeal); lv != 0 {
+	until(t, forgot, f.name+" keeps Heal 3 at most at level 1", func() string {
+		if lv := skillLevel(f, skillHeal); lv > healAt1 {
 			return fmt.Sprintf("SkillList shows Heal level %d", lv)
 		}
 		return ""
 	})
-	from := len(f.watch.Sent())
-	gmOn(t, ctx, gm, f, fmt.Sprintf("set sp %d", trainerSP), "set level 15")
-	learn(t, ctx, gm, f, from, 1)
 
-	from = len(f.watch.Sent())
-	gmOn(t, ctx, gm, f, "set level 20", fmt.Sprintf("set sp %d", trainerSP))
-	learn(t, ctx, gm, f, from, healAt20)
+	// Level 10: a visit, and Heal 1-3 learned when the bot lacks them.
+	seen := f.watch.Len()
+	gmOn(t, ctx, gm, f, fmt.Sprintf("set sp %d", trainerSP), "set level 10")
+	vctx, vcancel := context.WithTimeout(ctx, 6*time.Minute)
+	defer vcancel()
+	asked := false
+	until(t, vctx, f.name+"'s visit at level 10", func() string {
+		spellbook(t, ctx, gm, f, &asked)
+		listed := slices.ContainsFunc(f.watch.Seen(seen), func(s Seen) bool {
+			_, ok := s.Event.(botclient.AcquireSkillList)
+			return ok
+		})
+		switch rule := f.bot.Status().Rule; {
+		case !listed:
+			return fmt.Sprintf("no AcquireSkillList (rule %q)", rule)
+		case rule == "train":
+			return "the visit goes on"
+		}
+		return ""
+	})
+	t.Logf("%s visited at level 10: knows Heal level %d (book asked %v)", f.name, skillLevel(f, skillHeal), asked)
+	if lv := skillLevel(f, skillHeal); lv != healAt1 {
+		t.Fatalf("%s knows Heal level %d after the level 10 visit, want %d", f.name, lv, healAt1)
+	}
+
+	// Level 15: Heal 4 is offered now, and learned.
+	from := len(f.watch.Sent())
+	gmOn(t, ctx, gm, f, "set level 15", fmt.Sprintf("set sp %d", trainerSP))
+	learn(t, ctx, gm, f, from, healAt15)
+}
+
+// spellbook gives f Heal's spellbook once a trainer's AcquireSkillInfo
+// asked for it (Heal's first level) while f carries none, and records the
+// ask in asked.
+func spellbook(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, asked *bool) {
+	t.Helper()
+	if *asked || !asksBook(f) {
+		return
+	}
+	*asked = true
+	if carriedOf(inventory(f.watch.Seen(0)), spellbookHeal) == 0 {
+		t.Logf("%s's trainer asks for Spellbook: Heal", f.name)
+		gmOn(t, ctx, gm, f)
+		gmGiveGear(t, ctx, gm, f, spellbookHeal, 1)
+	}
 }
 
 // learn waits until f's SkillList shows Heal at level or higher, learned
 // by a RequestAcquireSkill f sent from index from of its sent packets on.
-// The GM gives the spellbook once a trainer's AcquireSkillInfo asks for it,
-// and the server then takes it.
 func learn(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, from int, level int32) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
-	booked := false
-	until(t, ctx, fmt.Sprintf("%s learns Heal level %d", f.name, level), func() string {
-		if !booked && asksBook(f) {
-			t.Logf("%s's trainer asks for Spellbook: Heal", f.name)
-			gmOn(t, ctx, gm, f)
-			gmGive(t, ctx, gm, f, spellbookHeal, 1)
-			booked = true
+	fromSeen := f.watch.Len()
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(trainerTrail(f, fromSeen, from))
 		}
-		asked := false
+	})
+	until(t, ctx, fmt.Sprintf("%s learns Heal level %d", f.name, level), func() string {
+		learned := false
 		for _, p := range sentOf(f.watch.Sent()[from:], botclient.OpRequestAcquireSkill) {
-			asked = asked || p.Target == skillHeal && len(p.Payload) >= 9 && int32(binary.LittleEndian.Uint32(p.Payload[5:9])) >= level
+			learned = learned || p.Target == skillHeal && len(p.Payload) >= 9 && int32(binary.LittleEndian.Uint32(p.Payload[5:9])) >= level
 		}
 		switch lv := skillLevel(f, skillHeal); {
-		case !asked:
+		case !learned:
 			return fmt.Sprintf("no RequestAcquireSkill for Heal level %d or higher (rule %q, knows level %d)", level, f.bot.Status().Rule, lv)
 		case lv < level:
 			return fmt.Sprintf("SkillList shows Heal level %d", lv)
 		}
 		return ""
 	})
-	if booked {
-		if n := carriedOf(inventory(f.watch.Seen(0)), spellbookHeal); n != 0 {
-			t.Errorf("%s still carries %d Spellbook: Heal after learning", f.name, n)
-		}
-	}
 	t.Logf("%s learned Heal level %d (rule %q)", f.name, skillLevel(f, skillHeal), f.bot.Status().Rule)
 }
 
-// asksBook reports whether a trainer told f that learning Heal takes its
-// spellbook.
+// asksBook reports whether a trainer told f that learning Heal's first
+// level takes its spellbook.
 func asksBook(f *farmer) bool {
 	for _, s := range f.watch.Seen(0) {
-		if info, ok := s.Event.(botclient.AcquireSkillInfo); ok && info.ID == skillHeal {
+		if info, ok := s.Event.(botclient.AcquireSkillInfo); ok && info.ID == skillHeal && info.Level == 1 {
 			for _, r := range info.Requirements {
 				if r.ItemID == spellbookHeal {
 					return true
@@ -119,7 +152,7 @@ func skillLevel(f *farmer, id int32) int32 {
 }
 
 // gmReset sets f back to level 1 with no SP once the scenario ends, so the
-// next run finds Heal to learn again.
+// next run finds Heal 4 to learn again.
 func gmReset(t *testing.T, gm *GMClient, f *farmer) {
 	if gm.Closed() {
 		return
@@ -143,4 +176,25 @@ func gmReset(t *testing.T, gm *GMClient, f *farmer) {
 			t.Logf("cleanup: %s on %s: %v", cmd, f.name, err)
 		}
 	}
+}
+
+// trainerTrail lists, for a failed visit, what f sent from index sentFrom
+// on and the trainer's answers it read from index seenFrom on.
+func trainerTrail(f *farmer, seenFrom, sentFrom int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s's trainer trail:", f.name)
+	for _, p := range f.watch.Sent()[sentFrom:] {
+		fmt.Fprintf(&b, "\n  %s sent %#02x %d", p.At.Format("15:04:05.000"), p.Op, p.Target)
+	}
+	for _, s := range f.watch.Seen(seenFrom) {
+		switch e := s.Event.(type) {
+		case botclient.NpcHtmlMessage:
+			fmt.Fprintf(&b, "\n  %s read NpcHtmlMessage %d %.120q", s.At.Format("15:04:05.000"), e.ObjectID, e.HTML)
+		case botclient.AcquireSkillList, botclient.AcquireSkillInfo, botclient.AcquireSkillDone, botclient.SystemMessage, botclient.ActionFailed:
+			fmt.Fprintf(&b, "\n  %s read %T%+v", s.At.Format("15:04:05.000"), e, e)
+		case botclient.UserInfo:
+			fmt.Fprintf(&b, "\n  %s read UserInfo level %d SP %d", s.At.Format("15:04:05.000"), e.Level, e.SP)
+		}
+	}
+	return b.String()
 }
