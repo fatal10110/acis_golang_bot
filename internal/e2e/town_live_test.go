@@ -18,8 +18,9 @@ const hopAway = 50000
 // the GM: it runs its errand cycle, a merchant visit that buys potions,
 // then a gatekeeper hop to another town once its idle spell is over (#33).
 // The hop is #32's teleport: the bot reappears at the destination, where
-// the GM, teleported to it, sees it. Between the two the GM recalls the bot
-// to the village square (#122).
+// the GM, teleported to it, sees it. Next to Katerina the server refuses
+// every routed ground move of the bot, and the bot unsticks itself on the
+// way to the gatekeeper (#122).
 func TestLiveTownErrands(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -58,10 +59,6 @@ func TestLiveTownErrands(t *testing.T) {
 		}
 		return ""
 	})
-	// Next to Katerina the server refuses every ground move of the bot
-	// (#122): the GM brings it back to the village square, by the
-	// gatekeeper, before the hop is due.
-	toTown(t, ctx, tg, gm, f)
 	var landed botclient.Point
 	until(t, ctx, "the gatekeeper hop", func() string {
 		p, ok := f.hopped(from)
@@ -73,9 +70,37 @@ func TestLiveTownErrands(t *testing.T) {
 	})
 	t.Logf("%s hopped to %v; potions %v, adena %v", f.name, landed,
 		f.counts(lesserHealingPotion, from), f.counts(adena, from))
+	if n, at, casts := f.echoes(from); n > 0 || casts > 0 {
+		t.Logf("%s: %d ground moves refused in place, first at %v; %d /unstuck casts (#122)", f.name, n, at, casts)
+	}
 	gmTo(t, ctx, gm, f)
 	t.Logf("the GM sees %s at %v", f.name, landed)
 }
+
+// echoes counts the ground moves of f the server refused in place since
+// index from, a MoveToLocation of f from its own position to the same
+// position, and where the first one left it, and f's /unstuck casts (#122).
+func (f *farmer) echoes(from int) (n int, first botclient.Point, casts int) {
+	for _, s := range f.watch.Seen(from) {
+		switch e := s.Event.(type) {
+		case botclient.MoveToLocation:
+			if e.ObjectID == f.id && e.Origin == e.Dest {
+				if n++; n == 1 {
+					first = e.Origin
+				}
+			}
+		case botclient.MagicSkillUse:
+			if e.CasterID == f.id && e.SkillID == escapeSkill {
+				casts++
+			}
+		}
+	}
+	return n, first, casts
+}
+
+// escapeSkill is the recall cast of a player's /unstuck (acis_golang
+// network/usercommand.go).
+const escapeSkill = 2099
 
 // hopped reports where f's first teleport since index from landed farther
 // than hopAway from Talking Island village.

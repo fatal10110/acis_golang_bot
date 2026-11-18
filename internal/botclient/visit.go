@@ -40,9 +40,17 @@ type npcVisit struct {
 	waitUntil time.Time
 	clicks    int
 	// lastDist is the distance left when the last leg went out, 0 before
-	// one; stalls counts legs in a row that got nowhere.
+	// one, and legFrom where the bot stood then; stalls counts legs in a
+	// row that got nowhere.
 	lastDist float64
+	legFrom  Point
 	stalls   int
+	// unsticks counts the tries at leaving a spot the legs stall in (see
+	// unstick), stuckAt is where the bot stood for the last one and escapeAt
+	// is when the visit's /unstuck went out, zero before.
+	unsticks int
+	stuckAt  Point
+	escapeAt time.Time
 }
 
 // active reports whether a visit runs.
@@ -131,7 +139,8 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 // walkTo is the next leg of visit v toward its NPC's spawn, the bot
 // standing up first. It reports false once the bot is within visitArrive
 // of the spawn, once visitLook passed since the bot appeared, or when the
-// legs got nowhere. Legs go through the frame pacer like the spot rule's.
+// legs got nowhere: legs that stall where the bot stands try an unstick
+// first. Legs go through the frame pacer like the spot rule's.
 func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	from := s.Position(now)
@@ -148,15 +157,26 @@ func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 	if s.Sitting {
 		return b.toggle(now), true
 	}
+	if v.stalls >= spotStalls {
+		if !budged(from, v.stuckAt) {
+			return b.unstick(v, from, d, now)
+		}
+		// An unstick moved the bot: legs again from where it stands.
+		v.lastDist, v.stalls = 0, 0
+	}
 	if v.lastDist > 0 && v.lastDist-d < spotProgress {
 		v.stalls++
 	} else {
 		v.stalls = 0
 	}
 	if v.stalls >= spotStalls {
-		return Action{}, false
+		if budged(from, v.legFrom) {
+			// The bot walks, just no closer: no way there.
+			return Action{}, false
+		}
+		return b.unstick(v, from, d, now)
 	}
-	v.lastDist = d
+	v.lastDist, v.legFrom = d, from
 	return moveAction(legToward(from, v.at, d), from), true
 }
 
