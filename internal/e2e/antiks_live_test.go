@@ -11,10 +11,10 @@ import (
 
 // TestLiveAntiKS has a farmer find an aggressive monster fighting the GM
 // at its spot: it leaves the monster alone past EngagedWindow, and once the
-// GM is gone it takes the monster on (#28). The monster appears while the
-// farmer is away, recalled to town, so it cannot be the first to attack
-// it. A monster that goes for someone else instead is fought, and the GM
-// tries again.
+// GM is gone it takes the monster on (#28). The farmer is told to stay
+// while the monster appears, so it cannot be the first to attack it, and
+// sent back to its spot once the monster fights the GM. A monster that goes
+// for the farmer instead is fought, and the GM tries again.
 func TestLiveAntiKS(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 15*time.Minute)
@@ -24,7 +24,24 @@ func TestLiveAntiKS(t *testing.T) {
 	account, _ := tg.Account("k", 1)
 	f := runFarmer(t, ctx, tg, account, spots, nil)
 	window := botclient.DefaultPersona().EngagedWindow
+	levelOf(t, ctx, f) // in the world
+	if at := f.bot.Status().Position; within(at, townTI, 3000) {
+		// A farmer walks no way out of the village: the GM brings it to
+		// the newbie spots.
+		t.Logf("%s is in town at %v: the GM brings it out", f.name, at)
+		gmTeleport(t, ctx, gm, tiSpots)
+		if err := gm.Command(ctx, "recall "+f.name); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f.id)); err != nil {
+			t.Fatalf("%s recalled: %v", f.name, err)
+		}
+	}
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
+	var spot string
+	for i := range heldBy(spots) {
+		spot = spots.Statuses()[i].Name
+	}
 
 	// A GM logs in invisible (GMStartupInvisible), and no monster attacks
 	// an invisible player.
@@ -32,15 +49,10 @@ func TestLiveAntiKS(t *testing.T) {
 
 	const attempts = 3
 	for attempt := 1; ; attempt++ {
-		spot := f.bot.Status().Position
-		gmTeleport(t, ctx, gm, home)
-		if err := gm.Command(ctx, "recall "+f.name); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f.id)); err != nil {
-			t.Fatalf("%s recalled to town: %v", f.name, err)
-		}
-		gmTeleport(t, ctx, gm, spot)
+		order(t, ctx, f, botclient.Command{Kind: botclient.CommandStay})
+		gmTo(t, ctx, gm, f)
+		p := gm.Pos()
+		gmTeleport(t, ctx, gm, botclient.Point{X: p.X + 400, Y: p.Y, Z: p.Z})
 		mob, err := gm.Spawn(ctx, gremlin)
 		if err != nil {
 			t.Fatal(err)
@@ -53,6 +65,7 @@ func TestLiveAntiKS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the monster attacks: %v", err)
 		}
+		order(t, ctx, f, botclient.Command{Kind: botclient.CommandGo, Arg: spot})
 		if prey := ev.(botclient.Attack).Hits[0].TargetID; prey != gm.Self.ObjectID {
 			t.Logf("attempt %d: the monster went for %d, not the GM", attempt, prey)
 			if attempt == attempts {
@@ -63,15 +76,6 @@ func TestLiveAntiKS(t *testing.T) {
 			continue
 		}
 		engaged := time.Now()
-		leash := int64(botclient.DefaultPersona().Spots.Leash)
-		until(t, scenarioCtx(t, 5*time.Minute), "the farmer back at its spot", func() string {
-			if at := f.bot.Status().Position; !within(at, spot, leash) {
-				return fmt.Sprintf("%s at %v, within %d of %v", f.name, at, leash, spot)
-			}
-			return ""
-		})
-		back := time.Now()
-		t.Logf("%s back at its spot %v after the monster engaged the GM", f.name, back.Sub(engaged))
 		hold := time.NewTimer(2 * window)
 		select {
 		case <-ctx.Done():
@@ -80,9 +84,9 @@ func TestLiveAntiKS(t *testing.T) {
 		}
 		hit, click := mobContact(f, mob, engaged)
 		if !click.IsZero() && (hit.IsZero() || click.Before(hit)) {
-			t.Fatalf("the farmer clicked the monster %v after it came back, before the monster hit it", click.Sub(back))
+			t.Fatalf("the farmer clicked the monster %v after the GM engaged it, before it hit the farmer", click.Sub(engaged))
 		}
-		t.Logf("the farmer left the GM's monster alone for %v at its spot (first hit on the farmer: %v)", 2*window, !hit.IsZero())
+		t.Logf("the farmer left the GM's monster alone for %v (first hit on the farmer: %v)", 2*window, !hit.IsZero())
 
 		gmTeleport(t, ctx, gm, home)
 		until(t, scenarioCtx(t, 3*time.Minute), "the farmer takes the monster on", func() string {
@@ -93,6 +97,26 @@ func TestLiveAntiKS(t *testing.T) {
 		})
 		awaitDeath(t, ctx, gm, f, mob)
 		return
+	}
+}
+
+// tiSpots is where a farmer k1 farmed, among the Talking Island newbie
+// spots, in walking reach of them.
+var tiSpots = botclient.Point{X: -75296, Y: 254141, Z: -3328}
+
+// order hands c to f's bot and waits for its answer.
+func order(t *testing.T, ctx context.Context, f *farmer, c botclient.Command) {
+	t.Helper()
+	answer, err := f.bot.Command(c)
+	if err == nil {
+		select {
+		case err = <-answer:
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+	}
+	if err != nil {
+		t.Fatalf("%s told %q: %v", f.name, c, err)
 	}
 }
 
