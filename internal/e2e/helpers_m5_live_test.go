@@ -114,15 +114,18 @@ func gmAdena(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, n int) 
 // object each, and waits until f carries n more of them.
 func gmGiveGear(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl int32, n int32) {
 	t.Helper()
-	from := f.watch.Len()
-	had := carriedOf(inventory(f.watch.Seen(0)), tmpl)
+	seen := f.watch.Seen(0)
+	inv := inventory(seen)
+	had := carriedOf(inv, tmpl)
 	if err := gm.Command(ctx, fmt.Sprintf("give %d %d", tmpl, n)); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	if _, _, err := f.watch.Await(ctx, from, func(botclient.Event) bool {
-		return carriedOf(inventory(f.watch.Seen(0)), tmpl) >= had+n
+	// The match runs under the watch's lock: it folds each event itself.
+	if _, _, err := f.watch.Await(ctx, len(seen), func(ev botclient.Event) bool {
+		applyInventory(inv, ev)
+		return carriedOf(inv, tmpl) >= had+n
 	}); err != nil {
 		t.Fatalf("%s never got %d of %d: %v", f.name, n, tmpl, err)
 	}
@@ -308,7 +311,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		}
 		switch ev.(type) {
 		case botclient.SystemMessage, botclient.ActionFailed:
-			refused = append(refused, fmt.Sprintf("%s (%T%+v)", items[it.TemplateID].Name, ev, ev))
+			refused = append(refused, fmt.Sprintf("%s %+v (%T%+v)", items[it.TemplateID].Name, it, ev, ev))
 			if inv[id].Equipped {
 				if err := c.Send(ctx, botclient.EncodeUseItem(id)); err != nil {
 					t.Fatal(err)

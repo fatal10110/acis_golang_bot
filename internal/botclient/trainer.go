@@ -216,6 +216,9 @@ type trainerVisit struct {
 	// afford.
 	skipped map[int32]bool
 	short   int32
+	// again makes the visit end due again: a spellbook it may have skipped
+	// a skill for arrived while it ran (booksArrived).
+	again bool
 	// doneLevel is the bot's level at the end of its last visit, 0 before
 	// the first; needSP, when set, makes a visit due again at that SP.
 	doneLevel, needSP int32
@@ -232,7 +235,7 @@ type trainerVisit struct {
 // reset ends the visit in progress.
 func (t *trainerVisit) reset() {
 	t.npc, t.step, t.waitUntil, t.clicks = 0, trainTalk, time.Time{}, 0
-	t.offer, t.pending, t.skipped, t.short = nil, AcquirableSkill{}, nil, 0
+	t.offer, t.pending, t.skipped, t.short, t.again = nil, AcquirableSkill{}, nil, 0, false
 	t.walk = npcVisit{}
 }
 
@@ -240,6 +243,9 @@ func (t *trainerVisit) reset() {
 // level.
 func (t *trainerVisit) finish(level int32) {
 	t.doneLevel, t.needSP = level, t.short
+	if t.again {
+		t.doneLevel, t.needSP = 0, 0
+	}
 	t.reset()
 }
 

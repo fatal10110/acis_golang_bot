@@ -756,6 +756,9 @@ func (b *Brain) booksArrived() {
 			}
 			sh.held[id] = true
 			b.train.doneLevel = 0
+			// A visit under way may have skipped the book's skill
+			// already: it ends due again.
+			b.train.again = b.train.npc != 0
 		}
 	}
 }
