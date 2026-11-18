@@ -21,7 +21,7 @@ import (
 // into its inventory (#29), never sending more than the pacer allows.
 func TestLiveFarmFight(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 20*time.Minute)
+	ctx := scenarioCtx(t, 30*time.Minute) // run 8 passed after 19m50s: a kill with a non-herb drop is rare
 	spots := spotRegistry(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("f", 1)
