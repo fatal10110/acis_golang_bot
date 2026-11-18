@@ -37,8 +37,8 @@ func budged(from, at Point) bool { return dist2(from, at) > stuckSlack*stuckSlac
 // sidestepTurns, then one /unstuck, whose recall lands the bot in the
 // nearest town; the bot stands still while that cast runs. A sidestep or
 // recall that moves the bot lets the legs go again (walkTo). It reports
-// false once the tries ran out, or escapeRetry after an /unstuck no cast
-// came of: the visit is over.
+// false once the tries ran out, or escapeRetry after an /unstuck, or after
+// the end of its recall cast, left the bot where it stood: the visit is over.
 //
 // Sidesteps are moves and go through the frame pacer like the legs, one per
 // decision; a visit sends at most one /unstuck (RequestUserCommand, no
@@ -53,10 +53,21 @@ func (b *Brain) unstick(v *npcVisit, from Point, d float64, now time.Time) (Acti
 	case v.escapeAt.IsZero():
 		v.stuckAt, v.escapeAt = from, now
 		return escapeAction(), true
-	case b.world.Self.Casting(now) || now.Sub(v.escapeAt) < escapeRetry:
+	case b.world.Self.Casting(now) || now.Sub(escapeWait(v.escapeAt, b.world.Self.castEnd)) < escapeRetry:
 		return Action{}, true
 	}
 	return Action{}, false
+}
+
+// escapeWait is when the wait for an /unstuck asked at asked counts from:
+// the end of the recall cast when one ran after it (the server teleports
+// when the cast completes, so the TeleportToLocation lands just after
+// castEnd), else when it was asked.
+func escapeWait(asked, castEnd time.Time) time.Time {
+	if castEnd.After(asked) {
+		return castEnd
+	}
+	return asked
 }
 
 // sidestep is the end of a sidestep of a bot at from facing to, d away:

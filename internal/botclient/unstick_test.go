@@ -53,6 +53,7 @@ func TestUnstickVisit(t *testing.T) {
 			steps: append(stuck[:len(stuck):len(stuck)],
 				trainerStep{name: "casting", at: escapeAt + time.Second, events: []Event{recall}, wantRule: "newbie"},
 				trainerStep{name: "still casting", at: 4 * time.Minute, wantRule: "newbie"},
+				trainerStep{name: "cast over, recall not landed yet", at: escapeAt + time.Second + 5*time.Minute + time.Second, wantRule: "newbie"},
 				trainerStep{
 					name: "landed: leg", at: 6 * time.Minute, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1000}) },
 					wantRule: "newbie", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 4000}, Point{X: 1000}),
