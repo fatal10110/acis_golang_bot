@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -31,8 +32,8 @@ func TestLiveFarmFight(t *testing.T) {
 		p.Loot.Junk = []int32{stem}
 		p.Loot.DropAbove = 1 // any load: the stems go at once
 	})
-	gmOn(t, ctx, gm, f, "skill set 3 1", "give 1061 10", "give 1835 500")
-	home := gm.Pos()
+	// Level 1 against level 1 monsters: they hit back before they die.
+	gmOn(t, ctx, gm, f, "set level 1", "skill set 3 1", "give 1061 10", "give 1835 500")
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
 
 	// Junk is dropped where the farmer stands still: at its spot.
@@ -51,16 +52,24 @@ func TestLiveFarmFight(t *testing.T) {
 	}
 	t.Logf("%s dropped its junk next to the GM", f.name)
 
+	// The farmer may have moved on: the monster spawns at it.
+	gmOn(t, ctx, gm, f)
 	mob, err := gm.Spawn(ctx, gremlin)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
-	// Out of the farmer's way: a monster that attacks the GM is engaged
-	// by another player, which the farmer leaves alone.
-	gmTeleport(t, ctx, gm, home)
+	// Out of the farmer's way, in a peace zone out of any monster's reach:
+	// a monster that keeps attacking the GM is engaged by another player,
+	// which the farmer leaves alone.
+	gmTeleport(t, ctx, gm, townTI)
+	alive := time.Now()
 
 	until(t, ctx, "the farm fight", func() string {
+		if time.Since(alive) > gmKeepAlive {
+			gmTeleport(t, ctx, gm, townTI)
+			alive = time.Now()
+		}
 		r := readFight(f, mob)
 		if r.spawnKilled {
 			gm.Forget(mob)
@@ -80,6 +89,15 @@ func TestLiveFarmFight(t *testing.T) {
 		t.Errorf("%d frames within a second, want at most %d", r.perSecond, frameCap)
 	}
 }
+
+// townTI is Talking Island Village (teleports.xml), a peace zone far from
+// the newbie spots around it.
+var townTI = botclient.Point{X: -84141, Y: 244623, Z: -3729}
+
+// gmKeepAlive is how long the GM may wait in silence: the server drops a
+// connection it read nothing from for 15 minutes (session.go
+// clientReadIdleTimeout), and a teleport reads what queued up meanwhile.
+const gmKeepAlive = 3 * time.Minute
 
 // gmBackFor brings the GM back next to f while mob, a monster the run
 // spawned, is still alive, so that cleanup can select and delete it.
@@ -102,20 +120,28 @@ func gmBackFor(t *testing.T, gm *GMClient, f *farmer, mob int32) {
 type fight struct {
 	shotsOn, shotsSpent   bool
 	potionUsed, potionLow bool
-	// kills are the monsters it swung at that died; swings and clicks
+	// kills are the monsters it swung or cast at that died; swings and clicks
 	// are its swings at them (server Attack) and its AttackRequests on
 	// them.
-	kills         map[int32]bool
-	swings        int
-	clicks        int
-	spawnKilled   bool
-	casts         []Seen
-	early         []string
-	pickedUp      bool
-	perSecond     int
-	failed        int
-	pickupPending int
+	kills       map[int32]bool
+	swings      int
+	clicks      int
+	spawnKilled bool
+	casts       []Seen
+	early       []string
+	pickedUp    bool
+	loot        int
+	perSecond   int
+	failed      int
+	// What the farmer saw of the GM-spawned monster: in sight, out of it,
+	// its hits by target, and the farmer's clicks on it.
+	mobSeen, mobGone bool
+	mobHits          map[int32]int
+	mobClicks        int
 }
+
+// groundItem is a DropItem: who dropped which template.
+type groundItem struct{ dropper, template int32 }
 
 // herb reports whether tmpl is a herb (8600-8614): used up on pickup, it
 // never reaches the inventory.
@@ -123,13 +149,18 @@ func herb(tmpl int32) bool { return tmpl >= 8600 && tmpl <= 8614 }
 
 func readFight(f *farmer, mob int32) fight {
 	seen, sent := f.watch.Seen(0), f.watch.Sent()
-	r := fight{kills: map[int32]bool{}, perSecond: maxPerSecond(sent)}
+	r := fight{kills: map[int32]bool{}, mobHits: map[int32]int{}, perSecond: maxPerSecond(sent)}
 	r.shotsSpent, _ = stockSpent(seen, soulshotNG)
 	var potion int32
 	r.potionLow, potion = stockSpent(seen, healingPotion)
 	swungAt := map[int32]int{}
-	drops := map[int32]int32{} // ground item -> template, dropped by a kill
-	picked := map[int32]int{}  // template picked up -> index of its GetItem
+	castAt := map[int32]bool{} // monsters it cast Power Strike at
+	// The server sends a kill's DropItems before its Die
+	// (Creature.doDie: rewards first): the drops are matched to the kills
+	// once all are read.
+	drops := map[int32]groundItem{} // ground item -> its drop
+	picked := map[int32]int{}       // ground item -> index of its GetItem
+	gained := map[int32][]int{}     // template -> indexes of InventoryUpdates adding it
 	for i, s := range seen {
 		switch e := s.Event.(type) {
 		case botclient.ExAutoSoulShot:
@@ -139,40 +170,59 @@ func readFight(f *farmer, mob int32) fight {
 				swungAt[e.Hits[0].TargetID]++
 			}
 		case botclient.Die:
-			if swungAt[e.ObjectID] > 0 {
+			if swungAt[e.ObjectID] > 0 || castAt[e.ObjectID] {
 				r.kills[e.ObjectID] = true
 				r.spawnKilled = r.spawnKilled || e.ObjectID == mob
 			}
 		case botclient.DropItem:
-			if r.kills[e.DropperID] {
-				drops[e.Item.ObjectID] = e.Item.TemplateID
-			}
+			drops[e.Item.ObjectID] = groundItem{dropper: e.DropperID, template: e.Item.TemplateID}
 		case botclient.GetItem:
-			if tmpl, ok := drops[e.ObjectID]; ok && e.PickerID == f.id && !herb(tmpl) {
-				picked[tmpl] = i
+			if e.PickerID == f.id {
+				picked[e.ObjectID] = i
 			}
 		case botclient.InventoryUpdate:
 			for _, c := range e.Changes {
-				if at, ok := picked[c.Item.TemplateID]; ok && at < i && c.State != botclient.ItemRemoved {
-					r.pickedUp = true
+				if c.State != botclient.ItemRemoved {
+					gained[c.Item.TemplateID] = append(gained[c.Item.TemplateID], i)
 				}
 			}
+		case botclient.NPCInfo:
+			r.mobSeen = r.mobSeen || e.ObjectID == mob
+		case botclient.DeleteObject:
+			r.mobGone = r.mobGone || e.ObjectID == mob
 		case botclient.MagicSkillUse:
 			if e.CasterID == f.id && e.SkillID == powerStrike {
 				r.casts = append(r.casts, s)
+				castAt[e.TargetID] = true
 			}
 		case botclient.ActionFailed:
 			r.failed++
 		}
+		if a, ok := s.Event.(botclient.Attack); ok && a.AttackerID == mob && len(a.Hits) > 0 {
+			r.mobHits[a.Hits[0].TargetID]++
+		}
 	}
-	r.pickupPending = len(drops)
+	for item, d := range drops {
+		if !r.kills[d.dropper] || herb(d.template) {
+			continue
+		}
+		r.loot++
+		at, ok := picked[item]
+		if ok && slices.ContainsFunc(gained[d.template], func(i int) bool { return i > at }) {
+			r.pickedUp = true
+		}
+	}
 	for id := range r.kills {
 		r.swings += swungAt[id]
 	}
 	for _, p := range sent {
-		switch {
-		case p.Op == botclient.OpAttackRequest && r.kills[p.Target]:
+		if p.Op == botclient.OpAttackRequest && r.kills[p.Target] {
 			r.clicks++
+		}
+		if (p.Op == botclient.OpAction || p.Op == botclient.OpAttackRequest) && p.Target == mob {
+			r.mobClicks++
+		}
+		switch {
 		case p.Op == botclient.OpUseItem && potion != 0 && p.Target == potion:
 			r.potionUsed = true
 		case p.Op == botclient.OpRequestMagicSkillUse && p.Target == powerStrike:
@@ -206,11 +256,11 @@ func (r fight) missing() string {
 		{r.shotsOn, "ExAutoSoulShot enabling soulshots"},
 		{r.shotsSpent, "soulshots spent (InventoryUpdate)"},
 		{len(r.kills) > 0, "a kill"},
-		{r.spawnKilled, "the GM-spawned monster killed"},
+		{r.spawnKilled, fmt.Sprintf("the GM-spawned monster killed (seen %v, gone %v, its hits %v, clicked %d times)", r.mobSeen, r.mobGone, r.mobHits, r.mobClicks)},
 		{len(r.casts) >= 2, "two Power Strike casts"},
 		{r.potionUsed, "UseItem of a potion"},
 		{r.potionLow, "a potion spent (InventoryUpdate)"},
-		{r.pickedUp, fmt.Sprintf("a kill's drop picked up into the inventory (%d drops seen)", r.pickupPending)},
+		{r.pickedUp, fmt.Sprintf("a kill's drop picked up into the inventory (%d non-herb drops of kills seen)", r.loot)},
 	} {
 		if !c.ok {
 			m = append(m, c.what)
