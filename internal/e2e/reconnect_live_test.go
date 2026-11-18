@@ -25,6 +25,7 @@ func online(b *botclient.Bot) func() bool {
 // the server sends ServerClose and drops it, and the bot logs back in once
 // the login server lets the account go (#12).
 func TestLiveReconnectAfterKick(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 5*time.Minute)
 	gm := enterGM(t, ctx, tg)

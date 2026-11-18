@@ -19,7 +19,9 @@ const stemPrice = 5
 // the bot's confirm, and the trade settles with the stems in the buyer's
 // inventory and the adena in the bot's.
 func TestLiveTradeFromBot(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("td", 1)

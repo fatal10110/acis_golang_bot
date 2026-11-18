@@ -35,7 +35,10 @@ const (
 	// EnvAllowlisted=1 drops the login gate's spacing: set it only when the
 	// source address is on AcceptFilterAllowlist of both servers.
 	EnvAllowlisted = "BOT_E2E_ALLOWLISTED"
-	// EnvGMFile is the GM file (mode 0600): account, password and character.
+	// EnvGMFile is the GM file (mode 0600: account, password and character),
+	// or a list of them (filepath.ListSeparator between): the run's GM pool,
+	// one GM per scenario open. Unset, the pool is every GM file of the
+	// config dir (gmFiles).
 	EnvGMFile = "BOT_E2E_GM_FILE"
 	// EnvDatapack is a local copy of the server's datapack XML directory.
 	EnvDatapack = "BOT_E2E_DATAPACK"
@@ -64,7 +67,7 @@ type Config struct {
 	SecretFile     string
 	Prefix         string
 	Allowlisted    bool
-	GMFile         string
+	GMFiles        []string
 	Datapack       string
 	AllowLoginFail bool
 }
@@ -77,15 +80,37 @@ func ConfigFromEnv(getenv func(string) string, dir string) Config {
 		SecretFile:     getenv(EnvSecretFile),
 		Prefix:         cmp.Or(getenv(EnvPrefix), DefaultPrefix),
 		Allowlisted:    getenv(EnvAllowlisted) == "1",
-		GMFile:         getenv(EnvGMFile),
 		Datapack:       getenv(EnvDatapack),
 		AllowLoginFail: getenv(EnvAllowLoginFail) == "1",
 	}
+	if v := getenv(EnvGMFile); v != "" {
+		c.GMFiles = filepath.SplitList(v)
+	}
 	if dir != "" {
 		c.SecretFile = cmp.Or(c.SecretFile, filepath.Join(dir, "secret"))
-		c.GMFile = cmp.Or(c.GMFile, filepath.Join(dir, "gm"))
+		if len(c.GMFiles) == 0 {
+			c.GMFiles = gmFiles(dir)
+		}
 	}
 	return c
+}
+
+// gmFiles are the GM files of dir: "gm" and "gm" followed by digits ("gm2",
+// "gm3", ...), in name order; none when dir cannot be read.
+func gmFiles(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, e := range entries {
+		name := e.Name()
+		digits := strings.TrimPrefix(name, "gm")
+		if e.Type().IsRegular() && digits != name && strings.Trim(digits, "0123456789") == "" {
+			files = append(files, filepath.Join(dir, name))
+		}
+	}
+	return files
 }
 
 // HaltFileName is the credential breaker's marker, next to the secret file:
@@ -162,7 +187,12 @@ func (c Config) Missing(needs ...Need) []string {
 	for _, n := range needs {
 		switch n {
 		case NeedGM:
-			miss = missingFile(miss, EnvGMFile, c.GMFile)
+			if len(c.GMFiles) == 0 {
+				miss = append(miss, EnvGMFile+" unset and no GM file in the config dir")
+			}
+			for _, f := range c.GMFiles {
+				miss = missingFile(miss, EnvGMFile, f)
+			}
 		case NeedDatapack:
 			miss = missingFile(miss, EnvDatapack, c.Datapack)
 		case NeedLoginFail:

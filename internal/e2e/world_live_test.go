@@ -10,6 +10,7 @@ import (
 // TestLiveRecallReappear recalls a bot to the GM: the bot is teleported
 // next to the GM, answers Appearing, and the GM then sees it (#11).
 func TestLiveRecallReappear(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 3*time.Minute)
 	account, _ := tg.Account("w", 1)
@@ -33,6 +34,7 @@ func TestLiveRecallReappear(t *testing.T) {
 // dies, asks to restart in the village, revives and is teleported there
 // (#11).
 func TestLiveKilledBotRevivesInVillage(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 3*time.Minute)
 	account, _ := tg.Account("w", 2)

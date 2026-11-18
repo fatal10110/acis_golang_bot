@@ -5,6 +5,7 @@ import (
 	"errors"
 	"hash/fnv"
 	"math/rand/v2"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -85,6 +86,7 @@ func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("GM of the pool: %s", filepath.Base(gm.file))
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

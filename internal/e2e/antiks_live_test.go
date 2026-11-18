@@ -17,7 +17,9 @@ import (
 // (gmProvoke). A monster that goes
 // for the farmer instead is fought, and the GM tries again.
 func TestLiveAntiKS(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &newbieSpots)
 	ctx := scenarioCtx(t, 15*time.Minute)
 	spots := spotRegistry(t, tg)
 	gm := enterGM(t, ctx, tg)
