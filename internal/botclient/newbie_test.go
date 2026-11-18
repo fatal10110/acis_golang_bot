@@ -129,12 +129,12 @@ func TestNewbieGivesUp(t *testing.T) {
 			},
 		},
 		{
-			name: "legs get nowhere",
+			name: "legs move the bot no closer",
 			steps: []trainerStep{
 				{name: "leg 1", at: time.Second, wantRule: "newbie", wantKind: actMove},
 				{name: "leg 2", at: 2 * time.Second, wantRule: "newbie", wantKind: actMove},
 				{name: "leg 3", at: 3 * time.Second, wantRule: "newbie", wantKind: actMove},
-				{name: "stalled", at: 4 * time.Second},
+				{name: "stalled", at: 4 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{Y: 200}) }},
 			},
 		},
 	}

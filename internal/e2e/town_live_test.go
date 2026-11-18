@@ -18,8 +18,9 @@ const hopAway = 50000
 // the GM: it runs its errand cycle, a merchant visit that buys potions,
 // then a gatekeeper hop to another town once its idle spell is over (#33).
 // The hop is #32's teleport: the bot reappears at the destination, where
-// the GM, teleported to it, sees it. Between the two the GM recalls the bot
-// to the village square (#122).
+// the GM, teleported to it, sees it. Next to Katerina the server refuses
+// every routed ground move of the bot, and the bot unsticks itself on the
+// way to the gatekeeper (#122).
 func TestLiveTownErrands(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
@@ -56,10 +57,6 @@ func TestLiveTownErrands(t *testing.T) {
 		}
 		return ""
 	})
-	// Next to Katerina the server refuses every ground move of the bot
-	// (#122): the GM brings it back to the village square, by the
-	// gatekeeper, before the hop is due.
-	toTown(t, ctx, tg, gm, f)
 	var landed botclient.Point
 	until(t, ctx, "the gatekeeper hop", func() string {
 		p, ok := f.hopped(from)
