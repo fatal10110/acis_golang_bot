@@ -67,7 +67,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **Cap:** at most 4 characters of a run online at once, the GM's and a panel's bots included;
   every scenario logs its characters out in cleanup.
 - **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:
-  `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal [NAME]`, `set level N` and
+  `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N` and
   `skill set` on a targeted run character, `spawn ID`, `delete` on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. The GM targets only run

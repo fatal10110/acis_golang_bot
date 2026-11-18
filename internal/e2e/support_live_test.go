@@ -157,7 +157,7 @@ func skill(id, target int32) func(botclient.Event) bool {
 // renews its buffs once under RebuffBefore (#22).
 func TestLiveSupport(t *testing.T) {
 	tg := Live(t, NeedGM)
-	ctx := scenarioCtx(t, 10*time.Minute)
+	ctx := scenarioCtx(t, 12*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	acc, _ := tg.Account("su", 1)
 	leader := enter(t, ctx, tg, acc, character(t, acc, &botclient.HumanFighter), nil)
@@ -174,31 +174,10 @@ func TestLiveSupport(t *testing.T) {
 	recallClient(t, ctx, gm, leader)
 	botID := recallBot(t, ctx, tg, gm, name)
 
-	if err := gm.Select(ctx, botID); err != nil {
-		t.Fatal(err)
-	}
-	// A full bar of the level 15 MP too: with the MP of its old level the
-	// bot sits out its buffs resting.
-	for _, cmd := range []string{"set level 15", "skill set 1011 1", "skill set 1015 1", "skill set 1068 1", "skill set 1040 1", "heal " + name} {
-		if err := gm.Command(ctx, cmd); err != nil {
-			t.Fatal(err)
-		}
-	}
-	watchUntil(t, ctx, gm.Client, "the bot at level 15", func() bool { return b.Status().Level >= 15 }, nil)
-
-	// The leader at level 15 too, so the orc it fights takes it under 60 %
-	// HP over a few blows rather than killing it in two.
-	self := leader.Self.ObjectID
-	if err := gm.Select(ctx, self); err != nil {
-		t.Fatal(err)
-	}
-	// Full HP too: a leader that entered dead restarts in the village
-	// with part of it, and the heal phase starts from a full bar.
-	for _, cmd := range []string{"set level 15", "heal " + leader.Self.Name} {
-		if err := gm.Command(ctx, cmd); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// Effects outlast a logout: a bot or leader that kept Might and Shield
+	// from an earlier run would renew them on that run's clock, minutes
+	// into this one. Cancel them, then watch the bot cast both on itself,
+	// from here on, through the GM (it sees the bot recalled to it).
 	var seen casts
 	start := time.Now()
 	defer func() {
@@ -210,6 +189,41 @@ func TestLiveSupport(t *testing.T) {
 			st.State, st.Level, st.HP, st.MaxHP, st.MP, st.MaxMP, st.Rule, st.Leader, st.Members, dist(st.Position, leader.Pos()))
 		seen.between(t, botID, start, time.Now())
 	}()
+	if err := gm.Select(ctx, botID); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"cancel " + name, "set level 15", "skill set 1011 1", "skill set 1015 1", "skill set 1068 1", "skill set 1040 1"} {
+		if err := gm.Command(ctx, cmd); err != nil {
+			t.Fatal(err)
+		}
+	}
+	watchUntil(t, ctx, gm.Client, "the bot at level 15", func() bool { return b.Status().Level >= 15 }, seen.note)
+	// Healed only once at level 15, so to a full bar of the level 15 MP:
+	// with the MP of its old level the bot sits out its buffs resting.
+	if err := gm.Command(ctx, "heal "+name); err != nil {
+		t.Fatal(err)
+	}
+	watchUntil(t, ctx, gm.Client, "Might and Shield on the bot itself", func() bool {
+		_, might := seen.first(botID, skill(skillMight, botID))
+		_, shield := seen.first(botID, skill(skillShield, botID))
+		return might && shield
+	}, seen.note)
+	st := b.Status()
+	t.Logf("bot buffed itself: MP %d/%d rule %q", st.MP, st.MaxMP, st.Rule)
+
+	// The leader at level 15 too, so the orc it fights takes it under 60 %
+	// HP over a few blows rather than killing it in two.
+	self := leader.Self.ObjectID
+	if err := gm.Select(ctx, self); err != nil {
+		t.Fatal(err)
+	}
+	// Full HP too: a leader that entered dead restarts in the village
+	// with part of it, and the heal phase starts from a full bar.
+	for _, cmd := range []string{"cancel " + leader.Self.Name, "set level 15", "heal " + leader.Self.Name} {
+		if err := gm.Command(ctx, cmd); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var hp, maxHP int32
 	var hurtAt time.Time
 	track := func(ev botclient.Event) {
