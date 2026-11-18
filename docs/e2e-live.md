@@ -67,7 +67,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **Cap:** at most 4 characters of a run online at once, the GM's and a panel's bots included;
   every scenario logs its characters out in cleanup.
 - **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:
-  `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal [NAME]`, `set level N` and
+  `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N` and
   `skill set` on a targeted run character, `spawn ID`, `delete` on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. The GM targets only run
@@ -77,7 +77,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 
 ## What a run creates and leaves behind
 
-- Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`) and
+- Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
+  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv3`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
@@ -101,5 +102,12 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveKilledBotRevivesInVillage` | GM | #11 revive in the village |
 | `TestLiveSoak` | login | #9 soak past the idle timeout, #14 flat metrics |
 | `TestLivePanelBots` | datapack | #94, #96, #89 panel create, despawn, respawn, restart |
+| `TestLivePartyGMInviteLeave` | GM | #17 GM invite, GM leads; #19 whispered `leave` |
+| `TestLivePartySwarmOneJoins` | login | #72 a player invites two bots of one swarm, one joins |
+| `TestLiveWhisperCommands` | GM | #19 `invite me`, `follow`; a non-commander's `follow` ignored |
+| `TestLiveFollow` | GM | #18 follow from out of sight, settle, walk and run |
+| `TestLiveSupport` | GM | #22 buffs, heal under 60 %, assist after the leader's hit, renewal |
+| `TestLiveRecoverVillageRestart` | GM | #24 village restart after `ResurrectWait`, back to the GM |
+| `TestLiveRecoverLeaderLogout` | GM | #24 leader logout: `LeaderWait`, `/unstuck`, town |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.

@@ -2,9 +2,6 @@ package e2e
 
 import (
 	"context"
-	"log/slog"
-	"math/rand/v2"
-	"os"
 	"testing"
 	"time"
 
@@ -12,33 +9,12 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 )
 
-// runBot runs a whole Bot of account on the run's gate and a place of its
-// own until the test ends, which logs it out and joins it.
+// runBot runs a whole Bot of account playing DefaultPersona on the run's
+// gate and a place of its own until the test ends, which logs it out and
+// joins it.
 func runBot(t *testing.T, ctx context.Context, tg *Target, account string, persistent bool, metrics *botmetrics.Bot) *botclient.Bot {
 	t.Helper()
-	release, err := tg.Hold(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := tg.SessionConfig(slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	cfg.Persistent = persistent
-	brain := botclient.BrainConfig{Persona: botclient.DefaultPersona(), Metrics: metrics}
-	b, err := botclient.NewBot(cfg, account, tg.Password(account), botclient.BotConfig{Character: character(t, account, nil), Brain: brain}, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
-	if err != nil {
-		release()
-		t.Fatal(err)
-	}
-	runCtx, stop := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- b.Run(runCtx) }()
-	t.Cleanup(func() {
-		stop()
-		if err := <-done; err != nil {
-			t.Logf("bot %s stopped: %v", account, err)
-		}
-		release()
-	})
-	return b
+	return runBotWith(t, ctx, tg, account, botSetup{persistent: persistent, metrics: metrics})
 }
 
 func online(b *botclient.Bot) func() bool {

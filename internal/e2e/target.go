@@ -27,6 +27,10 @@ const EntryTimeout = 15 * time.Second
 // login server bans the IP after 3 in a row (LoginTryBeforeBan).
 var ErrLoginFailUsed = errors.New("the run's one wrong-password login is used")
 
+// ErrMoveRefused reports a move the server answered ActionFailed: no path
+// to the point, or the character cannot move now.
+var ErrMoveRefused = errors.New("move refused")
+
 // network is how a Target reaches the servers; tests replace it.
 type network interface {
 	login(ctx context.Context, account, password string) (botclient.LoginResult, error)
@@ -310,12 +314,14 @@ type Client struct {
 	release func()
 	once    sync.Once
 	closed  atomic.Bool
-	// pos is the character's position as its own teleports moved it.
+	// pos is the character's position as the server last placed or sent
+	// it: entry, its own teleports, moves and stops.
 	pos botclient.Point
 }
 
-// Pos is where the character stands: where it entered, or where its last
-// teleport put it.
+// Pos is where the character stands, or heads to while it moves: where it
+// entered, or where the server last put it (its own teleport, stop or
+// position fix) or sends it (its own move's destination).
 func (c *Client) Pos() botclient.Point { return c.pos }
 
 // Send sends payload once the pacer lets one more frame out.
@@ -330,7 +336,8 @@ func (c *Client) Send(ctx context.Context, payload []byte) error {
 // accepts, for at most timeout (and not past ctx's deadline); other frames
 // are skipped. A teleport of the character itself is completed on the way:
 // its position follows and Appearing goes out, without which the server
-// keeps the character out of the world.
+// keeps the character out of the world. Its own moves, stops and position
+// fixes move Pos too.
 func (c *Client) Await(ctx context.Context, timeout time.Duration, match func(botclient.Event) bool) (botclient.Event, error) {
 	deadline := time.Now().Add(timeout)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
@@ -348,17 +355,92 @@ func (c *Client) Await(ctx context.Context, timeout time.Duration, match func(bo
 		if !ok {
 			continue
 		}
-		if tp, isTP := ev.(botclient.TeleportToLocation); isTP && tp.ObjectID == c.Self.ObjectID {
-			c.pos = tp.Pos
-			if err := c.Send(ctx, botclient.EncodeAppearing()); err != nil {
-				return nil, err
-			}
+		if err := c.follow(ctx, ev); err != nil {
+			return nil, err
 		}
 		if match(ev) {
 			return ev, nil
 		}
 	}
 }
+
+// follow moves Pos after an event about the character itself, and answers
+// its teleport with Appearing.
+func (c *Client) follow(ctx context.Context, ev botclient.Event) error {
+	switch e := ev.(type) {
+	case botclient.TeleportToLocation:
+		if e.ObjectID == c.Self.ObjectID {
+			c.pos = e.Pos
+			return c.Send(ctx, botclient.EncodeAppearing())
+		}
+	case botclient.MoveToLocation:
+		if e.ObjectID == c.Self.ObjectID {
+			// The destination's Z is head height; keep the floor's.
+			c.pos = botclient.Point{X: e.Dest.X, Y: e.Dest.Y, Z: c.pos.Z}
+		}
+	case botclient.StopMove:
+		if e.ObjectID == c.Self.ObjectID {
+			c.pos = e.Pos
+		}
+	case botclient.ValidateLocation:
+		if e.ObjectID == c.Self.ObjectID {
+			c.pos = e.Pos
+		}
+	}
+	return nil
+}
+
+// Watch reads the connection for d (not past ctx's deadline), handing fn
+// every event, as Await does with a match that never accepts; the time
+// running out is no error. A deadline that cuts a frame in two breaks the
+// connection's framing, so later reads fail.
+func (c *Client) Watch(ctx context.Context, d time.Duration, fn func(botclient.Event)) error {
+	_, err := c.Await(ctx, d, func(ev botclient.Event) bool {
+		fn(ev)
+		return false
+	})
+	if errors.Is(err, os.ErrDeadlineExceeded) && ctx.Err() == nil {
+		return nil
+	}
+	return err
+}
+
+// Move sends the character to `to`, walking or running as it is set to,
+// and waits for the server to start the move; Pos is then the move's
+// destination, which geodata may have cut short. It does not wait for the
+// arrival. A move the server answers ActionFailed is ErrMoveRefused.
+func (c *Client) Move(ctx context.Context, to botclient.Point) (botclient.MoveToLocation, error) {
+	if err := c.Send(ctx, botclient.EncodeMoveBackwardToLocation(to, c.pos)); err != nil {
+		return botclient.MoveToLocation{}, err
+	}
+	own := func(ev botclient.Event) bool {
+		m, ok := ev.(botclient.MoveToLocation)
+		return ok && m.ObjectID == c.Self.ObjectID
+	}
+	ev, err := c.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
+		_, failed := ev.(botclient.ActionFailed)
+		return failed || own(ev)
+	})
+	if err != nil {
+		return botclient.MoveToLocation{}, fmt.Errorf("move to %v: %w", to, err)
+	}
+	if m, ok := ev.(botclient.MoveToLocation); ok {
+		return m, nil
+	}
+	// ActionFailed also answers other requests (a bypass) and may lead an
+	// accepted move: the move is refused only when none follows.
+	ev, err = c.Await(ctx, moveAfterFail, own)
+	if errors.Is(err, os.ErrDeadlineExceeded) && ctx.Err() == nil {
+		return botclient.MoveToLocation{}, fmt.Errorf("move to %v: %w", to, ErrMoveRefused)
+	}
+	if err != nil {
+		return botclient.MoveToLocation{}, fmt.Errorf("move to %v: %w", to, err)
+	}
+	return ev.(botclient.MoveToLocation), nil
+}
+
+// moveAfterFail is how long Move waits for the move after an ActionFailed.
+const moveAfterFail = 2 * time.Second
 
 // Closed reports whether the connection is closed (Logout or Close).
 func (c *Client) Closed() bool { return c.closed.Load() }
@@ -438,13 +520,7 @@ func (g *GMClient) Select(ctx context.Context, objectID int32) error {
 	if !owned {
 		return fmt.Errorf("%w: target %d is not the run's", ErrCommandRefused, objectID)
 	}
-	if err := g.Send(ctx, botclient.EncodeAction(objectID, g.pos)); err != nil {
-		return err
-	}
-	if _, err := g.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
-		s, ok := ev.(botclient.MyTargetSelected)
-		return ok && s.ObjectID == objectID
-	}); err != nil {
+	if err := g.selectOnce(ctx, objectID); err != nil {
 		return fmt.Errorf("select %d: %w", objectID, err)
 	}
 	g.t.mu.Lock()
@@ -452,6 +528,51 @@ func (g *GMClient) Select(ctx context.Context, objectID int32) error {
 	g.t.mu.Unlock()
 	return nil
 }
+
+// selectTries is how often Select clicks an object the server does not
+// select: one that just teleported is out of the GM's world until it
+// appears again, and the click is dropped or answered ActionFailed.
+const selectTries = 3
+
+// selectOnce clicks objectID until the server selects it, up to
+// selectTries times, each answered within selectWait (selectAfterFail
+// once ActionFailed answered it). A click on an object the server did
+// select acts on it, so the next click goes out only when the last one
+// was not selected.
+func (g *GMClient) selectOnce(ctx context.Context, objectID int32) error {
+	selected := func(ev botclient.Event) bool {
+		s, ok := ev.(botclient.MyTargetSelected)
+		return ok && s.ObjectID == objectID
+	}
+	var err error
+	for range selectTries {
+		if err := g.Send(ctx, botclient.EncodeAction(objectID, g.pos)); err != nil {
+			return err
+		}
+		var ev botclient.Event
+		ev, err = g.Await(ctx, selectWait, func(ev botclient.Event) bool {
+			_, failed := ev.(botclient.ActionFailed)
+			return failed || selected(ev)
+		})
+		if err == nil {
+			if selected(ev) {
+				return nil
+			}
+			if _, err = g.Await(ctx, selectAfterFail, selected); err == nil {
+				return nil
+			}
+		}
+		if !errors.Is(err, os.ErrDeadlineExceeded) || ctx.Err() != nil {
+			return err
+		}
+	}
+	return err
+}
+
+const (
+	selectWait      = 5 * time.Second
+	selectAfterFail = time.Second
+)
 
 // spawnReach is how far from the GM a monster it spawns may appear: the
 // GM's target stands next to it when it spawns.
