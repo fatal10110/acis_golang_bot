@@ -515,6 +515,8 @@ func (c *Client) Close() {
 type GMClient struct {
 	*Client
 	t *Target
+	// file is the pool's GM file the scenario holds.
+	file string
 }
 
 // EnterGM logs in a GM of the run's pool that no other scenario, of this
@@ -541,7 +543,7 @@ func (t *Target) EnterGM(ctx context.Context) (*GMClient, error) {
 	t.mu.Lock()
 	delete(t.scope.chars, strings.ToLower(gm.Character))
 	t.mu.Unlock()
-	return &GMClient{Client: c, t: t}, nil
+	return &GMClient{Client: c, t: t, file: lease.file}, nil
 }
 
 // Command sends cmd (without "//") once the scenario's filter accepts it.
