@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -81,13 +82,39 @@ func TestLiveArrows(t *testing.T) {
 	// Out of the peace zone, where the GM is seen (//hide off): a bot
 	// assists only a player in its sight.
 	gmVisibleAt(t, ctx, gm, tiSpots)
+	from := len(f.watch.Seen(0))
 	if err := gm.Command(ctx, "recall "+f.name); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f.id)); err != nil {
 		t.Fatalf("%s recalled: %v", f.name, err)
 	}
-	order(t, ctx, f, botclient.Command{Kind: botclient.CommandAssist, Arg: gm.Self.Name})
+	// The GM is in the archer's sight once its CharInfo reached the bot:
+	// the tap sees the frame just before the brain does.
+	sctx, cancel := context.WithTimeout(ctx, EntryTimeout)
+	defer cancel()
+	if _, _, err := f.watch.Await(sctx, from, charInfoOf(gm.Self.ObjectID)); err != nil {
+		t.Fatalf("%s never saw the GM: %v", f.name, err)
+	}
+	assist := botclient.Command{Kind: botclient.CommandAssist, Arg: gm.Self.Name}
+	var err error
+	for range 5 {
+		var answer <-chan error
+		if answer, err = f.bot.Command(assist); err == nil {
+			select {
+			case err = <-answer:
+			case <-ctx.Done():
+				err = ctx.Err()
+			}
+		}
+		if !errors.Is(err, botclient.ErrNotInSight) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("%s told %q: %v", f.name, assist, err)
+	}
 	mob, err := gm.Spawn(ctx, wolf)
 	if err != nil {
 		t.Fatal(err)
