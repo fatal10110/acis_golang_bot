@@ -94,7 +94,28 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 	}
 	ui := seen.Event.(botclient.UserInfo)
 	tg.Own(ui.Name, ui.ObjectID)
-	return &farmer{bot: b, watch: w, id: ui.ObjectID, name: ui.Name}
+	f := &farmer{bot: b, watch: w, id: ui.ObjectID, name: ui.Name}
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(f.digest())
+		}
+	})
+	return f
+}
+
+// digest sums up what the farmer did, for a failed scenario: its status,
+// the packets it sent by opcode and the events it read by type.
+func (f *farmer) digest() string {
+	s := f.bot.Status()
+	sent, read := map[string]int{}, map[string]int{}
+	for _, p := range f.watch.Sent() {
+		sent[fmt.Sprintf("%#02x", p.Op)]++
+	}
+	for _, e := range f.watch.Seen(0) {
+		read[fmt.Sprintf("%T", e.Event)]++
+	}
+	return fmt.Sprintf("%s: state %v, rule %q, level %d, HP %d/%d, at %v; sent %v; read %v",
+		f.name, s.State, s.Rule, s.Level, s.HP, s.MaxHP, s.Position, sent, read)
 }
 
 // gmTo teleports the GM next to f and waits until it sees f there.

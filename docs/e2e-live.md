@@ -67,8 +67,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **Cap:** at most 4 characters of a run online at once, the GM's and a panel's bots included;
   every scenario logs its characters out in cleanup.
 - **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:
-  `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal [NAME]`, `set level N` and
-  `skill set` on a targeted run character, `spawn ID`, `delete` on a spawned monster. The forms
+  `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal [NAME]`, `set level N`,
+  `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run character, `spawn ID`,
+  `delete` on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. The GM targets only run
   objects, so a command that falls back on its target cannot reach anyone else.
@@ -77,11 +78,15 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 
 ## What a run creates and leaves behind
 
-- Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`) and
+- Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`, `e2ef1`, `e2ek1`, `e2en1`-`e2en2`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
-  village); nothing is restored.
+  village); nothing is restored but the level below.
+- What the GM gave a farmer (`TestLiveFarmFight`: Power Strike, 10 Healing Potions, 500 no-grade
+  soulshots, 3 Stems) stays with it, less what it used; the Stems it dropped lie on the ground until
+  the server clears them. Farmers keep the levels they gained; `TestLiveSpots` sets its first farmer
+  back to level 1 at the end.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
 - The GM's commands land in the server's GM audit log.
@@ -101,5 +106,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveKilledBotRevivesInVillage` | GM | #11 revive in the village |
 | `TestLiveSoak` | login | #9 soak past the idle timeout, #14 flat metrics |
 | `TestLivePanelBots` | datapack | #94, #96, #89 panel create, despawn, respawn, restart |
+| `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
+| `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow` |
+| `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.

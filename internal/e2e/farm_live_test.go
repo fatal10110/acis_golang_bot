@@ -31,9 +31,19 @@ func TestLiveFarmFight(t *testing.T) {
 		p.Loot.Junk = []int32{stem}
 		p.Loot.DropAbove = 1 // any load: the stems go at once
 	})
-	gmOn(t, ctx, gm, f, "skill set 3 1", "give 1061 10", "give 1835 500", "give 1864 3")
+	gmOn(t, ctx, gm, f, "skill set 3 1", "give 1061 10", "give 1835 500")
 	home := gm.Pos()
-	if _, err := gm.Await(ctx, 2*time.Minute, func(ev botclient.Event) bool {
+	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
+
+	// Junk is dropped where the farmer stands still: at its spot.
+	gmOn(t, ctx, gm, f, "give 1864 3")
+	if _, _, err := f.watch.Await(ctx, 0, func(ev botclient.Event) bool {
+		n, _, ok := stock(ev, stem)
+		return ok && n > 0
+	}); err != nil {
+		t.Fatalf("the farmer gets the stems: %v", err)
+	}
+	if _, err := gm.Await(ctx, 3*time.Minute, func(ev botclient.Event) bool {
 		d, ok := ev.(botclient.DropItem)
 		return ok && d.DropperID == f.id && d.Item.TemplateID == stem
 	}); err != nil {
@@ -41,8 +51,6 @@ func TestLiveFarmFight(t *testing.T) {
 	}
 	t.Logf("%s dropped its junk next to the GM", f.name)
 
-	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
-	gmOn(t, ctx, gm, f)
 	mob, err := gm.Spawn(ctx, gremlin)
 	if err != nil {
 		t.Fatal(err)
