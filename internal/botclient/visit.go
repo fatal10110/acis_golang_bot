@@ -8,12 +8,19 @@ import (
 // NPC visit timing, shared by the gatekeeper and Newbie Guide errands.
 const (
 	// visitArrive is how close to an NPC's spawn the bot walks looking for
-	// it: there and still out of sight, the NPC is not there.
+	// it: there and still out of sight, the NPC is not there. It is also
+	// how close to an NPC in sight the bot walks before it clicks.
 	visitArrive = 300
 	// visitClicks is how many clicks (selections and talks) a visit spends
 	// before it leaves the NPC alone for visitShunFor.
 	visitClicks  = 6
 	visitShunFor = 10 * time.Minute
+	// visitLook is how long after the bot appeared at a landing point a
+	// visit there waits for the NPC to come in sight before it calls the
+	// NPC absent: a loading-screen teleport empties the world, and the
+	// server shows the objects around the landing point only once the
+	// client reports Appearing.
+	visitLook = 3 * time.Second
 )
 
 // npcVisit walks to an NPC's spawn, then selects and talks to the NPC
@@ -90,7 +97,9 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 		}
 	}
 	if v.obj == 0 {
-		v.obj = b.nearestNPC(v.npcID, v.at, now)
+		if v.obj = b.nearestNPC(v.npcID, v.at, now); v.obj != 0 {
+			v.lastDist, v.stalls = 0, 0
+		}
 	}
 	if v.obj == 0 {
 		return b.walkTo(v, now)
@@ -100,6 +109,9 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 	}
 	// Unanswered: the server refused in silence; click again.
 	v.waitUntil = time.Time{}
+	if a, ok := b.closeIn(v, now); ok {
+		return a, true
+	}
 	if v.clicks >= visitClicks {
 		return Action{}, false
 	}
@@ -115,13 +127,16 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 
 // walkTo is the next leg of visit v toward its NPC's spawn, the bot
 // standing up first. It reports false once the bot is within visitArrive
-// of the spawn, or when the legs got nowhere. Legs go through the frame
-// pacer like the spot rule's.
+// of the spawn, once visitLook passed since the bot appeared, or when the
+// legs got nowhere. Legs go through the frame pacer like the spot rule's.
 func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	from := s.Position(now)
 	d := math.Sqrt(float64(dist2(from, v.at)))
 	if d <= visitArrive {
+		if now.Before(b.appearedAt.Add(visitLook)) {
+			return Action{}, true
+		}
 		return Action{}, false
 	}
 	if s.Moving(now) {
@@ -140,6 +155,38 @@ func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 	}
 	v.lastDist = d
 	return moveAction(legToward(from, v.at, d), from), true
+}
+
+// closeIn is the next leg toward visit v's NPC, in sight but farther than
+// visitArrive: the server walks the approach of a click straight at the
+// NPC and ends it at the first wall (PlayerMove.moveToPawn; acis_golang
+// move.CreatureMove.MoveToPawnWithPathOutcome), while it routes a ground
+// move around obstacles. It reports false once the bot is close enough to
+// click, or when spotStalls legs in a row got nowhere: the clicks are tried
+// then. Legs go through the frame pacer like the spot rule's.
+func (b *Brain) closeIn(v *npcVisit, now time.Time) (Action, bool) {
+	s := &b.world.Self
+	from := s.Position(now)
+	to := b.world.object(v.obj).Position(now)
+	d := math.Sqrt(float64(dist2(from, to)))
+	if d <= visitArrive || v.stalls >= spotStalls {
+		return Action{}, false
+	}
+	if s.Moving(now) {
+		return Action{}, true
+	}
+	if s.Sitting {
+		return b.toggle(now), true
+	}
+	if v.lastDist > 0 && v.lastDist-d < spotProgress {
+		if v.stalls++; v.stalls >= spotStalls {
+			return Action{}, false
+		}
+	} else {
+		v.stalls = 0
+	}
+	v.lastDist = d
+	return moveAction(legToward(from, to, d), from), true
 }
 
 // nearestNPC is the object id of the live NPC of template npcID in sight

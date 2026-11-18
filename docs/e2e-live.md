@@ -49,6 +49,28 @@ One group at a time: `go test -count=1 -v -run '^TestLiveRecall' ./internal/e2e/
 variables and `BOT_REQUIRE_E2E=1`. `make e2e-live` runs the packages one after the other, the
 second only when the first passed: each test process has its own login gate.
 
+### Parallel runs
+
+Live runs may run at the same time, as real bot runs do (several agents, or an agent and the
+owner's own bots). Each concurrent run needs:
+
+- **Its own GM file** (`BOT_E2E_GM_FILE=.e2e/gm2`, `gm3`, ...): one GM character per run, each
+  promoted to access level 7 by the owner. Two runs never share a GM session: the second login of
+  the same account drops the first.
+- **Its own lock** when the run goes through `scripts/agent-tools/heavy`: `HEAVY_LOCK` named after
+  the GM file (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`, with `HEAVY_TIMEOUT=60m`). The lock only
+  serializes runs of the same GM; a live run never takes the default heavy lock, which stays for
+  race tests and lint on the owner's machine.
+- **Its own scenarios or its own prefix:** two runs of the same scenario at once log in the same
+  `e2e` accounts and drop each other; give one of them another `BOT_E2E_PREFIX`.
+- **Headroom:** each run keeps its cap of 4 characters online, so the login server's
+  `MaximumOnlineUsers` needs 4 more per concurrent run.
+
+Every scenario tolerates other players and bots around it: another run may play in the same town
+at the same time. A scenario asserts only on its own characters, the monsters it spawned and the
+packets about them (the bot's own inventory, a skill cast on the bot, a GM seeing the bot), never
+on a global count, on who else is in sight, or on the absence of everyone else.
+
 ## Safety envelope
 
 Operational limits, not persona defaults; unit-tested with a fake target (`internal/e2e`):

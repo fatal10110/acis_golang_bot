@@ -8,7 +8,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
-// TestLiveMerchantBuySell has the GM recall a bot to Talking Island village
+// TestLiveMerchantBuySell has the GM recall a bot next to Talking Island's grocer
 // and give it adena and stems: the bot visits a merchant of the travel map,
 // buys Lesser Healing Potions with the adena and sells the stems, its junk
 // (#31). The evidence is the bot's own inventory packets: its potions rise
@@ -16,7 +16,7 @@ import (
 // opened, with adena coming in.
 func TestLiveMerchantBuySell(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 15*time.Minute)
+	ctx := scenarioCtx(t, 9*time.Minute)
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("m", 1)
@@ -36,7 +36,7 @@ func TestLiveMerchantBuySell(t *testing.T) {
 		},
 		brain: withTravel(travel),
 	})
-	toTown(t, ctx, tg, gm, f)
+	toGrocer(t, ctx, tg, gm, f)
 	from := f.seen()
 	if err := gm.Select(ctx, f.id); err != nil {
 		t.Fatal(err)

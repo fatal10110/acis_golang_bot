@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -19,7 +18,8 @@ const hopAway = 50000
 // the GM: it runs its errand cycle, a merchant visit that buys potions,
 // then a gatekeeper hop to another town once its idle spell is over (#33).
 // The hop is #32's teleport: the bot reappears at the destination, where
-// the GM, teleported to it, sees it.
+// the GM, teleported to it, sees it. Between the two the GM recalls the bot
+// to the village square (#122).
 func TestLiveTownErrands(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
@@ -41,7 +41,7 @@ func TestLiveTownErrands(t *testing.T) {
 		},
 		brain: withTravel(travel),
 	})
-	toTown(t, ctx, tg, gm, f)
+	toGrocer(t, ctx, tg, gm, f)
 	from := f.seen()
 	if err := gm.Select(ctx, f.id); err != nil {
 		t.Fatal(err)
@@ -50,21 +50,24 @@ func TestLiveTownErrands(t *testing.T) {
 	gmGive(t, ctx, gm, f, adena, 10000)
 	t.Logf("%s seeded with adena in the village", f.name)
 
-	var landed botclient.Point
-	until(t, ctx, "the town errands", func() string {
-		var missing []string
+	until(t, ctx, "the merchant visit", func() string {
 		if !rose(f.counts(lesserHealingPotion, from)) || !fell(f.counts(adena, from)) {
-			missing = append(missing, "a merchant visit")
+			return "potions bought"
 		}
-		if p, ok := f.hopped(from); ok {
-			landed = p
-		} else {
-			missing = append(missing, "a gatekeeper hop")
+		return ""
+	})
+	// Next to Katerina the server refuses every ground move of the bot
+	// (#122): the GM brings it back to the village square, by the
+	// gatekeeper, before the hop is due.
+	toTown(t, ctx, tg, gm, f)
+	var landed botclient.Point
+	until(t, ctx, "the gatekeeper hop", func() string {
+		p, ok := f.hopped(from)
+		if !ok {
+			return "a teleport away"
 		}
-		if len(missing) == 0 {
-			return ""
-		}
-		return fmt.Sprint(missing)
+		landed = p
+		return ""
 	})
 	t.Logf("%s hopped to %v; potions %v, adena %v", f.name, landed,
 		f.counts(lesserHealingPotion, from), f.counts(adena, from))
@@ -107,15 +110,21 @@ func TestLiveNewbieGuideBuffs(t *testing.T) {
 	if err := gm.Command(ctx, "set level 8"); err != nil {
 		t.Fatal(err)
 	}
-	// Every event since login: a bot that entered at level 8 next to a
-	// guide asks it before the GM is done.
+	// Every event since login: a bot that entered at level 8 asks the
+	// guide on its own. The guide has the player cast its buffs on itself
+	// (newbiehelper.go SupportMagic: CallSkill(p, p, buff)), so the caster
+	// is the bot; at level 8 a fighter gets Wind Walk alone
+	// (newbieBuffs.xml).
 	_, seen, err := f.watch.Await(ctx, 0, func(ev botclient.Event) bool {
 		m, ok := ev.(botclient.MagicSkillUse)
-		return ok && m.TargetID == f.id && m.CasterID != f.id
+		return ok && m.TargetID == f.id && m.SkillID == windWalk
 	})
 	if err != nil {
-		t.Fatalf("a guide buffs %s: %v", f.name, err)
+		t.Fatalf("the guide buffs %s: %v", f.name, err)
 	}
 	m := seen.Event.(botclient.MagicSkillUse)
-	t.Logf("guide %d cast skill %d level %d on %s (level %d)", m.CasterID, m.SkillID, m.Level, f.name, f.bot.Status().Level)
+	t.Logf("%s got skill %d level %d from the guide at level %d", f.name, m.SkillID, m.Level, f.bot.Status().Level)
 }
+
+// windWalk is the newbie buff of levels 8-24 (newbieBuffs.xml).
+const windWalk int32 = 4322

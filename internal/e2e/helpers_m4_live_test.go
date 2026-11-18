@@ -57,6 +57,20 @@ func toTown(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, f *farm
 	recallBot(t, ctx, tg, gm, f.name)
 }
 
+// nearGrocer is a step in front of Katerina (npc 30004, -84204;240403;-3717
+// heading 14000; spawnlist/17_25.xml), the Talking Island merchant who sells
+// the potions the scenarios buy. Bots recalled to the village centre walk
+// there on their own, but the routed walk stops short of her, at
+// (-84529,241723), and a click's straight approach ends at the wall (#116).
+var nearGrocer = botclient.Point{X: -84190, Y: 240460, Z: -3717}
+
+// toGrocer brings the GM next to Katerina and recalls f there.
+func toGrocer(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, f *farmer) {
+	t.Helper()
+	gmTeleport(t, ctx, gm, nearGrocer)
+	recallBot(t, ctx, tg, gm, f.name)
+}
+
 // seen is the index of f's next event: what a scenario reads from.
 func (f *farmer) seen() int { return len(f.watch.Seen(0)) }
 
