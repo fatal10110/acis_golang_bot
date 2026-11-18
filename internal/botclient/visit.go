@@ -92,8 +92,11 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if v.obj != 0 {
 		if o := b.world.object(v.obj); o == nil || o.Dead {
-			// Out of sight (a teleport clears the world): look again.
+			// Out of sight (a teleport clears the world): look again. The
+			// stalls counted toward the NPC say nothing of the legs toward
+			// its spawn.
 			v.obj, v.opened, v.waitUntil = 0, false, time.Time{}
+			v.lastDist, v.stalls = 0, 0
 		}
 	}
 	if v.obj == 0 {

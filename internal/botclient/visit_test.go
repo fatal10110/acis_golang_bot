@@ -44,6 +44,18 @@ func TestVisitClosesIn(t *testing.T) {
 			},
 		},
 		{
+			name: "out of sight after stalled legs: a leg to the spawn",
+			steps: []trainerStep{
+				{name: "leg 1", at: time.Second, setup: inSight, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
+				{name: "leg 2", at: 2 * time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
+				{name: "leg 3", at: 3 * time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
+				{
+					name: "gone: leg to the spawn", at: 4 * time.Second, events: []Event{DeleteObject{ObjectID: guideObj}},
+					wantRule: "newbie", wantKind: actMove, wantPayload: leg,
+				},
+			},
+		},
+		{
 			name: "sitting: stands up first",
 			steps: []trainerStep{
 				{name: "stand", at: time.Second, setup: func(b *Brain) { inSight(b); b.world.Self.Sitting = true }, wantRule: "newbie", wantKind: actSitStand},
