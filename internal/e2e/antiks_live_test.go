@@ -9,11 +9,12 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
-// TestLiveAntiKS has a farmer find an aggressive monster fighting the GM
+// TestLiveAntiKS has a farmer find a monster fighting the GM
 // at its spot: it leaves the monster alone past EngagedWindow, and once the
 // GM is gone it takes the monster on (#28). The farmer is told to stay
 // while the monster appears, so it cannot be the first to attack it, and
-// sent back to its spot once the monster fights the GM. A monster that goes
+// sent back to its spot once the monster fights the GM, which hit it first
+// (gmProvoke). A monster that goes
 // for the farmer instead is fought, and the GM tries again.
 func TestLiveAntiKS(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -53,20 +54,14 @@ func TestLiveAntiKS(t *testing.T) {
 		gmTo(t, ctx, gm, f)
 		p := gm.Pos()
 		gmTeleport(t, ctx, gm, botclient.Point{X: p.X + 400, Y: p.Y, Z: p.Z})
-		mob, err := gm.Spawn(ctx, gremlin)
+		mob, err := gm.Spawn(ctx, wolf)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
-		ev, err := gm.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
-			a, ok := ev.(botclient.Attack)
-			return ok && a.AttackerID == mob && len(a.Hits) > 0
-		})
-		if err != nil {
-			t.Fatalf("the monster attacks: %v", err)
-		}
+		attack := gmProvoke(t, ctx, gm, mob)
 		order(t, ctx, f, botclient.Command{Kind: botclient.CommandGo, Arg: spot})
-		if prey := ev.(botclient.Attack).Hits[0].TargetID; prey != gm.Self.ObjectID {
+		if prey := attack.Hits[0].TargetID; prey != gm.Self.ObjectID {
 			t.Logf("attempt %d: the monster went for %d, not the GM", attempt, prey)
 			if attempt == attempts {
 				t.Fatalf("the monster never went for the GM in %d attempts", attempts)
@@ -98,6 +93,59 @@ func TestLiveAntiKS(t *testing.T) {
 		awaitDeath(t, ctx, gm, f, mob)
 		return
 	}
+}
+
+// gmProvoke has the GM hit mob and step aside, and returns the monster's
+// first landed attack. A monster of the datapack's Warrior AI aggroes
+// nobody by sight without an aggro param (script/ai/warrior/base.go
+// seeCreature), but fights back whoever hits it (OnAttacked). The GM stops
+// at its second swing, its first hit resolved, or once the monster hits
+// back: the teleport aside idles it (instant_teleport.go goIdle) and the
+// monster follows the GM it hates.
+func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botclient.Attack {
+	t.Helper()
+	if err := gm.Select(ctx, mob); err != nil {
+		t.Fatal(err)
+	}
+	if err := gm.Send(ctx, botclient.EncodeAttackRequest(mob, gm.Pos())); err != nil {
+		t.Fatal(err)
+	}
+	hitsBack := func(ev botclient.Event) bool {
+		switch e := ev.(type) {
+		case botclient.Attack:
+			return e.AttackerID == mob && len(e.Hits) > 0
+		case botclient.Die:
+			return e.ObjectID == mob
+		}
+		return false
+	}
+	swings := 0
+	ev, err := gm.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+		if a, ok := ev.(botclient.Attack); ok && a.AttackerID == gm.Self.ObjectID &&
+			len(a.Hits) > 0 && a.Hits[0].TargetID == mob {
+			swings++
+			return swings == 2
+		}
+		return hitsBack(ev)
+	})
+	if err != nil {
+		t.Fatalf("the GM hits the monster: %v", err)
+	}
+	if _, ok := ev.(botclient.Die); ok {
+		t.Fatal("the GM killed the monster before it fought back")
+	}
+	p := gm.Pos()
+	gmTeleport(t, ctx, gm, botclient.Point{X: p.X + 150, Y: p.Y, Z: p.Z})
+	if a, ok := ev.(botclient.Attack); ok && a.AttackerID == mob {
+		return a
+	}
+	if ev, err = gm.Await(ctx, 30*time.Second, hitsBack); err != nil {
+		t.Fatalf("the monster fights back: %v", err)
+	}
+	if _, ok := ev.(botclient.Die); ok {
+		t.Fatal("the GM killed the monster before it fought back")
+	}
+	return ev.(botclient.Attack)
 }
 
 // tiSpots is where a farmer k1 farmed, among the Talking Island newbie
