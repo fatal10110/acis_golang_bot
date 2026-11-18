@@ -15,7 +15,6 @@ var lootPrices = map[int32]int32{animalSkin: 10, woodenArrow: 2, stoneSword: 100
 func newLootTrader(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	b := newStoreBrain(t, 0, items...)
-	b.cfg.Travel.prices = lootPrices
 	near := Point{Y: 100}
 	b.world.Objects[pcID].move = motion{from: near, to: near}
 	return b

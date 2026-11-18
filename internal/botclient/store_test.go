@@ -15,11 +15,13 @@ import (
 )
 
 // Items of the store tests (aCis_datapack/data/xml/items): wooden arrows
-// are sold by NPC shops, the others are loot.
+// are sold by NPC shops, the others are loot. The Tutorial Guide a new
+// character carries is loot its store cannot price (reference price 1).
 const (
-	woodenArrow int32 = 17
-	stoneSword  int32 = 2370
-	thread      int32 = 1868
+	woodenArrow   int32 = 17
+	stoneSword    int32 = 2370
+	thread        int32 = 1868
+	tutorialGuide int32 = 5588
 )
 
 var (
@@ -27,6 +29,7 @@ var (
 	arrowsLoot = Item{ObjectID: 105, TemplateID: woodenArrow, Count: 50, SubCategory: 5}
 	swordLoot  = Item{ObjectID: 107, TemplateID: stoneSword, Count: 1, BodySlot: 128}
 	threadLoot = Item{ObjectID: 108, TemplateID: thread, Count: 3, SubCategory: 5}
+	guideLoot  = Item{ObjectID: 109, TemplateID: tutorialGuide, Count: 1, SubCategory: 5}
 
 	// Candidates of the manage list, their price the reference price.
 	skinCand   = StoreItem{Type2: 5, ObjectID: 102, TemplateID: animalSkin, Count: 10, Price: 10, ReferencePrice: 10}
@@ -158,7 +161,8 @@ func TestStoreEncoders(t *testing.T) {
 
 // newStoreBrain is a merchant at the origin of a town with budget, a 140 %
 // markup and the default persona (no idle drift) carrying items, wooden
-// arrows on an NPC shop's list.
+// arrows on an NPC shop's list and the store test templates' reference
+// prices (lootPrices) on its travel map.
 func newStoreBrain(t *testing.T, budget int64, items ...Item) *Brain {
 	t.Helper()
 	p := DefaultPersona()
@@ -166,7 +170,7 @@ func newStoreBrain(t *testing.T, budget int64, items ...Item) *Brain {
 	p.Store.Budget, p.Store.MinMarkup, p.Store.MaxMarkup = budget, 140, 140
 	b, _ := newTestBrain(t, p)
 	shops, cheapest := indexShops([]datapack.BuyList{{ID: 1, NPCID: 30001, Products: []datapack.Product{{ItemID: woodenArrow, Price: 2}}}})
-	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{}, shops: shops, cheapest: cheapest}
+	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{}, shops: shops, cheapest: cheapest, prices: lootPrices}
 	b.cfg.Stores = NewStoreRegistry([]Point{{}}, 5, 150)
 	b.world.Apply(ItemList{Items: items}, t0)
 	return b
@@ -292,6 +296,16 @@ func TestStoreStart(t *testing.T) {
 	}{
 		{name: "loot in town", open: true},
 		{name: "no loot", items: []Item{adenaStack(10), potionsOf(5), arrowsLoot, questItem, sword}},
+		// Half of reference price 1 is 0: the store cannot price it (#120).
+		{name: "only the Tutorial Guide", items: []Item{adenaStack(10), guideLoot}},
+		{name: "unpriced loot", items: []Item{adenaStack(10), guideLoot, threadLoot}},
+		{name: "no reference price", setup: func(b *Brain) { b.cfg.Travel.prices = nil }},
+		{name: "Tutorial Guide and priced loot", items: []Item{adenaStack(10), guideLoot, skinLoot}, open: true},
+		{
+			name: "priced by a manage list", open: true, setup: func(b *Brain) {
+				b.cfg.Travel.prices, b.store.prices = nil, map[int32]int32{animalSkin: 14}
+			},
+		},
 		{name: "no budget", setup: func(b *Brain) { b.persona.Store.Budget = 0 }},
 		{name: "budget spent", setup: func(b *Brain) { b.store.sold = b.persona.Store.Budget }},
 		{name: "no registry", setup: func(b *Brain) { b.cfg.Stores = nil }},

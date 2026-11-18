@@ -321,9 +321,10 @@ func (b *Brain) ruleStore(now time.Time) (Action, bool) {
 }
 
 // startStore starts an opening when the bot may open a store: a merchant
-// (StorePolicy.Budget) with budget left and loot to sell, in a town of the
-// store registry with room for it, alive, out of combat and PvP flag, not
-// casting, not trading, still, and on no errand. A seated bot stands up
+// (StorePolicy.Budget) with budget left and loot with a store price
+// (storeSells), in a town of the store registry with room for it, alive,
+// out of combat and PvP flag, not casting, not trading, still, and on no
+// errand. A seated bot stands up
 // first and waits for the stand to end.
 func (b *Brain) startStore(now time.Time) (Action, bool) {
 	if !b.storeReady(now) {
@@ -370,11 +371,27 @@ func (b *Brain) storeReady(now time.Time) bool {
 		return false
 	}
 	for _, it := range w.Inventory.Items {
-		if b.storeLoot(it) {
+		if b.storeSells(it) {
 			return true
 		}
 	}
 	return false
+}
+
+// storeSells reports whether the bot's store sells it: loot (storeLoot)
+// with a store price, the one its store's manage lists showed, else the one
+// of the travel map's reference price, the test storeRows applies. An
+// opening with no such loot lists nothing: its manage list and title go out
+// for no store.
+func (b *Brain) storeSells(it Item) bool {
+	if !b.storeLoot(it) {
+		return false
+	}
+	if _, ok := b.store.prices[it.TemplateID]; ok {
+		return true
+	}
+	ref, ok := b.cfg.Travel.prices[it.TemplateID]
+	return ok && b.storePrice(ref) > 0
 }
 
 // called reports whether the bot follows or assists another player (a GM
