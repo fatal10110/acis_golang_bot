@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"math"
 	"strings"
 	"testing"
@@ -13,7 +14,8 @@ import (
 // commander (the -commanders allowlist: the run has no database), whispers
 // "invite me": the bot whispers it back and joins the GM's invitation, the
 // GM leading; the GM's "follow" has it follow. A player who is no
-// commander whispers "follow" and walks off: the bot stays with the GM.
+// commander whispers "follow" and walks off: the bot keeps its slot by the
+// GM.
 // With the allowlist the player's whispers never reach a database lookup
 // (Authority.ask refuses a non-commander at once) (#19).
 func TestLiveWhisperCommands(t *testing.T) {
@@ -53,20 +55,60 @@ func TestLiveWhisperCommands(t *testing.T) {
 		t.Fatalf("%s settled %.0f from the GM, want at most %d", name, d, followReach)
 	}
 
+	// The GM stands still from here: a bot that ignores the player keeps
+	// its slot, one that obeyed would trail the player far off.
 	for range 3 {
 		tell(t, ctx, other, name, "follow")
 		if err := other.Watch(ctx, 2*time.Second, func(botclient.Event) {}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := moveToward(ctx, other, awayFrom(other.Pos(), 900, math.Pi)); err != nil {
-		t.Fatal(err)
-	}
+	walkOff(t, ctx, other, gm.Pos(), offReach)
 	if err := gm.Watch(ctx, 15*time.Second, func(botclient.Event) {}); err != nil {
 		t.Fatal(err)
 	}
-	at = settled(t, ctx, gm.Client, b)
-	if d := dist(at, gm.Pos()); d > followReach {
-		t.Fatalf("%s ended %.0f from the GM after a non-commander's follow, want at most %d (%.0f from %s)", name, d, followReach, dist(at, other.Pos()), other.Self.Name)
+	end := settled(t, ctx, gm.Client, b)
+	if d := dist(end, at); d > followRepath {
+		t.Fatalf("%s moved %.0f from its slot by the GM after a non-commander's follow, want at most %d (%.0f from %s)", name, d, followRepath, dist(end, other.Pos()), other.Self.Name)
+	}
+	if d := dist(end, other.Pos()); d <= followReach {
+		t.Fatalf("%s ended %.0f from %s, who is no commander, want over %d", name, d, other.Self.Name, followReach)
+	}
+}
+
+// offReach is how far the non-commander walks from the GM: a bot that
+// obeyed it would settle within followReach of it, over followReach plus
+// Repath from any slot by the GM.
+const offReach = 2*followReach + followRepath
+
+// walkOff walks c until it stands at least d from from, in up to four
+// moves (geodata may cut each short), each awaited to its arrival.
+func walkOff(t *testing.T, ctx context.Context, c *Client, from botclient.Point, d float64) {
+	t.Helper()
+	ui := userInfo(t, c)
+	speed := ui.RunSpeed
+	if !ui.Running {
+		speed = ui.WalkSpeed
+	}
+	for range 4 {
+		left := d - dist(c.Pos(), from)
+		if left <= 0 {
+			return
+		}
+		a := math.Atan2(float64(c.Pos().Y-from.Y), float64(c.Pos().X-from.X))
+		if c.Pos() == from {
+			a = math.Pi
+		}
+		m, err := moveToward(ctx, c, awayFrom(c.Pos(), left+50, a))
+		if err != nil {
+			t.Fatal(err)
+		}
+		travel := time.Duration(dist(m.Origin, m.Dest) / float64(speed) * float64(time.Second))
+		if err := c.Watch(ctx, travel+time.Second, func(botclient.Event) {}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := dist(c.Pos(), from); got < d {
+		t.Fatalf("%s walked %.0f off, geodata cut it short of %.0f", c.Self.Name, got, d)
 	}
 }

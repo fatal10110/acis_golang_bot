@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
@@ -20,10 +21,12 @@ const (
 // buffTime is the datapack's duration of Might and Shield at level 1.
 const buffTime = 20 * time.Minute
 
-// supportRebuff is the scenario's RebuffBefore: a minute into a buff the
-// bot renews it, so the renewal shows in minutes, not in the twenty of the
-// default (a minute before the end).
-const supportRebuff = buffTime - time.Minute
+// supportRebuff is the scenario's RebuffBefore: four minutes into a buff
+// the bot renews it, so the renewal shows in minutes, not in the twenty of
+// the default (a minute before the end), and falls due only after the
+// assist and heal phases: a bot casting a renewal when the leader swings
+// would assist late.
+const supportRebuff = buffTime - 4*time.Minute
 
 // vukuOrc is a level 14 monster of the datapack that only fights back
 // (data/xml/npcs/20000-20999.xml, id 20009): it hurts a level 15 fighter
@@ -33,6 +36,17 @@ const vukuOrc int32 = 20009
 // bareSelection is how long the scenario watches the bot ignore a monster
 // the leader only selected: past the 1.5 s an assist would take.
 const bareSelection = 4 * time.Second
+
+// castQuiet is how long the bot has cast nothing before the leader swings,
+// so no cast in flight delays the assist being timed.
+const castQuiet = 3 * time.Second
+
+// The assist bound: the persona's 0.5 to 1.5 s delay widened for the live
+// server's latency on the swing, the bot's reaction and the observer.
+const (
+	assistMin = 400 * time.Millisecond
+	assistMax = 5 * time.Second
+)
 
 // casts records the casts and attacks a client sees, with when.
 type casts struct {
@@ -64,6 +78,28 @@ func (c *casts) first(caster int32, match func(botclient.Event) bool) (castSeen,
 		}
 	}
 	return castSeen{}, false
+}
+
+// last is when caster's last noted event that match accepts was seen;
+// zero for none.
+func (c *casts) last(caster int32, match func(botclient.Event) bool) time.Time {
+	var at time.Time
+	for _, s := range c.seen {
+		if s.who == caster && match(s.ev) {
+			at = s.at
+		}
+	}
+	return at
+}
+
+// between logs caster's noted events from from to to.
+func (c *casts) between(t *testing.T, caster int32, from, to time.Time) {
+	t.Helper()
+	for _, s := range c.seen {
+		if s.who == caster && !s.at.Before(from) && !s.at.After(to) {
+			t.Logf("%v: %T %+v", s.at.Sub(from), s.ev, s.ev)
+		}
+	}
 }
 
 // all are the noted events of caster that match accepts.
@@ -100,6 +136,12 @@ func hits(target int32) func(botclient.Event) bool {
 	}
 }
 
+// anyCast matches any cast.
+func anyCast(ev botclient.Event) bool {
+	_, ok := ev.(botclient.MagicSkillUse)
+	return ok
+}
+
 func skill(id, target int32) func(botclient.Event) bool {
 	return func(ev botclient.Event) bool {
 		m, ok := ev.(botclient.MagicSkillUse)
@@ -110,8 +152,8 @@ func skill(id, target int32) func(botclient.Event) bool {
 // TestLiveSupport has a level 15 human mystic bot, seeded by GM commands
 // with Heal, Battle Heal, Might and Shield, support a player that leads its
 // party: it buffs the leader and itself, leaves a monster the leader only
-// selected be, assists the leader's attack on it 0.5 to 1.5 s after the
-// first swing, heals the leader once the monster took it under 60 % HP, and
+// selected be, assists the leader's attack on it 0.5 to 1.5 s (the
+// persona's delay; assistMin to assistMax live) after the first swing, heals the leader once the monster took it under 60 % HP, and
 // renews its buffs once under RebuffBefore (#22).
 func TestLiveSupport(t *testing.T) {
 	tg := Live(t, NeedGM)
@@ -135,7 +177,9 @@ func TestLiveSupport(t *testing.T) {
 	if err := gm.Select(ctx, botID); err != nil {
 		t.Fatal(err)
 	}
-	for _, cmd := range []string{"set level 15", "skill set 1011 1", "skill set 1015 1", "skill set 1068 1", "skill set 1040 1"} {
+	// A full bar of the level 15 MP too: with the MP of its old level the
+	// bot sits out its buffs resting.
+	for _, cmd := range []string{"set level 15", "skill set 1011 1", "skill set 1015 1", "skill set 1068 1", "skill set 1040 1", "heal " + name} {
 		if err := gm.Command(ctx, cmd); err != nil {
 			t.Fatal(err)
 		}
@@ -148,10 +192,24 @@ func TestLiveSupport(t *testing.T) {
 	if err := gm.Select(ctx, self); err != nil {
 		t.Fatal(err)
 	}
-	if err := gm.Command(ctx, "set level 15"); err != nil {
-		t.Fatal(err)
+	// Full HP too: a leader that entered dead restarts in the village
+	// with part of it, and the heal phase starts from a full bar.
+	for _, cmd := range []string{"set level 15", "heal " + leader.Self.Name} {
+		if err := gm.Command(ctx, cmd); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var seen casts
+	start := time.Now()
+	defer func() {
+		if !t.Failed() {
+			return
+		}
+		st := b.Status()
+		t.Logf("bot: state %v level %d HP %d/%d MP %d/%d rule %q leader %q members %v, %.0f from the leader",
+			st.State, st.Level, st.HP, st.MaxHP, st.MP, st.MaxMP, st.Rule, st.Leader, st.Members, dist(st.Position, leader.Pos()))
+		seen.between(t, botID, start, time.Now())
+	}()
 	var hp, maxHP int32
 	var hurtAt time.Time
 	track := func(ev botclient.Event) {
@@ -201,6 +259,19 @@ func TestLiveSupport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Registered after the leader's logout, this runs first: a failure
+	// before the Delete below leaves no orc hitting the leader as it logs
+	// out.
+	t.Cleanup(func() {
+		if !slices.Contains(gm.Spawned(), mob) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := gm.Delete(ctx, mob); err != nil {
+			t.Logf("cleanup: delete the orc %d: %v", mob, err)
+		}
+	})
 	if err := leader.Send(ctx, botclient.EncodeAction(mob, leader.Pos())); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +281,14 @@ func TestLiveSupport(t *testing.T) {
 		t.Fatalf("%s went for the orc on the leader's bare selection: %+v", name, s.ev)
 	}
 
-	// The leader attacks: the bot follows 0.5 to 1.5 s later.
+	// The leader attacks once the bot has cast nothing for castQuiet: the
+	// bot follows 0.5 to 1.5 s later.
+	watchUntil(t, ctx, leader, "the bot done casting", func() bool {
+		return time.Since(seen.last(botID, anyCast)) >= castQuiet
+	}, track)
+	if left := time.Until(might.at.Add(buffTime - supportRebuff)); left < time.Minute {
+		t.Fatalf("the renewal falls due %v after the leader's swing: too close to time the assist", left)
+	}
 	if err := leader.Send(ctx, botclient.EncodeAttackRequest(mob, leader.Pos())); err != nil {
 		t.Fatal(err)
 	}
@@ -224,8 +302,9 @@ func TestLiveSupport(t *testing.T) {
 		}
 		return !attackAt.IsZero() && !assisted().IsZero()
 	}, track)
-	if d := assisted().Sub(attackAt); d < 400*time.Millisecond || d > 5*time.Second {
-		t.Fatalf("%s went for the orc %v after the leader's first swing, want 0.5 to 1.5 s and a reaction", name, d)
+	if d := assisted().Sub(attackAt); d < assistMin || d > assistMax {
+		seen.between(t, botID, attackAt.Add(-castQuiet), assisted())
+		t.Fatalf("%s went for the orc %v after the leader's first swing, want %v to %v", name, d, assistMin, assistMax)
 	} else {
 		t.Logf("%s went for the orc %v after the leader's first swing", name, d)
 	}
@@ -250,7 +329,7 @@ func TestLiveSupport(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Renewal: a second Might on the leader once a minute of it ran.
+	// Renewal: a second Might on the leader once four minutes of it ran.
 	watchUntil(t, ctx, leader, "Might renewed on the leader", func() bool {
 		return len(seen.all(botID, skill(skillMight, self))) >= 2
 	}, track)
