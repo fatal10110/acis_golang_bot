@@ -49,6 +49,28 @@ One group at a time: `go test -count=1 -v -run '^TestLiveRecall' ./internal/e2e/
 variables and `BOT_REQUIRE_E2E=1`. `make e2e-live` runs the packages one after the other, the
 second only when the first passed: each test process has its own login gate.
 
+### Parallel runs
+
+Live runs may run at the same time, as real bot runs do (several agents, or an agent and the
+owner's own bots). Each concurrent run needs:
+
+- **Its own GM file** (`BOT_E2E_GM_FILE=.e2e/gm2`, `gm3`, ...): one GM character per run, each
+  promoted to access level 7 by the owner. Two runs never share a GM session: the second login of
+  the same account drops the first.
+- **Its own lock** when the run goes through `scripts/agent-tools/heavy`: `HEAVY_LOCK` named after
+  the GM file (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`, with `HEAVY_TIMEOUT=60m`). The lock only
+  serializes runs of the same GM; a live run never takes the default heavy lock, which stays for
+  race tests and lint on the owner's machine.
+- **Its own scenarios or its own prefix:** two runs of the same scenario at once log in the same
+  `e2e` accounts and drop each other; give one of them another `BOT_E2E_PREFIX`.
+- **Headroom:** each run keeps its cap of 4 characters online, so the login server's
+  `MaximumOnlineUsers` needs 4 more per concurrent run.
+
+Every scenario tolerates other players and bots around it: another run may play in the same town
+at the same time. A scenario asserts only on its own characters, the monsters it spawned and the
+packets about them (the bot's own inventory, a skill cast on the bot, a GM seeing the bot), never
+on a global count, on who else is in sight, or on the absence of everyone else.
+
 ## Safety envelope
 
 Operational limits, not persona defaults; unit-tested with a fake target (`internal/e2e`):
@@ -81,7 +103,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
   `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv3`,
-  `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`) and
+  `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`, `e2est1`-`e2est3`,
+  `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
@@ -96,6 +119,15 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   fights an invisible player) and lets the GM land the first hit on a spawned wolf, which then
   fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight. A farmer `e2ek1`
   found inside the Talking Island village is recalled to the newbie spots first.
+- The M4 scenarios seed with `give` only: adena for purchases, trades and the town bot's gatekeeper
+  hop (Gludin, 18000), Stems (1864) for the merchant visit's sale and the trade, and Steel Powder
+  (1664), loot no NPC shop sells, for the stores. The
+  merchant bot `e2em1` spends all its adena on Lesser Healing Potions each run, the town bot
+  `e2etw1` all but 19000, and both keep what they bought; the town bot ends in another town, the
+  Newbie Guide's bot `e2eg1` at level 8 with the newbie buffs. The buyers keep what they
+  bought and the adena they did not spend. `TestLiveChatReplies` has the GM say one line on the
+  shout and one on the trade channel ("e2e test line, please ignore"), which other players in
+  the region see.
 - `TestLiveTrainer` sets its mystic to level 1 with no SP at the start and the end (the server
   takes away the skills a lower level does not allow), and in between to levels 10 and 15 with
   20000 SP; it ends next to the village's trainers. The GM gives a Spellbook: Heal only when the
@@ -106,8 +138,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   the harness only: the server refuses to drop the starting weapons, and drops would litter the
   village), and a starting piece it lost is given by the GM and worn again. The buyer of
   `TestLiveGearBuy` starts from a GM-given Short Sword, Shirt and Pants instead, as the starting
-  set cannot be sold. For the buying scenarios the GM then tops the character's adena up to 30000 (gives of
-  at most 10000) and recalls it next to its first merchant, so that its bot logs in with something
+  set cannot be sold. For the buying scenarios the GM then tops the character's adena up to 30000
+  (gives of at most 10000) and recalls it next to its first merchant, so that its bot logs in with something
   to buy in reach (a bot that finds nothing to buy holds its shop errand off for five minutes);
   `TestLiveGearWear`'s GM gives the pieces instead. The bots keep what they bought and the adena
   left, until the next strip.
@@ -141,6 +173,14 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
+| `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |
+| `TestLiveTownErrands` | GM, datapack | #33 the town persona's errand cycle, a merchant visit then a gatekeeper hop; #32 the hop's teleport, the bot seen by the GM at the destination |
+| `TestLiveNewbieGuideBuffs` | GM, datapack | #32 a level 8 bot asks the Newbie Guide and gets its buffs |
+| `TestLiveTradeFromBot` | GM | #34, #82 a second client buys a bot's stems by trade; short of the price the bot cancels, never confirms |
+| `TestLiveStoreSale` | GM, datapack | #35 a second client buys out a bot's private store, which closes sold out |
+| `TestLiveStoreClosesOnFollow` | GM, datapack | #77 a GM's `follow` closes the bot's open store, and the bot follows |
+| `TestLiveMerchantSwarm` | GM, datapack | #111 a merchant-preset bot with loot in town opens its store, seen by the GM |
+| `TestLiveChatReplies` | GM | #36 one whispered reply after the delay; none to a repeat sender, a marked name, shout or trade |
 | `TestLiveTrainer` | GM, datapack | #21 a level 10 mystic visits its class trainer (the spellbook when asked), #39 Heal's level offered from level 14 learned after the level-up to 15 |
 | `TestLiveGearWear` | GM, datapack | #79 shield, necklace and two rings worn, a better ring for the lesser, a two-handed sword worn and the shield taken off |
 | `TestLiveGearBuy` | GM, datapack | #40 a better piece bought and worn, the old one sold; #79 a rogue's table buys and wears a dagger |

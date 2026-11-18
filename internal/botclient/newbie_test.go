@@ -45,15 +45,20 @@ func TestBrainNewbieBuffs(t *testing.T) {
 			b.world.Self.move = motion{from: Point{}, to: Point{X: 3000}, start: at(time.Second), speed: 100}
 		}, wantRule: "newbie"},
 		{
-			name: "guide in sight: select", at: 40 * time.Second,
+			name: "guide in sight far off: a leg to it", at: 40 * time.Second,
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 3000}) },
 			events:   []Event{NPCInfo{ObjectID: guideObj, NPCID: 30598, Pos: Point{X: 5000}}},
+			wantRule: "newbie", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 5000}, Point{X: 3000}),
+		},
+		{
+			name: "close: select", at: 41 * time.Second,
+			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 4800}) },
 			wantRule: "newbie", wantKind: actSelect,
 		},
-		{name: "talk", at: 41 * time.Second, events: []Event{MyTargetSelected{ObjectID: guideObj}}, wantRule: "newbie", wantKind: actTalk},
-		{name: "a page of another NPC changes nothing", at: 42 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: npcID, HTML: guidePage}}, wantRule: "newbie"},
-		{name: "buff link", at: 43 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: guideObj, HTML: guidePage}}, wantRule: "newbie", wantKind: actBypass, wantPayload: supportMagic},
-		{name: "not due again at the same level", at: 44 * time.Second},
+		{name: "talk", at: 42 * time.Second, events: []Event{MyTargetSelected{ObjectID: guideObj}}, wantRule: "newbie", wantKind: actTalk},
+		{name: "a page of another NPC changes nothing", at: 43 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: npcID, HTML: guidePage}}, wantRule: "newbie"},
+		{name: "buff link", at: 44 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: guideObj, HTML: guidePage}}, wantRule: "newbie", wantKind: actBypass, wantPayload: supportMagic},
+		{name: "not due again at the same level", at: 45 * time.Second},
 		{name: "due after a level-up", at: 50 * time.Second, setup: func(b *Brain) { b.world.Self.Level = 9 }, wantRule: "newbie", wantKind: actTalk},
 	})
 	if b.newbie.doneLevel != 8 {
