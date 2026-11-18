@@ -627,6 +627,17 @@ func (g *GMClient) Delete(ctx context.Context, objectID int32) error {
 	return nil
 }
 
+// Forget drops objectID, a monster the run spawned that the world removed
+// (killed), from the run's monsters: cleanup has nothing left to delete.
+func (g *GMClient) Forget(objectID int32) {
+	g.t.mu.Lock()
+	defer g.t.mu.Unlock()
+	delete(g.t.scope.npcs, objectID)
+	if g.t.scope.target == objectID {
+		g.t.scope.target = 0
+	}
+}
+
 // Spawned lists the monsters the run spawned and has not deleted.
 func (g *GMClient) Spawned() []int32 {
 	g.t.mu.Lock()

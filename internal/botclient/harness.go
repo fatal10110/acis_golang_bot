@@ -45,6 +45,18 @@ func EncodeSendBypassBuildCmd(cmd string) []byte {
 	return w.Bytes()
 }
 
+// Client packet opcodes a scenario finds in the frames a bot wrote
+// (FrameTap.RecordSent): each packet's first field after the opcode is the
+// object, skill or item it acts on (encodeAction, encodeAttackRequest,
+// encodeRequestMagicSkillUse, encodeUseItem, encodeRequestDropItem).
+const (
+	OpAction               byte = opGameAction
+	OpAttackRequest        byte = opGameAttackRequest
+	OpRequestMagicSkillUse byte = opGameRequestMagicSkillUse
+	OpUseItem              byte = opGameUseItem
+	OpRequestDropItem      byte = opGameRequestDropItem
+)
+
 // EncodeMoveBackwardToLocation walks or runs to to from origin, as a mouse
 // click (see encodeMoveBackwardToLocation).
 func EncodeMoveBackwardToLocation(to, origin Point) []byte {

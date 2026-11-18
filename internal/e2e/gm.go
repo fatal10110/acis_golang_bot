@@ -141,8 +141,11 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	kill|res|heal|cancel [NAME] a run character, or with no name the GM's target
 //	set level N          the GM's target, a run character
 //	skill set ID LEVEL   the GM's target, a run character; also skill set all
+//	give ID [COUNT]      items to the GM's target, a run character; COUNT
+//	                     1 to maxGive, 1 by default
 //	spawn ID             a monster at the GM's target or the GM; it never respawns
 //	delete               the GM's target, a monster the run spawned
+//	hide                 toggles the GM's own invisibility
 func (s *Scope) check(cmd string) error {
 	f := strings.Fields(cmd)
 	if len(f) == 0 {
@@ -162,15 +165,28 @@ func (s *Scope) check(cmd string) error {
 	case "skill":
 		ok = (len(args) == 3 && args[0] == "set" && allInts(args[1:]) ||
 			len(args) == 2 && args[0] == "set" && args[1] == "all") && s.isCharID(s.target)
+	case "give":
+		ok = (len(args) == 1 || len(args) == 2 && validGive(args[1])) && allInts(args[:1]) && s.isCharID(s.target)
 	case "spawn":
 		ok = len(args) == 1 && allInts(args)
 	case "delete":
 		ok = len(args) == 0 && s.npcs[s.target]
+	case "hide":
+		ok = len(args) == 0
 	}
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrCommandRefused, cmd)
 	}
 	return nil
+}
+
+// maxGive bounds the count of one //give: a scenario seeds a few stacks
+// (potions, shots, junk), never a fortune.
+const maxGive = 10000
+
+func validGive(count string) bool {
+	n, err := strconv.Atoi(count)
+	return err == nil && n >= 1 && n <= maxGive
 }
 
 func allInts(ss []string) bool {

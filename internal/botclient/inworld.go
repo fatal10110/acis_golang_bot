@@ -57,8 +57,10 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	r.Skip(1)     // can crystallize
 	r.Skip(2 * 4) // PK kills, PvP kills
 	skipCubics(r)
-	r.Skip(1 + 4 + 1 + 4) // party room, abnormal effect, 0, clan privileges
-	r.Skip(2*2 + 4 + 2)   // recommendations left and had, mount NPC id, inventory limit
+	r.Skip(1) // party room
+	u.Abnormal = r.ReadInt32()
+	r.Skip(1 + 4)       // 0, clan privileges
+	r.Skip(2*2 + 4 + 2) // recommendations left and had, mount NPC id, inventory limit
 	u.ClassID = r.ReadInt32()
 	r.Skip(4) // 0
 	u.MaxCP, u.CP = r.ReadInt32(), r.ReadInt32()

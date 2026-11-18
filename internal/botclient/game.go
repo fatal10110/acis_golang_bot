@@ -31,15 +31,26 @@ type GameConn struct {
 	timeout time.Duration
 	// logoutGrace is logoutRefusalGrace; tests shorten it.
 	logoutGrace time.Duration
-	// rec is the -record tap; owned like the frame buffer (one reader).
-	rec *Recorder
+	// rec is the frame tap; set before the first read, then only read.
+	rec FrameTap
+}
+
+// FrameTap sees the decrypted game frames of a connection: Record each
+// frame read, on the connection's reader, and RecordSent each frame
+// written, before its encryption, on its writer; the two may run at once.
+// Neither may keep payload past the call. *Recorder (-record) is one; the
+// live e2e harness watches its brain-driven bots through another.
+type FrameTap interface {
+	Record(payload []byte)
+	RecordSent(payload []byte)
 }
 
 // SetRecorder makes every later read of the connection (EnterGame, Logout,
-// Read and ReadEvents) pass its decrypted frame to rec; nil turns the tap
-// off. Call it while no read runs, typically right after DialGame, so the
-// handshake's VersionCheck is never recorded.
-func (g *GameConn) SetRecorder(rec *Recorder) { g.rec = rec }
+// Read and ReadEvents) and every later write pass its decrypted frame to
+// rec; nil turns the tap off. Call it while no read or write runs,
+// typically right after DialGame, so the handshake's VersionCheck is never
+// recorded.
+func (g *GameConn) SetRecorder(rec FrameTap) { g.rec = rec }
 
 // DialGame connects to a game server and completes the cleartext
 // ProtocolVersion/VersionCheck exchange that arms the connection's cipher.
@@ -114,6 +125,9 @@ func (g *GameConn) send(ctx context.Context, payload []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if g.rec != nil {
+		g.rec.RecordSent(payload)
+	}
 	buf := append([]byte(nil), payload...)
 	if g.cipher != nil {
 		g.cipher.Encrypt(buf)
@@ -138,7 +152,9 @@ func (g *GameConn) read(ctx context.Context, deadline time.Time) ([]byte, error)
 	if len(payload) == 0 {
 		return nil, errors.New("empty game frame")
 	}
-	g.rec.Record(payload)
+	if g.rec != nil {
+		g.rec.Record(payload)
+	}
 	return payload, nil
 }
 

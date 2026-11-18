@@ -66,7 +66,7 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 	w.WriteInt32(12) // PvP kills
 	writeCubics(w, cubics)
 	w.WriteUint8(1)
-	w.WriteInt32(0x2000)
+	w.WriteInt32(u.Abnormal)
 	w.WriteUint8(0)
 	w.WriteInt32(0x7f)
 	w.WriteUint16(3)
@@ -218,6 +218,7 @@ var (
 		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
 		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000,
 		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, Running: true, StoreType: 3, IsGM: true,
+		Abnormal: AbnormalStealth | 0x2000,
 	}
 	testCharInfo = CharInfo{
 		ObjectID: 0x10000002, Name: "other", Pos: Point{X: 1, Y: 2, Z: 3}, Heading: 1000, ClassID: 10,

@@ -104,8 +104,9 @@ type SessionConfig struct {
 	Timeout time.Duration
 	// Dial applies to every login and game dial (WithLocalAddr).
 	Dial []DialOption
-	// Recorder is the -record tap; nil records nothing.
-	Recorder *Recorder
+	// Recorder is the frame tap of every game connection: the -record
+	// Recorder, or the e2e harness's watch; nil taps nothing.
+	Recorder FrameTap
 	// Persistent bots reconnect after a session in the world ends; others
 	// stop.
 	Persistent bool
