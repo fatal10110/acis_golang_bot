@@ -29,6 +29,8 @@ type botSetup struct {
 	persona func() botclient.Persona
 	// brain, when set, adjusts the brain config last: authority, claims.
 	brain func(*botclient.BrainConfig)
+	// tap, when set, sees every frame the bot reads and writes (a Watch).
+	tap botclient.FrameTap
 }
 
 // runBotWith runs a whole Bot of account as setup says, on the run's gate
@@ -42,6 +44,7 @@ func runBotWith(t *testing.T, ctx context.Context, tg *Target, account string, s
 	}
 	cfg := tg.SessionConfig(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	cfg.Persistent = setup.persistent
+	cfg.Recorder = setup.tap
 	persona := botclient.DefaultPersona
 	if setup.persona != nil {
 		persona = setup.persona

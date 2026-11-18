@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -47,15 +48,10 @@ func TestLiveSpots(t *testing.T) {
 		t.Logf("%s is level %d from an earlier run: back to 1", f1.name, lvl)
 		gmOn(t, ctx, gm, f1, "set level 1")
 	}
-	waitFor(t, ctx, "the first farmer's spot", func() bool { return heldTotal(spots) == 1 })
-	first := heldBy(spots)
-	var spot int
-	for i := range first {
-		spot = i
-	}
+	waitFor(t, ctx, "the first farmer's spot", func() bool { return f1.bot.Status().Spot != "" })
 
 	f2 := runFarmer(t, ctx, tg, a2, spots, nil)
-	waitFor(t, ctx, "the second farmer's spot", func() bool { return heldTotal(spots) == 2 })
+	waitFor(t, ctx, "the second farmer's spot", func() bool { return f2.bot.Status().Spot != "" })
 	levels := []int{levelOf(t, ctx, f1), levelOf(t, ctx, f2)}
 	st := spots.Statuses()
 	for i, n := range heldBy(spots) {
@@ -69,19 +65,25 @@ func TestLiveSpots(t *testing.T) {
 		t.Logf("spot %s (levels %d-%d): %d of %d", s.Name, s.MinLevel, s.MaxLevel, n, s.Cap)
 	}
 
-	before := spots.Held(spot)
-	level, next := outlevelTo(t, tg, st, spot, f1.bot.Status().Position)
-	t.Logf("%s goes to level %d: %s fits it", f1.name, level, next)
+	// The farmer's own claim, not the registry's count: the other farmer
+	// may take or leave a spot meanwhile.
+	waitFor(t, ctx, "the first farmer holding a spot", func() bool { return f1.bot.Status().Spot != "" })
+	held := f1.bot.Status().Spot
+	spot := slices.IndexFunc(st, func(s botclient.SpotStatus) bool { return s.Name == held })
+	if spot < 0 {
+		t.Fatalf("%s holds %q, not a spot of the registry", f1.name, held)
+	}
+	level, next := outlevelTo(t, tg, spots.Statuses(), spot, f1.bot.Status().Position)
+	t.Logf("%s holds %s; goes to level %d: %s fits it", f1.name, held, level, next)
 	gmOn(t, ctx, gm, f1, "set level "+strconv.Itoa(level))
 	waitFor(t, ctx, "the first farmer at its new level", func() bool { return int(f1.bot.Status().Level) >= level })
-	waitFor(t, ctx, "the outleveled spot given up", func() bool { return spots.Held(spot) < before })
-	after := spots.Held(spot)
-	t.Logf("%s at level %d gave %s up (%d of it held now, %d spots held in all)", f1.name, level, st[spot].Name, after, heldTotal(spots))
+	waitFor(t, ctx, "the outleveled spot given up", func() bool { return f1.bot.Status().Spot != held })
+	t.Logf("%s at level %d gave %s up for %q", f1.name, level, held, f1.bot.Status().Spot)
 	stay := time.NewTicker(2 * time.Second)
 	defer stay.Stop()
 	for end := time.Now().Add(time.Minute); time.Now().Before(end); {
-		if n := spots.Held(spot); n > after {
-			t.Fatalf("%s flipped back: %d of %s held", f1.name, n, st[spot].Name)
+		if now := f1.bot.Status().Spot; now == held {
+			t.Fatalf("%s flipped back to %s", f1.name, held)
 		}
 		select {
 		case <-ctx.Done():
@@ -135,14 +137,6 @@ func heldBy(r *botclient.SpotRegistry) map[int]int {
 		}
 	}
 	return held
-}
-
-func heldTotal(r *botclient.SpotRegistry) int {
-	n := 0
-	for _, h := range heldBy(r) {
-		n += h
-	}
-	return n
 }
 
 // fitsAny reports whether s fits a farmer of one of levels as

@@ -39,10 +39,7 @@ func TestLiveAntiKS(t *testing.T) {
 		}
 	}
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
-	var spot string
-	for i := range heldBy(spots) {
-		spot = spots.Statuses()[i].Name
-	}
+	spot := f.bot.Status().Spot
 
 	// A GM logs in invisible (GMStartupInvisible), and no monster attacks
 	// an invisible player.
@@ -101,15 +98,23 @@ func TestLiveAntiKS(t *testing.T) {
 // seeCreature), but fights back whoever hits it (OnAttacked). The GM stops
 // at its second swing, its first hit resolved, or once the monster hits
 // back: the teleport aside idles it (instant_teleport.go goIdle) and the
-// monster follows the GM it hates.
+// monster follows the GM it hates. An attack the GM does not start within
+// provokeRetry is asked again; a GM that never swings fails with what it
+// read (provokeLog).
 func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botclient.Attack {
 	t.Helper()
 	if err := gm.Select(ctx, mob); err != nil {
 		t.Fatal(err)
 	}
-	if err := gm.Send(ctx, botclient.EncodeAttackRequest(mob, gm.Pos())); err != nil {
-		t.Fatal(err)
+	pl := provokeLog{gm: gm.Self.ObjectID, mob: mob, hp: userInfo(t, gm.Client).HP}
+	attack := func() {
+		pl.tries++
+		pl.last = time.Now()
+		if err := gm.Send(ctx, botclient.EncodeAttackRequest(mob, gm.Pos())); err != nil {
+			t.Fatal(err)
+		}
 	}
+	attack()
 	hitsBack := func(ev botclient.Event) bool {
 		switch e := ev.(type) {
 		case botclient.Attack:
@@ -121,15 +126,19 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botcl
 	}
 	swings := 0
 	ev, err := gm.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+		pl.note(ev)
 		if a, ok := ev.(botclient.Attack); ok && a.AttackerID == gm.Self.ObjectID &&
 			len(a.Hits) > 0 && a.Hits[0].TargetID == mob {
 			swings++
 			return swings == 2
 		}
+		if swings == 0 && time.Since(pl.last) >= provokeRetry {
+			attack()
+		}
 		return hitsBack(ev)
 	})
 	if err != nil {
-		t.Fatalf("the GM hits the monster: %v", err)
+		t.Fatalf("the GM hits the monster: %v; %s", err, pl)
 	}
 	if _, ok := ev.(botclient.Die); ok {
 		t.Fatal("the GM killed the monster before it fought back")
@@ -146,6 +155,56 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botcl
 		t.Fatal("the GM killed the monster before it fought back")
 	}
 	return ev.(botclient.Attack)
+}
+
+// provokeRetry is how long the GM waits for its first swing at the monster
+// before it asks for the attack again: one AttackRequest per try, a few in
+// all, far under the frame pacing.
+const provokeRetry = 8 * time.Second
+
+// provokeLog is what the GM read while it tried to hit the monster: why
+// an attack never started.
+type provokeLog struct {
+	gm, mob     int32
+	tries       int
+	last        time.Time
+	hp          int32
+	gmDied      bool
+	failed      int
+	msgs        []int32
+	mobInfo     int
+	mobGone     bool
+	mobAttacked int
+}
+
+func (pl *provokeLog) note(ev botclient.Event) {
+	switch e := ev.(type) {
+	case botclient.ActionFailed:
+		pl.failed++
+	case botclient.SystemMessage:
+		pl.msgs = append(pl.msgs, e.ID)
+	case botclient.UserInfo:
+		if e.ObjectID == pl.gm {
+			pl.hp = e.HP
+		}
+	case botclient.Die:
+		pl.gmDied = pl.gmDied || e.ObjectID == pl.gm
+	case botclient.NPCInfo:
+		if e.ObjectID == pl.mob {
+			pl.mobInfo++
+		}
+	case botclient.DeleteObject:
+		pl.mobGone = pl.mobGone || e.ObjectID == pl.mob
+	case botclient.Attack:
+		if e.AttackerID == pl.mob {
+			pl.mobAttacked++
+		}
+	}
+}
+
+func (pl provokeLog) String() string {
+	return fmt.Sprintf("%d attack requests, GM HP %d (died %v), %d ActionFailed, system messages %v; monster: %d NPCInfo after the spawn, deleted %v, %d attacks",
+		pl.tries, pl.hp, pl.gmDied, pl.failed, pl.msgs, pl.mobInfo, pl.mobGone, pl.mobAttacked)
 }
 
 // tiSpots is where a farmer k1 farmed, among the Talking Island newbie

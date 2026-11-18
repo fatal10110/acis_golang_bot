@@ -3,9 +3,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"math/rand/v2"
-	"os"
 	"slices"
 	"testing"
 	"time"
@@ -24,10 +21,17 @@ const (
 	// soulshotNG is Soulshot: No Grade; the human fighter's starting
 	// Squire's Sword (2369, equipped) takes one per hit.
 	soulshotNG int32 = 1835
-	// wolf is Wolf, a level 4 aggressive monster (aggroRange 1000, 68 HP).
+	// wolf is Wolf, a level 4 monster (68 HP) of the Warrior AI: it attacks
+	// no one on sight (script/ai/warrior/base.go), only whoever hits it.
 	wolf int32 = 20120
-	// packSize is how many wolves the GM spawns at once at a farmer: while
-	// it kills one, the others land hits.
+	// orcGrunt is Orc Grunt, a level 7 monster of the same AI with 108 HP
+	// and 53 P.Def: a level 5 fighter's shot swing or Power Strike seldom
+	// kills it at once, so a kill takes swings of the server's auto-attack
+	// (#20).
+	orcGrunt int32 = 20131
+	// packSize is how many orc grunts the GM spawns at once at a farmer:
+	// each one the farmer hits fights back, and a pack keeps it fighting
+	// long enough to take hits.
 	packSize = 3
 	// adena is the currency, never junk.
 	adena int32 = 57
@@ -60,38 +64,23 @@ type farmer struct {
 }
 
 // runFarmer runs a human fighter of account with the persona tune adjusts
-// (DefaultPersona when nil) on spots, on the run's gate and a place of its
-// own, until the test ends, which logs it out and joins it. It returns once
-// the bot is in the world, its character one of the run's.
+// (DefaultPersona when nil) on spots, through runBotWith with a Watch as its
+// frame tap. It returns once the bot is in the world, its character one of
+// the run's.
 func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, spots *botclient.SpotRegistry, tune func(*botclient.Persona)) *farmer {
 	t.Helper()
-	release, err := tg.Hold(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
 	w := NewWatch(botclient.SystemClock{})
-	cfg := tg.SessionConfig(slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	cfg.Recorder = w
-	p := botclient.DefaultPersona()
-	if tune != nil {
-		tune(&p)
-	}
-	brain := botclient.BrainConfig{Persona: p, Spots: spots}
-	ch := character(t, account, &botclient.HumanFighter)
-	b, err := botclient.NewBot(cfg, account, tg.Password(account), botclient.BotConfig{Character: ch, Brain: brain}, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
-	if err != nil {
-		release()
-		t.Fatal(err)
-	}
-	runCtx, stop := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- b.Run(runCtx) }()
-	t.Cleanup(func() {
-		stop()
-		if err := <-done; err != nil {
-			t.Logf("farmer %s stopped: %v", account, err)
-		}
-		release()
+	b := runBotWith(t, ctx, tg, account, botSetup{
+		class: &botclient.HumanFighter,
+		persona: func() botclient.Persona {
+			p := botclient.DefaultPersona()
+			if tune != nil {
+				tune(&p)
+			}
+			return p
+		},
+		brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
+		tap:   w,
 	})
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
@@ -133,8 +122,8 @@ func (f *farmer) digest() string {
 			items = len(ev.Items)
 		}
 	}
-	return fmt.Sprintf("%s: state %v, rule %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login; sent %v; read %v",
-		f.name, s.State, s.Rule, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, sent, read)
+	return fmt.Sprintf("%s: state %v, rule %q, spot %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login; sent %v; read %v",
+		f.name, s.State, s.Rule, s.Spot, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, sent, read)
 }
 
 // junkBut is every item template but keep: a farmer whose Loot.Junk it is

@@ -14,9 +14,9 @@ import (
 // TestLiveFarmFight runs a farmer seeded by the GM with Power Strike,
 // healing potions, soulshots and junk, and watches it farm its spot: it
 // drops the junk where the GM sees it (#29), turns its soulshots on and
-// spends them (#23), kills monsters, the first of a GM-spawned wolf pack
-// among them, with steady swings and no click per swing, casting Power
-// Strike no sooner than the last cast's reuse allows (#20), drinks a potion
+// spends them (#23), kills monsters, the first of a GM-spawned orc grunt
+// pack among them, one at least in several swings of one attack click,
+// casting Power Strike no sooner than the last cast's reuse allows (#20), drinks a potion
 // once a hit takes it under CriticalHP (#23), and picks up a kill's drop
 // into its inventory (#29), never sending more than the pacer allows.
 func TestLiveFarmFight(t *testing.T) {
@@ -50,10 +50,10 @@ func TestLiveFarmFight(t *testing.T) {
 	}
 	t.Logf("%s dropped its junk next to the GM", f.name)
 
-	// Level 5, about 200 HP, against a pack of wolves: Power Strike and
-	// shots kill one quickly while the others land hits, so the farmer
-	// drinks without dying. Alone against level 1 monsters it one-shots
-	// each before it is ever hit.
+	// Level 5, about 200 HP, against a pack of orc grunts: each takes a few
+	// swings, and hits back meanwhile, so the farmer drinks without dying.
+	// Alone against level 1 monsters it one-shots each before it is ever
+	// hit.
 	gmOn(t, ctx, gm, f, "set level 5", "skill set 3 1")
 	gmGive(t, ctx, gm, f, healingPotion, 10)
 	gmGive(t, ctx, gm, f, soulshotNG, 500)
@@ -63,7 +63,7 @@ func TestLiveFarmFight(t *testing.T) {
 	gmOn(t, ctx, gm, f)
 	pack := make([]int32, 0, packSize)
 	for range packSize {
-		mob, err := gm.Spawn(ctx, wolf)
+		mob, err := gm.Spawn(ctx, orcGrunt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,11 +90,8 @@ func TestLiveFarmFight(t *testing.T) {
 		return readFight(f, mob).missing()
 	})
 	r := readFight(f, mob)
-	t.Logf("%s: %d kills, %d swings for %d attack clicks, %d casts, %d frames at most in a second, %d ActionFailed",
-		f.name, len(r.kills), r.swings, r.clicks, len(r.casts), r.perSecond, r.failed)
-	if r.clicks >= r.swings {
-		t.Errorf("%d attack clicks for %d swings on the monsters it killed, want fewer clicks than swings", r.clicks, r.swings)
-	}
+	t.Logf("%s: %d kills (%d of 2 swings or more on fewer clicks), %d swings for %d attack clicks, %d casts, %d frames at most in a second, %d ActionFailed",
+		f.name, len(r.kills), r.melee, r.swings, r.clicks, len(r.casts), r.perSecond, r.failed)
 	for _, v := range r.early {
 		t.Errorf("Power Strike cast too soon: %s", v)
 	}
@@ -134,11 +131,14 @@ type fight struct {
 	shotsOn, shotsSpent   bool
 	potionUsed, potionLow bool
 	// kills are the monsters it swung or cast at that died; swings and clicks
-	// are its swings at them (server Attack) and its AttackRequests on
-	// them.
+	// are its swings at them (server Attack) and its attack clicks on them:
+	// every Action on one after the one that selected it, and every
+	// AttackRequest. melee counts the kills of 2 swings or more with fewer
+	// clicks than swings: the server's auto-attack kept swinging (#20).
 	kills       map[int32]bool
 	swings      int
 	clicks      int
+	melee       int
 	spawnKilled bool
 	casts       []Seen
 	early       []string
@@ -225,12 +225,13 @@ func readFight(f *farmer, mob int32) fight {
 			r.pickedUp = true
 		}
 	}
-	for id := range r.kills {
-		r.swings += swungAt[id]
-	}
+	actions, requests := map[int32]int{}, map[int32]int{}
 	for _, p := range sent {
-		if p.Op == botclient.OpAttackRequest && r.kills[p.Target] {
-			r.clicks++
+		switch p.Op {
+		case botclient.OpAction:
+			actions[p.Target]++
+		case botclient.OpAttackRequest:
+			requests[p.Target]++
 		}
 		if (p.Op == botclient.OpAction || p.Op == botclient.OpAttackRequest) && p.Target == mob {
 			r.mobClicks++
@@ -256,6 +257,14 @@ func readFight(f *farmer, mob int32) fight {
 			}
 		}
 	}
+	for id := range r.kills {
+		clicks := requests[id] + max(actions[id]-1, 0)
+		r.swings += swungAt[id]
+		r.clicks += clicks
+		if swungAt[id] >= 2 && clicks < swungAt[id] {
+			r.melee++
+		}
+	}
 	return r
 }
 
@@ -271,6 +280,7 @@ func (r fight) missing() string {
 		{len(r.kills) > 0, "a kill"},
 		{r.spawnKilled, fmt.Sprintf("the GM-spawned monster killed (seen %v, gone %v, its hits %v, clicked %d times)", r.mobSeen, r.mobGone, r.mobHits, r.mobClicks)},
 		{len(r.casts) >= 2, "two Power Strike casts"},
+		{r.melee > 0, fmt.Sprintf("a kill of 2 swings or more with fewer attack clicks than swings (%d swings, %d clicks on %d kills)", r.swings, r.clicks, len(r.kills))},
 		{r.potionUsed, "UseItem of a potion"},
 		{r.potionLow, "a potion spent (InventoryUpdate)"},
 		{r.pickedUp, fmt.Sprintf("a kill's drop picked up into the inventory (%d non-herb drops of kills seen)", r.loot)},

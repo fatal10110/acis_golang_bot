@@ -69,6 +69,9 @@ type Status struct {
 	Preset string
 	// Rule is the rule of the latest decision while online.
 	Rule string
+	// Spot is the npcmaker name of the farming spot the bot holds in its
+	// spot registry (BrainConfig.Spots), "" while it holds none.
+	Spot string
 	// Leader is the party leader's name, the bot's own when it leads, and
 	// Members the other members' names in order; empty outside a party.
 	Leader  string
@@ -101,7 +104,7 @@ func (b *Bot) Status() Status { return b.link.board.load() }
 // goroutine.
 func (b *Bot) publish(state BotState, err error) {
 	st := b.link.board.load()
-	st.At, st.State, st.Rule = b.cfg.Clock.Now(), state, ""
+	st.At, st.State, st.Rule, st.Spot = b.cfg.Clock.Now(), state, "", ""
 	st.Character, st.Order, st.Reconnects = cmp.Or(b.char.Name, st.Character), b.link.order.cmd, b.reconnects
 	if err != nil {
 		st.Err = err
@@ -120,6 +123,10 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st, w := l.board.load(), b.world
 	s := &w.Self
 	st.At, st.State, st.Rule, st.Order = now, StateOnline, b.lastRule, l.order.cmd
+	st.Spot = ""
+	if b.spot.held {
+		st.Spot = b.cfg.Spots.spots[b.spot.idx].Maker
+	}
 	st.Character, st.ClassID, st.Level = s.Name, s.ClassID, s.Level
 	st.HP, st.MaxHP, st.MP, st.MaxMP, st.CP, st.MaxCP = s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP
 	st.Position = s.Position(now)
