@@ -298,15 +298,14 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		}
 		// A destroy also tells the item disarmed (417) or gone (302)
 		// ahead of the InventoryUpdate: only a refusal ends the wait early.
+		// The server never answers a destroy with ActionFailed; one read
+		// here answers something earlier (seen live after EnterWorld).
 		ev, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
 			applyInventory(inv, ev)
-			_, carried := inv[id]
-			switch e := ev.(type) {
-			case botclient.SystemMessage:
-				return slices.Contains(destroyRefusals, e.ID)
-			case botclient.ActionFailed:
+			if m, ok := ev.(botclient.SystemMessage); ok && slices.Contains(destroyRefusals, m.ID) {
 				return true
 			}
+			_, carried := inv[id]
 			return !carried
 		})
 		if err != nil {
