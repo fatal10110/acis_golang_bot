@@ -86,7 +86,14 @@ type UserInfo struct {
 	// for none).
 	StoreType uint8
 	IsGM      bool
+	// Abnormal is the abnormal effect mask drawn on the character; an
+	// invisible game master sees AbnormalStealth in its own.
+	Abnormal int32
 }
+
+// AbnormalStealth is the abnormal effect bit of an invisible game master
+// in its own UserInfo (server skill.AbnormalStealth, userinfo.go).
+const AbnormalStealth int32 = 0x100000
 
 // StatusFields is a set of StatusUpdate fields.
 type StatusFields uint16

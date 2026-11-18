@@ -94,6 +94,8 @@ func TestScopeCheck(t *testing.T) {
 		{"skill set all", other, true},
 		{"skill set 1177 1", 0, false},
 		{"skill remove 1177", bot, false},
+		{"hide", 0, true},
+		{"hide on", 0, false},
 		{"give 1061 5", bot, true},
 		{"give 1835", other, true},
 		{"give 1061 5", 0, false},

@@ -145,6 +145,7 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	                     1 to maxGive, 1 by default
 //	spawn ID             a monster at the GM's target or the GM; it never respawns
 //	delete               the GM's target, a monster the run spawned
+//	hide                 toggles the GM's own invisibility
 func (s *Scope) check(cmd string) error {
 	f := strings.Fields(cmd)
 	if len(f) == 0 {
@@ -170,6 +171,8 @@ func (s *Scope) check(cmd string) error {
 		ok = len(args) == 1 && allInts(args)
 	case "delete":
 		ok = len(args) == 0 && s.npcs[s.target]
+	case "hide":
+		ok = len(args) == 0
 	}
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrCommandRefused, cmd)
