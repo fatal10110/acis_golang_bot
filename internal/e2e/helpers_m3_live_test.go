@@ -111,11 +111,15 @@ func (f *farmer) digest() string {
 	for _, p := range f.watch.Sent() {
 		sent[fmt.Sprintf("%#02x", p.Op)]++
 	}
+	deaths := 0
 	for _, e := range f.watch.Seen(0) {
 		read[fmt.Sprintf("%T", e.Event)]++
+		if d, ok := e.Event.(botclient.Die); ok && d.ObjectID == f.id {
+			deaths++
+		}
 	}
-	return fmt.Sprintf("%s: state %v, rule %q, level %d, HP %d/%d, at %v; sent %v; read %v",
-		f.name, s.State, s.Rule, s.Level, s.HP, s.MaxHP, s.Position, sent, read)
+	return fmt.Sprintf("%s: state %v, rule %q, level %d, HP %d/%d, at %v, died %d times; sent %v; read %v",
+		f.name, s.State, s.Rule, s.Level, s.HP, s.MaxHP, s.Position, deaths, sent, read)
 }
 
 // gmTo teleports the GM next to f and waits until it sees f there.

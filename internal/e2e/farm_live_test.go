@@ -34,16 +34,21 @@ func TestLiveFarmFight(t *testing.T) {
 	})
 	// Level 1 against level 1 monsters: they hit back before they die.
 	gmOn(t, ctx, gm, f, "set level 1", "skill set 3 1", "give 1061 10", "give 1835 500")
+	t.Logf("%s seeded at level 1", f.name)
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
+	t.Logf("%s farms at %v", f.name, f.bot.Status().Position)
 
 	// Junk is dropped where the farmer stands still: at its spot.
 	gmOn(t, ctx, gm, f, "give 1864 3")
-	if _, _, err := f.watch.Await(ctx, 0, func(ev botclient.Event) bool {
+	given, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if _, _, err := f.watch.Await(given, 0, func(ev botclient.Event) bool {
 		n, _, ok := stock(ev, stem)
 		return ok && n > 0
 	}); err != nil {
 		t.Fatalf("the farmer gets the stems: %v", err)
 	}
+	t.Logf("%s got the stems", f.name)
 	if _, err := gm.Await(ctx, 3*time.Minute, func(ev botclient.Event) bool {
 		d, ok := ev.(botclient.DropItem)
 		return ok && d.DropperID == f.id && d.Item.TemplateID == stem
