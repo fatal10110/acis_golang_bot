@@ -321,9 +321,10 @@ func (b *Brain) ruleStore(now time.Time) (Action, bool) {
 }
 
 // startStore starts an opening when the bot may open a store: a merchant
-// (StorePolicy.Budget) with budget left and loot to sell, in a town of the
-// store registry with room for it, alive, out of combat and PvP flag, not
-// casting, not trading, still, and on no errand. A seated bot stands up
+// (StorePolicy.Budget) with budget left and loot with a store price
+// (storeSells), in a town of the store registry with room for it, alive,
+// out of combat and PvP flag, not casting, not trading, still, and on no
+// errand. A seated bot stands up
 // first and waits for the stand to end.
 func (b *Brain) startStore(now time.Time) (Action, bool) {
 	if !b.storeReady(now) {
@@ -370,11 +371,27 @@ func (b *Brain) storeReady(now time.Time) bool {
 		return false
 	}
 	for _, it := range w.Inventory.Items {
-		if b.storeLoot(it) {
+		if b.storeSells(it) {
 			return true
 		}
 	}
 	return false
+}
+
+// storeSells reports whether the bot's store sells it: loot (storeLoot)
+// with a store price, the one its store's manage lists showed, else the one
+// of the travel map's reference price, the test storeRows applies. An
+// opening with no such loot lists nothing: its manage list and title go out
+// for no store.
+func (b *Brain) storeSells(it Item) bool {
+	if !b.storeLoot(it) {
+		return false
+	}
+	if _, ok := b.store.prices[it.TemplateID]; ok {
+		return true
+	}
+	ref, ok := b.cfg.Travel.prices[it.TemplateID]
+	return ok && b.storePrice(ref) > 0
 }
 
 // called reports whether the bot follows or assists another player (a GM
@@ -435,7 +452,8 @@ func (b *Brain) storePrice(ref int32) int32 {
 }
 
 // storeRows is the list of the opening: the candidates that are loot,
-// priced, at most MaxRows, within the budget left and, with the adena
+// priced (storePrice of the reference price the manage list shows, kept in
+// the store's prices), at most MaxRows, within the budget left and, with the adena
 // carried, within the largest int32 the server takes (privatestore
 // FillSell).
 func (b *Brain) storeRows() []storeRow {
@@ -455,6 +473,14 @@ func (b *Brain) storeRows() []storeRow {
 		if !ok || !b.storeLoot(it) {
 			continue
 		}
+		if _, ok := st.prices[c.TemplateID]; !ok {
+			if st.prices == nil {
+				st.prices = make(map[int32]int32)
+			}
+			if price := b.storePrice(c.ReferencePrice); price > 0 {
+				st.prices[c.TemplateID] = price
+			}
+		}
 		price := int64(st.prices[c.TemplateID])
 		if price <= 0 {
 			continue
@@ -470,8 +496,10 @@ func (b *Brain) storeRows() []storeRow {
 	return rows
 }
 
-// storeManageList takes the manage list the opening asked for, pricing its
-// loot. One arriving after the list went out is the server refusing a row
+// storeManageList takes the manage list the opening asked for; storeRows
+// prices its loot once the title went out, as an item the server just gave
+// can show in the list before the InventoryUpdate that brings it. One
+// arriving after the list went out is the server refusing a row
 // (FillSell): the opening is taken down.
 func (b *Brain) storeManageList(e PrivateStoreManageListSell) {
 	st := &b.store
@@ -481,18 +509,6 @@ func (b *Brain) storeManageList(e PrivateStoreManageListSell) {
 	switch st.step {
 	case storeAskManage:
 		st.candidates, st.step = e.Candidates, storeManage
-		if st.prices == nil {
-			st.prices = make(map[int32]int32)
-		}
-		for _, c := range e.Candidates {
-			it, ok := b.world.Inventory.Items[c.ObjectID]
-			if !ok || !b.storeLoot(it) {
-				continue
-			}
-			if price := b.storePrice(c.ReferencePrice); price > 0 {
-				st.prices[c.TemplateID] = price
-			}
-		}
 	case storeTitled, storeListed:
 		st.step = storeQuit
 	}

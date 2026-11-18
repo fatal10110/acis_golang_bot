@@ -35,8 +35,8 @@ type TravelMap struct {
 	// arrows maps each bow template to the arrow template it shoots
 	// (indexArrows).
 	arrows map[int32]int32
-	// prices are the reference prices of the item templates with one
-	// (items/*.xml price): the price a store's manage list shows, which
+	// prices are the reference prices of the item templates a store can
+	// list (datapack.Datapack.Prices): the price a store's manage list shows, which
 	// prices the loot a bot sells by trade (Brain.tradePrice).
 	prices map[int32]int32
 }
@@ -70,12 +70,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
 	m.gear, m.shopGear = indexGear(dp.Items, m.cheapest)
 	m.arrows = indexArrows(dp.Items)
-	m.prices = make(map[int32]int32)
-	for id, it := range dp.Items {
-		if it.Price > 0 {
-			m.prices[id] = it.Price
-		}
-	}
+	m.prices = dp.Prices
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue
