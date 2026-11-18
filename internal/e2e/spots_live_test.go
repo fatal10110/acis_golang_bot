@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // TestLiveSpots runs two farmers on one spot registry: each claims a spot
@@ -69,7 +70,8 @@ func TestLiveSpots(t *testing.T) {
 	}
 
 	before := spots.Held(spot)
-	level := st[spot].MaxLevel + botclient.DefaultPersona().Spots.Outlevel + 10
+	level, next := outlevelTo(t, tg, st, spot, f1.bot.Status().Position)
+	t.Logf("%s goes to level %d: %s fits it", f1.name, level, next)
 	gmOn(t, ctx, gm, f1, "set level "+strconv.Itoa(level))
 	waitFor(t, ctx, "the first farmer at its new level", func() bool { return int(f1.bot.Status().Level) >= level })
 	waitFor(t, ctx, "the outleveled spot given up", func() bool { return spots.Held(spot) < before })
@@ -87,6 +89,34 @@ func TestLiveSpots(t *testing.T) {
 		case <-stay.C:
 		}
 	}
+}
+
+// outlevelTo is the lowest level that outlevels spot from but fits another
+// spot with room in a farmer's reach from at, and that spot's name: an
+// outleveled farmer with no fitting spot keeps the one it has
+// (Brain.pickSpot).
+func outlevelTo(t *testing.T, tg *Target, st []botclient.SpotStatus, from int, at botclient.Point) (int, string) {
+	t.Helper()
+	dp, err := datapack.Load(tg.Config().Datapack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := dp.Spots()
+	p := botclient.DefaultPersona().Spots
+	reach := int64(p.MaxTravel) * int64(p.MaxTravel)
+	for level := all[from].MaxLevel + p.Outlevel + 1; level <= 80; level++ {
+		for i, s := range all {
+			if i == from || st[i].Held >= st[i].Cap || !fitsAny(st[i], []int{level}) {
+				continue
+			}
+			dx, dy := int64(s.Center.X-at.X), int64(s.Center.Y-at.Y)
+			if dx*dx+dy*dy <= reach {
+				return level, s.Maker
+			}
+		}
+	}
+	t.Fatalf("no level outlevels %s and fits another spot within %d of %v", st[from].Name, p.MaxTravel, at)
+	return 0, ""
 }
 
 // levelOf is f's level once its status knows it.
