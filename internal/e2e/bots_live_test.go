@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"math/rand/v2"
@@ -113,6 +114,23 @@ func recallBot(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, name
 	id := ev.(botclient.CharInfo).ObjectID
 	tg.Own(name, id)
 	return id
+}
+
+// openGround is the human newbie start of Talking Island: open, level
+// ground. The GM stands wherever the last run left it, and some of those
+// spots refuse every move (ActionFailed in all directions), so the
+// scenarios that walk the GM start it here.
+var openGround = botclient.Point{X: -71338, Y: 258271, Z: -3104}
+
+// gmToOpenGround teleports the GM to openGround and waits for it to land.
+func gmToOpenGround(t *testing.T, ctx context.Context, gm *GMClient) {
+	t.Helper()
+	if err := gm.Command(ctx, fmt.Sprintf("teleport %d %d %d", openGround.X, openGround.Y, openGround.Z)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gm.Await(ctx, EntryTimeout, teleportOf(gm.Self.ObjectID)); err != nil {
+		t.Fatalf("GM teleported to open ground: %v", err)
+	}
 }
 
 // recallClient recalls c's character to the GM and waits for it to land.

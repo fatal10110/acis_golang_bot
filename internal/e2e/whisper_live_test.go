@@ -25,6 +25,7 @@ func TestLiveWhisperCommands(t *testing.T) {
 	name := botOnline(t, ctx, tg, b)
 	acc, _ := tg.Account("wh", 2)
 	other := enter(t, ctx, tg, acc, character(t, acc, &botclient.HumanFighter), nil)
+	gmToOpenGround(t, ctx, gm)
 	recallBot(t, ctx, tg, gm, name)
 	recallClient(t, ctx, gm, other)
 
@@ -58,7 +59,7 @@ func TestLiveWhisperCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := other.Move(ctx, awayFrom(other.Pos(), 900, math.Pi)); err != nil {
+	if _, err := moveToward(ctx, other, awayFrom(other.Pos(), 900, math.Pi)); err != nil {
 		t.Fatal(err)
 	}
 	if err := gm.Watch(ctx, 15*time.Second, func(botclient.Event) {}); err != nil {

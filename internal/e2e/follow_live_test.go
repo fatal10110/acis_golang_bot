@@ -35,7 +35,7 @@ type leg struct {
 // how far b stands from where the leader is on its path.
 func lead(t *testing.T, ctx context.Context, leader *Client, b *botclient.Bot, to botclient.Point, speed int32) leg {
 	t.Helper()
-	m, err := leader.Move(ctx, to)
+	m, err := moveToward(ctx, leader, to)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +57,24 @@ func lead(t *testing.T, ctx context.Context, leader *Client, b *botclient.Bot, t
 	return leg{stop: m.Dest, gap: gap}
 }
 
+// moveToward moves c toward to or, where geodata refuses that move, as far
+// in the next of eight directions around c: the scenarios start wherever
+// the last run left the GM, so no one heading is open everywhere.
+func moveToward(ctx context.Context, c *Client, to botclient.Point) (botclient.MoveToLocation, error) {
+	from := c.Pos()
+	d := dist(from, to)
+	a := math.Atan2(float64(to.Y-from.Y), float64(to.X-from.X))
+	var err error
+	for i := range 8 {
+		var m botclient.MoveToLocation
+		m, err = c.Move(ctx, awayFrom(from, d, a+float64(i)*math.Pi/4))
+		if !errors.Is(err, ErrMoveRefused) {
+			return m, err
+		}
+	}
+	return botclient.MoveToLocation{}, err
+}
+
 // awayFrom is from moved d along the ground at angle a (radians).
 func awayFrom(from botclient.Point, d float64, a float64) botclient.Point {
 	return botclient.Point{X: from.X + int32(d*math.Cos(a)), Y: from.Y + int32(d*math.Sin(a)), Z: from.Z}
@@ -76,21 +94,10 @@ func TestLiveFollow(t *testing.T) {
 	name := botOnline(t, ctx, tg, b)
 	ui := userInfo(t, gm.Client)
 
-	// Out of sight first: the GM joins the bot, then runs off in legs until
-	// the bot leaves its sight.
-	if err := gm.Command(ctx, "teleportto "+name); err != nil {
-		t.Fatal(err)
-	}
-	// The bot may stand in the GM's sight already: its CharInfo counts only
-	// after the GM's own teleport.
-	if _, err := gm.Await(ctx, EntryTimeout, teleportOf(gm.Self.ObjectID)); err != nil {
-		t.Fatalf("GM teleported to %s: %v", name, err)
-	}
-	ev, err := gm.Await(ctx, EntryTimeout, charInfoNamed(name))
-	if err != nil {
-		t.Fatalf("GM sees %s: %v", name, err)
-	}
-	botID := ev.(botclient.CharInfo).ObjectID
+	// Out of sight first: the bot joins the GM on open ground, then the GM
+	// runs off in legs until the bot leaves its sight.
+	gmToOpenGround(t, ctx, gm)
+	botID := recallBot(t, ctx, tg, gm, name)
 	if !ui.Running {
 		if err := gm.Send(ctx, botclient.EncodeWalkRunToggle()); err != nil {
 			t.Fatal(err)
