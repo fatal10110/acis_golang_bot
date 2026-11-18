@@ -26,7 +26,7 @@ func TestLiveFarmFight(t *testing.T) {
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("f", 1)
 	f := runFarmer(t, ctx, tg, account, spots, func(p *botclient.Persona) {
-		p.CriticalHP = 95 // the first hit that lands makes it drink
+		p.CriticalHP = 99 // any hit that lands makes it drink
 		p.AttackSkills = []int32{powerStrike}
 		p.MPReserve = 0
 		// No merchant visits here: what it loots stays, run after run,
@@ -58,7 +58,7 @@ func TestLiveFarmFight(t *testing.T) {
 
 	// The farmer may have moved on: the monster spawns at it.
 	gmOn(t, ctx, gm, f)
-	mob, err := gm.Spawn(ctx, gremlin)
+	mob, err := gm.Spawn(ctx, wolf)
 	if err != nil {
 		t.Fatal(err)
 	}
