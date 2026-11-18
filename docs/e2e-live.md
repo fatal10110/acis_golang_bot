@@ -80,7 +80,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
   `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv3`,
-  `e2ef1`, `e2ek1`, `e2en1`-`e2en2`) and
+  `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`, `e2est1`-`e2est3`,
+  `e2ems1`, `e2ech1`-`e2ech2`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
@@ -95,6 +96,15 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   fights an invisible player) and lets the GM land the first hit on a spawned wolf, which then
   fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight. A farmer `e2ek1`
   found inside the Talking Island village is recalled to the newbie spots first.
+- The M4 scenarios seed with `give` only: adena for purchases, trades and the town bot's gatekeeper
+  hop (Gludin, 18000), Stems (1864) for the merchant visit's sale and the trade, and Steel Powder
+  (1664), loot no NPC shop sells, for the stores. The
+  merchant bot `e2em1` spends all its adena on Lesser Healing Potions each run, the town bot
+  `e2etw1` all but 19000, and both keep what they bought; the town bot ends in another town, the
+  Newbie Guide's bot `e2eg1` at level 8 with the newbie buffs. The buyers keep what they
+  bought and the adena they did not spend. `TestLiveChatReplies` has the GM say one line on the
+  shout and one on the trade channel ("e2e test line, please ignore"), which other players in
+  the region see.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
 - The GM's commands land in the server's GM audit log.
@@ -124,5 +134,13 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
+| `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |
+| `TestLiveTownErrands` | GM, datapack | #33 the town persona's errand cycle, a merchant visit then a gatekeeper hop; #32 the hop's teleport, the bot seen by the GM at the destination |
+| `TestLiveNewbieGuideBuffs` | GM, datapack | #32 a level 8 bot asks the Newbie Guide and gets its buffs |
+| `TestLiveTradeFromBot` | GM | #34, #82 a second client buys a bot's stems by trade; short of the price the bot cancels, never confirms |
+| `TestLiveStoreSale` | GM, datapack | #35 a second client buys out a bot's private store, which closes sold out |
+| `TestLiveStoreClosesOnFollow` | GM, datapack | #77 a GM's `follow` closes the bot's open store, and the bot follows |
+| `TestLiveMerchantSwarm` | GM, datapack | #111 a merchant-preset bot with loot in town opens its store, seen by the GM |
+| `TestLiveChatReplies` | GM | #36 one whispered reply after the delay; none to a repeat sender, a marked name, shout or trade |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.

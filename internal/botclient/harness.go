@@ -76,6 +76,41 @@ func EncodeRequestJoinParty(target string, loot int32) []byte {
 // EncodeSay2Tell whispers text to the player named target.
 func EncodeSay2Tell(target, text string) []byte { return encodeSay2Tell(target, text) }
 
+// Say2 channels a scenario speaks on besides a whisper (handler/chat):
+// the server delivers shout and trade lines to the players of a region.
+const (
+	ChatShout int32 = 1
+	ChatTrade int32 = 8
+)
+
+// EncodeSay2 says text on channel (ChatShout, ChatTrade); a whisper is
+// EncodeSay2Tell.
+func EncodeSay2(text string, channel int32) []byte { return encodeSay2(text, channel) }
+
+// EncodeTradeRequest asks the player objectID to trade.
+func EncodeTradeRequest(objectID int32) []byte { return encodeTradeRequest(objectID) }
+
+// EncodeAddTradeItem adds count of the item objectID to the sender's offer
+// in its open trade.
+func EncodeAddTradeItem(objectID, count int32) []byte { return encodeAddTradeItem(objectID, count) }
+
+// EncodeTradeDone confirms the open trade, or cancels it.
+func EncodeTradeDone(confirm bool) []byte { return encodeTradeDone(confirm) }
+
+// StoreBuy is a row of a purchase from a private sell store: the listed
+// item object, how many and the store's unit price.
+type StoreBuy struct{ ObjectID, Count, Price int32 }
+
+// EncodeRequestPrivateStoreBuy buys rows from the sell store of the player
+// owner.
+func EncodeRequestPrivateStoreBuy(owner int32, rows []StoreBuy) []byte {
+	r := make([]storeRow, len(rows))
+	for i, row := range rows {
+		r[i] = storeRow{object: row.ObjectID, count: row.Count, price: row.Price}
+	}
+	return encodeRequestPrivateStoreBuy(owner, r)
+}
+
 // DecodeEvent decodes one server game frame (non-empty) as the session's
 // reader does: ok is false for an opcode the reader drops, and a frame that
 // does not match its layout is an error.

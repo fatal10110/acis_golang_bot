@@ -69,8 +69,7 @@ type farmer struct {
 // the run's.
 func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, spots *botclient.SpotRegistry, tune func(*botclient.Persona)) *farmer {
 	t.Helper()
-	w := NewWatch(botclient.SystemClock{})
-	b := runBotWith(t, ctx, tg, account, botSetup{
+	return runWatched(t, ctx, tg, account, botSetup{
 		class: &botclient.HumanFighter,
 		persona: func() botclient.Persona {
 			p := botclient.DefaultPersona()
@@ -80,14 +79,23 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 			return p
 		},
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
-		tap:   w,
 	})
+}
+
+// runWatched runs a bot of account as setup says, through runBotWith with
+// a Watch as its frame tap. It returns once the bot is in the world, its
+// character one of the run's.
+func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *farmer {
+	t.Helper()
+	w := NewWatch(botclient.SystemClock{})
+	setup.tap = w
+	b := runBotWith(t, ctx, tg, account, setup)
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
 		return ok
 	})
 	if err != nil {
-		t.Fatalf("farmer %s in the world: %v", account, err)
+		t.Fatalf("bot %s in the world: %v", account, err)
 	}
 	ui := seen.Event.(botclient.UserInfo)
 	tg.Own(ui.Name, ui.ObjectID)
