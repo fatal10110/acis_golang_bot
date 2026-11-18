@@ -29,6 +29,7 @@ func recoverPersona() botclient.Persona {
 // nobody offers a resurrection, so the bot restarts in the village once its
 // ResurrectWait ran, and comes back to the GM (#24).
 func TestLiveRecoverVillageRestart(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 8*time.Minute)
 	gm := enterGM(t, ctx, tg)
@@ -73,6 +74,7 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 // the gone leader once, then casts /unstuck, whose five-minute recall lands
 // it in town. The GM watches (#24).
 func TestLiveRecoverLeaderLogout(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 12*time.Minute)
 	gm := enterGM(t, ctx, tg)

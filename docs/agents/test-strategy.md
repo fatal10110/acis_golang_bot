@@ -30,15 +30,17 @@ server stack (server image, non-interactive registration, config bundle, geodata
 plan's server prerequisites P1-P4, #5) once it exists, both through the same harness.
 
 - **Harness.** Package `internal/e2e`: the target (`e2e.Live`), its safety envelope (the bot's
-  login gate and credential breaker, at most 4 e2e characters online, the GM command filter, the
-  bot's pacer) and the scenarios, its `*_live_test.go` files; M6 panel scenarios live in
+  login gate and credential breaker, at most 4 e2e characters of a scenario online and 2
+  scenarios of a process open, a GM per scenario from the locked GM pool, the GM command filter,
+  the bot's pacer) and the scenarios, its `*_live_test.go` files; M6 panel scenarios live in
   `cmd/bots/ui_live_test.go`. No build tag hides them.
 - **Target.** Environment variables that point at files only, never a secret: `BOT_E2E_LOGIN`,
   `BOT_E2E_SECRET_FILE`, `BOT_E2E_GM_FILE` (both default to the primary checkout's gitignored
-  `.e2e/`), `BOT_E2E_PREFIX` (default `e2e`; refused when it overlaps `hz` or the owner's panel
+  `.e2e/`, the GM file to its pool `gm`, `gm2`, ...; a list pins the pool), `BOT_E2E_PREFIX` (default `e2e`; refused when it overlaps `hz` or the owner's panel
   prefix), `BOT_E2E_ALLOWLISTED`, `BOT_E2E_DATAPACK`, `BOT_E2E_ALLOW_LOGINFAIL`.
-- **Server config:** `AutoCreateAccounts = True`, `MaximumOnlineUsers` headroom for 4 more
-  characters, and an existing GM character (access level 7).
+- **Server config:** `AutoCreateAccounts = True`, `MaximumOnlineUsers` headroom for 8 more
+  characters per test process, and existing GM characters (access level 7), one per scenario
+  running at once.
 - **Seeding** goes through GM commands only, never the database (no DSN, tunnel or SQL):
   `//teleport`, `//teleportto`, `//recall`, `//kick`, `//kill`, `//spawn` and `//delete` on the
   run's own characters and monsters (`e2e.Scope`). **Assertions** use the packets the bot or the
@@ -48,8 +50,10 @@ plan's server prerequisites P1-P4, #5) once it exists, both through the same har
   never respawns) and delete them in cleanup.
 - **Gating.** A scenario skips when its config is missing (each declares what it needs: login,
   GM, datapack), and fails instead of skipping when `BOT_REQUIRE_E2E=1` is set; agents set it
-  whenever they claim a scenario ran. Run them with `make e2e-live` (one package after the other:
-  one login gate at a time). A refused credential leaves `.e2e/halted`, which fails every later
+  whenever they claim a scenario ran. Run them with `make e2e-live`: scenarios run in parallel
+  (`t.Parallel` first, before `e2e.Live`; scenarios sharing ground take a group lock with
+  `alone`), and the packages too when allowlisted. A scenario asserts only on its own
+  characters, its spawned monsters and packets about them. A refused credential leaves `.e2e/halted`, which fails every later
   run until the owner fixes the secret and deletes it; the wrong-password scenario trips the
   breaker without the marker and runs alone (`make e2e-live-loginfail`).
 - One shared stack per machine; never bring up a second one next to it.

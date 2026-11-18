@@ -19,7 +19,9 @@ import (
 // order). Then, out of town, told to assist the GM, it shoots the monster
 // the GM hits until it dies, and never reads NotEnoughArrows.
 func TestLiveArrows(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &newbieSpots)
 	ctx := scenarioCtx(t, 20*time.Minute)
 	travel, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)

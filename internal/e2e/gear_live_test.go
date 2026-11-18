@@ -42,7 +42,9 @@ func warriorGear(p *botclient.Persona) {
 // wears that ring; given a two-handed sword, it wears it and the server
 // takes the shield off.
 func TestLiveGearWear(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 15*time.Minute)
 	travel, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)
@@ -98,7 +100,9 @@ func wears(t *testing.T, ctx context.Context, f *farmer, items map[int32]datapac
 // class table (#79: daggers in light armor, class 7) unarmed: it buys a
 // dagger and wears it.
 func TestLiveGearBuy(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 20*time.Minute)
 	travel, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)

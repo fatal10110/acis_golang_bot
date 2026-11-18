@@ -34,16 +34,20 @@ lint:
 	golangci-lint run
 
 # The live e2e scenarios against the server BOT_E2E_LOGIN names
-# (docs/e2e-live.md); never in CI. One package after the other, the second
-# only when the first passed: each test process has its own login gate, two
-# dialing at once would burst the accept filter, and a refused credential
-# leaves the breaker's marker that fails every later run until it is
-# deleted. The wrong-password scenario trips the breaker, so it runs alone
+# (docs/e2e-live.md); never in CI. Inside a package, the scenarios that call
+# t.Parallel run MaxScenarios (2) at once, each with a GM of its own from the
+# pool (.e2e/gm, gm2, ...; a lock per GM). The packages run in parallel only
+# from an allowlisted address (BOT_E2E_ALLOWLISTED=1): each test process has
+# its own login gate, and two spaced gates dialing at once would burst the
+# accept filter. Every process refuses to log in while the breaker's marker
+# (.e2e/halted) exists, checked again before each scenario. The
+# wrong-password scenario trips the breaker, so it runs alone
 # (e2e-live-loginfail).
-E2E_LIVE_RUN = BOT_REQUIRE_E2E=1 $(GO) test -count=1 -v -timeout 60m -run '^TestLive' -skip '^TestLiveWrongPassword$$'
+E2E_LIVE_P = $(if $(filter 1,$(BOT_E2E_ALLOWLISTED)),2,1)
+E2E_LIVE_RUN = BOT_REQUIRE_E2E=1 $(GO) test -count=1 -v -timeout 60m -p $(E2E_LIVE_P) -parallel 2 -run '^TestLive' -skip '^TestLiveWrongPassword$$'
 
 e2e-live:
-	$(E2E_LIVE_RUN) ./internal/e2e/ && $(E2E_LIVE_RUN) ./cmd/bots/
+	$(E2E_LIVE_RUN) ./internal/e2e/ ./cmd/bots/
 
 e2e-live-loginfail:
 	BOT_REQUIRE_E2E=1 BOT_E2E_ALLOW_LOGINFAIL=1 $(GO) test -count=1 -v -timeout 5m -run '^TestLiveWrongPassword$$' ./internal/e2e/

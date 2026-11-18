@@ -19,6 +19,7 @@ import (
 // With the allowlist the player's whispers never reach a database lookup
 // (Authority.ask refuses a non-commander at once) (#19).
 func TestLiveWhisperCommands(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 6*time.Minute)
 	gm := enterGM(t, ctx, tg)

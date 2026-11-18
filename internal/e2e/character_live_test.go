@@ -48,6 +48,7 @@ func enterOnce(t *testing.T, tg *Target, account string, ch botclient.Character)
 // server answers CharCreateFail 2 and the next name is created (on the run
 // that creates it). A relogin selects the first by name (#10).
 func TestLiveCharacterClasses(t *testing.T) {
+	t.Parallel()
 	tg := Live(t)
 	var first string
 	for i, class := range raceClasses() {
@@ -81,6 +82,7 @@ func TestLiveCharacterClasses(t *testing.T) {
 // adopts a character bearing one of its names or stops, and a bot that may
 // create stops on an account holding other characters.
 func TestLivePinning(t *testing.T) {
+	t.Parallel()
 	tg := Live(t)
 	account, _ := tg.Account("c", 1)
 	class := raceClasses()[0]

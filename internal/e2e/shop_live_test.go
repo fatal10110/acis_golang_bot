@@ -15,7 +15,9 @@ import (
 // as its adena falls, and its stems go once the merchant's sell window
 // opened, with adena coming in.
 func TestLiveMerchantBuySell(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 9*time.Minute)
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)

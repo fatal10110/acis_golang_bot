@@ -12,7 +12,9 @@ import (
 // the owner twice, buys every row at the listed price, gets the steel powder, and
 // sees the store close once sold out.
 func TestLiveStoreSale(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("st", 1)
@@ -70,7 +72,9 @@ func TestLiveStoreSale(t *testing.T) {
 // "follow" to a bot in its store (#77): the bot quits its store, and then
 // follows the GM when it walks off.
 func TestLiveStoreClosesOnFollow(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("st", 3)
@@ -98,7 +102,9 @@ func TestLiveStoreClosesOnFollow(t *testing.T) {
 // GM-given steel powder stands in for the loot of a farming run, which takes tens
 // of minutes on live spawns. Cleanup logs it out, which closes the store.
 func TestLiveMerchantSwarm(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("ms", 1)

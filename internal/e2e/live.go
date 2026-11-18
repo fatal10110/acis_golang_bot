@@ -11,16 +11,20 @@ import (
 )
 
 // The run's target: one per test process, so every scenario of the process
-// shares its login gate, credential breaker and cap.
+// shares its login gate, credential breaker, GM pool and bound on scenarios
+// open.
 var (
 	runOnce   sync.Once
 	runTarget *Target
 	runErr    error
 )
 
-// Live returns the run's target for a scenario of needs. With its config
+// Live opens a scenario of needs on the run (Target.Scenario), waiting while
+// MaxScenarios are open, and closes it when the test ends. With its config
 // missing the scenario skips, or fails under BOT_REQUIRE_E2E=1. The config
-// comes from the environment, its files defaulting to DefaultDir's.
+// comes from the environment, its files defaulting to DefaultDir's. A
+// scenario that runs in parallel calls t.Parallel before Live: a paused
+// test holding a scenario would keep the sequential ones waiting.
 func Live(t testing.TB, needs ...Need) *Target {
 	t.Helper()
 	cfg := ConfigFromEnv(os.Getenv, DefaultDir())
@@ -43,5 +47,10 @@ func Live(t testing.TB, needs ...Need) *Target {
 	if runErr != nil {
 		t.Fatal(runErr)
 	}
-	return runTarget
+	tg, done, err := runTarget.Scenario(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(done)
+	return tg
 }

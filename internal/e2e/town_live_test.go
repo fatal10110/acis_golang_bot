@@ -21,7 +21,9 @@ const hopAway = 50000
 // the GM, teleported to it, sees it. Between the two the GM recalls the bot
 // to the village square (#122).
 func TestLiveTownErrands(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 20*time.Minute)
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
@@ -89,7 +91,9 @@ func (f *farmer) hopped(from int) (botclient.Point, bool) {
 // TestLiveNewbieGuideBuffs sets a bot in Talking Island village to level 8:
 // it asks the Newbie Guide (#32), which casts the newbie buffs on it.
 func TestLiveNewbieGuideBuffs(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
