@@ -52,7 +52,8 @@ plan's server prerequisites P1-P4, #5) once it exists, both through the same har
   GM, datapack), and fails instead of skipping when `BOT_REQUIRE_E2E=1` is set; agents set it
   whenever they claim a scenario ran. Run them with `make e2e-live`: scenarios run in parallel
   (`t.Parallel` first, before `e2e.Live`; scenarios sharing ground take a group lock with
-  `alone`), and the packages too when allowlisted. A scenario asserts only on its own
+  `alone`; each scenario logs in an account group of its own), and the packages too when
+  allowlisted. A scenario asserts only on its own
   characters, its spawned monsters and packets about them. A refused credential leaves `.e2e/halted`, which fails every later
   run until the owner fixes the secret and deletes it; the wrong-password scenario trips the
   breaker without the marker and runs alone (`make e2e-live-loginfail`).

@@ -80,11 +80,13 @@ func TestLiveCharacterClasses(t *testing.T) {
 // TestLivePinning runs the character choice rules against the server
 // (#92): a known name selects only that character, a never-create bot
 // adopts a character bearing one of its names or stops, and a bot that may
-// create stops on an account holding other characters.
+// create stops on an account holding other characters. It has an account
+// of its own: TestLiveCharacterClasses runs alongside, and a login to an
+// account already in game evicts that session.
 func TestLivePinning(t *testing.T) {
 	t.Parallel()
 	tg := Live(t)
-	account, _ := tg.Account("c", 1)
+	account, _ := tg.Account("pn", 1)
 	class := raceClasses()[0]
 	name, _ := enterOnce(t, tg, account, character(t, account, &class))
 	const absent = "NoSuchEtwoe"
