@@ -65,6 +65,19 @@ const (
 // encodeUseItem).
 func EncodeUseItem(objectID int32) []byte { return encodeUseItem(objectID) }
 
+// opGameRequestDestroyItem destroys an item (clientpackets/wiresafe.go).
+// Only the harness sends it: a bot never destroys what it carries.
+const opGameRequestDestroyItem = 0x59
+
+// EncodeRequestDestroyItem destroys count of the carried item objectID:
+// object id, count (clientpackets/item_ops.go RequestDestroyItem).
+func EncodeRequestDestroyItem(objectID, count int32) []byte {
+	w := wire.NewPacketWriter(opGameRequestDestroyItem)
+	w.WriteInt32(objectID)
+	w.WriteInt32(count)
+	return w.Bytes()
+}
+
 // EncodeRequestDropItem drops count of the carried item objectID at p,
 // within 150 of the character (see encodeRequestDropItem).
 func EncodeRequestDropItem(objectID, count int32, p Point) []byte {

@@ -22,6 +22,10 @@ func TestHarnessEncoders(t *testing.T) {
 		{"WalkRunToggle", EncodeWalkRunToggle(), []byte{0x45, 1, 0, 0, 0, 0, 0, 0, 0, 0}},
 		{"RequestJoinParty", EncodeRequestJoinParty("ab", 1), []byte{0x29, 'a', 0, 'b', 0, 0, 0, 1, 0, 0, 0}},
 		{"Say2Tell", EncodeSay2Tell("ab", "hi"), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 2, 0, 0, 0, 'a', 0, 'b', 0, 0, 0}},
+		// The server's own vector (clientpackets_item_trade_test.go).
+		{"RequestDestroyItem", EncodeRequestDestroyItem(501, 2), []byte{0x59, 0xf5, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}},
+		{"UseItem", EncodeUseItem(0x01020304), []byte{0x14, 4, 3, 2, 1, 0, 0, 0, 0}},
+		{"RequestDropItem", EncodeRequestDropItem(0x01020304, 2, Point{X: 1, Y: -1, Z: 2}), []byte{0x12, 4, 3, 2, 1, 2, 0, 0, 0, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

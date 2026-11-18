@@ -35,6 +35,7 @@ func TestLiveArrows(t *testing.T) {
 	gmRecall(t, ctx, gm, f, tiMarketWay)
 	gmOn(t, ctx, gm, f)
 	gmAdena(t, ctx, gm, f, 3)
+	t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 
 	var bow, arrows int32
 	wctx, cancel := context.WithTimeout(ctx, 2*gearBound)

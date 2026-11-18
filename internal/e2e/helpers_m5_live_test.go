@@ -36,6 +36,9 @@ const (
 	squiresSword int32 = 2369
 	squiresShirt int32 = 1146
 	squiresPants int32 = 1147
+	// shortSword is a one-handed sword of no grade a merchant buys back:
+	// the starting set is not sellable.
+	shortSword int32 = 1
 	// The pieces of #79: a shield, a necklace and two kinds of ring sold
 	// in the village (buylists 11 and 13), and a two-handed sword of no
 	// grade.
@@ -227,17 +230,13 @@ func soldObjects(p Sent) []int32 {
 	return ids
 }
 
-// stripDropGap spaces a strip's drops as the bot's pacer does (dropGap):
-// the server silently ignores a drop within DropItemTime (1 s by default)
-// of the previous one (config_gates.go handleRequestDropItem).
-const stripDropGap = 2 * time.Second
-
 // strip readies account's character of class for a gear scenario, whatever
 // earlier runs left it wearing or carrying: it enters as a scripted client,
-// drops every weapon, armor and jewelry piece and every arrow it carries,
-// worn or not, but one item of each template of keep, has the GM give it
-// those of keep it lacks, wears them, and logs out. The drops land where it
-// stands, as the farm scenario's junk does; adena and the rest stay.
+// destroys every weapon, armor and jewelry piece and every arrow it
+// carries, worn or not, but one item of each template of keep, has the GM
+// give it those of keep it lacks, wears them, and logs out. Adena and the
+// rest stay. (A drop would leave litter in the village, and the server
+// refuses to drop the starting weapons.)
 func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items map[int32]datapack.Item, account string, class *botclient.StartingClass, keep ...int32) {
 	t.Helper()
 	c, err := tg.EnterWhenFree(ctx, account, character(t, account, class), nil)
@@ -272,7 +271,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 	}
 
 	kept := make(map[int32]int32) // template -> object
-	var drops []int32
+	var gone []int32
 	for _, id := range slices.Sorted(maps.Keys(inv)) {
 		it := inv[id]
 		if _, gear := items[it.TemplateID]; !gear {
@@ -282,27 +281,17 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 			kept[it.TemplateID] = id
 			continue
 		}
-		drops = append(drops, id)
+		gone = append(gone, id)
 	}
-	// One at a time: the server refuses some (a starting item that cannot
-	// be discarded) with a SystemMessage only, and a refused one is worn
-	// no more.
-	dropped, refused := 0, []string{}
-	var last time.Time
-	for _, id := range drops {
+	// One at a time: the server refuses some with a SystemMessage only,
+	// and a refused one is worn no more.
+	destroyed, refused := 0, []string{}
+	for _, id := range gone {
 		it := inv[id]
-		select {
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		case <-time.After(time.Until(last.Add(stripDropGap))):
-		}
-		last = time.Now()
-		if err := c.Send(ctx, botclient.EncodeRequestDropItem(id, it.Count, c.Pos())); err != nil {
+		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(id, it.Count)); err != nil {
 			t.Fatal(err)
 		}
-		var read []string
 		ev, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
-			read = append(read, fmt.Sprintf("%T%+v", ev, ev))
 			applyInventory(inv, ev)
 			_, carried := inv[id]
 			switch ev.(type) {
@@ -312,20 +301,19 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 			return !carried
 		})
 		if err != nil {
-			t.Fatalf("strip %s: drop %s %+v: %v; read %.2000s", c.Self.Name, items[it.TemplateID].Name, it, err, strings.Join(read, " | "))
+			t.Fatalf("strip %s: destroy %s %+v: %v", c.Self.Name, items[it.TemplateID].Name, it, err)
 		}
-		switch ev.(type) {
-		case botclient.SystemMessage, botclient.ActionFailed:
-			refused = append(refused, fmt.Sprintf("%s %+v (%T%+v)", items[it.TemplateID].Name, it, ev, ev))
-			if inv[id].Equipped {
-				if err := c.Send(ctx, botclient.EncodeUseItem(id)); err != nil {
-					t.Fatal(err)
-				}
-				await(items[it.TemplateID].Name+" taken off", func() bool { return !inv[id].Equipped })
-			}
+		if _, carried := inv[id]; !carried {
+			destroyed++
 			continue
 		}
-		dropped++
+		refused = append(refused, fmt.Sprintf("%s (%T%+v)", items[it.TemplateID].Name, ev, ev))
+		if inv[id].Equipped {
+			if err := c.Send(ctx, botclient.EncodeUseItem(id)); err != nil {
+				t.Fatal(err)
+			}
+			await(items[it.TemplateID].Name+" taken off", func() bool { return !inv[id].Equipped })
+		}
 	}
 
 	for _, tmpl := range keep {
@@ -364,7 +352,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		}
 		await(fmt.Sprintf("%d worn", tmpl), func() bool { return inv[id].Equipped })
 	}
-	t.Logf("%s stripped: dropped %d pieces, kept %v, wears %s", c.Self.Name, dropped, refused, wornNames(inv, items))
+	t.Logf("%s stripped: destroyed %d pieces, kept %v, wears %s", c.Self.Name, destroyed, refused, wornNames(inv, items))
 	lctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	if err := c.Logout(lctx); err != nil {

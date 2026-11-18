@@ -87,9 +87,9 @@ func wears(t *testing.T, ctx context.Context, f *farmer, items map[int32]datapac
 
 // TestLiveGearBuy runs two fighters with adena in the Talking Island
 // village next to the weapon and armor merchants, stripped to their
-// starting sets. One plays the default persona (#40): it buys a better
-// piece for a slot of its starting set, wears it, and sells the piece it
-// took off. The other plays a rogue's class table (#79: daggers in light
+// starting sets, the first one with a Short Sword for its Squire's Sword.
+// That one plays the default persona (#40): it buys a better piece for a
+// slot of its set, wears it, and sells the piece it took off. The other plays a rogue's class table (#79: daggers in light
 // armor, class 7) unarmed: it buys a dagger and wears it.
 func TestLiveGearBuy(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -98,9 +98,11 @@ func TestLiveGearBuy(t *testing.T) {
 	gm := enterGM(t, ctx, tg)
 	buyerAcc, _ := tg.Account("gb", 1)
 	rogueAcc, _ := tg.Account("gb", 2)
-	strip(t, ctx, tg, gm, items, buyerAcc, &botclient.HumanFighter, squiresSword, squiresShirt, squiresPants)
+	// The buyer wields a Short Sword, which a merchant buys back once it
+	// is replaced.
+	strip(t, ctx, tg, gm, items, buyerAcc, &botclient.HumanFighter, shortSword, squiresShirt, squiresPants)
 	strip(t, ctx, tg, gm, items, rogueAcc, &botclient.HumanFighter, squiresShirt, squiresPants)
-	starting := []int32{squiresSword, squiresShirt, squiresPants}
+	starting := []int32{shortSword, squiresShirt, squiresPants}
 
 	buyer := runTownBot(t, ctx, tg, buyerAcc, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		// Gear only, and the piece it takes off sold at the next visit.
@@ -114,6 +116,7 @@ func TestLiveGearBuy(t *testing.T) {
 		gmRecall(t, ctx, gm, f, tiArmory)
 		gmOn(t, ctx, gm, f)
 		gmAdena(t, ctx, gm, f, 3)
+		t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 	}
 
 	bctx, cancel := context.WithTimeout(ctx, 2*gearBound)
