@@ -89,6 +89,10 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   gives it Power Strike, 10 Healing Potions, 500 no-grade soulshots and 3 Stems (a gift waits while
   the inventory is full); what it did not use stays with it. Other farmers keep their loot and the
   levels they gained; `TestLiveSpots` sets its first farmer back to level 1 at the end.
+- `TestLiveAntiKS` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
+  fights an invisible player) and lets the GM land the first hit on a spawned wolf, which then
+  fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight. A farmer `e2ek1`
+  found inside the Talking Island village is recalled to the newbie spots first.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
 - The GM's commands land in the server's GM audit log.
@@ -109,7 +113,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveSoak` | login | #9 soak past the idle timeout, #14 flat metrics |
 | `TestLivePanelBots` | datapack | #94, #96, #89 panel create, despawn, respawn, restart |
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
-| `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow` |
+| `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
