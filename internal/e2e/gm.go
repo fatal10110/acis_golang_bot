@@ -138,7 +138,7 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	teleportto NAME      moves the GM to a run character
 //	recall NAME          moves a run character to the GM
 //	kick NAME            disconnects a run character
-//	kill|res|heal [NAME] a run character, or with no name the GM's target
+//	kill|res|heal|cancel [NAME] a run character, or with no name the GM's target
 //	set level N          the GM's target, a run character
 //	skill set ID LEVEL   the GM's target, a run character; also skill set all
 //	give ID [COUNT]      items to the GM's target, a run character; COUNT
@@ -158,7 +158,7 @@ func (s *Scope) check(cmd string) error {
 		ok = len(args) == 3 && allInts(args)
 	case "teleportto", "recall", "kick":
 		ok = len(args) == 1 && s.isChar(args[0])
-	case "kill", "res", "heal":
+	case "kill", "res", "heal", "cancel":
 		ok = len(args) == 1 && s.isChar(args[0]) || len(args) == 0 && s.owns(s.target)
 	case "set":
 		ok = len(args) == 2 && args[0] == "level" && allInts(args[1:]) && s.isCharID(s.target)

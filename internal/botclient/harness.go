@@ -57,6 +57,25 @@ const (
 	OpRequestDropItem      byte = opGameRequestDropItem
 )
 
+// EncodeMoveBackwardToLocation walks or runs to to from origin, as a mouse
+// click (see encodeMoveBackwardToLocation).
+func EncodeMoveBackwardToLocation(to, origin Point) []byte {
+	return encodeMoveBackwardToLocation(to, origin)
+}
+
+// EncodeWalkRunToggle switches between walking and running (the action
+// bar's toggle, RequestActionUse 1).
+func EncodeWalkRunToggle() []byte { return encodeRequestActionUse(actionWalkRun) }
+
+// EncodeRequestJoinParty invites the player named target into the sender's
+// party under loot rule loot (see encodeRequestJoinParty).
+func EncodeRequestJoinParty(target string, loot int32) []byte {
+	return encodeRequestJoinParty(target, loot)
+}
+
+// EncodeSay2Tell whispers text to the player named target.
+func EncodeSay2Tell(target, text string) []byte { return encodeSay2Tell(target, text) }
+
 // DecodeEvent decodes one server game frame (non-empty) as the session's
 // reader does: ok is false for an opcode the reader drops, and a frame that
 // does not match its layout is an error.

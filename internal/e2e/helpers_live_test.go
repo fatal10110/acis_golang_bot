@@ -50,6 +50,9 @@ func enter(t *testing.T, ctx context.Context, tg *Target, account string, ch bot
 		t.Fatal(err)
 	}
 	logoutAtEnd(t, c)
+	if userInfo(t, c).HP == 0 {
+		revive(t, ctx, c)
+	}
 	return c
 }
 
@@ -95,7 +98,35 @@ func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
 		}
 		gm.Close()
 	})
+	if userInfo(t, gm.Client).HP == 0 {
+		revive(t, ctx, gm.Client)
+	}
 	return gm
+}
+
+// revive restarts a character that entered dead (a scenario of another
+// run left it so) in the village, as any player would: a dead character
+// is no party member to buff or heal, and a dead GM sees and commands but
+// its moves are refused. The run's filter does not let the GM revive
+// itself by command.
+func revive(t *testing.T, ctx context.Context, c *Client) {
+	t.Helper()
+	if err := c.Send(ctx, botclient.EncodeRequestRestartPoint(botclient.RestartVillage)); err != nil {
+		t.Fatal(err)
+	}
+	revived, landed := false, false
+	if _, err := c.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
+		switch e := ev.(type) {
+		case botclient.Revive:
+			revived = revived || e.ObjectID == c.Self.ObjectID
+		case botclient.TeleportToLocation:
+			landed = landed || e.ObjectID == c.Self.ObjectID
+		}
+		return revived && landed
+	}); err != nil {
+		t.Fatalf("%s restarted in the village: %v", c.Self.Name, err)
+	}
+	t.Logf("%s entered dead; restarted in the village", c.Self.Name)
 }
 
 func teleportOf(id int32) func(botclient.Event) bool {
