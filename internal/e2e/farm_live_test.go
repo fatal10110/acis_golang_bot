@@ -29,33 +29,32 @@ func TestLiveFarmFight(t *testing.T) {
 		p.CriticalHP = 95 // the first hit that lands makes it drink
 		p.AttackSkills = []int32{powerStrike}
 		p.MPReserve = 0
-		p.Loot.Junk = []int32{stem}
-		p.Loot.DropAbove = 1 // any load: the stems go at once
+		// No merchant visits here: what it loots stays, run after run,
+		// until its inventory refuses the GM's gifts. All it carries but
+		// adena, potions and shots is junk, dropped at any load.
+		p.Loot.Junk = junkBut(slices.Concat([]int32{adena}, p.Potions, p.Shots)...)
+		p.Loot.DropAbove = 1
 	})
-	// Level 1 against level 1 monsters: they hit back before they die.
-	gmOn(t, ctx, gm, f, "set level 1", "skill set 3 1", "give 1061 10", "give 1835 500")
-	t.Logf("%s seeded at level 1", f.name)
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
 	t.Logf("%s farms at %v", f.name, f.bot.Status().Position)
 
-	// Junk is dropped where the farmer stands still: at its spot.
-	gmOn(t, ctx, gm, f, "give 1864 3")
-	given, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	if _, _, err := f.watch.Await(given, 0, func(ev botclient.Event) bool {
-		n, _, ok := stock(ev, stem)
-		return ok && n > 0
-	}); err != nil {
-		t.Fatalf("the farmer gets the stems: %v", err)
-	}
-	t.Logf("%s got the stems", f.name)
+	// Junk is dropped where the farmer stands still: at its spot. A new
+	// farmer carries none: the stems are its junk then (a full inventory
+	// refuses them, and holds junk already).
+	gmOn(t, ctx, gm, f, fmt.Sprintf("give %d 3", stem))
 	if _, err := gm.Await(ctx, 3*time.Minute, func(ev botclient.Event) bool {
 		d, ok := ev.(botclient.DropItem)
-		return ok && d.DropperID == f.id && d.Item.TemplateID == stem
+		return ok && d.DropperID == f.id
 	}); err != nil {
 		t.Fatalf("the GM sees the junk dropped: %v", err)
 	}
 	t.Logf("%s dropped its junk next to the GM", f.name)
+
+	// Level 1 against level 1 monsters: they hit back before they die.
+	gmOn(t, ctx, gm, f, "set level 1", "skill set 3 1")
+	gmGive(t, ctx, gm, f, healingPotion, 10)
+	gmGive(t, ctx, gm, f, soulshotNG, 500)
+	t.Logf("%s seeded at level 1", f.name)
 
 	// The farmer may have moved on: the monster spawns at it.
 	gmOn(t, ctx, gm, f)

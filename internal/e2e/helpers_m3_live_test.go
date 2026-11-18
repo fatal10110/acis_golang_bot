@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -23,6 +24,8 @@ const (
 	// soulshotNG is Soulshot: No Grade; the human fighter's starting
 	// Squire's Sword (2369, equipped) takes one per hit.
 	soulshotNG int32 = 1835
+	// adena is the currency, never junk.
+	adena int32 = 57
 	// stem is a droppable material of weight 2: the farmer's junk.
 	stem int32 = 1864
 	// powerStrike is skill 3 level 1: hit time 1080 ms, reuse 13 s, 10 MP,
@@ -111,15 +114,70 @@ func (f *farmer) digest() string {
 	for _, p := range f.watch.Sent() {
 		sent[fmt.Sprintf("%#02x", p.Op)]++
 	}
-	deaths := 0
+	deaths, items, load := 0, 0, ""
 	for _, e := range f.watch.Seen(0) {
 		read[fmt.Sprintf("%T", e.Event)]++
-		if d, ok := e.Event.(botclient.Die); ok && d.ObjectID == f.id {
-			deaths++
+		switch ev := e.Event.(type) {
+		case botclient.Die:
+			if ev.ObjectID == f.id {
+				deaths++
+			}
+		case botclient.UserInfo:
+			load = fmt.Sprintf("%d/%d", ev.Load, ev.MaxLoad)
+		case botclient.ItemList:
+			items = len(ev.Items)
 		}
 	}
-	return fmt.Sprintf("%s: state %v, rule %q, level %d, HP %d/%d, at %v, died %d times; sent %v; read %v",
-		f.name, s.State, s.Rule, s.Level, s.HP, s.MaxHP, s.Position, deaths, sent, read)
+	return fmt.Sprintf("%s: state %v, rule %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login; sent %v; read %v",
+		f.name, s.State, s.Rule, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, sent, read)
+}
+
+// junkBut is every item template but keep: a farmer whose Loot.Junk it is
+// drops all it carries unequipped but keep.
+func junkBut(keep ...int32) []int32 {
+	// maxTemplate is past the datapack's highest item template id.
+	const maxTemplate = 10000
+	var junk []int32
+	for id := int32(1); id < maxTemplate; id++ {
+		if !slices.Contains(keep, id) {
+			junk = append(junk, id)
+		}
+	}
+	return junk
+}
+
+// gmGive gives f, the GM's target, count of template tmpl and waits until
+// f's inventory shows them. A full inventory refuses a give: it asks again
+// while f sheds its junk, for at most three minutes.
+func gmGive(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl, count int32) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+	for {
+		seen := f.watch.Seen(0)
+		var had int32
+		for _, s := range seen {
+			if n, _, ok := stock(s.Event, tmpl); ok {
+				had = n
+			}
+		}
+		if err := gm.Command(ctx, fmt.Sprintf("give %d %d", tmpl, count)); err != nil {
+			t.Fatal(err)
+		}
+		wait, stop := context.WithTimeout(ctx, 15*time.Second)
+		_, _, err := f.watch.Await(wait, len(seen), func(ev botclient.Event) bool {
+			n, _, ok := stock(ev, tmpl)
+			return ok && n > had
+		})
+		stop()
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("%s never got %d of %d: %v", f.name, count, tmpl, ctx.Err())
+		}
+		t.Logf("%s did not get %d of %d (a full inventory?): again", f.name, count, tmpl)
+	}
 }
 
 // gmTo teleports the GM next to f and waits until it sees f there.
