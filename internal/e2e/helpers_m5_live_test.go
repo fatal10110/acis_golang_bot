@@ -230,6 +230,11 @@ func soldObjects(p Sent) []int32 {
 	return ids
 }
 
+// destroyRefusals are the SystemMessages refusing a RequestDestroyItem
+// (inventory.go destroyLiveItem): cannot discard, number incorrect, a hero
+// weapon, a summoned pet's collar, a trade or store open.
+var destroyRefusals = []int32{98, 163, 1845, 557, 1065}
+
 // strip readies account's character of class for a gear scenario, whatever
 // earlier runs left it wearing or carrying: it enters as a scripted client,
 // destroys every weapon, armor and jewelry piece and every arrow it
@@ -291,11 +296,15 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(id, it.Count)); err != nil {
 			t.Fatal(err)
 		}
+		// A destroy also tells the item disarmed (417) or gone (302)
+		// ahead of the InventoryUpdate: only a refusal ends the wait early.
 		ev, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
 			applyInventory(inv, ev)
 			_, carried := inv[id]
-			switch ev.(type) {
-			case botclient.SystemMessage, botclient.ActionFailed:
+			switch e := ev.(type) {
+			case botclient.SystemMessage:
+				return slices.Contains(destroyRefusals, e.ID)
+			case botclient.ActionFailed:
 				return true
 			}
 			return !carried
