@@ -22,10 +22,25 @@ func TestLiveAntiKS(t *testing.T) {
 	spots := spotRegistry(t, tg)
 	gm := enterGM(t, ctx, tg)
 	home := townTI // a peace zone far from the spots: the monster loses the GM there
+	var f *farmer
+	t.Cleanup(func() { forgetKilled(gm, f) }) // after the farmer stops, before the GM deletes
 	account, _ := tg.Account("k", 1)
-	f := runFarmer(t, ctx, tg, account, spots, nil)
+	f = runFarmer(t, ctx, tg, account, spots, nil)
 	window := botclient.DefaultPersona().EngagedWindow
 	levelOf(t, ctx, f) // in the world
+	// Each phase logs when it ends; a phase that runs out of its bound
+	// fails with its name.
+	start, last := time.Now(), time.Now()
+	phase := func(what string) {
+		t.Logf("%s after %v (%v in all)", what, time.Since(last).Round(time.Second), time.Since(start).Round(time.Second))
+		last = time.Now()
+	}
+	bound := func(d time.Duration) context.Context {
+		c, cancel := context.WithTimeout(ctx, d)
+		t.Cleanup(cancel)
+		return c
+	}
+	phase("in the world")
 	if at := f.bot.Status().Position; within(at, townTI, 3000) {
 		// A farmer walks no way out of the village: the GM brings it to
 		// the newbie spots.
@@ -38,12 +53,14 @@ func TestLiveAntiKS(t *testing.T) {
 			t.Fatalf("%s recalled: %v", f.name, err)
 		}
 	}
-	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
+	waitFor(t, bound(spotBound), "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
 	spot := f.bot.Status().Spot
+	phase("at its spot " + spot)
 
 	// A GM logs in invisible (GMStartupInvisible), and no monster attacks
 	// an invisible player.
 	gmVisibleAt(t, ctx, gm, home)
+	phase("the GM visible")
 
 	const attempts = 3
 	for attempt := 1; ; attempt++ {
@@ -56,7 +73,8 @@ func TestLiveAntiKS(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
-		attack := gmProvoke(t, ctx, gm, mob)
+		attack, tries := gmProvoke(t, ctx, gm, mob)
+		phase(fmt.Sprintf("attempt %d: provoked in %d tries", attempt, tries))
 		order(t, ctx, f, botclient.Command{Kind: botclient.CommandGo, Arg: spot})
 		if prey := attack.Hits[0].TargetID; prey != gm.Self.ObjectID {
 			t.Logf("attempt %d: the monster went for %d, not the GM", attempt, prey)
@@ -65,6 +83,7 @@ func TestLiveAntiKS(t *testing.T) {
 			}
 			gmTeleport(t, ctx, gm, home)
 			awaitDeath(t, ctx, gm, f, mob)
+			phase(fmt.Sprintf("attempt %d: the monster dead", attempt))
 			continue
 		}
 		engaged := time.Now()
@@ -78,16 +97,18 @@ func TestLiveAntiKS(t *testing.T) {
 		if !click.IsZero() && (hit.IsZero() || click.Before(hit)) {
 			t.Fatalf("the farmer clicked the monster %v after the GM engaged it, before it hit the farmer", click.Sub(engaged))
 		}
-		t.Logf("the farmer left the GM's monster alone for %v (first hit on the farmer: %v)", 2*window, !hit.IsZero())
+		phase(fmt.Sprintf("the farmer left the GM's monster alone (first hit on the farmer: %v)", !hit.IsZero()))
 
 		gmTeleport(t, ctx, gm, home)
-		until(t, scenarioCtx(t, 3*time.Minute), "the farmer takes the monster on", func() string {
+		until(t, bound(3*time.Minute), "the farmer takes the monster on", func() string {
 			if _, click := mobContact(f, mob, engaged); click.IsZero() {
 				return "an Action or AttackRequest on the monster"
 			}
 			return ""
 		})
+		phase("the farmer took the monster on")
 		awaitDeath(t, ctx, gm, f, mob)
+		phase("the monster dead")
 		return
 	}
 }
@@ -101,7 +122,7 @@ func TestLiveAntiKS(t *testing.T) {
 // monster follows the GM it hates. An attack the GM does not start within
 // provokeRetry is asked again; a GM that never swings fails with what it
 // read (provokeLog).
-func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botclient.Attack {
+func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) (_ botclient.Attack, tries int) {
 	t.Helper()
 	if err := gm.Select(ctx, mob); err != nil {
 		t.Fatal(err)
@@ -146,7 +167,7 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botcl
 	p := gm.Pos()
 	gmTeleport(t, ctx, gm, botclient.Point{X: p.X + 150, Y: p.Y, Z: p.Z})
 	if a, ok := ev.(botclient.Attack); ok && a.AttackerID == mob {
-		return a
+		return a, pl.tries
 	}
 	if ev, err = gm.Await(ctx, 30*time.Second, hitsBack); err != nil {
 		t.Fatalf("the monster fights back: %v", err)
@@ -154,7 +175,7 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) botcl
 	if _, ok := ev.(botclient.Die); ok {
 		t.Fatal("the GM killed the monster before it fought back")
 	}
-	return ev.(botclient.Attack)
+	return ev.(botclient.Attack), pl.tries
 }
 
 // provokeRetry is how long the GM waits for its first swing at the monster
@@ -276,10 +297,12 @@ func mobContact(f *farmer, mob int32, from time.Time) (hit, click time.Time) {
 	return hit, time.Time{}
 }
 
-// awaitDeath waits until f sees mob die, a monster the run spawned, and
-// drops it from the run's monsters.
+// awaitDeath waits up to deathBound until f sees mob die, a monster the
+// run spawned, and drops it from the run's monsters.
 func awaitDeath(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, mob int32) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, deathBound)
+	defer cancel()
 	if _, _, err := f.watch.Await(ctx, 0, func(ev botclient.Event) bool {
 		d, ok := ev.(botclient.Die)
 		return ok && d.ObjectID == mob
@@ -288,3 +311,10 @@ func awaitDeath(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, mob 
 	}
 	gm.Forget(mob)
 }
+
+// Bounds of the anti-KS phases that wait on the farmer: a farmer reaches
+// its spot in a minute or two, and one wolf takes it a few swings.
+const (
+	spotBound  = 8 * time.Minute
+	deathBound = 3 * time.Minute
+)

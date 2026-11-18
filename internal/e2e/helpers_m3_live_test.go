@@ -100,6 +100,21 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 	return f
 }
 
+// forgetKilled drops from the run's monsters every one f saw die, so that
+// a monster cleanup fails to delete is one still alive. The scenarios
+// register it before runFarmer: it runs once the farmer stopped, so no
+// kill comes after it.
+func forgetKilled(gm *GMClient, f *farmer) {
+	if f == nil {
+		return
+	}
+	for _, s := range f.watch.Seen(0) {
+		if d, ok := s.Event.(botclient.Die); ok && gm.owned(d.ObjectID) {
+			gm.Forget(d.ObjectID)
+		}
+	}
+}
+
 // digest sums up what the farmer did, for a failed scenario: its status,
 // the packets it sent by opcode and the events it read by type.
 func (f *farmer) digest() string {

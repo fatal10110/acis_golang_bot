@@ -24,8 +24,10 @@ func TestLiveFarmFight(t *testing.T) {
 	ctx := scenarioCtx(t, 30*time.Minute) // run 8 passed after 19m50s: a kill with a non-herb drop is rare
 	spots := spotRegistry(t, tg)
 	gm := enterGM(t, ctx, tg)
+	var f *farmer
+	t.Cleanup(func() { forgetKilled(gm, f) }) // after the farmer stops, before the GM deletes
 	account, _ := tg.Account("f", 1)
-	f := runFarmer(t, ctx, tg, account, spots, func(p *botclient.Persona) {
+	f = runFarmer(t, ctx, tg, account, spots, func(p *botclient.Persona) {
 		p.CriticalHP = 99 // any hit that lands makes it drink
 		p.AttackSkills = []int32{powerStrike}
 		p.MPReserve = 0
@@ -112,6 +114,7 @@ const gmKeepAlive = 3 * time.Minute
 // gmBackFor brings the GM back next to f while mob, a monster the run
 // spawned, is still alive, so that cleanup can select and delete it.
 func gmBackFor(t *testing.T, gm *GMClient, f *farmer, mob int32) {
+	forgetKilled(gm, f)
 	if !gm.owned(mob) || gm.Closed() {
 		return
 	}
