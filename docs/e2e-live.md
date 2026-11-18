@@ -83,10 +83,12 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
   village); nothing is restored but the level below.
-- What the GM gave a farmer (`TestLiveFarmFight`: Power Strike, 10 Healing Potions, 500 no-grade
-  soulshots, 3 Stems) stays with it, less what it used; the Stems it dropped lie on the ground until
-  the server clears them. Farmers keep the levels they gained; `TestLiveSpots` sets its first farmer
-  back to level 1 at the end.
+- `TestLiveFarmFight` sets its farmer to level 5 and runs it with every item but adena, potions
+  and shots marked as junk: each run the farmer drops all its unequipped loot at its spot, where it
+  lies until the server clears it, so the farmer's inventory never fills up across runs. The GM then
+  gives it Power Strike, 10 Healing Potions, 500 no-grade soulshots and 3 Stems (a gift waits while
+  the inventory is full); what it did not use stays with it. Other farmers keep their loot and the
+  levels they gained; `TestLiveSpots` sets its first farmer back to level 1 at the end.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
 - The GM's commands land in the server's GM audit log.

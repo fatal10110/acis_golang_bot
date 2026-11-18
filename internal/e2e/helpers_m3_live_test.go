@@ -24,9 +24,11 @@ const (
 	// soulshotNG is Soulshot: No Grade; the human fighter's starting
 	// Squire's Sword (2369, equipped) takes one per hit.
 	soulshotNG int32 = 1835
-	// wolf is Wolf, a level 4 monster: a level 1 farmer that fights it
-	// takes hits before it dies.
+	// wolf is Wolf, a level 4 aggressive monster (aggroRange 1000, 68 HP).
 	wolf int32 = 20120
+	// packSize is how many wolves the GM spawns at once at a farmer: while
+	// it kills one, the others land hits.
+	packSize = 3
 	// adena is the currency, never junk.
 	adena int32 = 57
 	// stem is a droppable material of weight 2: the farmer's junk.

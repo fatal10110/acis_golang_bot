@@ -14,11 +14,11 @@ import (
 // TestLiveFarmFight runs a farmer seeded by the GM with Power Strike,
 // healing potions, soulshots and junk, and watches it farm its spot: it
 // drops the junk where the GM sees it (#29), turns its soulshots on and
-// spends them (#23), kills monsters, a GM-spawned one among them, with
-// steady swings and no click per swing, casting Power Strike no sooner
-// than the last cast's reuse allows (#20), drinks a potion once a hit takes
-// it under CriticalHP (#23), and picks up a kill's drop into its inventory
-// (#29), never sending more than the pacer allows.
+// spends them (#23), kills monsters, the first of a GM-spawned wolf pack
+// among them, with steady swings and no click per swing, casting Power
+// Strike no sooner than the last cast's reuse allows (#20), drinks a potion
+// once a hit takes it under CriticalHP (#23), and picks up a kill's drop
+// into its inventory (#29), never sending more than the pacer allows.
 func TestLiveFarmFight(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
@@ -50,19 +50,27 @@ func TestLiveFarmFight(t *testing.T) {
 	}
 	t.Logf("%s dropped its junk next to the GM", f.name)
 
-	// Level 1 against level 1 monsters: they hit back before they die.
-	gmOn(t, ctx, gm, f, "set level 1", "skill set 3 1")
+	// Level 5, about 200 HP, against a pack of wolves: Power Strike and
+	// shots kill one quickly while the others land hits, so the farmer
+	// drinks without dying. Alone against level 1 monsters it one-shots
+	// each before it is ever hit.
+	gmOn(t, ctx, gm, f, "set level 5", "skill set 3 1")
 	gmGive(t, ctx, gm, f, healingPotion, 10)
 	gmGive(t, ctx, gm, f, soulshotNG, 500)
-	t.Logf("%s seeded at level 1", f.name)
+	t.Logf("%s seeded at level 5", f.name)
 
-	// The farmer may have moved on: the monster spawns at it.
+	// The farmer may have moved on: the pack spawns at it.
 	gmOn(t, ctx, gm, f)
-	mob, err := gm.Spawn(ctx, wolf)
-	if err != nil {
-		t.Fatal(err)
+	pack := make([]int32, 0, packSize)
+	for range packSize {
+		mob, err := gm.Spawn(ctx, wolf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
+		pack = append(pack, mob)
 	}
-	t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
+	mob := pack[0]
 	// Out of the farmer's way, in a peace zone out of any monster's reach:
 	// a monster that keeps attacking the GM is engaged by another player,
 	// which the farmer leaves alone.
@@ -74,11 +82,12 @@ func TestLiveFarmFight(t *testing.T) {
 			gmTeleport(t, ctx, gm, townTI)
 			alive = time.Now()
 		}
-		r := readFight(f, mob)
-		if r.spawnKilled {
-			gm.Forget(mob)
+		for _, id := range pack {
+			if gm.owned(id) && readFight(f, id).spawnKilled {
+				gm.Forget(id)
+			}
 		}
-		return r.missing()
+		return readFight(f, mob).missing()
 	})
 	r := readFight(f, mob)
 	t.Logf("%s: %d kills, %d swings for %d attack clicks, %d casts, %d frames at most in a second, %d ActionFailed",

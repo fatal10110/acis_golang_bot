@@ -18,7 +18,7 @@ func TestLiveAntiKS(t *testing.T) {
 	ctx := scenarioCtx(t, 15*time.Minute)
 	spots := spotRegistry(t, tg)
 	gm := enterGM(t, ctx, tg)
-	home := gm.Pos()
+	home := townTI // a peace zone far from the spots: the monster loses the GM there
 	account, _ := tg.Account("k", 1)
 	f := runFarmer(t, ctx, tg, account, spots, nil)
 	window := botclient.DefaultPersona().EngagedWindow
