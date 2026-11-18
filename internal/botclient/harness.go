@@ -45,6 +45,18 @@ func EncodeSendBypassBuildCmd(cmd string) []byte {
 	return w.Bytes()
 }
 
+// Client packet opcodes a scenario finds in the frames a bot wrote
+// (FrameTap.RecordSent): each packet's first field after the opcode is the
+// object, skill or item it acts on (encodeAction, encodeAttackRequest,
+// encodeRequestMagicSkillUse, encodeUseItem, encodeRequestDropItem).
+const (
+	OpAction               byte = opGameAction
+	OpAttackRequest        byte = opGameAttackRequest
+	OpRequestMagicSkillUse byte = opGameRequestMagicSkillUse
+	OpUseItem              byte = opGameUseItem
+	OpRequestDropItem      byte = opGameRequestDropItem
+)
+
 // DecodeEvent decodes one server game frame (non-empty) as the session's
 // reader does: ok is false for an opcode the reader drops, and a frame that
 // does not match its layout is an error.

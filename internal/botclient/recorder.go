@@ -57,6 +57,9 @@ func (r *Recorder) Record(payload []byte) {
 	}
 }
 
+// RecordSent records nothing: the fixtures are the server's packets.
+func (r *Recorder) RecordSent([]byte) {}
+
 // Err returns the first write that failed, if any.
 func (r *Recorder) Err() error {
 	r.mu.Lock()
