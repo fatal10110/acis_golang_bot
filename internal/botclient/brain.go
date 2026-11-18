@@ -148,6 +148,9 @@ type Brain struct {
 	// Appearing goes out: the server keeps the character out of the world
 	// until then.
 	appearing bool
+	// appearedAt is when the last Appearing went out: the server shows the
+	// objects around the landing point only after it.
+	appearedAt time.Time
 	// restartedAt is the restart request or resurrection answer not yet
 	// answered by a Revive.
 	restartedAt time.Time
@@ -631,7 +634,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.engaged = 0
 		b.toggledAt = now
 	case actAppear:
-		b.appearing = false
+		b.appearing, b.appearedAt = false, now
 	case actRestart:
 		b.restartedAt = now
 	case actDlgAnswer:

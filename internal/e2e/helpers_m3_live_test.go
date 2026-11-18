@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,8 +70,7 @@ type farmer struct {
 // the run's.
 func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, spots *botclient.SpotRegistry, tune func(*botclient.Persona)) *farmer {
 	t.Helper()
-	w := NewWatch(botclient.SystemClock{})
-	b := runBotWith(t, ctx, tg, account, botSetup{
+	return runWatched(t, ctx, tg, account, botSetup{
 		class: &botclient.HumanFighter,
 		persona: func() botclient.Persona {
 			p := botclient.DefaultPersona()
@@ -80,14 +80,23 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 			return p
 		},
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
-		tap:   w,
 	})
+}
+
+// runWatched runs a bot of account as setup says, through runBotWith with
+// a Watch as its frame tap. It returns once the bot is in the world, its
+// character one of the run's.
+func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *farmer {
+	t.Helper()
+	w := NewWatch(botclient.SystemClock{})
+	setup.tap = w
+	b := runBotWith(t, ctx, tg, account, setup)
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
 		return ok
 	})
 	if err != nil {
-		t.Fatalf("farmer %s in the world: %v", account, err)
+		t.Fatalf("bot %s in the world: %v", account, err)
 	}
 	ui := seen.Event.(botclient.UserInfo)
 	tg.Own(ui.Name, ui.ObjectID)
@@ -137,8 +146,68 @@ func (f *farmer) digest() string {
 			items = len(ev.Items)
 		}
 	}
-	return fmt.Sprintf("%s: state %v, rule %q, spot %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login; sent %v; read %v",
-		f.name, s.State, s.Rule, s.Spot, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, sent, read)
+	return fmt.Sprintf("%s: state %v, rule %q, spot %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login; sent %v; read %v; last moves %s",
+		f.name, s.State, s.Rule, s.Spot, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, sent, read, f.trail(trailLen))
+}
+
+// trailLen is how many lines of a failed farmer's trail its digest shows.
+const trailLen = 40
+
+// trail is the last n of f's clicks and of the moves the server reported
+// for it, oldest first, timed from the first: where an approach the server
+// walked got to.
+func (f *farmer) trail(n int) string {
+	type line struct {
+		at   time.Time
+		text string
+	}
+	var lines []line
+	for _, p := range f.watch.Sent() {
+		if p.Op == botclient.OpAction {
+			lines = append(lines, line{p.At, fmt.Sprintf("click %d", p.Target)})
+		}
+	}
+	for _, e := range f.watch.Seen(0) {
+		var text string
+		switch ev := e.Event.(type) {
+		case botclient.MoveToPawn:
+			if ev.ObjectID == f.id {
+				text = fmt.Sprintf("to pawn %d from %v", ev.TargetID, ev.Origin)
+			}
+		case botclient.MoveToLocation:
+			if ev.ObjectID == f.id {
+				text = fmt.Sprintf("move %v to %v", ev.Origin, ev.Dest)
+			}
+		case botclient.StopMove:
+			if ev.ObjectID == f.id {
+				text = fmt.Sprintf("stop %v", ev.Pos)
+			}
+		case botclient.ValidateLocation:
+			if ev.ObjectID == f.id {
+				text = fmt.Sprintf("at %v", ev.Pos)
+			}
+		case botclient.TeleportToLocation:
+			if ev.ObjectID == f.id {
+				text = fmt.Sprintf("teleport %v", ev.Pos)
+			}
+		case botclient.ActionFailed:
+			text = "action failed"
+		case botclient.NpcHtmlMessage:
+			text = fmt.Sprintf("page of %d", ev.ObjectID)
+		}
+		if text != "" {
+			lines = append(lines, line{e.At, text})
+		}
+	}
+	slices.SortStableFunc(lines, func(a, b line) int { return a.at.Compare(b.at) })
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	var out []string
+	for _, l := range lines {
+		out = append(out, fmt.Sprintf("%s %s", l.at.Format("15:04:05.000"), l.text))
+	}
+	return strings.Join(out, "; ")
 }
 
 // junkBut is every item template but keep: a farmer whose Loot.Junk it is
@@ -173,10 +242,17 @@ func gmGive(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl, co
 		if err := gm.Command(ctx, fmt.Sprintf("give %d %d", tmpl, count)); err != nil {
 			t.Fatal(err)
 		}
+		// Any rise counts, from what the stock was just before: a bot
+		// selling or spending tmpl meanwhile lowers it first.
 		wait, stop := context.WithTimeout(ctx, 15*time.Second)
 		_, _, err := f.watch.Await(wait, len(seen), func(ev botclient.Event) bool {
 			n, _, ok := stock(ev, tmpl)
-			return ok && n > had
+			if !ok {
+				return false
+			}
+			rose := n > had
+			had = n
+			return rose
 		})
 		stop()
 		if err == nil {

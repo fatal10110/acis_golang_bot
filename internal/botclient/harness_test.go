@@ -22,6 +22,13 @@ func TestHarnessEncoders(t *testing.T) {
 		{"WalkRunToggle", EncodeWalkRunToggle(), []byte{0x45, 1, 0, 0, 0, 0, 0, 0, 0, 0}},
 		{"RequestJoinParty", EncodeRequestJoinParty("ab", 1), []byte{0x29, 'a', 0, 'b', 0, 0, 0, 1, 0, 0, 0}},
 		{"Say2Tell", EncodeSay2Tell("ab", "hi"), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 2, 0, 0, 0, 'a', 0, 'b', 0, 0, 0}},
+		{"Say2 shout", EncodeSay2("hi", ChatShout), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 1, 0, 0, 0}},
+		{"Say2 trade", EncodeSay2("hi", ChatTrade), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 8, 0, 0, 0}},
+		{"TradeRequest", EncodeTradeRequest(0x01020304), []byte{0x15, 4, 3, 2, 1}},
+		{"AddTradeItem", EncodeAddTradeItem(7, 300), []byte{0x16, 0, 0, 0, 0, 7, 0, 0, 0, 0x2c, 1, 0, 0}},
+		{"TradeDone confirm", EncodeTradeDone(true), []byte{0x17, 1, 0, 0, 0}},
+		{"TradeDone cancel", EncodeTradeDone(false), []byte{0x17, 0, 0, 0, 0}},
+		{"RequestPrivateStoreBuy", EncodeRequestPrivateStoreBuy(9, []StoreBuy{{ObjectID: 7, Count: 2, Price: 300}, {ObjectID: 8, Count: 1, Price: 5}}), []byte{0x79, 9, 0, 0, 0, 2, 0, 0, 0, 7, 0, 0, 0, 2, 0, 0, 0, 0x2c, 1, 0, 0, 8, 0, 0, 0, 1, 0, 0, 0, 5, 0, 0, 0}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
