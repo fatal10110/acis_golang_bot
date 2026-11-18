@@ -106,8 +106,11 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   the harness only: the server refuses to drop the starting weapons, and drops would litter the
   village), and a starting piece it lost is given by the GM and worn again. The buyer of
   `TestLiveGearBuy` starts from a GM-given Short Sword, Shirt and Pants instead, as the starting
-  set cannot be sold. The GM then gives the pieces or the 30000 adena the scenario needs (three gives of 10000);
-  the bots keep what they bought and the adena left, until the next strip.
+  set cannot be sold. For the buying scenarios the GM then tops the character's adena up to 30000 (gives of
+  at most 10000) and recalls it next to its first merchant, so that its bot logs in with something
+  to buy in reach (a bot that finds nothing to buy holds its shop errand off for five minutes);
+  `TestLiveGearWear`'s GM gives the pieces instead. The bots keep what they bought and the adena
+  left, until the next strip.
   `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
