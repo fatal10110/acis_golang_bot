@@ -32,14 +32,27 @@ func TestLiveArrows(t *testing.T) {
 		// Bow and arrows only.
 		p.Shop.Restock = nil
 	})
-	gmRecall(t, ctx, gm, f, tiMarketWay)
+	gmRecall(t, ctx, gm, f, tiArmory)
 	gmOn(t, ctx, gm, f)
 	gmAdena(t, ctx, gm, f, 3)
 	t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 
-	var bow, arrows int32
+	// The bow at the weapon merchant, then the arrows next to the grocer:
+	// live, the server's walk to a merchant across the village (a click's
+	// MoveToPawn) stops at a wall short of it (#BOTGAP).
 	wctx, cancel := context.WithTimeout(ctx, 2*gearBound)
 	defer cancel()
+	until(t, wctx, f.name+" buys a bow", func() string {
+		for _, it := range inventory(f.watch.Seen(0)) {
+			if items[it.TemplateID].Kind == "BOW" {
+				return ""
+			}
+		}
+		return fmt.Sprintf("no bow (rule %q)", f.bot.Status().Rule)
+	})
+	gmRecall(t, ctx, gm, f, tiGrocery)
+
+	var bow, arrows int32
 	until(t, wctx, f.name+" buys a bow and its arrows and wears the bow", func() string {
 		inv := inventory(f.watch.Seen(0))
 		bow, arrows = 0, 0

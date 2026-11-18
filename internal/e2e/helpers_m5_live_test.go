@@ -36,9 +36,11 @@ const (
 	squiresSword int32 = 2369
 	squiresShirt int32 = 1146
 	squiresPants int32 = 1147
-	// shortSword is a one-handed sword of no grade a merchant buys back:
-	// the starting set is not sellable.
+	// shortSword, shirt and pants are no-grade pieces of the starting
+	// set's slots a merchant buys back: the starting set is not sellable.
 	shortSword int32 = 1
+	shirt      int32 = 21
+	pants      int32 = 28
 	// The pieces of #79: a shield, a necklace and two kinds of ring sold
 	// in the village (buylists 11 and 13), and a two-handed sword of no
 	// grade.
@@ -57,12 +59,12 @@ const (
 
 // Points of the Talking Island village (spawnlist/17_25.xml): next to the
 // human mystic trainers (30032, 30033, 30035, 30036), between the weapon
-// and armor merchants (Lector 30001, Jackson 30002), and between those and
-// the jewelry and grocery merchants (Silvia 30003, Katerina 30004).
+// and armor merchants (Lector 30001, Jackson 30002), and between the
+// jewelry and grocery merchants (Silvia 30003, Katerina 30004).
 var (
-	tiTrainers  = botclient.Point{X: -84850, Y: 244950, Z: -3726}
-	tiArmory    = botclient.Point{X: -86400, Y: 243000, Z: -3717}
-	tiMarketWay = botclient.Point{X: -85100, Y: 241900, Z: -3717}
+	tiTrainers = botclient.Point{X: -84850, Y: 244950, Z: -3726}
+	tiArmory   = botclient.Point{X: -86400, Y: 243000, Z: -3717}
+	tiGrocery  = botclient.Point{X: -84000, Y: 240600, Z: -3717}
 )
 
 // townData is the datapack's travel map (trainers, merchants, their spawns

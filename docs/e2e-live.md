@@ -105,8 +105,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   and every arrow an earlier run left it, worn or not, is destroyed (`RequestDestroyItem`, sent by
   the harness only: the server refuses to drop the starting weapons, and drops would litter the
   village), and a starting piece it lost is given by the GM and worn again. The buyer of
-  `TestLiveGearBuy` starts from a GM-given Short Sword instead, as the starting weapons cannot be
-  sold. The GM then gives the pieces or the 30000 adena the scenario needs (three gives of 10000);
+  `TestLiveGearBuy` starts from a GM-given Short Sword, Shirt and Pants instead, as the starting
+  set cannot be sold. The GM then gives the pieces or the 30000 adena the scenario needs (three gives of 10000);
   the bots keep what they bought and the adena left, until the next strip.
   `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
