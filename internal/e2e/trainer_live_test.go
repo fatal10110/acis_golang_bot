@@ -35,7 +35,8 @@ func TestLiveTrainer(t *testing.T) {
 	// Level 1 pulls Heal down to level 3 (healAt1); the visit the bot may
 	// make at level 1 finds nothing to learn.
 	gmOn(t, ctx, gm, f, "set level 1", "set sp 0")
-	gmRecall(t, ctx, gm, f, tiTrainers)
+	gmTeleport(t, ctx, gm, tiTrainers)
+	recallBot(t, ctx, tg, gm, f.name)
 	forgot, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	until(t, forgot, f.name+" keeps Heal 3 at most at level 1", func() string {

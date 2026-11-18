@@ -70,7 +70,8 @@ var (
 )
 
 // townData is the datapack's travel map (trainers, merchants, their spawns
-// and wares) and its weapon, armor, jewelry and arrow templates.
+// and wares) and its weapon, armor, jewelry and arrow templates. travelMap
+// (helpers_m4) is the same map alone.
 func townData(t *testing.T, tg *Target) (*botclient.TravelMap, map[int32]datapack.Item) {
 	t.Helper()
 	dp, err := datapack.Load(tg.Config().Datapack)
@@ -96,7 +97,7 @@ func runTownBot(t *testing.T, ctx context.Context, tg *Target, account string, c
 			}
 			return p
 		},
-		brain: func(cfg *botclient.BrainConfig) { cfg.Travel = travel },
+		brain: withTravel(travel),
 	})
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -158,19 +159,6 @@ func (f *farmer) visits() string {
 		fmt.Fprintf(&b, "\n  %s %s", l.at.Format("15:04:05.000"), l.text)
 	}
 	return b.String()
-}
-
-// gmRecall brings f to p, the GM going there first, and waits until the GM
-// sees f arrive.
-func gmRecall(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, p botclient.Point) {
-	t.Helper()
-	gmTeleport(t, ctx, gm, p)
-	if err := gm.Command(ctx, "recall "+f.name); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f.id)); err != nil {
-		t.Fatalf("%s recalled to %v: %v", f.name, p, err)
-	}
 }
 
 // gmGiveGear gives f, the GM's target, n items of template tmpl, one

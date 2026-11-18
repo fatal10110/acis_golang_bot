@@ -91,8 +91,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:
   `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N`,
   `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
-  character, `hide` (the GM's
-  own invisibility), `spawn ID`, `delete` on a spawned monster. The forms
+  character, `hide` (the GM's own invisibility), `spawn ID`, `delete` on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. The GM targets only run
   objects, so a command that falls back on its target cannot reach anyone else.
@@ -139,8 +138,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   village), and a starting piece it lost is given by the GM and worn again. The buyer of
   `TestLiveGearBuy` starts from a GM-given Short Sword, Shirt and Pants instead, as the starting
   set cannot be sold. For the buying scenarios the GM then tops the character's adena up to 30000
-  (gives of at most 10000) and recalls it next to its first merchant, so that its bot logs in with something
-  to buy in reach (a bot that finds nothing to buy holds its shop errand off for five minutes);
+  (gives of at most 10000) and recalls it next to its first merchant, so that its bot logs in with
+  something to buy in reach (a bot that finds nothing to buy holds its shop errand off for five minutes);
   `TestLiveGearWear`'s GM gives the pieces instead. The bots keep what they bought and the adena
   left, until the next strip.
   `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.

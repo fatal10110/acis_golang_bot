@@ -15,9 +15,9 @@ import (
 // with adena in the Talking Island village, stripped to its starting set:
 // it wields a sword, a weapon type an archer does not. It buys a bow and
 // the arrows of the bow's grade, at two merchants, and wears the bow only
-// once it carries the arrows. Then, out of town, told to assist the GM, it
-// shoots the monster the GM hits until it dies, and never reads
-// NotEnoughArrows.
+// once it carries the arrows (checked over its inventory events in
+// order). Then, out of town, told to assist the GM, it shoots the monster
+// the GM hits until it dies, and never reads NotEnoughArrows.
 func TestLiveArrows(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
@@ -49,7 +49,8 @@ func TestLiveArrows(t *testing.T) {
 		}
 		return fmt.Sprintf("no bow (rule %q)", f.bot.Status().Rule)
 	})
-	gmRecall(t, ctx, gm, f, tiGrocery)
+	gmTeleport(t, ctx, gm, tiGrocery)
+	recallBot(t, ctx, tg, gm, f.name)
 
 	var bow, arrows int32
 	until(t, wctx, f.name+" buys a bow and its arrows and wears the bow", func() string {
@@ -74,6 +75,30 @@ func TestLiveArrows(t *testing.T) {
 		return ""
 	})
 	t.Logf("%s wears %s and carries %d of its arrows", f.name, items[bow].Name, arrows)
+	// #85: the bow goes on only once arrows of its grade are carried.
+	inv := make(map[int32]botclient.Item)
+	for _, s := range f.watch.Seen(0) {
+		applyInventory(inv, s.Event)
+		var worn int32
+		for _, it := range inv {
+			if it.Equipped && items[it.TemplateID].Kind == "BOW" {
+				worn = it.TemplateID
+			}
+		}
+		if worn == 0 {
+			continue
+		}
+		var carried int32
+		for _, it := range inv {
+			if items[it.TemplateID].Kind == "ARROW" && items[it.TemplateID].Grade == items[worn].Grade {
+				carried += it.Count
+			}
+		}
+		if carried == 0 {
+			t.Errorf("%s wore %s at %s with none of its arrows", f.name, items[worn].Name, s.At.Format("15:04:05.000"))
+		}
+		break
+	}
 	if n := len(sentOf(f.watch.Sent(), botclient.OpRequestBuyItem)); n < 2 {
 		t.Errorf("%d RequestBuyItem: want the bow's and the arrows' at least", n)
 	}
@@ -83,12 +108,7 @@ func TestLiveArrows(t *testing.T) {
 	// assists only a player in its sight.
 	gmVisibleAt(t, ctx, gm, tiSpots)
 	from := len(f.watch.Seen(0))
-	if err := gm.Command(ctx, "recall "+f.name); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f.id)); err != nil {
-		t.Fatalf("%s recalled: %v", f.name, err)
-	}
+	recallBot(t, ctx, tg, gm, f.name)
 	// The GM is in the archer's sight once its CharInfo reached the bot:
 	// the tap sees the frame just before the brain does.
 	sctx, cancel := context.WithTimeout(ctx, EntryTimeout)

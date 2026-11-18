@@ -53,7 +53,7 @@ func TestLiveGearWear(t *testing.T) {
 		// Wearing only: what it is given, never what it could buy.
 		p.Gear.Buy, p.Shop = false, botclient.ShopPolicy{}
 	})
-	gmRecall(t, ctx, gm, f, townTI)
+	toTown(t, ctx, tg, gm, f)
 
 	gmOn(t, ctx, gm, f)
 	gmGiveGear(t, ctx, gm, f, smallShield, 1)
@@ -92,9 +92,11 @@ func wears(t *testing.T, ctx context.Context, f *farmer, items map[int32]datapac
 // TestLiveGearBuy runs two fighters with adena in the Talking Island
 // village next to the weapon and armor merchants, stripped to their
 // starting sets, the first one with a Short Sword, a Shirt and Pants for
-// its Squire's set, which no merchant buys back. That one plays the default persona (#40): it buys a better piece for a
-// slot of its set, wears it, and sells the piece it took off. The other plays a rogue's class table (#79: daggers in light
-// armor, class 7) unarmed: it buys a dagger and wears it.
+// its Squire's set, which no merchant buys back. That one plays the
+// default persona (#40): it buys a better piece for a slot of its set,
+// wears it, and sells the piece it took off. The other plays a rogue's
+// class table (#79: daggers in light armor, class 7) unarmed: it buys a
+// dagger and wears it.
 func TestLiveGearBuy(t *testing.T) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
