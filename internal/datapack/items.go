@@ -52,42 +52,68 @@ type itemElement struct {
 }
 
 // LoadItems reads every *.xml item template file directly under dir, in
-// sorted file order, keeping the weapons, armor and arrows. A file that is
-// not well-formed, or a template kept missing or mangling a field
-// bots read, fails the whole load. An id declared twice keeps its last
-// declaration.
-func LoadItems(dir string) (map[int32]Item, error) {
+// sorted file order, keeping the weapons, armor and arrows, and the
+// reference prices of every template (buildPrice). A file that is not
+// well-formed, or a template missing or mangling a field bots read, fails
+// the whole load. An id declared twice keeps its last declaration.
+func LoadItems(dir string) (map[int32]Item, map[int32]int32, error) {
 	paths, err := xmlFiles(dir, "item")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	items := make(map[int32]Item)
+	items, prices := make(map[int32]Item), make(map[int32]int32)
 	for _, path := range paths {
 		var f itemFile
 		if err := decodeFile(path, &f); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, el := range f.Items {
+			id, price, priced, err := buildPrice(el)
+			if err != nil {
+				return nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
+			}
+			delete(prices, id)
+			if priced {
+				prices[id] = price
+			}
 			it, ok, err := buildItem(el)
 			if err != nil {
-				return nil, fmt.Errorf("datapack: %s: %w", path, err)
+				return nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
 			}
 			if ok {
 				items[it.ID] = it
 			}
 		}
 	}
-	return items, nil
+	return items, prices, nil
+}
+
+// itemAttrs reads el's attributes and its <set> values into one reader.
+func itemAttrs(el itemElement) *attrReader {
+	a := foldAttrs(el.Attrs)
+	for _, s := range el.Sets {
+		a.vals[s.Name] = s.Val
+	}
+	return a
+}
+
+// buildPrice reads the id and reference price of any template, reporting
+// false for one a private store never lists: no price above 0, or
+// is_tradable false (item.Instance.Tradable, privatestore ItemsToSell).
+func buildPrice(el itemElement) (id, price int32, priced bool, err error) {
+	a := itemAttrs(el)
+	id, price = a.int32("id"), a.int32Default("price", 0)
+	if a.err != nil {
+		return 0, 0, false, fmt.Errorf("item %s: %w", a.strDefault("id", "?"), a.err)
+	}
+	return id, price, price > 0 && a.boolDefault("is_tradable", true), nil
 }
 
 // buildItem reads a weapon, armor or arrow template, reporting false for
 // any other: id, type and name are required, price and duration default
 // to 0, crystal_type to none.
 func buildItem(el itemElement) (Item, bool, error) {
-	a := foldAttrs(el.Attrs)
-	for _, s := range el.Sets {
-		a.vals[s.Name] = s.Val
-	}
+	a := itemAttrs(el)
 	it := Item{ID: a.int32("id"), Type: a.str("type"), Name: a.str("name")}
 	if a.err != nil {
 		return Item{}, false, fmt.Errorf("item %s: %w", a.strDefault("id", "?"), a.err)

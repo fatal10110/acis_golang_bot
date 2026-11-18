@@ -156,6 +156,7 @@ func skill(id, target int32) func(botclient.Event) bool {
 // persona's delay; assistMin to assistMax live) after the first swing, heals the leader once the monster took it under 60 % HP, and
 // renews its buffs once under RebuffBefore (#22).
 func TestLiveSupport(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 12*time.Minute)
 	gm := enterGM(t, ctx, tg)

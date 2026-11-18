@@ -130,6 +130,7 @@ func freeLoopback(t *testing.T) string {
 // same data directory logs both back in as the same characters; and the
 // first bot's account still lists exactly one character.
 func TestLivePanelBots(t *testing.T) {
+	t.Parallel()
 	tg := e2e.Live(t, e2e.NeedDatapack)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()

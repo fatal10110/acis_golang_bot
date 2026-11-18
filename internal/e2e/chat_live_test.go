@@ -15,7 +15,9 @@ import (
 // gets none; nor does a whisper of a second client of the run, whose name
 // carries the bot marker.
 func TestLiveChatReplies(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	if botnames.DefaultMarker.Marks(gm.Self.Name) {

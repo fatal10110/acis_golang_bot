@@ -21,7 +21,9 @@ import (
 // on (#21, #39). The GM sets the mystic back to level 1, which pulls Heal
 // down to level 3, at the start and at the end.
 func TestLiveTrainer(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &townNPCs)
 	ctx := scenarioCtx(t, 20*time.Minute)
 	travel, _ := townData(t, tg)
 	gm := enterGM(t, ctx, tg)

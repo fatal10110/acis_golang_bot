@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestConfigFromEnv(t *testing.T) {
 		want Config
 	}{
 		{"nothing set, no dir", nil, "", Config{Prefix: DefaultPrefix}},
-		{"files default to the dir", nil, "/p/.e2e", Config{Prefix: DefaultPrefix, SecretFile: "/p/.e2e/secret", GMFile: "/p/.e2e/gm"}},
+		{"files default to the dir", nil, "/p/.e2e", Config{Prefix: DefaultPrefix, SecretFile: "/p/.e2e/secret"}},
 		{
 			"every variable",
 			map[string]string{
@@ -26,13 +27,13 @@ func TestConfigFromEnv(t *testing.T) {
 				EnvGMFile: "/g", EnvDatapack: "/d", EnvAllowLoginFail: "1",
 			},
 			"/p/.e2e",
-			Config{Login: "h:2106", SecretFile: "/s", Prefix: "e2x", Allowlisted: true, GMFile: "/g", Datapack: "/d", AllowLoginFail: true},
+			Config{Login: "h:2106", SecretFile: "/s", Prefix: "e2x", Allowlisted: true, GMFiles: []string{"/g"}, Datapack: "/d", AllowLoginFail: true},
 		},
 		{"only 1 switches on", map[string]string{EnvAllowlisted: "true", EnvAllowLoginFail: "yes"}, "", Config{Prefix: DefaultPrefix}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ConfigFromEnv(env(tt.env), tt.dir); got != tt.want {
+			if got := ConfigFromEnv(env(tt.env), tt.dir); !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("ConfigFromEnv = %+v, want %+v", got, tt.want)
 			}
 		})
@@ -45,7 +46,7 @@ func TestConfigMissing(t *testing.T) {
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	full := Config{Login: "h:2106", SecretFile: file, GMFile: file, Datapack: dir, AllowLoginFail: true}
+	full := Config{Login: "h:2106", SecretFile: file, GMFiles: []string{file}, Datapack: dir, AllowLoginFail: true}
 	tests := []struct {
 		name  string
 		cfg   Config
@@ -57,7 +58,7 @@ func TestConfigMissing(t *testing.T) {
 		{"every need", full, []Need{NeedGM, NeedDatapack, NeedLoginFail}, nil},
 		{"secret file absent", Config{Login: "h:2106", SecretFile: filepath.Join(dir, "none")}, nil, []string{EnvSecretFile}},
 		{"GM not needed is not checked", Config{Login: "h:2106", SecretFile: file}, nil, nil},
-		{"GM file absent", Config{Login: "h:2106", SecretFile: file, GMFile: filepath.Join(dir, "none")}, []Need{NeedGM}, []string{EnvGMFile}},
+		{"GM file absent", Config{Login: "h:2106", SecretFile: file, GMFiles: []string{file, filepath.Join(dir, "none")}}, []Need{NeedGM}, []string{EnvGMFile}},
 		{"login fail not allowed", Config{Login: "h:2106", SecretFile: file}, []Need{NeedLoginFail}, []string{EnvAllowLoginFail}},
 	}
 	for _, tt := range tests {

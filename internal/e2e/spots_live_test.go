@@ -17,7 +17,9 @@ import (
 // not claim it back (#38). The first farmer goes back to level 1 at the
 // end, so the next run finds it a newbie again.
 func TestLiveSpots(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
+	alone(t, &newbieSpots)
 	ctx := scenarioCtx(t, 15*time.Minute)
 	spots := spotRegistry(t, tg)
 	gm := enterGM(t, ctx, tg)

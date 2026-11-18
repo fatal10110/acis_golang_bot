@@ -196,10 +196,6 @@ func storeBot(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, accou
 		persona: func() botclient.Persona {
 			p := persona()
 			p.Store.Budget = storeBudget
-			// A persona default (D6): a bot that enters in town with only
-			// loot its store cannot price (the Tutorial Guide, reference
-			// price 1) quits that opening, and opens no store for Retry.
-			p.Store.Retry = 10 * time.Second
 			return p
 		},
 		brain: func(cfg *botclient.BrainConfig) {

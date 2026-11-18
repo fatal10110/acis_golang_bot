@@ -7,14 +7,16 @@ and never edit the server's config: a scenario the server cannot satisfy is reco
 ## Owner prerequisites
 
 - **Login server:** `AutoCreateAccounts = True` (the first login of an `e2e` account creates it),
-  `MaximumOnlineUsers` headroom for 4 more characters.
-- **GM character:** an existing account whose character has access level 7, created over the
-  protocol and promoted once by the owner. The harness never promotes anything.
+  `MaximumOnlineUsers` headroom for 8 more characters per test process (2 scenarios of 4).
+- **GM characters:** existing accounts whose characters have access level 7, created over the
+  protocol and promoted once by the owner, one per scenario running at once. The harness never
+  promotes anything.
 - **Config files** in `.e2e/` at the root of the primary checkout (gitignored; dir 0700, files
   0600, refused when readable by others):
   - `secret`: the HMAC secret the `e2e` account passwords derive from (strong, as persistent mode
     wants it);
-  - `gm`: three `key=value` lines, `account=`, `password=` and `character=`.
+  - `gm`, `gm2`, `gm3`, ...: the GM pool, one GM file each, three `key=value` lines, `account=`,
+    `password=` and `character=`. The harness keeps a lock file next to each (`gm.lock`, ...).
 - **Allowlist:** set `BOT_E2E_ALLOWLISTED=1` only when the source address is on
   `AcceptFilterAllowlist` of both servers; otherwise logins are paced by the bot's login gate.
 
@@ -26,7 +28,7 @@ Environment variables only, each a value or a path, never a secret:
 | --- | --- | --- |
 | `BOT_E2E_LOGIN` | login server `host:port` | none: every scenario skips |
 | `BOT_E2E_SECRET_FILE` | secret file | `.e2e/secret` of the primary checkout |
-| `BOT_E2E_GM_FILE` | GM file | `.e2e/gm` of the primary checkout |
+| `BOT_E2E_GM_FILE` | GM file, or a list of them (`:` between, `;` on Windows): pins the run's GM pool | every `gm`, `gm2`, ... of the primary checkout's `.e2e/` |
 | `BOT_E2E_PREFIX` | account prefix; refused when it overlaps `hz` or the owner's `bots ui` panel prefix | `e2e` |
 | `BOT_E2E_ALLOWLISTED` | `1`: no login spacing | unset |
 | `BOT_E2E_DATAPACK` | local datapack XML directory (the panel's `town` preset) | none |
@@ -46,25 +48,43 @@ BOT_E2E_LOGIN=l2-login.iterharbor.com:2106 make e2e-live-loginfail   # alone: it
 ```
 
 One group at a time: `go test -count=1 -v -run '^TestLiveRecall' ./internal/e2e/` with the same
-variables and `BOT_REQUIRE_E2E=1`. `make e2e-live` runs the packages one after the other, the
-second only when the first passed: each test process has its own login gate.
+variables and `BOT_REQUIRE_E2E=1`.
+
+`make e2e-live` runs in parallel:
+
+- **Scenarios:** inside a test process, every scenario but the soak (it counts the process's
+  goroutines) and the wrong-password one calls `t.Parallel`, and at most 2 run at once
+  (`e2e.MaxScenarios`, `-parallel 2`). Scenarios that share ground take a group lock and run one
+  at a time: the farmers on the newbie spots (farm, anti-KS, spots, arrows), and the bots sent to
+  the village's grocer, stores, trainers and merchants. Each scenario logs in accounts of its own
+  (an account group no other scenario uses): a login to an account already in game evicts that
+  session.
+- **GM pool:** each scenario that needs a GM leases one from the pool (`.e2e/gm*`, or the
+  `BOT_E2E_GM_FILE` list) through a lock on its lock file, held until the GM logs out, so two
+  scenarios of one process, of two processes or of two runs never share a GM. With every GM
+  held, the scenario waits. The kernel drops the lock of a process that dies, so a killed run
+  never blocks a later one.
+- **Packages:** `./internal/e2e/` and `./cmd/bots/` are separate test processes, each with its own
+  login gate. They run at the same time only with `BOT_E2E_ALLOWLISTED=1`: two spaced gates
+  dialing at once would burst the accept filter.
 
 ### Parallel runs
 
 Live runs may run at the same time, as real bot runs do (several agents, or an agent and the
 owner's own bots). Each concurrent run needs:
 
-- **Its own GM file** (`BOT_E2E_GM_FILE=.e2e/gm2`, `gm3`, ...): one GM character per run, each
-  promoted to access level 7 by the owner. Two runs never share a GM session: the second login of
-  the same account drops the first.
-- **Its own lock** when the run goes through `scripts/agent-tools/heavy`: `HEAVY_LOCK` named after
-  the GM file (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`, with `HEAVY_TIMEOUT=60m`). The lock only
-  serializes runs of the same GM; a live run never takes the default heavy lock, which stays for
-  race tests and lint on the owner's machine.
+- **GMs:** the second login of an account drops the first, so two runs never share a GM session.
+  Runs of this harness lease GMs from the pool through the per-GM locks, so they may share the
+  pool; a run may still pin its own GM files (`BOT_E2E_GM_FILE=.e2e/gm2`, or a list) to keep out
+  of the GMs another run uses, for example a run of an older harness that takes no lock.
+- **Its own lock** when the run goes through `scripts/agent-tools/heavy`: a `HEAVY_LOCK` of its
+  own (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`, with `HEAVY_TIMEOUT=60m`). A live run never takes
+  the default heavy lock, which stays for race tests and lint on the owner's machine.
 - **Its own scenarios or its own prefix:** two runs of the same scenario at once log in the same
   `e2e` accounts and drop each other; give one of them another `BOT_E2E_PREFIX`.
-- **Headroom:** each run keeps its cap of 4 characters online, so the login server's
-  `MaximumOnlineUsers` needs 4 more per concurrent run.
+- **Headroom:** each scenario keeps its cap of 4 characters online and a test process keeps at
+  most 2 scenarios open, so the login server's `MaximumOnlineUsers` needs 8 more per concurrent
+  test process.
 
 Every scenario tolerates other players and bots around it: another run may play in the same town
 at the same time. A scenario asserts only on its own characters, the monsters it spawned and the
@@ -80,15 +100,18 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   bots log in through the panel's own gate and breaker; the scenario first checks the panel's
   first account through the run's gate. The first refused credential halts every later login of
   the process and leaves the marker `halted` next to the secret file (account and reason, never a
-  password). While the marker exists every scenario fails before it logs in: the login server
+  password). While the marker exists every scenario fails before it logs in, checked when the
+  process opens the run and again before each scenario, so a test process running beside the one
+  that tripped stops at its next scenario: the login server
   counts failed logins per address over all accounts for at least an hour, only a good login of
   the same account takes one back, and 3 ban the address (`LoginTryBeforeBan`). After a refusal,
   fix the secret file, then delete `.e2e/halted`. The wrong password is sent at most once a run,
   only with `BOT_E2E_ALLOW_LOGINFAIL=1`, after a good login of the same account, and leaves no
   marker: the next good login of that account takes its failure back.
-- **Cap:** at most 4 characters of a run online at once, the GM's and a panel's bots included;
-  every scenario logs its characters out in cleanup.
-- **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:
+- **Cap:** at most 4 characters of a scenario online at once, the GM's and a panel's bots
+  included, and at most 2 scenarios of a test process open at once; every scenario logs its
+  characters out in cleanup.
+- **GM commands** (`e2e.Scope`) touch only the scenario's characters and the monsters it spawned:
   `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N`,
   `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
   character, `hide` (the GM's own invisibility), `spawn ID`, `delete` on a spawned monster. The forms
@@ -103,7 +126,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
   `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv3`,
   `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`, `e2est1`-`e2est3`,
-  `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`) and
+  `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`, `e2epn1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a

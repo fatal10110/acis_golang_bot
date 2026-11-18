@@ -17,6 +17,7 @@ import (
 // into BOT_E2E_RECORD when set, else a temporary directory. The world model
 // built from the EnterWorld burst matches the server's UserInfo (#8).
 func TestLiveLoginEnterLogout(t *testing.T) {
+	t.Parallel()
 	tg := Live(t)
 	ctx := scenarioCtx(t, 2*time.Minute)
 	account, _ := tg.Account("a", 1)
@@ -70,6 +71,7 @@ func TestLiveLoginEnterLogout(t *testing.T) {
 // the combat stance, which keeps the character in the world 15 s, so a
 // login right after meets AccountInUse until the server lets it go (#12).
 func TestLiveLogoutRefusedInCombat(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 4*time.Minute)
 	account, _ := tg.Account("a", 2)

@@ -76,7 +76,7 @@ func TestNewTravelMap(t *testing.T) {
 			30059: {{Kind: "NOBLE_HUNTING_ZONE_PASS", PriceID: 6651, X: 1}}, // nothing standard
 			31000: {std(500, 57)},                                           // not a gatekeeper
 		},
-		Items: map[int32]datapack.Item{1867: {ID: 1867, Price: 10}, 1868: {ID: 1868}},
+		Prices: map[int32]int32{1867: 10},
 	}
 	m := NewTravelMap(dp)
 	if want := map[int32]int32{1867: 10}; !reflect.DeepEqual(m.prices, want) {

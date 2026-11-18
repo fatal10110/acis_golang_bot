@@ -15,7 +15,6 @@ var lootPrices = map[int32]int32{animalSkin: 10, woodenArrow: 2, stoneSword: 100
 func newLootTrader(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	b := newStoreBrain(t, 0, items...)
-	b.cfg.Travel.prices = lootPrices
 	near := Point{Y: 100}
 	b.world.Objects[pcID].move = motion{from: near, to: near}
 	return b
@@ -71,6 +70,7 @@ func TestTradeLootMatchesStore(t *testing.T) {
 		}
 		b.store.step = storeAskManage
 		b.storeManageList(PrivateStoreManageListSell{OwnerID: selfID, Candidates: []StoreItem{swordCand}})
+		b.storeRows() // prices the list's loot
 		if stored := b.store.prices[stoneSword]; stored != traded || traded < 600 || traded > 750 {
 			t.Fatalf("seed %d: trade price %d, store price %d, want equal, 1.2-1.5 times the buy-back of 500", seed, traded, stored)
 		}

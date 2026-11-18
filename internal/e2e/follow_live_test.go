@@ -86,6 +86,7 @@ func awayFrom(from botclient.Point, d float64, a float64) botclient.Point {
 // of every stop, keeps within that plus one re-path delay of travel while
 // the GM moves, and matches the GM's walk or run (#18).
 func TestLiveFollow(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)

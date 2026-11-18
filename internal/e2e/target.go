@@ -16,9 +16,13 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
-// MaxOnline is the most e2e characters a run keeps online at once, the GM's
-// included.
+// MaxOnline is the most e2e characters a scenario keeps online at once,
+// its GM's included.
 const MaxOnline = 4
+
+// MaxScenarios is the most scenarios a run keeps open at once, so a run
+// keeps at most MaxScenarios*MaxOnline characters online.
+const MaxScenarios = 2
 
 // EntryTimeout bounds each read and write of a login or game entry.
 const EntryTimeout = 15 * time.Second
@@ -52,26 +56,36 @@ func (n netDialer) dialGame(ctx context.Context, addr string) (*botclient.GameCo
 	return botclient.DialGame(ctx, addr, botclient.ProtocolRevision, EntryTimeout)
 }
 
-// Target is one run against a server: every login of the run passes its
-// login gate, spaced under the accept filter unless the config says the
-// source address is allowlisted, and its credential breaker, which the
-// first refused credential trips for the rest of the run and, through the
-// marker it leaves (Config.HaltFile), for every later run. At most MaxOnline
-// characters of the run are online at once (Hold). Its methods may be
-// called from any goroutine.
+// Target is one scenario of a run against a server. Every login of the run
+// passes the run's login gate, spaced under the accept filter unless the
+// config says the source address is allowlisted, and its credential breaker,
+// which the first refused credential trips for the rest of the run and,
+// through the marker it leaves (Config.HaltFile), for every later run. At
+// most MaxScenarios scenarios of a run are open at once (Scenario), each with
+// at most MaxOnline characters online (Hold), its own GM from the run's pool
+// (EnterGM) and its own GM command scope. Its methods may be called from any
+// goroutine.
 type Target struct {
+	*run
+	// slots holds a token per character of the scenario online.
+	slots chan struct{}
+
+	mu    sync.Mutex
+	scope *Scope // guarded by mu
+}
+
+// run is what the scenarios of one run share.
+type run struct {
 	cfg    Config
 	secret botaccounts.Secret
 	clock  botclient.Clock
 	gate   *botclient.LoginGate
 	net    network
-	// slots holds a token per character online.
-	slots chan struct{}
+	gms    *gmPool
+	// scenarios holds a token per scenario open.
+	scenarios chan struct{}
 	// loginFail is set once the run's one wrong-password login was sent.
 	loginFail atomic.Bool
-
-	mu    sync.Mutex
-	scope *Scope // guarded by mu
 }
 
 // NewTarget opens a run against cfg's server: it refuses a prefix that
@@ -100,11 +114,36 @@ func newTarget(cfg Config, secret botaccounts.Secret, clock botclient.Clock, n n
 	if cfg.Allowlisted {
 		gate = botclient.NewAllowlistedLoginGate(clock, nil)
 	}
-	return &Target{
+	r := &run{
 		cfg: cfg, secret: secret, clock: clock, gate: gate, net: n,
-		slots: make(chan struct{}, MaxOnline),
-		scope: newScope(),
+		gms:       newGMPool(cfg.GMFiles, clock),
+		scenarios: make(chan struct{}, MaxScenarios),
 	}
+	return r.target()
+}
+
+func (r *run) target() *Target {
+	return &Target{run: r, slots: make(chan struct{}, MaxOnline), scope: newScope()}
+}
+
+// Scenario opens another scenario of t's run, waiting while MaxScenarios
+// are open; done closes it, once, after its characters are offline. It
+// refuses to open once the breaker is tripped, by this run or, through its
+// marker, by another.
+func (t *Target) Scenario(ctx context.Context) (s *Target, done func(), err error) {
+	if err := t.gate.Err(); err != nil {
+		return nil, nil, err
+	}
+	if err := checkHalt(t.cfg.HaltFile()); err != nil {
+		return nil, nil, err
+	}
+	select {
+	case t.scenarios <- struct{}{}:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	var once sync.Once
+	return t.run.target(), func() { once.Do(func() { <-t.scenarios }) }, nil
 }
 
 // Config is the run's config.
@@ -151,7 +190,7 @@ func (t *Target) SessionConfig(log *slog.Logger) botclient.SessionConfig {
 // tripped it, else nil.
 func (t *Target) Halted() error { return t.gate.Err() }
 
-// Own makes name (objectID 0 when not known yet) one of the run's
+// Own makes name (objectID 0 when not known yet) one of the scenario's
 // characters, which GM commands may then touch.
 func (t *Target) Own(name string, objectID int32) {
 	t.mu.Lock()
@@ -161,7 +200,8 @@ func (t *Target) Own(name string, objectID int32) {
 
 // Enter logs account in and enters the world as ch on a place of its own,
 // recording every game frame read into rec when it is set. A refused
-// credential trips the breaker. The character becomes one of the run's.
+// credential trips the breaker. The character becomes one of the
+// scenario's.
 func (t *Target) Enter(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*Client, error) {
 	release, err := t.Hold(ctx)
 	if err != nil {
@@ -470,31 +510,43 @@ func (c *Client) Close() {
 	})
 }
 
-// GMClient is the run's GM online: its commands pass the run's filter
+// GMClient is a scenario's GM online: its commands pass the scenario's filter
 // (Scope.check) before they are sent, paced like dialog clicks.
 type GMClient struct {
 	*Client
 	t *Target
+	// file is the pool's GM file the scenario holds.
+	file string
 }
 
-// EnterGM logs the GM file's GM in.
+// EnterGM logs in a GM of the run's pool that no other scenario, of this
+// process or another, holds, waiting while every one is held; the GM is the
+// scenario's until it logs out or its connection closes.
 func (t *Target) EnterGM(ctx context.Context) (*GMClient, error) {
-	gm, err := LoadGM(t.cfg.GMFile)
+	lease, err := t.gms.take(ctx)
 	if err != nil {
+		return nil, err
+	}
+	gm, err := LoadGM(lease.file)
+	if err != nil {
+		lease.release()
 		return nil, err
 	}
 	c, err := t.Enter(ctx, gm.Account, gm.Password(), botclient.Character{Name: gm.Character}, nil)
 	if err != nil {
+		lease.release()
 		return nil, err
 	}
+	place := c.release
+	c.release = func() { place(); lease.release() }
 	// The GM is no run character: no command may touch it by name.
 	t.mu.Lock()
 	delete(t.scope.chars, strings.ToLower(gm.Character))
 	t.mu.Unlock()
-	return &GMClient{Client: c, t: t}, nil
+	return &GMClient{Client: c, t: t, file: lease.file}, nil
 }
 
-// Command sends cmd (without "//") once the run's filter accepts it.
+// Command sends cmd (without "//") once the scenario's filter accepts it.
 func (g *GMClient) Command(ctx context.Context, cmd string) error {
 	g.t.mu.Lock()
 	err := g.t.scope.check(cmd)

@@ -12,6 +12,7 @@ import (
 // whispered "leave" takes the bot out, which disperses the party of two
 // (#17, #19).
 func TestLivePartyGMInviteLeave(t *testing.T) {
+	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 5*time.Minute)
 	gm := enterGM(t, ctx, tg)
@@ -38,6 +39,7 @@ func TestLivePartyGMInviteLeave(t *testing.T) {
 // swarm: the first joins, the second declines while the first holds the
 // player as its leader; once the first left, the second joins (#72).
 func TestLivePartySwarmOneJoins(t *testing.T) {
+	t.Parallel()
 	tg := Live(t)
 	ctx := scenarioCtx(t, 5*time.Minute)
 	acc, _ := tg.Account("sw", 1)
