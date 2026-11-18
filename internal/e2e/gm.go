@@ -140,6 +140,7 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	kick NAME            disconnects a run character
 //	kill|res|heal|cancel [NAME] a run character, or with no name the GM's target
 //	set level N          the GM's target, a run character
+//	set sp N             the GM's target, a run character; N 0 to maxSP
 //	skill set ID LEVEL   the GM's target, a run character; also skill set all
 //	give ID [COUNT]      items to the GM's target, a run character; COUNT
 //	                     1 to maxGive, 1 by default
@@ -161,7 +162,7 @@ func (s *Scope) check(cmd string) error {
 	case "kill", "res", "heal", "cancel":
 		ok = len(args) == 1 && s.isChar(args[0]) || len(args) == 0 && s.owns(s.target)
 	case "set":
-		ok = len(args) == 2 && args[0] == "level" && allInts(args[1:]) && s.isCharID(s.target)
+		ok = len(args) == 2 && (args[0] == "level" && allInts(args[1:]) || args[0] == "sp" && validSP(args[1])) && s.isCharID(s.target)
 	case "skill":
 		ok = (len(args) == 3 && args[0] == "set" && allInts(args[1:]) ||
 			len(args) == 2 && args[0] == "set" && args[1] == "all") && s.isCharID(s.target)
@@ -187,6 +188,15 @@ const maxGive = 10000
 func validGive(count string) bool {
 	n, err := strconv.Atoi(count)
 	return err == nil && n >= 1 && n <= maxGive
+}
+
+// maxSP bounds the SP of a //set sp: a trainer scenario seeds the cost of
+// a few skill levels (#21, #39).
+const maxSP = 100000
+
+func validSP(sp string) bool {
+	n, err := strconv.Atoi(sp)
+	return err == nil && n >= 0 && n <= maxSP
 }
 
 func allInts(ss []string) bool {
