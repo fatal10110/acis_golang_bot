@@ -90,8 +90,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   every scenario logs its characters out in cleanup.
 - **GM commands** (`e2e.Scope`) touch only the run's characters and the monsters it spawned:
   `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N`,
-  `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run character, `hide` (the GM's
-  own invisibility), `spawn ID`, `delete` on a spawned monster. The forms
+  `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
+  character, `hide` (the GM's own invisibility), `spawn ID`, `delete` on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. The GM targets only run
   objects, so a command that falls back on its target cannot reach anyone else.
@@ -103,7 +103,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
   `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv3`,
   `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`, `e2est1`-`e2est3`,
-  `e2ems1`, `e2ech1`-`e2ech2`) and
+  `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
@@ -127,6 +127,22 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   bought and the adena they did not spend. `TestLiveChatReplies` has the GM say one line on the
   shout and one on the trade channel ("e2e test line, please ignore"), which other players in
   the region see.
+- `TestLiveTrainer` sets its mystic to level 1 with no SP at the start and the end (the server
+  takes away the skills a lower level does not allow), and in between to levels 10 and 15 with
+  20000 SP; it ends next to the village's trainers. The GM gives a Spellbook: Heal only when the
+  trainer asks for one; learning takes it.
+- The gear scenarios (`TestLiveGearWear`, `TestLiveGearBuy`, `TestLiveArrows`) first enter each of
+  their characters alone and strip it to its starting set: every weapon, armor and jewelry piece
+  and every arrow an earlier run left it, worn or not, is destroyed (`RequestDestroyItem`, sent by
+  the harness only: the server refuses to drop the starting weapons, and drops would litter the
+  village), and a starting piece it lost is given by the GM and worn again. The buyer of
+  `TestLiveGearBuy` starts from a GM-given Short Sword, Shirt and Pants instead, as the starting
+  set cannot be sold. For the buying scenarios the GM then tops the character's adena up to 30000
+  (gives of at most 10000) and recalls it next to its first merchant, so that its bot logs in with
+  something to buy in reach (a bot that finds nothing to buy holds its shop errand off for five minutes);
+  `TestLiveGearWear`'s GM gives the pieces instead. The bots keep what they bought and the adena
+  left, until the next strip.
+  `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
 - The GM's commands land in the server's GM audit log.
@@ -164,5 +180,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveStoreClosesOnFollow` | GM, datapack | #77 a GM's `follow` closes the bot's open store, and the bot follows |
 | `TestLiveMerchantSwarm` | GM, datapack | #111 a merchant-preset bot with loot in town opens its store, seen by the GM |
 | `TestLiveChatReplies` | GM | #36 one whispered reply after the delay; none to a repeat sender, a marked name, shout or trade |
+| `TestLiveTrainer` | GM, datapack | #21 a level 10 mystic visits its class trainer (the spellbook when asked), #39 Heal's level offered from level 14 learned after the level-up to 15 |
+| `TestLiveGearWear` | GM, datapack | #79 shield, necklace and two rings worn, a better ring for the lesser, a two-handed sword worn and the shield taken off |
+| `TestLiveGearBuy` | GM, datapack | #40 a better piece bought and worn, the old one sold; #79 a rogue's table buys and wears a dagger |
+| `TestLiveArrows` | GM, datapack | #85, #102 an archer's table wielding a sword buys a bow and its arrows, wears the bow, and shoots without NotEnoughArrows |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.

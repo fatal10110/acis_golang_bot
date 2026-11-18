@@ -65,9 +65,8 @@ type farmer struct {
 }
 
 // runFarmer runs a human fighter of account with the persona tune adjusts
-// (DefaultPersona when nil) on spots, through runBotWith with a Watch as its
-// frame tap. It returns once the bot is in the world, its character one of
-// the run's.
+// (DefaultPersona when nil) on spots, through runWatched. It returns once
+// the bot is in the world, its character one of the run's.
 func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, spots *botclient.SpotRegistry, tune func(*botclient.Persona)) *farmer {
 	t.Helper()
 	return runWatched(t, ctx, tg, account, botSetup{
@@ -83,9 +82,10 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 	})
 }
 
-// runWatched runs a bot of account as setup says, through runBotWith with
-// a Watch as its frame tap. It returns once the bot is in the world, its
-// character one of the run's.
+// runWatched runs a whole Bot of account as setup says, through runBotWith
+// with a Watch as its frame tap (setup.tap is replaced). It returns once the
+// bot is in the world, its character one of the run's; a failed test logs
+// the bot's digest.
 func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *farmer {
 	t.Helper()
 	w := NewWatch(botclient.SystemClock{})

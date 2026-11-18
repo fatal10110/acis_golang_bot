@@ -103,7 +103,8 @@ func (w *Watch) Sent() []Sent {
 }
 
 // Await waits until an event read at index from or later matches and
-// returns its index and it, or ctx's error once ctx ends.
+// returns its index and it, or ctx's error once ctx ends. match runs with
+// the watch locked, once per event: it must not call w's methods.
 func (w *Watch) Await(ctx context.Context, from int, match func(botclient.Event) bool) (int, Seen, error) {
 	for {
 		w.mu.Lock()

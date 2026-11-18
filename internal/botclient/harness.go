@@ -47,15 +47,42 @@ func EncodeSendBypassBuildCmd(cmd string) []byte {
 
 // Client packet opcodes a scenario finds in the frames a bot wrote
 // (FrameTap.RecordSent): each packet's first field after the opcode is the
-// object, skill or item it acts on (encodeAction, encodeAttackRequest,
-// encodeRequestMagicSkillUse, encodeUseItem, encodeRequestDropItem).
+// object, skill, item or list it acts on (encodeAction, encodeAttackRequest,
+// encodeRequestMagicSkillUse, encodeUseItem, encodeRequestDropItem,
+// encodeSkillRequest, encodeRequestBuyItem, encodeRequestSellItem).
 const (
 	OpAction               byte = opGameAction
 	OpAttackRequest        byte = opGameAttackRequest
 	OpRequestMagicSkillUse byte = opGameRequestMagicSkillUse
 	OpUseItem              byte = opGameUseItem
 	OpRequestDropItem      byte = opGameRequestDropItem
+	OpRequestAcquireSkill  byte = opGameRequestAcquireSkill
+	OpRequestBuyItem       byte = opGameRequestBuyItem
+	OpRequestSellItem      byte = opGameRequestSellItem
 )
+
+// EncodeUseItem uses (equips or takes off) the carried item objectID (see
+// encodeUseItem).
+func EncodeUseItem(objectID int32) []byte { return encodeUseItem(objectID) }
+
+// opGameRequestDestroyItem destroys an item (clientpackets/wiresafe.go).
+// Only the harness sends it: a bot never destroys what it carries.
+const opGameRequestDestroyItem = 0x59
+
+// EncodeRequestDestroyItem destroys count of the carried item objectID:
+// object id, count (clientpackets/item_ops.go RequestDestroyItem).
+func EncodeRequestDestroyItem(objectID, count int32) []byte {
+	w := wire.NewPacketWriter(opGameRequestDestroyItem)
+	w.WriteInt32(objectID)
+	w.WriteInt32(count)
+	return w.Bytes()
+}
+
+// EncodeRequestDropItem drops count of the carried item objectID at p,
+// within 150 of the character (see encodeRequestDropItem).
+func EncodeRequestDropItem(objectID, count int32, p Point) []byte {
+	return encodeRequestDropItem(objectID, count, p)
+}
 
 // EncodeMoveBackwardToLocation walks or runs to to from origin, as a mouse
 // click (see encodeMoveBackwardToLocation).
