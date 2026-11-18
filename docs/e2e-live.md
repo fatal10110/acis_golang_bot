@@ -97,15 +97,17 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight. A farmer `e2ek1`
   found inside the Talking Island village is recalled to the newbie spots first.
 - `TestLiveTrainer` sets its mystic to level 1 with no SP at the start and the end (the server
-  takes away the skills a lower level does not allow), and in between to levels 15 and 20 with
+  takes away the skills a lower level does not allow), and in between to levels 10 and 15 with
   20000 SP; it ends next to the village's trainers. The GM gives a Spellbook: Heal only when the
   trainer asks for one; learning takes it.
 - The gear scenarios (`TestLiveGearWear`, `TestLiveGearBuy`, `TestLiveArrows`) first enter each of
   their characters alone and strip it to its starting set: every weapon, armor and jewelry piece
-  and every arrow an earlier run left it, worn or not, is dropped where it stands, a starting
-  piece it lost is given by the GM and worn again (the Dagger every human fighter starts with
-  cannot be dropped and stays). The GM then gives the pieces or the 30000 adena the scenario needs
-  (three gives of 10000); the bots keep what they bought and the adena left, until the next strip.
+  and every arrow an earlier run left it, worn or not, is destroyed (`RequestDestroyItem`, sent by
+  the harness only: the server refuses to drop the starting weapons, and drops would litter the
+  village), and a starting piece it lost is given by the GM and worn again. The buyer of
+  `TestLiveGearBuy` starts from a GM-given Short Sword instead, as the starting weapons cannot be
+  sold. The GM then gives the pieces or the 30000 adena the scenario needs (three gives of 10000);
+  the bots keep what they bought and the adena left, until the next strip.
   `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
@@ -136,7 +138,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
-| `TestLiveTrainer` | GM, datapack | #21 a level 15 mystic learns Heal at its class trainer (the spellbook when asked), #39 a skill offered from level 20 learned after the level-up |
+| `TestLiveTrainer` | GM, datapack | #21 a level 10 mystic visits its class trainer (the spellbook when asked), #39 Heal's level offered from level 14 learned after the level-up to 15 |
 | `TestLiveGearWear` | GM, datapack | #79 shield, necklace and two rings worn, a better ring for the lesser, a two-handed sword worn and the shield taken off |
 | `TestLiveGearBuy` | GM, datapack | #40 a better piece bought and worn, the old one sold; #79 a rogue's table buys and wears a dagger |
 | `TestLiveArrows` | GM, datapack | #85, #102 an archer's table wielding a sword buys a bow and its arrows, wears the bow, and shoots without NotEnoughArrows |
