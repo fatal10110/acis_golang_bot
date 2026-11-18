@@ -30,6 +30,10 @@ type Datapack struct {
 	BuyLists []BuyList
 	// Items maps a weapon, armor or arrow template id to its template.
 	Items map[int32]Item
+	// Prices maps the id of every template a private store can list (any
+	// type, tradable, priced) to its reference price in adena: the price
+	// a store's manage list shows.
+	Prices map[int32]int32
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
@@ -52,11 +56,11 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
-	items, err := LoadItems(filepath.Join(xmlDir, "items"))
+	items, prices, err := LoadItems(filepath.Join(xmlDir, "items"))
 	if err != nil {
 		return nil, err
 	}
-	return &Datapack{NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists, Items: items}, nil
+	return &Datapack{NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists, Items: items, Prices: prices}, nil
 }
 
 // xmlFiles lists the *.xml files directly under dir in file name order, the

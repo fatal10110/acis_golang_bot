@@ -452,7 +452,8 @@ func (b *Brain) storePrice(ref int32) int32 {
 }
 
 // storeRows is the list of the opening: the candidates that are loot,
-// priced, at most MaxRows, within the budget left and, with the adena
+// priced (storePrice of the reference price the manage list shows, kept in
+// the store's prices), at most MaxRows, within the budget left and, with the adena
 // carried, within the largest int32 the server takes (privatestore
 // FillSell).
 func (b *Brain) storeRows() []storeRow {
@@ -472,6 +473,14 @@ func (b *Brain) storeRows() []storeRow {
 		if !ok || !b.storeLoot(it) {
 			continue
 		}
+		if _, ok := st.prices[c.TemplateID]; !ok {
+			if st.prices == nil {
+				st.prices = make(map[int32]int32)
+			}
+			if price := b.storePrice(c.ReferencePrice); price > 0 {
+				st.prices[c.TemplateID] = price
+			}
+		}
 		price := int64(st.prices[c.TemplateID])
 		if price <= 0 {
 			continue
@@ -487,8 +496,10 @@ func (b *Brain) storeRows() []storeRow {
 	return rows
 }
 
-// storeManageList takes the manage list the opening asked for, pricing its
-// loot. One arriving after the list went out is the server refusing a row
+// storeManageList takes the manage list the opening asked for; storeRows
+// prices its loot once the title went out, as an item the server just gave
+// can show in the list before the InventoryUpdate that brings it. One
+// arriving after the list went out is the server refusing a row
 // (FillSell): the opening is taken down.
 func (b *Brain) storeManageList(e PrivateStoreManageListSell) {
 	st := &b.store
@@ -498,18 +509,6 @@ func (b *Brain) storeManageList(e PrivateStoreManageListSell) {
 	switch st.step {
 	case storeAskManage:
 		st.candidates, st.step = e.Candidates, storeManage
-		if st.prices == nil {
-			st.prices = make(map[int32]int32)
-		}
-		for _, c := range e.Candidates {
-			it, ok := b.world.Inventory.Items[c.ObjectID]
-			if !ok || !b.storeLoot(it) {
-				continue
-			}
-			if price := b.storePrice(c.ReferencePrice); price > 0 {
-				st.prices[c.TemplateID] = price
-			}
-		}
 	case storeTitled, storeListed:
 		st.step = storeQuit
 	}

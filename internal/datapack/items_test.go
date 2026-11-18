@@ -21,9 +21,15 @@ func TestLoadItems(t *testing.T) {
 		398:  {ID: 398, Name: "Plate Leather", Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Grade: 1, Price: 74600},
 		6611: {ID: 6611, Name: "Infinity Blade", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Conditional: true},
 		6702: {ID: 6702, Name: "Shadow Item: Falchion", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Duration: 120, Conditional: true},
+		10:   {ID: 10, Name: "Dagger", Type: "Weapon", BodyPart: "rhand", Kind: "DAGGER", Price: 138},
 	}
 	if !reflect.DeepEqual(dp.Items, want) {
 		t.Errorf("Items = %+v, want %+v", dp.Items, want)
+	}
+	// Every priced template, the steel powder too; never the untradable
+	// dagger, nor 6611 and 6702 priced 0.
+	if want := map[int32]int32{1: 768, 6: 138, 17: 2, 49: 2650, 398: 74600, 1664: 80}; !reflect.DeepEqual(dp.Prices, want) {
+		t.Errorf("Prices = %v, want %v", dp.Prices, want)
 	}
 }
 
@@ -42,7 +48,7 @@ func TestLoadItemsRejects(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "a.xml"), []byte("<list>"+tt.body+"</list>"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			_, err := LoadItems(dir)
+			_, _, err := LoadItems(dir)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("LoadItems err = %v, want one naming %s", err, tt.want)
 			}

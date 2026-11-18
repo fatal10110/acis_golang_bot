@@ -70,6 +70,7 @@ func TestTradeLootMatchesStore(t *testing.T) {
 		}
 		b.store.step = storeAskManage
 		b.storeManageList(PrivateStoreManageListSell{OwnerID: selfID, Candidates: []StoreItem{swordCand}})
+		b.storeRows() // prices the list's loot
 		if stored := b.store.prices[stoneSword]; stored != traded || traded < 600 || traded > 750 {
 			t.Fatalf("seed %d: trade price %d, store price %d, want equal, 1.2-1.5 times the buy-back of 500", seed, traded, stored)
 		}
