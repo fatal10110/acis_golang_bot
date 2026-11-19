@@ -54,13 +54,20 @@ type followState struct {
 	// own wake-up, which pulls decisionAt earlier and never later.
 	wake bool
 	// dest is the slot the bot is on its way to while traveling;
-	// lastDist and stalls track the legs as rule "spot" does. A stuck
-	// bot that gave up waits for the leader to move on.
+	// lastDist and stalls track the legs as rule "spot" does, and legFrom
+	// is where the bot stood when the last leg went out. Legs that stall
+	// where the bot stands try the sidesteps of an unstick first: unsticks
+	// counts them on the way to dest, stuckAt is where the bot stood for
+	// the last one. A stuck bot that gave up waits for the leader to move
+	// on.
 	dest      Point
 	traveling bool
 	stuck     bool
 	lastDist  float64
+	legFrom   Point
 	stalls    int
+	unsticks  int
+	stuckAt   Point
 	// runToggledAt is the last walk/run toggle not yet settled.
 	runToggledAt time.Time
 }
@@ -86,9 +93,10 @@ type leaderView struct {
 //
 // Each move is one MoveBackwardToLocation and each toggle one
 // RequestActionUse, at most one per decision, through the frame pacer
-// (gateNone); a toggle waits toggleSettle for the server's answer, and a
-// slot that spotStalls legs bring no closer is given up until the leader
-// moves on.
+// (gateNone); a toggle waits toggleSettle for the server's answer. Legs
+// that stall where the bot stands sidestep as a visit does (followUnstick);
+// a slot the legs and sidesteps bring no closer is given up until the
+// leader moves on.
 func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	p, w, v := &b.persona.Follow, b.world, &b.follow
 	id := b.followed()
@@ -128,7 +136,7 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 		}
 		v.dest = offset(lead.pos, b.behind(lead, from, now)+v.angle, v.radius)
 		v.dueAt, v.anchor, v.anchored = time.Time{}, lead.pos, true
-		v.traveling, v.stuck, v.lastDist, v.stalls = true, false, 0, 0
+		v.traveling, v.stuck, v.lastDist, v.stalls, v.unsticks = true, false, 0, 0, 0
 		return b.followLeg(from), true
 	}
 	if v.traveling && !s.Moving(now) {
@@ -170,7 +178,9 @@ func (b *Brain) behind(lead leaderView, from Point, now time.Time) float64 {
 }
 
 // followLeg is the next move toward the slot, or nothing once the bot is
-// there or the last legs got it no closer.
+// there or the last legs got it no closer. Legs that stall where the bot
+// stands, the server echoing its own position (acis_golang#5412), try an
+// unstick first; a sidestep that moves the bot sends the legs again.
 func (b *Brain) followLeg(from Point) Action {
 	v := &b.follow
 	d := math.Sqrt(float64(dist2(from, v.dest)))
@@ -178,17 +188,45 @@ func (b *Brain) followLeg(from Point) Action {
 		v.traveling = false
 		return Action{}
 	}
+	if v.stalls >= spotStalls {
+		if !budged(from, v.stuckAt) {
+			return b.followUnstick(from, d)
+		}
+		// A sidestep moved the bot: legs again from where it stands.
+		v.lastDist, v.stalls = 0, 0
+	}
 	if v.lastDist > 0 && v.lastDist-d < spotProgress {
 		v.stalls++
 	} else {
 		v.stalls = 0
 	}
 	if v.stalls >= spotStalls {
+		if budged(from, v.legFrom) {
+			// The bot walks, just no closer: no way there.
+			v.traveling, v.stuck = false, true
+			return Action{}
+		}
+		return b.followUnstick(from, d)
+	}
+	v.lastDist, v.legFrom = d, from
+	return moveAction(legToward(from, v.dest, d), from)
+}
+
+// followUnstick is the next sidestep of a bot at from, d away from its
+// slot, whose legs stall where it stands: one in each of sidestepTurns on
+// the way to the slot, then the slot is given up until the leader moves on.
+// No /unstuck: its recall lands in the nearest town, farther from a leader
+// out in the field, and the leader may be in that town already.
+func (b *Brain) followUnstick(from Point, d float64) Action {
+	v := &b.follow
+	if v.unsticks >= len(sidestepTurns) {
 		v.traveling, v.stuck = false, true
 		return Action{}
 	}
-	v.lastDist = d
-	return moveAction(legToward(from, v.dest, d), from)
+	turn := sidestepTurns[v.unsticks]
+	v.unsticks++
+	v.stuckAt = from
+	return moveAction(sidestep(from, v.dest, d, turn), from)
 }
 
 // followDelay is the wait between noticing the leader moved and moving.

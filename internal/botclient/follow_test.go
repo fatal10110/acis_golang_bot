@@ -154,12 +154,13 @@ func TestFollowOutOfSight(t *testing.T) {
 		t.Errorf("slot %v, want 150-350 short of the report on the bot's side", slot)
 	}
 
-	// The leg ends: the next one goes at once. Then legs that get nowhere
-	// give the slot up until the leader moves on.
+	// The leg ends: the next one goes at once. Then legs that get nowhere,
+	// and the sidesteps after them (TestFollowUnstick), give the slot up
+	// until the leader moves on.
 	stop := Point{X: spotLeg}
 	b.world.Apply(StopMove{ObjectID: selfID, Pos: stop}, due.Add(time.Second))
 	now := due.Add(2 * time.Second)
-	for i := range spotStalls {
+	for i := range spotStalls + len(sidestepTurns) {
 		name, a := b.decide(now)
 		if name != "follow" || a.kind != actMove {
 			t.Fatalf("leg %d: decide = %q kind %d, want follow moving", i+2, name, a.kind)
