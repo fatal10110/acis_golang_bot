@@ -117,7 +117,11 @@ func TestSpotPolicyFits(t *testing.T) {
 		{"highest two above", datapack.Spot{MinLevel: 3, MaxLevel: 7}, 5, true},
 		{"highest three above", datapack.Spot{MinLevel: 3, MaxLevel: 8}, 5, false},
 		{"aggressive at the level", datapack.Spot{MinLevel: 3, MaxLevel: 5, AggroLevel: 5}, 5, true},
-		{"aggressive above the level", datapack.Spot{MinLevel: 3, MaxLevel: 6, AggroLevel: 6}, 5, false},
+		{"aggressive above the level", datapack.Spot{MinLevel: 3, MaxLevel: 7, AggroLevel: 7}, 6, false},
+		{"newbie: aggressive two above", datapack.Spot{MinLevel: 1, MaxLevel: 3, AggroLevel: 3}, 1, true},
+		{"newbie at the last level: aggressive two above", datapack.Spot{MinLevel: 3, MaxLevel: 7, AggroLevel: 7}, 5, true},
+		{"newbie: aggressive three above", datapack.Spot{MinLevel: 1, MaxLevel: 4, AggroLevel: 4}, 1, false},
+		{"past newbie: aggressive one above", datapack.Spot{MinLevel: 4, MaxLevel: 7, AggroLevel: 7}, 6, false},
 		{"highest three below", datapack.Spot{MinLevel: 1, MaxLevel: 2}, 5, true},
 		{"highest four below", datapack.Spot{MinLevel: 1, MaxLevel: 1}, 5, false},
 	}

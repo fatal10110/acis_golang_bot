@@ -195,6 +195,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
+| `TestLiveFarmStarters` | GM, datapack | #133 a level 1 elf, dark elf and orc farmer each claim a spot of their own newbie zone and kill a monster there |
 | `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |
 | `TestLiveTownErrands` | GM, datapack | #33 the town persona's errand cycle, a merchant visit then a gatekeeper hop; #32 the hop's teleport, the bot seen by the GM at the destination |
 | `TestLiveNewbieGuideBuffs` | GM, datapack | #32 a level 8 bot asks the Newbie Guide and gets its buffs |

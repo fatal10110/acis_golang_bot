@@ -1,0 +1,632 @@
+[
+	{
+		"Maker": "gludio32_1725_01m1",
+		"X": -74383,
+		"Y": 254367,
+		"Z": -3226,
+		"MinLevel": 1,
+		"MaxLevel": 1,
+		"AggroLevel": 1,
+		"MaximumNPCs": 20
+	},
+	{
+		"Maker": "gludio32_1725_02m1",
+		"X": -81411,
+		"Y": 246563,
+		"Z": -3596,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 20
+	},
+	{
+		"Maker": "gludio32_1725_03m1",
+		"X": -82559,
+		"Y": 250148,
+		"Z": -3596,
+		"MinLevel": 1,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "gludio32_1725_04m1",
+		"X": -86478,
+		"Y": 251342,
+		"Z": -3516,
+		"MinLevel": 1,
+		"MaxLevel": 1,
+		"AggroLevel": 1,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "gludio32_1725_05m1",
+		"X": -84312,
+		"Y": 252645,
+		"Z": -3597,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 5
+	},
+	{
+		"Maker": "gludio32_1725_06m1",
+		"X": -86401,
+		"Y": 253927,
+		"Z": -3618,
+		"MinLevel": 1,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "gludio32_1725_13m1",
+		"X": -81716,
+		"Y": 241040,
+		"Z": -3639,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "gludio32_1725_14m1",
+		"X": -85812,
+		"Y": 239010,
+		"Z": -3619,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "gludio32_1725_15m1",
+		"X": -88052,
+		"Y": 241579,
+		"Z": -3602,
+		"MinLevel": 1,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "gludio32_1725_16m1",
+		"X": -90122,
+		"Y": 241149,
+		"Z": -3602,
+		"MinLevel": 1,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "gludio32_1725_17m1",
+		"X": -91677,
+		"Y": 243859,
+		"Z": -3602,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "gludio32_1725_23m1",
+		"X": -88800,
+		"Y": 237915,
+		"Z": -3521,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "gludio32_1725_27m1",
+		"X": -92889,
+		"Y": 245986,
+		"Z": -3602,
+		"MinLevel": 5,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 5
+	},
+	{
+		"Maker": "gludio32_1725_28m1",
+		"X": -95394,
+		"Y": 246014,
+		"Z": -3602,
+		"MinLevel": 5,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 4
+	},
+	{
+		"Maker": "gludio32_1725_29m1",
+		"X": -97185,
+		"Y": 245366,
+		"Z": -3602,
+		"MinLevel": 5,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 4
+	},
+	{
+		"Maker": "gludio32_1725_30m1",
+		"X": -97038,
+		"Y": 247767,
+		"Z": -3602,
+		"MinLevel": 5,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 4
+	},
+	{
+		"Maker": "lyonn07_18_14_01m1",
+		"X": -49644,
+		"Y": -110569,
+		"Z": -238,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 20
+	},
+	{
+		"Maker": "lyonn07_18_14_02m1",
+		"X": -46930,
+		"Y": -107936,
+		"Z": -494,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "lyonn07_18_14_03m1",
+		"X": -49366,
+		"Y": -115720,
+		"Z": -206,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 16
+	},
+	{
+		"Maker": "lyonn07_18_14_04m1",
+		"X": -46276,
+		"Y": -118995,
+		"Z": -190,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "lyonn07_18_14_05m1",
+		"X": -41436,
+		"Y": -122574,
+		"Z": -413,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "lyonn07_18_14_07m1",
+		"X": -39537,
+		"Y": -105269,
+		"Z": -2660,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 3
+	},
+	{
+		"Maker": "lyonn07_18_14_15m1",
+		"X": -42592,
+		"Y": -109016,
+		"Z": -1634,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "lyonn07_18_14_16m1",
+		"X": -49106,
+		"Y": -115854,
+		"Z": -184,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 5
+	},
+	{
+		"Maker": "lyonn07_18_14_17m1",
+		"X": -49543,
+		"Y": -110784,
+		"Z": -260,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 5
+	},
+	{
+		"Maker": "oren23_2018_03m1",
+		"X": 26135,
+		"Y": 13674,
+		"Z": -3591,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 10
+	},
+	{
+		"Maker": "oren23_2018_04m1",
+		"X": 26534,
+		"Y": 18263,
+		"Z": -3591,
+		"MinLevel": 2,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 12
+	},
+	{
+		"Maker": "oren23_2018_05m1",
+		"X": 22786,
+		"Y": 15011,
+		"Z": -3591,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 12
+	},
+	{
+		"Maker": "oren23_2018_08m1",
+		"X": 23215,
+		"Y": 9051,
+		"Z": -3563,
+		"MinLevel": 1,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 10
+	},
+	{
+		"Maker": "oren23_2018_15sm1",
+		"X": 24496,
+		"Y": 9206,
+		"Z": -3538,
+		"MinLevel": 1,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "oren23_2018_16sm1",
+		"X": 25307,
+		"Y": 13254,
+		"Z": -3538,
+		"MinLevel": 1,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "oren02_2119_01m1",
+		"X": 48052,
+		"Y": 43253,
+		"Z": -3614,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "oren02_2119_01sm1",
+		"X": 48366,
+		"Y": 42521,
+		"Z": -3480,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 4
+	},
+	{
+		"Maker": "oren02_2119_02m1",
+		"X": 52174,
+		"Y": 41304,
+		"Z": -3590,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "oren02_2119_021sm1",
+		"X": 50626,
+		"Y": 40925,
+		"Z": -3472,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 3
+	},
+	{
+		"Maker": "oren02_2119_022sm1",
+		"X": 52862,
+		"Y": 41153,
+		"Z": -3556,
+		"MinLevel": 2,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 3
+	},
+	{
+		"Maker": "oren02_2119_03m1",
+		"X": 50373,
+		"Y": 38678,
+		"Z": -3612,
+		"MinLevel": 2,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 4
+	},
+	{
+		"Maker": "oren02_2119_04m1",
+		"X": 47947,
+		"Y": 37495,
+		"Z": -3634,
+		"MinLevel": 2,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "oren02_2119_04sm1",
+		"X": 47907,
+		"Y": 37504,
+		"Z": -3572,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_05m1",
+		"X": 43883,
+		"Y": 37321,
+		"Z": -3568,
+		"MinLevel": 2,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "oren02_2119_05sm1",
+		"X": 43767,
+		"Y": 37445,
+		"Z": -3484,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_06m1",
+		"X": 41280,
+		"Y": 38924,
+		"Z": -3608,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "oren02_2119_06sm1",
+		"X": 41267,
+		"Y": 39070,
+		"Z": -3496,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_07m1",
+		"X": 41544,
+		"Y": 41539,
+		"Z": -3604,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "oren02_2119_07sm1",
+		"X": 42118,
+		"Y": 41401,
+		"Z": -3500,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_08m1",
+		"X": 43955,
+		"Y": 43377,
+		"Z": -3602,
+		"MinLevel": 1,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "oren02_2119_08sm1",
+		"X": 44126,
+		"Y": 42751,
+		"Z": -3586,
+		"MinLevel": 2,
+		"MaxLevel": 2,
+		"AggroLevel": 2,
+		"MaximumNPCs": 3
+	},
+	{
+		"Maker": "oren02_2119_09m1",
+		"X": 38905,
+		"Y": 41783,
+		"Z": -3612,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "oren02_2119_09sm1",
+		"X": 39050,
+		"Y": 41882,
+		"Z": -3620,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_10m1",
+		"X": 38195,
+		"Y": 38683,
+		"Z": -3648,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "oren02_2119_10sm1",
+		"X": 38303,
+		"Y": 39146,
+		"Z": -3568,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_11m1",
+		"X": 39676,
+		"Y": 35960,
+		"Z": -3654,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "oren02_2119_11sm1",
+		"X": 39605,
+		"Y": 36319,
+		"Z": -3604,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren02_2119_12m1",
+		"X": 42358,
+		"Y": 34433,
+		"Z": -3634,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "oren02_2119_13m1",
+		"X": 46655,
+		"Y": 35342,
+		"Z": -3696,
+		"MinLevel": 3,
+		"MaxLevel": 4,
+		"AggroLevel": 4,
+		"MaximumNPCs": 8
+	},
+	{
+		"Maker": "oren02_2119_15m1",
+		"X": 50556,
+		"Y": 46156,
+		"Z": -3544,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 11
+	},
+	{
+		"Maker": "oren02_2119_20m1",
+		"X": 48788,
+		"Y": 55943,
+		"Z": -3518,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "oren02_2119_20sm1",
+		"X": 48712,
+		"Y": 55466,
+		"Z": -3492,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "oren04_2119_28m1",
+		"X": 39663,
+		"Y": 54854,
+		"Z": -3496,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 9
+	},
+	{
+		"Maker": "oren04_2119_31m1",
+		"X": 39342,
+		"Y": 52373,
+		"Z": -3414,
+		"MinLevel": 4,
+		"MaxLevel": 5,
+		"AggroLevel": 5,
+		"MaximumNPCs": 6
+	},
+	{
+		"Maker": "schttgart07_2312_05m1",
+		"X": 114965,
+		"Y": -172886,
+		"Z": -613,
+		"MinLevel": 2,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 2
+	},
+	{
+		"Maker": "schttgart07_2312_06m1",
+		"X": 116056,
+		"Y": -175091,
+		"Z": -764,
+		"MinLevel": 2,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 7
+	},
+	{
+		"Maker": "schttgart07_2312_07m1",
+		"X": 117968,
+		"Y": -173208,
+		"Z": -414,
+		"MinLevel": 2,
+		"MaxLevel": 3,
+		"AggroLevel": 3,
+		"MaximumNPCs": 4
+	}
+]

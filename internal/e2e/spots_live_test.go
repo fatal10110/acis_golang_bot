@@ -146,7 +146,11 @@ func heldBy(r *botclient.SpotRegistry) map[int]int {
 func fitsAny(s botclient.SpotStatus, levels []int) bool {
 	p := botclient.DefaultPersona().Spots
 	for _, l := range levels {
-		if s.MaxLevel <= l+p.Below && s.AggroLevel <= l+p.AggroAbove && s.MaxLevel >= l-p.Above {
+		aggro := p.AggroAbove
+		if l <= p.Newbie {
+			aggro = max(aggro, p.Below)
+		}
+		if s.MaxLevel <= l+p.Below && s.AggroLevel <= l+aggro && s.MaxLevel >= l-p.Above {
 			return true
 		}
 	}
