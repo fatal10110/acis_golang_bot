@@ -57,8 +57,7 @@ func (w *World) hitBy(id int32, damage int32, now time.Time) {
 }
 
 // applyAttack records every hit on the bot, misses included, against the
-// attacker, and every swing between a monster and another creature as an
-// engagement, and places the attacker where it swings from.
+// attacker, and places the attacker where it swings from.
 func (w *World) applyAttack(e Attack, now time.Time) {
 	if m := w.motionOf(e.AttackerID); m != nil {
 		*m = m.resample(now, e.Pos)
@@ -67,7 +66,6 @@ func (w *World) applyAttack(e Attack, now time.Time) {
 		return
 	}
 	for _, h := range e.Hits {
-		w.engage(e.AttackerID, h.TargetID, now)
 		if h.TargetID == w.Self.ObjectID {
 			w.hitBy(e.AttackerID, h.Damage, now)
 		}
@@ -78,16 +76,13 @@ func (w *World) applyAttack(e Attack, now time.Time) {
 // skill is ready again hit time plus reuse after the cast starts. A cast at
 // the bot by a monster, or by a player who is flagged or has karma, counts
 // as a hit: MagicSkillUse does not tell an attack from a buff, and only
-// those casters can attack the bot without a forced attack. A cast between
-// a monster and another creature is an engagement: a player buffs no
-// monster.
+// those casters can attack the bot without a forced attack.
 func (w *World) applyMagicSkillUse(e MagicSkillUse, now time.Time) {
 	if e.CasterID == w.Self.ObjectID {
 		w.Self.castEnd = now.Add(e.HitTime)
 		w.holdSkill(e.SkillID, now.Add(e.HitTime+e.Reuse))
 		return
 	}
-	w.engage(e.CasterID, e.TargetID, now)
 	if e.TargetID != w.Self.ObjectID {
 		return
 	}

@@ -9,112 +9,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
-// TestLiveAntiKS has a farmer find a monster fighting the GM
-// at its spot: it leaves the monster alone past EngagedWindow, and once the
-// GM is gone it takes the monster on (#28). The farmer is told to stay
-// while the monster appears, so it cannot be the first to attack it, and
-// sent back to its spot once the monster fights the GM, which hit it first
-// (gmProvoke). A monster that goes
-// for the farmer instead is fought, and the GM tries again.
-func TestLiveAntiKS(t *testing.T) {
-	t.Parallel()
-	tg := Live(t, NeedGM, NeedDatapack)
-	alone(t, &newbieSpots)
-	ctx := scenarioCtx(t, 15*time.Minute)
-	spots := spotRegistry(t, tg)
-	gm := enterGM(t, ctx, tg)
-	home := townTI // a peace zone far from the spots: the monster loses the GM there
-	var f *farmer
-	t.Cleanup(func() { forgetKilled(gm, f) }) // after the farmer stops, before the GM deletes
-	account, _ := tg.Account("k", 1)
-	f = runFarmer(t, ctx, tg, account, spots, nil)
-	window := botclient.DefaultPersona().EngagedWindow
-	levelOf(t, ctx, f) // in the world
-	// Each phase logs when it ends; a phase that runs out of its bound
-	// fails with its name.
-	start, last := time.Now(), time.Now()
-	phase := func(what string) {
-		t.Logf("%s after %v (%v in all)", what, time.Since(last).Round(time.Second), time.Since(start).Round(time.Second))
-		last = time.Now()
-	}
-	bound := func(d time.Duration) context.Context {
-		c, cancel := context.WithTimeout(ctx, d)
-		t.Cleanup(cancel)
-		return c
-	}
-	phase("in the world")
-	if at := f.bot.Status().Position; within(at, townTI, 3000) {
-		// A farmer walks no way out of the village: the GM brings it to
-		// the newbie spots.
-		t.Logf("%s is in town at %v: the GM brings it out", f.name, at)
-		gmTeleport(t, ctx, gm, tiSpots)
-		if err := gm.Command(ctx, "recall "+f.name); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f.id)); err != nil {
-			t.Fatalf("%s recalled: %v", f.name, err)
-		}
-	}
-	waitFor(t, bound(spotBound), "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
-	spot := f.bot.Status().Spot
-	phase("at its spot " + spot)
-
-	// A GM logs in invisible (GMStartupInvisible), and no monster attacks
-	// an invisible player.
-	gmVisibleAt(t, ctx, gm, home)
-	phase("the GM visible")
-
-	const attempts = 3
-	for attempt := 1; ; attempt++ {
-		order(t, ctx, f, botclient.Command{Kind: botclient.CommandStay})
-		gmTo(t, ctx, gm, f)
-		p := gm.Pos()
-		gmTeleport(t, ctx, gm, botclient.Point{X: p.X + 400, Y: p.Y, Z: p.Z})
-		mob, err := gm.Spawn(ctx, wolf)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
-		attack, tries := gmProvoke(t, ctx, gm, mob)
-		phase(fmt.Sprintf("attempt %d: provoked in %d tries", attempt, tries))
-		order(t, ctx, f, botclient.Command{Kind: botclient.CommandGo, Arg: spot})
-		if prey := attack.Hits[0].TargetID; prey != gm.Self.ObjectID {
-			t.Logf("attempt %d: the monster went for %d, not the GM", attempt, prey)
-			if attempt == attempts {
-				t.Fatalf("the monster never went for the GM in %d attempts", attempts)
-			}
-			gmTeleport(t, ctx, gm, home)
-			awaitDeath(t, ctx, gm, f, mob)
-			phase(fmt.Sprintf("attempt %d: the monster dead", attempt))
-			continue
-		}
-		engaged := time.Now()
-		hold := time.NewTimer(2 * window)
-		select {
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		case <-hold.C:
-		}
-		hit, click := mobContact(f, mob, engaged)
-		if !click.IsZero() && (hit.IsZero() || click.Before(hit)) {
-			t.Fatalf("the farmer clicked the monster %v after the GM engaged it, before it hit the farmer", click.Sub(engaged))
-		}
-		phase(fmt.Sprintf("the farmer left the GM's monster alone (first hit on the farmer: %v)", !hit.IsZero()))
-
-		gmTeleport(t, ctx, gm, home)
-		until(t, bound(3*time.Minute), "the farmer takes the monster on", func() string {
-			if _, click := mobContact(f, mob, engaged); click.IsZero() {
-				return "an Action or AttackRequest on the monster"
-			}
-			return ""
-		})
-		phase("the farmer took the monster on")
-		awaitDeath(t, ctx, gm, f, mob)
-		phase("the monster dead")
-		return
-	}
-}
-
 // gmProvoke has the GM hit mob and step aside, and returns the monster's
 // first landed attack. A monster of the datapack's Warrior AI aggroes
 // nobody by sight without an aggro param (script/ai/warrior/base.go
@@ -230,25 +124,9 @@ func (pl provokeLog) String() string {
 		pl.tries, pl.hp, pl.gmDied, pl.failed, pl.msgs, pl.mobInfo, pl.mobGone, pl.mobAttacked)
 }
 
-// tiSpots is where a farmer k1 farmed, among the Talking Island newbie
-// spots, in walking reach of them.
+// tiSpots is a place among the Talking Island newbie spots, in walking
+// reach of them.
 var tiSpots = botclient.Point{X: -75296, Y: 254141, Z: -3328}
-
-// order hands c to f's bot and waits for its answer.
-func order(t *testing.T, ctx context.Context, f *farmer, c botclient.Command) {
-	t.Helper()
-	answer, err := f.bot.Command(c)
-	if err == nil {
-		select {
-		case err = <-answer:
-		case <-ctx.Done():
-			err = ctx.Err()
-		}
-	}
-	if err != nil {
-		t.Fatalf("%s told %q: %v", f.name, c, err)
-	}
-}
 
 // gmVisibleAt makes the GM visible, teleporting it to p: //hide toggles
 // invisibility and answers with the GM's UserInfo, the last one read before
@@ -282,23 +160,6 @@ func gmVisibleAt(t *testing.T, ctx context.Context, gm *GMClient, p botclient.Po
 	t.Fatal("the GM is still invisible after two //hide")
 }
 
-// mobContact is when, since from, mob first hit f and f first clicked mob
-// (Action or AttackRequest); zero for none.
-func mobContact(f *farmer, mob int32, from time.Time) (hit, click time.Time) {
-	for _, s := range f.watch.Seen(0) {
-		if a, ok := s.Event.(botclient.Attack); ok && hit.IsZero() && !s.At.Before(from) &&
-			a.AttackerID == mob && len(a.Hits) > 0 && a.Hits[0].TargetID == f.id {
-			hit = s.At
-		}
-	}
-	for _, p := range f.watch.Sent() {
-		if (p.Op == botclient.OpAction || p.Op == botclient.OpAttackRequest) && p.Target == mob && !p.At.Before(from) {
-			return hit, p.At
-		}
-	}
-	return hit, time.Time{}
-}
-
 // awaitDeath waits up to deathBound until f sees mob die, a monster the
 // run spawned, and drops it from the run's monsters.
 func awaitDeath(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, mob int32) {
@@ -314,9 +175,6 @@ func awaitDeath(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, mob 
 	gm.Forget(mob)
 }
 
-// Bounds of the anti-KS phases that wait on the farmer: a farmer reaches
-// its spot in a minute or two, and one wolf takes it a few swings.
-const (
-	spotBound  = 8 * time.Minute
-	deathBound = 3 * time.Minute
-)
+// deathBound is how long awaitDeath waits: one wolf takes a farmer a few
+// swings.
+const deathBound = 3 * time.Minute

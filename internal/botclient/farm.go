@@ -59,23 +59,22 @@ func (b *Brain) farmTarget(now time.Time) int32 {
 }
 
 // mayFarm reports whether id is a farm target at now: a monster the bot may
-// fight within the spot's leash of centre, that no one outside the bot's
-// party engaged within the persona's EngagedWindow (anti-KS) unless the bot
-// already attacked it.
+// fight within the spot's leash of centre. A monster another player is
+// fighting is a target all the same: kill stealing is allowed (owner
+// decision on #138, plan "Shared behavior").
 func (b *Brain) mayFarm(id int32, centre Point, now time.Time) bool {
 	if !b.world.monster(id) || !b.mayFight(id, now) {
 		return false
 	}
 	leash := int64(b.persona.Spots.Leash)
-	if dist2(b.world.Objects[id].Position(now), centre) > leash*leash {
-		return false
-	}
-	return id == b.engaged || !b.contested(id, now)
+	return dist2(b.world.Objects[id].Position(now), centre) <= leash*leash
 }
 
-// contested reports whether someone outside the bot's party engaged monster
-// id within the persona's EngagedWindow of now.
-func (b *Brain) contested(id int32, now time.Time) bool {
-	w := b.persona.EngagedWindow
-	return w > 0 && b.world.engagedByOther(id, w, now)
+// monster reports whether id is an attackable NPC in sight that is alive.
+// A player's summon is not one: the server marks it attackable when its
+// owner is flagged, has karma or stands in a PvP zone (visibility.go
+// AttackableWithoutForceBy), and hitting it is PvP.
+func (w *World) monster(id int32) bool {
+	o := w.object(id)
+	return o != nil && o.Kind == KindNPC && o.Attackable && !o.Summon && !o.Dead
 }

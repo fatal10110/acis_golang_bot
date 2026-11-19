@@ -107,12 +107,6 @@ type Persona struct {
 	// Spots is how the bot picks and keeps its farming spot when the brain
 	// has a spot registry (BrainConfig.Spots, rule 9 errand "spot").
 	Spots SpotPolicy
-	// EngagedWindow is how long after another player's last sign of
-	// fighting a monster (an attack or a cast between them, or one closing
-	// in on the other) the bot leaves the monster alone as a fresh target
-	// (anti-KS, rule 9 errand "farm"); a party member's fight is no sign.
-	// A monster attacking the bot is fought all the same. 0 skips none.
-	EngagedWindow time.Duration
 	// Follow is how the bot follows the leader of its party (rule
 	// "follow").
 	Follow FollowPolicy
@@ -172,7 +166,6 @@ func DefaultPersona() Persona {
 		TrainerReach:   8000,
 		WalkStuckFor:   time.Hour,
 		Spots:          defaultSpotPolicy(),
-		EngagedWindow:  10 * time.Second,
 		MPReserve:      50,
 		Heals:          defaultHeals,
 		Buffs:          defaultBuffs,
