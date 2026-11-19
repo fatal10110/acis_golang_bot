@@ -27,15 +27,16 @@ func recoverPersona() botclient.Persona {
 
 // TestLiveRecoverVillageRestart kills a bot in the GM's party with //kill:
 // nobody offers a resurrection, so the bot restarts in the village once its
-// ResurrectWait ran, and comes back to the GM (#24).
+// ResurrectWait ran, and comes back to the GM (#24), sidestepping where the
+// server refuses its legs in place (acis_golang#5412, #128).
 func TestLiveRecoverVillageRestart(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 8*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("rv", 1)
-	b := runBotWith(t, ctx, tg, account, botSetup{persona: recoverPersona})
-	name := botOnline(t, ctx, tg, b)
+	f := runWatched(t, ctx, tg, account, botSetup{persona: recoverPersona})
+	b, name := f.bot, f.name
 	botID := recallBot(t, ctx, tg, gm, name)
 	if r := invite(t, ctx, gm.Client, name); r != 1 {
 		t.Fatalf("%s answered %d, want 1", name, r)
@@ -67,6 +68,9 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 		s := b.Status()
 		return s.HP > 0 && dist(s.Position, gm.Pos()) <= followReach
 	}, nil)
+	if n, at, _ := f.echoes(0); n > 0 {
+		t.Logf("%s: %d ground moves refused in place on the way back, first at %v (acis_golang#5412)", name, n, at)
+	}
 }
 
 // TestLiveRecoverLeaderLogout has the player leading a bot's party of two
