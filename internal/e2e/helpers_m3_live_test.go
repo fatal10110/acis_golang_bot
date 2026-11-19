@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"slices"
 	"strings"
@@ -163,8 +164,14 @@ func (f *farmer) trail(n int) string {
 	}
 	var lines []line
 	for _, p := range f.watch.Sent() {
-		if p.Op == botclient.OpAction {
+		switch p.Op {
+		case botclient.OpAction:
 			lines = append(lines, line{p.At, fmt.Sprintf("click %d", p.Target)})
+		case botclient.OpMoveBackwardToLocation:
+			if len(p.Payload) >= 9 {
+				x, y := int32(binary.LittleEndian.Uint32(p.Payload[1:5])), int32(binary.LittleEndian.Uint32(p.Payload[5:9]))
+				lines = append(lines, line{p.At, fmt.Sprintf("click to (%d,%d)", x, y)})
+			}
 		}
 	}
 	for _, e := range f.watch.Seen(0) {
@@ -190,6 +197,8 @@ func (f *farmer) trail(n int) string {
 			if ev.ObjectID == f.id {
 				text = fmt.Sprintf("teleport %v", ev.Pos)
 			}
+		case botclient.PartyMemberPosition:
+			text = fmt.Sprintf("party positions %v", ev.Members)
 		case botclient.ActionFailed:
 			text = "action failed"
 		case botclient.NpcHtmlMessage:

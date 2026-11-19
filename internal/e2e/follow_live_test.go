@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -91,8 +92,8 @@ func TestLiveFollow(t *testing.T) {
 	ctx := scenarioCtx(t, 10*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("fo", 1)
-	b := runBotWith(t, ctx, tg, account, botSetup{persona: partyPersona})
-	name := botOnline(t, ctx, tg, b)
+	f := runWatched(t, ctx, tg, account, botSetup{persona: partyPersona})
+	b, name := f.bot, f.name
 	ui := userInfo(t, gm.Client)
 
 	// Out of sight first: the bot joins the GM on open ground, then the GM
@@ -141,10 +142,9 @@ func TestLiveFollow(t *testing.T) {
 			gone = false
 		}
 	})
-	at := settled(t, ctx, gm.Client, b)
-	if d := dist(at, gm.Pos()); d > followReach {
-		t.Fatalf("%s settled %.0f from the GM after the travel, want at most %d", name, d, followReach)
-	}
+	t.Logf("%s back in the GM's sight at %v", name, b.Status().Position)
+	at := settledNear(t, ctx, gm.Client, b, gm.Pos(), name+" after the travel")
+	t.Logf("%s settled %.0f from the GM after the travel", name, dist(at, gm.Pos()))
 
 	// Walk, then run.
 	for _, walk := range []bool{true, false} {
@@ -167,12 +167,42 @@ func TestLiveFollow(t *testing.T) {
 			if l.gap > bound {
 				t.Fatalf("walk=%v leg %d: %s fell %.0f behind the GM's path, want at most %.0f", walk, i, name, l.gap, bound)
 			}
-			at := settled(t, ctx, gm.Client, b)
+			at := settledNear(t, ctx, gm.Client, b, l.stop, fmt.Sprintf("walk=%v leg %d: %s", walk, i, name))
 			d := dist(at, l.stop)
-			if d > followReach {
-				t.Fatalf("walk=%v leg %d: %s settled %.0f from the GM, want at most %d", walk, i, name, d, followReach)
-			}
 			t.Logf("walk=%v leg %d: at most %.0f behind on the way, settled %.0f from the GM", walk, i, l.gap, d)
+		}
+	}
+}
+
+// followSettle bounds how long a following bot takes to settle near its
+// leader's stop: the trip from out of sight waits for the first
+// PartyMemberPosition, up to half the server's 12 s report period after the
+// party forms, then runs a few thousand units.
+const followSettle = time.Minute
+
+// settledNear reads c until b's position stays put for settleFor within
+// followReach of stop and returns it; what names the wait in a failure. A
+// pause on the way is not the end of the trip: the bot walks a server path
+// one segment at a time, and a segment the server is late to start leaves
+// it standing at a waypoint (#131). Only a bot that has not settled near
+// stop after followSettle fails, with where it stands then.
+func settledNear(t *testing.T, ctx context.Context, c *Client, b *botclient.Bot, stop botclient.Point, what string) botclient.Point {
+	t.Helper()
+	deadline := time.Now().Add(followSettle)
+	last, since := b.Status().Position, time.Now()
+	for {
+		if p := b.Status().Position; p != last {
+			last, since = p, time.Now()
+		}
+		d := dist(last, stop)
+		if d <= followReach && time.Since(since) >= settleFor {
+			return last
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s: %.0f from the GM after %v, want settled within %d", what, d, followSettle, followReach)
+		}
+		if err := c.Watch(ctx, 500*time.Millisecond, func(botclient.Event) {}); err != nil {
+			t.Fatalf("%s: %v", what, err)
 		}
 	}
 }

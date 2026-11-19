@@ -57,9 +57,11 @@ type followState struct {
 	// lastDist and stalls track the legs as rule "spot" does, and legFrom
 	// is where the bot stood when the last leg went out. Legs that stall
 	// where the bot stands try the sidesteps of an unstick first: unsticks
-	// counts them on the way to dest, stuckAt is where the bot stood for
-	// the last one. A stuck bot that gave up waits for the leader to move
-	// on.
+	// counts them at the stall the bot is getting past, stuckAt is where
+	// the bot stood for the last one and stuckDist how far from dest it
+	// stood for the first. Legs that bring it spotProgress closer than
+	// stuckDist got past that stall: the next one has every sidestep again.
+	// A stuck bot that gave up waits for the leader to move on.
 	dest      Point
 	traveling bool
 	stuck     bool
@@ -68,6 +70,7 @@ type followState struct {
 	stalls    int
 	unsticks  int
 	stuckAt   Point
+	stuckDist float64
 	// runToggledAt is the last walk/run toggle not yet settled.
 	runToggledAt time.Time
 }
@@ -199,6 +202,10 @@ func (b *Brain) followLeg(from Point) Action {
 		v.stalls++
 	} else {
 		v.stalls = 0
+		if v.unsticks > 0 && v.stuckDist-d >= spotProgress {
+			// Past the stall the sidesteps were for.
+			v.unsticks = 0
+		}
 	}
 	if v.stalls >= spotStalls {
 		if budged(from, v.legFrom) {
@@ -213,8 +220,10 @@ func (b *Brain) followLeg(from Point) Action {
 }
 
 // followUnstick is the next sidestep of a bot at from, d away from its
-// slot, whose legs stall where it stands: one in each of sidestepTurns on
-// the way to the slot, then the slot is given up until the leader moves on.
+// slot, whose legs stall where it stands: one in each of sidestepTurns at
+// each stall on the way to the slot, then the slot is given up until the
+// leader moves on. Each stall the legs get past brings the bot spotProgress
+// closer, so a trip has at most d/spotProgress of them.
 // No /unstuck: its recall lands in the nearest town, farther from a leader
 // out in the field, and the leader may be in that town already.
 func (b *Brain) followUnstick(from Point, d float64) Action {
@@ -222,6 +231,9 @@ func (b *Brain) followUnstick(from Point, d float64) Action {
 	if v.unsticks >= len(sidestepTurns) {
 		v.traveling, v.stuck = false, true
 		return Action{}
+	}
+	if v.unsticks == 0 {
+		v.stuckDist = d
 	}
 	turn := sidestepTurns[v.unsticks]
 	v.unsticks++
