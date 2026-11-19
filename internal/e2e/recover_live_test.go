@@ -18,6 +18,11 @@ const (
 // (server network/usercommand.go escapeSkillRef).
 const skillEscape int32 = 2099
 
+// recoverGround is where the GM waits for the bot it killed: on open
+// ground whose dead restart in Talking Island village and walk back over
+// the island (#128, #131).
+var recoverGround = botclient.Point{X: -70744, Y: 258264, Z: -3104}
+
 func recoverPersona() botclient.Persona {
 	p := partyPersona()
 	p.Recover.ResurrectWait = recoverResurrectWait
@@ -34,6 +39,9 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 8*time.Minute)
 	gm := enterGM(t, ctx, tg)
+	// The way back from the village depends on where the bot died: the GM
+	// waits at recoverGround, not wherever the last scenario left it (#131).
+	gmTeleport(t, ctx, gm, recoverGround)
 	account, _ := tg.Account("rv", 1)
 	f := runWatched(t, ctx, tg, account, botSetup{persona: recoverPersona})
 	b, name := f.bot, f.name
@@ -43,6 +51,7 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 	}
 	watchUntil(t, ctx, gm.Client, "the GM leading the bot's party", leaderIs(b, gm.Self.Name), nil)
 
+	killed := f.watch.Len()
 	if err := gm.Command(ctx, "kill "+name); err != nil {
 		t.Fatal(err)
 	}
@@ -64,9 +73,19 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 	} else {
 		t.Logf("%s restarted %v after its death", name, waited)
 	}
+	// The restart teleports the bot to the village; only a snapshot taken
+	// after the teleport tells where it is from then on (#131).
+	_, tp, err := f.watch.Await(ctx, killed, func(ev botclient.Event) bool {
+		e, ok := ev.(botclient.TeleportToLocation)
+		return ok && e.ObjectID == f.id
+	})
+	if err != nil {
+		t.Fatalf("%s teleported to the village: %v", name, err)
+	}
+	t.Logf("%s restarted at %v, %.0f from the GM", name, tp.Event.(botclient.TeleportToLocation).Pos, dist(tp.Event.(botclient.TeleportToLocation).Pos, gm.Pos()))
 	watchUntil(t, ctx, gm.Client, "the bot back at the GM", func() bool {
 		s := b.Status()
-		return s.HP > 0 && dist(s.Position, gm.Pos()) <= followReach
+		return s.At.After(tp.At) && s.HP > 0 && dist(s.Position, gm.Pos()) <= followReach
 	}, nil)
 	if n, at, _ := f.echoes(0); n > 0 {
 		t.Logf("%s: %d ground moves refused in place on the way back, first at %v (acis_golang#5412)", name, n, at)

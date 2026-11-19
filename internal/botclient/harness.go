@@ -59,6 +59,9 @@ const (
 	OpRequestAcquireSkill  byte = opGameRequestAcquireSkill
 	OpRequestBuyItem       byte = opGameRequestBuyItem
 	OpRequestSellItem      byte = opGameRequestSellItem
+	// OpMoveBackwardToLocation's first fields are the X and Y it goes to
+	// (encodeMoveBackwardToLocation).
+	OpMoveBackwardToLocation byte = opGameMoveBackwardToLocation
 )
 
 // EncodeUseItem uses (equips or takes off) the carried item objectID (see
