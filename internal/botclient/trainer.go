@@ -427,18 +427,14 @@ func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 
 // trainerLeg is the next leg of the walk to a trainer's spawn. Arrived
 // with no trainer in sight, the bot leaves that trainer template alone for
-// visitShunFor. Getting nowhere, its sidesteps and /unstuck spent (walkTo),
-// it walks to no trainer before the next level: the other trainers' spawns
-// lie past the same ground, and the recall of an /unstuck can land the bot
-// back where it stood (a new human mystic's start is its own restart area,
-// whose ground moves the pathfinder cannot route out of: acis_golang#5412),
-// so a walk to the next spawn would only spend another /unstuck there (#134).
+// visitShunFor. Getting nowhere, its sidesteps and /unstuck spent
+// (walkStuck), it walks to no trainer before the next level (#134).
 func (b *Brain) trainerLeg(now time.Time) (Action, bool) {
 	t := &b.train
 	if a, ok := b.walkTo(&t.walk, now); ok {
 		return a, true
 	}
-	if dist2(b.world.Self.Position(now), t.walk.at) > visitArrive*visitArrive {
+	if b.walkStuck(&t.walk, now) {
 		t.stuckLevel = b.world.Self.Level
 		t.walk = npcVisit{}
 		return Action{}, false
