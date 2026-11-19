@@ -19,9 +19,14 @@ const (
 const skillEscape int32 = 2099
 
 // recoverGround is where the GM waits for the bot it killed: on open
-// ground whose dead restart in Talking Island village and walk back over
-// the island (#128, #131).
-var recoverGround = botclient.Point{X: -70744, Y: 258264, Z: -3104}
+// ground whose dead restart in Talking Island village (restartPointAreas:
+// outside Cedric's Training Hall) and walk back over the island (#128,
+// #131), about 8000 out on the road the bots took toward the human newbie
+// start. Past it, beyond (-75767,251135), the ground drops into a pit, and
+// around x -71700..-70600, y 252800..253400 the server refuses the legs
+// cell after cell (acis_golang#5412): the walk back from there took longer
+// than the scenario.
+var recoverGround = botclient.Point{X: -78500, Y: 248900, Z: -3600}
 
 func recoverPersona() botclient.Persona {
 	p := partyPersona()
@@ -73,8 +78,7 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 	} else {
 		t.Logf("%s restarted %v after its death", name, waited)
 	}
-	// The restart teleports the bot to the village; only a snapshot taken
-	// after the teleport tells where it is from then on (#131).
+	// The restart teleports the bot to the village (#131).
 	_, tp, err := f.watch.Await(ctx, killed, func(ev botclient.Event) bool {
 		e, ok := ev.(botclient.TeleportToLocation)
 		return ok && e.ObjectID == f.id
@@ -82,10 +86,18 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s teleported to the village: %v", name, err)
 	}
-	t.Logf("%s restarted at %v, %.0f from the GM", name, tp.Event.(botclient.TeleportToLocation).Pos, dist(tp.Event.(botclient.TeleportToLocation).Pos, gm.Pos()))
+	tpPos := tp.Event.(botclient.TeleportToLocation).Pos
+	t.Logf("%s restarted at %v, %.0f from the GM", name, tpPos, dist(tpPos, gm.Pos()))
+	// The brain publishes its snapshots on its own clock, not the tap's: a
+	// snapshot published while it applied the Revive, before the teleport,
+	// can be stamped after tp.At and still stand by the GM. Only one in the
+	// village is past the teleport.
+	watchUntil(t, ctx, gm.Client, "the bot in the village", func() bool {
+		return dist(b.Status().Position, tpPos) <= followReach
+	}, nil)
 	watchUntil(t, ctx, gm.Client, "the bot back at the GM", func() bool {
 		s := b.Status()
-		return s.At.After(tp.At) && s.HP > 0 && dist(s.Position, gm.Pos()) <= followReach
+		return s.HP > 0 && dist(s.Position, gm.Pos()) <= followReach
 	}, nil)
 	if n, at, _ := f.echoes(0); n > 0 {
 		t.Logf("%s: %d ground moves refused in place on the way back, first at %v (acis_golang#5412)", name, n, at)
