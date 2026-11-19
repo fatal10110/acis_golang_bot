@@ -39,7 +39,9 @@ const (
 	// legs stall at: followDetourLegs legs of followDetourStep along the
 	// wall, followDetourTurn off the line to the slot: past square to it,
 	// so a wall the line meets aslant does not stop the detour at once.
-	// followDetours bounds a trip's.
+	// followDetours bounds the detours at one wall: the legs leave it
+	// behind once they bring the bot followDetourStep closer than where its
+	// first detour started.
 	followDetourTurn = 2 * math.Pi / 3
 	followDetourStep = 600
 	followDetourLegs = 2
@@ -80,7 +82,8 @@ type followState struct {
 	// the direction of the detour under way (radians), detourLegs its legs
 	// still to go and detourFrom where it started; detouring is set while
 	// one is under way and flipped once it turned to the other side.
-	// detours counts the trip's.
+	// detours counts those at the wall the bot is getting past, and wallDist
+	// is how far from dest the first of them started.
 	dest      Point
 	traveling bool
 	stuck     bool
@@ -98,6 +101,7 @@ type followState struct {
 	detouring  bool
 	flipped    bool
 	detours    int
+	wallDist   float64
 	// runToggledAt is the last walk/run toggle not yet settled.
 	runToggledAt time.Time
 }
@@ -233,7 +237,7 @@ func (b *Brain) followLeg(from Point) Action {
 		// where it stands.
 		v.lastDist, v.stalls = 0, 0
 		if v.detours < followDetours {
-			return b.startDetour(from)
+			return b.startDetour(from, d)
 		}
 	}
 	if v.lastDist > 0 && v.lastDist-d < spotProgress {
@@ -243,6 +247,10 @@ func (b *Brain) followLeg(from Point) Action {
 		if v.unsticks > 0 && v.stuckDist-d >= spotProgress {
 			// Past the stall the sidesteps were for.
 			v.unsticks = 0
+		}
+		if v.detours > 0 && v.wallDist-d >= followDetourStep {
+			// Past the wall the detours were for.
+			v.detours = 0
 		}
 	}
 	if v.stalls >= spotStalls {
@@ -257,19 +265,22 @@ func (b *Brain) followLeg(from Point) Action {
 	return moveAction(legToward(from, v.dest, d), from)
 }
 
-// startDetour starts a detour of a bot at from that a sidestep just got off
-// a stall. Legs aimed straight at the slot from anywhere near hit the same
+// startDetour starts a detour of a bot at from, d away from its slot, that a
+// sidestep just got off a stall. Legs aimed straight at the slot from anywhere near hit the same
 // wall again (acis_golang#5412 refuses them cell after cell along a band
 // several hundred units wide, #141), so the detour walks along it first: on
 // the trip's side, or for the trip's first on the side of that sidestep
 // (counterclockwise for one straight back).
-func (b *Brain) startDetour(from Point) Action {
+func (b *Brain) startDetour(from Point, d float64) Action {
 	v := &b.follow
 	if v.side == 0 {
 		v.side = 1
 		if sidestepTurns[v.unsticks-1] < 0 {
 			v.side = -1
 		}
+	}
+	if v.detours == 0 {
+		v.wallDist = d
 	}
 	v.detours++
 	v.detouring, v.flipped, v.detourFrom = true, false, from
@@ -282,8 +293,8 @@ func (b *Brain) startDetour(from Point) Action {
 // found a wall on that side too: the trip goes around on the other side from
 // then on, and a detour whose first leg did not move the bot turns to it at
 // once. A detour that moved the bot ends where the legs did not stall yet, so
-// the next stall has every sidestep again; the trip's followDetours bound how
-// often.
+// the next stall has every sidestep again; followDetours bound how often at
+// one wall.
 func (b *Brain) followDetour(from Point) (Action, bool) {
 	v := &b.follow
 	blocked := dist2(from, v.legFrom) < spotProgress*spotProgress

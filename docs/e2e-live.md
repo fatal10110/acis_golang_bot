@@ -124,7 +124,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 ## What a run creates and leaves behind
 
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
-  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv4`,
+  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu2`, `e2erv1`-`e2erv3`,
   `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`, `e2est1`-`e2est3`,
   `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`, `e2epn1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
@@ -189,9 +189,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLivePartySwarmOneJoins` | login | #72 a player invites two bots of one swarm, one joins |
 | `TestLiveWhisperCommands` | GM | #19 `invite me`, `follow`; a non-commander's `follow` ignored |
 | `TestLiveFollow` | GM | #18 follow from out of sight, settle, walk and run |
+| `TestLiveFollowAcrossBand` | GM | #141 follow out of sight across Talking Island's band of refused cells (acis_golang#5412): the bot detours along it |
 | `TestLiveSupport` | GM | #22 buffs, heal under 60 %, assist after the leader's hit, renewal |
 | `TestLiveRecoverVillageRestart` | GM | #24 village restart after `ResurrectWait`, back to the GM |
-| `TestLiveRecoverAcrossBand` | GM | #141 the village restart's way back crosses the band of refused cells (acis_golang#5412): the bot detours along it |
 | `TestLiveRecoverLeaderLogout` | GM | #24 leader logout: `LeaderWait`, `/unstuck`, town |
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |

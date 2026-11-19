@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"cmp"
 	"math"
 	"testing"
 	"time"
@@ -21,6 +22,10 @@ func TestFollowBand(t *testing.T) {
 		// gives the slot up within maxMoves.
 		around   bool
 		maxMoves int
+		// leader is the leader's Y, 5000 when zero.
+		leader int32
+		// minDetours: the trip takes more detours than one wall allows.
+		minDetours int
 	}{
 		{name: "600 wide", ground: fakeGround{{-300, 2000, 300, 2400}}, around: true, maxMoves: 20},
 		{name: "1200 wide, the near end on the detour side", ground: fakeGround{{-200, 2000, 1000, 2400}}, around: true, maxMoves: 20},
@@ -32,21 +37,30 @@ func TestFollowBand(t *testing.T) {
 			ground: fakeGround{{-300, 2000, 300, 2400}, {-500, 1000, -400, 2400}},
 			around: true, maxMoves: 25,
 		},
+		{
+			name:   "one wall after another: detours counted per wall",
+			ground: fakeGround{{-2400, 2000, 2400, 2400}, {-3600, 5000, 3600, 5400}, {-4800, 8000, 4800, 8400}},
+			leader: 12000, around: true, maxMoves: 200, minDetours: followDetours + 1,
+		},
 		{name: "no way around", ground: fakeGround{{-1e6, 2000, 1e6, 2400}}, around: false, maxMoves: 250},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newFollowBrain(t)
 			b.world.Apply(DeleteObject{ObjectID: gmID}, t0)
-			b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{Y: 5000}}}}, t0)
+			leader := cmp.Or(tt.leader, 5000)
+			b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{Y: leader}}}}, t0)
 			a, now := repath(t, b, at(time.Second))
 			slot := b.follow.dest
-			moves := 0
+			moves, detours := 0, 0
 			for a.kind == actMove {
 				if moves++; moves > tt.maxMoves {
 					t.Fatalf("still on the way after %d moves at %v, slot %v", tt.maxMoves, b.world.Self.Position(now), slot)
 				}
 				from := b.world.Self.Position(now)
+				if b.follow.detouring && b.follow.detourLegs == followDetourLegs-1 && !b.follow.flipped {
+					detours++
+				}
 				if to := tt.ground.walk(from, moveTarget(a.payload)); budged(to, from) {
 					b.world.Apply(StopMove{ObjectID: selfID, Pos: to}, now)
 				} else {
@@ -58,9 +72,12 @@ func TestFollowBand(t *testing.T) {
 					t.Fatalf("decide(%v) = %q, want follow", now.Sub(t0), name)
 				}
 			}
-			t.Logf("%d moves, %d detours", moves, b.follow.detours)
+			t.Logf("%d moves, %d detours", moves, detours)
+			if detours < tt.minDetours {
+				t.Errorf("%d detours over the trip, want at least %d", detours, tt.minDetours)
+			}
 			if b.follow.detours > followDetours {
-				t.Errorf("%d detours, want at most %d", b.follow.detours, followDetours)
+				t.Errorf("%d detours at the last wall, want at most %d", b.follow.detours, followDetours)
 			}
 			pos := b.world.Self.Position(now)
 			if arrived := dist2(pos, slot) <= followArrive*followArrive; arrived != tt.around || b.follow.stuck == tt.around {
