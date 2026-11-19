@@ -200,9 +200,8 @@ skills are paced from `MagicSkillUse` hit time plus reuse, with a safety timeout
 
 Shared behavior in every persona:
 
-- anti-KS: monster targets are inferred from `MoveToPawn` (NPC chasing), `Attack` and
-  `MagicSkillUse`; skip a monster engaged by a non-party player in the last ~10 s. Aggro held before
-  any action is invisible to the client, so this is a heuristic;
+- no anti-KS (owner decision on #138, superseding the PR3 rule): kill stealing is acceptable, so a
+  bot may attack a monster another player is fighting, and it does not track who fights what;
 - PvP defaults (configurable, D6): assist and fight-back target NPCs, or players who are flagged or
   have karma; never force-attack an unflagged player with no karma; stop fighting back when the
   attacker unflags; do not heal or buff a flagged party member (that flags the bot);
@@ -241,8 +240,19 @@ spawn flags). Up to level 5 the aggressive bound is that of any monster (two lev
 nearly every starter monster has an aggro range, so the strict rule left new characters outside
 Talking Island no spot (#133). A process-wide spot registry (one owner) caps bots per spot at about
 `maximumNpcs`/3; on arrival the bot counts visible players and moves on when crowded. Each race starts
-in its own newbie zone. The caps hold about 13-22 level 1 farmers per village (4 in the dwarven one);
-the rest wait and look again each minute (#133).
+in its own newbie zone. Owner decision (#137): the farmers spread so that as many spots as possible
+are covered rather than waiting for one. A bot claims, within `MaxTravel` (20000) of where it stands,
+the nearest fitting spot no bot holds, else the nearest with room; with none, the same within
+`Wander` (40000), walked in legs that hop from one monster spot's centre to the next where a straight
+leg would end on ground no path reaches (a spot its legs get no closer to is avoided for an hour,
+#144); with none, a gatekeeper trip to a spot with room when it carries the
+price; with none, it shares past its cap the fitting spot within `Wander` that its bots fill least for
+its cap, up to one bot per monster (`maximumNpcs`), and looks again each minute for a spot with room.
+The same choice runs at every level-up that outlevels its spot. Level 1 farmers find room at 17
+(Talking Island), 36 (elven and dark elven), 13 (orc) and 4 (dwarven) per village and share up to 58,
+118, 46 and 13; a home run's 340 hold 235 spots at once, the rest wait for a holder to level on.
+Owner decision (#138): it is fine for a farmer to steal a kill. A monster another player is fighting
+is a target like any other, which keeps more farmers fighting on shared spots.
 
 **town** (PR4): idles, sits, buys potions and shots, sells loot to merchants, uses the gatekeeper,
 visits the Newbie Helper for buffs (levels 8-24).
@@ -552,7 +562,7 @@ to avoid: both would log in the same accounts and kick each other.
 | 1 | Reader decode-to-events, brain loop with injected clock and `done` teardown, PR1 codecs and world model, `Appearing` after teleport, character creation with race/class/appearance and the nickname marker, `-persistent`, safe reconnect, login pacing and credential breaker, pre-created accounts with per-bot passwords, metrics, `-record` tap | Bot stays in world; after a kick it reconnects once the old character leaves; after `//recall` it reappears; a credential failure halts logins without a ban |
 | 2a | Party accept, follow slot, GM Tell commands with both authority options | GM whispers `invite me`/`follow`; bot is invited, follows at slot distance; a non-GM whisper is ignored and triggers no DB query after the negative cache |
 | 2b | Assist, heal and buff with skill pacing, trainer skill learning, rebuff from timers, potions and auto soulshots, death policy, resurrection accept, leader edge cases, PvP defaults | Level-15 human mystic learns Heal at the trainer, heals the GM below 60 % HP, assists only after the GM hits a monster, dies and returns to the leader |
-| 3 | Farmer persona, datapack readers (NPC templates, spawnlist territories), spot registry, loot queue, drop, anti-KS, stuck and blacklist | Kills a monster, loot row in `items`, exp grew; a monster engaged by another player is skipped |
+| 3 | Farmer persona, datapack readers (NPC templates, spawnlist territories), spot registry, loot queue, drop, stuck and blacklist (anti-KS dropped, #138) | Kills a monster, loot row in `items`, exp grew |
 | 4 | Town and merchant personas: merchant buy and sell, gatekeeper, Newbie Helper buffs, trade defaults, private store with registry and pricing | Adena and items change in DB after buy, sell, a player trade and a store sale; teleport reaches the spot and the bot reappears |
 | 5 | Progression: better spots by level, more skills at the trainer, equip bought gear | Bot learns a skill it can now afford; skill row in DB |
 | 6a | Home run (D9): `-allowlisted` without `-local-addr` in `bots accounts` and `bots swarm`; dialer with `TCP_USER_TIMEOUT` and a `KeepAliveConfig` so dead sessions end in about a minute, and sessions ended by those timeouts not counted as aborts; AccountInUse retried for 3 minutes from the first AccountInUse after a run start or any non-kick end (failed entries included); `docs/home.md` in this repository (provider range on both servers, public `Hostname` or `-game`, `AutoCreateAccounts` on, swarm flags, secret file and account prefix on the owner's machine (the Hetzner host's secret file copied over to re-use its `hz` bots), local datapack copy, GM control over the SSH tunnel, WSL2 notes); retiring the Hetzner run (all paths in this repository: `docs/hetzner.md` and `ops/acis-bots.service` kept as an archive pointing to `docs/home.md`; the owner's steps in `docs/home.md`: stop and disable the unit, replace the `127.0.0.2` allowlist entry; `README.md`, `docs/gm-control.md` and the "shared host" lines of `CLAUDE.md` and `.claude/skills/bot-issue/SKILL.md` updated) | Unit: `-allowlisted` accepted without `-local-addr`; the dialer's socket options (user timeout and keepalive) come from a plain function tested on its own, with the `setsockopt` call behind a small seam, so the test needs no network and no build tag; a session ended by a timeout is not counted as an abort, EOF and a reset are; the window starts at the first AccountInUse, however late it comes after a run start or a non-kick end (failed entry included), retries come at most 30 s apart, and only after 3 minutes of AccountInUse does the bot stop, while after a kick the first one stops it as today. e2e on the shared stack (its Docker gateway is allowlisted): `-allowlisted` without `-local-addr` logs in unspaced |

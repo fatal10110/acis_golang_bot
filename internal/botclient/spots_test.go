@@ -58,8 +58,8 @@ func TestSpotRegistryClaim(t *testing.T) {
 		wantOK  bool
 	}{
 		{name: "first in order", claim: []int{0, 1}, release: -1, want: 0, wantOK: true},
-		{name: "a again, its cap is 2", claim: []int{0, 1}, release: -1, want: 0, wantOK: true},
-		{name: "a full: b", claim: []int{0, 1}, release: -1, want: 1, wantOK: true},
+		{name: "b held by none goes first", claim: []int{0, 1}, release: -1, want: 1, wantOK: true},
+		{name: "both held: a has room, its cap is 2", claim: []int{0, 1}, release: -1, want: 0, wantOK: true},
 		{name: "both full", claim: []int{0, 1}, release: -1},
 		{name: "a released: a", claim: []int{1, 0}, release: 0, want: 0, wantOK: true},
 		{name: "empty order", release: -1},
@@ -143,7 +143,7 @@ func TestRuleSpot(t *testing.T) {
 		testSpot("high", 100, 0, 8, 9, 9),
 		testSpot("far", 0, 5000, 2, 4, 9),
 		testSpot("near", 4000, 0, 3, 6, 9),
-		testSpot("distant", 30000, 0, 3, 6, 9),
+		testSpot("distant", 50000, 0, 3, 6, 9),
 	}
 	tests := []struct {
 		name     string
@@ -211,9 +211,11 @@ func TestRuleSpot(t *testing.T) {
 			name: "co-holders under the cap are no crowd",
 			setup: func(b *Brain) {
 				// Spot 3 takes 3 bots; the 2 others holding it stand there
-				// with 3 strangers: 5 in sight, 3 that count.
+				// with 3 strangers: 5 in sight, 3 that count. The bot
+				// avoids the empty spot 2, which it would take first.
 				b.cfg.Spots.claim([]int{3})
 				b.cfg.Spots.claim([]int{3})
+				b.spot.avoid = map[int]time.Time{2: at(time.Minute)}
 				b.world.Self.move = stopAt(Point{X: 3900})
 				for i := range int32(5) {
 					b.world.Apply(CharInfo{ObjectID: pcID + 1 + i, Name: "p", Pos: Point{X: 4000}}, t0)
@@ -359,7 +361,7 @@ func TestSpotStalls(t *testing.T) {
 	if rule, a := b.decide(at(10 * time.Second)); rule != "spot" || a.kind != actHold || b.spot.held {
 		t.Fatalf("stalled = %q %d held %v, want the spot given up", rule, a.kind, b.spot.held)
 	}
-	if !at(10*time.Second).Before(b.spot.avoid[0]) || b.cfg.Spots.Held(0) != 0 {
+	if !b.spot.avoid[0].Equal(at(10*time.Second).Add(spotUnreachable)) || b.cfg.Spots.Held(0) != 0 {
 		t.Fatalf("stalled spot not avoided or still held: %v, %d", b.spot.avoid, b.cfg.Spots.Held(0))
 	}
 }

@@ -55,7 +55,7 @@ variables and `BOT_REQUIRE_E2E=1`.
 - **Scenarios:** inside a test process, every scenario but the soak (it counts the process's
   goroutines) and the wrong-password one calls `t.Parallel`, and at most 2 run at once
   (`e2e.MaxScenarios`, `-parallel 2`). Scenarios that share ground take a group lock and run one
-  at a time: the farmers on the newbie spots (farm, anti-KS, spots, arrows), and the bots sent to
+  at a time: the farmers on the newbie spots (farm, spots, arrows), and the bots sent to
   the village's grocer, stores, trainers and merchants. Each scenario logs in accounts of its own
   (an account group no other scenario uses): a login to an account already in game evicts that
   session.
@@ -137,10 +137,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   gives it Power Strike, 10 Healing Potions, 500 no-grade soulshots and 3 Stems (a gift waits while
   the inventory is full); what it did not use stays with it. Other farmers keep their loot and the
   levels they gained; `TestLiveSpots` sets its first farmer back to level 1 at the end.
-- `TestLiveAntiKS` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
-  fights an invisible player) and lets the GM land the first hit on a spawned wolf, which then
-  fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight. A farmer `e2ek1`
-  found inside the Talking Island village is recalled to the newbie spots first.
+- `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
+  fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),
+  which then fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight.
 - The M4 scenarios seed with `give` only: adena for purchases, trades and the town bot's gatekeeper
   hop (Gludin, 18000), Stems (1864) for the merchant visit's sale and the trade, and Steel Powder
   (1664), loot no NPC shop sells, for the stores. The
@@ -194,7 +193,6 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveRecoverVillageRestart` | GM | #24 village restart after `ResurrectWait`, back to the GM |
 | `TestLiveRecoverLeaderLogout` | GM | #24 leader logout: `LeaderWait`, `/unstuck`, town |
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
-| `TestLiveAntiKS` | GM, datapack | #28 a monster fighting the GM is left alone past `EngagedWindow`, then taken on once the GM is gone |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
 | `TestLiveFarmStarters` | GM, datapack | #133 a level 1 elf, dark elf and orc farmer each claim a spot of their own newbie zone and kill a monster there |
 | `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |

@@ -32,8 +32,8 @@ var starterStarts = []starterStart{
 }
 
 // starterSpotsFile is the fixture of the real datapack's starter spots:
-// every spot within MaxTravel of a start point whose monsters are at most
-// level 5.
+// every spot within Wander of a start point whose monsters are at most
+// level starterMaxLevel.
 const starterSpotsFile = "testdata/starter_spots.json"
 
 // starterSpot is a datapack.Spot of the fixture, its territory aside.
@@ -45,13 +45,17 @@ type starterSpot struct {
 	MaximumNPCs        int
 }
 
+// starterMaxLevel is the highest monster level of the fixture: all a
+// level 5 farmer fits (SpotPolicy.Below).
+const starterMaxLevel = 7
+
 // starterSpots picks the fixture's spots from the spots of a datapack.
 func starterSpots(all []datapack.Spot) []starterSpot {
-	reach := int64(defaultSpotPolicy().MaxTravel) * int64(defaultSpotPolicy().MaxTravel)
+	reach := int64(defaultSpotPolicy().Wander) * int64(defaultSpotPolicy().Wander)
 	var out []starterSpot
 	for _, s := range all {
 		c := Point{X: s.Center.X, Y: s.Center.Y}
-		if s.MaxLevel > 5 || !slices.ContainsFunc(starterStarts, func(st starterStart) bool {
+		if s.MaxLevel > starterMaxLevel || !slices.ContainsFunc(starterStarts, func(st starterStart) bool {
 			return dist2(st.at, c) <= reach
 		}) {
 			continue
@@ -110,9 +114,10 @@ func loadStarterSpots(t *testing.T) []datapack.Spot {
 // TestStarterSpots places level 1 farmers at each race's start point over
 // the real datapack's starter spots: the first claims a spot of its newbie
 // zone, where the plan's rule alone (aggressive monsters not above the
-// bot) finds none outside Talking Island; then farmers claim until every
-// spot in reach is full, which is the village's capacity, and the next
-// one waits spotRetry before it looks again (#133).
+// bot) finds none outside Talking Island (#133); then farmers claim until
+// every spot in reach (Wander) is full, which is the village's room, and
+// share them until every one is at its limit; the next one waits
+// spotRetry before it looks again (#137).
 func TestStarterSpots(t *testing.T) {
 	spots := loadStarterSpots(t)
 	// newbieZone is how far from its start a new character's spot lies.
@@ -121,15 +126,16 @@ func TestStarterSpots(t *testing.T) {
 		village string
 		// planRule: a farmer held to AggroAbove alone finds a spot.
 		planRule bool
-		// capacity is how many level 1 farmers find a spot from the start.
-		capacity int
+		// room is how many level 1 farmers find a spot with room from the
+		// start, limit how many find one sharing past the caps.
+		room, limit int
 	}{
-		{"talking island, fighter", true, 15},
-		{"talking island, mystic", true, 17},
-		{"elven village", false, 22},
-		{"dark elven village", false, 14},
-		{"orc village", false, 13},
-		{"dwarven village", false, 4},
+		{"talking island, fighter", true, 17, 58},
+		{"talking island, mystic", true, 17, 58},
+		{"elven village", false, 36, 118},
+		{"dark elven village", false, 36, 118},
+		{"orc village", false, 13, 46},
+		{"dwarven village", false, 4, 13},
 	}
 	for _, tt := range tests {
 		t.Run(tt.village, func(t *testing.T) {
@@ -168,17 +174,21 @@ func TestStarterSpots(t *testing.T) {
 				t.Errorf("first spot %s has monsters up to level %d", sp.Maker, sp.MaxLevel)
 			}
 
-			n := 1
-			var last *Brain
-			for {
-				last = farmer(r)
-				if last.pickSpot(now); !last.spot.held {
-					break
+			claimAll := func(overflow bool) (int, *Brain) {
+				for n := 0; ; n++ {
+					f := farmer(r)
+					f.persona.Spots.Overflow = overflow
+					if f.pickSpot(now); !f.spot.held {
+						return n, f
+					}
 				}
-				n++
 			}
-			if n != tt.capacity {
-				t.Errorf("capacity %d level 1 farmers, want %d", n, tt.capacity)
+			if n, _ := claimAll(false); n+1 != tt.room {
+				t.Errorf("room for %d level 1 farmers, want %d", n+1, tt.room)
+			}
+			n, last := claimAll(true)
+			if n += tt.room; n != tt.limit {
+				t.Errorf("%d level 1 farmers sharing, want %d", n, tt.limit)
 			}
 			// Overflow: the next farmer waits, and finds the spot a farmer
 			// gives up once the wait is over.
