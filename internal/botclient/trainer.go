@@ -227,9 +227,12 @@ type trainerVisit struct {
 	shunned map[int32]time.Time
 	// walk is the walk to a trainer's spawn while none is in sight (zero
 	// for none); walkShunned are the trainer templates whose spawn the bot
-	// reached without finding one, or could not reach, until a time.
+	// reached without finding one, until a time. stuckLevel is the bot's
+	// level when a walk last got nowhere, 0 before: no walk starts again
+	// before the next level.
 	walk        npcVisit
 	walkShunned map[int32]time.Time
+	stuckLevel  int32
 }
 
 // reset ends the visit in progress.
@@ -393,11 +396,13 @@ func (b *Brain) startVisit(now time.Time) bool {
 // trainer of the bot's class within Persona.TrainerReach, reporting
 // whether one runs. A walk the bot left the reach of (a teleport) is
 // dropped. A party member stays with its party and a bot told to follow
-// stays with its commander: neither walks to a trainer out of sight.
+// stays with its commander: neither walks to a trainer out of sight. After
+// a walk that got nowhere, none starts again before the next level.
 func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 	t, m := &b.train, b.cfg.Travel
 	reach := int64(b.persona.TrainerReach) * int64(b.persona.TrainerReach)
-	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 {
+	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 ||
+		(t.stuckLevel != 0 && b.world.Self.Level <= t.stuckLevel) {
 		t.walk = npcVisit{}
 		return false
 	}
@@ -421,12 +426,22 @@ func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 }
 
 // trainerLeg is the next leg of the walk to a trainer's spawn. Arrived
-// with no trainer in sight, or getting nowhere, the bot leaves that
-// trainer template alone for visitShunFor.
+// with no trainer in sight, the bot leaves that trainer template alone for
+// visitShunFor. Getting nowhere, its sidesteps and /unstuck spent (walkTo),
+// it walks to no trainer before the next level: the other trainers' spawns
+// lie past the same ground, and the recall of an /unstuck can land the bot
+// back where it stood (a new human mystic's start is its own restart area,
+// whose ground moves the pathfinder cannot route out of: acis_golang#5412),
+// so a walk to the next spawn would only spend another /unstuck there (#134).
 func (b *Brain) trainerLeg(now time.Time) (Action, bool) {
 	t := &b.train
 	if a, ok := b.walkTo(&t.walk, now); ok {
 		return a, true
+	}
+	if dist2(b.world.Self.Position(now), t.walk.at) > visitArrive*visitArrive {
+		t.stuckLevel = b.world.Self.Level
+		t.walk = npcVisit{}
+		return Action{}, false
 	}
 	if t.walkShunned == nil {
 		t.walkShunned = make(map[int32]time.Time)

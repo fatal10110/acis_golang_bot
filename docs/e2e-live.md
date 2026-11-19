@@ -204,6 +204,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveMerchantSwarm` | GM, datapack | #111 a merchant-preset bot with loot in town opens its store, seen by the GM |
 | `TestLiveChatReplies` | GM | #36 one whispered reply after the delay; none to a repeat sender, a marked name, shout or trade |
 | `TestLiveTrainer` | GM, datapack | #21 a level 10 mystic visits its class trainer (the spellbook when asked), #39 Heal's level offered from level 14 learned after the level-up to 15 |
+| `TestLiveMysticStart` | GM, datapack | #134 a level 1 human mystic at its start point, whose legs and /unstuck recall the server keeps there (acis_golang#5412), gives its trainer walk up within minutes and stays off it |
 | `TestLiveGearWear` | GM, datapack | #79 shield, necklace and two rings worn, a better ring for the lesser, a two-handed sword worn and the shield taken off |
 | `TestLiveGearBuy` | GM, datapack | #40 a better piece bought and worn, the old one sold; #79 a rogue's table buys and wears a dagger |
 | `TestLiveArrows` | GM, datapack | #85, #102 an archer's table wielding a sword buys a bow and its arrows, wears the bow, and shoots without NotEnoughArrows |
