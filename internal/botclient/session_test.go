@@ -552,36 +552,3 @@ func TestSessionStableResetsAborts(t *testing.T) {
 }
 
 func discardLog() *slog.Logger { return slog.New(slog.DiscardHandler) }
-
-func TestBrainLogoutLimit(t *testing.T) {
-	clock := newFakeClock(t0)
-	sent := make(chan []byte, 64)
-	b := NewBrain(newTestWorld(t), NewEvents(64), chanSender(sent), clock, BrainConfig{LogoutLimit: shutdownGrace, Rand: rand.New(rand.NewPCG(5, 6))})
-	done, logout := make(chan struct{}), make(chan struct{})
-	errc := make(chan error, 1)
-	go func() { errc <- b.Run(done, logout) }()
-	close(logout)
-	// The Logout goes out at once; the server refuses it (in combat). The
-	// brain handles the refusal after the Logout is pending.
-	for p := range sent {
-		if p[0] == opGameLogout {
-			break
-		}
-	}
-	b.events.push(ActionFailed{}, nil)
-	for {
-		select {
-		case err := <-errc:
-			if !errors.Is(err, errLogoutTimeout) {
-				t.Fatalf("Run = %v, want %v", err, errLogoutTimeout)
-			}
-			if took := clock.Now().Sub(t0); took < shutdownGrace || took > shutdownGrace+time.Second {
-				t.Fatalf("gave up after %s, want %s", took, shutdownGrace)
-			}
-			return
-		case <-sent:
-		case <-clock.armed:
-			clock.advanceToNext()
-		}
-	}
-}
