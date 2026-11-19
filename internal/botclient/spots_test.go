@@ -427,19 +427,23 @@ func TestSpotReleased(t *testing.T) {
 }
 
 // TestSpotLegLength: a spot within spotDirect is one move to its centre,
-// for the server's pathfinder to route; a farther one a spotLeg leg.
+// for the server's pathfinder to route; a farther one, on the plane or in
+// 3D (the server's move cap counts height), a spotLeg leg.
 func TestSpotLegLength(t *testing.T) {
 	tests := []struct {
 		name string
-		x    int32
+		x, z int32
 		want Point
 	}{
-		{"within spotDirect", spotDirect, Point{X: spotDirect}},
-		{"beyond spotDirect", spotDirect + 1000, Point{X: spotLeg}},
+		{"within spotDirect", spotDirect, 0, Point{X: spotDirect}},
+		{"beyond spotDirect", spotDirect + 1000, 0, Point{X: spotLeg}},
+		{"within on the plane, beyond in 3D", spotDirect - 100, 5000, Point{X: spotLeg, Z: 1685}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newSpotBrain(t, 5, testSpot("s", tt.x, 0, 3, 6, 9))
+			sp := testSpot("s", tt.x, 0, 3, 6, 9)
+			sp.Z = tt.z
+			b := newSpotBrain(t, 5, sp)
 			name, act := b.decide(at(time.Second))
 			if got := moveTarget(act.payload); name != "spot" || act.kind != actMove || got != tt.want {
 				t.Fatalf("decide = %q kind %v, move to %v; want a move to %v", name, act.kind, moveTarget(act.payload), tt.want)

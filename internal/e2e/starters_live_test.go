@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // TestLiveFarmStarters runs a level 1 farmer of each of three races that
@@ -20,7 +21,16 @@ func TestLiveFarmStarters(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
-	spots := spotRegistry(t, tg)
+	dp, err := datapack.Load(tg.Config().Datapack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spots := botclient.NewSpotRegistry(dp.Spots(), 1)
+	centres := map[string]botclient.Point{}
+	for _, s := range dp.Spots() {
+		centres[s.Maker] = botclient.Point{X: s.Center.X, Y: s.Center.Y, Z: s.Z}
+	}
+	leash := botclient.DefaultPersona().Spots.Leash
 	gm := enterGM(t, ctx, tg)
 	classes := []*botclient.StartingClass{&botclient.ElvenFighter, &botclient.DarkFighter, &botclient.OrcFighter}
 	farmers := make([]*farmer, len(classes))
@@ -59,19 +69,24 @@ func TestLiveFarmStarters(t *testing.T) {
 		}
 	}
 	for _, f := range farmers {
-		waitFor(t, ctx, f.name+" killing a monster at its spot", func() bool { return killedAtSpot(f) })
+		waitFor(t, ctx, f.name+" killing a monster at its spot", func() bool {
+			centre, ok := centres[f.bot.Status().Spot]
+			return ok && killedAtSpot(f, centre, leash)
+		})
 		t.Logf("%s killed a monster at %s", f.name, f.bot.Status().Spot)
 	}
 }
 
-// killedAtSpot reports whether a monster f swung at died: f only fights
-// at its spot (rule "farm") or when attacked on its way.
-func killedAtSpot(f *farmer) bool {
+// killedAtSpot reports whether a monster f swung at from within leash of
+// its spot's centre died: a kill on the way to the spot, when attacked
+// there, does not count.
+func killedAtSpot(f *farmer, centre botclient.Point, leash int32) bool {
 	swungAt := map[int32]bool{}
 	for _, s := range f.watch.Seen(0) {
 		switch e := s.Event.(type) {
 		case botclient.Attack:
-			if e.AttackerID == f.id && len(e.Hits) > 0 {
+			dx, dy := int64(e.Pos.X-centre.X), int64(e.Pos.Y-centre.Y)
+			if e.AttackerID == f.id && len(e.Hits) > 0 && dx*dx+dy*dy <= int64(leash)*int64(leash) {
 				swungAt[e.Hits[0].TargetID] = true
 			}
 		case botclient.Die:

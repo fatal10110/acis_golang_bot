@@ -149,7 +149,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 
 // spotLeg is the next move toward dest, d away from from: standing up
 // first, giving the spot up when the last legs got nowhere, straight to
-// dest within spotDirect.
+// dest within spotDirect in 3D (d is the distance on the X/Y plane).
 func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 	v := &b.spot
 	if b.world.Self.Sitting {
@@ -165,7 +165,9 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 		return Action{}
 	}
 	v.lastDist = d
-	if d <= spotDirect {
+	// The server checks the move's 3D length (movement.go), so the height
+	// between here and the centre counts too.
+	if math.Hypot(d, float64(dest.Z-from.Z)) <= spotDirect {
 		return moveAction(dest, from)
 	}
 	return moveAction(legToward(from, dest, d), from)
