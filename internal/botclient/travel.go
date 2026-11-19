@@ -223,8 +223,9 @@ func teleportBypass(obj int32, index int) string {
 // teleport ends the trip (the brain sends Appearing) and the spot rule
 // picks again where it lands. A gatekeeper that takes it nowhere is
 // shunned; after a walk that got nowhere (walkStuck) no trip to a
-// gatekeeper out of sight is planned for Persona.WalkStuckFor. Bypasses pass the bypass gate (gateBypass); legs and clicks the
-// frame pacer, a trip spending at most visitClicks clicks.
+// gatekeeper out of sight is planned for Persona.WalkStuckFor. Bypasses
+// pass the bypass gate (gateBypass); legs and clicks the frame pacer, a
+// trip spending at most visitClicks clicks.
 func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 	tr := &b.trip
 	v := &tr.v

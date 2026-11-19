@@ -36,10 +36,29 @@ func stuckWalkEnd(start time.Duration) time.Duration {
 	return start + time.Duration(3+len(sidestepTurns))*time.Second + escapeRetry
 }
 
+// noCloserWalk is a walk of errand rule toward an NPC spawn from the origin
+// whose three legs, the first at start, move the bot sideways, no closer:
+// the walk is given up at noCloserWalkEnd without a sidestep or /unstuck.
+func noCloserWalk(rule string, start time.Duration) []trainerStep {
+	var steps []trainerStep
+	for i := range 3 {
+		steps = append(steps, trainerStep{name: fmt.Sprintf("leg %d", i+1), at: start + time.Duration(i)*time.Second, wantRule: rule, wantKind: actMove})
+	}
+	return append(steps, trainerStep{
+		name: "no closer: given up", at: noCloserWalkEnd(start),
+		setup: func(b *Brain) { b.world.Self.move = stopAt(Point{Y: 200}) },
+	})
+}
+
+// noCloserWalkEnd is when the walk of noCloserWalk(_, start) is given up.
+func noCloserWalkEnd(start time.Duration) time.Duration {
+	return start + 3*time.Second
+}
+
 // TestErrandWalkStuck has the Newbie Guide, shop and gatekeeper errands
-// walk toward an NPC spawn the bot's legs get nowhere near, its sidesteps
-// and /unstuck spent (#135): the errand starts no other walk to an NPC out
-// of sight, the Newbie Guide's before the next level and the others' for
+// walk toward an NPC spawn the bot's legs get nowhere near, either its
+// sidesteps and /unstuck spent or its legs moving it no closer (#135): the
+// errand starts no other walk to an NPC out of sight, the Newbie Guide's before the next level and the others' for
 // Persona.WalkStuckFor, past the template shun, while an NPC already in
 // sight is still visited: the back-off shuns no NPC.
 func TestErrandWalkStuck(t *testing.T) {
@@ -154,18 +173,28 @@ func TestErrandWalkStuck(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b := tt.brain(t)
-			runTrainerSteps(t, b, append(tt.steps, stuckWalk(tt.rule, tt.start)...))
-			end := stuckWalkEnd(tt.start)
-			if b.newbie.v.active() || b.shop.v.active() || b.trip.v.active() {
-				t.Fatalf("visits newbie %+v shop %+v trip %+v, want all over", b.newbie.v, b.shop.v, b.trip.v)
-			}
-			if tt.backedOff != nil && !tt.backedOff(b, at(end)) {
-				t.Fatalf("newbie %+v shop %+v trip %+v, want the errand backed off", b.newbie, b.shop, b.trip)
-			}
-			runTrainerSteps(t, b, tt.then(end))
-		})
+	walks := []struct {
+		name  string
+		steps func(rule string, start time.Duration) []trainerStep
+		end   func(start time.Duration) time.Duration
+	}{
+		{name: "unstuck spent", steps: stuckWalk, end: stuckWalkEnd},
+		{name: "legs no closer", steps: noCloserWalk, end: noCloserWalkEnd},
+	}
+	for _, w := range walks {
+		for _, tt := range tests {
+			t.Run(w.name+"/"+tt.name, func(t *testing.T) {
+				b := tt.brain(t)
+				runTrainerSteps(t, b, append(tt.steps, w.steps(tt.rule, tt.start)...))
+				end := w.end(tt.start)
+				if b.newbie.v.active() || b.shop.v.active() || b.trip.v.active() {
+					t.Fatalf("visits newbie %+v shop %+v trip %+v, want all over", b.newbie.v, b.shop.v, b.trip.v)
+				}
+				if tt.backedOff != nil && !tt.backedOff(b, at(end)) {
+					t.Fatalf("newbie %+v shop %+v trip %+v, want the errand backed off", b.newbie, b.shop, b.trip)
+				}
+				runTrainerSteps(t, b, tt.then(end))
+			})
+		}
 	}
 }
