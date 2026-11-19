@@ -65,8 +65,14 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) (_ bo
 	if a, ok := ev.(botclient.Attack); ok && a.AttackerID == mob {
 		return a, pl.tries
 	}
-	if ev, err = gm.Await(ctx, 30*time.Second, hitsBack); err != nil {
-		t.Fatalf("the monster fights back: %v", err)
+	// The step aside is blind: a monster that finds no path to the GM's
+	// landing, or gives up on it, swings at no one, and the read times out
+	// (#138). What the GM read then says which.
+	if ev, err = gm.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+		pl.note(ev)
+		return hitsBack(ev)
+	}); err != nil {
+		t.Fatalf("the monster fights back: %v; %s", err, pl)
 	}
 	if _, ok := ev.(botclient.Die); ok {
 		t.Fatal("the GM killed the monster before it fought back")
@@ -92,6 +98,9 @@ type provokeLog struct {
 	mobInfo     int
 	mobGone     bool
 	mobAttacked int
+	// mobChased and mobWalked count the monster's MoveToPawn (after
+	// someone) and MoveToLocation (to a point: home, or a path leg).
+	mobChased, mobWalked int
 }
 
 func (pl *provokeLog) note(ev botclient.Event) {
@@ -116,12 +125,20 @@ func (pl *provokeLog) note(ev botclient.Event) {
 		if e.AttackerID == pl.mob {
 			pl.mobAttacked++
 		}
+	case botclient.MoveToPawn:
+		if e.ObjectID == pl.mob {
+			pl.mobChased++
+		}
+	case botclient.MoveToLocation:
+		if e.ObjectID == pl.mob {
+			pl.mobWalked++
+		}
 	}
 }
 
 func (pl provokeLog) String() string {
-	return fmt.Sprintf("%d attack requests, GM HP %d (died %v), %d ActionFailed, system messages %v; monster: %d NPCInfo after the spawn, deleted %v, %d attacks",
-		pl.tries, pl.hp, pl.gmDied, pl.failed, pl.msgs, pl.mobInfo, pl.mobGone, pl.mobAttacked)
+	return fmt.Sprintf("%d attack requests, GM HP %d (died %v), %d ActionFailed, system messages %v; monster: %d NPCInfo after the spawn, deleted %v, %d attacks, %d chases, %d walks",
+		pl.tries, pl.hp, pl.gmDied, pl.failed, pl.msgs, pl.mobInfo, pl.mobGone, pl.mobAttacked, pl.mobChased, pl.mobWalked)
 }
 
 // tiSpots is a place among the Talking Island newbie spots, in walking
