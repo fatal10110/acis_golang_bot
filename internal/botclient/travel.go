@@ -175,6 +175,10 @@ type travelTrip struct {
 	// hopAt is when the next town hop is due (planHop), zero before the
 	// idle spell to it started.
 	hopAt time.Time
+	// stuckUntil is when a walk to a gatekeeper last got nowhere
+	// (walkStuck) plus Persona.WalkStuckFor: no trip to a gatekeeper out of
+	// sight is planned before then.
+	stuckUntil time.Time
 }
 
 // end ends the trip at now; a positive shunFor leaves its gatekeeper alone
@@ -218,8 +222,10 @@ func teleportBypass(obj int32, index int) string {
 // opens its teleport list and sends the destination's link; its own
 // teleport ends the trip (the brain sends Appearing) and the spot rule
 // picks again where it lands. A gatekeeper that takes it nowhere is
-// shunned. Bypasses pass the bypass gate (gateBypass); legs and clicks the
-// frame pacer, a trip spending at most visitClicks clicks.
+// shunned; after a walk that got nowhere (walkStuck) no trip to a
+// gatekeeper out of sight is planned for Persona.WalkStuckFor. Bypasses
+// pass the bypass gate (gateBypass); legs and clicks the frame pacer, a
+// trip spending at most visitClicks clicks.
 func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 	tr := &b.trip
 	v := &tr.v
@@ -251,6 +257,13 @@ func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 	}
 	a, ok := b.approach(v, now)
 	if !ok {
+		// A walk that got nowhere backs off every walk, not the gatekeeper:
+		// one in sight is still visited.
+		if b.walkStuck(v, now) {
+			tr.stuckUntil = now.Add(b.persona.WalkStuckFor)
+			tr.end(now, 0)
+			return Action{}, false
+		}
 		tr.end(now, visitShunFor)
 		return Action{}, false
 	}
@@ -286,6 +299,13 @@ func (b *Brain) tripTeleported(now time.Time) {
 	b.spot.retryAt = time.Time{}
 }
 
+// tripWalkable reports whether a trip may start at gatekeeper g: no walk
+// to a gatekeeper got nowhere less than Persona.WalkStuckFor ago, or g
+// stands in sight at its spawn.
+func (b *Brain) tripWalkable(g *gatekeeper, now time.Time) bool {
+	return !now.Before(b.trip.stuckUntil) || b.npcAt(g.npcID, g.at, now)
+}
+
 // planTrip plans a trip when the spot rule found no spot to claim in
 // walking reach: from a gatekeeper in walking reach to a destination with a
 // spot that fits the bot's level and has room in walking reach of it, the
@@ -307,7 +327,7 @@ func (b *Brain) planTrip(now time.Time) {
 	for gi := range m.gatekeepers {
 		g := &m.gatekeepers[gi]
 		dg := dist2(from, g.at)
-		if dg > reach || now.Before(tr.shunned[gi]) {
+		if dg > reach || now.Before(tr.shunned[gi]) || !b.tripWalkable(g, now) {
 			continue
 		}
 		for _, d := range g.dests {

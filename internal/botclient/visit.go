@@ -180,6 +180,25 @@ func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 	return moveAction(legToward(from, v.at, d), from), true
 }
 
+// walkStuck reports whether visit v, over without a page, ended on a walk
+// toward its NPC's spawn that got nowhere (walkTo): the NPC out of sight and
+// the bot farther than visitArrive from the spawn. The errand backs off its
+// walks then, not just that NPC: the other spawns lie past the same ground,
+// and the recall of an /unstuck can land the bot back where it stood (a new
+// human mystic's start is its own restart area, whose ground moves the
+// pathfinder cannot route out of: acis_golang#5412), so a walk to the next
+// spawn would only spend another /unstuck there (#134, #135).
+func (b *Brain) walkStuck(v *npcVisit, now time.Time) bool {
+	return v.obj == 0 && dist2(b.world.Self.Position(now), v.at) > visitArrive*visitArrive
+}
+
+// npcAt reports whether an NPC of template npcID stands in sight within
+// visitArrive of at: a visit to it walks no leg out of sight.
+func (b *Brain) npcAt(npcID int32, at Point, now time.Time) bool {
+	id := b.nearestNPC(npcID, at, now)
+	return id != 0 && dist2(b.world.object(id).Position(now), at) <= visitArrive*visitArrive
+}
+
 // closeIn is the next leg toward visit v's NPC, in sight but farther than
 // visitArrive: the server walks the approach of a click straight at the
 // NPC and ends it at the first wall (PlayerMove.moveToPawn; acis_golang

@@ -46,6 +46,10 @@ type newbieVisit struct {
 	// shunned are the guides, by template id, that buffed the bot nothing,
 	// until a time.
 	shunned map[int32]time.Time
+	// stuckLevel is the bot's level when a walk to a guide's spawn last got
+	// nowhere, 0 before: no walk to a guide out of sight starts again
+	// before the next level.
+	stuckLevel int32
 }
 
 // shun ends the visit and leaves its guide alone for visitShunFor.
@@ -73,7 +77,9 @@ func (n *newbieVisit) sent(a Action, now time.Time, level int32) {
 // ruleNewbie is a rule 9 errand: once per level in the persona's window,
 // the bot walks to a Newbie Guide, talks to it and sends its buff link;
 // the server casts the buffs. A guide whose page has no buff link, or that
-// the bot cannot reach, is shunned. The bypass passes the bypass gate
+// is not at its spawn, is shunned; after a walk that got nowhere
+// (walkStuck) the bot walks to no guide out of sight before the next level.
+// The bypass passes the bypass gate
 // (gateBypass); legs and clicks the frame pacer, a visit spending at most
 // visitClicks clicks.
 func (b *Brain) ruleNewbie(now time.Time) (Action, bool) {
@@ -92,6 +98,10 @@ func (b *Brain) ruleNewbie(now time.Time) (Action, bool) {
 	}
 	a, ok := b.approach(v, now)
 	if !ok {
+		if b.walkStuck(v, now) {
+			n.stuckLevel, n.v = b.world.Self.Level, npcVisit{}
+			return Action{}, false
+		}
 		n.shun(now)
 		return Action{}, false
 	}
@@ -99,8 +109,8 @@ func (b *Brain) ruleNewbie(now time.Time) (Action, bool) {
 }
 
 // startNewbie starts a visit when one is due: at the nearest guide in
-// sight, else at the nearest guide spawn within Reach, reporting whether
-// it did.
+// sight, else at the nearest guide spawn within Reach unless a walk got
+// nowhere at this level, reporting whether it did.
 func (b *Brain) startNewbie(now time.Time) bool {
 	n, s, p := &b.newbie, &b.world.Self, &b.persona.Newbie
 	if p.MaxLevel == 0 || s.Level < p.MinLevel || s.Level > p.MaxLevel || s.Level == n.doneLevel {
@@ -120,7 +130,7 @@ func (b *Brain) startNewbie(now time.Time) bool {
 			}
 			continue
 		}
-		if b.cfg.Travel == nil || best.obj != 0 {
+		if b.cfg.Travel == nil || best.obj != 0 || (n.stuckLevel != 0 && s.Level <= n.stuckLevel) {
 			continue
 		}
 		reach := int64(p.Reach) * int64(p.Reach)
