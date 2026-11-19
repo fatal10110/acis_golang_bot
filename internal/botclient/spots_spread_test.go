@@ -270,3 +270,30 @@ func TestSpotWaypoint(t *testing.T) {
 		})
 	}
 }
+
+// TestSpotTripLeavesSpot: a bot sharing a fitting spot past its cap that
+// plans a trip gives its place back at once, and after the teleport claims
+// the spot near the destination even when its old spot fell back to its cap
+// during the trip.
+func TestSpotTripLeavesSpot(t *testing.T) {
+	b := newTravelBrain(t, 5000)
+	b.cfg.Spots = NewSpotRegistry([]datapack.Spot{
+		testSpot("low", 1000, 0, 1, 5, 9), testSpot("far", 95500, 0, 18, 21, 9), testSpot("home", 3000, 0, 18, 21, 9),
+	}, 1)
+	r := b.cfg.Spots
+	r.held[2] = 4 // three bots and this one: one past the cap of 3
+	b.spot.idx, b.spot.held = 2, true
+	b.decide(at(time.Second))
+	if !b.trip.v.active() || b.spot.held || r.Held(2) != 3 {
+		t.Fatalf("trip %+v, spot %+v, home held by %d: want a trip, no spot, home back to 3", b.trip, b.spot, r.Held(2))
+	}
+	r.release(2) // another bot left home during the trip
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 95000}}}, at(11*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	b.appearing = false
+	b.decide(at(12 * time.Second))
+	if !b.spot.held || b.spot.idx != 1 || r.Held(2) != 2 || r.Held(1) != 1 {
+		t.Fatalf("after the teleport: spot %+v, home %d far %d: want far claimed", b.spot, r.Held(2), r.Held(1))
+	}
+}

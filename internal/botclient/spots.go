@@ -265,9 +265,10 @@ func (b *Brain) outleveled() bool {
 // place of the one it holds (#137): within MaxTravel, then within Wander,
 // the nearest that no bot holds, else the nearest with room. With none, it
 // looks again after spotRetry and plans a trip by gatekeeper to a spot out
-// of walking reach (rule "travel"); with no trip either, a bot holding no
-// spot that fits shares, past its cap, the spot in Wander its bots fill
-// least (SpotPolicy.Overflow), and one that holds a spot that fits keeps it.
+// of walking reach (rule "travel"), giving up the spot it holds for the
+// trip; with no trip either, a bot holding no spot that fits shares, past
+// its cap, the spot in Wander its bots fill least (SpotPolicy.Overflow), and
+// one that holds a spot that fits keeps it.
 func (b *Brain) pickSpot(now time.Time) {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	level, from := int(b.world.Self.Level), b.world.Self.Position(now)
@@ -303,6 +304,12 @@ func (b *Brain) pickSpot(now time.Time) {
 	if !ok {
 		v.retryAt = now.Add(spotRetry)
 		b.planTrip(now)
+		if b.trip.v.active() {
+			// A bot on a trip farms near its destination: it gives back the
+			// spot it holds (outlevelled, or shared past its cap) rather
+			// than block a place there for the trip and walk back to it.
+			b.leaveSpot()
+		}
 		if !p.Overflow || b.trip.v.active() || (v.held && !b.outleveled()) {
 			return
 		}
