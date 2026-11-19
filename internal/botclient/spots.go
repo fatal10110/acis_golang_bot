@@ -68,6 +68,12 @@ const (
 	// spotLeg is the longest move toward a spot, well under the 9900 the
 	// server refuses (movement.go moveLivePlayer).
 	spotLeg = 3000
+	// spotDirect is the distance from which the bot walks to the spot's
+	// centre in one move, under the 9900 cap: the server's pathfinder
+	// routes the whole way around cliffs and walls, where a leg's end on
+	// the straight line may lie on ground no path reaches (the orc start,
+	// #133).
+	spotDirect = 9000
 	// spotProgress is how much closer each leg must bring the bot;
 	// spotStalls legs in a row short of it give the spot up.
 	spotProgress = 100
@@ -142,7 +148,8 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 }
 
 // spotLeg is the next move toward dest, d away from from: standing up
-// first, giving the spot up when the last legs got nowhere.
+// first, giving the spot up when the last legs got nowhere, straight to
+// dest within spotDirect.
 func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 	v := &b.spot
 	if b.world.Self.Sitting {
@@ -158,6 +165,9 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 		return Action{}
 	}
 	v.lastDist = d
+	if d <= spotDirect {
+		return moveAction(dest, from)
+	}
 	return moveAction(legToward(from, dest, d), from)
 }
 

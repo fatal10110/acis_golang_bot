@@ -25,9 +25,16 @@ func TestLiveFarmStarters(t *testing.T) {
 	classes := []*botclient.StartingClass{&botclient.ElvenFighter, &botclient.DarkFighter, &botclient.OrcFighter}
 	farmers := make([]*farmer, len(classes))
 	for i, class := range classes {
-		account, _ := tg.Account("ns", i+1)
+		account, _ := tg.Account("sr", i+1)
 		f := runWatched(t, ctx, tg, account, botSetup{
 			class: class,
+			persona: func() botclient.Persona {
+				p := botclient.DefaultPersona()
+				// No loot: carried run after run, it would weigh a
+				// character set back to level 1 down.
+				p.Loot.Pickup = false
+				return p
+			},
 			brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
 		})
 		farmers[i] = f

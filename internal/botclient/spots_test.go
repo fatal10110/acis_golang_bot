@@ -156,24 +156,24 @@ func TestRuleSpot(t *testing.T) {
 		// wantSpot is the spot held after, -1 for none.
 		wantSpot int
 	}{
-		{name: "nearest fitting spot: a leg toward it", wantRule: "spot", wantKind: actMove, wantMove: Point{X: 3000}, wantSpot: 3},
+		{name: "nearest fitting spot: straight to it", wantRule: "spot", wantKind: actMove, wantMove: Point{X: 4000}, wantSpot: 3},
 		{name: "leg to the end", setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1500}) }, wantRule: "spot", wantKind: actMove, wantMove: Point{X: 4000}, wantSpot: 3},
 		{name: "no registry", setup: func(b *Brain) { b.cfg.Spots = nil }, wantSpot: -1},
 		{name: "combat goes first", setup: func(b *Brain) { b.world.Self.InCombat = true }, wantRule: "attacked", wantSpot: -1},
 		{
 			name:     "nearest full: the next one",
 			setup:    func(b *Brain) { b.cfg.Spots.claim([]int{3}); b.cfg.Spots.claim([]int{3}); b.cfg.Spots.claim([]int{3}) },
-			wantRule: "spot", wantKind: actMove, wantMove: Point{Y: 3000}, wantSpot: 2,
+			wantRule: "spot", wantKind: actMove, wantMove: Point{Y: 5000}, wantSpot: 2,
 		},
 		{
 			name:     "nearest avoided: the next one",
 			setup:    func(b *Brain) { b.spot.avoid = map[int]time.Time{3: at(time.Minute)} },
-			wantRule: "spot", wantKind: actMove, wantMove: Point{Y: 3000}, wantSpot: 2,
+			wantRule: "spot", wantKind: actMove, wantMove: Point{Y: 5000}, wantSpot: 2,
 		},
 		{
 			name:     "avoidance over",
 			setup:    func(b *Brain) { b.spot.avoid = map[int]time.Time{3: now} },
-			wantRule: "spot", wantKind: actMove, wantMove: Point{X: 3000}, wantSpot: 3,
+			wantRule: "spot", wantKind: actMove, wantMove: Point{X: 4000}, wantSpot: 3,
 		},
 		{
 			name:     "none fits: the goal's turn",
@@ -343,7 +343,7 @@ func TestSpotTeleportWalksBack(t *testing.T) {
 	if rule != "spot" || a.kind != actMove {
 		t.Fatalf("after teleport = %q %d, want a leg to the spot", rule, a.kind)
 	}
-	if got, want := moveTarget(a.payload), (Point{X: 6000}); got != want {
+	if got, want := moveTarget(a.payload), (Point{X: 4000}); got != want {
 		t.Fatalf("leg to %+v, want %+v", got, want)
 	}
 }
@@ -423,5 +423,27 @@ func TestSpotReleased(t *testing.T) {
 	}
 	if b.cfg.Spots.Held(0) != 0 {
 		t.Fatalf("after Run: held %d, want 0", b.cfg.Spots.Held(0))
+	}
+}
+
+// TestSpotLegLength: a spot within spotDirect is one move to its centre,
+// for the server's pathfinder to route; a farther one a spotLeg leg.
+func TestSpotLegLength(t *testing.T) {
+	tests := []struct {
+		name string
+		x    int32
+		want Point
+	}{
+		{"within spotDirect", spotDirect, Point{X: spotDirect}},
+		{"beyond spotDirect", spotDirect + 1000, Point{X: spotLeg}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newSpotBrain(t, 5, testSpot("s", tt.x, 0, 3, 6, 9))
+			name, act := b.decide(at(time.Second))
+			if got := moveTarget(act.payload); name != "spot" || act.kind != actMove || got != tt.want {
+				t.Fatalf("decide = %q kind %v, move to %v; want a move to %v", name, act.kind, moveTarget(act.payload), tt.want)
+			}
+		})
 	}
 }
