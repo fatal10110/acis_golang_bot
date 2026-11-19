@@ -10,12 +10,13 @@ import (
 // On Talking Island, the way from the village to the human fighters' start
 // crosses a band around x -71700..-70600, y 252800..253400 where the server
 // refuses ground moves cell after cell (acis_golang#5412). bandApproach is
-// on that way, about 2500 short of the band, where the server reported a
-// follower walking back from the village (#141); beyondBand, the old
-// recoverGround of #128, is past it.
+// on that way, about 2500 short of the band, and beyondBand about 1500 past
+// it, both where the server reported a follower on its way (#141). The old
+// recoverGround of #128 (-70744,258264), 3300 farther on, is not used: past
+// the band, ledges drop a bot's blind moves into the ground below.
 var (
 	bandApproach = botclient.Point{X: -74167, Y: 250518, Z: -3975}
-	beyondBand   = botclient.Point{X: -70744, Y: 258264, Z: -3112}
+	beyondBand   = botclient.Point{X: -70459, Y: 254943, Z: -3533}
 )
 
 // TestLiveFollowAcrossBand has a bot in the GM's party at bandApproach
