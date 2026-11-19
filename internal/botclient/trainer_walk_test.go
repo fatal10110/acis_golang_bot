@@ -84,12 +84,14 @@ func TestTrainerWalkDue(t *testing.T) {
 }
 
 // TestTrainerWalkGivesUp checks a walk that finds no trainer leaves the
-// template alone, and one the bot was teleported away from is dropped.
+// template alone, one that gets nowhere stops the walks until the next
+// level, and one the bot was teleported away from is dropped.
 func TestTrainerWalkGivesUp(t *testing.T) {
 	tests := []struct {
 		name      string
 		steps     []trainerStep
 		wantShun  bool
+		wantStuck bool // no walk before the next level
 		wantAfter bool // a walk runs after the steps
 	}{
 		{
@@ -108,7 +110,7 @@ func TestTrainerWalkGivesUp(t *testing.T) {
 				{name: "leg 3", at: 3 * time.Second, wantRule: "train", wantKind: actMove},
 				{name: "stalled", at: 4 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{Y: 200}) }},
 			},
-			wantShun: true,
+			wantStuck: true,
 		},
 		{
 			name: "teleported out of reach",
@@ -122,8 +124,9 @@ func TestTrainerWalkGivesUp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTrainerWalkBrain(t)
 			runTrainerSteps(t, b, tt.steps)
-			if b.train.walk.active() != tt.wantAfter || b.train.walkShunned[30022].IsZero() == tt.wantShun {
-				t.Fatalf("walk %+v shunned %v, want walk %v shunned %v", b.train.walk, b.train.walkShunned, tt.wantAfter, tt.wantShun)
+			if b.train.walk.active() != tt.wantAfter || b.train.walkShunned[30022].IsZero() == tt.wantShun || (b.train.stuckLevel != 0) != tt.wantStuck {
+				t.Fatalf("walk %+v shunned %v stuck at level %d, want walk %v shunned %v stuck %v",
+					b.train.walk, b.train.walkShunned, b.train.stuckLevel, tt.wantAfter, tt.wantShun, tt.wantStuck)
 			}
 		})
 	}
