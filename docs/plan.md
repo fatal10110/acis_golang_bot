@@ -237,9 +237,12 @@ Shared behavior in every persona:
 **farmer** (PR3): spot choice from spawnlist territories (polygons with minZ/maxZ) and NPC levels,
 excluding makers with `event=` or `ban=`, raid and grand bosses, non-monsters, aggressive mobs
 (`aggroRange > 0`) above the bot's level, and likely quest mobs (no data marker; heuristic on type and
-spawn flags). A process-wide spot registry (one owner) caps bots per spot at about `maximumNpcs`/3; on
-arrival the bot counts visible players and moves on when crowded. Each race starts in its own newbie
-zone.
+spawn flags). Up to level 5 the aggressive bound is that of any monster (two levels above the bot):
+nearly every starter monster has an aggro range, so the strict rule left new characters outside
+Talking Island no spot (#133). A process-wide spot registry (one owner) caps bots per spot at about
+`maximumNpcs`/3; on arrival the bot counts visible players and moves on when crowded. Each race starts
+in its own newbie zone. The caps hold about 13-22 level 1 farmers per village (4 in the dwarven one);
+the rest wait and look again each minute (#133).
 
 **town** (PR4): idles, sits, buys potions and shots, sells loot to merchants, uses the gatekeeper,
 visits the Newbie Helper for buffs (levels 8-24).

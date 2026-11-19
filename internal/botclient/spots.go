@@ -17,6 +17,12 @@ type SpotPolicy struct {
 	// L+Below, none of its aggressive ones (aggroRange above 0) above
 	// L+AggroAbove, and its highest one is at least L-Above.
 	Below, AggroAbove, Above int
+	// Newbie is the highest level at which aggressive monsters are bound
+	// by Below rather than AggroAbove: the server takes any monster whose
+	// template has an aggro range for aggressive (npc Hostile.Aggressive),
+	// and nearly every starter monster has one, so a new character held to
+	// AggroAbove finds no spot near its village (#133).
+	Newbie int
 	// Outlevel: the bot leaves its spot for a fitting one once its level is
 	// above the spot's highest monster by more than Outlevel. Larger than
 	// Above, it keeps the bot from flipping between spots: the spot it
@@ -38,18 +44,22 @@ type SpotPolicy struct {
 }
 
 // defaultSpotPolicy is the farmer's spot choice: monsters up to two levels
-// above the bot, aggressive ones not above it (plan, farmer), leaving at
-// five levels over.
+// above the bot, aggressive ones not above it (plan, farmer) once it is
+// past level 5, leaving at five levels over.
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
-		Below: 2, AggroAbove: 0, Above: 3, Outlevel: 5,
+		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
 		MaxTravel: 20000, Crowd: 4, AvoidFor: 10 * time.Minute, Leash: 1500,
 	}
 }
 
 // fits reports whether s fits a bot of level.
 func (p *SpotPolicy) fits(s *datapack.Spot, level int) bool {
-	return s.MaxLevel <= level+p.Below && s.AggroLevel <= level+p.AggroAbove && s.MaxLevel >= level-p.Above
+	aggro := p.AggroAbove
+	if level <= p.Newbie {
+		aggro = max(aggro, p.Below)
+	}
+	return s.MaxLevel <= level+p.Below && s.AggroLevel <= level+aggro && s.MaxLevel >= level-p.Above
 }
 
 const (
@@ -58,6 +68,12 @@ const (
 	// spotLeg is the longest move toward a spot, well under the 9900 the
 	// server refuses (movement.go moveLivePlayer).
 	spotLeg = 3000
+	// spotDirect is the distance from which the bot walks to the spot's
+	// centre in one move, under the 9900 cap: the server's pathfinder
+	// routes the whole way around cliffs and walls, where a leg's end on
+	// the straight line may lie on ground no path reaches (the orc start,
+	// #133).
+	spotDirect = 9000
 	// spotProgress is how much closer each leg must bring the bot;
 	// spotStalls legs in a row short of it give the spot up.
 	spotProgress = 100
@@ -132,7 +148,8 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 }
 
 // spotLeg is the next move toward dest, d away from from: standing up
-// first, giving the spot up when the last legs got nowhere.
+// first, giving the spot up when the last legs got nowhere, straight to
+// dest within spotDirect in 3D (d is the distance on the X/Y plane).
 func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 	v := &b.spot
 	if b.world.Self.Sitting {
@@ -148,6 +165,11 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 		return Action{}
 	}
 	v.lastDist = d
+	// The server checks the move's 3D length (movement.go), so the height
+	// between here and the centre counts too.
+	if math.Hypot(d, float64(dest.Z-from.Z)) <= spotDirect {
+		return moveAction(dest, from)
+	}
 	return moveAction(legToward(from, dest, d), from)
 }
 
