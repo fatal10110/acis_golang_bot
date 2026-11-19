@@ -26,6 +26,9 @@ func TestFollowUnstickPerStall(t *testing.T) {
 					to := moveTarget(a.payload)
 					now = now.Add(time.Second)
 					b.world.Apply(StopMove{ObjectID: selfID, Pos: to}, now)
+					if i < followDetours {
+						now = refuseDetour(t, b, to, now)
+					}
 					followMove(t, b, now)
 					// The leg gets the bot 500 on, past the stall, where the
 					// legs stall again.
@@ -48,6 +51,7 @@ func TestFollowUnstickPerStall(t *testing.T) {
 				back := toward(Point{}, slot, -300)
 				now = now.Add(time.Second)
 				b.world.Apply(StopMove{ObjectID: selfID, Pos: back}, now)
+				now = refuseDetour(t, b, back, now)
 				followMove(t, b, now)
 				pos := toward(back, slot, 250)
 				now = now.Add(time.Second)

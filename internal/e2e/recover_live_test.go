@@ -25,8 +25,13 @@ const skillEscape int32 = 2099
 // start. Past it, beyond (-75767,251135), the ground drops into a pit, and
 // around x -71700..-70600, y 252800..253400 the server refuses the legs
 // cell after cell (acis_golang#5412): the walk back from there took longer
-// than the scenario.
+// than the scenario, before the bot detoured along such walls (#141).
 var recoverGround = botclient.Point{X: -78500, Y: 248900, Z: -3600}
+
+// recoverBeyondBand is the old recoverGround of #128, past the band of
+// refused cells around x -71700..-70600, y 252800..253400
+// (acis_golang#5412): the way back from the village crosses it (#141).
+var recoverBeyondBand = botclient.Point{X: -70744, Y: 258264, Z: -3104}
 
 func recoverPersona() botclient.Persona {
 	p := partyPersona()
@@ -41,13 +46,28 @@ func recoverPersona() botclient.Persona {
 // server refuses its legs in place (acis_golang#5412, #128).
 func TestLiveRecoverVillageRestart(t *testing.T) {
 	t.Parallel()
+	recoverVillageRestart(t, recoverGround, 1)
+}
+
+// TestLiveRecoverAcrossBand is TestLiveRecoverVillageRestart with the GM
+// waiting at recoverBeyondBand: the bot's way back from the village runs
+// into the band of cells the server refuses its legs in (acis_golang#5412)
+// and detours along it to get past (#141).
+func TestLiveRecoverAcrossBand(t *testing.T) {
+	t.Parallel()
+	recoverVillageRestart(t, recoverBeyondBand, 4)
+}
+
+// recoverVillageRestart is the village restart scenario with the GM waiting
+// at ground, for the bot of account rv<n>.
+func recoverVillageRestart(t *testing.T, ground botclient.Point, n int) {
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 8*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	// The way back from the village depends on where the bot died: the GM
-	// waits at recoverGround, not wherever the last scenario left it (#131).
-	gmTeleport(t, ctx, gm, recoverGround)
-	account, _ := tg.Account("rv", 1)
+	// waits at ground, not wherever the last scenario left it (#131).
+	gmTeleport(t, ctx, gm, ground)
+	account, _ := tg.Account("rv", n)
 	f := runWatched(t, ctx, tg, account, botSetup{persona: recoverPersona})
 	b, name := f.bot, f.name
 	botID := recallBot(t, ctx, tg, gm, name)
