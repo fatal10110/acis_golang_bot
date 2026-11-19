@@ -28,13 +28,24 @@ type SpotPolicy struct {
 	// Above, it keeps the bot from flipping between spots: the spot it
 	// leaves no longer fits.
 	Outlevel int
-	// MaxTravel is the farthest spot the bot picks, from where it stands:
-	// a new character stands in its race's newbie zone, so it farms there.
+	// MaxTravel is the farthest spot the bot picks, from where it stands,
+	// while one fits it with room: a new character stands in its race's
+	// newbie zone, so it farms there. It is also the gatekeeper trip's walk
+	// at either end (planTrip).
 	MaxTravel int32
+	// Wander is the farthest spot the bot walks to once every spot that
+	// fits it within MaxTravel is full; a smaller one than MaxTravel adds
+	// nothing.
+	Wander int32
+	// Overflow: once every spot that fits the bot within Wander is full and
+	// it takes no trip, it shares the one its bots fill least for its cap,
+	// up to one bot per monster the server keeps there, rather than wait
+	// (#137). Each spotRetry it looks again for a spot with room.
+	Overflow bool
 	// Crowd is the number of other players within Leash of the spot's
 	// centre, party members and the bots sharing the spot's claim aside,
 	// that makes a spot crowded on arrival: the bot moves on and avoids the
-	// spot for AvoidFor, as it does a spot it cannot walk to. 0 never
+	// spot for AvoidFor (one it cannot walk to, spotUnreachable). 0 never
 	// finds one crowded.
 	Crowd    int
 	AvoidFor time.Duration
@@ -45,11 +56,14 @@ type SpotPolicy struct {
 
 // defaultSpotPolicy is the farmer's spot choice: monsters up to two levels
 // above the bot, aggressive ones not above it (plan, farmer) once it is
-// past level 5, leaving at five levels over.
+// past level 5, leaving at five levels over; spread over every spot that
+// fits within twice the newbie zone's reach, sharing full ones rather than
+// waiting (#137).
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
-		MaxTravel: 20000, Crowd: 4, AvoidFor: 10 * time.Minute, Leash: 1500,
+		MaxTravel: 20000, Wander: 40000, Overflow: true,
+		Crowd: 4, AvoidFor: 10 * time.Minute, Leash: 1500,
 	}
 }
 
@@ -81,6 +95,12 @@ const (
 	// spotRetry is how long the bot waits to pick again after finding no
 	// spot free that fits.
 	spotRetry = time.Minute
+	// spotUnreachable is how long the bot avoids a spot its legs got no
+	// closer to: a far one (SpotPolicy.Wander) may lie past ground the
+	// server routes no walk across, and a bot sharing a spot looks for room
+	// each spotRetry, so a short avoidance would send it off on the same
+	// walk again and again (#137).
+	spotUnreachable = time.Hour
 )
 
 // spotVisit is the bot's farming spot (rule "spot"). It is owned by the
@@ -102,10 +122,11 @@ type spotVisit struct {
 }
 
 // ruleSpot is a rule 9 errand ahead of the persona's goal: with a spot
-// registry, the bot claims the nearest fitting spot with room, walks there
-// in legs, moves on when it finds the spot crowded, walks back when a fight
-// left it beyond the leash, and picks a new spot once it outlevels its own.
-// At its spot it leaves the turn to rule "farm".
+// registry, the bot claims a fitting spot (pickSpot), walks there in legs,
+// moves on when it finds the spot crowded, walks back when a fight left it
+// beyond the leash, and picks a new spot once it outlevels its own or,
+// sharing one past its cap, every spotRetry. At its spot it leaves the turn
+// to rule "farm".
 //
 // Each leg is one MoveBackwardToLocation through the frame pacer (gateNone);
 // a spot that spotStalls legs bring no closer is avoided, and a fruitless
@@ -115,7 +136,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	if r == nil || s.InCombat {
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || b.outleveled()) {
+	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.held {
@@ -135,7 +156,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		v.arrived, v.lastDist, v.stalls = true, 0, 0
 		b.anchor = from
 		if b.crowded(dest, now) {
-			b.moveOn(now)
+			b.moveOn(now, b.persona.Spots.AvoidFor)
 			return Action{}, true
 		}
 		return Action{}, false
@@ -161,7 +182,7 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 		v.stalls = 0
 	}
 	if v.stalls >= spotStalls {
-		b.moveOn(now)
+		b.moveOn(now, spotUnreachable)
 		return Action{}
 	}
 	v.lastDist = d
@@ -170,7 +191,31 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 	if math.Hypot(d, float64(dest.Z-from.Z)) <= spotDirect {
 		return moveAction(dest, from)
 	}
+	if w, ok := b.spotWaypoint(from, dest, d); ok {
+		return moveAction(w, from)
+	}
 	return moveAction(legToward(from, dest, d), from)
+}
+
+// spotWaypoint is the centre of any spot of the registry within spotDirect
+// of from (in 3D) that lies nearest dest, d away, when it is at least spotLeg
+// nearer than from: monsters spawn on ground the pathfinder reaches, so a
+// long walk hopping from spot to spot gets where a straight leg's end may
+// lie on ground no path reaches (the dark elven village, #137).
+func (b *Brain) spotWaypoint(from, dest Point, d float64) (Point, bool) {
+	r := b.cfg.Spots
+	best, bestDist, found := Point{}, d-spotLeg, false
+	for i := range r.spots {
+		sp := &r.spots[i]
+		c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
+		if math.Hypot(math.Sqrt(float64(dist2(from, c))), float64(c.Z-from.Z)) > spotDirect {
+			continue
+		}
+		if dc := math.Sqrt(float64(dist2(c, dest))); dc <= bestDist {
+			best, bestDist, found = c, dc, true
+		}
+	}
+	return best, found
 }
 
 // legToward is the point at most spotLeg along the line from from to to, d
@@ -216,14 +261,19 @@ func (b *Brain) outleveled() bool {
 	return v.held && int(b.world.Self.Level) > b.cfg.Spots.spots[v.idx].MaxLevel+b.persona.Spots.Outlevel
 }
 
-// pickSpot claims the nearest spot within reach that fits the bot's level,
-// is not avoided and has room, in place of the one it holds; with none, it
-// keeps what it holds, looks again after spotRetry and plans a trip by
-// gatekeeper to a spot out of walking reach (rule "travel").
+// pickSpot claims a spot that fits the bot's level and is not avoided, in
+// place of the one it holds (#137): within MaxTravel, then within Wander,
+// the nearest that no bot holds, else the nearest with room. With none, it
+// looks again after spotRetry and plans a trip by gatekeeper to a spot out
+// of walking reach (rule "travel"), giving up the spot it holds for the
+// trip; with no trip either, a bot holding no spot that fits shares, past
+// its cap, the spot in Wander its bots fill least (SpotPolicy.Overflow), and
+// one that holds a spot that fits keeps it.
 func (b *Brain) pickSpot(now time.Time) {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	level, from := int(b.world.Self.Level), b.world.Self.Position(now)
-	maxD := int64(p.MaxTravel) * int64(p.MaxTravel)
+	near := int64(p.MaxTravel) * int64(p.MaxTravel)
+	far := max(near, int64(p.Wander)*int64(p.Wander))
 	type cand struct {
 		i int
 		d int64
@@ -234,27 +284,45 @@ func (b *Brain) pickSpot(now time.Time) {
 		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !p.fits(sp, level) {
 			continue
 		}
-		if d := dist2(from, Point{X: sp.Center.X, Y: sp.Center.Y}); d <= maxD {
+		if d := dist2(from, Point{X: sp.Center.X, Y: sp.Center.Y}); d <= far {
 			cands = append(cands, cand{i, d})
 		}
 	}
 	slices.SortStableFunc(cands, func(a, b cand) int { return cmp.Compare(a.d, b.d) })
 	order := make([]int, len(cands))
+	n := 0
 	for k, c := range cands {
 		order[k] = c.i
+		if c.d <= near {
+			n = k + 1
+		}
 	}
-	i, ok := r.claim(order)
+	i, ok := r.claim(order[:n])
+	if !ok {
+		i, ok = r.claim(order[n:])
+	}
 	if !ok {
 		v.retryAt = now.Add(spotRetry)
 		b.planTrip(now)
-		return
+		if b.trip.v.active() {
+			// A bot on a trip farms near its destination: it gives back the
+			// spot it holds (outlevelled, or shared past its cap) rather
+			// than block a place there for the trip and walk back to it.
+			b.leaveSpot()
+		}
+		if !p.Overflow || b.trip.v.active() || (v.held && !b.outleveled()) {
+			return
+		}
+		if i, ok = r.claimOver(order); !ok {
+			return
+		}
 	}
 	b.leaveSpot()
 	v.idx, v.held = i, true
 }
 
-// moveOn gives the spot up and avoids it for Persona.Spots.AvoidFor.
-func (b *Brain) moveOn(now time.Time) {
+// moveOn gives the spot up and avoids it for d.
+func (b *Brain) moveOn(now time.Time, d time.Duration) {
 	v := &b.spot
 	if v.avoid == nil {
 		v.avoid = make(map[int]time.Time)
@@ -264,7 +332,7 @@ func (b *Brain) moveOn(now time.Time) {
 			delete(v.avoid, i)
 		}
 	}
-	v.avoid[v.idx] = now.Add(b.persona.Spots.AvoidFor)
+	v.avoid[v.idx] = now.Add(d)
 	b.leaveSpot()
 }
 
