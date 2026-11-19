@@ -10,8 +10,8 @@ import (
 // still, whose legs toward its slot stall where it stands, the server
 // echoing its own position (acis_golang#5412, the village restart of #128):
 // it sidesteps in each of sidestepTurns before it gives the slot up until the
-// leader moves on. A sidestep that moves it sends the legs again; legs that
-// move it no closer give up at once.
+// leader moves on. A sidestep that moves it starts a detour (TestFollowDetour)
+// and then sends the legs again; legs that move it no closer give up at once.
 func TestFollowUnstick(t *testing.T) {
 	tests := []struct {
 		name string
@@ -41,11 +41,12 @@ func TestFollowUnstick(t *testing.T) {
 			},
 		},
 		{
-			name: "a sidestep that moves the bot: legs again from there",
+			name: "a sidestep that moves the bot, its detour refused: legs again from there",
 			run: func(t *testing.T, b *Brain, slot Point, now time.Time) {
 				to := moveTarget(followMove(t, b, now).payload)
 				now = now.Add(time.Second)
 				b.world.Apply(StopMove{ObjectID: selfID, Pos: to}, now)
+				now = refuseDetour(t, b, to, now)
 				leg := legToward(to, slot, math.Sqrt(float64(dist2(to, slot))))
 				if got := moveTarget(followMove(t, b, now).payload); got != leg {
 					t.Fatalf("after the sidestep: move to %v, want the leg to %v", got, leg)
