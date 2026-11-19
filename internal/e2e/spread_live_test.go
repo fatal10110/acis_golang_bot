@@ -15,11 +15,15 @@ import (
 var darkElvenStart = botclient.Point{X: 28295, Y: 11063, Z: -4224}
 
 // TestLiveSpotSpread runs a level 1 dark elf farmer on a registry that
-// lacks every spot fitting it within MaxTravel of its village's start, as
-// though bots filled them all: brought to the start, it claims a spot that
-// fits it beyond MaxTravel and within Wander, and walks there (#137). The
-// farmer goes back to level 1 at the end, so the next run finds it a new
-// character again; each run brings it to the start first.
+// lacks the spots fitting it within fullNear of its village's start, as
+// though bots filled them all: brought to the start, it claims a fitting
+// spot further away and walks there (#137). The farmer goes back to level 1
+// at the end, so the next run finds it a new character again; each run
+// brings it to the start first.
+//
+// The full spots are the nearest ones, not all within MaxTravel: from the
+// dark elven village the server routes no walk across to the elven
+// village's spots beyond it (#144), which TestSpotSpread covers as a choice.
 func TestLiveSpotSpread(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -36,7 +40,10 @@ func TestLiveSpotSpread(t *testing.T) {
 	fitsNewbie := func(s datapack.Spot) bool {
 		return fitsAny(botclient.SpotStatus{MinLevel: s.MinLevel, MaxLevel: s.MaxLevel, AggroLevel: s.AggroLevel}, []int{1})
 	}
-	near := int64(p.MaxTravel) * int64(p.MaxTravel)
+	// fullNear takes the three nearest spots out (3389-4228 from the
+	// start); the next ones lie 5464 and 6778 away.
+	const fullNear = 5000
+	near := int64(fullNear) * int64(fullNear)
 	var kept []datapack.Spot
 	full := 0
 	for _, s := range dp.Spots() {
@@ -47,9 +54,9 @@ func TestLiveSpotSpread(t *testing.T) {
 		kept = append(kept, s)
 	}
 	if full == 0 {
-		t.Fatalf("no spot fits level 1 within %d of the dark elven start", p.MaxTravel)
+		t.Fatalf("no spot fits level 1 within %d of the dark elven start", fullNear)
 	}
-	t.Logf("%d spots fitting level 1 within %d of the start taken out as full", full, p.MaxTravel)
+	t.Logf("%d spots fitting level 1 within %d of the start taken out as full", full, fullNear)
 	spots := botclient.NewSpotRegistry(kept, 1)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("sp", 1)
@@ -101,13 +108,13 @@ func TestLiveSpotSpread(t *testing.T) {
 			t.Fatalf("%s holds %s, which does not fit level 1", f.name, s.Maker)
 		}
 		if d <= near || d > wander {
-			t.Fatalf("%s holds %s, squared %d from the start, not between MaxTravel and Wander", f.name, s.Maker, d)
+			t.Fatalf("%s holds %s, squared %d from the start, not past the full spots and within Wander", f.name, s.Maker, d)
 		}
 	}
 	leash := int64(p.Leash) * int64(p.Leash)
 	walk, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
-	waitFor(t, walk, f.name+" at a spot beyond MaxTravel", func() bool {
+	waitFor(t, walk, f.name+" at a spot past the full ones", func() bool {
 		st := f.bot.Status()
 		if st.Spot == "" {
 			return false

@@ -361,7 +361,7 @@ func TestSpotStalls(t *testing.T) {
 	if rule, a := b.decide(at(10 * time.Second)); rule != "spot" || a.kind != actHold || b.spot.held {
 		t.Fatalf("stalled = %q %d held %v, want the spot given up", rule, a.kind, b.spot.held)
 	}
-	if !at(10*time.Second).Before(b.spot.avoid[0]) || b.cfg.Spots.Held(0) != 0 {
+	if !b.spot.avoid[0].Equal(at(10*time.Second).Add(spotUnreachable)) || b.cfg.Spots.Held(0) != 0 {
 		t.Fatalf("stalled spot not avoided or still held: %v, %d", b.spot.avoid, b.cfg.Spots.Held(0))
 	}
 }

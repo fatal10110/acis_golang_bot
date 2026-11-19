@@ -239,3 +239,34 @@ func TestStarterSpread(t *testing.T) {
 		t.Errorf("%d of %d farmers hold a spot, not most", total, len(farmers))
 	}
 }
+
+// TestSpotWaypoint: a walk beyond spotDirect hops to the spot centre within
+// spotDirect that lies nearest the destination, at least spotLeg nearer;
+// with none, it takes a straight leg.
+func TestSpotWaypoint(t *testing.T) {
+	far := testSpot("far", 30000, 0, 3, 6, 9)
+	tests := []struct {
+		name string
+		hops []datapack.Spot
+		want Point
+	}{
+		{name: "no spot on the way: a straight leg", want: Point{X: spotLeg}},
+		{
+			name: "the hop nearest the destination",
+			hops: []datapack.Spot{testSpot("w1", 4000, 3000, 20, 30, 9), testSpot("w2", 7000, -4000, 20, 30, 9)},
+			want: Point{X: 7000, Y: -4000},
+		},
+		{name: "beyond spotDirect: a straight leg", hops: []datapack.Spot{testSpot("w", 9500, 0, 20, 30, 9)}, want: Point{X: spotLeg}},
+		{name: "behind: a straight leg", hops: []datapack.Spot{testSpot("w", -3000, 0, 20, 30, 9)}, want: Point{X: spotLeg}},
+		{name: "less than a leg nearer: a straight leg", hops: []datapack.Spot{testSpot("w", 2000, 8000, 20, 30, 9)}, want: Point{X: spotLeg}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newSpotBrain(t, 5, append([]datapack.Spot{far}, tt.hops...)...)
+			name, act := b.decide(at(time.Second))
+			if got := moveTarget(act.payload); name != "spot" || act.kind != actMove || got != tt.want {
+				t.Fatalf("decide = %q kind %v, move to %v; want a move to %v", name, act.kind, got, tt.want)
+			}
+		})
+	}
+}

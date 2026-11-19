@@ -45,7 +45,7 @@ type SpotPolicy struct {
 	// Crowd is the number of other players within Leash of the spot's
 	// centre, party members and the bots sharing the spot's claim aside,
 	// that makes a spot crowded on arrival: the bot moves on and avoids the
-	// spot for AvoidFor, as it does a spot it cannot walk to. 0 never
+	// spot for AvoidFor (one it cannot walk to, spotUnreachable). 0 never
 	// finds one crowded.
 	Crowd    int
 	AvoidFor time.Duration
@@ -95,6 +95,12 @@ const (
 	// spotRetry is how long the bot waits to pick again after finding no
 	// spot free that fits.
 	spotRetry = time.Minute
+	// spotUnreachable is how long the bot avoids a spot its legs got no
+	// closer to: a far one (SpotPolicy.Wander) may lie past ground the
+	// server routes no walk across, and a bot sharing a spot looks for room
+	// each spotRetry, so a short avoidance would send it off on the same
+	// walk again and again (#137).
+	spotUnreachable = time.Hour
 )
 
 // spotVisit is the bot's farming spot (rule "spot"). It is owned by the
@@ -150,7 +156,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		v.arrived, v.lastDist, v.stalls = true, 0, 0
 		b.anchor = from
 		if b.crowded(dest, now) {
-			b.moveOn(now)
+			b.moveOn(now, b.persona.Spots.AvoidFor)
 			return Action{}, true
 		}
 		return Action{}, false
@@ -176,7 +182,7 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 		v.stalls = 0
 	}
 	if v.stalls >= spotStalls {
-		b.moveOn(now)
+		b.moveOn(now, spotUnreachable)
 		return Action{}
 	}
 	v.lastDist = d
@@ -185,7 +191,31 @@ func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
 	if math.Hypot(d, float64(dest.Z-from.Z)) <= spotDirect {
 		return moveAction(dest, from)
 	}
+	if w, ok := b.spotWaypoint(from, dest, d); ok {
+		return moveAction(w, from)
+	}
 	return moveAction(legToward(from, dest, d), from)
+}
+
+// spotWaypoint is the centre of any spot of the registry within spotDirect
+// of from (in 3D) that lies nearest dest, d away, when it is at least spotLeg
+// nearer than from: monsters spawn on ground the pathfinder reaches, so a
+// long walk hopping from spot to spot gets where a straight leg's end may
+// lie on ground no path reaches (the dark elven village, #137).
+func (b *Brain) spotWaypoint(from, dest Point, d float64) (Point, bool) {
+	r := b.cfg.Spots
+	best, bestDist, found := Point{}, d-spotLeg, false
+	for i := range r.spots {
+		sp := &r.spots[i]
+		c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
+		if math.Hypot(math.Sqrt(float64(dist2(from, c))), float64(c.Z-from.Z)) > spotDirect {
+			continue
+		}
+		if dc := math.Sqrt(float64(dist2(c, dest))); dc <= bestDist {
+			best, bestDist, found = c, dc, true
+		}
+	}
+	return best, found
 }
 
 // legToward is the point at most spotLeg along the line from from to to, d
@@ -284,8 +314,8 @@ func (b *Brain) pickSpot(now time.Time) {
 	v.idx, v.held = i, true
 }
 
-// moveOn gives the spot up and avoids it for Persona.Spots.AvoidFor.
-func (b *Brain) moveOn(now time.Time) {
+// moveOn gives the spot up and avoids it for d.
+func (b *Brain) moveOn(now time.Time, d time.Duration) {
 	v := &b.spot
 	if v.avoid == nil {
 		v.avoid = make(map[int]time.Time)
@@ -295,7 +325,7 @@ func (b *Brain) moveOn(now time.Time) {
 			delete(v.avoid, i)
 		}
 	}
-	v.avoid[v.idx] = now.Add(b.persona.Spots.AvoidFor)
+	v.avoid[v.idx] = now.Add(d)
 	b.leaveSpot()
 }
 
