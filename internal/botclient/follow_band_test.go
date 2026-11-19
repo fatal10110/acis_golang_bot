@@ -202,3 +202,31 @@ func refuseDetour(t *testing.T, b *Brain, pos Point, now time.Time) time.Time {
 	}
 	return now
 }
+
+// TestFollowDetourNewSlot: a leader that moves on mid-detour gives a new
+// slot, and the detour around the wall on the way to the old one is over:
+// the next move is the leg toward the new slot.
+func TestFollowDetourNewSlot(t *testing.T) {
+	b, _, now := stalledFollower(t)
+	pos := moveTarget(followMove(t, b, now).payload)
+	now = now.Add(time.Second)
+	b.world.Apply(StopMove{ObjectID: selfID, Pos: pos}, now)
+	pos = moveTarget(followMove(t, b, now).payload)
+	now = now.Add(time.Second)
+	b.world.Apply(StopMove{ObjectID: selfID, Pos: pos}, now)
+	if !b.follow.detouring || b.follow.detours != 1 {
+		t.Fatalf("detouring %v after %d detours, want one under way", b.follow.detouring, b.follow.detours)
+	}
+	b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{X: -10000}}}}, now)
+	a, _ := repath(t, b, now)
+	if a.kind != actMove {
+		t.Fatalf("kind %d, want a leg", a.kind)
+	}
+	slot := b.follow.dest
+	if got, want := moveTarget(a.payload), legToward(pos, slot, math.Sqrt(float64(dist2(pos, slot)))); got != want {
+		t.Fatalf("first move for the new slot %v: to %v, want the leg to %v", slot, got, want)
+	}
+	if v := b.follow; v.detouring || v.flipped || v.detours != 0 || v.wallDist != 0 {
+		t.Fatalf("detour state kept for the new slot: detouring %v flipped %v detours %d wallDist %.0f", v.detouring, v.flipped, v.detours, v.wallDist)
+	}
+}

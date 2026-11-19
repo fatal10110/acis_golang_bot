@@ -172,6 +172,8 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 		v.dest = offset(lead.pos, b.behind(lead, from, now)+v.angle, v.radius)
 		v.dueAt, v.anchor, v.anchored = time.Time{}, lead.pos, true
 		v.traveling, v.stuck, v.lastDist, v.stalls, v.unsticks = true, false, 0, 0, 0
+		// A detour was around a wall on the way to the old slot.
+		v.detouring, v.flipped, v.detours, v.wallDist = false, false, 0, 0
 		return b.followLeg(from), true
 	}
 	if v.traveling && !s.Moving(now) {
