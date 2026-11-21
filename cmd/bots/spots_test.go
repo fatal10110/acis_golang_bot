@@ -54,6 +54,16 @@ const (
 	</item>
 </list>
 `
+	spotsSkills = `<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<skill id="2031" levels="1" name="Lesser Healing Potion">
+		<set name="isPotion" val="true" />
+		<for>
+			<effect count="7" name="HealOverTime" time="2" val="16" stackOrder="1" stackType="hp_recover" />
+		</for>
+	</skill>
+</list>
+`
 	spotsBuyLists = `<?xml version="1.0" encoding="utf-8"?>
 <list>
 	<buyList id="14" npcId="30004">
@@ -65,7 +75,7 @@ const (
 
 func TestLoadSpots(t *testing.T) {
 	dir := t.TempDir()
-	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems} {
+	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills} {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
