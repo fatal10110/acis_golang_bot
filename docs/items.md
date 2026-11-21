@@ -219,14 +219,26 @@ The junk rule (`keeps`) learns everything the loadout buys. Today it keeps only 
 `Restock`, `Keep`, books and arrows, so a sell visit would sell the SoE, buff potions and dyes the
 bot just bought. It now keeps every template with a trip target (section 4), plus a **keep set**
 that later PRs add to: the build's buff potion (I9) and the planned dyes until they are drawn
-(I12), each tested there. A persona **keep hook** lets the clan crafter
-plan (M9) keep more, with no clan logic in M8. It is called per carried item (object and
-template), so it can keep crafting materials, every recipe scroll, and unworn graded gear deposited
-for crystallizing.
+(I12), each tested there.
+
+A persona **keep hook** lets the clan crafter plan (M9) keep more, with no clan logic in M8:
+
+- **Input.** It is called per carried item (the `Item`, object and template), so it can keep
+  crafting materials, every recipe scroll, and unworn graded gear deposited for crystallizing.
+- **Callers.** Three places decide what the bot lets go of, and all three consult it: the NPC sale
+  (`shop.go` `junk`), the store listing (`store.go` `storeLoot`), and trade pricing (`trade.go`
+  `tradePrice`). A kept item is never sold, listed or offered.
+- **Result.** It answers keep, and whether the gear errand may still wear the item, so a piece
+  kept for crystallizing is deposited, not worn.
 
 A persona **extra supply hook** (template → count) adds supply targets beyond the use meter's.
-I4 buys them in the supplies tier, and `keeps` keeps them. M9 uses it for the ore its members'
-shot orders need (Soul Ore 1785, Spirit Ore 3031, on spawned grocer lists).
+M9 uses it for the ore its members' shot orders need (Soul Ore 1785, Spirit Ore 3031, on spawned
+grocer lists).
+
+- I4 buys them in the supplies tier **after** the bot's own shots, potions and SoE, and `keeps`
+  keeps them.
+- They count toward neither the preparation gate nor the run-out trigger (section 7), so an
+  unfilled order never holds a farmer in town or sends it home.
 
 ### 6. Gear by stats, enchant and sets
 
@@ -249,8 +261,11 @@ shot orders need (Soul Ore 1785, Spirit Ore 3031, on spawned grocer lists).
 - **Going home.** A farmer starts a supply trip when any of these holds:
   - it would run out within `Supply.ReturnMinutes` (default 10) of fighting;
   - its HP potions are gone;
-  - its weight passes `Supply.ReturnLoad` (default 70 %, well above the 45 % `BuyLoad`, so a bot
-    that bought to the cap does not turn round at its first loot);
+  - its load passes `Supply.ReturnLoad` (default 70 %, well above the 45 % `BuyLoad`, so a bot
+    that bought to the cap does not turn round at its first loot) **and** a town visit would shed
+    at least `Supply.ShedMin` (default 10 % of the limit). Shed weight is the junk it would sell,
+    plus what the "trip in town" hook reports it will hand off. So items kept with nowhere to go
+    do not send it home after every return;
   - the saved adena covers the gear goal.
 
   It reads SoE only with no attacker and nothing aggressive within its aggro range. If that does
@@ -423,9 +438,12 @@ M9 builds on M8 rather than duplicating it. M8 exposes these and adds no clan lo
 - the **shot source** interface of section 3, to which M9 adds the crafter;
 - the **per-item trip target** of I3, which sizes a clan member's orders;
 - the budget's **reserve tier** (I4), which carries the warehouse fees;
-- a **"trip in town" hook** in I8b (#182), when a member deposits materials and collects products;
-- a persona **keep hook** on the junk rule (I4), called per carried item (object and template).
+- a **"trip in town" hook** in I8b (#182), when a member deposits materials and collects products.
+  It also reports the weight it will hand off, which counts toward `ReturnLoad` (section 7);
+- a persona **keep hook** (I4), called per carried item by the NPC sale, the store listing and
+  trade pricing, answering keep and may-wear.
   M9 fills it so that members keep crafting materials, recipe scrolls and unworn graded gear for
   crystallizing instead of selling them. I1 exposes the material etc items for this;
 - a persona **extra supply hook** (template → count) in I3/I4, which M9 fills with the ore its shot
-  orders need, bought in the supplies tier;
+  orders need. It is bought in the supplies tier after the bot's own supplies, and counts toward
+  neither the preparation gate nor the run-out trigger;
