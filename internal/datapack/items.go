@@ -3,10 +3,13 @@ package datapack
 import (
 	"encoding/xml"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Item is the part of a weapon, armor or arrow template (items/*.xml) bots
-// pick gear and ammunition with. Other etc items are not read.
+// pick gear and ammunition with. The etc items bots use are EtcItem.
 type Item struct {
 	ID   int32
 	Name string
@@ -33,6 +36,92 @@ type Item struct {
 	// <cond> block, use_condition or equip_condition): the server may
 	// refuse to equip it.
 	Conditional bool
+	// Stats are the base stats the template's <for> block gives.
+	Stats Stats
+	// Enchants are the stats its <enchant> entries name, in file order:
+	// the ones an enchant level raises (EnchantGain).
+	Enchants []string
+	// Soulshots and Spiritshots are how many shots a weapon's attack or
+	// cast spends; 0 for armor and arrows.
+	Soulshots, Spiritshots int
+}
+
+// Stats are the base values of the stats bots compare gear by: what a
+// template's <for> block sets (<set>, weapons) or adds to the base
+// (<baseadd>, armor), the phases the server runs before it scales a stat by
+// level and attributes (skill/effect/mod.go Op.order). The flat <add>,
+// <sub> and <mul> modifiers that run after that scaling are not read; in
+// the shipped datapack only pet weapons <add> to these stats.
+type Stats struct {
+	PAtk, MAtk, PDef, MDef, PAtkSpd, RCrit float64
+}
+
+// field returns the field of s that the stat named name (as the files spell
+// it) reads into, nil for a stat bots do not read.
+func (s *Stats) field(name string) *float64 {
+	switch name {
+	case "pAtk":
+		return &s.PAtk
+	case "mAtk":
+		return &s.MAtk
+	case "pDef":
+		return &s.PDef
+	case "mDef":
+		return &s.MDef
+	case "pAtkSpd":
+		return &s.PAtkSpd
+	case "rCrit":
+		return &s.RCrit
+	}
+	return nil
+}
+
+// EtcKind is the use bots put an etc item template to.
+type EtcKind string
+
+// The etc item kinds bots keep (buildEtcItem).
+const (
+	EtcSoulshot          EtcKind = "soulshot"
+	EtcSpiritshot        EtcKind = "spiritshot"
+	EtcBlessedSpiritshot EtcKind = "blessed spiritshot"
+	EtcPotion            EtcKind = "potion"
+	EtcScroll            EtcKind = "scroll"
+	EtcEnchantScroll     EtcKind = "enchant scroll"
+	// EtcMaterial is a crafting material (etcitem_type MATERIAL): what a
+	// clan crafter keeps for its recipes.
+	EtcMaterial EtcKind = "material"
+	EtcDye      EtcKind = "dye"
+)
+
+// EtcItem is the part of an etc item template bots use, restock or keep:
+// a player's shots, potions, scrolls, enchant scrolls, crafting materials
+// and dyes. Arrows are an Item; other etc items are not read.
+type EtcItem struct {
+	ID   int32
+	Name string
+	Kind EtcKind
+	// Type is the etcitem_type as the file names it (POTION, SCROLL,
+	// SCRL_ENCHANT_WP, MATERIAL, DYE, ...), "" when it sets none, as for
+	// shots. Potions and scrolls of escape share default_action
+	// skill_reduce: only Type tells them apart.
+	Type string
+	// Grade is the crystal grade, as Item.Grade.
+	Grade  int
+	Weight int32
+	// Skills are the item_skill entries: the skills using the item casts.
+	Skills []SkillRef
+	// Reuse is reuse_delay: how long after one use the server refuses the
+	// next of the item; 0 for none.
+	Reuse time.Duration
+	// Tradable is is_tradable and Sellable is_sellable: the beginners'
+	// shots are neither.
+	Tradable, Sellable bool
+}
+
+// SkillRef names one level of a skill: an entry of an item_skill value, and
+// the key of Datapack.Skills.
+type SkillRef struct {
+	ID, Level int32
 }
 
 // grades maps crystal_type to Item.Grade (item.ParseCrystalType on the
@@ -43,49 +132,71 @@ type itemFile struct {
 	Items []itemElement `xml:"item"`
 }
 
-// itemElement is one <item>: its attributes, its direct <set> children and
-// whether it has a <cond> block. Stat blocks are not read.
+// itemElement is one <item>: its attributes, its direct <set> children,
+// whether it has a <cond> block, and its <for> stat block.
 type itemElement struct {
 	Attrs []xml.Attr   `xml:",any,attr"`
 	Sets  []setElement `xml:"set"`
 	Conds []struct{}   `xml:"cond"`
+	For   []struct {
+		Mods []statElement `xml:",any"`
+	} `xml:"for"`
+}
+
+// statElement is one child of a <for> block: <set>, <baseadd>, <add>,
+// <sub>, <mul> or <enchant>, naming its stat.
+type statElement struct {
+	XMLName xml.Name
+	Stat    string `xml:"stat,attr"`
+	Val     string `xml:"val,attr"`
 }
 
 // LoadItems reads every *.xml item template file directly under dir, in
-// sorted file order, keeping the weapons, armor and arrows, and the
-// reference prices of every template (buildPrice). A file that is not
-// well-formed, or a template missing or mangling a field bots read, fails
-// the whole load. An id declared twice keeps its last declaration.
-func LoadItems(dir string) (map[int32]Item, map[int32]int32, error) {
+// sorted file order, keeping the weapons, armor and arrows (items), the etc
+// items bots use (etc, buildEtcItem), and the reference prices of every
+// template (buildPrice). A file that is not well-formed, or a template
+// missing or mangling a field bots read, fails the whole load. An id
+// declared twice keeps its last declaration.
+func LoadItems(dir string) (items map[int32]Item, etc map[int32]EtcItem, prices map[int32]int32, err error) {
 	paths, err := xmlFiles(dir, "item")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	items, prices := make(map[int32]Item), make(map[int32]int32)
+	items, etc, prices = make(map[int32]Item), make(map[int32]EtcItem), make(map[int32]int32)
 	for _, path := range paths {
 		var f itemFile
 		if err := decodeFile(path, &f); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		for _, el := range f.Items {
 			id, price, priced, err := buildPrice(el)
 			if err != nil {
-				return nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
+				return nil, nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
 			}
 			delete(prices, id)
+			delete(items, id)
+			delete(etc, id)
 			if priced {
 				prices[id] = price
 			}
 			it, ok, err := buildItem(el)
 			if err != nil {
-				return nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
+				return nil, nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
 			}
 			if ok {
-				items[it.ID] = it
+				items[id] = it
+				continue
+			}
+			e, ok, err := buildEtcItem(el)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
+			}
+			if ok {
+				etc[id] = e
 			}
 		}
 	}
-	return items, prices, nil
+	return items, etc, prices, nil
 }
 
 // itemAttrs reads el's attributes and its <set> values into one reader.
@@ -110,8 +221,8 @@ func buildPrice(el itemElement) (id, price int32, priced bool, err error) {
 }
 
 // buildItem reads a weapon, armor or arrow template, reporting false for
-// any other: id, type and name are required, price and duration default
-// to 0, crystal_type to none.
+// any other: id, type and name are required, price, duration and the shot
+// counts default to 0, crystal_type to none.
 func buildItem(el itemElement) (Item, bool, error) {
 	a := itemAttrs(el)
 	it := Item{ID: a.int32("id"), Type: a.str("type"), Name: a.str("name")}
@@ -147,8 +258,131 @@ func buildItem(el itemElement) (Item, bool, error) {
 	_, use := a.vals["use_condition"]
 	_, equip := a.vals["equip_condition"]
 	it.Conditional = len(el.Conds) > 0 || use || equip
+	it.Soulshots = a.intDefault("soulshots", 0)
+	it.Spiritshots = a.intDefault("spiritshots", 0)
 	if a.err != nil {
 		return Item{}, false, fmt.Errorf("item %d: %w", it.ID, a.err)
 	}
+	if err := readStats(el, &it); err != nil {
+		return Item{}, false, fmt.Errorf("item %d: %w", it.ID, err)
+	}
 	return it, true, nil
+}
+
+// readStats reads el's <for> block into it: the <set> values first, then
+// the <baseadd> amounts added to them, the server's calculation order; and
+// the stat of every <enchant> entry. A value bots read that is not a
+// number fails the template.
+func readStats(el itemElement, it *Item) error {
+	for _, op := range []string{"set", "baseadd"} {
+		for _, f := range el.For {
+			for _, m := range f.Mods {
+				dst := it.Stats.field(m.Stat)
+				if m.XMLName.Local != op || dst == nil {
+					continue
+				}
+				v, err := strconv.ParseFloat(m.Val, 64)
+				if err != nil {
+					return fmt.Errorf("<%s stat=%q>: %w", op, m.Stat, err)
+				}
+				if op == "set" {
+					*dst = v
+				} else {
+					*dst += v
+				}
+			}
+		}
+	}
+	for _, f := range el.For {
+		for _, m := range f.Mods {
+			if m.XMLName.Local == "enchant" {
+				if m.Stat == "" {
+					return fmt.Errorf("<enchant>: %w", errMissing)
+				}
+				it.Enchants = append(it.Enchants, m.Stat)
+			}
+		}
+	}
+	return nil
+}
+
+// buildEtcItem reads an etc item template of an EtcKind, reporting false
+// for any other. A player's shots are told by their handler (the fish and
+// pet shots have handlers of their own, and blessed spiritshots share
+// default_action spiritshot), enchant scrolls by their handler or their
+// etcitem_type (the crystal scrolls set no enchant type), the rest by
+// etcitem_type. id and name are required; weight and reuse_delay default
+// to 0, crystal_type to none, is_tradable and is_sellable to true.
+func buildEtcItem(el itemElement) (EtcItem, bool, error) {
+	a := itemAttrs(el)
+	if a.strDefault("type", "") != "EtcItem" {
+		return EtcItem{}, false, nil
+	}
+	e := EtcItem{Type: a.strDefault("etcitem_type", "")}
+	switch handler := a.strDefault("handler", ""); {
+	case handler == "SoulShots":
+		e.Kind = EtcSoulshot
+	case handler == "SpiritShots":
+		e.Kind = EtcSpiritshot
+	case handler == "BlessedSpiritShots":
+		e.Kind = EtcBlessedSpiritshot
+	case handler == "EnchantScrolls", strings.Contains(e.Type, "SCRL_ENCHANT_"):
+		e.Kind = EtcEnchantScroll
+	case e.Type == "POTION":
+		e.Kind = EtcPotion
+	case e.Type == "SCROLL":
+		e.Kind = EtcScroll
+	case e.Type == "MATERIAL":
+		e.Kind = EtcMaterial
+	case e.Type == "DYE":
+		e.Kind = EtcDye
+	default:
+		return EtcItem{}, false, nil
+	}
+	e.ID, e.Name = a.int32("id"), a.str("name")
+	e.Weight = a.int32Default("weight", 0)
+	e.Reuse = time.Duration(a.int32Default("reuse_delay", 0)) * time.Millisecond
+	e.Tradable = a.boolDefault("is_tradable", true)
+	e.Sellable = a.boolDefault("is_sellable", true)
+	if a.err != nil {
+		return EtcItem{}, false, fmt.Errorf("item %s: %w", a.strDefault("id", "?"), a.err)
+	}
+	grade, ok := grades[a.strDefault("crystal_type", "NONE")]
+	if !ok {
+		return EtcItem{}, false, fmt.Errorf("item %d: crystal_type %q", e.ID, a.vals["crystal_type"])
+	}
+	e.Grade = grade
+	skills, err := parseSkillRefs(a.strDefault("item_skill", ""))
+	if err != nil {
+		return EtcItem{}, false, fmt.Errorf("item %d: item_skill: %w", e.ID, err)
+	}
+	e.Skills = skills
+	return e, true, nil
+}
+
+// parseSkillRefs parses an item_skill value the way the server does
+// (model/item/skillref.go ParseSkillRefs): ";"-separated "id-level" pairs
+// of base-10 numbers; "" is none.
+func parseSkillRefs(s string) ([]SkillRef, error) {
+	if s == "" {
+		return nil, nil
+	}
+	parts := strings.Split(s, ";")
+	refs := make([]SkillRef, len(parts))
+	for i, p := range parts {
+		id, level, ok := strings.Cut(p, "-")
+		if !ok {
+			return nil, fmt.Errorf("skill reference %q: want \"id-level\"", p)
+		}
+		idNum, err := strconv.ParseInt(id, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("skill reference %q: %w", p, err)
+		}
+		levelNum, err := strconv.ParseInt(level, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("skill reference %q: %w", p, err)
+		}
+		refs[i] = SkillRef{ID: int32(idNum), Level: int32(levelNum)}
+	}
+	return refs, nil
 }

@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/items: gear with stat blocks, and
+	     the etc items bots use. -->
+	<item id="287" type="Weapon" name="Bow of Peril">
+		<set name="default_action" val="equip" />
+		<set name="weapon_type" val="BOW" />
+		<set name="bodypart" val="lrhand" />
+		<set name="crystal_type" val="B" />
+		<set name="weight" val="1700" />
+		<set name="price" val="13100000" />
+		<set name="soulshots" val="3" />
+		<set name="spiritshots" val="1" />
+		<set name="reuse_delay" val="1500" />
+		<for>
+			<set stat="pAtk" val="400" />
+			<set stat="mAtk" val="99" />
+			<set stat="rCrit" val="12" />
+			<sub stat="accCombat" val="3" />
+			<set stat="pAtkSpd" val="293" />
+			<enchant val="0" stat="pAtk" />
+			<enchant val="0" stat="mAtk" />
+		</for>
+	</item>
+	<item id="352" type="Armor" name="Brigandine Tunic">
+		<set name="default_action" val="equip" />
+		<set name="armor_type" val="HEAVY" />
+		<set name="bodypart" val="chest" />
+		<set name="crystal_type" val="D" />
+		<set name="weight" val="8320" />
+		<set name="price" val="299000" />
+		<for>
+			<baseadd stat="pDef" val="103" />
+			<add stat="maxMp" val="10" />
+			<enchant stat="pDef" val="0" />
+		</for>
+	</item>
+	<item id="1061" type="EtcItem" name="Healing Potion">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="POTION" />
+		<set name="weight" val="5" />
+		<set name="price" val="330" />
+		<set name="reuse_delay" val="10000" />
+		<set name="is_stackable" val="true" />
+		<set name="handler" val="ItemSkills" />
+		<set name="item_skill" val="2032-1" />
+		<set name="use_condition" val="{{uc_transmode_exclude;{tt_flying}}}" />
+		<set name="shared_reuse_group" val="9" />
+	</item>
+	<item id="735" type="EtcItem" name="Potion of Alacrity">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="POTION" />
+		<set name="weight" val="20" />
+		<set name="reuse_delay" val="500" />
+		<set name="handler" val="ItemSkills" />
+		<set name="item_skill" val="2012-1" />
+	</item>
+	<item id="736" type="EtcItem" name="Scroll of Escape">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="SCROLL" />
+		<set name="weight" val="120" />
+		<set name="handler" val="ItemSkills" />
+		<set name="item_skill" val="2013-1" />
+	</item>
+	<!-- No etcitem_type: a player's shots are told by their handler. -->
+	<item id="5789" type="EtcItem" name="Soulshot: No Grade for Beginners">
+		<set name="default_action" val="soulshot" />
+		<set name="weight" val="1" />
+		<set name="is_tradable" val="false" />
+		<set name="is_sellable" val="false" />
+		<set name="handler" val="SoulShots" />
+		<set name="item_skill" val="2039-1" />
+	</item>
+	<!-- Declared once more: the last declaration wins. -->
+	<item id="1835" type="EtcItem" name="Soulshot: No Grade">
+		<set name="default_action" val="soulshot" />
+		<set name="weight" val="2" />
+		<set name="handler" val="SoulShots" />
+		<set name="item_skill" val="2039-1" />
+	</item>
+	<item id="2510" type="EtcItem" name="Spiritshot: D-Grade">
+		<set name="default_action" val="spiritshot" />
+		<set name="crystal_type" val="D" />
+		<set name="weight" val="5" />
+		<set name="handler" val="SpiritShots" />
+		<set name="item_skill" val="2047-1" />
+	</item>
+	<!-- default_action spiritshot like a spiritshot: the handler tells it apart. -->
+	<item id="3947" type="EtcItem" name="Blessed Spiritshot: No Grade">
+		<set name="default_action" val="spiritshot" />
+		<set name="weight" val="5" />
+		<set name="handler" val="BlessedSpiritShots" />
+		<set name="item_skill" val="2061-1" />
+	</item>
+	<!-- Not a player's shot. -->
+	<item id="6535" type="EtcItem" name="Fishing Shot: non-grade">
+		<set name="default_action" val="fishingshot" />
+		<set name="weight" val="3" />
+		<set name="handler" val="FishShots" />
+		<set name="item_skill" val="2181-1" />
+	</item>
+	<item id="729" type="EtcItem" name="Scroll: Enchant Weapon (Grade A)">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="SCRL_ENCHANT_WP" />
+		<set name="weight" val="120" />
+		<set name="handler" val="EnchantScrolls" />
+		<set name="item_skill" val="2006-1" />
+	</item>
+	<!-- A crystal scroll: etcitem_type SCROLL, but an enchant scroll by its handler. -->
+	<item id="731" type="EtcItem" name="Crystal Scroll: Enchant Weapon (Grade A)">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="SCROLL" />
+		<set name="weight" val="120" />
+		<set name="handler" val="EnchantScrolls" />
+	</item>
+	<item id="1864" type="EtcItem" name="Stem">
+		<set name="etcitem_type" val="MATERIAL" />
+		<set name="weight" val="2" />
+		<set name="is_stackable" val="true" />
+	</item>
+	<item id="4445" type="EtcItem" name="Dye of STR (Str+1 Con-3)">
+		<set name="etcitem_type" val="DYE" />
+		<set name="weight" val="150" />
+		<set name="is_stackable" val="true" />
+	</item>
+	<item id="8786" type="EtcItem" name="Primeval Potion">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="POTION" />
+		<set name="handler" val="ItemSkills" />
+		<set name="item_skill" val="2305-1;2306-2" />
+	</item>
+	<!-- An elixir: not an etc item bots use. -->
+	<item id="8622" type="EtcItem" name="Elixir of Life (No Grade)">
+		<set name="default_action" val="skill_reduce" />
+		<set name="etcitem_type" val="ELIXIR" />
+		<set name="handler" val="Elixirs" />
+		<set name="item_skill" val="2287-1" />
+	</item>
+</list>

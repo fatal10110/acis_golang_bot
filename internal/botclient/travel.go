@@ -39,6 +39,10 @@ type TravelMap struct {
 	// list (datapack.Datapack.Prices): the price a store's manage list shows, which
 	// prices the loot a bot sells by trade (Brain.tradePrice).
 	prices map[int32]int32
+	// potions are the datapack's healing potions, best first, and shots
+	// its player shots (indexPotions, indexShots): what WithItemIndex puts
+	// in a persona.
+	potions, shots []int32
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -64,13 +68,16 @@ type destination struct {
 // a fixed spawn outside an event, with its standard adena-priced
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear, the
-// arrows each bow shoots and the items' reference prices.
+// arrows each bow shoots, the items' reference prices, and the healing
+// potions and shots.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
 	m.gear, m.shopGear = indexGear(dp.Items, m.cheapest)
 	m.arrows = indexArrows(dp.Items)
 	m.prices = dp.Prices
+	m.potions = indexPotions(dp.EtcItems, dp.Skills)
+	m.shots = indexShots(dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue
