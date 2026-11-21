@@ -89,6 +89,9 @@ func TestPresetBrain(t *testing.T) {
 			if cfg.Persona.JoinParty == nil {
 				t.Error("JoinParty nil: the claim and the GM hooks do not wrap the persona")
 			}
+			if cfg.Persona.JoinClan == nil {
+				t.Error("JoinClan nil: the GM hook does not wrap the persona")
+			}
 		})
 	}
 }

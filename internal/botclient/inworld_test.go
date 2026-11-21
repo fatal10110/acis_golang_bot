@@ -56,8 +56,9 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 		w.WriteInt32(v)
 	}
 	w.WriteString("a title")
-	for i := range int32(5) { // clan, crest, ally, ally crest, relation
-		w.WriteInt32(600 + i)
+	w.WriteInt32(u.ClanID)
+	for i := range int32(4) { // crest, ally, ally crest, relation
+		w.WriteInt32(601 + i)
 	}
 	w.WriteUint8(2) // mount type
 	w.WriteUint8(u.StoreType)
@@ -218,7 +219,7 @@ var (
 		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
 		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000,
 		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, Running: true, StoreType: 3, IsGM: true,
-		Abnormal: AbnormalStealth | 0x2000,
+		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001,
 	}
 	testCharInfo = CharInfo{
 		ObjectID: 0x10000002, Name: "other", Pos: Point{X: 1, Y: 2, Z: 3}, Heading: 1000, ClassID: 10,
@@ -263,7 +264,7 @@ func inworldCases() []struct {
 		{
 			"SystemMessage every param type",
 			packet(opGameSystemMessage, 1147, 6, 0, "text", 1, 5, 3, 57, 4, 1216, 2, 6, 100, 7, at.X, at.Y, at.Z),
-			SystemMessage{ID: 1147},
+			SystemMessage{ID: 1147, Text: [2]string{"text"}},
 		},
 		{"SystemMessage other type is one int32", packet(opGameSystemMessage, 9, 2, 2, 20001, 5, 3), SystemMessage{ID: 9}},
 		{"ActionFailed", packet(opGameActionFailed), ActionFailed{}},

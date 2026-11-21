@@ -24,6 +24,8 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(packet(opGameSystemMessage, 1147, 3, 0, "text", 4, 1216, 2, 7, 1, 2, 3))
 	f.Add(packet(opGameCreatureSay, 7, 1, "bot7", "hello"))
 	f.Add(packet(opGameAskJoinParty, "GM", 1))
+	f.Add(packet(opGameAskJoinPledge, gmID, "Crafters"))
+	f.Add(clanRoster(clanID, 0, "Crafters", "GM", "GM", "bot7"))
 	f.Add(packet(opGameConfirmDlg, 1842, 2, 0, "GM", 7, 1, 2, 3, 30000, gmID))
 	f.Add(partyWindowAll(gmID, 1, []int32{0, 3}, gmRow, mateRow))
 	f.Add(packet(opGamePartySmallWindowUpdate, vitals(gmRow)...))

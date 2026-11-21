@@ -76,6 +76,10 @@ type Status struct {
 	// Members the other members' names in order; empty outside a party.
 	Leader  string
 	Members []string
+	// ClanID is the bot's clan, 0 for none, and ClanLeader its leader's
+	// name, "" until the clan's roster arrived.
+	ClanID     int32
+	ClanLeader string
 	// Order is the standing order of the panel, the zero Command for none.
 	Order Command
 	// Reconnects counts the bot's attempts after its first.
@@ -131,6 +135,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st.HP, st.MaxHP, st.MP, st.MaxMP, st.CP, st.MaxCP = s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP
 	st.Position = s.Position(now)
 	st.Town = b.nearestTown(st.Position)
+	st.ClanID, st.ClanLeader = w.Clan.ID, w.Clan.Leader
 	st.Leader, st.Members = "", nil
 	if p := &w.Party; p.In() {
 		if p.LeaderID == s.ObjectID {

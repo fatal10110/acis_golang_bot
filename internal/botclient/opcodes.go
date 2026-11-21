@@ -142,6 +142,18 @@ const (
 	opGameRequestWithdrawParty   = 0x2b
 )
 
+// Clan, both directions (internal/gameserver/network/serverpackets/pledge.go,
+// pledgememberlist.go and clientpackets/pledge.go).
+const (
+	opGameAskJoinPledge                 = 0x32
+	opGameJoinPledge                    = 0x33
+	opGamePledgeShowMemberListAll       = 0x53
+	opGamePledgeShowMemberListDeleteAll = 0x82
+
+	opGameRequestJoinPledge       = 0x24
+	opGameRequestAnswerJoinPledge = 0x25
+)
+
 // Questions and slash commands, both directions: ConfirmDlg
 // (serverpackets/confirmdlg.go), DlgAnswer (clientpackets/wiresafe.go,
 // dlganswer.go) and RequestUserCommand (clientpackets/usercommand.go).

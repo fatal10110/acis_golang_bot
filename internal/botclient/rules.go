@@ -85,6 +85,11 @@ type Persona struct {
 	// JoinParty decides whether to accept the party invitation of the
 	// player named requester (rule 2); nil declines every invitation.
 	JoinParty func(w *World, requester string, now time.Time) bool
+	// JoinClan decides whether to accept the invitation of the player named
+	// requester into the clan named clan (rule 2); nil declines every
+	// invitation, and an invitation whose inviter is unknown is declined.
+	// AcceptClanFrom is the crafter's policy (D20).
+	JoinClan func(w *World, requester, clan string, now time.Time) bool
 	// Trade is how the bot answers trade requests and trades (rule 2).
 	Trade TradePolicy
 	// Chat is how the bot answers whispers (rule "chat").
@@ -219,6 +224,7 @@ const (
 	actSelect
 	actCast
 	actAnswerParty
+	actAnswerClan
 	actLeaveParty
 	actUseItem
 	actAutoShot
@@ -246,31 +252,29 @@ const (
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
-// RequestRestartPoint, RequestAnswerJoinParty, RequestWithdrawParty, UseItem,
-// RequestAutoSoulShot, RequestAcquireSkillInfo and RequestAcquireSkill have
-// no reuse gate on the server: the frame bucket bounds them, restartRetry
-// spaces a repeated restart, an invitation is answered once, potionReuse
-// spaces the potions the bot drinks (the potions' shared heal over time),
-// shotRetry the toggles of a shot template, and a trainer visit sends one
-// skill request per server answer. RequestBuyItem and RequestSellItem have
-// none either: a shop visit sends one per BuyList or SellList it opened.
-// RequestMagicSkillUse (attack, heal and
-// buff casts) has none either: a cast waits for the one before it
-// (castPending, castTimeout) and its skill's reuse, and buffRetry spaces
-// one buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone
-// have no reuse gate either (no flood protector covers them): a request is
-// answered once, and a trade gets one add, one confirm and one cancel
-// (Trade.added, confirmed, cancelAt). A pickup click (Action) has none:
-// lootRetry spaces the clicks on one item. A whisper (Say2 Tell), a GM
-// command's reply or a chat reply, has no server gate either (chat.go
-// chatTell): it keeps the chat gate. DlgAnswer and RequestUserCommand have
-// none either: an offer is answered once, and escapeRetry spaces a repeated
-// /unstuck. The sell store packets
-// (RequestPrivateStoreManageSell, SetPrivateStoreMsgSell,
+// RequestRestartPoint, RequestAnswerJoinParty, RequestAnswerJoinPledge,
+// RequestWithdrawParty, UseItem, RequestAutoSoulShot,
+// RequestAcquireSkillInfo and RequestAcquireSkill have no reuse gate on the
+// server: the frame bucket bounds them, restartRetry spaces a repeated
+// restart, an invitation is answered once, potionReuse spaces the potions
+// the bot drinks (the potions' shared heal over time), shotRetry the toggles
+// of a shot template, and a trainer visit sends one skill request per server
+// answer. RequestBuyItem and RequestSellItem have none either: a shop visit
+// sends one per BuyList or SellList it opened. RequestMagicSkillUse (attack,
+// heal and buff casts) has none either: a cast waits for the one before it
+// (castPending, castTimeout) and its skill's reuse, and buffRetry spaces one
+// buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone have no
+// reuse gate either (no flood protector covers them): a request is answered
+// once, and a trade gets one add, one confirm and one cancel (Trade.added,
+// confirmed, cancelAt). A pickup click (Action) has none: lootRetry spaces
+// the clicks on one item. A whisper (Say2 Tell), a GM command's reply or a
+// chat reply, has no server gate either (chat.go chatTell): it keeps the
+// chat gate. DlgAnswer and RequestUserCommand have none either: an offer is
+// answered once, and escapeRetry spaces a repeated /unstuck. The sell store
+// packets (RequestPrivateStoreManageSell, SetPrivateStoreMsgSell,
 // SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
-// protector either (network/privatestore_dispatch.go): an opening sends
-// each once per answer it waits for, and StorePolicy.Retry spaces the
-// openings.
+// protector either (network/privatestore_dispatch.go): an opening sends each
+// once per answer it waits for, and StorePolicy.Retry spaces the openings.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -438,13 +442,17 @@ func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 
 // rulePrompt is rule 2: an open prompt waits for the persona's answer. A
 // party invitation still answerable is accepted or declined at once, per
-// the persona, then a trade request, and an open trade holds the bot
-// (ruleTrade); the restart prompt opens only while dead, so rule 1 answers
-// it first.
+// the persona, then a clan invitation, then a trade request, and an open
+// trade holds the bot (ruleTrade); the restart prompt opens only while
+// dead, so rule 1 answers it first.
 func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	if inv := b.world.Prompts.Party; inv.Pending(now) {
 		join := b.persona.JoinParty
 		return answerPartyAction(join != nil && join(b.world, inv.Requester, now)), true
+	}
+	if inv := b.world.Prompts.Clan; inv.Pending(now) {
+		join := b.persona.JoinClan
+		return answerClanAction(join != nil && inv.Requester != "" && join(b.world, inv.Requester, inv.Clan, now)), true
 	}
 	if a, ok := b.ruleTrade(now); ok {
 		return a, true

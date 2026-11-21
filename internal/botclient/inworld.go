@@ -51,8 +51,9 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	r.Skip(3 * 4) // hair style, hair color, face
 	u.IsGM = r.ReadInt32() != 0
 	r.ReadString() // title
-	r.Skip(5 * 4)  // clan, crest, ally, ally crest, relation
-	r.Skip(1)      // mount type
+	u.ClanID = r.ReadInt32()
+	r.Skip(4 * 4) // crest, ally, ally crest, relation
+	r.Skip(1)     // mount type
 	u.StoreType = r.ReadUint8()
 	r.Skip(1)     // can crystallize
 	r.Skip(2 * 4) // PK kills, PvP kills
@@ -219,14 +220,18 @@ const (
 // decodeSystemMessage: message id, parameter count, then per parameter its
 // type and value (serverpackets/systemmessage.go): text is a string, a
 // skill name its id and level, a zone name a point, every other type one
-// int32. The count comes off the wire, so the loop ends at the first short
-// read.
+// int32. The first two texts are kept. The count comes off the wire, so the
+// loop ends at the first short read.
 func decodeSystemMessage(r *wire.Reader) Event {
 	m := SystemMessage{ID: r.ReadInt32()}
+	texts := 0
 	for n := r.ReadInt32(); n > 0 && r.Err() == nil; n-- {
 		switch r.ReadInt32() {
 		case sysParamText:
-			r.ReadString()
+			if s := r.ReadString(); texts < len(m.Text) {
+				m.Text[texts] = s
+				texts++
+			}
 		case sysParamSkillName:
 			r.Skip(2 * 4)
 		case sysParamZoneName:

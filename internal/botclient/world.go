@@ -32,6 +32,10 @@ type World struct {
 	// Attackers are the creatures that hit the bot recently, by object id.
 	Attackers map[int32]*Attacker
 	Party     Party
+	// Clan is the bot's clan; clanInviter the inviter the last clan
+	// invitation's system message named (applyClan).
+	Clan        Clan
+	clanInviter clanInviter
 	// Dialog is the last dialog page the server sent.
 	Dialog Dialog
 	// Inventory is what the bot carries.
@@ -121,6 +125,9 @@ type Prompts struct {
 	// Party is open from a party invitation until the bot answers it or
 	// joins a party.
 	Party PartyInvite
+	// Clan is open from a clan invitation until the bot answers it or
+	// joins a clan.
+	Clan ClanInvite
 	// Trade is open from a trade request until the bot answers it or a
 	// trade window opens.
 	Trade TradeInvite
@@ -376,6 +383,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)
+	case SystemMessage, AskJoinPledge, JoinPledge, PledgeShowMemberListAll, PledgeShowMemberListDeleteAll:
+		w.applyClan(ev, now)
 	case ItemList, InventoryUpdate, ExAutoSoulShot:
 		w.applyItems(ev)
 	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOwnOk, TradePressOtherOk, SendTradeDone:
@@ -396,6 +405,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
 	s.Heading = e.Heading
+	w.applyClanID(e.ClanID)
 	s.move = s.move.resample(now, e.Pos)
 	if s.move.speed != 0 {
 		s.move.speed = pace(s.Running, s.RunSpeed, s.WalkSpeed)

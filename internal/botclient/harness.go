@@ -103,6 +103,10 @@ func EncodeRequestJoinParty(target string, loot int32) []byte {
 	return encodeRequestJoinParty(target, loot)
 }
 
+// EncodeRequestJoinPledge invites the player whose object id is target
+// into the sender's main clan (see encodeRequestJoinPledge).
+func EncodeRequestJoinPledge(target int32) []byte { return encodeRequestJoinPledge(target, 0) }
+
 // EncodeSay2Tell whispers text to the player named target.
 func EncodeSay2Tell(target, text string) []byte { return encodeSay2Tell(target, text) }
 

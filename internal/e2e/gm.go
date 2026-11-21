@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // maxGMFileSize bounds the GM file.
@@ -147,6 +148,10 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	spawn ID             a monster at the GM's target or the GM; it never respawns
 //	delete               the GM's target, a monster the run spawned
 //	hide                 toggles the GM's own invisibility
+//	pledge create NAME   founds the clan NAME (2 to 16 letters or digits)
+//	                     led by the GM's target, a run character
+//	pledge dismiss       dissolves the clan of the GM's target, a run
+//	                     character
 func (s *Scope) check(cmd string) error {
 	f := strings.Fields(cmd)
 	if len(f) == 0 {
@@ -174,6 +179,11 @@ func (s *Scope) check(cmd string) error {
 		ok = len(args) == 0 && s.npcs[s.target]
 	case "hide":
 		ok = len(args) == 0
+	case "pledge":
+		// Never without a target: the server would act on the GM itself
+		// (admin_pledge.go).
+		ok = (len(args) == 2 && args[0] == "create" && validClanName(args[1]) ||
+			len(args) == 1 && args[0] == "dismiss") && s.isCharID(s.target)
 	}
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrCommandRefused, cmd)
@@ -197,6 +207,19 @@ const maxSP = 100000
 func validSP(sp string) bool {
 	n, err := strconv.Atoi(sp)
 	return err == nil && n >= 0 && n <= maxSP
+}
+
+// validClanName reports a clan name the server founds: 2 to 16 letters or
+// digits (clan/service.go validName, membership.go name lengths).
+func validClanName(name string) bool {
+	n := 0
+	for _, r := range name {
+		if r > 0xffff || !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+		n++
+	}
+	return n >= 2 && n <= 16
 }
 
 func allInts(ss []string) bool {
