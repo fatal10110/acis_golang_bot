@@ -219,7 +219,13 @@ The junk rule (`keeps`) learns everything the loadout buys. Today it keeps only 
 `Restock`, `Keep`, books and arrows, so a sell visit would sell the SoE, buff potions and dyes the
 bot just bought. It now keeps every template with a trip target (section 4), the build's buff
 potion and the planned dyes until they are drawn. A persona **keep hook** lets the clan crafter
-plan (M9) add crafting materials, with no clan logic in M8.
+plan (M9) keep more, with no clan logic in M8. It is called per carried item (object and
+template), so it can keep crafting materials, every recipe scroll, and unworn graded gear deposited
+for crystallizing.
+
+A persona **extra supply hook** (template → count) adds supply targets beyond the use meter's.
+I4 buys them in the supplies tier, and `keeps` keeps them. M9 uses it for the ore its members'
+shot orders need (Soul Ore 1785, Spirit Ore 3031, on spawned grocer lists).
 
 ### 6. Gear by stats, enchant and sets
 
@@ -404,7 +410,9 @@ M9 builds on M8 rather than duplicating it. M8 exposes these and adds no clan lo
 - the **shot source** interface of section 3, to which M9 adds the crafter;
 - the **per-item trip target** of I3, which sizes a clan member's orders;
 - the budget's **reserve tier** (I4), which carries the warehouse fees;
-- a **"trip in town" hook** in I8, when a member deposits materials and collects products;
-- a persona **keep hook** on the junk rule (I1/I4), which M9 fills from its recipe index so that
-  members keep crafting materials instead of selling them. I1 exposes the material etc items for
-  this.
+- a **"trip in town" hook** in I8b (#182), when a member deposits materials and collects products;
+- a persona **keep hook** on the junk rule (I4), called per carried item (object and template).
+  M9 fills it so that members keep crafting materials, recipe scrolls and unworn graded gear for
+  crystallizing instead of selling them. I1 exposes the material etc items for this;
+- a persona **extra supply hook** (template → count) in I3/I4, which M9 fills with the ore its shot
+  orders need, bought in the supplies tier;
