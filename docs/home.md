@@ -52,6 +52,15 @@ MaximumOnlineUsers = 150
 
 - If `Hostname` cannot be public, give the swarm the game address with `-game <public host:port>`:
   it replaces the advertised address on every game dial.
+For a clan crafter (`docs/crafting.md`, D17), in `clans.properties`:
+
+```properties
+MembersCanWithdrawFromClanWH = True
+```
+
+Then, as the clan leader in game, give grade 6 (where new members join) the clan warehouse
+privilege once. Without both, only the leader withdraws and the crafter cannot see the warehouse.
+
 - Raise `MaximumOnlineUsers` by the bot cap: `-bots N` today, the control panel's `-max-online`
   once it lands (`docs/plan.md`, section 8). Bots cannot see the live player count, so a full
   server refuses their logins instead of the cap adapting.

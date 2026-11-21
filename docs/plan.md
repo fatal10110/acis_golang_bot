@@ -22,6 +22,7 @@ repository.
 | M5 - Progression | #37 | #38-#40 |
 | M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
 | M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
+| M9 - Clan crafter | to be filed | to be filed (`docs/crafting.md`, PRs C1-C10) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
@@ -52,6 +53,9 @@ the goal.
 | D11 | Ban and security risk on the home run | Accepted by the owner: it is the owner's private server. M6 adds no ban or abuse handling beyond what the bots already have (login gate, credential breaker), and the panel is a local tool |
 | D12 | Panel page stack | React, TypeScript (strict), Vite and Tailwind, built from `web/` and embedded in the binary; Node is needed only to build the page (`make ui`, the CI `web` job, the release build), never by the Go jobs or at run time. Replaces the earlier plain-JavaScript, no-Node rule (owner, 2026-11-17, #106) |
 | D13 | Who finds a bot's route | The bot, on its own copy of the server's geodata: every move it sends is a segment it checked with the copied `CanMove` and step chain, and the server's pathfinder is never relied on. Geodata is never loaded whole into memory: it is packed offline and mapped read-only, with regions read in place, as the game server does. Walking personas need the geodata and nav caches; today's legs are not kept as a fallback (D13a). Owner, 2026-11-21. Design and delivery: `docs/navigation.md` |
+| D17 | Who withdraws from the clan warehouse | The owner's server sets `MembersCanWithdrawFromClanWH=True`, and the clan leader gives grade 6 (where new members join) privilege 8; a server setting, not a bot special case. Owner, 2026-11-21. Design: `docs/crafting.md` |
+| D18 | How the clan crafter's Create Item grows | Through the class change of D15 (M8 #178): Artisan at 20, Warsmith at 40; until then Create Item 1 and no crystallizing. Owner, 2026-11-21. Design: `docs/crafting.md` |
+| D19 | What the clan crafter may take from the clan warehouse | Anything a crafting chain it plans needs, any time; it crafts a chain only when the chain is worth it. Never adena, items no reachable recipe uses, or unpriced items without an order. Owner, 2026-11-21. Design: `docs/crafting.md` |
 
 ## Consequences of a separate repository (D5)
 
@@ -598,3 +602,5 @@ owning milestone. The bot logs the gap and degrades; no server special-casing fo
 - Q1: Repository name and visibility (placeholder `fatal10110/acis_bots`), and whether it joins
   `acis_public` as a submodule.
 - Q2: The nickname marker text and whether it is a prefix or suffix.
+- Q3: May a non-GM clan leader invite the clan crafter and order crafts (D3 limits both to GMs)?
+  (`docs/crafting.md`)
