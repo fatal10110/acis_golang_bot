@@ -1,7 +1,10 @@
 package e2e
 
 import (
+	"cmp"
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -19,7 +22,10 @@ const clanCreateLevel = 10
 // the clan dissolved takes the bot out (#185). The pool's GM is below the
 // founding level and the harness levels only run characters, so a run
 // character leads the clan and the bot's -commanders allowlist makes it a
-// known GM, the same Authority path a real GM takes.
+// known GM, the same Authority path a real GM takes. The bot records the
+// first frame of each opcode it reads into the clan directory of
+// BOT_E2E_RECORD when set, else a temporary one: the clan frames there are
+// the recorded fixtures of the clan decoders.
 func TestLiveClanInvite(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM)
@@ -28,7 +34,11 @@ func TestLiveClanInvite(t *testing.T) {
 	acc, _ := tg.Account("cl", 1)
 	leader := enter(t, ctx, tg, acc, character(t, acc, &botclient.HumanFighter), nil)
 	botAcc, _ := tg.Account("cl", 2)
-	b := runBotWith(t, ctx, tg, botAcc, botSetup{persona: partyPersona, brain: func(cfg *botclient.BrainConfig) {
+	rec, err := botclient.NewRecorder(filepath.Join(cmp.Or(os.Getenv("BOT_E2E_RECORD"), t.TempDir()), "clan"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := runBotWith(t, ctx, tg, botAcc, botSetup{persona: partyPersona, tap: rec, brain: func(cfg *botclient.BrainConfig) {
 		a := botclient.NewAuthority(botclient.AuthorityConfig{Commanders: []int32{leader.Self.ObjectID}, Clock: botclient.SystemClock{}})
 		cfg.Authority = a
 		cfg.Persona = a.Hooks(cfg.Persona)
@@ -113,4 +123,7 @@ func TestLiveClanInvite(t *testing.T) {
 		st := b.Status()
 		return st.ClanID == 0 && st.ClanLeader == ""
 	})
+	if err := rec.Err(); err != nil {
+		t.Error(err)
+	}
 }

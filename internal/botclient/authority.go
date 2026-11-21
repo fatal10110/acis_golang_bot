@@ -288,9 +288,9 @@ func (a *Authority) knowsName(w *World, name string, now time.Time) bool {
 // Hooks returns p with its party, clan and trade hooks pointed at a: the
 // bot accepts the party or clan invitation of a GM it knows (a commander,
 // or a GM a recent database check confirmed) and otherwise asks p's own
-// JoinParty or JoinClan (D3; D20 for the crafter's), and a known GM is exempt from the trade policy, besides any p's own
-// Exempt exempts. Neither hook queries the database: both run on the brain
-// goroutine.
+// JoinParty or JoinClan (D3; D20 for the crafter's), and a known GM is
+// exempt from the trade policy, besides any p's own Exempt exempts. No hook
+// queries the database: all run on the brain goroutine.
 func (a *Authority) Hooks(p Persona) Persona {
 	join, joinClan, exempt := p.JoinParty, p.JoinClan, p.Trade.Exempt
 	p.JoinParty = func(w *World, requester string, now time.Time) bool {

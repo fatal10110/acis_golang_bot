@@ -3,6 +3,9 @@ package botclient
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -263,5 +266,49 @@ func TestBrainClanChatUnanswered(t *testing.T) {
 		if f[0] == opGameSay2 {
 			t.Fatalf("sent Say2 % x after clan chat", f)
 		}
+	}
+}
+
+// TestRecordedClanFixtures checks the clan frames TestLiveClanInvite
+// recorded against the live server decode to sane fields: a clan id, names.
+// Ids and names vary between runs and are not pinned; TestRecordedFixtures
+// checks each decodes exactly.
+func TestRecordedClanFixtures(t *testing.T) {
+	tests := []struct {
+		op   byte
+		sane func(Event) bool
+	}{
+		{opGameAskJoinPledge, func(ev Event) bool {
+			e, ok := ev.(AskJoinPledge)
+			return ok && e.RequesterID != 0 && e.Clan != ""
+		}},
+		{opGameJoinPledge, func(ev Event) bool {
+			e, ok := ev.(JoinPledge)
+			return ok && e.ClanID != 0
+		}},
+		{opGamePledgeShowMemberListAll, func(ev Event) bool {
+			e, ok := ev.(PledgeShowMemberListAll)
+			return ok && e.ClanID != 0 && e.PledgeType == 0 && e.Name != "" && e.Leader != ""
+		}},
+		{opGamePledgeShowMemberListDeleteAll, func(ev Event) bool {
+			_, ok := ev.(PledgeShowMemberListDeleteAll)
+			return ok
+		}},
+	}
+	for _, tt := range tests {
+		name := fmt.Sprintf("%02x.bin", tt.op)
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join("testdata", "recorded", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ev, ok, err := decodeEvent(raw)
+			if err != nil || !ok {
+				t.Fatalf("decodeEvent = %v, %v, %v", ev, ok, err)
+			}
+			if !tt.sane(ev) {
+				t.Errorf("decoded %+v, want non-zero ids and non-empty names", ev)
+			}
+		})
 	}
 }

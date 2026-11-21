@@ -34,7 +34,7 @@ Environment variables only, each a value or a path, never a secret:
 | `BOT_E2E_DATAPACK` | local datapack XML directory (the panel's `town` preset) | none |
 | `BOT_E2E_ALLOW_LOGINFAIL` | `1`: run the wrong-password scenario | unset |
 | `BOT_E2E_SOAK` | soak length | `16m` (past the 15 min idle timeout) |
-| `BOT_E2E_RECORD` | directory the login scenario records fixtures into | a temporary one |
+| `BOT_E2E_RECORD` | directory the login scenario records fixtures into (the clan scenario into its `clan` subdirectory) | a temporary one |
 | `BOT_REQUIRE_E2E` | `1`: a scenario whose config is missing fails instead of skipping | unset |
 
 The default files are found through git (`git rev-parse --git-common-dir`), so a run from a

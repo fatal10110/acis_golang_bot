@@ -326,6 +326,8 @@ var recordedMustDecode = []byte{
 	opGameMoveToLocation, opGameUserInfo, opGameStatusUpdate, opGameDeleteObject,
 	opGameCharSelectInfo, opGameNPCInfo, opGameActionFailed, opGameChangeWaitType,
 	opGameSystemMessage, opGameLeaveWorld, opGameSkillList, opGameSkillCoolTime, opGameItemList,
+	opGameAskJoinPledge, opGameJoinPledge, opGamePledgeShowMemberListAll,
+	opGamePledgeShowMemberListDeleteAll,
 }
 
 // TestRecordedFixtures replays the -record captures checked in under
