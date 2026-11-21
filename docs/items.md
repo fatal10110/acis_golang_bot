@@ -1,11 +1,13 @@
 # Bot items: loadout, supplies and gear like a real player
 
-Status: draft for the owner. It needs answers to D14-D16 (below) before any issue is filed. Two
-independent review rounds; the second found it sound to file after its fixes, which are applied.
-Revised after the first round. That round found: SoE casts are queued, not cancelled, by
-moves; enchanting would freeze gear upgrades; buff potion stacking and pacing were wrong; the shot
-fix sat in the wrong PR; beginner shots were wasted; player stores need a walk and exclude package
-stores; and several PRs were too large.
+Status: approved by the owner on 2026-11-21: D14 (b), D15 (a), D16 yes (see "Owner decisions").
+Filed as milestone M8, epic #166, issues #167-#181, and server issue fatal10110/acis_golang#5419.
+
+Two rounds of independent review; the second found it sound to file. The first round found: SoE
+casts are queued, not cancelled, by moves; enchanting would freeze gear upgrades; buff potion
+stacking and pacing were wrong; the shot fix sat in the wrong PR; beginner shots were wasted;
+player stores need a walk and exclude package stores; and several PRs were too large. The second
+found that unspawned merchants' lists must not count as a shot source.
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang). Datapack paths (`items/...`,
@@ -151,7 +153,7 @@ picks one per persona.
 - **Shot factor** (in the same PR, on today's price score): a weapon's value is multiplied by the
   shot factor only when the bot can get shots of its grade. So without D shots, the bot keeps a
   no-grade weapon with shots over a D weapon without them until the D weapon's value wins on its
-  own. This is the actual fix for finding 1 under D14 (c).
+  own. This is the fix for finding 1 until the clan crafter (M9, D14 b) supplies graded shots.
 
   "Can get" is a small consumer-side interface, a **shot source** (grade → obtainable). The default
   answers from carried shots and from the lists of merchants that have a spawn in `Travel.spawns`.
@@ -246,7 +248,7 @@ stores.
   per-seller cool-down (default 10 min).
 - This also gives the bot merchants buyers, so trading runs both ways.
 
-### 9. Class change and dyes (gated by D15)
+### 9. Class change and dyes (D15)
 
 - **Class change:** at level 20 and 40, the bot visits the class master and picks the build's
   profession for its race and persona, through the page's bypass links. Pacing: `bypassGap`
@@ -273,11 +275,13 @@ time, the next only after `EnchantResult`. It depends on section 6's enchant-awa
 
 ## Owner decisions
 
-| # | Question | Options | Recommendation |
-| --- | --- | --- | --- |
-| D14 | Where do D-grade and higher shots come from? | (a) The server adds graded shots to grocer buylists (a data change for every player, not only bots). (b) A Dwarven crafter bot makes them for its clan through the clan warehouse (the clan crafter plan, milestone M9, D17-D19; needs D15). (c) None: bots fight without shots at D+ and keep the better of a weapon with shots and one without. | (c) as the floor now (I2 ships it). Then (a) for the classic shop economy, or (b) for a player-run one. |
-| D15 | May bots change class? | (a) Spawn the class master NPC 50000 on the server: the free, quest-free mod is already configured, and it serves every player. (b) Bots run the profession quests (large). (c) Stay out of scope: no professions, no dyes, no crafting. | (a): it unlocks professions, dyes and crafting with one spawn. |
-| D16 | Supply trips | Farmers leave their spot to restock (the spot is released and may be taken). | Yes, as in section 7. |
+Answered by the owner on 2026-11-21.
+
+| # | Question | Decision |
+| --- | --- | --- |
+| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan, milestone M9 (D17-D19). Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
+| D15 | May bots change class? | (a) At the class master NPC 50000, which is free and quest-free under the shipped config, given a persistent spawn by fatal10110/acis_golang#5419. |
+| D16 | Supply trips | Yes: farmers leave their spot to restock, and the spot is released and may be taken. |
 
 ## Testing
 
@@ -303,25 +307,28 @@ time, the next only after `EnchantResult`. It depends on section 6's enchant-awa
 - **e2e (live harness):** a level-20 fighter keeps or wears the right weapon for its shot supply; a
   farmer runs low, reads SoE, restocks, and comes back; the class master and dyes under D15.
 
-## Delivery (milestone M8, "Items and loadout")
+## Delivery (milestone M8, "Items and loadout", epic #166)
 
-| PR | Scope | Depends on |
-| --- | --- | --- |
-| P0 | After the owner's answers: `docs/plan.md` gains the M8 milestone row and D14-D16, and the class change note is amended under D15. Server issues in acis_golang for D14 (a) (graded shots on grocer lists) and D15 (a) (spawn NPC 50000), if chosen. | D14-D16 |
-| I0 | Settle the remaining server facts: private store list open, class master pages, the Symbol Maker flow. Notes go into this doc. | — |
-| I1 | Datapack: etc items, gear stats and enchant gains, potion skill stack types. Replace the hard-coded potion and shot lists. | — |
-| I2 | Shots by weapon grade, beginner shots first, blessed spiritshots for casters, no unusable shots bought, the shot factor on the price score (findings 1, 2). | I1 |
-| I3 | Use meter and trip targets (section 4). | I1 |
-| I4 | One budget replacing `shopWants`, `gearWants` and `gearReserve` (section 5). | I3 |
-| I5 | Gear score by stats and enchant, replacing price and the never-replace-enchanted rule (section 6). | I1, I2 |
-| I6 | Armor set reader and set-combination scoring and buying. | I5, I4 |
-| I7 | Grade-jump saving. | I5, I4 |
-| I8 | Supply trip, SoE with the escaping hold, preparation (section 7). | I4, M7 N6 |
-| I9 | Better HP potion and buff potions with the stack-type check and gate. | I1, I4 |
-| I10 | Buying from private sell stores (section 8). | I0, I4 |
-| I11 | Class change at the class master with a race and persona build table. | D15 (a), P0, I0 |
-| I12 | Dye purchase and drawing. | I11, I4 |
-| I13 | e2e live scenarios for I2-I12. | each |
+P0 (the `docs/plan.md` rows and the server issue for D15) is done in PR #165:
+fatal10110/acis_golang#5419. D14 (b) needs no server change.
+
+| PR | Issue | Scope | Depends on |
+| --- | --- | --- | --- |
+| I0 | #167 | Settle the remaining server facts: private store list open, class master pages, the dye flow, abnormals. Notes go into this doc. | — |
+| I1 | #168 | Datapack: etc items, gear stats and enchant gains, potion skill stack types. Replace the hard-coded potion and shot lists. | — |
+| I2 | #169 | Shots by weapon grade, beginner shots first, blessed spiritshots for casters, no unusable shots bought, the shot source and the shot factor on the price score (findings 1, 2). | I1 |
+| I3 | #170 | Use meter and trip targets (section 4). | I1 |
+| I4 | #171 | One budget replacing `shopWants`, `gearWants` and `gearReserve`, plus the keep hook (section 5). | I3 |
+| I5 | #172 | Gear score by stats and enchant, replacing price and the never-replace-enchanted rule (section 6). | I1, I2 |
+| I6 | #173 | Armor set reader and set-combination scoring and buying. | I5, I4 |
+| I7 | #174 | Grade-jump saving. | I5, I4 |
+| I8 | #175 | Supply trip, SoE with the escaping hold, preparation (section 7). | I4, M7 N6 (#158) |
+| I9 | #176 | Better HP potion and buff potions with the stack-type check and gate. | I1, I4 |
+| I10 | #177 | Buying from private sell stores (section 8). | I0, I4 |
+| I11 | #178 | Class change at the class master with a race and persona build table. | acis_golang#5419, I0 |
+| I12 | #179 | Dye purchase and drawing. | I11, I4 |
+| I13 | #180 | e2e live scenarios for I2-I12. | each |
+| — | #181 | Backlog: enchant to the safe level (section 10). | I5 |
 
 Most urgent: I2 (every bot at level 20 today), then I3, I4 and I8 (farmers never restock).
 
