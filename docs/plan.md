@@ -23,6 +23,7 @@ repository.
 | M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
 | M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
 | M8 - Items and loadout | #166 | #167-#182 (`docs/items.md`, PRs I0-I13 with I8b, and the enchant backlog issue) |
+| M9 - Clan crafter | #184 | #185-#194 (`docs/crafting.md`, PRs C1-C10) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
@@ -56,6 +57,10 @@ the goal.
 | D14 | Where D-grade and higher shots come from | A Dwarven crafter bot makes them for its clan through the clan warehouse (the clan crafter plan, M9). No spawned NPC sells them; until then the bots weigh weapons by whether their grade's shots can be had. Owner, 2026-11-21. Design: `docs/items.md` |
 | D15 | Class change | At the class master NPC 50000: free and quest-free under the shipped `ConfigClassMaster`, given a persistent spawn in the towns by fatal10110/acis_golang#5419. Bots pick a profession for their race and persona at 20 and 40, then draw dyes. Owner, 2026-11-21. Design: `docs/items.md` |
 | D16 | Supply trips | A farmer may leave its spot to restock in town (by Scroll of Escape, a walk or a gatekeeper); its spot is released and may be taken. Owner, 2026-11-21. Design: `docs/items.md` |
+| D17 | Who withdraws from the clan warehouse | The owner's server sets `MembersCanWithdrawFromClanWH=True`, and the clan leader gives grade 6 (where new members join) privilege 8; a server setting, not a bot special case. Owner, 2026-11-21. Design: `docs/crafting.md` |
+| D18 | How the clan crafter's Create Item grows | Through the class change of D15 (M8 #178): Artisan at 20, Warsmith at 40; until then Create Item 1 and no crystallizing. Owner, 2026-11-21. Design: `docs/crafting.md` |
+| D19 | What the clan crafter may take from the clan warehouse | Anything a crafting chain it plans needs, any time; it crafts a chain only when the chain is worth it. Never adena, items no reachable recipe uses, or unpriced items without an order. Owner, 2026-11-21. Design: `docs/crafting.md` |
+| D20 | Who may add the clan crafter to a clan and order crafts | Beside GMs, any player: a clanless crafter accepts any player's clan invitation (or only the names in its preset's `ClanInviters`), and its clan's leader orders crafts like a GM. Extends D3 for the crafter only. Owner, 2026-11-22. Design: `docs/crafting.md` |
 
 ## Consequences of a separate repository (D5)
 
