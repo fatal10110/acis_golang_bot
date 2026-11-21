@@ -226,19 +226,14 @@ func TestOpenGrowsTheHeapByLittle(t *testing.T) {
 
 // TestWriteCacheReplacesAtomically pins that rebuilding writes a new file
 // and renames it over the old one, so a mapping of the old cache keeps
-// reading the old bytes. Windows refuses to replace a mapped file, so there
-// the rebuild fails and the old cache stays in place and usable.
+// reading the old bytes. This holds on Windows too: os.Rename replaces a
+// file whose view is still mapped.
 func TestWriteCacheReplacesAtomically(t *testing.T) {
 	dir, regions, cachePath := packFixture(t, 1, false)
 	old := mustOpen(t, dir, regions, cachePath)
 	want := append([]byte(nil), old.mapping...)
 
-	_, err := WriteCache(cachePath, dir, L2OFF, regions, slog.New(slog.DiscardHandler))
-	if runtime.GOOS == "windows" {
-		if err == nil {
-			t.Fatal("WriteCache() over a mapped cache on Windows succeeded, want the rename refused")
-		}
-	} else if err != nil {
+	if _, err := WriteCache(cachePath, dir, L2OFF, regions, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatalf("WriteCache(): %v", err)
 	}
 	if !bytes.Equal(old.mapping, want) {
