@@ -248,20 +248,20 @@ All of it stays far below 80 frames/s average.
   stack, `//pledge create` and the clan level command added to the e2e GM filter
   (`internal/e2e/gm.go`), fresh characters per run (rejoin penalties).
 
-## Delivery (milestone M9, "Clan crafter")
+## Delivery (milestone M9, "Clan crafter", epic #184)
 
 | PR | Scope | Depends on |
 | --- | --- | --- |
-| C1 | Clan membership: codecs, `JoinClan` (GM by default), requester name, clan id, clan chat channel | — |
-| C2 | Warehouse errand: keeper spawns, open, lists, empty answer, deposit, withdraw, fee and slot checks, refusals, `MinOpenGap` | C1 |
-| C3 | `recipes.xml` reader; recipe book, make-self and make-info codecs with their system messages; recipe learning | I1 #168 |
-| C4 | Craft planner with chain planning (pure) | C3 |
-| C5 | `CraftBoard`: warehouse lease, crafter entry, orders, ledger, reservations, expiry, release on stop | C2 |
-| C6 | `crafter` preset: cycle, MP rest, weight guard, breakers, Create Item learning, idle farming | C4, C5 |
-| C7 | Shot materials: crystallize for the crafter; ore with members' orders | C6, I11 #178, I3 #170, I4 #171 |
-| C8 | Clan member option: keep hook and extra supply hook wiring, deposit and order, collect, board shot source | C6, I2 #169, I3 #170, I4 #171, I8b #182 (and I8 #175, M7 N6 #158 below it) |
-| C9 | GM orders and clan announcements | C6 |
-| C10 | Panel preset and status; e2e scenarios and GM filter commands | C6 |
+| C1 #185 | Clan membership: codecs, `JoinClan` (GM by default), requester name, clan id, clan chat channel | — |
+| C2 #186 | Warehouse errand: keeper spawns, open, lists, empty answer, deposit, withdraw, fee and slot checks, refusals, `MinOpenGap` | C1 |
+| C3 #187 | `recipes.xml` reader; recipe book, make-self and make-info codecs with their system messages; recipe learning | I1 #168 |
+| C4 #188 | Craft planner with chain planning (pure) | C3 |
+| C5 #189 | `CraftBoard`: warehouse lease, crafter entry, orders, ledger, reservations, expiry, release on stop | C2 |
+| C6 #190 | `crafter` preset: cycle, MP rest, weight guard, breakers, Create Item learning, idle farming | C4, C5 |
+| C7 #191 | Shot materials: crystallize for the crafter; ore with members' orders | C6, I11 #178, I3 #170, I4 #171 |
+| C8 #192 | Clan member option: keep hook and extra supply hook wiring, deposit and order, collect, board shot source | C6, I2 #169, I3 #170, I4 #171, I8b #182 (and I8 #175, M7 N6 #158 below it) |
+| C9 #193 | GM orders and clan announcements | C6 |
+| C10 #194 | Panel preset and status; e2e scenarios and GM filter commands | C6 |
 
 ## Risks
 
