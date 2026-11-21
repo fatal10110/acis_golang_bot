@@ -6,7 +6,7 @@ Status: approved by the owner on 2026-11-21:
   memory, and it is used the way the game server uses it.
 - D13a option 1: walking personas require geodata.
 
-Revised after two rounds of independent review. The first round found a mid-walk step check the
+Revised after four rounds of independent review; the fourth found it sound to file. The first round found a mid-walk step check the
 first draft missed, one-way ledges, doors left out of the hierarchy, and Action approaches
 described wrongly. The second found that the step-chain check depended on the order of steps,
 cluster-level component membership, door-edge tagging, and how door events are ordered.
@@ -282,8 +282,13 @@ server's pathfinder.
     entrances that can reach it, inside the cluster.
   - **Membership rule.** A cell is in abstract SCC X exactly when X holds both an entrance the
     cell reaches and an entrance that reaches the cell. Such an X is unique: two would be joined
-    through the cell, and would be one SCC. A local SCC with no such X is **isolated**: a pocket
-    or pit with no way to and from the rest. Isolated is the `/unstuck` case. The rule is exact
+    through the cell, and would be one SCC. A local SCC with no such X is one of two kinds:
+    - **one-way out**: it reaches some abstract SCC, but none reaches it back. This is ground the
+      bot can drop off but never climb back to, such as a ledge a teleport or a restart point puts
+      it on. The walker takes one checked drop into the nearest abstract SCC it reaches, then goes
+      on as normal;
+    - **isolated**: it reaches no abstract SCC at all. This is a closed pocket or pit, and the only
+      `/unstuck` case. The rule is exact
     because every border crossing is an entrance or merged into one only when mutually reachable
     (above): any path leaving and re-entering the cluster passes through entrance nodes.
   - **Cache.**
@@ -397,8 +402,9 @@ unreachable (with a reason).
     1. the cell has exactly one layer (a flat or complex block, or a multilayer cell holding one
        layer), so `belowCell`, `HeightNearest` and `Height` can only ever answer that floor,
        whatever Z the chain carries;
-    2. the NSWE flags allow crossing in both directions of the segment's quadrant (and both senses
-       across the axis, for a line close to an axis);
+    2. the NSWE flags allow crossing in both directions of the segment's quadrant. For a line close
+       to an axis, and for the end cell and its neighbours (where the minor-axis step can reverse
+       by one unit whatever the slope), both senses across the minor axis must be allowed too;
     3. no step up between neighbouring corridor cells is more than 48.
 
     Under those conditions every per-step `CanMove` between two points in the corridor holds,
@@ -413,10 +419,11 @@ unreachable (with a reason).
     NSWE, a bridge end, a stair with mixed layers), the stretch from the last corridor cell before
     the failure to the first after it is checked exactly:
     - It is a dynamic program over states keyed by rounded `(X, Y, Z)`.
-    - It starts from every rounded point on the line within `Lmax` before the stretch, at its one
-      floor.
-    - From each state, every distinct rounded next point for a step length in `(0, Lmax]` must
-      pass `CanMove`, with Z from `Height(next, prevZ + 2*CellHeight)`.
+    - It starts from every rounded point within one unit of the line and within `Lmax` before the
+      stretch, at its one floor.
+    - The server carries a float position inside each rounded point. So from each state, every
+      rounded point within `Lmax + 1` ahead and within one unit of the line must pass `CanMove`,
+      with Z from `Height(next, prevZ + 2*CellHeight)`.
     - The stretch passes when every reachable state does, up to the far side.
     - It runs only on the final segments of a route, not on pull candidates. A stretch is a few
       cells long, so it costs a few thousand short `CanMove` calls; N1 benchmarks one call, and N3
@@ -451,9 +458,12 @@ unreachable (with a reason).
     successful pick-up and talk included.
 - **Progress watchdog**: from the route length and the bot's speed, the walker knows when each
   segment should arrive (injected clock). This replaces "100 units closer per leg".
-- **Recovery**: replan from where the server says the bot is. `/unstuck` is kept for one case
-  only: the bot's own SCC holds no destination it needs (a pit, the restart area of
-  acis_golang#5412). Sidesteps and wall detours are deleted.
+- **Recovery**: replan from where the server says the bot is.
+  - A bot standing on one-way-out ground first drops, with one checked route, into the nearest
+    abstract SCC it reaches.
+  - `/unstuck` is kept for isolated ground only, which reaches no abstract SCC (a closed pit, the
+    restart area of acis_golang#5412).
+  - Sidesteps and wall detours are deleted.
 - **Pacing**:
   - one `MoveBackwardToLocation` per segment, through the frame pacer (`gateNone`);
   - segments are at least about 300 units long, so a running bot sends at most about one move per
@@ -475,7 +485,7 @@ unreachable (with a reason).
 
 ### 5. What is deleted
 
-`unstick.go` (except the small-SCC `/unstuck`); the detour and stall fields of `followState`;
+`unstick.go` (except the `/unstuck` for isolated ground); the detour and stall fields of `followState`;
 `spotWaypoint`, `legToward`, `spotStalls`, `spotProgress`, `spotUnreachable`; `walkStuck` and the
 errand back-off it drives; and the tests that pin those heuristics. Each consumer's PR deletes its
 own heuristics, and nothing is kept alongside the new code.
@@ -530,7 +540,7 @@ geodata is committed here, and CI never sees it.**
     cells that are not mutually reachable;
   - cluster labels computed while a door is closed equal those computed with it open;
   - the cluster membership rule matches a whole-region SCC computed by brute force on every
-    synthetic region, isolated pockets included;
+    synthetic region, one-way-out ledges and isolated pockets included;
   - a closed door on the cheapest entrance-to-entrance path falls back to the door-free cost, not
     `unreachable: door`;
   - on door-free regions, `Route` succeeds exactly when `SameSCC` holds;
@@ -563,7 +573,8 @@ geodata is committed here, and CI never sees it.**
   - another destination counts a desync, or a door replan on a door segment;
   - no move during the bot's own swing or cast;
   - the watchdog;
-  - `/unstuck` only in a small SCC.
+  - a bot on one-way-out ground drops into the nearest SCC, and only one on isolated ground uses
+    `/unstuck`.
 - **Consumers**: today's rule tests rewritten against a nav built from the synthetic regions, so
   they no longer pin heuristics.
 - **e2e** against the live server (`docs/e2e-live.md`), with the owner's geodata:
@@ -581,9 +592,9 @@ geodata is committed here, and CI never sees it.**
 | N0 | Settle the open server points by test: head-level Z on multilayer, the longest tick elapsed time `Emax` measured live, the echo of `pathDirect`. Write `bots geoquery`. File the server issue for a `geoprobe` walk category. Record the findings in this document | — |
 | N1 | `internal/geo` copy with its dependencies (location, door template, geometry, properties, `doors.xml`): stored form, `ParseRegion` views, cache writer and reader, mmap on Unix and Windows, readers for `bots geopack`, queries, step chain `WalkSteps`, door overlay. Flags `-geodata`, `-geoengine` and `-geodata-cache`; `docs/home.md` steps (rsync with mtimes kept, `bots geopack`). Synthetic fixtures, memory test, local parity run, measured heap and RSS for the 139 regions | — |
 | N2 | `internal/nav` on cells: directed edges, clearance cost, open-corridor test and exact stretch check, smoothing, snap, stand points (routes inside one cluster) | — |
-| N3 | Hierarchy: entrances per crossing (merged only when mutually reachable), directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule on static doors-open blocks, the byte-bounded LRU and per-walker pins, `bots navbuild` and its cache file, benchmarks and final thresholds | — |
+| N3 | Hierarchy: entrances per crossing (merged only when mutually reachable), directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule on static doors-open blocks (in X, one-way out, isolated), the byte-bounded LRU and per-walker pins, `bots navbuild` and its cache file, benchmarks and final thresholds | — |
 | N4 | Door table (mutex writes, per-door atomic reads, per-bot dedupe), `DoorInfo` and `DoorStatusUpdate` decoders, toggles into the shared engine; door-aware route search with the doors-ignored second search | — |
-| N5 | Walker: step-chain position, `CanMove` plus the corridor test and exact check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
+| N5 | Walker: one-way-out drop and isolated-only `/unstuck`; step-chain position, `CanMove` plus the corridor test and exact check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
 | N6 | Spots and trips on SCCs and abstract distance; hops, stalls and the hour-long avoid deleted | #144 |
 | N7 | Follow on routes with one-way drops toward the leader; detour machinery deleted; flee, idle drift and death return | #147, #148 |
 | N8 | e2e scenarios and metrics above; the PR rows of `docs/plan.md` updated for D13 | — |
