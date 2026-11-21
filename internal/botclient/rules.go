@@ -25,7 +25,9 @@ type Persona struct {
 	// first; none drinks nothing.
 	Potions []int32
 	// Shots are the shot template ids whose auto use the bot turns on when
-	// it carries them (rule "shots"); none turns none on.
+	// it carries them (rule "shots"); none turns none on. DefaultPersona's
+	// Potions and Shots are built-in lists; TravelMap.WithItemIndex
+	// replaces them with the datapack's.
 	Shots []int32
 	// OutmatchedHP is the HP percent under which a bot hit by two or more
 	// attackers flees from the hardest hitter instead of fighting it (rule

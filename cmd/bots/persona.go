@@ -84,9 +84,14 @@ type shared struct {
 
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
-// presets get the spot registry, only merchants the store registry.
+// presets get the spot registry, only merchants the store registry. With
+// the travel map the persona drinks and shoots the datapack's healing
+// potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
 	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel}
+	if s.travel != nil {
+		cfg.Persona = s.travel.WithItemIndex(cfg.Persona)
+	}
 	if p.farms {
 		cfg.Spots = s.spots
 	}

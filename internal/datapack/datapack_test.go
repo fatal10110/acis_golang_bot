@@ -203,9 +203,14 @@ func TestLoadShippedDatapack(t *testing.T) {
 	if dir == "" {
 		t.Skip("BOT_DATAPACK_XML not set")
 	}
+	start := time.Now()
 	dp, err := Load(dir)
 	if err != nil {
 		t.Fatalf("Load(%s): %v", dir, err)
+	}
+	t.Logf("loaded in %v: items=%d etcitems=%d skills=%d", time.Since(start), len(dp.Items), len(dp.EtcItems), len(dp.Skills))
+	if len(dp.EtcItems) == 0 || len(dp.Skills) == 0 {
+		t.Fatal("shipped datapack loaded no etc items or skills")
 	}
 	spawns := 0
 	for _, m := range dp.Spawnlist.Makers {

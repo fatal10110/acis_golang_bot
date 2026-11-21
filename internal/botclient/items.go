@@ -26,7 +26,9 @@ const shotRetry = 30 * time.Second
 
 // Healing potions and shots by template id (aCis_datapack/data/xml/items).
 // The wire carries no item class that tells them apart from other etc
-// items, so the persona lists them by id.
+// items, so the persona lists them by id. These are the lists of a bot
+// without a datapack; with one, TravelMap.WithItemIndex puts the datapack's
+// in their place.
 var (
 	// healingPotions are Greater Healing Potion, Healing Potion and Lesser
 	// Healing Potion, best first.

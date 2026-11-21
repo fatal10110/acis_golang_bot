@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/skills, values not read trimmed. -->
+	<skill id="1086" levels="2" name="Haste" enchantLevels1="30" enchantLevels2="30" >
+		<table name="#ench1time"> 1240 1280 1320 </table>
+		<table name="#pAtkSpd"> 1.15 1.33 </table>
+		<table name="#stackOrder"> 1 2 </table>
+		<set name="target" val="TARGET_ONE"/>
+		<for>
+			<effect name="Buff" time="1200" val="0" stackOrder="#stackOrder" stackType="attack_time_down">
+				<mul stat="pAtkSpd" val="#pAtkSpd"/>
+			</effect>
+		</for>
+		<!-- Enchanted levels only: not read. -->
+		<enchant1for>
+			<effect name="Buff" time="#ench1time" val="0" stackOrder="2" stackType="attack_time_down">
+				<mul stat="pAtkSpd" val="1.33"/>
+			</effect>
+		</enchant1for>
+	</skill>
+	<!-- Declared once more in a later file: the last declaration wins. -->
+	<skill id="4327" levels="1" name="Old Haste for Beginners" >
+		<for>
+			<effect name="Buff" time="60" val="0" stackOrder="9" stackType="speed_up"/>
+		</for>
+	</skill>
+</list>

@@ -153,6 +153,32 @@ func (r *attrReader) literal(key string) int32 {
 	return n
 }
 
+// literalDefault returns the integer literal at key (see decodeInt32), or
+// def when it is absent.
+func (r *attrReader) literalDefault(key string, def int32) int32 {
+	if _, ok := r.vals[key]; !ok || r.err != nil {
+		return def
+	}
+	return r.literal(key)
+}
+
+// floatDefault returns the decimal value at key, or def when it is absent.
+func (r *attrReader) floatDefault(key string, def float64) float64 {
+	if r.err != nil {
+		return def
+	}
+	raw, ok := r.vals[key]
+	if !ok {
+		return def
+	}
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		r.fail(key, err)
+		return def
+	}
+	return f
+}
+
 // duration returns the game duration at key (see parseGameDuration), or 0
 // when it is absent or empty.
 func (r *attrReader) duration(key string) time.Duration {
