@@ -208,7 +208,8 @@ stackable items are fine in a sell store. Send one request per list.
 #### Changing class at the class master
 
 NPC 50000 (Hasha, the Class Manager, `xml/npcs/50000-50999.xml:3`). Its pages are
-`html/mods/classmaster/50000.htm` and `50000-1.htm` to `50000-6.htm` (`model/actor/npc/folk_chat.go:95`).
+`html/mods/classmaster/50000.htm` and `50000-1.htm` to `50000-6.htm`
+(`model/actor/npc/folk_chat.go:95`).
 
 1. **Talk.** The same two `Action`s as any folk NPC. The answer is `NpcHtmlMessage` (0x0f,
    `network/serverpackets/npchtmlmessage.go:10`) with `50000.htm`. Its links are
@@ -277,8 +278,8 @@ No request below checks for a Symbol Maker or an NPC distance (`network/henna.go
 | `RequestHennaUnequipInfo` | 0xbe | symbolId | `HennaItemUnequipInfo` 0xe6 |
 | `RequestHennaUnequip` | 0xbf | symbolId | see below |
 
-Opcodes and bodies: `network/clientpackets/henna.go:11-16,44-70`, `network/serverpackets/henna.go:10-13`,
-`network/serverpackets/hennainfo.go:10`. Dispatch: `network/client_dispatch.go:85-90`.
+Opcodes and bodies: `network/clientpackets/henna.go:11-16,44-70`,
+`network/serverpackets/henna.go:10-13`, `network/serverpackets/hennainfo.go:10`. Dispatch: `network/client_dispatch.go:85-90`.
 
 1. **List.** `HennaEquipList` (`network/serverpackets/henna.go:34-47`): adena, max slots, count,
    then per symbol symbolId, dyeId, 10 (the dyes a draw takes), price, 1. It lists only symbols the
@@ -515,8 +516,8 @@ stores.
   profession for its race and persona, through the page's bypass links: `1stClass` at 20 and
   `2ndClass` at 40, then the `change_class N` link of the menu page for the profession. The bot
   stands within 150 of the master and clicks only links of the last page it got, since the server
-  drops any other. Pacing: `bypassGap` (500 ms). The page's answer, a new page or the class change in `UserInfo`, is waited for 5 s; then
-  the visit backs off for `WalkStuckFor`. The build table includes the dwarf crafter line the clan
+  drops any other. Pacing: `bypassGap` (500 ms). The page's answer, a new page or the class change
+  in `UserInfo`, is waited for 5 s; then the visit backs off for `WalkStuckFor`. The build table includes the dwarf crafter line the clan
   crafter plan (M9) needs: 53 → 56 Artisan (20) → 57 Warsmith (40). That plan owns the Create Item
   (172) learn data.
 - **After the change.**
