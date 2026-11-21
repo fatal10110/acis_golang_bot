@@ -1,0 +1,84 @@
+package dynamic
+
+import "github.com/fatal10110/acis_golang_bot/internal/geo/block"
+
+// Object is one dynamic geodata shape positioned in geodata cell space.
+type Object interface {
+	GeoX() int
+	GeoY() int
+	GeoZ() int
+	Height() int
+	GeoData() [][]block.NSWE
+}
+
+// StandIn is implemented by a value that wraps an Object the geodata
+// holds, such as a door seen as the target of a hit. Geodata matches
+// objects by identity, so a query told to ignore a stand-in ignores the
+// object it stands for.
+type StandIn interface {
+	StoredObject() Object
+}
+
+// Stored returns the object o stands for when o is a StandIn, else o.
+func Stored(o Object) Object {
+	if s, ok := o.(StandIn); ok {
+		return s.StoredObject()
+	}
+	return o
+}
+
+type object struct {
+	geoX   int
+	geoY   int
+	geoZ   int
+	height int
+	data   [][]block.NSWE
+}
+
+// NewObject returns a dynamic geodata object whose cell edits data start at
+// geodata cell (geoX, geoY) and block from geoZ up to geoZ+height.
+func NewObject(geoX, geoY, geoZ, height int, data [][]block.NSWE) Object {
+	return &object{geoX: geoX, geoY: geoY, geoZ: geoZ, height: height, data: data}
+}
+
+func (o *object) GeoX() int               { return o.geoX }
+func (o *object) GeoY() int               { return o.geoY }
+func (o *object) GeoZ() int               { return o.geoZ }
+func (o *object) Height() int             { return o.height }
+func (o *object) GeoData() [][]block.NSWE { return o.data }
+
+// CalculateGeoObject converts an object's inside/outside cell mask into
+// geodata NSWE edits: an inside cell is fully blocked, and an outside cell
+// loses each direction that leads into an inside neighbour.
+func CalculateGeoObject(inside [][]bool) [][]block.NSWE {
+	width := len(inside)
+	if width == 0 {
+		return nil
+	}
+	height := len(inside[0])
+	out := make([][]block.NSWE, width)
+	for x := 0; x < width; x++ {
+		out[x] = make([]block.NSWE, height)
+		for y := 0; y < height; y++ {
+			if inside[x][y] {
+				out[x][y] = block.NoDirections
+				continue
+			}
+			nswe := block.AllDirections
+			if y < height-1 && inside[x][y+1] {
+				nswe &^= block.South
+			}
+			if y > 0 && inside[x][y-1] {
+				nswe &^= block.North
+			}
+			if x < width-1 && inside[x+1][y] {
+				nswe &^= block.East
+			}
+			if x > 0 && inside[x-1][y] {
+				nswe &^= block.West
+			}
+			out[x][y] = nswe
+		}
+	}
+	return out
+}

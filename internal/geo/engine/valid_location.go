@@ -1,0 +1,110 @@
+package engine
+
+import (
+	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
+)
+
+// ValidLocation returns the last world-space point reachable along the straight
+// line from (ox,oy,oz) toward (tx,ty,tz) before the route is blocked. When the
+// full line is walkable and the target cell's floor matches the walked floor,
+// the target itself is returned with its resolved geodata Z. When the actor
+// cannot step off the origin cell (route closes immediately) or the target
+// cell sits on a different floor, the origin is returned unchanged. A target
+// outside the geodata grid does not short-circuit: the walk runs toward it
+// and stops at the grid border it exits through, same as any other stop
+// condition (the grid-bounds check runs inside the walk loop).
+//
+// Used as the no-path fallback for movement requests: rather than refusing to
+// move at all when no pathfinder route exists, the actor advances as far as
+// the terrain allows in the requested direction.
+func (e *Engine) ValidLocation(ox, oy, oz, tx, ty, tz int) location.Location {
+	return e.ValidLocationTraced(ox, oy, oz, tx, ty, tz, nil)
+}
+
+// ValidLocationTraced is ValidLocation recording into tr both endpoint
+// cells in blue, each border crossed with the cell left in green, and the
+// cell the walk stops on in red.
+func (e *Engine) ValidLocationTraced(ox, oy, oz, tx, ty, tz int, tr *Trace) location.Location {
+	gox := GeoX(ox)
+	goy := GeoY(oy)
+	goz := int(e.heightNearest(gox, goy, oz))
+	gtx := GeoX(tx)
+	gty := GeoY(ty)
+	gtz := int(e.heightNearest(gtx, gty, tz))
+
+	if tr != nil {
+		tr.cellSquare(TraceBlue, alignCell(ox), alignCell(oy), goz+1)
+		tr.cellSquare(TraceBlue, alignCell(tx), alignCell(ty), gtz+1)
+	}
+	if gox == gtx && goy == gty {
+		if goz == int(e.Height(tx, ty, tz)) {
+			return location.Location{X: tx, Y: ty, Z: gtz}
+		}
+		return location.Location{X: ox, Y: oy, Z: oz}
+	}
+
+	nswe := e.nsweNearest(gox, goy, goz)
+	// tx == ox would have collapsed into the same-cell branch above, so the
+	// slope is finite here. Float division mirrors the engine's CanMove line
+	// walk, which produces identical stepping decisions.
+	m := float64(ty-oy) / float64(tx-ox)
+	dir := moveDirectionFor(gtx-gox, gty-goy)
+	gridX := alignCell(ox)
+	gridY := alignCell(oy)
+	nx := gox
+	ny := goy
+	maxGeoX := GeoX(WorldXMax)
+	maxGeoY := GeoY(WorldYMax)
+	for gox != gtx || goy != gty {
+		checkX := gridX + dir.offsetX
+		checkY := int(float64(oy) + m*float64(checkX-ox))
+
+		step := dir.dirY
+		if dir.stepX != 0 && GeoY(checkY) == goy {
+			tr.border(dir, true, checkX, checkY, goz)
+			tr.cellSquare(TraceGreen, gridX, gridY, goz)
+			gridX += dir.stepX
+			nx += dir.signumX
+			step = dir.dirX
+		} else {
+			checkY = gridY + dir.offsetY
+			checkX = min(max(int(float64(ox)+float64(checkY-oy)/m), gridX), gridX+block.CellSize-1)
+			tr.border(dir, false, checkX, checkY, goz)
+			tr.cellSquare(TraceGreen, gridX, gridY, goz)
+			gridY += dir.stepY
+			ny += dir.signumY
+		}
+
+		// The next cell falls outside the geodata grid: the walk stops at
+		// this border, same as a blocked edge (the grid bounds are checked
+		// before the NSWE obstacle test).
+		if nx < 0 || nx > maxGeoX || ny < 0 || ny > maxGeoY {
+			tr.cellSquare(TraceRed, gridX, gridY, goz)
+			return location.Location{X: checkX, Y: checkY, Z: goz}
+		}
+
+		// A blocked edge or an unservable next cell ends the walk at this
+		// border: the actor stops at the last grid boundary it reached.
+		if !nswe.Allows(step) {
+			tr.cellSquare(TraceRed, gridX, gridY, goz)
+			return location.Location{X: checkX, Y: checkY, Z: goz}
+		}
+		next := e.blockAtGeo(nx, ny)
+		layer, cell := next.belowCell(localCell(nx), localCell(ny), int32(goz+block.CellIgnoreHeight), nil)
+		if layer == -1 {
+			tr.cellSquare(TraceRed, gridX, gridY, goz)
+			return location.Location{X: checkX, Y: checkY, Z: goz}
+		}
+
+		gox = nx
+		goy = ny
+		goz = int(cell.Height)
+		nswe = cell.NSWE
+	}
+
+	if goz == int(e.Height(tx, ty, tz)) {
+		return location.Location{X: tx, Y: ty, Z: gtz}
+	}
+	return location.Location{X: ox, Y: oy, Z: oz}
+}

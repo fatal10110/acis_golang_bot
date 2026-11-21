@@ -12,6 +12,10 @@
 //	bots ui -secret-file PATH [-data-dir DIR] [-prefix PREFIX] [-max-online N] ...
 //
 // runs the bots of a registry, the control panel's (see ui.go).
+//
+//	bots geopack -geodata DIR -geoengine FILE [-out geodata.cache]
+//
+// packs the listed geodata regions into the cache the bots map (see geopack.go).
 package main
 
 import (
@@ -40,8 +44,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return runSwarm(ctx, args[1:], stderr)
 		case "ui":
 			return runUI(ctx, args[1:], stderr)
+		case "geopack":
+			return runGeopack(args[1:], stdout, stderr)
 		}
 	}
-	fmt.Fprintln(stderr, "usage: bots accounts|swarm|ui [flags]")
+	fmt.Fprintln(stderr, "usage: bots accounts|swarm|ui|geopack [flags]")
 	return 2
 }

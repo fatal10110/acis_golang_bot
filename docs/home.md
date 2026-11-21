@@ -85,6 +85,22 @@ Keep a local copy of the server's datapack XML, which the bots pick farming spot
 rsync -a HOST:PATH/aCis_datapack/data/xml/ ~/acis-datapack/xml/
 ```
 
+Keep a local copy of the server's geodata and of its `geoengine.properties`, then pack the listed
+regions once into the cache the bots map read-only (docs/navigation.md, section 1). `rsync -a`
+keeps each region file's size and mtime, which the cache is keyed on: a cache built by the
+server's `geopack` stays valid, and any changed region file makes the bots refuse the cache until
+it is packed again. The bots never load geodata onto their heap.
+
+```bash
+rsync -a HOST:PATH/aCis_datapack/data/geodata/ ~/acis-datapack/geodata/
+rsync -a HOST:PATH/config/geoengine.properties ~/acis-datapack/geoengine.properties
+bots geopack -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengine.properties \
+  -out ~/acis-datapack/geodata.cache
+```
+
+`geopack` prints the region-list hash; it matches the server's region list when both
+`geoengine.properties` copies list the same regions. Pack again after every geodata update.
+
 ## 4. Swarm
 
 ```bash
