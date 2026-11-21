@@ -189,20 +189,27 @@ Graded shots are D14 (b), and their inputs cannot be looted.
   deposit graded gear they do not wear instead of selling it, through the keep hook.
 - **Ore.** A member buys the Soul Ore or Spirit Ore its shot orders need at a grocer: M9 fills I3's
   extra supply hook (#170, template → count), and I4 (#171) buys it in the supplies tier and keeps
-  it out of junk. The member deposits it with the order. The crafter
+  it out of junk, after the bot's own shots, potions and SoE. Ore counts toward neither the town
+  preparation gate (#182) nor the run-out trigger (#175): an unfilled ore order never holds a member
+  in town or sends it home; the member orders as many shots as the ore it carries covers. The crafter
   never buys with clan adena (D19); the owner may deposit ore too.
 
 ### 7. Clan member option (farmer, support, merchant presets)
 
 Active when the bot is in a clan with a crafter on the board.
 
-- The keep hook (I4 #171, called per carried item) keeps every recipe scroll, the materials of recipes in the crafter's book
-  or whose scrolls are in the warehouse (I1 #168 marks material etc items), and graded gear the bot
-  does not wear. `shop.go` gains no clan logic.
+- The keep hook (I4 #171) takes the carried item (object and template) and answers keep and
+  may-wear; the NPC sale, the store listing and trade pricing all consult it. M9 answers keep for
+  every recipe scroll and for the materials of recipes in the crafter's book or whose scrolls are in
+  the warehouse (I1 #168 marks material etc items). For graded gear the bot does not wear, kept to
+  deposit for crystallizing, it answers keep and not may-wear, so the gear errand never puts it on.
+  `shop.go` gains no clan logic.
 - On its supply trip (I8b #182, its trip-in-town hook) it visits a warehouse keeper: deposits what
   it keeps, posts orders sized by I3's per-item trip target, deposits the ore those orders need (bought
   through I3's extra supply hook, #170),
-  and withdraws its delivered counts. Fees come from I4's reserve tier.
+  and withdraws its delivered counts. Fees come from I4's reserve tier. The hook also reports the
+  weight it will hand off (what it deposits), so #175's load trigger counts kept materials and
+  sends a heavy member home.
 - The board implements I2's shot source (#169): a grade counts only when the crafter can make it
   now.
 
