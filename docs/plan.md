@@ -56,6 +56,7 @@ the goal.
 | D17 | Who withdraws from the clan warehouse | The owner's server sets `MembersCanWithdrawFromClanWH=True`, and the clan leader gives grade 6 (where new members join) privilege 8; a server setting, not a bot special case. Owner, 2026-11-21. Design: `docs/crafting.md` |
 | D18 | How the clan crafter's Create Item grows | Through the class change of D15 (M8 #178): Artisan at 20, Warsmith at 40; until then Create Item 1 and no crystallizing. Owner, 2026-11-21. Design: `docs/crafting.md` |
 | D19 | What the clan crafter may take from the clan warehouse | Anything a crafting chain it plans needs, any time; it crafts a chain only when the chain is worth it. Never adena, items no reachable recipe uses, or unpriced items without an order. Owner, 2026-11-21. Design: `docs/crafting.md` |
+| D20 | Who may add the clan crafter to a clan and order crafts | Beside GMs, any player: a clanless crafter accepts any player's clan invitation (or only the names in its preset's `ClanInviters`), and its clan's leader orders crafts like a GM. Extends D3 for the crafter only. Owner, 2026-11-22. Design: `docs/crafting.md` |
 
 ## Consequences of a separate repository (D5)
 
@@ -602,5 +603,3 @@ owning milestone. The bot logs the gap and degrades; no server special-casing fo
 - Q1: Repository name and visibility (placeholder `fatal10110/acis_bots`), and whether it joins
   `acis_public` as a submodule.
 - Q2: The nickname marker text and whether it is a prefix or suffix.
-- Q3: May a non-GM clan leader invite the clan crafter and order crafts (D3 limits both to GMs)?
-  (`docs/crafting.md`)

@@ -6,7 +6,7 @@ after one independent review round, which found: shot materials cannot be looted
 from crystallizing, ores from shops); 448 recipes consume a copy of their own scroll; craft and
 registration replies are ambiguous; several warehouse facts were missing; shared stacks race; the
 order board had no lifecycle; chain valuation ignored unpriced items, yields and recipe variants;
-crafting orders went beyond D3.
+crafting orders went beyond D3 (since settled by D20).
 
 Builds on the items plan (`docs/items.md`, milestone M8, epic #166), whose D14 (b) is this plan.
 Its section "Interfaces the clan crafter plan (M9) consumes" lists what M9 uses: I1 #168 (material
@@ -75,10 +75,7 @@ Every handler below is ported in the Go server. No server gap was found.
 | D18 | How does the dwarf get past Create Item 1? | The items plan's class change (D15, I11 #178): Artisan at 20, Warsmith at 40. Until then it stays at Create Item 1: wooden arrows, steel, cokes, leather, braided hemp, no-grade gear and the first potions; no shots (Soulshot D is level 2) and no crystallizing. |
 | D19 | What may the crafter take from the clan warehouse? | Anything a chain it plans needs, any time, including recipe scroll copies that recipes consume. Never adena, never items no recipe it can reach uses, never items without a reference price unless an order names them. |
 | — | Chains | The crafter plans chains from base materials up to an end product and crafts a chain only when it is worth it (owner, 2026-11-21). |
-
-Crafting orders stay under D3: only a GM (the authority) commands a bot, and the default
-`JoinClan` accepts only a GM's invitation. Letting a non-GM clan leader invite or order is open
-question Q3 below.
+| D20 | Who may add the crafter to a clan and order crafts? | A non-GM player too, beside GMs (owner, 2026-11-22, answering Q3). A clanless crafter accepts a clan invitation from any player, or only from the names in its preset's `ClanInviters` when set. Its clan's leader orders crafts like a GM. This extends D3 for the crafter only; every other command stays GM-only. |
 
 ## Design
 
@@ -86,7 +83,14 @@ question Q3 below.
 
 - `Persona.JoinClan(w, requester, clan, now) bool`, like `JoinParty`. The requester's name comes
   from the S1HasInvitedYouToJoinTheClanS2 message just before `AskJoinPledge`, or from the known
-  object of its id; the default asks the authority hooks and accepts only a GM.
+  object of its id. The default accepts a GM's invitation; the crafter preset also accepts any
+  player's while it has no clan, or only `ClanInviters`' when that list is set (D20).
+- `PledgeShowMemberListAll` 0x53 (sent on entering the world and on joining) gives the clan's
+  leader name: i32 sub-unit flag, i32 clan id, i32 pledge type, str clan name, str leader name, then
+  crest, level, castle, hall, rank, reputation, dissolving, 0, ally id, str ally name, ally crest,
+  at war, i32 member count and the member rows (`serverpackets/pledge*.go`,
+  `FramePledgeShowMemberListAll`). The world model keeps the leader name; it is read again at every
+  entry, so a leader change is seen at the next login.
 - The world model keeps the clan id from `UserInfo` and `JoinPledge`, and clears it on leaving.
 - Clan chat is decoded into the existing chat event with its channel.
 
@@ -129,7 +133,7 @@ Input: a fresh warehouse list, the crafter's inventory, recipes, the recipe book
 level, MP, the board's orders and reservations. Output: what to withdraw, an ordered craft list and
 what to keep.
 
-1. **Orders**: the board's member orders, then a GM's orders (section 7).
+1. **Orders**: the board's member orders, then the clan leader's and GMs' orders (section 8).
 2. **Recipe scrolls** in the warehouse the crafter can register now (level and room): withdraw one
    copy and use it. Further copies stay, as the materials of recipes that consume their own scroll.
 3. **Chains** from everything else (D19), below.
@@ -213,9 +217,10 @@ Active when the bot is in a clan with a crafter on the board.
 - The board implements I2's shot source (#169): a grade counts only when the crafter can make it
   now.
 
-### 8. GM orders
+### 8. Leader and GM orders
 
-- `craft <item name> [count]` by whisper from a GM (D3), handled by the existing command path; the
+- `craft <item name> [count]` by whisper or clan chat from the crafter's clan leader (D20) or a GM
+  (D3), handled by the existing command path; the
   crafter answers once with the plan or the reason it cannot (unknown recipe, Create Item too low,
   materials missing), through the chat gates and caps. A finished order is announced once in clan
   chat.
@@ -232,7 +237,7 @@ Active when the bot is in a clan with a crafter on the board.
 | Craft requests | One per answer, at least 500 ms plus jitter apart (server gate 300 ms, silent); MP bounds it far lower; a breaker on failure streaks |
 | Warehouse | At least `MinOpenGap` (60 s) between opens per bot, one request per open, bypasses `bypassGap` apart |
 | Recipe learning, crystallizing | One `UseItem` or `RequestCrystallizeItem` per answer, with a timeout |
-| Chat | One answer per GM order and one clan line per finished order, through the chat gates |
+| Chat | One answer per leader or GM order and one clan line per finished order, through the chat gates |
 
 All of it stays far below 80 frames/s average.
 
@@ -259,7 +264,7 @@ All of it stays far below 80 frames/s average.
 
 | PR | Scope | Depends on |
 | --- | --- | --- |
-| C1 #185 | Clan membership: codecs, `JoinClan` (GM by default), requester name, clan id, clan chat channel | — |
+| C1 #185 | Clan membership: codecs, `JoinClan` (GM by default, any player or `ClanInviters` for the crafter, D20), requester name, clan id and leader name (0x53), clan chat channel | — |
 | C2 #186 | Warehouse errand: keeper spawns, open, lists, empty answer, deposit, withdraw, fee and slot checks, refusals, `MinOpenGap` | C1 |
 | C3 #187 | `recipes.xml` reader; recipe book, make-self and make-info codecs with their system messages; recipe learning | I1 #168 |
 | C4 #188 | Craft planner with chain planning (pure) | C3 |
@@ -267,7 +272,7 @@ All of it stays far below 80 frames/s average.
 | C6 #190 | `crafter` preset: cycle, MP rest, weight guard, breakers, Create Item learning, idle farming | C4, C5 |
 | C7 #191 | Shot materials: crystallize for the crafter; ore with members' orders | C6, I11 #178, I3 #170, I4 #171 |
 | C8 #192 | Clan member option: keep hook and extra supply hook wiring, deposit and order, collect, board shot source | C6, I2 #169, I3 #170, I4 #171, I8b #182 (and I8 #175, M7 N6 #158 below it) |
-| C9 #193 | GM orders and clan announcements | C6 |
+| C9 #193 | Clan leader and GM orders, clan announcements | C6 |
 | C10 #194 | Panel preset and status; e2e scenarios and GM filter commands | C6 |
 
 ## Risks
@@ -281,10 +286,6 @@ All of it stays far below 80 frames/s average.
   says so in clan chat once.
 - **Clan size.** A level-1 clan holds 15 members; more member bots need a higher clan level.
 - **Adena.** Fees are 30 per row; a broke crafter farms.
-
-## Open questions
-
-- Q3: May a non-GM clan leader invite the crafter and order crafts? Today D3 limits both to GMs.
 
 ## Gaps
 
