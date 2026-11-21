@@ -85,6 +85,11 @@ type Persona struct {
 	// JoinParty decides whether to accept the party invitation of the
 	// player named requester (rule 2); nil declines every invitation.
 	JoinParty func(w *World, requester string, now time.Time) bool
+	// JoinClan decides whether to accept the invitation of the player named
+	// requester into the clan named clan (rule 2); nil declines every
+	// invitation, and an invitation whose inviter is unknown is declined.
+	// AcceptClanFrom is the crafter's policy (D20).
+	JoinClan func(w *World, requester, clan string, now time.Time) bool
 	// Trade is how the bot answers trade requests and trades (rule 2).
 	Trade TradePolicy
 	// Chat is how the bot answers whispers (rule "chat").
@@ -219,6 +224,7 @@ const (
 	actSelect
 	actCast
 	actAnswerParty
+	actAnswerClan
 	actLeaveParty
 	actUseItem
 	actAutoShot
@@ -246,7 +252,8 @@ const (
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
-// RequestRestartPoint, RequestAnswerJoinParty, RequestWithdrawParty, UseItem,
+// RequestRestartPoint, RequestAnswerJoinParty, RequestAnswerJoinPledge,
+// RequestWithdrawParty, UseItem,
 // RequestAutoSoulShot, RequestAcquireSkillInfo and RequestAcquireSkill have
 // no reuse gate on the server: the frame bucket bounds them, restartRetry
 // spaces a repeated restart, an invitation is answered once, potionReuse
@@ -438,13 +445,17 @@ func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 
 // rulePrompt is rule 2: an open prompt waits for the persona's answer. A
 // party invitation still answerable is accepted or declined at once, per
-// the persona, then a trade request, and an open trade holds the bot
+// the persona, then a clan invitation, then a trade request, and an open trade holds the bot
 // (ruleTrade); the restart prompt opens only while dead, so rule 1 answers
 // it first.
 func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	if inv := b.world.Prompts.Party; inv.Pending(now) {
 		join := b.persona.JoinParty
 		return answerPartyAction(join != nil && join(b.world, inv.Requester, now)), true
+	}
+	if inv := b.world.Prompts.Clan; inv.Pending(now) {
+		join := b.persona.JoinClan
+		return answerClanAction(join != nil && inv.Requester != "" && join(b.world, inv.Requester, inv.Clan, now)), true
 	}
 	if a, ok := b.ruleTrade(now); ok {
 		return a, true

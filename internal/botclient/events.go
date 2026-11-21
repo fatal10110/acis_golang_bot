@@ -86,6 +86,8 @@ type UserInfo struct {
 	// for none).
 	StoreType uint8
 	IsGM      bool
+	// ClanID is the character's clan, 0 for none.
+	ClanID int32
 	// Abnormal is the abnormal effect mask drawn on the character; an
 	// invisible game master sees AbnormalStealth in its own.
 	Abnormal int32
@@ -199,9 +201,13 @@ type TargetUnselected struct {
 	Pos      Point
 }
 
-// SystemMessage is a system message by id; its parameters are consumed and
-// dropped.
-type SystemMessage struct{ ID int32 }
+// SystemMessage is a system message by id. Text holds its first two text
+// parameters in order, "" past the ones it has; every other parameter is
+// consumed and dropped.
+type SystemMessage struct {
+	ID   int32
+	Text [2]string
+}
 
 // ActionFailed tells the client its last action request was not carried
 // out.

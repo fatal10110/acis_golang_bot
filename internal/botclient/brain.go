@@ -460,7 +460,7 @@ func salient(ev Event, self int32) bool {
 		return e.ObjectID == self
 	case TeleportToLocation:
 		return e.ObjectID == self
-	case MyTargetSelected, AskJoinParty, ConfirmDlg, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList,
+	case MyTargetSelected, AskJoinParty, AskJoinPledge, ConfirmDlg, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList,
 		PrivateStoreManageListSell:
 		return true
 	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOtherOk:
@@ -650,6 +650,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actAnswerParty:
 		// The server takes the invitation with the first answer.
 		b.world.Prompts.Party = PartyInvite{}
+	case actAnswerClan:
+		// The server takes the invitation with the first answer, or lets
+		// it lapse.
+		b.world.Prompts.Clan = ClanInvite{}
 	case actUseItem:
 		b.usedAt[a.item] = now
 	case actAutoShot:
