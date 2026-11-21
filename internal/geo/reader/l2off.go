@@ -1,0 +1,153 @@
+package reader
+
+import (
+	"encoding/binary"
+	"fmt"
+	"os"
+	"slices"
+
+	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+)
+
+const (
+	l2offHeaderSize  = 18
+	l2offTypeFlat    = 0x0000
+	l2offTypeComplex = 0x0040
+)
+
+// ReadL2OFF loads a little-endian L2OFF _conv.dat geodata region. It also
+// reports how many bytes of the file the block table left unread, which is
+// zero for a well-formed region; the caller owns reporting a non-zero count
+// through its own logger.
+func ReadL2OFF(path string) (*block.Region, int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read L2OFF region %s: %w", path, err)
+	}
+	blocks, trailing, err := decodeL2OFF(data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read L2OFF region %s: %w", path, err)
+	}
+	return blocks, trailing, nil
+}
+
+func decodeL2OFF(data []byte) (*block.Region, int, error) {
+	r := l2offReader{data: data}
+	if !r.skip(l2offHeaderSize) {
+		return nil, 0, shortL2OFF(-1, "header", r.pos)
+	}
+
+	region := block.NewRegionBuilder()
+	for i := 0; i < block.RegionBlockCount; i++ {
+		typ, ok := r.u16()
+		if !ok {
+			return nil, 0, shortL2OFF(i, "block type", r.pos)
+		}
+
+		var err error
+		switch typ {
+		case l2offTypeFlat:
+			err = r.flat(region, i)
+		case l2offTypeComplex:
+			err = r.complex(region, i)
+		default:
+			err = r.multilayer(region, i)
+		}
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	return region.Build(), len(data) - r.pos, nil
+}
+
+type l2offReader struct {
+	data []byte
+	pos  int
+}
+
+func (r *l2offReader) skip(n int) bool {
+	if len(r.data)-r.pos < n {
+		return false
+	}
+	r.pos += n
+	return true
+}
+
+func (r *l2offReader) u16() (uint16, bool) {
+	if len(r.data)-r.pos < 2 {
+		return 0, false
+	}
+	v := binary.LittleEndian.Uint16(r.data[r.pos:])
+	r.pos += 2
+	return v, true
+}
+
+func (r *l2offReader) flat(region *block.RegionBuilder, blockIndex int) error {
+	height, ok := r.u16()
+	if !ok {
+		return shortL2OFF(blockIndex, "flat height", r.pos)
+	}
+	if _, ok := r.u16(); !ok {
+		return shortL2OFF(blockIndex, "flat dummy", r.pos)
+	}
+	region.SetFlat(blockIndex, int16(height))
+	return nil
+}
+
+func (r *l2offReader) complex(region *block.RegionBuilder, blockIndex int) error {
+	var cells [block.CellCount]uint16
+	for i := range cells {
+		code, ok := r.u16()
+		if !ok {
+			return shortL2OFF(blockIndex, "complex cell", r.pos)
+		}
+		cells[i] = code
+	}
+	region.SetComplexEncoded(blockIndex, cells)
+	return nil
+}
+
+func (r *l2offReader) multilayer(region *block.RegionBuilder, blockIndex int) error {
+	var counts [block.CellCount]uint8
+	cells := make([]uint16, 0, block.CellCount)
+	for cell := range counts {
+		raw, ok := r.u16()
+		if !ok {
+			return shortL2OFF(blockIndex, "layer count", r.pos)
+		}
+		// The count is stored in two bytes but only the low byte counts, as
+		// a signed byte: 0x0105 is five layers, 0x0080-0x00ff are negative
+		// and rejected.
+		count := int(int8(raw))
+		if count <= 0 || count > block.MaxLayers {
+			return fmt.Errorf("geo/reader: block %d cell %d: invalid layer count %d", blockIndex, cell, count)
+		}
+
+		counts[cell] = uint8(count)
+		// The file stores each cell's layers highest first, the geodata
+		// format's on-disk order; Region and the rest of this package expect
+		// them ordered lowest to highest, so reverse them into place as
+		// they're read.
+		start := len(cells)
+		for layer := 0; layer < count; layer++ {
+			code, ok := r.u16()
+			if !ok {
+				return shortL2OFF(blockIndex, "layer data", r.pos)
+			}
+			cells = append(cells, code)
+		}
+		slices.Reverse(cells[start:])
+	}
+
+	if err := region.SetMultilayerEncoded(blockIndex, counts, cells); err != nil {
+		return fmt.Errorf("geo/reader: block %d: %w", blockIndex, err)
+	}
+	return nil
+}
+
+func shortL2OFF(blockIndex int, field string, offset int) error {
+	if blockIndex < 0 {
+		return fmt.Errorf("geo/reader: short L2OFF region: read %s at offset %d", field, offset)
+	}
+	return fmt.Errorf("geo/reader: short L2OFF region: block %d: read %s at offset %d", blockIndex, field, offset)
+}
