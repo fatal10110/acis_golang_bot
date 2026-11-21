@@ -98,11 +98,17 @@ type file struct {
 // Registry is the open registry of one data directory, locked for the
 // process. It is not safe for concurrent use: one goroutine owns it (the
 // Supervisor, once it runs). A mutation applies in memory, then saves the
-// whole file; a failed save is returned, and the next save writes it.
+// whole file before it returns; a failed save is returned, and the next save
+// writes it. UpdateLater is the one deferred mutation: it marks the registry
+// dirty, and Flush, Close or the next save writes it.
 type Registry struct {
 	dir  string
 	lock *os.File
 	data file
+	// dirty marks changes in memory that the file does not hold yet.
+	dirty bool
+	// writes counts the files written, for tests.
+	writes int
 }
 
 // Open locks dir and reads its registry; a directory without a registry
@@ -145,8 +151,9 @@ func PanelPrefix(dir string) (string, error) {
 	return r.data.Panel, nil
 }
 
-// Close releases the data directory.
-func (r *Registry) Close() error { return r.lock.Close() }
+// Close saves the changes the file does not hold yet (Flush) and releases
+// the data directory.
+func (r *Registry) Close() error { return errors.Join(r.Flush(), r.lock.Close()) }
 
 func (r *Registry) load() error {
 	path := filepath.Join(r.dir, FileName)
@@ -212,8 +219,9 @@ func (f file) validate() error {
 }
 
 // save writes the registry atomically: a temp file in the data directory,
-// synced, renamed over FileName.
+// synced, renamed over FileName. A failed save leaves the registry dirty.
 func (r *Registry) save() error {
+	r.dirty = true
 	b, err := json.MarshalIndent(r.data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("registry save: %w", err)
@@ -240,7 +248,21 @@ func (r *Registry) save() error {
 		_ = d.Sync()
 		_ = d.Close()
 	}
+	r.dirty = false
+	r.writes++
 	return nil
+}
+
+// Dirty reports changes in memory that the file does not hold yet
+// (UpdateLater, or a failed save).
+func (r *Registry) Dirty() bool { return r.dirty }
+
+// Flush saves the registry when it is dirty, and does nothing otherwise.
+func (r *Registry) Flush() error {
+	if !r.dirty {
+		return nil
+	}
+	return r.save()
 }
 
 // Panel returns the prefix new bots take their accounts from, once set.
@@ -388,6 +410,26 @@ func (r *Registry) Import(prefix string, m botnames.Marker, n int, preset string
 
 // Update applies fn to account's bot and saves; account and prefix stay.
 func (r *Registry) Update(account string, fn func(*Bot)) error {
+	if err := r.apply(account, fn); err != nil {
+		return err
+	}
+	return r.save()
+}
+
+// UpdateLater applies fn to account's bot as Update does, without saving: it
+// marks the registry dirty, and Flush, Close or the next save writes it. A
+// crash before then loses the change, so it is only for state a restart can
+// do without: the online flag, the stop time and reason, the level and the
+// position. A name, class, account or tombstone is saved at once.
+func (r *Registry) UpdateLater(account string, fn func(*Bot)) error {
+	if err := r.apply(account, fn); err != nil {
+		return err
+	}
+	r.dirty = true
+	return nil
+}
+
+func (r *Registry) apply(account string, fn func(*Bot)) error {
 	i := r.index(account)
 	if i < 0 {
 		return fmt.Errorf("no bot %s", account)
@@ -396,7 +438,7 @@ func (r *Registry) Update(account string, fn func(*Bot)) error {
 	prefix := b.Prefix
 	fn(b)
 	b.Account, b.Prefix = account, prefix
-	return r.save()
+	return nil
 }
 
 // Drop removes account's bot and keeps a tombstone of its account.

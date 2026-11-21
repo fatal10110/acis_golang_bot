@@ -135,7 +135,10 @@ type BotConfig struct {
 	// Learned, when set, is called once per Bot, on Run's goroutine, with
 	// the name and class id of the character it learned: one chosen or
 	// created by a session of a bot whose Character had no known name. It
-	// is called before the session enters the world, and must not block.
+	// is called before the session enters the world, while the bot holds
+	// its login gate turn, so it must not block: every other bot's login
+	// waits for that turn. The owner takes the report without waiting and
+	// saves it later (botregistry.Run.Learned).
 	Learned func(name string, classID int32)
 	// Preset names the persona preset the bot plays, for its status.
 	Preset string

@@ -64,15 +64,18 @@ type Run struct {
 	// run; nil without a metrics registry.
 	Metrics *botmetrics.Bot
 	// Learned hands the supervisor the character the run learned; it is
-	// botclient.BotConfig.Learned. It returns once the supervisor took the
-	// report: the supervisor goroutine always receives run reports, and
-	// handles one request or report at a time, so it waits at most for one
-	// registry save.
+	// botclient.BotConfig.Learned, which a bot calls while it holds its
+	// login gate turn. It never waits on the supervisor: it posts the
+	// report to the supervisor's mailbox and returns. The supervisor saves
+	// the name and class to the registry file as soon as it takes the
+	// report, and always before the run's end report, which the run posts
+	// after it: a run that ends right after reporting never loses them. It
+	// is called before the RunFunc returns.
 	Learned func(name string, classID int32)
 	// Live hands the supervisor the run's bot once the RunFunc built it,
 	// before it runs: until the run reports its end, the supervisor reads
-	// its status (Status.Live) and passes it commands (Command). It returns
-	// once the supervisor took it, as Learned does.
+	// its status (Status.Live) and passes it commands (Command). Like
+	// Learned it posts to the mailbox and never waits.
 	Live func(b *botclient.Bot)
 }
 
@@ -88,7 +91,7 @@ type Config struct {
 	// Gate is the login gate every run passes; ResumeLogins resets its
 	// breaker.
 	Gate *botclient.LoginGate
-	// Clock times the cool-down and the stop times.
+	// Clock times the cool-down, the registry flush and the stop times.
 	Clock botclient.Clock
 	// MaxOnline bounds the bots online at once, on spawn and on restore.
 	MaxOnline int
@@ -165,6 +168,11 @@ func (st *runState) state() RunState {
 	return RunNone
 }
 
+// FlushDelay is how long a deferred registry change (Registry.UpdateLater:
+// a run's end, progress or online flag) waits before the supervisor writes
+// the file; every change in that time is written by the one save.
+const FlushDelay = 3 * time.Second
+
 // event is a run's report: its bot, the character it learned, or its end.
 type event struct {
 	account string
@@ -185,20 +193,23 @@ type event struct {
 // It sends no packet: every run logs in through the login gate, which paces
 // it.
 type Supervisor struct {
-	cfg    Config
-	reqs   chan func()
-	events chan event
-	done   chan struct{}
-	wg     sync.WaitGroup
+	cfg  Config
+	reqs chan func()
+	mail *mailbox
+	done chan struct{}
+	wg   sync.WaitGroup
 
 	// Owned by Run.
-	runs    map[string]*runState
-	slots   map[string]*botmetrics.Bot
-	timer   botclient.Timer
-	base    context.Context
-	closing bool
-	rng     *rand.Rand
-	log     *slog.Logger
+	runs  map[string]*runState
+	slots map[string]*botmetrics.Bot
+	timer botclient.Timer
+	// flush is the registry flush timer, running while flushing is set.
+	flush    botclient.Timer
+	flushing bool
+	base     context.Context
+	closing  bool
+	rng      *rand.Rand
+	log      *slog.Logger
 }
 
 // New returns the supervisor of cfg; Run starts it.
@@ -218,30 +229,33 @@ func New(cfg Config) (*Supervisor, error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Supervisor{
-		cfg:    cfg,
-		reqs:   make(chan func()),
-		events: make(chan event),
-		done:   make(chan struct{}),
-		runs:   make(map[string]*runState),
-		slots:  make(map[string]*botmetrics.Bot),
-		rng:    rng,
-		log:    log,
+		cfg:   cfg,
+		reqs:  make(chan func()),
+		mail:  newMailbox(),
+		done:  make(chan struct{}),
+		runs:  make(map[string]*runState),
+		slots: make(map[string]*botmetrics.Bot),
+		rng:   rng,
+		log:   log,
 	}, nil
 }
 
 // Run restores the bots marked online, up to MaxOnline, then serves
 // requests and run reports until ctx ends. It then cancels every run, keeps
-// draining reports until all arrived, joins every run goroutine and returns.
-// The bots stay marked online, so the next start restores them. Call it
-// once.
+// draining reports until all arrived, joins every run goroutine, writes the
+// registry file once and returns. The bots stay marked online, so the next
+// start restores them. Call it once.
 func (s *Supervisor) Run(ctx context.Context) error {
 	defer close(s.done)
 	s.base = context.WithoutCancel(ctx)
 	s.restore()
 	for {
-		var tick <-chan time.Time
+		var tick, flush <-chan time.Time
 		if s.timer != nil {
 			tick = s.timer.C()
+		}
+		if s.armFlush() {
+			flush = s.flush.C()
 		}
 		select {
 		case <-ctx.Done():
@@ -249,19 +263,26 @@ func (s *Supervisor) Run(ctx context.Context) error {
 			return nil
 		case fn := <-s.reqs:
 			fn()
-		case e := <-s.events:
-			s.handle(e)
+		case <-s.mail.ready:
+			s.handleMail()
 		case <-tick:
 			s.wake()
+		case <-flush:
+			s.flushing = false
+			s.save()
 		}
 	}
 }
 
-// shutdown cancels every run and handles reports until none is live.
+// shutdown cancels every run, handles reports until none is live, joins
+// every run goroutine and writes the registry's deferred changes.
 func (s *Supervisor) shutdown() {
 	s.closing = true
 	if s.timer != nil {
 		s.timer.Stop()
+	}
+	if s.flush != nil {
+		s.flush.Stop()
 	}
 	for _, st := range s.runs {
 		if st.cancel != nil {
@@ -269,9 +290,41 @@ func (s *Supervisor) shutdown() {
 		}
 	}
 	for s.live() > 0 {
-		s.handle(<-s.events)
+		<-s.mail.ready
+		s.handleMail()
 	}
 	s.wg.Wait()
+	s.save()
+}
+
+// handleMail applies the reports in the mailbox, in the order posted.
+func (s *Supervisor) handleMail() {
+	for _, e := range s.mail.take() {
+		s.handle(e)
+	}
+}
+
+// armFlush starts the flush timer when the registry holds deferred changes
+// and the timer does not run; it reports whether the timer runs. A save in
+// the meantime writes them, and the flush then finds nothing to write.
+func (s *Supervisor) armFlush() bool {
+	switch {
+	case s.flushing || !s.cfg.Registry.Dirty():
+	case s.flush == nil:
+		s.flush = s.cfg.Clock.NewTimer(FlushDelay)
+		s.flushing = true
+	default:
+		s.flush.Reset(FlushDelay)
+		s.flushing = true
+	}
+	return s.flushing
+}
+
+// save writes the registry's deferred changes, if any.
+func (s *Supervisor) save() {
+	if err := s.cfg.Registry.Flush(); err != nil {
+		s.log.Error("registry save failed", "err", err)
+	}
 }
 
 func (s *Supervisor) live() int {
@@ -344,15 +397,15 @@ func (s *Supervisor) start(account string) {
 		Markers:   s.cfg.Registry.Markers(),
 		Metrics:   slot,
 		Learned: func(name string, classID int32) {
-			s.events <- event{account: account, learned: true, name: name, class: classID}
+			s.mail.post(event{account: account, learned: true, name: name, class: classID})
 		},
 		Live: func(b *botclient.Bot) {
-			s.events <- event{account: account, bot: b}
+			s.mail.post(event{account: account, bot: b})
 		},
 	}
 	s.wg.Go(func() {
 		err := s.cfg.Run(ctx, r)
-		s.events <- event{account: account, err: err}
+		s.mail.post(event{account: account, err: err})
 	})
 	s.log.Info("bot starts", "account", account, "preset", b.Preset)
 }
@@ -387,7 +440,8 @@ func (s *Supervisor) character(b Bot) (botclient.Character, error) {
 	return ch, ch.Validate()
 }
 
-// stopped records the end of account's run with reason and the online flag.
+// stopped records the end of account's run with reason and the online flag,
+// deferred (update).
 func (s *Supervisor) stopped(account string, online bool, reason string) {
 	now := s.cfg.Clock.Now()
 	s.update(account, func(b *Bot) {
@@ -396,8 +450,11 @@ func (s *Supervisor) stopped(account string, online bool, reason string) {
 	})
 }
 
+// update applies fn to account's bot in memory; the flush timer, the next
+// save or the shutdown writes it (Registry.UpdateLater). It is for the
+// online flag, the stop record and the progress only.
 func (s *Supervisor) update(account string, fn func(*Bot)) {
-	if err := s.cfg.Registry.Update(account, fn); err != nil {
+	if err := s.cfg.Registry.UpdateLater(account, fn); err != nil {
 		s.log.Error("registry update failed", "account", account, "err", err)
 	}
 }
@@ -411,8 +468,12 @@ func (s *Supervisor) handle(e event) {
 		return
 	}
 	if e.learned {
+		// Saved at once, with every deferred change (docs/plan.md section 8,
+		// "Character pinning").
 		class := e.class
-		s.update(e.account, func(b *Bot) { b.Name, b.Class = e.name, &class })
+		if err := s.cfg.Registry.Update(e.account, func(b *Bot) { b.Name, b.Class = e.name, &class }); err != nil {
+			s.log.Error("registry update failed", "account", e.account, "err", err)
+		}
 		s.log.Info("bot learned its character", "account", e.account, "character", e.name, "class", e.class)
 		return
 	}

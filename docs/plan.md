@@ -457,8 +457,8 @@ to avoid: both would log in the same accounts and kick each other.
     later error, so the name would be lost), and the `Bot` pins it as known, so every later attempt
     of that run, reconnects included, is a known-name login;
   - at the same moment the `Bot` reports the name and the slot's class id to the supervisor (a run
-    event on the same channel as its end report), and the supervisor saves both to the registry at
-    once, so a drop, crash or restart before the first entry never loses it.
+    event posted, without waiting, to the same mailbox as its end report and ahead of it), and the
+    supervisor saves both to the registry at once, so a drop, crash or restart before the first entry never loses it.
 - The derived names depend on the name marker, so the registry stores each prefix with its marker
   and placement, and the panel always uses the stored ones. Each bot gets its prefix's marker for
   its names (with its `Character`), while the brain's bot filter (no chat reply to a name carrying a
@@ -510,9 +510,16 @@ to avoid: both would log in the same accounts and kick each other.
   that player comes in sight, since at session start the world model has not seen the player yet;
   only an order the panel sends to a running session is refused when the player is not in sight.
 - Ownership: one supervisor goroutine owns the registry, its file and every bot's cancel func; HTTP
-  handlers send it requests on a channel and get an answer at once. Each run sends its events
-  (character learned, with its name and class id, then `{account, err}` at its end) on one channel
-  the supervisor always selects on; a respawn or persona change of a running bot marks it stopping,
+  handlers send it requests on a channel and get an answer at once. Each run posts its events
+  (its bot, the character learned with its name and class id, then `{account, err}` at its end) to
+  one mailbox the supervisor always selects on: a post never waits on the supervisor, so a report
+  made while the bot holds its login gate turn never stalls the other bots' logins, and the
+  supervisor takes the events in the order posted, so a run's learned character is saved before its
+  end report is applied. A learned name and class, a new bot's account and counter, a tombstone and
+  an import are written to `bots.json` before the change returns; a run's end, progress and online
+  flag are applied in memory and written by one save a few seconds later (or by the next of those
+  saves, or once at stop), so a mass end costs one write and a crash loses at most that record; a
+  respawn or persona change of a running bot marks it stopping,
   cancels the run and starts the new one when that report arrives. Stopping the panel cancels every
   run, keeps draining reports until all have arrived, and joins every goroutine (bots, HTTP server,
   event streams, metrics); a bot's reader is joined before its next dial as today.
