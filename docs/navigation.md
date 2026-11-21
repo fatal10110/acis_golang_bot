@@ -146,8 +146,8 @@ Points N0 must settle, by test:
 
 - which layer the target's head-level Z selects under a bridge or in a multi-storey building, and
   so the Z the bot sends;
-- the range of a tick's measured elapsed time on the live server (`Emin`, `Emax`), which bounds
-  the step lengths the walker's check covers (section 3). It is measured live, because
+- the longest tick elapsed time on the live server (`Emax`), which bounds the step lengths the
+  walker's exact check covers (section 3). It is measured live, because
   `geoprobe` cannot answer walks;
 - that a `pathDirect` walk's `MoveToLocation` echoes the requested X and Y exactly.
 
@@ -221,8 +221,8 @@ The copy covers:
 - **the player step chain**: `stepLocked`'s step-point arithmetic (`playerPassed`, rounding half
   up, ground Z from `Height(next, prevZ + 2*CellHeight)`) together with the per-step `CanMove`.
   It becomes a pure function `geo.WalkSteps(from, to, startSpeed, speed, stepDurations)`, which
-  returns where one given sequence of steps stops. The walker's bound check is built on it
-  (section 3).
+  returns where one given sequence of steps stops. The walker's exact stretch check is built on
+  it (section 3).
 
 Configuration:
 
@@ -265,23 +265,39 @@ server's pathfinder.
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over
     139 regions;
-  - entrances on cluster borders, with precomputed directed intra-cluster edge costs;
+  - **entrances**: every pair of cells that crosses a cluster border, per layer. A run of
+    neighbouring crossings is merged into one entrance node only when its cells are mutually
+    reachable inside both clusters, so one-way terrain along a border keeps its own nodes. N3
+    reports the node and edge counts;
+  - precomputed directed intra-cluster edge costs between entrances;
   - **strongly connected components (SCCs)** labelled on the directed abstract graph, and its
     condensation (the graph of components) stored.
 - **Reachability**: which abstract SCC a cell belongs to, worked out inside its cluster.
   - **Local SCCs.** `Locate` runs Tarjan's algorithm on the directed cell graph, bounded to the
-    cell's cluster (at most 256×256 cells per layer).
+    cell's cluster (at most 256×256 cells per layer). It reads the **static base blocks only,
+    with every door open** (`dynamic.Block.Base()`), exactly as `navbuild` does for the abstract
+    SCCs. So cached labels never depend on the door state at the moment they were computed; doors
+    are handled by the route search (below).
   - **Entrance sets.** For each local SCC it also records the entrances it can reach and the
     entrances that can reach it, inside the cluster.
   - **Membership rule.** A cell is in abstract SCC X exactly when X holds both an entrance the
     cell reaches and an entrance that reaches the cell. Such an X is unique: two would be joined
     through the cell, and would be one SCC. A local SCC with no such X is **isolated**: a pocket
-    or pit with no way to and from the rest. Isolated is the `/unstuck` case.
-  - **Cache.** Each cluster's result is a 16-bit label per cell layer plus a small per-label table
-    (about 130 KB for a single-layer cluster). Results are kept in a process-wide LRU of at most
-    64 clusters (about 8-16 MB), owned by one mutex. The mutex guards only the lookup and the
-    insert; the computing bot runs Tarjan without holding it. Two bots can rarely compute the
-    same cluster at the same time; the second insert is dropped.
+    or pit with no way to and from the rest. Isolated is the `/unstuck` case. The rule is exact
+    because every border crossing is an entrance or merged into one only when mutually reachable
+    (above): any path leaving and re-entering the cluster passes through entrance nodes.
+  - **Cache.**
+    - A result is immutable. A cluster with a single local SCC (the common case: open ground)
+      stores only that fact and its abstract SCC, a few bytes. A cluster with several stores a
+      16-bit label per cell layer plus a small per-label table, about 130 KB for one layer.
+    - Results live in a process-wide LRU **bounded by bytes** (default 64 MB, a flag), owned by
+      one mutex. The mutex guards only the lookup and the insert; the computing bot runs Tarjan
+      without holding it. Two bots can rarely compute the same cluster at the same time; the
+      second insert is dropped.
+    - Each walker also holds its own references to the results for its current cluster and its
+      destination's cluster, so eviction never forces a bot to recompute the ground it stands on.
+      Memory is then at most the LRU bound plus two results per bot, and most results are the
+      few-byte kind.
   - **Queries.** After `Locate`, `SameSCC(a, b)` (reachable each way) is O(1). `Reachable(a, b)`
     one way is a search over the condensation, which is small.
   - **Consumers ask for `SameSCC` by default**, so a bot never walks down into a pit it cannot
@@ -305,9 +321,10 @@ server's pathfinder.
   - string pulling with the copied `CanMove`;
   - splitting into segments of at most `navSegment` (about 2500 units, roughly a click on screen,
     far under 9900 in 3D);
-  - **every segment passes both checks of the Goal**, the step chain through the walker's bound
-    check (section 3). The planner asserts this. A pull that fails the bound check is not taken,
-    and the next-shorter pull is tried. Inside the clearance corridor a waypoint may get a small
+  - **every segment passes both checks of the Goal**, the step chain through the open-corridor
+    test and, on the stretches it fails, the exact check (section 3). The planner asserts this. A
+    pull candidate is judged by `CanMove` and the corridor test only; a pull that fails is not
+    taken, and the next-shorter pull is tried. Inside the clearance corridor a waypoint may get a small
     random offset, re-checked the same way.
 - **Stand points** (`StandPoint(target, range, mode)`): a walkable cell in the bot's SCC within
   `range` of the target. Depending on `mode`, it has:
@@ -364,23 +381,51 @@ unreachable (with a reason).
   `StopMove`, `TeleportToLocation`). Between those, the bot simulates its own walk with the copied
   step chain at the nominal 100 ms steps. That replaces the linear Z interpolation in `world.go`.
   Arrival is inferred from the simulation, because the server sends nothing on arrival.
-- **Step-chain bound check**: it holds whatever sequence of steps the server takes.
-  - The server's step points along a segment are rounded points on its line, so the walker
-    indexes them by whole units of distance from the start.
-  - Step lengths lie in `[Lmin, Lmax]`:
-    - `Lmin` = start (walk) speed × `Emin`;
-    - `Lmax` = run speed × `Emax`, with `Emin` and `Emax` from N0;
-    - the 100 ms run-out steps fall inside that range.
-  - The check is a dynamic program over those positions, starting from the segment's origin. For
-    every position the walk can reach, `CanMove` must hold to every position between `Lmin` and
-    `Lmax` further on. Each start Z is the one the chain lands on there (`Height(next,
-    prevZ + 2*CellHeight)`); where different histories land on different floors, every one of
-    them is checked.
-  - The segment is sent only if all of them hold up to its end.
-  - A 2500-unit segment costs at most about 2500 × (`Lmax` − `Lmin`) short `CanMove` calls, about
-    a millisecond, and the result is cached with the route.
-  - **What it does not cover**: a server tick that stalls past `Emax` (a GC pause, for example).
-    `nav_blocked_total` measures that.
+- **Step-chain check**: it holds whatever sequence of steps the server takes. It comes in two
+  parts: a cheap test that covers almost every segment, and an exact check only where that test
+  fails.
+  - **Facts it rests on.**
+    - The first step of a move can be any length from about 0, because the global position ticker
+      runs at a fixed phase and the move's clock starts when the request arrives
+      (`task/positionupdates.go:34-35, 80-84`, `creature.go:833-835`, `:408-415`).
+    - Later steps are at most `Lmax` = run speed × `Emax` (`Emax` from N0); the 100 ms run-out
+      steps fall inside that.
+    - Each step re-aims from its rounded point toward the destination (`creature.go:1374-1376`),
+      so step points stay within about one unit of the segment's line.
+  - **Open-corridor test (cheap, sufficient).** Take every cell the segment's line crosses, plus
+    a margin of one cell on each side. The segment passes when, in all of those cells:
+    1. the cell has exactly one layer (a flat or complex block, or a multilayer cell holding one
+       layer), so `belowCell`, `HeightNearest` and `Height` can only ever answer that floor,
+       whatever Z the chain carries;
+    2. the NSWE flags allow crossing in both directions of the segment's quadrant (and both senses
+       across the axis, for a line close to an axis);
+    3. no step up between neighbouring corridor cells is more than 48.
+
+    Under those conditions every per-step `CanMove` between two points in the corridor holds,
+    whatever the step lengths and wherever the rounding lands:
+    - every border crossing is allowed;
+    - `belowCell(z + 48)` finds the one floor;
+    - the final `goz == Height(target)` compares that floor with itself.
+
+    The test costs O(cells along the segment): no `CanMove` calls, a few microseconds.
+    String-pull candidates use only this test.
+  - **Exact check (short stretches only).** Where the corridor test fails (a doorway with partial
+    NSWE, a bridge end, a stair with mixed layers), the stretch from the last corridor cell before
+    the failure to the first after it is checked exactly:
+    - It is a dynamic program over states keyed by rounded `(X, Y, Z)`.
+    - It starts from every rounded point on the line within `Lmax` before the stretch, at its one
+      floor.
+    - From each state, every distinct rounded next point for a step length in `(0, Lmax]` must
+      pass `CanMove`, with Z from `Height(next, prevZ + 2*CellHeight)`.
+    - The stretch passes when every reachable state does, up to the far side.
+    - It runs only on the final segments of a route, not on pull candidates. A stretch is a few
+      cells long, so it costs a few thousand short `CanMove` calls; N1 benchmarks one call, and N3
+      sets the route thresholds from that measurement.
+    - A segment whose exact check fails is split at the stretch, and the planner tries another
+      way past it.
+  - **What it does not cover**: a server tick that stalls past `Emax` (a GC pause, for example)
+    inside a stretch that needed the exact check. Open corridors are immune to it.
+    `nav_blocked_total` measures what is left.
 - **Sending**:
   - Every segment goes out from standstill, from the server-confirmed position.
   - **No click-ahead.** A click while moving would run the server's catch-up step of any length
@@ -476,8 +521,14 @@ geodata is committed here, and CI never sees it.**
     category, which would add an offline oracle.
 - **`nav`** (CI, synthetic regions):
   - every returned path passes both checks of the Goal, segment by segment;
-  - the bound check rejects a segment that only some step sequences get through (a synthetic
-    ledge edge);
+  - the open-corridor test accepts open ground and rejects corridors with a multilayer cell,
+    partial NSWE or a climb over 48;
+  - the exact check rejects a stretch that only some step sequences get through (a synthetic
+    ledge edge, a first step of any length), and agrees with `WalkSteps` run over random step
+    sequences;
+  - entrances: a border with one-way terrain keeps separate nodes, and no run is merged across
+    cells that are not mutually reachable;
+  - cluster labels computed while a door is closed equal those computed with it open;
   - the cluster membership rule matches a whole-region SCC computed by brute force on every
     synthetic region, isolated pockets included;
   - a closed door on the cheapest entrance-to-entrance path falls back to the door-free cost, not
@@ -490,17 +541,21 @@ geodata is committed here, and CI never sees it.**
   - a property test over random pairs checks the same invariants.
 - **`nav` performance**: benchmarks with recorded thresholds, measured on the owner's geodata
   locally and reported in the N3 PR.
-  - **Warm** (cluster LRU warm, pages resident):
+  - **Warm** (cluster LRU warm, pages resident), as initial targets that N3 confirms or resets
+    from N1's measured cost of one `CanMove` and the measured share of segments needing the exact
+    check:
     - `Locate` + `SameSCC` p99 ≤ 1 ms;
     - abstract distance p99 ≤ 2 ms;
-    - a full 40000-unit route p99 ≤ 10 ms, bound checks included.
+    - a full 40000-unit route p99 ≤ 10 ms, corridor tests and exact checks included.
   - **Cold** (first touch of the clusters and pages): `Locate` p99 ≤ 30 ms, and a full route
     p99 ≤ 150 ms. A cold route happens at most once per destination per bot.
   - Heap per route query ≤ 4 MB.
   - `navbuild` ≤ 15 minutes with half the cores, peak heap ≤ 1 GB. N3 reports the measured
     entrance and edge counts, then sets the nav cache's size bound from them.
-- **Door table** (CI, `-race`): out-of-order events from two bots never flip a door back; the
-  engine sees the newest state.
+- **Door table** (CI, `-race`): concurrent reports from many bots are serialized, every toggle
+  reaches the engine, the per-bot dedupe drops repeats, and route-search reads never block on the
+  table mutex. A misordered state is not tested as prevented (it is best effort, section 3); the
+  walker test checks that it costs only a door replan.
 - **`walker`** (events and an injected clock in, packets out):
   - segments in order, each from standstill;
   - a same-point `MoveToLocation` replans as blocked, and so does a `StopMove` short of a talk
@@ -523,12 +578,12 @@ geodata is committed here, and CI never sees it.**
 
 | PR | Scope | Closes or supersedes |
 | --- | --- | --- |
-| N0 | Settle the open server points by test: head-level Z on multilayer, the tick elapsed range `Emin`/`Emax` measured live, the echo of `pathDirect`. Write `bots geoquery`. File the server issue for a `geoprobe` walk category. Record the findings in this document | — |
+| N0 | Settle the open server points by test: head-level Z on multilayer, the longest tick elapsed time `Emax` measured live, the echo of `pathDirect`. Write `bots geoquery`. File the server issue for a `geoprobe` walk category. Record the findings in this document | — |
 | N1 | `internal/geo` copy with its dependencies (location, door template, geometry, properties, `doors.xml`): stored form, `ParseRegion` views, cache writer and reader, mmap on Unix and Windows, readers for `bots geopack`, queries, step chain `WalkSteps`, door overlay. Flags `-geodata`, `-geoengine` and `-geodata-cache`; `docs/home.md` steps (rsync with mtimes kept, `bots geopack`). Synthetic fixtures, memory test, local parity run, measured heap and RSS for the 139 regions | — |
-| N2 | `internal/nav` on cells: directed edges, clearance cost, smoothing with both checks, snap, stand points (routes inside one cluster) | — |
-| N3 | Hierarchy: directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule and its LRU, `bots navbuild` and its cache file, benchmarks against the thresholds above | — |
+| N2 | `internal/nav` on cells: directed edges, clearance cost, open-corridor test and exact stretch check, smoothing, snap, stand points (routes inside one cluster) | — |
+| N3 | Hierarchy: entrances per crossing (merged only when mutually reachable), directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule on static doors-open blocks, the byte-bounded LRU and per-walker pins, `bots navbuild` and its cache file, benchmarks and final thresholds | — |
 | N4 | Door table (mutex writes, per-door atomic reads, per-bot dedupe), `DoorInfo` and `DoorStatusUpdate` decoders, toggles into the shared engine; door-aware route search with the doors-ignored second search | — |
-| N5 | Walker: step-chain position, `CanMove` and the bound check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
+| N5 | Walker: step-chain position, `CanMove` plus the corridor test and exact check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
 | N6 | Spots and trips on SCCs and abstract distance; hops, stalls and the hour-long avoid deleted | #144 |
 | N7 | Follow on routes with one-way drops toward the leader; detour machinery deleted; flee, idle drift and death return | #147, #148 |
 | N8 | e2e scenarios and metrics above; the PR rows of `docs/plan.md` updated for D13 | — |
@@ -542,10 +597,10 @@ heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore d
   is not). The cache key rejects a changed local copy, and the desync counter catches a changed
   server copy at the first segment. `docs/home.md` keeps the geodata in the same rsync step as the
   datapack.
-- **Tick jitter in the step chain.** The bound check covers every step length in
-  `[Lmin, Lmax]`; the clearance cost keeps routes off the edges where it matters; a blocked stop
-  is a replan. What is left, ticks past `Emax`, is measured by `nav_blocked_total` against its
-  e2e threshold.
+- **Tick jitter in the step chain.** Open corridors are immune to it. The exact check covers
+  every step length in `(0, Lmax]` on the short stretches that need it; the clearance cost keeps
+  routes off such stretches where it can; a blocked stop is a replan. What is left, ticks past
+  `Emax` inside exact stretches, is measured by `nav_blocked_total` against its e2e threshold.
 - **Stale or misordered door state** (a door no bot sees, changed by a script or timer, or events
   from lagging sessions): it shows up as door replans, never as plain unreachable.
 - **Multilayer Z** (bridges, buildings): settled in N0, then pinned by the parity queries.
