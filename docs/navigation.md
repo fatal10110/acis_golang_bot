@@ -6,10 +6,16 @@ Status: approved by the owner on 2026-11-21:
   memory, and it is used the way the game server uses it.
 - D13a option 1: walking personas require geodata.
 
-Revised after four rounds of independent review; the fourth found it sound to file. The first round found a mid-walk step check the
-first draft missed, one-way ledges, doors left out of the hierarchy, and Action approaches
-described wrongly. The second found that the step-chain check depended on the order of steps,
-cluster-level component membership, door-edge tagging, and how door events are ordered.
+Revised after four rounds of independent review; the fourth found it sound to file. The rounds
+found, in order:
+
+1. a mid-walk step check the first draft missed, one-way ledges, doors left out of the hierarchy,
+   and Action approaches described wrongly;
+2. a step-chain check that depended on the order of steps, cluster-level component membership,
+   door-edge tagging, and how door events are ordered;
+3. the cost and the first step of the step-chain check, entrance granularity, door-dependent
+   cluster labels, and cache size;
+4. one-way-out ground being mistaken for a pit.
 
 Server paths below (`internal/gameserver/...`, `cmd/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang); bot paths name this repository.
