@@ -3,15 +3,30 @@
 Status: approved by the owner on 2026-11-21: D14 (b), D15 (a), D16 yes (see "Owner decisions").
 Filed as milestone M8, epic #166, issues #167-#182, and server issue fatal10110/acis_golang#5419.
 
-Two rounds of independent review; the second found it sound to file. The first round found: SoE
-casts are queued, not cancelled, by moves; enchanting would freeze gear upgrades; buff potion
-stacking and pacing were wrong; the shot fix sat in the wrong PR; beginner shots were wasted;
-player stores need a walk and exclude package stores; and several PRs were too large. The second
-found that unspawned merchants' lists must not count as a shot source. A third round, by a fresh
-reviewer over the final doc and the filed issues, found: enchant gains are a server formula, not
-item data; junk rules would sell the new consumables; carried-shot and weight thresholds that flip
-back and forth; the profession trainer tables and class report; per-level stack orders; split and
-dependency fixes in the issues. All are applied here and in the issues.
+Five rounds of independent review; the fifth found the final doc and the filed issues sound.
+
+- **Round 1:** SoE casts are queued, not cancelled, by moves; enchanting would freeze gear
+  upgrades; buff potion stacking and pacing were wrong; the shot fix sat in the wrong PR; beginner
+  shots were wasted; player stores need a walk and exclude package stores; several PRs were too
+  large.
+- **Round 2:** unspawned merchants' lists must not count as a shot source.
+- **Round 3** (a fresh reviewer, over the final doc and the filed issues):
+  - enchant gains are a server formula, not item data;
+  - junk rules would sell the new consumables;
+  - carried-shot and weight thresholds that flip back and forth;
+  - the profession trainer tables and the class report;
+  - per-level stack orders;
+  - splits and dependency fixes in the issues.
+- **Round 4:**
+  - the class is saved by extending `keepProgress`;
+  - first-profession dyes go dead at the second profession;
+  - the keep set across PRs;
+  - the keep hook's three callers and may-wear;
+  - kept weight looping supply trips;
+  - extra supplies outside the gate.
+- **Round 5:** wording and one dependency order.
+
+Everything found is applied here and in the issues.
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang). Datapack paths (`items/...`,
@@ -263,9 +278,9 @@ grocer lists).
   - its HP potions are gone;
   - its load passes `Supply.ReturnLoad` (default 70 %, well above the 45 % `BuyLoad`, so a bot
     that bought to the cap does not turn round at its first loot) **and** a town visit would shed
-    at least `Supply.ShedMin` (default 10 % of the limit). Shed weight is the junk it would sell,
-    plus what the "trip in town" hook reports it will hand off. So items kept with nowhere to go
-    do not send it home after every return;
+    at least `Supply.ShedMin` (default 10 % of the limit). Shed weight is the junk it would sell
+    (I8); I8b adds what the "trip in town" hook reports it will hand off. So items kept with
+    nowhere to go do not send it home after every return;
   - the saved adena covers the gear goal.
 
   It reads SoE only with no attacker and nothing aggressive within its aggro range. If that does
@@ -352,7 +367,7 @@ Answered by the owner on 2026-11-21.
 
 | # | Question | Decision |
 | --- | --- | --- |
-| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan (milestone M9, decisions D17-D19, planned in its own PR as `docs/crafting.md`). Until that PR lands, M9 is not in `docs/plan.md`; its PR adds its rows and epic. Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
+| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan (`docs/crafting.md` and the D17-D19 rows in PR #183; milestone M9, epic #184). Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
 | D15 | May bots change class? | (a) At the class master NPC 50000, which is free and quest-free under the shipped config, given a persistent spawn by fatal10110/acis_golang#5419. |
 | D16 | Supply trips | Yes: farmers leave their spot to restock, and the spot is released and may be taken. |
 
@@ -429,9 +444,9 @@ Most urgent: I2 (every bot at level 20 today), then I3, I4, I8 and I8b (farmers 
 - Mana Potion (728), Greater Healing Potion (1539) and CP potions are not on any spawned list. Bots
   buy them only from player stores (I10).
 - Weapon enchant scrolls come only from multisells, and enchanting is backlog (section 10).
-- Dwarven crafting of graded shots (D14 b) is the clan crafter plan (M9), not an M8 PR.
+- Dwarven crafting of graded shots (D14 b) is the clan crafter plan (M9, epic #184), not an M8 PR.
 
-## Interfaces the clan crafter plan (M9) consumes
+## Interfaces the clan crafter plan (M9, epic #184) consumes
 
 M9 builds on M8 rather than duplicating it. M8 exposes these and adds no clan logic itself:
 
