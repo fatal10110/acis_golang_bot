@@ -217,8 +217,9 @@ floor.
 
 The junk rule (`keeps`) learns everything the loadout buys. Today it keeps only `Potions`, `Shots`,
 `Restock`, `Keep`, books and arrows, so a sell visit would sell the SoE, buff potions and dyes the
-bot just bought. It now keeps every template with a trip target (section 4), the build's buff
-potion and the planned dyes until they are drawn. A persona **keep hook** lets the clan crafter
+bot just bought. It now keeps every template with a trip target (section 4), plus a **keep set**
+that later PRs add to: the build's buff potion (I9) and the planned dyes until they are drawn
+(I12), each tested there. A persona **keep hook** lets the clan crafter
 plan (M9) keep more, with no clan logic in M8. It is called per carried item (object and
 template), so it can keep crafting materials, every recipe scroll, and unworn graded gear deposited
 for crystallizing.
@@ -266,8 +267,10 @@ shot orders need (Soul Ore 1785, Spirit Ore 3031, on spawned grocer lists).
 - **In town.** Arrival resets `shop.nextAt`, because a miss from the spot would otherwise push the
   first visit up to 5 min out. Then the errands run in the existing order: sell, shop (the budget),
   gear, trainer, Newbie Guide.
-- **Preparation.** No farmer leaves town for a spot until its supplies meet the trip target, or the
-  budget has spent all it may. A broke bot still goes and farms.
+- **Preparation.** No farmer leaves town for a spot until its supplies meet the trip target, the
+  budget has spent all it may, or no spawned merchant within reach sells what is missing. A broke
+  bot still goes and farms. The same gate applies after a death and respawn in town and at a fresh
+  login in town.
 - Dependency: walks go through M7 navigation (#151). This lands after N6 (#158).
 
 ### 8. Buying from player stores
@@ -296,10 +299,12 @@ stores.
   - `LearnSkills` and `Trainers` are keyed by class id, and today only base classes have entries
     (`trainer.go`). So the change adds the professions' learn and trainer tables, or the support
     mystic stops learning heals and buffs at 20.
-  - The registry learns the new class through the existing path: the brain's status snapshot
-    already carries `ClassID`, and the supervisor's `keepProgress`, on the supervisor goroutine,
-    copies it with the level and position. The one-shot `pin` report (`session.go`), which fires
-    once per run, is not used for this.
+  - The registry learns the new class through the existing status path. The brain's snapshot
+    already carries `ClassID` (`status.go`). The supervisor's `keepProgress`, which today copies
+    only the level and position when a run ends (`internal/botregistry/supervisor.go`), gains
+    `b.Class = &st.ClassID`, so the new class is saved at the run's end, not live. This is safe:
+    the starting-class check in `character()` is skipped once the bot has a name. The one-shot
+    `pin` report (`session.go`), which fires once per run, is not used for this.
 - **Dyes:**
   1. **Buy.** The dyes go on the shop errand's list from merchant buylists, under the budget's gear
      tier: 10 per symbol plus the fee.
@@ -308,7 +313,12 @@ stores.
      `RequestHennaEquip` per symbol into its free slots. One request per answer, waited for 5 s:
      the server drops an unknown symbol in silence (`network/henna.go:61-66`). On a timeout the
      visit ends and backs off for `WalkStuckFor`. Bypass links are paced by `bypassGap`.
-  3. **Which dyes.** A persona table per profession that respects the +1/-3 trade and each row's
+  3. **At the second profession.** First-profession dyes (`hennas.xml` symbols 1-36) list only
+     first-profession ids, so after the change at 40 they stay in their slots but add nothing
+     (`model/henna/list.go` `recalculateLocked`). The bot removes them (`RequestHennaUnequip`,
+     fee: a fifth of the price, 5 dyes back), then draws the second-profession rows (37+) into all
+     3 slots. It uses the same one-request-per-answer pacing and 5 s timeout.
+  4. **Which dyes.** A persona table per profession that respects the +1/-3 trade and each row's
      class list. For example: warriors STR+1 CON-3 and DEX+1 CON-3; nukers INT+1 WIT-3 or WIT+1
      INT-3; healers (Cleric 15, Oracle 29, Shillien Oracle 42, Shaman 50), whom the INT/WIT rows
      exclude, MEN+1 WIT-3 (`hennas.xml:12`).
@@ -316,8 +326,9 @@ stores.
 ### 10. Enchant to the safe level (backlog)
 
 Given finding 8, this is backlog, not M8 core. Enchant scrolls of a grade the bot wears would be
-kept. Out of combat, in town, the bot uses them on its best worn piece of that grade up to the safe
-level (+3, +4 full-body armor), never past it unless `Enchant.Risk` is set (D6). One enchant at a
+kept. Out of combat, in town, the bot uses them on its best worn piece of that grade while its
+level is below +3 (+4 for full-body armor), where success is certain, so the last safe use ends at
++3 (+4). It never goes past that unless `Enchant.Risk` is set (D6). One enchant at a
 time, the next only after `EnchantResult`. It depends on section 6's enchant-aware score.
 
 ## Owner decisions
@@ -326,7 +337,7 @@ Answered by the owner on 2026-11-21.
 
 | # | Question | Decision |
 | --- | --- | --- |
-| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan (`docs/crafting.md`, milestone M9, decisions D17-D19). That plan is being written in a separate session and is not yet in `docs/plan.md` or filed; M9's own PR adds its rows and epic. Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
+| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan (milestone M9, decisions D17-D19, planned in its own PR as `docs/crafting.md`). Until that PR lands, M9 is not in `docs/plan.md`; its PR adds its rows and epic. Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
 | D15 | May bots change class? | (a) At the class master NPC 50000, which is free and quest-free under the shipped config, given a persistent spawn by fatal10110/acis_golang#5419. |
 | D16 | Supply trips | Yes: farmers leave their spot to restock, and the spot is released and may be taken. |
 
@@ -341,6 +352,8 @@ Answered by the owner on 2026-11-21.
   - a few looted D shots below the trip target do not switch weapons, and the replaced weapon is
     kept while only carried shots back the new grade;
   - bought SoE, buff potions and planned dyes are never junk;
+  - at the second profession, inactive first-profession dyes are removed and second-profession dyes
+    drawn;
   - beginner shots go first and are never junk;
   - no D shots on sale: the bot keeps a no-grade weapon with shots;
   - an unspawned merchant's list (the Sales Cat's D shots) gives no shot factor;
