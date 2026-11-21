@@ -279,7 +279,8 @@ No request below checks for a Symbol Maker or an NPC distance (`network/henna.go
 | `RequestHennaUnequip` | 0xbf | symbolId | see below |
 
 Opcodes and bodies: `network/clientpackets/henna.go:11-16,44-70`,
-`network/serverpackets/henna.go:10-13`, `network/serverpackets/hennainfo.go:10`. Dispatch: `network/client_dispatch.go:85-90`.
+`network/serverpackets/henna.go:10-13`, `network/serverpackets/hennainfo.go:10`. Dispatch:
+`network/client_dispatch.go:85-90`.
 
 1. **List.** `HennaEquipList` (`network/serverpackets/henna.go:34-47`): adena, max slots, count,
    then per symbol symbolId, dyeId, 10 (the dyes a draw takes), price, 1. It lists only symbols the
@@ -299,13 +300,16 @@ Opcodes and bodies: `network/clientpackets/henna.go:11-16,44-70`,
 4. **Draw success.** The adena is paid **before** the dyes are taken. The bot gets `SystemMessage`
    S1DisappearedAdena (when the price is above 0), then S2S1Disappeared (the dye, 10). Then comes
    `HennaInfo` (0xe4, `network/serverpackets/hennainfo.go:15-45`): uint8 INT, STR, CON, MEN, DEX,
-   WIT, then max slots, count, and per symbol symbolId and an active flag. Then `UserInfo`
-   (`sendHennaChange` :129-132), then SymbolAdded. The symbol takes the first free slot.
-5. **Remove.** `RequestHennaUnequipList` always answers the list (`network/henna.go:23-31`).
+   WIT, then max slots, count, and per symbol symbolId, then activeSymbolId (the same id when the
+   class can use the dye, else 0; `model/henna/list.go:31`). Then `UserInfo` (`sendHennaChange`
+   :129-132), then SymbolAdded. The symbol takes the first free slot.
+5. **Remove.** `RequestHennaUnequipList` always answers the list, even an empty one
+   (`network/client_ingame.go:245-250`, `sendHennaUnequipList` `network/henna.go:35-37`).
    `RequestHennaUnequip` (`deleteHenna` :95-115, `Delete`, `symbolmaker/symbolmaker.go:134-160`)
-   costs a fifth of the draw price (`model/henna/henna.go:27`).
-   - Not enough adena: YouNotEnoughAdena.
-   - A symbol not worn: silent.
+   costs a fifth of the draw price (`model/henna/henna.go:27`). Refusals, in order
+   (`symbolmaker/symbolmaker.go:135-144`):
+   - a symbol not worn: silent;
+   - not enough adena: YouNotEnoughAdena.
    - Success: `HennaInfo`, `UserInfo`, `SystemMessage` YouPickedUpS2S1 (5 dyes back), then
      SymbolDeleted.
 6. **Data** (`xml/hennas.xml`, 180 symbols).
@@ -517,9 +521,9 @@ stores.
   `2ndClass` at 40, then the `change_class N` link of the menu page for the profession. The bot
   stands within 150 of the master and clicks only links of the last page it got, since the server
   drops any other. Pacing: `bypassGap` (500 ms). The page's answer, a new page or the class change
-  in `UserInfo`, is waited for 5 s; then the visit backs off for `WalkStuckFor`. The build table includes the dwarf crafter line the clan
-  crafter plan (M9) needs: 53 → 56 Artisan (20) → 57 Warsmith (40). That plan owns the Create Item
-  (172) learn data.
+  in `UserInfo`, is waited for 5 s; then the visit backs off for `WalkStuckFor`. The build table
+  includes the dwarf crafter line the clan crafter plan (M9) needs: 53 → 56 Artisan (20) → 57
+  Warsmith (40). That plan owns the Create Item (172) learn data.
 - **After the change.**
   - The change sends `HennaInfo` and `UserInfo` (new class id), then the changed page. It sends no
     `SkillList`, because `AutoLearnSkills` is off by default. The page's `learn_skills` link would
