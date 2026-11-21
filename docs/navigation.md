@@ -6,9 +6,10 @@ Status: approved by the owner on 2026-11-21:
   memory, and it is used the way the game server uses it.
 - D13a option 1: walking personas require geodata.
 
-Revised after an independent review of the first draft. That review found a mid-walk step check
-the draft missed, one-way ledges, doors left out of the hierarchy, and Action approaches described
-wrongly.
+Revised after two rounds of independent review. The first round found a mid-walk step check the
+first draft missed, one-way ledges, doors left out of the hierarchy, and Action approaches
+described wrongly. The second found that the step-chain check depended on the order of steps,
+cluster-level component membership, door-edge tagging, and how door events are ordered.
 
 Server paths below (`internal/gameserver/...`, `cmd/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang); bot paths name this repository.
@@ -97,39 +98,57 @@ one-way. `CanMove` is a pure function of geodata and the door overlay.
 **The walk itself** (`creature.go:1290-1330, 1380-1400`):
 
 - every `PositionUpdateInterval` (100 ms), a player's step length is speed × the measured
-  elapsed milliseconds (`playerPassed`, `:408`);
+  elapsed milliseconds (`playerPassed`, `:408`). So the length varies with each tick's real
+  timing;
+- the first 5 updates of a move use the start speed, which for a player is the walk speed
+  (`walkStartUpdates`, `:34`, `:443-447`). The end of a walk is run out in fixed 100 ms steps
+  (`runOutLegLocked`, `:1084-1095`). A click while already moving first runs a catch-up step of
+  any length (`:1418-1426`);
 - the step point is rounded half up, and its Z is `Height(next, origin.Z + 2*CellHeight)`;
 - the server checks `CanMove(stepFrom, stepTo)`. If that fails, the walk stops there, and the
   server broadcasts a `MoveToLocation` whose origin and destination are both the stop point
-  (`BroadcastBlockedCorrection`, `controller.go:748`);
+  (`BroadcastBlockedCorrection`, `controller.go:748`). A blocked approach to talk to an NPC
+  answers differently: `ActionFailed`, then a `StopMove`, and the talk goes ahead anyway
+  (`network/targeting.go:690-704`);
 - on a normal arrival the mover receives nothing.
 
 **Pick-up** (`network/targeting.go:265-275`): a `MoveToLocation` to the item's raw position (Z not
 raised), with full route resolution. The server answers `ActionFailed` even when the pick-up
 succeeds. So does talking (`:565`).
 
-**Unlisted regions** (`geo/block/null.go:45-61`): a region with no geodata is open in every
-direction, but its layer heights read as 0. A walk from loaded geodata into such a region lands at
-Z 0. **The bot must load exactly the regions the server lists in `geoengine.properties`** (139 in
-the shipped config, all present as `*_conv.dat`), in the same `GeoDataType`.
+**Unlisted regions** (`geo/block/null.go:22-61`): a region with no geodata is open in every
+direction. A query that resolves a layer reads height 0, while `HeightNearest` echoes the queried
+Z. `CanMove` ends by comparing the two (`engine_query.go:84`), so a walk into an unlisted region
+holds only for a target Z of 0. The planner treats unlisted regions as no-go. **The bot must load
+exactly the regions the server lists in `geoengine.properties`** (139 in the shipped config, all
+present as `*_conv.dat`), in the same `GeoDataType`.
 
 **Doors** (`geo/dynamic`, `geo/engine/engine_dynamic.go`): doors from `doors.xml` are overlaid on
-the static cells while closed. The client learns door state from `DoorInfo`, which maps an object
-id to a door, and `DoorStatusUpdate`, which carries only the object id and the state
-(`network/serverpackets/worldobjects.go:60-63`).
+the static cells while closed. The client learns door state from `DoorInfo` and
+`DoorStatusUpdate`. Both carry the object id and the door id; the update also carries the
+open/closed state (`network/serverpackets/worldobjects.go:60-70`).
 
 **Other characters** never block movement. Geodata and doors are the only obstacles.
 
-**`cmd/geoprobe`**: evaluates geodata queries (height, canMove, LOS, path) against the server
-engine. With `-expected-dump` it re-evaluates a dump's queries and reports how far its answers
-agree. It loads every region file in the directory and no doors (`geo/geodata/load.go:87-105`).
+**`cmd/geoprobe`**: evaluates geodata queries (height, canmove, los, path, validlocation) against
+the server engine:
+
+- with `-expected-dump` it reads a dump written by anyone (`datadiff.ReadDump`), turns each record
+  id such as `canmove:x,y,z->x,y,z` back into a query (`probe.ParseQuery`), and reports how far
+  its answers agree (`cmd/geoprobe/main.go:186-212`, `geo/probe/query.go:41-82`);
+- it has no walk (step-chain) category;
+- it loads every region file in the directory onto the heap, ignoring the region list, and loads
+  no doors (`geo/geodata/load.go:87-105`);
+- without `-geodata`, it takes the directory from the config's `GeoDataPath`, which is relative
+  to the server checkout (`main.go:80-87`).
 
 Points N0 must settle, by test:
 
 - which layer the target's head-level Z selects under a bridge or in a multi-storey building, and
   so the Z the bot sends;
-- how sensitive the step chain is to tick jitter near walls and ledges, which decides how many
-  step lengths the walker checks (section 3);
+- the range of a tick's measured elapsed time on the live server (`Emin`, `Emax`), which bounds
+  the step lengths the walker's check covers (section 3). It is measured live, because
+  `geoprobe` cannot answer walks;
 - that a `pathDirect` walk's `MoveToLocation` echoes the requested X and Y exactly.
 
 ## Design
@@ -200,9 +219,10 @@ The copy covers:
   `CanSee` / `CanSeeActor`, which archers and casters need to choose where to stand. The 32-bit
   overflow quirks are copied as they are, because they are observable behavior;
 - **the player step chain**: `stepLocked`'s step-point arithmetic (`playerPassed`, rounding half
-  up, ground Z from `Height(next, origin.Z + 2*CellHeight)`) together with the per-step
-  `CanMove`, as a pure function `geo.WalkSteps(from, to, speed, stepDurations)`. It returns where
-  a walk stops for a given sequence of step durations.
+  up, ground Z from `Height(next, prevZ + 2*CellHeight)`) together with the per-step `CanMove`.
+  It becomes a pure function `geo.WalkSteps(from, to, startSpeed, speed, stepDurations)`, which
+  returns where one given sequence of steps stops. The walker's bound check is built on it
+  (section 3).
 
 Configuration:
 
@@ -213,14 +233,15 @@ Configuration:
 - the region list goes through the server's `ListedRegions` rule: a key present counts, whatever
   its value; a commented-out line does not;
 - at start the bot logs a hash of the region list, to compare with the server's;
+- N1 also checks what `internal/commons` code the copied packages import, and copies that too;
 - collision heights for `CanSee` come from the bot's own `UserInfo` and from NPC templates
   (datapack).
 
 **Doors, the server's way.** The server keeps doors as an overlay inside the shared engine
 (`engine_dynamic.go`):
 
-- readers take one atomic load and a plain map read; on a block a door overlays, they also take
-  that `dynamic.Block`'s own mutex (`geo/dynamic/block.go`);
+- readers take one atomic load and a plain map read. On a block a door overlays, they also take
+  that `dynamic.Block`'s own mutex (`geo/dynamic/block.go:36, 222-243`);
 - writers build a new copy and swap it in, serialized by `dynamicBlocksMu`;
 - a per-region bitmap means a cell with no door pays no map lookup.
 
@@ -247,22 +268,36 @@ server's pathfinder.
   - entrances on cluster borders, with precomputed directed intra-cluster edge costs;
   - **strongly connected components (SCCs)** labelled on the directed abstract graph, and its
     condensation (the graph of components) stored.
-- **Reachability**:
-  - `Locate` finds a cell's local component inside its cluster by a flood fill bounded to that
-    cluster (at most 256×256 cells per layer).
-  - The results are kept in a process-wide LRU of a bounded size, owned by one mutex, so a cluster
-    is filled once and not by every bot.
-  - After `Locate`, `SameSCC(a, b)` (each way reachable) is O(1).
-  - `Reachable(a, b)` one way is a search over the condensation, which is small.
+- **Reachability**: which abstract SCC a cell belongs to, worked out inside its cluster.
+  - **Local SCCs.** `Locate` runs Tarjan's algorithm on the directed cell graph, bounded to the
+    cell's cluster (at most 256×256 cells per layer).
+  - **Entrance sets.** For each local SCC it also records the entrances it can reach and the
+    entrances that can reach it, inside the cluster.
+  - **Membership rule.** A cell is in abstract SCC X exactly when X holds both an entrance the
+    cell reaches and an entrance that reaches the cell. Such an X is unique: two would be joined
+    through the cell, and would be one SCC. A local SCC with no such X is **isolated**: a pocket
+    or pit with no way to and from the rest. Isolated is the `/unstuck` case.
+  - **Cache.** Each cluster's result is a 16-bit label per cell layer plus a small per-label table
+    (about 130 KB for a single-layer cluster). Results are kept in a process-wide LRU of at most
+    64 clusters (about 8-16 MB), owned by one mutex. The mutex guards only the lookup and the
+    insert; the computing bot runs Tarjan without holding it. Two bots can rarely compute the
+    same cluster at the same time; the second insert is dropped.
+  - **Queries.** After `Locate`, `SameSCC(a, b)` (reachable each way) is O(1). `Reachable(a, b)`
+    one way is a search over the condensation, which is small.
   - **Consumers ask for `SameSCC` by default**, so a bot never walks down into a pit it cannot
     climb out of. Only follow and death return accept a one-way drop.
 - **Doors in the hierarchy**:
   - `navbuild` builds every door's footprint from `doors.xml` (the copied `NewDoorObject` over the
-    static geodata) and tags each abstract edge that crosses door cells with the door's id.
+    static geodata).
+  - For each intra-cluster edge it stores two costs: the cheapest with every door open, with the
+    set of doors that path crosses, and the cheapest crossing no door (infinite when there is
+    none).
   - SCCs are labelled with every door open, so they are optimistic.
-  - At run time the search skips edges whose door is closed in the shared engine.
-  - A route that fails only because of a closed door is reported as `unreachable: door`, never as
-    plain unreachable.
+  - At run time an edge whose door set holds a closed door costs its door-free cost. Door state is
+    read from the door table's per-door atomic array (section 3).
+  - Only after the real search fails, a second search ignores doors. If that one succeeds, the
+    result is `unreachable: door`, never plain unreachable. Both searches count against the same
+    node budget.
 - **Routes**:
   - an abstract search over the condensation-restricted graph;
   - refinement inside each cluster the abstract path crosses, reading cells through the mapped
@@ -270,9 +305,10 @@ server's pathfinder.
   - string pulling with the copied `CanMove`;
   - splitting into segments of at most `navSegment` (about 2500 units, roughly a click on screen,
     far under 9900 in 3D);
-  - **every segment passes both checks of the Goal**, which the planner asserts. A pull that fails
-    the step chain is not taken, and the next-shorter pull is tried. Inside the clearance corridor
-    a waypoint may get a small random offset, re-checked the same way.
+  - **every segment passes both checks of the Goal**, the step chain through the walker's bound
+    check (section 3). The planner asserts this. A pull that fails the bound check is not taken,
+    and the next-shorter pull is tried. Inside the clearance corridor a waypoint may get a small
+    random offset, re-checked the same way.
 - **Stand points** (`StandPoint(target, range, mode)`): a walkable cell in the bot's SCC within
   `range` of the target. Depending on `mode`, it has:
   - a straight walkable line to the target (melee, cast, talk), the line the tracking walk will
@@ -308,13 +344,15 @@ server's pathfinder.
 
 **Door table (process-wide).**
 
-- It is one value owned by a mutex.
-- It maps object ids to doors (from `DoorInfo`) and records each door's state with the
-  reader-side receive time of the packet that set it.
-- A bot's brain hands each door event to the table. The table applies an event only when it is
-  newer than the last one applied for that door, then toggles the door in the shared engine
-  through the engine's writer path. So packets that different bots handle in a different order
-  never flip a door back.
+- Writes are serialized by one mutex. Reads go to a per-door atomic state array, so the route
+  search never takes the mutex.
+- Each bot's brain reports a door only when the state it sees differs from what that bot saw last
+  for the door (door id from `DoorInfo` and `DoorStatusUpdate`). The table then sets the state
+  and toggles the door in the shared engine through the engine's writer path.
+- **Best effort.** Sessions lag differently, so a slow bot can report an older state after a fast
+  bot reported a newer one. There is no server order to recover, and the per-bot dedupe only makes
+  this rarer. A door left in the wrong state shows up as a door replan, which never counts toward
+  unreachable.
 - A door no bot has seen keeps its `doors.xml` default.
 
 **Walker (one per bot, owned by the brain goroutine).** It replaces `legToward`, `spotLeg`,
@@ -326,21 +364,36 @@ unreachable (with a reason).
   `StopMove`, `TeleportToLocation`). Between those, the bot simulates its own walk with the copied
   step chain at the nominal 100 ms steps. That replaces the linear Z interpolation in `world.go`.
   Arrival is inferred from the simulation, because the server sends nothing on arrival.
-- **Step-chain check**: for each segment, `geo.WalkSteps` runs over a sweep of constant step
-  durations around 100 ms. N0 sets the range and the count from the measured sensitivity. The
-  segment is sent only if every run reaches the end.
+- **Step-chain bound check**: it holds whatever sequence of steps the server takes.
+  - The server's step points along a segment are rounded points on its line, so the walker
+    indexes them by whole units of distance from the start.
+  - Step lengths lie in `[Lmin, Lmax]`:
+    - `Lmin` = start (walk) speed × `Emin`;
+    - `Lmax` = run speed × `Emax`, with `Emin` and `Emax` from N0;
+    - the 100 ms run-out steps fall inside that range.
+  - The check is a dynamic program over those positions, starting from the segment's origin. For
+    every position the walk can reach, `CanMove` must hold to every position between `Lmin` and
+    `Lmax` further on. Each start Z is the one the chain lands on there (`Height(next,
+    prevZ + 2*CellHeight)`); where different histories land on different floors, every one of
+    them is checked.
+  - The segment is sent only if all of them hold up to its end.
+  - A 2500-unit segment costs at most about 2500 × (`Lmax` − `Lmin`) short `CanMove` calls, about
+    a millisecond, and the result is cached with the route.
+  - **What it does not cover**: a server tick that stalls past `Emax` (a GC pause, for example).
+    `nav_blocked_total` measures that.
 - **Sending**:
-  - From standstill, the next segment goes out from the server-confirmed position.
-  - Clicking ahead while still moving is allowed only where the corridor has at least two cells
-    of clearance on both sides. Then the checks must hold from every point of a ±32-unit square
-    around the predicted position, which covers error along the walk and across it.
-  - Otherwise the walker waits for the simulated arrival.
+  - Every segment goes out from standstill, from the server-confirmed position.
+  - **No click-ahead.** A click while moving would run the server's catch-up step of any length
+    (`creature.go:1418-1426`), which no bound covers. The walker waits for the simulated arrival
+    plus one tick, then sends the next segment. With segments of about 2500 units, this is a
+    short pause every 10 to 20 seconds of running, like a player clicking again.
   - No move goes out while the bot's own swing or cast is in progress, because the server would
     defer it and answer `ActionFailed`.
 - **Server answers to its own moves**:
   - A `MoveToLocation` for the bot whose origin equals its destination is a **blocked stop**. The
-    step chain differed from the bot's check. The walker counts `nav_blocked_total`, replans from
-    the stop point, and avoids the segment's cells for this route.
+    step chain differed from the bot's check. So is a `StopMove` short of the stand point during an
+    approach to talk. The walker counts `nav_blocked_total`, replans from the stop point, and
+    avoids the segment's cells for this route.
   - A `MoveToLocation` answering the bot's click with another destination is a **desync**. The
     server routed or truncated, so the bot's geodata or door state differs from the server's. The
     walker counts `nav_desync_total` and replans from the server's origin. If the segment crosses
@@ -413,14 +466,22 @@ geodata is committed here, and CI never sees it.**
   - N0 adds `bots geoquery`, which writes a curated query file in `geoprobe`'s dump format with
     the bot's answers. It covers short-range `canMove` near walls, ledges both ways, multilayer
     heights, `los` and random short pairs.
-  - `geoprobe -expected-dump <file> -config <geoengine.properties>` runs from the server checkout
-    without editing it, and must report full agreement.
-  - A Go test gated on `BOT_GEODATA` checks the step chain against points captured with
-    `geoprobe`. Without the variable it skips with a message, as the e2e-live tests do; no build
-    tag.
-  - Doors are not covered by `geoprobe`; e2e covers them.
+  - `geoprobe -expected-dump <file> -config <geoengine.properties> -geodata
+    <datapack>/data/geodata` runs from the server checkout without editing it, and must report
+    full agreement. This is the server's own tool: it decodes every region onto its heap (several
+    GB), on the owner's machine and only for this check, never in the bot's runtime.
+  - Doors and the step chain are not covered by `geoprobe`. A live e2e scenario covers both: it
+    walks segments along walls, ledges and stairs, and compares every blocked stop with what
+    `WalkSteps` predicts for the tick timings seen. A server issue asks `geoprobe` for a walk
+    category, which would add an offline oracle.
 - **`nav`** (CI, synthetic regions):
   - every returned path passes both checks of the Goal, segment by segment;
+  - the bound check rejects a segment that only some step sequences get through (a synthetic
+    ledge edge);
+  - the cluster membership rule matches a whole-region SCC computed by brute force on every
+    synthetic region, isolated pockets included;
+  - a closed door on the cheapest entrance-to-entrance path falls back to the door-free cost, not
+    `unreachable: door`;
   - on door-free regions, `Route` succeeds exactly when `SameSCC` holds;
   - the pit is never entered by a default (`SameSCC`) route, and the ledge is taken down only by
     the one-way modes;
@@ -428,20 +489,24 @@ geodata is committed here, and CI never sees it.**
   - budget exhaustion is reported;
   - a property test over random pairs checks the same invariants.
 - **`nav` performance**: benchmarks with recorded thresholds, measured on the owner's geodata
-  locally and reported in the N3 PR:
-  - `Locate` + `SameSCC` p99 ≤ 1 ms with the cluster LRU warm and ≤ 20 ms cold;
-  - abstract distance p99 ≤ 2 ms;
-  - a full 40000-unit route p99 ≤ 10 ms;
-  - heap per route query ≤ 4 MB;
-  - `navbuild` ≤ 15 minutes with half the cores, peak heap ≤ 1 GB, nav cache ≤ 100 MB.
+  locally and reported in the N3 PR.
+  - **Warm** (cluster LRU warm, pages resident):
+    - `Locate` + `SameSCC` p99 ≤ 1 ms;
+    - abstract distance p99 ≤ 2 ms;
+    - a full 40000-unit route p99 ≤ 10 ms, bound checks included.
+  - **Cold** (first touch of the clusters and pages): `Locate` p99 ≤ 30 ms, and a full route
+    p99 ≤ 150 ms. A cold route happens at most once per destination per bot.
+  - Heap per route query ≤ 4 MB.
+  - `navbuild` ≤ 15 minutes with half the cores, peak heap ≤ 1 GB. N3 reports the measured
+    entrance and edge counts, then sets the nav cache's size bound from them.
 - **Door table** (CI, `-race`): out-of-order events from two bots never flip a door back; the
   engine sees the newest state.
 - **`walker`** (events and an injected clock in, packets out):
-  - segments in order;
-  - a same-point `MoveToLocation` replans as blocked;
+  - segments in order, each from standstill;
+  - a same-point `MoveToLocation` replans as blocked, and so does a `StopMove` short of a talk
+    stand point;
   - another destination counts a desync, or a door replan on a door segment;
   - no move during the bot's own swing or cast;
-  - click-ahead only with clearance;
   - the watchdog;
   - `/unstuck` only in a small SCC.
 - **Consumers**: today's rule tests rewritten against a nav built from the synthetic regions, so
@@ -449,19 +514,21 @@ geodata is committed here, and CI never sees it.**
 - **e2e** against the live server (`docs/e2e-live.md`), with the owner's geodata:
   - scenarios: a long walk across a region, the dark elven trip (#144), following over ledges
     (#147, #148), the grocer visit (#122), melee and pick-up around obstacles;
-  - each asserts `nav_desync_total` = 0 on door-free routes and reports `nav_blocked_total`;
+  - each asserts `nav_desync_total` = 0 on door-free routes, and `nav_blocked_total` ≤ 1 per 100
+    segments;
+  - the step-chain scenario above;
   - a door scenario asserts door replans and no plain unreachable.
 
 ## Delivery (milestone M7, "Own navigation")
 
 | PR | Scope | Closes or supersedes |
 | --- | --- | --- |
-| N0 | Settle the open server points by test: head-level Z on multilayer, step-chain sensitivity, echo of `pathDirect`. Write `bots geoquery`. Record the findings in this document | — |
+| N0 | Settle the open server points by test: head-level Z on multilayer, the tick elapsed range `Emin`/`Emax` measured live, the echo of `pathDirect`. Write `bots geoquery`. File the server issue for a `geoprobe` walk category. Record the findings in this document | — |
 | N1 | `internal/geo` copy with its dependencies (location, door template, geometry, properties, `doors.xml`): stored form, `ParseRegion` views, cache writer and reader, mmap on Unix and Windows, readers for `bots geopack`, queries, step chain `WalkSteps`, door overlay. Flags `-geodata`, `-geoengine` and `-geodata-cache`; `docs/home.md` steps (rsync with mtimes kept, `bots geopack`). Synthetic fixtures, memory test, local parity run, measured heap and RSS for the 139 regions | — |
 | N2 | `internal/nav` on cells: directed edges, clearance cost, smoothing with both checks, snap, stand points (routes inside one cluster) | — |
-| N3 | Hierarchy: directed abstract graph, door-tagged edges, SCCs and condensation, the cluster LRU, `bots navbuild` and its cache file, benchmarks against the thresholds above | — |
-| N4 | Door table, `DoorInfo` and `DoorStatusUpdate` decoders, toggles into the shared engine; door-aware route search | — |
-| N5 | Walker: step-chain position, both checks before sending, blocked and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
+| N3 | Hierarchy: directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule and its LRU, `bots navbuild` and its cache file, benchmarks against the thresholds above | — |
+| N4 | Door table (mutex writes, per-door atomic reads, per-bot dedupe), `DoorInfo` and `DoorStatusUpdate` decoders, toggles into the shared engine; door-aware route search with the doors-ignored second search | — |
+| N5 | Walker: step-chain position, `CanMove` and the bound check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
 | N6 | Spots and trips on SCCs and abstract distance; hops, stalls and the hour-long avoid deleted | #144 |
 | N7 | Follow on routes with one-way drops toward the leader; detour machinery deleted; flee, idle drift and death return | #147, #148 |
 | N8 | e2e scenarios and metrics above; the PR rows of `docs/plan.md` updated for D13 | — |
@@ -475,10 +542,12 @@ heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore d
   is not). The cache key rejects a changed local copy, and the desync counter catches a changed
   server copy at the first segment. `docs/home.md` keeps the geodata in the same rsync step as the
   datapack.
-- **Tick jitter in the step chain.** The sweep of step lengths, the clearance cost, and treating a
-  blocked stop as a replan cover it. `nav_blocked_total` measures what is left.
-- **Stale door state** (a door no bot sees, changed by a script or timer): it shows up as door
-  replans, never as plain unreachable.
+- **Tick jitter in the step chain.** The bound check covers every step length in
+  `[Lmin, Lmax]`; the clearance cost keeps routes off the edges where it matters; a blocked stop
+  is a replan. What is left, ticks past `Emax`, is measured by `nav_blocked_total` against its
+  e2e threshold.
+- **Stale or misordered door state** (a door no bot sees, changed by a script or timer, or events
+  from lagging sessions): it shows up as door replans, never as plain unreachable.
 - **Multilayer Z** (bridges, buildings): settled in N0, then pinned by the parity queries.
 - **Memory and CPU on the owner's machine**: one shared mapped engine and nav cache, both read in
   place; searches bounded by a budget and run synchronously, at most one full route per decision;
