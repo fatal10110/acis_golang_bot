@@ -21,6 +21,7 @@ repository.
 | M4 - Town, trade and merchant | #30 | #31-#36 |
 | M5 - Progression | #37 | #38-#40 |
 | M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
+| M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
@@ -50,6 +51,7 @@ the goal.
 | D10 | How bots are run | A control panel on the owner's machine: bots are spawned one by one or in small batches, each with its own persona. Every bot created is stored locally, and the panel logs existing bots back in (on reconnect, on respawn, after its own restart) instead of creating new ones. Gameplay bots, not load testing |
 | D11 | Ban and security risk on the home run | Accepted by the owner: it is the owner's private server. M6 adds no ban or abuse handling beyond what the bots already have (login gate, credential breaker), and the panel is a local tool |
 | D12 | Panel page stack | React, TypeScript (strict), Vite and Tailwind, built from `web/` and embedded in the binary; Node is needed only to build the page (`make ui`, the CI `web` job, the release build), never by the Go jobs or at run time. Replaces the earlier plain-JavaScript, no-Node rule (owner, 2026-11-17, #106) |
+| D13 | Who finds a bot's route | The bot, on its own copy of the server's geodata: every move it sends is a segment it checked with the copied `CanMove` and step chain, and the server's pathfinder is never relied on. Geodata is never loaded whole into memory: it is packed offline and mapped read-only, with regions read in place, as the game server does. Walking personas need the geodata and nav caches; today's legs are not kept as a fallback (D13a). Owner, 2026-11-21. Design and delivery: `docs/navigation.md` |
 
 ## Consequences of a separate repository (D5)
 
