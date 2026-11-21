@@ -22,7 +22,7 @@ repository.
 | M5 - Progression | #37 | #38-#40 |
 | M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
 | M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
-| M8 - Items and loadout | #166 | #167-#181 (`docs/items.md`, PRs I0-I13 and the enchant backlog issue) |
+| M8 - Items and loadout | #166 | #167-#182 (`docs/items.md`, PRs I0-I13 with I8b, and the enchant backlog issue) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to

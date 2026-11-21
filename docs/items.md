@@ -1,13 +1,17 @@
 # Bot items: loadout, supplies and gear like a real player
 
 Status: approved by the owner on 2026-11-21: D14 (b), D15 (a), D16 yes (see "Owner decisions").
-Filed as milestone M8, epic #166, issues #167-#181, and server issue fatal10110/acis_golang#5419.
+Filed as milestone M8, epic #166, issues #167-#182, and server issue fatal10110/acis_golang#5419.
 
 Two rounds of independent review; the second found it sound to file. The first round found: SoE
 casts are queued, not cancelled, by moves; enchanting would freeze gear upgrades; buff potion
 stacking and pacing were wrong; the shot fix sat in the wrong PR; beginner shots were wasted;
 player stores need a walk and exclude package stores; and several PRs were too large. The second
-found that unspawned merchants' lists must not count as a shot source.
+found that unspawned merchants' lists must not count as a shot source. A third round, by a fresh
+reviewer over the final doc and the filed issues, found: enchant gains are a server formula, not
+item data; junk rules would sell the new consumables; carried-shot and weight thresholds that flip
+back and forth; the profession trainer tables and class report; per-level stack orders; split and
+dependency fixes in the issues. All are applied here and in the issues.
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang). Datapack paths (`items/...`,
@@ -66,7 +70,7 @@ wrong.
 8. **Rare enchant scrolls are sold as junk.** D-grade scrolls (955/956) drop from only a handful of
    NPC templates (Hatu Dire Wolf, Bandit Watchman, invaders, raid bosses), so this is minor. But the
    few a bot finds are worth using up to the safe level, not selling.
-9. **Specialization stops at the base class, and dyes need a profession.** Class change is out of
+9. **Specialization stops at the base class, and dyes need a profession.** Class change was out of
    scope in `docs/plan.md` (PR breakdown, the note after the table), so a bot stays Human Fighter
    or Elven Mystic forever. A base class has 0 dye slots.
 
@@ -99,10 +103,11 @@ server. The gaps are in data and spawns, not in code.
 | D-grade and higher shots: only list 5720 (unspawned Sales Cat 31075) and the GM list 300511 sell them, and no multisell does. Dwarven recipes make them at Create Item 2 (Artisan, class 56). | `buyLists.xml:10871,16366`; `recipes.xml:22,319,325` |
 | Spawned grocers sell 1060, 1061, 734 (Haste), 735 (Alacrity), 6035 (Magic Haste), 736 (SoE), and no-grade 1835, 2509, 3947. 1539, 728 and 5591/5592 are not on any spawned list. | `buyLists.xml` (lists 14, 20-23, ...) |
 | HP potions: 10 s reuse, and the stronger heal-over-time replaces the weaker (`hp_recover`). | `items/1000-1099.xml:492`, `skills/2000-2099.xml:251` |
-| Buff potions: 500 ms reuse, 1200 s effect. Alacrity (skill 2012) is `attack_time_down` order 1, the same type as Haste (1086) and Haste for Beginners (4327, Newbie Guide). Magic Haste (2169) is `casting_time_down`, the same type as Acumen (1085) and Acumen for Beginners (4329). The higher order wins. | `skills/2000-2099.xml:127`, `skills/1000-1099.xml:1548,1586`, `skills/4300-4399.xml` (4327 order 2, 4329 order 4) |
+| Buff potions: 500 ms reuse, 1200 s effect. Alacrity (skill 2012) is `attack_time_down` order 1, the same type as Haste (1086) and Haste for Beginners (4327, Newbie Guide). Magic Haste (2169) is `casting_time_down`, the same type as Acumen (1085) and Acumen for Beginners (4329). The higher order wins. Some skills give the order per level through a `#stackOrder` table (Haste 1086, Magic Haste 2169), so the order depends on the effect's level. | `skills/2000-2099.xml:127`, `skills/2100-2199.xml:714,725`, `skills/1000-1099.xml:1548,1566,1586`, `skills/4300-4399.xml` (4327 order 2, 4329 order 4) |
+| Weight penalty starts at 50 % of the limit (then 66.6 %, 80 %). | `model/actor/player/character_weight_penalty.go:48-52` |
 | A UseItem whose item is still in reuse is dropped in silence. | `network/inventory.go` (`live.ItemDisabled`) |
 | SoE: a 20 s cast of skill 2013 (RECALL, not magic). Damage does not interrupt it. A move sent mid-cast is answered ActionFailed and **queued** to run when the cast ends. It lands at the nearest town. | `skills/2000-2099.xml:132-139`, `model/actor/cast/controller.go:919-924`, `network/movement.go:71-81`, `network/recall.go:14-30` |
-| Enchant is ported. It is safe below +3 (+4 for full-body armor). The item files give each piece an `<enchant stat=...>` gain. Weapon scrolls come only from multisells; armor scrolls only from castle and clan hall stewards. | `enchant/service.go:45-88,558` |
+| Enchant is ported. It is safe below +3 (+4 for full-body armor). Every `<enchant>` entry in the item files has `val="0"`: the gain is a server formula keyed by stat, grade and weapon type (`applyEnchant`), and `<enchant>` only names the stats an enchant raises. Weapon scrolls come only from multisells; armor scrolls only from castle and clan hall stewards. | `enchant/service.go:45-88,558`, `skill/effect/mod.go:175-230`, `items/0200-0299.xml:2032-2033` |
 | Armor set skills, shield skills and +6 skills are applied on equip. | `skill/persistence.go:723-830` |
 | Item stats are `<for>` children: `<set stat="pAtk" val=.../>` on weapons, `<baseadd stat="pDef" val=.../>` on armor. | `items/0200-0299.xml:2010-2034`, `items/0300-0399.xml:1194-1206` |
 | A private store buy needs the buyer within trade interaction distance of the owner. A package store (type 8) sells only whole. | `network/privatestore.go:385-395`; bot `store.go:37` |
@@ -118,12 +123,18 @@ Every policy value is a configurable persona default (D6). Every new sender stat
 
 ### 1. Item knowledge (`internal/datapack`)
 
-Extend `LoadItems` to cover the etc items the loadout uses. For each, read `default_action` /
-`handler` (soulshot, spiritshot, blessed spiritshot, potion, scroll), `crystal_type`, `weight`,
-`item_skill`, `reuse_delay`, `is_tradable`. For weapons and armor, read the `<for>` stat block
-(`pAtk`, `mAtk`, `pDef`, `mDef`, `pAtkSpd`, `rCrit`, and the `<enchant>` gains) and the
-`soulshots` / `spiritshots` counts. Add a skill reader for the potions' effect stack type and order
-(section 4).
+Extend `LoadItems` to cover the etc items the loadout uses. For each, read `default_action`,
+`handler` and `etcitem_type`. Potions and SoE share `default_action` `skill_reduce`, so only
+`etcitem_type` tells them apart. Also read `crystal_type`, `weight`, `item_skill`, `reuse_delay`,
+`is_tradable` and `is_sellable` (beginner shots are blocked by `is_sellable`).
+
+For weapons and armor, read the `<for>` stat block (`pAtk`, `mAtk`, `pDef`, `mDef`, `pAtkSpd`,
+`rCrit`), which stats `<enchant>` names, and the `soulshots` / `spiritshots` counts. The enchant
+gain itself is a copy of the server's `applyEnchant` formula (stat, grade, weapon type, +3 cap with
+the over-enchant rate), owned here (D5), because every `<enchant>` value in the files is 0.
+
+Add a skill reader for the effects' stack type and order, by skill id **and level** (`#stackOrder`
+tables), for section 4.
 
 The hard-coded `healingPotions` and `shotTemplates` lists in `items.go` give way to this index.
 The persona's `Potions` and `Shots` stay as overrides. The `armorSets.xml` reader comes with set
@@ -149,14 +160,20 @@ picks one per persona.
   other template the server has on. The server stays silent on later mismatches, so the bot cannot
   rely on it to notice.
 - No restock of shots the bot cannot use. Shots of a grade no weapon the bot wears or will wear
-  next can use become junk (beginner shots excepted: they are kept until used).
+  next can use become junk (beginner shots excepted: they are kept until used). For that,
+  `Persona.Shots`, which today defaults to all 19 shot templates and keeps them all out of junk
+  (`rules.go`, `shop.go` `keeps`), defaults to nothing: the wanted grade is derived. A persona
+  that lists templates still keeps them.
 - **Shot factor** (in the same PR, on today's price score): a weapon's value is multiplied by the
   shot factor only when the bot can get shots of its grade. So without D shots, the bot keeps a
   no-grade weapon with shots over a D weapon without them until the D weapon's value wins on its
   own. This is the fix for finding 1 until the clan crafter (M9, D14 b) supplies graded shots.
 
   "Can get" is a small consumer-side interface, a **shot source** (grade → obtainable). The default
-  answers from carried shots and from the lists of merchants that have a spawn in `Travel.spawns`.
+  answers from the lists of merchants that have a spawn in `Travel.spawns`, and from carried shots
+  only when they reach the trip target (I3). A few looted D shots must not switch the bot to a D
+  weapon it cannot keep charged. While a weapon's grade is obtainable only from carried shots, the
+  weapon it replaced is kept, not junk, so the bot can switch back when the shots run out.
   The travel map indexes every buylist with an NPC id, spawned or not (`shop.go` `indexShops`), and
   the unspawned Sales Cat's list sells D shots, so unspawned lists must not count. The clan crafter
   plan (M9) adds "the clan crafter can make this grade now" as a second source.
@@ -171,14 +188,15 @@ picks one per persona.
   clock.
 - The **trip target** for each consumable is use rate × `Supply.TripMinutes` (default 60) plus a
   margin. It is clamped by weight headroom (`SelfState.Load`/`MaxLoad` plus item weights from the
-  index; never above `Supply.MaxLoad`, default 60 %) and by the budget (section 5).
+  index; never above `Supply.BuyLoad`, default 45 %, below the server's first weight-penalty band at
+  50 %) and by the budget (section 5).
 - The default list: shots (section 3); the best HP potion a merchant sells (1061 over 1060); 1-2
   Scrolls of Escape; the class's buff potion only when the budget's comfort tier allows it.
 - **HP potions** keep rule 3, with a persona threshold that also allows drinking early when two or
   more attackers are on the bot. Pacing: `potionReuse` as today.
 - **Buff potions** are drunk at the spot, out of combat, only when no effect of the same stack type
-  with an equal or higher order is on the bot. The bot sees only skill ids in its abnormals, so it
-  maps them through the skill reader. This covers a support bot's Haste or Acumen and the Newbie
+  with an equal or higher order is on the bot. The bot's effects carry skill id and level
+  (`support.go` `Effect`), which it maps through the skill reader to stack type and order. This covers a support bot's Haste or Acumen and the Newbie
   Guide's beginner buffs, which would make the potion a waste. Pacing: per potion, one UseItem, then
   none until its effect shows in the abnormals or 5 s pass (the server drops a use still in its
   500 ms reuse in silence).
@@ -197,12 +215,18 @@ This replaces `shopWants`, `gearWants` and `gearReserve` (`shop.go`, `gear.go`) 
 `ShopPolicy.Restock` stays as an explicit override list; `GearPolicy.KeepAdena` becomes the reserve
 floor.
 
+The junk rule (`keeps`) learns everything the loadout buys. Today it keeps only `Potions`, `Shots`,
+`Restock`, `Keep`, books and arrows, so a sell visit would sell the SoE, buff potions and dyes the
+bot just bought. It now keeps every template with a trip target (section 4), the build's buff
+potion and the planned dyes until they are drawn. A persona **keep hook** lets the clan crafter
+plan (M9) add crafting materials, with no clan logic in M8.
+
 ### 6. Gear by stats, enchant and sets
 
 - **Score.** A piece's score is its stats, its enchant gain included, weighted by the build, times
   the shot factor for weapons (section 3). The "never replace an enchanted piece" rule becomes
   "replace it only when the new piece's score is higher, enchant counted." So a +3 D weapon does
-  not block a C upgrade. An enchant gain the item file does not give keeps today's rule.
+  not block a C upgrade. The enchant gain is the copied server formula (section 1).
 - **Sets.** Armor is scored per **combination**: a complete set adds a bonus valued as a persona
   fraction of its pieces' score (default 15 %), because the set skill's stats are not read. An
   upgrade that breaks a worn set must beat the set including its bonus. Purchases plan the whole set
@@ -215,15 +239,21 @@ floor.
 
 ### 7. Supply trip and preparation
 
-- **Going home.** A farmer starts a supply trip when it would run out within
-  `Supply.ReturnMinutes` (default 10) of fighting, when its HP potions are gone, when its weight
-  passes `Supply.MaxLoad`, or when the saved adena covers the gear goal. It goes only with no
-  attacker and nothing aggressive within its aggro range.
+- **Going home.** A farmer starts a supply trip when any of these holds:
+  - it would run out within `Supply.ReturnMinutes` (default 10) of fighting;
+  - its HP potions are gone;
+  - its weight passes `Supply.ReturnLoad` (default 70 %, well above the 45 % `BuyLoad`, so a bot
+    that bought to the cap does not turn round at its first loot);
+  - the saved adena covers the gear goal.
+
+  It reads SoE only with no attacker and nothing aggressive within its aggro range. If that does
+  not happen within `Supply.SafeWait` (default 2 min), as at a spot that always has an aggressive
+  monster in range, it walks out instead.
 - **SoE.** It stands up if sitting, then sends one UseItem of a carried SoE. While the cast runs it
   is in an **escaping hold**: every rule that moves, attacks, loots or clicks returns a hold until
   the teleport (`TeleportToLocation`) or the cast's end. This matters because a move sent mid-cast
   is queued by the server and would run on arrival. If the cast ends with no teleport, it walks.
-  Pacing: one UseItem, with no repeat before the cast ends or `escapeRetry`.
+  Pacing: one UseItem, with no repeat before the cast ends or `escapeRetry` (30 s, `death.go`).
 - **Without SoE,** it walks or takes a gatekeeper with the travel errand.
 - **Spot.** The trip releases its hold in the spot registry, so another bot may take the spot; the
   returning bot picks again, as at a level-up.
@@ -252,15 +282,26 @@ stores.
 
 - **Class change:** at level 20 and 40, the bot visits the class master and picks the build's
   profession for its race and persona, through the page's bypass links. Pacing: `bypassGap`
-  (500 ms). The build table includes the dwarf crafter line the clan crafter plan (M9) needs:
-  53 → 56 Artisan (20) → 57 Warsmith (40). That plan owns the Create Item (172) learn data.
+  (500 ms). The page's answer, a new page or the class change in `UserInfo`, is waited for 5 s; then
+  the visit backs off for `WalkStuckFor`. The build table includes the dwarf crafter line the clan
+  crafter plan (M9) needs: 53 → 56 Artisan (20) → 57 Warsmith (40). That plan owns the Create Item
+  (172) learn data.
+- **After the change.**
+  - `LearnSkills` and `Trainers` are keyed by class id, and today only base classes have entries
+    (`trainer.go`). So the change adds the professions' learn and trainer tables, or the support
+    mystic stops learning heals and buffs at 20.
+  - The registry learns the new class through the existing path: the brain's status snapshot
+    already carries `ClassID`, and the supervisor's `keepProgress`, on the supervisor goroutine,
+    copies it with the level and position. The one-shot `pin` report (`session.go`), which fires
+    once per run, is not used for this.
 - **Dyes:**
   1. **Buy.** The dyes go on the shop errand's list from merchant buylists, under the budget's gear
      tier: 10 per symbol plus the fee.
   2. **Draw.** The bot walks to a Symbol Maker, as a player does, although the server does not
      require one. There it sends `RequestHennaItemList` and waits for the list, then
-     `RequestHennaEquip` per symbol into its free slots. One request per answer; bypass links paced
-     by `bypassGap`.
+     `RequestHennaEquip` per symbol into its free slots. One request per answer, waited for 5 s:
+     the server drops an unknown symbol in silence (`network/henna.go:61-66`). On a timeout the
+     visit ends and backs off for `WalkStuckFor`. Bypass links are paced by `bypassGap`.
   3. **Which dyes.** A persona table per profession that respects the +1/-3 trade and each row's
      class list. For example: warriors STR+1 CON-3 and DEX+1 CON-3; nukers INT+1 WIT-3 or WIT+1
      INT-3; healers (Cleric 15, Oracle 29, Shillien Oracle 42, Shaman 50), whom the INT/WIT rows
@@ -279,17 +320,21 @@ Answered by the owner on 2026-11-21.
 
 | # | Question | Decision |
 | --- | --- | --- |
-| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan, milestone M9 (D17-D19). Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
+| D14 | Where do D-grade and higher shots come from? | (b) A Dwarven crafter bot makes them for its clan through the clan warehouse: the clan crafter plan (`docs/crafting.md`, milestone M9, decisions D17-D19). That plan is being written in a separate session and is not yet in `docs/plan.md` or filed; M9's own PR adds its rows and epic. Until it lands, I2's shot factor keeps the weapon choice honest without them. The rejected options were (a) adding graded shots to grocer lists, and (c) no source at all. |
 | D15 | May bots change class? | (a) At the class master NPC 50000, which is free and quest-free under the shipped config, given a persistent spawn by fatal10110/acis_golang#5419. |
 | D16 | Supply trips | Yes: farmers leave their spot to restock, and the spot is released and may be taken. |
 
 ## Testing
 
-- **Datapack (unit):** fixture item files with stats, enchant gains, shots, potions and enchant
+- **Datapack (unit):** fixture item files with stats, `<enchant>` stat names, shots, potions and enchant
   scrolls; potion skills with stack type and order; an armor set file. The reader keeps exactly the
   fields it reads and fails on mangled values, like the existing `items_test.go`.
 - **Brain (unit, table-driven, events and injected clock in, packets out):**
+  - the copied enchant formula matches the server's on fixed cases (weapon types, grades, over +3);
   - a worn D weapon turns auto on only for the D template, and off for a no-grade one that is on;
+  - a few looted D shots below the trip target do not switch weapons, and the replaced weapon is
+    kept while only carried shots back the new grade;
+  - bought SoE, buff potions and planned dyes are never junk;
   - beginner shots go first and are never junk;
   - no D shots on sale: the bot keeps a no-grade weapon with shots;
   - an unspawned merchant's list (the Sales Cat's D shots) gives no shot factor;
@@ -314,23 +359,24 @@ fatal10110/acis_golang#5419. D14 (b) needs no server change.
 
 | PR | Issue | Scope | Depends on |
 | --- | --- | --- | --- |
-| I0 | #167 | Settle the remaining server facts: private store list open, class master pages, the dye flow, abnormals. Notes go into this doc. | — |
-| I1 | #168 | Datapack: etc items, gear stats and enchant gains, potion skill stack types. Replace the hard-coded potion and shot lists. | — |
+| I0 | #167 | Settle the remaining server facts: private store list open, class master pages, the dye flow. Notes go into this doc. | — |
+| I1 | #168 | Datapack: etc items (`etcitem_type`, `is_sellable`), gear stats, the copied enchant formula, skill stack types by id and level. Replace the hard-coded potion and shot lists. | — |
 | I2 | #169 | Shots by weapon grade, beginner shots first, blessed spiritshots for casters, no unusable shots bought, the shot source and the shot factor on the price score (findings 1, 2). | I1 |
 | I3 | #170 | Use meter and trip targets (section 4). | I1 |
-| I4 | #171 | One budget replacing `shopWants`, `gearWants` and `gearReserve`, plus the keep hook (section 5). | I3 |
-| I5 | #172 | Gear score by stats and enchant, replacing price and the never-replace-enchanted rule (section 6). | I1, I2 |
+| I4 | #171 | One budget replacing `shopWants`, `gearWants` and `gearReserve`; `keeps` covers everything the loadout buys; the keep hook (section 5). | I3 |
+| I5 | #172 | The build table, and gear score by stats and enchant, replacing price and the never-replace-enchanted rule (sections 2, 6). | I1, I2 |
 | I6 | #173 | Armor set reader and set-combination scoring and buying. | I5, I4 |
 | I7 | #174 | Grade-jump saving. | I5, I4 |
-| I8 | #175 | Supply trip, SoE with the escaping hold, preparation (section 7). | I4, M7 N6 (#158) |
-| I9 | #176 | Better HP potion and buff potions with the stack-type check and gate. | I1, I4 |
+| I8 | #175 | Supply trip: triggers, SoE with the escaping hold, the walk-out fallback, the spot release (section 7). | I4, M7 N6 (#158) |
+| I8b | #182 | Preparation in town before leaving, the arrival reset of `shop.nextAt`, the "trip in town" hook (section 7). | I8, I4 |
+| I9 | #176 | Better HP potion and buff potions with the stack-type check and gate. | I1, I4, I5 (build table) |
 | I10 | #177 | Buying from private sell stores (section 8). | I0, I4 |
-| I11 | #178 | Class change at the class master with a race and persona build table. | acis_golang#5419, I0 |
+| I11 | #178 | Class change at the class master: professions in I5's build table, profession learn and trainer tables, the class through the status snapshot. | acis_golang#5419, I0, I5 |
 | I12 | #179 | Dye purchase and drawing. | I11, I4 |
 | I13 | #180 | e2e live scenarios for I2-I12. | each |
 | — | #181 | Backlog: enchant to the safe level (section 10). | I5 |
 
-Most urgent: I2 (every bot at level 20 today), then I3, I4 and I8 (farmers never restock).
+Most urgent: I2 (every bot at level 20 today), then I3, I4, I8 and I8b (farmers never restock).
 
 ## Risks
 
