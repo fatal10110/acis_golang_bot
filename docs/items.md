@@ -125,10 +125,196 @@ server. The gaps are in data and spawns, not in code.
 | Enchant is ported. It is safe below +3 (+4 for full-body armor). Every `<enchant>` entry in the item files has `val="0"`: the gain is a server formula keyed by stat, grade and weapon type (`applyEnchant`), and `<enchant>` only names the stats an enchant raises. Weapon scrolls come only from multisells; armor scrolls only from castle and clan hall stewards. | `enchant/service.go:45-88,558`, `skill/effect/mod.go:175-230`, `items/0200-0299.xml:2032-2033` |
 | Armor set skills, shield skills and +6 skills are applied on equip. | `skill/persistence.go:723-830` |
 | Item stats are `<for>` children: `<set stat="pAtk" val=.../>` on weapons, `<baseadd stat="pDef" val=.../>` on armor. | `items/0200-0299.xml:2010-2034`, `items/0300-0399.xml:1194-1206` |
-| A private store buy needs the buyer within trade interaction distance of the owner. A package store (type 8) sells only whole. | `network/privatestore.go:385-395`; bot `store.go:37` |
-| Dyes are ported: `RequestHennaItemList`, `RequestHennaItemInfo`, `RequestHennaEquip`. Neither the list nor the draw checks for a Symbol Maker nearby. Slots by class level are 0 / 2 / 3. Each `hennas.xml` row lists only profession ids. Drawing takes 10 dyes plus the fee (37000 / 87000). First-profession dyes trade +1 of one stat for -3 of another. Dyes (4445+) are on merchant lists (for example npc 30093). | `network/client_dispatch.go:85-90`, `network/henna.go:65`, `network/client_ingame.go:237`, `model/henna/list.go:58-66`, `symbolmaker/symbolmaker.go:82-156`, `hennas.xml:3-15` |
-| Class master mod is ported, and `ConfigClassMaster = 1;[];[];2;[];[];3;[];[]` makes it free with no quests. Its NPC 50000 is in no spawnlist. Grand masters need the path quest token (q401-q419 are ported). | `classmaster/`, `network/classmaster.go:91`, `npcs.properties:52` |
+| A private store buy needs the buyer within trade interaction distance (150, 3D) of the owner. A package store (type 8) sells only whole. A store list opens through the second `Action` on the owner, not a packet of its own. The full flow is under "Buying from a private sell store" below. | `network/privatestore.go:389-398`, `network/trade.go:15`; bot `store.go:37` |
+| Dyes are ported: `RequestHennaItemList`, `RequestHennaItemInfo`, `RequestHennaEquip`, and the unequip trio. Neither the list nor the draw checks for a Symbol Maker nearby. Slots by class level are 0 / 2 / 3. Each `hennas.xml` row lists only profession ids. Drawing takes 10 dyes plus the fee. The fee is 37000, 87000 or 149000 for the first-profession symbols 1-36, and 87000 to 628000 for symbols 37+. First-profession dyes trade +1 of one stat for -1, -2 or -3 of another, and the dearer the dye, the smaller the loss. Dyes (4445+) are on merchant lists (for example npc 30093). The full flow is under "Drawing dyes" below. | `network/client_dispatch.go:85-90`, `network/henna.go:65`, `network/client_ingame.go:237`, `model/henna/list.go:58-66`, `symbolmaker/symbolmaker.go:82-160`, `hennas.xml:3-40` |
+| Class master mod is ported, and `ConfigClassMaster = 1;[];[];2;[];[];3;[];[]` makes it free with no quests. That value is a deployment setting: the code default is empty, so no tier is offered. Its NPC 50000 is in no spawnlist (fatal10110/acis_golang#5419). Grand masters need the path quest token (q401-q419 are ported). The full flow is under "Changing class at the class master" below. | `classmaster/settings.go:39-66`, `network/classmaster.go:91`, `npcs.properties:52`, `internal/config/testdata/reference_defaults.golden:106` |
 | Crystallize, recipe crafting, `RequestPrivateStoreBuy` and private buy stores are ported. | `network/client_dispatch.go:80-100`, `network/privatestore_dispatch.go:54,60` |
+
+### Flows settled in I0
+
+Checked in the server and the datapack on 2026-11-22 (#167). Server paths are relative to
+`internal/gameserver/`, datapack paths to `aCis_datapack/data/`. Every integer is little-endian
+int32 unless stated. Every request below runs on the player's queue. None of them has a flood
+protector of its own, only the frame bucket.
+
+#### Buying from a private sell store
+
+1. **Find the owner.** `CharInfo` store type 1 (sell). Skip 8 (package sell). 3 (buy) and 5
+   (manufacture) are also `Operating()`, but they open other windows.
+2. **Select.** The client sends `Action` (0x04): objectId, originX, originY, originZ, then uint8
+   shift, 17 bytes in all (`network/clientpackets/targetaction.go:9-23`; bot
+   `brainpackets.go:33`). The first `Action` only selects. The server answers `ValidateLocation`,
+   then `MyTargetSelected` (`network/targeting.go:48`, `selectLiveTarget` :848-878).
+3. **Open the list.** A second `Action` on the same target (`actOnTargetAgain` :105,
+   `actOnSelectedTarget` :145) reaches `actOnPlayer` (`network/player_follow.go:24-41`). Its cases
+   run in this order:
+   - across a boat boundary: `ActionFailed`;
+   - an owner the bot may attack without force (karma or flagged): the bot **attacks** it. So the
+     bot must never click a flagged or karma owner;
+   - `Operating()` (`privatestore/store.go:31`): interact;
+   - anyone else is followed.
+
+   The interact (`tryToInteract` :473, `thinkInteract` :564-601) first sends `ActionFailed`. It
+   needs the bot standing and not flying. Beyond `interactApproachOffset` (100) plus both collision
+   radii (:379, :570), the server walks the bot there itself (`MoveToPawn`, offset 100), unless
+   shift is held. In reach (`interactionDistance` 150, :383) it broadcasts the bot facing the owner
+   (`MoveToPawn`) and opens the store (`onInteract` :618-621 → `showPrivateStore`,
+   `network/privatestore.go:544-570`). A store still being set up opens nothing.
+4. **The list.** `PrivateStoreListSell` (0x9b, `network/serverpackets/privatestore.go:13,48-97`):
+   - header: ownerId, packaged (0/1), buyer's adena, row count;
+   - per row: type2, objectId, itemId, count, uint16 0, uint16 enchant, uint16 0, body part slot,
+     price, reference price.
+
+   Rows whose template is missing are dropped. A buy store answers `PrivateStoreListBuy` (0xb8)
+   instead, and a manufacture store the recipe shop list. The bot already decodes the sell list
+   (`internal/botclient/store.go:156-185`).
+5. **Buy.** `RequestPrivateStoreBuy` (0x79, `network/clientpackets/privatestore.go:15,136-157`):
+   storeId (the owner's object id), count, then per row objectId, count, unit price.
+   - Each row needs objectId and count of at least 1 and a price of at least 0.
+   - The row count is capped at `MaxItemInPacket` (`network/privatestore_dispatch.go:15`), and
+     `count × 12` must equal the bytes left.
+   - A malformed request decodes to no rows and is dropped in silence.
+   - Bot encoder: `internal/botclient/store.go:203-211`.
+6. **Refusals** (`buyFromStore`, `network/privatestore.go:407-442`; `Store.Buy`,
+   `privatestore/deal.go:87-185`). Buying is all rows or nothing, and every refusal is silent
+   unless named:
+   - no rows;
+   - the buyer is dead or holds a cursed weapon;
+   - the owner is unknown, dead, or farther than 150 in 3D (`storeOwner` :389-398);
+   - the owner no longer sells (`OperateSell` or `OperatePackageSell`);
+   - the buyer's access level lacks `AllowTransaction`: `SystemMessage` NotAuthorizedToDoThat;
+   - a row that names an objectId not listed, or not at **exactly** the listed price
+     (`sellRowLocked` :278-285). So a changed price or a sold-out row refuses the whole deal;
+   - a count above the listed count (summed per object), or a total above MaxInt32;
+   - a package store asked for less than every row in full;
+   - an owner's item that can no longer be moved (bound, augmented and the like);
+   - not enough adena: `SystemMessage` YouNotEnoughAdena; then weight: WeightLimitExceeded; then
+     slots: SlotsFull. They are checked in that order (`privatestore/deal.go:162-173`, `answerDeal`
+     `network/privatestore.go:483-499`).
+7. **Success.**
+   - One `SystemMessage` per row to the buyer (`storeDealFrame` :519-540): PurchasedS3S2SFromS1
+     for a stackable item (seller, item, count), PurchasedS2S3FromS1 for an enchanted one,
+     PurchasedS2FromS1 otherwise. The owner gets the mirror messages.
+   - The bought items and the adena come in the batched `InventoryUpdate` of the next 333 ms
+     inventory tick (`task/inventoryupdates.go:13,91-113`).
+   - The list is not sent again.
+   - A store left empty closes: the owner gets `UserInfo`, and everyone around a `CharInfo` with
+     store type 0 (`closeSoldOutStore` :504-514). Other buyers learn it only from that `CharInfo`.
+
+For the bot (section 8): walk to within 150 of the owner on its own navigation, then send two
+`Action`s. Buy at the listed price exactly; the reference price is only a guide. Partial counts of
+stackable items are fine in a sell store. Send one request per list.
+
+#### Changing class at the class master
+
+NPC 50000 (Hasha, the Class Manager, `xml/npcs/50000-50999.xml:3`). Its pages are
+`html/mods/classmaster/50000.htm` and `50000-1.htm` to `50000-6.htm` (`model/actor/npc/folk_chat.go:95`).
+
+1. **Talk.** The same two `Action`s as any folk NPC. The answer is `NpcHtmlMessage` (0x0f,
+   `network/serverpackets/npchtmlmessage.go:10`) with `50000.htm`. Its links are
+   `bypass -h npc_%objectId%_1stClass`, `_2ndClass`, `_3rdClass`, `_become_noble` and
+   `_learn_skills` (`50000.htm:4-9`).
+2. **Bypass rules** (`RequestBypassToServer`, `network/bypass.go:115-166`):
+   - The command must be a link on the **last page sent** (`bypassWhitelist.allows` :65, :139).
+     Anything else is dropped in silence.
+   - The NPC must be within `interactionDistance` (150, `playerCanDoInteract`,
+     `network/targeting.go:725-730`).
+   - The handler closes with `ActionFailed`.
+   - The server's bypass gap (`ServerBypassTime`) is 100 ms. The bot's `bypassGap` (500 ms,
+     `pacing.go:26-30`) is wider.
+3. **Commands** (`classmaster/command.go:42-62`, routed by `model/actor/npc/folk_bypass.go:369` to
+   `network/classmaster.go:15-46`):
+   - `1stClass`, `2ndClass` and `3rdClass` ask for the menu of tier 1, 2 or 3;
+   - `change_class <id>`: a malformed id stops the request with nothing sent;
+   - `become_noble` and `learn_skills`.
+4. **Menu page** (`MenuPage`, `classmaster/dialog.go:84-122`). The change levels
+   (`changeLevel` :33-44) are 20 from a base class, 40 from a first profession and 76 from a second.
+   - A tier the config does not offer: no change.
+   - The class is already at or past the tier asked: page `-1` (no change).
+   - At or above the level: page `-2`, the menu. It has one
+     `<a action="bypass -h npc_%objectId%_change_class N">Name</a>` per class of that tier that is
+     a **direct** child of the current class (`canTransfer` :48-57; the whole line only with
+     `AllowEntireTree`). The page also fills `%req_items%`.
+   - No entry, or too low a level: page `-3` ("come back at level N").
+
+   So a base class at 20 sends `1stClass`, and a first profession at 40 sends `2ndClass`. The bot
+   reads N from the menu's links. It never builds one: a link not on the page is dropped.
+5. **Transfer refusals** (`classMasterTransfer`, `network/classmaster.go:53-98`; `CheckTransfer`,
+   `classmaster/transfer.go:39-66`):
+   - level below the change level, or a class that is not a child: silent, no page;
+   - weight penalty above 2 when the tier gives rewards: `SystemMessage` InventoryLessThan80Percent;
+   - required items missing: `SystemMessage` NotEnoughItems;
+   - a tier not configured: the request stops with nothing sent, not even `ActionFailed`.
+6. **Success**, in this order:
+   - required items destroyed and rewards given;
+   - `MagicSkillUse` of skill 5103 on the bot, broadcast (`network/occupation.go:11,28-30`);
+   - `SystemMessage` ClassTransfer (ThirdClassTransfer at the third), and the party and clan
+     window rows;
+   - the skill list, **only** when `AutoLearnSkills` is on. It is off by default
+     (`internal/config/testdata/reference_defaults.golden:139`), so no `SkillList` comes;
+   - the base class is set (not on a subclass), then `HennaInfo` (0xe4), then `UserInfo` with the
+     new class id, and `CharInfo` to everyone around (`broadcastCharacterInfo`,
+     `network/inventory.go:917-921`);
+   - `NpcHtmlMessage` with `50000-4.htm` (changed), then `ActionFailed`.
+7. **`learn_skills`** (`network/classmaster.go:42-43` → `rewardLiveSkills`,
+   `network/occupation.go:59-68`; `RewardSkills`, `skill/leveling.go:54-71`) grants every skill
+   the class and level unlock and charges no SP. It sends the raised skills (shortcuts, then
+   `SkillList`) and no page.
+8. **Spawn.** NPC 50000 is in no spawnlist. Until fatal10110/acis_golang#5419 lands, the flow can
+   only be tested on a GM-spawned master.
+
+#### Drawing dyes
+
+No request below checks for a Symbol Maker or an NPC distance (`network/henna.go:11-14`,
+`network/client_ingame.go:236-242`).
+
+| Client packet | Opcode | Body | Answer |
+| --- | --- | --- | --- |
+| `RequestHennaItemList` | 0xba | none | `HennaEquipList` 0xe2 |
+| `RequestHennaItemInfo` | 0xbb | symbolId | `HennaItemInfo` 0xe3 |
+| `RequestHennaEquip` | 0xbc | symbolId | see below |
+| `RequestHennaUnequipList` | 0xbd | none | `HennaUnequipList` 0xe5 |
+| `RequestHennaUnequipInfo` | 0xbe | symbolId | `HennaItemUnequipInfo` 0xe6 |
+| `RequestHennaUnequip` | 0xbf | symbolId | see below |
+
+Opcodes and bodies: `network/clientpackets/henna.go:11-16,44-70`, `network/serverpackets/henna.go:10-13`,
+`network/serverpackets/hennainfo.go:10`. Dispatch: `network/client_dispatch.go:85-90`.
+
+1. **List.** `HennaEquipList` (`network/serverpackets/henna.go:34-47`): adena, max slots, count,
+   then per symbol symbolId, dyeId, 10 (the dyes a draw takes), price, 1. It lists only symbols the
+   class may use **and** whose dye the bot carries at least one of (`Drawable`,
+   `symbolmaker/symbolmaker.go:32-44`). Without dyes the list is empty.
+2. **Slots.** `henna.MaxSlots(classTier)` (`model/henna/list.go:58-66`): 0 for a base class, 2
+   for a first profession, 3 after. A base-class bot cannot draw at all, so the class change comes
+   first.
+3. **Draw refusals** (`drawHenna`, `network/henna.go:65-89`; `Draw`,
+   `symbolmaker/symbolmaker.go:82-117`), in order:
+   - unknown symbol id: silent;
+   - class not allowed: `SystemMessage` CantDrawSymbol;
+   - no free slot: SymbolsFull;
+   - fewer than 10 of its dye (`henna.DrawAmount`, `model/henna/henna.go:7`): CantDrawSymbol
+     again, so a missing dye and a class refusal look the same;
+   - not enough adena: YouNotEnoughAdena.
+4. **Draw success.** The adena is paid **before** the dyes are taken. The bot gets `SystemMessage`
+   S1DisappearedAdena (when the price is above 0), then S2S1Disappeared (the dye, 10). Then comes
+   `HennaInfo` (0xe4, `network/serverpackets/hennainfo.go:15-45`): uint8 INT, STR, CON, MEN, DEX,
+   WIT, then max slots, count, and per symbol symbolId and an active flag. Then `UserInfo`
+   (`sendHennaChange` :129-132), then SymbolAdded. The symbol takes the first free slot.
+5. **Remove.** `RequestHennaUnequipList` always answers the list (`network/henna.go:23-31`).
+   `RequestHennaUnequip` (`deleteHenna` :95-115, `Delete`, `symbolmaker/symbolmaker.go:134-160`)
+   costs a fifth of the draw price (`model/henna/henna.go:27`).
+   - Not enough adena: YouNotEnoughAdena.
+   - A symbol not worn: silent.
+   - Success: `HennaInfo`, `UserInfo`, `SystemMessage` YouPickedUpS2S1 (5 dyes back), then
+     SymbolDeleted.
+6. **Data** (`xml/hennas.xml`, 180 symbols).
+   - Symbols 1-36 list only first-profession ids (`hennas.xml:3-38`). Symbols 1-12 cost 37000
+     (+1/-3), 13-24 cost 87000 (+1/-2), and 25-36 cost 149000 (+1/-1).
+   - Symbols 37+ list second and third-profession ids, with stronger rows (for example symbol 73:
+     STR+2 CON-3 for 190000, `:75`).
+   - Draw prices across the file: 12 × 37000, 24 × 87000, 24 × 149000, 12 × 176000, 12 × 190000,
+     36 × 206000, 36 × 258000, 12 × 387000, 12 × 628000.
+   - The per-profession table (I12 #179) re-checks each symbol's price and class list.
 
 ## Design
 
@@ -309,10 +495,16 @@ Items no spawned NPC sells (Greater Healing Potion, graded shots, gear) are boug
 stores.
 
 - **Who:** a player whose `CharInfo` store type is sell (1). Package stores (8) are skipped.
-- **Flow:** walk to within trade interaction distance of the owner, then select the owner to open
-  its list. Then send `RequestPrivateStoreBuy` for wanted rows at no more than
+- **Never** a karma or flagged owner: the second `Action` on one attacks it.
+- **Flow:** walk to within trade interaction distance (150) of the owner, then send `Action` twice
+  on it: the first selects, the second opens `PrivateStoreListSell`. There is no list-open packet
+  of its own. Then send `RequestPrivateStoreBuy` for wanted rows at no more than
   `Market.MaxOverReference` (default 1.5 × reference price, and never above an NPC's price for the
-  same item), within the budget. The exact list-open packets are settled in I0.
+  same item), within the budget. Each row carries the listed price exactly; any other price, or a
+  row sold out meanwhile, refuses the whole request in silence. Only adena, weight and slots
+  refusals answer, with a `SystemMessage`. The purchase shows as one `SystemMessage` per row and
+  then the batched `InventoryUpdate`; the list is not sent again. Packets, layouts and refusals:
+  "Buying from a private sell store" above.
 - **Pacing:** walks and clicks through the frame pacer, one buy request per list window, and a
   per-seller cool-down (default 10 min).
 - This also gives the bot merchants buyers, so trading runs both ways.
@@ -320,12 +512,18 @@ stores.
 ### 9. Class change and dyes (D15)
 
 - **Class change:** at level 20 and 40, the bot visits the class master and picks the build's
-  profession for its race and persona, through the page's bypass links. Pacing: `bypassGap`
-  (500 ms). The page's answer, a new page or the class change in `UserInfo`, is waited for 5 s; then
+  profession for its race and persona, through the page's bypass links: `1stClass` at 20 and
+  `2ndClass` at 40, then the `change_class N` link of the menu page for the profession. The bot
+  stands within 150 of the master and clicks only links of the last page it got, since the server
+  drops any other. Pacing: `bypassGap` (500 ms). The page's answer, a new page or the class change in `UserInfo`, is waited for 5 s; then
   the visit backs off for `WalkStuckFor`. The build table includes the dwarf crafter line the clan
   crafter plan (M9) needs: 53 → 56 Artisan (20) → 57 Warsmith (40). That plan owns the Create Item
   (172) learn data.
 - **After the change.**
+  - The change sends `HennaInfo` and `UserInfo` (new class id), then the changed page. It sends no
+    `SkillList`, because `AutoLearnSkills` is off by default. The page's `learn_skills` link would
+    grant every skill free of SP. The bot does not use it, since a player pays SP at the trainer
+    (D6 keeps it a persona choice).
   - `LearnSkills` and `Trainers` are keyed by class id, and today only base classes have entries
     (`trainer.go`). So the change adds the professions' learn and trainer tables, or the support
     mystic stops learning heals and buffs at 20.
@@ -340,18 +538,22 @@ stores.
      tier: 10 per symbol plus the fee.
   2. **Draw.** The bot walks to a Symbol Maker, as a player does, although the server does not
      require one. There it sends `RequestHennaItemList` and waits for the list, then
-     `RequestHennaEquip` per symbol into its free slots. One request per answer, waited for 5 s:
-     the server drops an unknown symbol in silence (`network/henna.go:61-66`). On a timeout the
-     visit ends and backs off for `WalkStuckFor`. Bypass links are paced by `bypassGap`.
+     `RequestHennaEquip` per symbol into its free slots. The list shows only symbols whose dye the
+     bot carries, so the dyes are bought first. One request per answer (`SymbolAdded` or a refusal
+     message), waited for 5 s: the server drops an unknown symbol in silence
+     (`network/henna.go:62-66`). A missing dye and a class refusal answer the same CantDrawSymbol,
+     and the adena goes before the dyes, so the bot checks dyes, class list and adena itself
+     before it sends. On a timeout the visit ends and backs off for `WalkStuckFor`. Bypass links
+     are paced by `bypassGap`.
   3. **At the second profession.** First-profession dyes (`hennas.xml` symbols 1-36) list only
      first-profession ids, so after the change at 40 they stay in their slots but add nothing
      (`model/henna/list.go` `recalculateLocked`). The bot removes them (`RequestHennaUnequip`,
      fee: a fifth of the price, 5 dyes back), then draws the second-profession rows (37+) into all
      3 slots. It uses the same one-request-per-answer pacing and 5 s timeout.
-  4. **Which dyes.** A persona table per profession that respects the +1/-3 trade and each row's
-     class list. For example: warriors STR+1 CON-3 and DEX+1 CON-3; nukers INT+1 WIT-3 or WIT+1
-     INT-3; healers (Cleric 15, Oracle 29, Shillien Oracle 42, Shaman 50), whom the INT/WIT rows
-     exclude, MEN+1 WIT-3 (`hennas.xml:12`).
+  4. **Which dyes.** A persona table per profession that respects each row's trade (+1 of one stat
+     for -1 to -3 of another, by price) and its class list. For example: warriors STR+1 CON-3 and
+     DEX+1 CON-3; nukers INT+1 WIT-3 or WIT+1 INT-3; healers (Cleric 15, Oracle 29, Shillien
+     Oracle 42, Shaman 50), whom the INT/WIT rows exclude, MEN+1 WIT-3 (`hennas.xml:12`).
 
 ### 10. Enchant to the safe level (backlog)
 
@@ -408,7 +610,7 @@ fatal10110/acis_golang#5419. D14 (b) needs no server change.
 
 | PR | Issue | Scope | Depends on |
 | --- | --- | --- | --- |
-| I0 | #167 | Settle the remaining server facts: private store list open, class master pages, the dye flow. Notes go into this doc. | — |
+| I0 | #167 | Settle the remaining server facts: private store list open, class master pages, the dye flow. Notes go into this doc ("Flows settled in I0"). | — |
 | I1 | #168 | Datapack: etc items (`etcitem_type`, `is_sellable`), gear stats, the copied enchant formula, skill stack types by id and level. Replace the hard-coded potion and shot lists. | — |
 | I2 | #169 | Shots by weapon grade, beginner shots first, blessed spiritshots for casters, no unusable shots bought, the shot source and the shot factor on the price score (findings 1, 2). | I1 |
 | I3 | #170 | Use meter and trip targets (section 4). | I1 |
