@@ -21,7 +21,7 @@ repository.
 | M4 - Town, trade and merchant | #30 | #31-#36 |
 | M5 - Progression | #37 | #38-#40 |
 | M6 - Home run and control panel | to be filed | to be filed (PR breakdown, rows 6a-6d) |
-| M7 - Own navigation | to be filed | to be filed (`docs/navigation.md`, PRs N0-N8) |
+| M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to

@@ -591,19 +591,19 @@ geodata is committed here, and CI never sees it.**
   - the step-chain scenario above;
   - a door scenario asserts door replans and no plain unreachable.
 
-## Delivery (milestone M7, "Own navigation")
+## Delivery (milestone M7, "Own navigation", epic #151)
 
 | PR | Scope | Closes or supersedes |
 | --- | --- | --- |
-| N0 | Settle the open server points by test: head-level Z on multilayer, the longest tick elapsed time `Emax` measured live, the echo of `pathDirect`. Write `bots geoquery`. File the server issue for a `geoprobe` walk category. Record the findings in this document | — |
-| N1 | `internal/geo` copy with its dependencies (location, door template, geometry, properties, `doors.xml`): stored form, `ParseRegion` views, cache writer and reader, mmap on Unix and Windows, readers for `bots geopack`, queries, step chain `WalkSteps`, door overlay. Flags `-geodata`, `-geoengine` and `-geodata-cache`; `docs/home.md` steps (rsync with mtimes kept, `bots geopack`). Synthetic fixtures, memory test, local parity run, measured heap and RSS for the 139 regions | — |
-| N2 | `internal/nav` on cells: directed edges, clearance cost, open-corridor test and exact stretch check, smoothing, snap, stand points (routes inside one cluster) | — |
-| N3 | Hierarchy: entrances per crossing (merged only when mutually reachable), directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule on static doors-open blocks (in X, one-way out, isolated), the byte-bounded LRU and per-walker pins, `bots navbuild` and its cache file, benchmarks and final thresholds | — |
-| N4 | Door table (mutex writes, per-door atomic reads, per-bot dedupe), `DoorInfo` and `DoorStatusUpdate` decoders, toggles into the shared engine; door-aware route search with the doors-ignored second search | — |
-| N5 | Walker: one-way-out drop and isolated-only `/unstuck`; step-chain position, `CanMove` plus the corridor test and exact check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
-| N6 | Spots and trips on SCCs and abstract distance; hops, stalls and the hour-long avoid deleted | #144 |
-| N7 | Follow on routes with one-way drops toward the leader; detour machinery deleted; flee, idle drift and death return | #147, #148 |
-| N8 | e2e scenarios and metrics above; the PR rows of `docs/plan.md` updated for D13 | — |
+| N0 (#152) | Settle the open server points by test: head-level Z on multilayer, the longest tick elapsed time `Emax` measured live, the echo of `pathDirect`. Write `bots geoquery`. File the server issue for a `geoprobe` walk category. Record the findings in this document | — |
+| N1 (#153) | `internal/geo` copy with its dependencies (location, door template, geometry, properties, `doors.xml`): stored form, `ParseRegion` views, cache writer and reader, mmap on Unix and Windows, readers for `bots geopack`, queries, step chain `WalkSteps`, door overlay. Flags `-geodata`, `-geoengine` and `-geodata-cache`; `docs/home.md` steps (rsync with mtimes kept, `bots geopack`). Synthetic fixtures, memory test, local parity run, measured heap and RSS for the 139 regions | — |
+| N2 (#154) | `internal/nav` on cells: directed edges, clearance cost, open-corridor test and exact stretch check, smoothing, snap, stand points (routes inside one cluster) | — |
+| N3 (#155) | Hierarchy: entrances per crossing (merged only when mutually reachable), directed abstract graph, edges with a door set and a door-free cost, SCCs and condensation, the cluster-local Tarjan membership rule on static doors-open blocks (in X, one-way out, isolated), the byte-bounded LRU and per-walker pins, `bots navbuild` and its cache file, benchmarks and final thresholds | — |
+| N4 (#156) | Door table (mutex writes, per-door atomic reads, per-bot dedupe), `DoorInfo` and `DoorStatusUpdate` decoders, toggles into the shared engine; door-aware route search with the doors-ignored second search | — |
+| N5 (#157) | Walker: one-way-out drop and isolated-only `/unstuck`; step-chain position, `CanMove` plus the corridor test and exact check before sending, standstill sends, blocked (including the talk `StopMove`) and desync handling, watchdog, swing and cast hold. NPC visits, errands, melee, casting, pick-up and ranged approach on stand points. `unstick` sidesteps and `walkStuck` deleted | #122 class |
+| N6 (#158) | Spots and trips on SCCs and abstract distance; hops, stalls and the hour-long avoid deleted | #144 |
+| N7 (#159) | Follow on routes with one-way drops toward the leader; detour machinery deleted; flee, idle drift and death return | #147, #148 |
+| N8 (#160) | e2e scenarios and metrics above; the PR rows of `docs/plan.md` updated for D13 | — |
 
 N1 to N4 change no behavior. From N5 on, each PR moves one set of consumers over and deletes their
 heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore doors.
@@ -631,6 +631,6 @@ heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore d
 
 - Swimming: water zones are not in the bot's world model, and the planner treats water cells as
   ground, while the server switches to swim moves in water (`waterLocked`). Bots rarely enter
-  water today. A follow-up issue in M7 tracks it.
+  water today. Tracked in #161.
 - Fences and doors that are not in `doors.xml` (siege, scripted): N4 covers `doors.xml` doors
-  only. A follow-up issue in M7 tracks it.
+  only. Tracked in #162.
