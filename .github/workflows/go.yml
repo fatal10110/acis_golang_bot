@@ -107,7 +107,7 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test -count=1 ./internal/ownerfile ./internal/botregistry ./internal/botaccounts ./cmd/bots
+        run: go test -count=1 ./internal/ownerfile ./internal/botregistry ./internal/botaccounts ./internal/geo/... ./cmd/bots
 
   # The control panel's page (web/, docs/plan.md D12): the only job with Node.
   # The Go jobs build and test against the placeholder page; this one builds

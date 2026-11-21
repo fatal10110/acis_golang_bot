@@ -1,0 +1,215 @@
+package engine
+
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+
+	"github.com/fatal10110/acis_golang_bot/internal/commons"
+
+	"github.com/fatal10110/acis_golang_bot/internal/geo"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/dynamic"
+)
+
+const (
+	TileXMin = geo.TileXMin
+	TileXMax = geo.TileXMax
+	TileYMin = geo.TileYMin
+	TileYMax = geo.TileYMax
+
+	TileSize  = geo.TileSize
+	WorldXMin = geo.WorldXMin
+	WorldXMax = geo.WorldXMax
+	WorldYMin = geo.WorldYMin
+	WorldYMax = geo.WorldYMax
+
+	regionCellsX = block.RegionBlocksX * block.CellsX
+	regionCellsY = block.RegionBlocksY * block.CellsY
+	regionTilesX = TileXMax - TileXMin + 1
+	regionTilesY = TileYMax - TileYMin + 1
+)
+
+// Engine serves geodata height, movement, and line-of-sight queries.
+//
+// regions is written only by SetRegion during boot loading and never again
+// afterward (LoadEngine finishes before the engine is handed to any
+// concurrent reader), so query paths read it without synchronization.
+//
+// dynamicBlocks holds the door/fence overlay blocks; it changes only on the
+// rare toggleObject write (a door opening/closing), against a read volume of
+// every CanMove/CanSee/pathfind cell step. It's held behind an atomic
+// pointer so steady-state reads are a single atomic load plus a plain map
+// read, no lock: toggleObject clones-and-swaps the map when it introduces a
+// block the map doesn't have yet, and mutates an already-present block's
+// *dynamic.Block in place, under that block's own internal lock, without
+// touching the map at all. dynamicBlocksMu only serializes concurrent
+// writers against each other; no read path ever acquires it.
+//
+// dynamicMask gates that map. Any live door makes dynamicBlocks non-empty,
+// so without the gate every cell step in the world would pay a hash lookup
+// to discover it has no overlay. One bit per block of a region answers that
+// question instead; the map is touched only where a bit is set. Region
+// bitmaps are allocated lazily on a region's first door (regions with no
+// door keep a nil pointer) and published by clone-and-swap, the same
+// discipline as dynamicBlocks; once allocated, a bitmap is never freed even
+// after its region's last door closes, at 8 KB per region and ~1.4 MB for
+// the whole tile grid, well inside the issue's budget.
+type Engine struct {
+	regionsMu sync.Mutex
+	regions   [regionTilesX][regionTilesY]*block.Region
+
+	dynamicBlocksMu sync.Mutex
+	dynamicBlocks   atomic.Pointer[map[blockKey]*dynamic.Block]
+	dynamicMask     [regionTilesX][regionTilesY]atomic.Pointer[regionMask]
+	// overlaid records, per block key, whether a block that ever carried
+	// an overlay was multilayer: game masters keep seeing such a block named
+	// dynamic after its last object leaves. Written under dynamicBlocksMu.
+	overlaid sync.Map
+
+	maxObstacleHeight     int
+	partOfCharacterHeight int
+}
+
+// New returns an empty engine that answers unloaded regions with null geodata.
+func New(options ...Options) *Engine {
+	opts := DefaultOptions()
+	if len(options) > 0 {
+		opts = options[0]
+	}
+	return &Engine{maxObstacleHeight: opts.MaxObstacleHeight, partOfCharacterHeight: opts.PartOfCharacterHeight}
+}
+
+// MaxObstacleHeight returns the line-of-sight obstacle allowance.
+func (e *Engine) MaxObstacleHeight() int {
+	return e.maxObstacleHeight
+}
+
+// PartOfCharacterHeight returns the percentage of an actor's full body
+// height that counts for line of sight.
+func (e *Engine) PartOfCharacterHeight() int {
+	return e.partOfCharacterHeight
+}
+
+// SightHeight converts an actor's collision height into its line-of-sight
+// eye height: real creature height is collision height * 2, of which the
+// configured PartOfCharacterHeight percentage counts for visibility.
+func (e *Engine) SightHeight(collisionHeight float64) float64 {
+	return collisionHeight * 2 * float64(e.partOfCharacterHeight) / 100
+}
+
+// SetRegion installs one decoded geodata region at the given tile
+// coordinates. Must only be called during boot, before any concurrent
+// query — query paths read regions without synchronization.
+func (e *Engine) SetRegion(regionX, regionY int, region *block.Region) error {
+	if regionX < TileXMin || regionX > TileXMax || regionY < TileYMin || regionY > TileYMax {
+		return fmt.Errorf("geo/engine: region %d_%d out of range", regionX, regionY)
+	}
+	if region == nil {
+		return fmt.Errorf("geo/engine: region %d_%d is nil", regionX, regionY)
+	}
+	e.regionsMu.Lock()
+	defer e.regionsMu.Unlock()
+	e.regions[regionX-TileXMin][regionY-TileYMin] = region
+	return nil
+}
+
+// AddObject applies obj's geodata changes to every loaded block it touches.
+func (e *Engine) AddObject(obj dynamic.Object) {
+	e.toggleObject(obj, true)
+}
+
+// RemoveObject removes obj's geodata changes from every dynamic block it touched.
+func (e *Engine) RemoveObject(obj dynamic.Object) {
+	e.toggleObject(obj, false)
+}
+
+// HasGeo reports whether the world position belongs to a loaded non-null block.
+func (e *Engine) HasGeo(worldX, worldY int) bool {
+	return e.blockAtGeo(GeoX(worldX), GeoY(worldY)).HasGeodata()
+}
+
+// Height returns the geodata height nearest to the given world position.
+func (e *Engine) Height(worldX, worldY, worldZ int) int16 {
+	return e.heightNearest(GeoX(worldX), GeoY(worldY), worldZ)
+}
+
+// HeightNearest returns the nearest height at geodata cell coordinates.
+func (e *Engine) HeightNearest(geoX, geoY, worldZ int) int16 {
+	return e.heightNearest(geoX, geoY, worldZ)
+}
+
+// NSWENearest returns the NSWE mask of the geodata layer nearest worldZ at
+// geodata cell coordinates.
+func (e *Engine) NSWENearest(geoX, geoY, worldZ int) block.NSWE {
+	return e.nsweNearest(geoX, geoY, worldZ)
+}
+
+// NodeBelow returns the resolved height and own decoded NSWE mask of the
+// geodata layer nearest at-or-below worldZ for the given geodata cell — the
+// same getIndexBelow/getHeight/getNswe sequence pathfinding candidate
+// generation needs to read a cell's own passability bits directly, instead
+// of re-deriving them with a CanMove line-walk. ok is false only when a
+// loaded region has no layer within reach of worldZ; an unloaded region
+// always answers open, same as every other null-block query on this engine.
+func (e *Engine) NodeBelow(geoX, geoY, worldZ int) (height int16, nswe block.NSWE, ok bool) {
+	b := e.blockAtGeo(geoX, geoY)
+	layer, cell := b.belowCell(localCell(geoX), localCell(geoY), int32(worldZ), nil)
+	if layer == -1 {
+		return 0, 0, false
+	}
+	return cell.Height, cell.NSWE, true
+}
+
+// HasLayerAtOrBelow reports whether the geodata cell under world (x,y) has a
+// layer at or below worldZ, a floor something at worldZ stands over. A cell
+// without geodata always has one.
+func (e *Engine) HasLayerAtOrBelow(x, y, worldZ int) bool {
+	geoX, geoY := GeoX(x), GeoY(y)
+	b := e.blockAtGeo(geoX, geoY)
+	if !b.HasGeodata() {
+		return true
+	}
+	layer, _ := b.belowCell(localCell(geoX), localCell(geoY), satAdd32(commons.TruncInt32Sat(float64(worldZ)), 1), nil)
+	return layer != -1
+}
+
+// NodeAtOrAbove returns the resolved height and own decoded NSWE mask of the
+// first geodata layer at or above worldZ, scanning from the topmost layer
+// down, whose height satisfies accept. This lets a caller reject a
+// higher-but-invalid layer (e.g. one with no matching edge back to the
+// searcher) and fall through to the next-highest qualifying layer, instead
+// of being stuck with whichever layer happens to be topmost. ok is false if
+// no layer both qualifies and satisfies accept.
+func (e *Engine) NodeAtOrAbove(geoX, geoY, worldZ int, accept func(height int16) bool) (height int16, nswe block.NSWE, ok bool) {
+	b := e.blockAtGeo(geoX, geoY)
+	// Every backward pathfind candidate that misses NodeBelow's guess lands
+	// here, so the layers are copied into a stack buffer instead of a fresh
+	// Cells slice. One copy, not a per-index walk, keeps a dynamic overlay's
+	// layers from one consistent snapshot, and accept runs with no lock held
+	// (it queries the engine again).
+	var buf [block.MaxLayers]block.Cell
+	cells := b.AppendCells(buf[:0], localCell(geoX), localCell(geoY))
+	for i := len(cells) - 1; i >= 0; i-- {
+		if int(cells[i].Height) >= worldZ && accept(cells[i].Height) {
+			return cells[i].Height, cells[i].NSWE, true
+		}
+	}
+	return 0, 0, false
+}
+
+// Above returns the first layer above worldZ at geodata cell coordinates.
+func (e *Engine) Above(geoX, geoY, worldZ int) (int16, bool) {
+	b := e.blockAtGeo(geoX, geoY)
+	if !b.HasGeodata() {
+		return 0, false
+	}
+	layer, cell := b.aboveCell(localCell(geoX), localCell(geoY), int32(worldZ), nil)
+	if layer == -1 {
+		return 0, false
+	}
+	return cell.Height, true
+}
+
+// CanMove reports whether a straight move from origin to target crosses no blocked edge
+// and stays on a reachable floor.
