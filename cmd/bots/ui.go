@@ -202,7 +202,12 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 	brain := p.brain(u.shared)
 	brain.Metrics = r.Metrics
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
-	b, err := botclient.NewBot(cfg, r.Account, u.secret.Password(r.Account), botclient.BotConfig{Character: r.Character, Brain: brain, Learned: r.Learned, Preset: r.Preset}, rng)
+	ch := r.Character
+	if p.class != nil {
+		// Used only when the bot creates its character.
+		ch.Class = *p.class
+	}
+	b, err := botclient.NewBot(cfg, r.Account, u.secret.Password(r.Account), botclient.BotConfig{Character: ch, Brain: brain, Learned: r.Learned, Preset: r.Preset}, rng)
 	if err != nil {
 		return err
 	}

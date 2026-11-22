@@ -191,6 +191,8 @@ type Brain struct {
 	wh warehouseErrand
 	// learn is the recipe learning errand (rule 9 errand "recipe").
 	learn recipeLearn
+	// craft is the clan crafter's cycle (rule "craft").
+	craft crafterCycle
 	// store is the merchant's private sell store (rule "store").
 	store storeState
 	// gear is the gear errand (rule 9 errand "gear").
@@ -373,6 +375,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.castRefused(e.ID, now)
 			b.warehouseEvent(ev, now)
 			b.recipeEvent(ev, now)
+			b.craftEvent(ev, now)
 		case ExAutoSoulShot:
 			if e.Enabled {
 				delete(b.shotOff, e.TemplateID)
@@ -468,6 +471,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.warehouseEvent(ev, now)
 		case RecipeBookItemList:
 			b.recipeEvent(ev, now)
+		case RecipeItemMakeInfo:
+			b.craftEvent(ev, now)
 		case PrivateStoreManageListSell:
 			b.storeManageList(e)
 		case PrivateStoreListSell:
@@ -714,6 +719,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.market.sent(a, now)
 	b.wh.sent(a, now)
 	b.learn.sent(a, &b.world.Recipes, now)
+	b.craftSent(a, now)
 	b.gear.sent(a, now)
 	b.storeSent(a, now)
 	b.loot.sent(a, now)

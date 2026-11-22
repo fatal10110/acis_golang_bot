@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,6 +56,8 @@ type swarmOptions struct {
 	store           storeOptions
 	// persona is what every bot plays (-persona).
 	persona string
+	// clanInviters are the -clan-inviters names.
+	clanInviters []string
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -74,6 +77,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	addGMFlags(fs, &o.gm)
 	addStoreFlags(fs, &o.store)
 	addPersonaFlag(fs, &o.persona)
+	inviters := fs.String("clan-inviters", "", "comma-separated character names whose clan invitation a crafter accepts while clanless; default: any player's")
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
@@ -117,6 +121,14 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	}
 	if p, _ := findPreset(o.persona); !p.store && flagSet(fs, "store-budget") {
 		return o, fmt.Errorf("-store-budget applies to -persona merchant, not %s", o.persona)
+	}
+	for _, n := range strings.Split(*inviters, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			o.clanInviters = append(o.clanInviters, n)
+		}
+	}
+	if p, _ := findPreset(o.persona); !p.inviters && flagSet(fs, "clan-inviters") {
+		return o, fmt.Errorf("-clan-inviters applies to -persona crafter, not %s", o.persona)
 	}
 	if o.metrics != "" {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
@@ -175,7 +187,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Log:        log,
 	}
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
-	sh := shared{claims: botclient.NewPartyClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget}
+	sh := shared{claims: botclient.NewPartyClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters}
 	if o.datapack != "" {
 		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
@@ -199,7 +211,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
 		gate.ReportBreaker(reg)
 	}
-	bots, err := newBots(cfg, p.name, p.brain(sh), o.marker, accounts, reg)
+	bots, err := newBots(cfg, p, p.brain(sh), o.marker, accounts, reg)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 1
@@ -280,21 +292,25 @@ func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.Spo
 	return botclient.NewSpotRegistry(spots, multiplier), travel, nil
 }
 
-// newBots returns one new bot per account playing preset, each with a copy
-// of brain and its character named with marker (botclient.NewCharacter),
+// newBots returns one new bot per account playing preset p, each with a copy
+// of brain and its character named with marker (botclient.NewCharacter), of
+// p's class when it forces one,
 // counting into its own Bot of reg (a slot: its sessions share it); a nil
 // reg counts nothing.
-func newBots(cfg botclient.SessionConfig, preset string, brain botclient.BrainConfig, marker botnames.Marker, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
+func newBots(cfg botclient.SessionConfig, p preset, brain botclient.BrainConfig, marker botnames.Marker, accounts []botaccounts.Account, reg *botmetrics.Registry) ([]*botclient.Bot, error) {
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	bots := make([]*botclient.Bot, 0, len(accounts))
 	for _, a := range accounts {
-		bot := botclient.BotConfig{Brain: brain, Preset: preset}
+		bot := botclient.BotConfig{Brain: brain, Preset: p.name}
 		if reg != nil {
 			bot.Brain.Metrics = reg.NewBot()
 		}
 		ch, err := botclient.NewCharacter(marker, a.Name, rng)
 		if err != nil {
 			return nil, fmt.Errorf("account %s: %w", a.Name, err)
+		}
+		if p.class != nil {
+			ch.Class = *p.class
 		}
 		bot.Character = ch
 		b, err := botclient.NewBot(cfg, a.Name, a.Password(), bot, rng)
