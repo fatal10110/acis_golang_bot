@@ -17,6 +17,7 @@ const (
 	shotD, shotPack                              = 1463, 1100
 	blade, sabre                                 = 1110, 1111
 	gilded, hilt                                 = 1120, 1025
+	flux, charm                                  = 1131, 1130
 )
 
 // rec is a recipe at level 1, 100 %, 10 MP, dwarven, unless edited.
@@ -269,6 +270,41 @@ func TestBuild(t *testing.T) {
 			edit: func(in *Input) { in.Inventory = map[int32]int64{part: 1} },
 			want: Plan{Keep: ing(part, 1), Chains: []Chain{{Product: hilt, Count: 1, Order: -1, Margin: 300, Steps: steps(25, 1)}}},
 		},
+		{
+			// Steel from ore and coal uses 100, from flux 150: the hilt's
+			// two steel come from the cheaper maker, though both are
+			// covered.
+			name: "intermediate made by its cheaper 100 % maker",
+			in:   input(map[int32]int64{ore: 10, coal: 10, flux: 6}, 10, 11, 20, 25),
+			edit: func(in *Input) {
+				in.Recipes = withRecipe(rec(11, steel, 1, flux, 3))
+				in.Prices = withPrice(flux, 50)
+			},
+			cfg:  &Config{MaxChains: 1, MaxWork: 1000},
+			want: Plan{Withdraw: ing(ore, 10, coal, 10), Chains: []Chain{{Product: hilt, Count: 1, Order: -1, Margin: 300, Steps: steps(10, 2, 20, 1, 25, 1)}}},
+		},
+		{
+			// Steel covers three charms, flux two: the steel maker covers
+			// more of the order though it uses more value.
+			name: "order made by the maker covering more of it",
+			in:   input(map[int32]int64{steel: 6, flux: 2}, 130, 131),
+			edit: func(in *Input) {
+				charmMakers(in)
+				in.Orders = []Order{{Product: charm, Count: 3}}
+			},
+			want: Plan{Withdraw: ing(steel, 6), Chains: []Chain{{Product: charm, Count: 3, Order: 0, Margin: -600, Steps: steps(130, 3)}}},
+		},
+		{
+			// Both makers cover two charms: the flux one uses 100, the
+			// steel one 400.
+			name: "order made by the maker using the least value",
+			in:   input(map[int32]int64{steel: 4, flux: 2}, 130, 131),
+			edit: func(in *Input) {
+				charmMakers(in)
+				in.Orders = []Order{{Product: charm, Count: 2}}
+			},
+			want: Plan{Withdraw: ing(flux, 2), Chains: []Chain{{Product: charm, Count: 2, Order: 0, Margin: -100, Steps: steps(131, 2)}}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -309,13 +345,21 @@ func withPrice(item int32, price int32) map[int32]int32 {
 	return out
 }
 
-func withRecipe(r datapack.Recipe) map[int32]datapack.Recipe {
+func withRecipe(rs ...datapack.Recipe) map[int32]datapack.Recipe {
 	out := map[int32]datapack.Recipe{}
 	for k, v := range recipes {
 		out[k] = v
 	}
-	out[r.ID] = r
+	for _, r := range rs {
+		out[r.ID] = r
+	}
 	return out
+}
+
+// charmMakers are two makers of the unpriced charm, from steel or flux.
+func charmMakers(in *Input) {
+	in.Recipes = withRecipe(rec(130, charm, 1, steel, 2), rec(131, charm, 1, flux, 1))
+	in.Prices = withPrice(flux, 50)
 }
 
 func withLevel(r datapack.Recipe, lvl int32) datapack.Recipe { r.Level = lvl; return r }

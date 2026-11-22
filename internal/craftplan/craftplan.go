@@ -34,8 +34,12 @@ type Order struct {
 type Input struct {
 	// Warehouse is the clan warehouse as its last fresh list showed it.
 	Warehouse map[int32]int64
-	// Inventory is what the crafter carries. A plan takes from it before
-	// the warehouse, so leftovers of a past cycle are used first.
+	// Inventory is the crafter's crafting stock: what it carries minus its
+	// equipped items and its own supplies (shots, potions, scrolls of
+	// escape), which the caller leaves out since the planner has no equip
+	// or loadout data. A plan takes from it before the warehouse, so
+	// leftovers of a past cycle are used first, and lists what it keeps of
+	// it in Plan.Keep.
 	Inventory map[int32]int64
 	// Reserved are the warehouse counts the board holds for members
 	// (products delivered to or reserved for them): never in the pool, so
