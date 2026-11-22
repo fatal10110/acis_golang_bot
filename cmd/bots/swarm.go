@@ -175,7 +175,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Log:        log,
 	}
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
-	sh := shared{claims: botclient.NewPartyClaims(), storeBudget: o.store.budget}
+	sh := shared{claims: botclient.NewPartyClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget}
 	if o.datapack != "" {
 		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
