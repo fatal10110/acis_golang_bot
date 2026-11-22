@@ -222,6 +222,10 @@ type Brain struct {
 	towns []Point
 	// chat is the whisper reply waiting for its time (rule "chat").
 	chat chatReply
+	// announce are the craft order lines still to say, in order (rule
+	// "announce"): orders' answers and finished GM orders' clan chat lines,
+	// at most craftCommandCap.
+	announce []Action
 	// lastRule is the rule that matched the latest decision.
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
@@ -707,6 +711,8 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.follow.runToggledAt = now
 	case actChatReply:
 		b.chatSent(now)
+	case actAnswer, actAnnounce:
+		b.announce = b.announce[1:]
 	}
 	if a.kind == b.orders.reply.kind {
 		b.orders.reply = Action{}

@@ -304,7 +304,7 @@ func (b *Brain) craftErrandDone(now time.Time) {
 		// The deposit after the withdrawal can carry the products of
 		// orders an earlier cycle's failed deposit left crafted.
 		if r := st.Deposit; !r.At.Before(c.askedAt) && r.Outcome == WarehouseDone {
-			b.deliverOrders()
+			b.deliverOrders(now)
 		}
 		c.delivering = nil
 		if r := st.Withdraw; r.At.Before(c.askedAt) || r.Outcome != WarehouseDone {
@@ -315,7 +315,7 @@ func (b *Brain) craftErrandDone(now time.Time) {
 		b.startMake(now)
 	case craftDeposit:
 		if r := st.Deposit; !r.At.Before(c.askedAt) && r.Outcome == WarehouseDone {
-			b.deliverOrders()
+			b.deliverOrders(now)
 		}
 		c.delivering = nil
 		if c.resume {
@@ -335,6 +335,9 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 	c.orders = b.claimCraftOrders(now)
 	in := b.craftInput(c.orders, fromWarehouse, now)
 	c.plan = craftplan.Build(in, b.persona.Crafter.Plan)
+	if fromWarehouse && !c.plan.Exhausted {
+		b.cancelUnplanned()
+	}
 	c.learn = slices.Clone(c.plan.Learn)
 	b.cfg.CraftBoard.Publish(b.world.Clan.ID, CrafterEntry{
 		Bot: b.world.Self.ObjectID, Name: b.world.Self.Name, Recipes: in.Book, CreateItem: in.DwarvenLevel,
@@ -354,19 +357,25 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 
 // claimCraftOrders claims (or renews) the board orders with their
 // materials in whose product a recipe in the book makes, and returns the
-// orders the bot holds a live claim on, in posting order.
+// orders the bot holds a live claim on: the members' in posting order, then
+// the clan leader's and GMs' (docs/crafting.md section 4).
 func (b *Brain) claimCraftOrders(now time.Time) []CraftOrder {
 	board, clan, self := b.cfg.CraftBoard, b.world.Clan.ID, b.world.Self.ObjectID
-	var mine []CraftOrder
+	var mine, commanded []CraftOrder
 	for _, o := range board.Orders(clan, now) {
 		switch {
 		case o.State == OrderMaterialsIn && b.canMake(o.Product), o.State == OrderClaimed && o.Crafter == self:
-			if board.Claim(clan, o.ID, self, now) {
+			if !board.Claim(clan, o.ID, self, now) {
+				continue
+			}
+			if o.By == OrderByMember {
 				mine = append(mine, o)
+			} else {
+				commanded = append(commanded, o)
 			}
 		}
 	}
-	return mine
+	return append(mine, commanded...)
 }
 
 // renewCraftClaims renews the claims of the cycle's orders on the tick.
