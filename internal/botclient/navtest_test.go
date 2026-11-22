@@ -86,7 +86,7 @@ func buildTestNav() (*Nav, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Nav{Engine: e, Hier: nav.NewHierarchy(g, e, nav.DefaultMemberCacheBytes)}, nil
+	return &Nav{Engine: e, Hier: nav.NewHierarchy(g, e, nil, nav.DefaultMemberCacheBytes)}, nil
 }
 
 const navTestCluster = nav.DefaultClusterCells

@@ -179,13 +179,13 @@ func TestOfferedPresets(t *testing.T) {
 		return out
 	}
 	const noNav = "needs -geodata, -geoengine, -geodata-cache and -nav-cache"
-	if got := names(offeredPresets("", true)); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack"}) {
+	if got := names(offeredPresets("", true)); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack", "crafter:needs -datapack"}) {
 		t.Fatalf("without a datapack offered %q, want support only, the others disabled", got)
 	}
-	if got := names(offeredPresets("dp", true)); !slices.Equal(got, []string{"support", "town", "merchant"}) {
+	if got := names(offeredPresets("dp", true)); !slices.Equal(got, []string{"support", "town", "merchant", "crafter"}) {
 		t.Fatalf("with a datapack offered %q", got)
 	}
-	if got := names(offeredPresets("dp", false)); !slices.Equal(got, []string{"support:" + noNav, "town:" + noNav, "merchant:" + noNav}) {
+	if got := names(offeredPresets("dp", false)); !slices.Equal(got, []string{"support:" + noNav, "town:" + noNav, "merchant:" + noNav, "crafter:" + noNav}) {
 		t.Fatalf("without the navigation offered %q, want every walking preset disabled", got)
 	}
 }

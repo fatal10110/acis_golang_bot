@@ -19,6 +19,9 @@ type Nav struct {
 	Hier   *nav.Hierarchy
 	// Doors is the door table; nil takes every door as open.
 	Doors *DoorTable
+	// Water is the water zones the nav cache was built with, which every
+	// walker's planner keeps its segments out of; nil is none.
+	Water *nav.Water
 }
 
 // closed is the door state a route search reads, nil without a door table.
@@ -158,7 +161,7 @@ type walker struct {
 func newWalker(n *Nav) walker {
 	w := walker{nav: n}
 	if n != nil {
-		w.plan = nav.Planner{Engine: n.Engine, Budget: walkBudget}
+		w.plan = nav.Planner{Engine: n.Engine, Budget: walkBudget, Water: n.Water}
 	}
 	return w
 }

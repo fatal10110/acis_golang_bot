@@ -55,7 +55,7 @@ func ownerNav(b *testing.B) (*engine.Engine, *Graph) {
 // SCC with a click target on it.
 func ownerSample(b *testing.B, e *engine.Engine, g *Graph, n, dist int) (from, to []Cell) {
 	b.Helper()
-	h := NewHierarchy(g, e, 1<<30)
+	h := NewHierarchy(g, e, nil, 1<<30)
 	p := &Planner{Engine: e, CollisionHeight: 23}
 	sizes := map[int32]int{}
 	for i := range g.Nodes() {
@@ -147,14 +147,14 @@ func BenchmarkOwnerNav(b *testing.B) {
 	for b.Loop() {
 		b.Run("LocateCold", func(b *testing.B) {
 			measure(b, n, func(i int) {
-				h := NewHierarchy(g, e, DefaultMemberCacheBytes)
+				h := NewHierarchy(g, e, nil, DefaultMemberCacheBytes)
 				if _, err := h.Locate(from[i], nil); err != nil {
 					b.Fatal(err)
 				}
 			})
 		})
 		// Warm: an LRU holding every sampled cluster.
-		h := NewHierarchy(g, e, 4<<30)
+		h := NewHierarchy(g, e, nil, 4<<30)
 		for i := range n {
 			if _, err := h.Locate(from[i], nil); err != nil {
 				b.Fatal(err)
@@ -192,7 +192,7 @@ func BenchmarkOwnerNav(b *testing.B) {
 			}
 		}
 		b.Run("RouteCold", func(b *testing.B) {
-			measure(b, n, func(i int) { route(NewHierarchy(g, e, DefaultMemberCacheBytes))(i) })
+			measure(b, n, func(i int) { route(NewHierarchy(g, e, nil, DefaultMemberCacheBytes))(i) })
 		})
 		b.Run("RouteWarm", func(b *testing.B) { measure(b, n, route(h)) })
 		b.Logf("routes failed: %d of %d (both passes)", failed, 2*n)

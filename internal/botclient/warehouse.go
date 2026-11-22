@@ -167,15 +167,18 @@ func encodeWarehouseRequest(op byte, rows []warehouseRow) []byte {
 type WarehouseRow struct{ TemplateID, Count int32 }
 
 // WarehouseRequest is a clan warehouse errand: a withdrawal of Withdraw,
-// then a deposit of Deposit, either one empty for none. The deposit right
-// after the withdrawal opens the warehouse again at once; any other open
+// then a deposit of Deposit, either one empty for none. Look opens the
+// withdrawal list and sends no withdrawal: the list is a look at the
+// contents (WarehouseStatus), Withdraw ignored. The deposit right after the
+// withdrawal or the look opens the warehouse again at once; any other open
 // waits for MinOpenGap (warehouseOpenGap) since the bot's last.
 type WarehouseRequest struct {
 	Withdraw, Deposit []WarehouseRow
+	Look              bool
 }
 
 // empty reports whether the request asks for nothing.
-func (r WarehouseRequest) empty() bool { return len(r.Withdraw) == 0 && len(r.Deposit) == 0 }
+func (r WarehouseRequest) empty() bool { return !r.Look && len(r.Withdraw) == 0 && len(r.Deposit) == 0 }
 
 // WarehouseOutcome is how a deposit or a withdrawal of an errand ended.
 type WarehouseOutcome uint8
@@ -201,6 +204,9 @@ const (
 	WarehouseTimeout
 	// WarehouseUnreachable: no keeper with a clan warehouse was reached.
 	WarehouseUnreachable
+	// WarehouseListed: a look got its fresh list (or the empty answer is
+	// WarehouseEmpty); no withdrawal went out.
+	WarehouseListed
 )
 
 // WarehouseResult is the end of the last deposit or withdrawal: its
@@ -223,7 +229,8 @@ type WarehouseStatus struct {
 // WarehousePolicy is the clan warehouse errand (rule 9 errand
 // "warehouse"). Want is asked for an errand when none runs, the bot is in a
 // clan and an open is due; a zero request asks for none, and nil never
-// runs the errand. Reach is how far the nearest warehouse keeper's spawn
+// runs the errand. A crafter (Persona.Crafter) asks its cycle's requests
+// instead, ahead of Want. Reach is how far the nearest warehouse keeper's spawn
 // may be (from the travel map, BrainConfig.Travel); 0 visits only a keeper
 // in sight.
 type WarehousePolicy struct {
@@ -285,7 +292,7 @@ type warehouseErrand struct {
 }
 
 // depositing reports whether the transaction under way is the deposit.
-func (e *warehouseErrand) depositing() bool { return len(e.req.Withdraw) == 0 }
+func (e *warehouseErrand) depositing() bool { return len(e.req.Withdraw) == 0 && !e.req.Look }
 
 // openDue reports whether an open may go out at now: MinOpenGap after the
 // last, doubled per timeout in a row, or at once for an exempt deposit.
@@ -317,7 +324,7 @@ func (e *warehouseErrand) endTransaction(o WarehouseOutcome, msg int32, now time
 	e.step, e.list, e.rows, e.chats, e.talked, e.firstPage = whTalk, nil, nil, nil, false, false
 	e.v.opened, e.v.waitUntil = false, time.Time{}
 	if !e.depositing() {
-		e.req.Withdraw = nil
+		e.req.Withdraw, e.req.Look = nil, false
 		e.exempt = len(e.req.Deposit) > 0
 		if e.exempt {
 			return
@@ -335,7 +342,7 @@ func (e *warehouseErrand) end() {
 // fail ends the whole request with outcome o for each part left.
 func (e *warehouseErrand) fail(o WarehouseOutcome, now time.Time) {
 	e.retryAt = now.Add(warehouseOpenGap)
-	if len(e.req.Withdraw) > 0 {
+	if len(e.req.Withdraw) > 0 || e.req.Look {
 		e.status.Withdraw = WarehouseResult{Outcome: o, At: now}
 	}
 	if len(e.req.Deposit) > 0 {
@@ -461,6 +468,10 @@ func (b *Brain) warehouseRequest(now time.Time) (Action, bool) {
 	for _, it := range e.list {
 		stock = append(stock, whStock{it.ObjectID, it.TemplateID, it.Count})
 	}
+	if e.req.Look {
+		e.endTransaction(WarehouseListed, 0, now)
+		return Action{}, false
+	}
 	if !e.depositing() {
 		rows := pickRows(e.req.Withdraw, stock)
 		if len(rows) == 0 {
@@ -557,23 +568,24 @@ func merges(r warehouseRow, contents []WarehouseItem) bool {
 }
 
 // startWarehouse starts a request when one is due: the bot is in a clan,
-// an open is due and Persona.Warehouse.Want asks for one. A deposit whose
+// an open is due and the crafter's cycle (warehouseWant) or
+// Persona.Warehouse.Want asks for one. A deposit whose
 // carried items fail its checks ends before any open. The keeper is the
 // nearest one in sight, else the nearest spawn within Reach. It reports
 // whether a request runs.
 func (b *Brain) startWarehouse(now time.Time) bool {
 	e, p := &b.wh, &b.persona.Warehouse
 	m := b.cfg.Travel
-	if p.Want == nil || m == nil || len(m.keepers) == 0 || b.world.Clan.ID == 0 ||
+	if (p.Want == nil && !b.crafting()) || m == nil || len(m.keepers) == 0 || b.world.Clan.ID == 0 ||
 		!e.openDue(now) || now.Before(e.retryAt) {
 		return false
 	}
-	req := p.Want(b.world, e.status, now)
+	req := b.warehouseWant(now)
 	if req.empty() {
 		return false
 	}
 	e.req, e.running = req, true
-	if len(req.Withdraw) == 0 {
+	if e.depositing() {
 		if _, o, msg := b.depositRows(b.carriedStock()); o != WarehouseNone {
 			e.result(o, msg, now)
 			e.end()

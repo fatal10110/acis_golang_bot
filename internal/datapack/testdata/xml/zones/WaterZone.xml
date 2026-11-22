@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Water Zones -->
+	<zone name="15_23_water1" shape="Cuboid" minZ="-4784" maxZ="-3784">
+		<node x="-163840" y="163839"/>
+		<node x="-131072" y="196607"/>
+	</zone>
+	<zone name="16_19_water2" shape="Cuboid" minZ="337" maxZ="237">
+		<node x="-117492" y="46588"/>
+		<node x="-118668" y="45364"/>
+	</zone>
+</list>

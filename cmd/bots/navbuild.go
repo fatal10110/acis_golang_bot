@@ -13,12 +13,14 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
 // runNavbuild builds the nav hierarchy (docs/navigation.md, section 2) from
-// the packed geodata cache and doors.xml, never the raw region files, and
+// the packed geodata cache, doors.xml and zones/WaterZone.xml, never the raw
+// region files, and
 // writes the nav cache walking personas map read-only. It works cluster by
 // cluster on at most half the cores by default, and sends nothing.
 func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -27,7 +29,7 @@ func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	geodataDir := fs.String("geodata", "", "directory of the geodata region files the cache was packed from (only stat'ed)")
 	geoengine := fs.String("geoengine", "", "local copy of the server's geoengine.properties: region list and GeoDataType")
 	cache := fs.String("geodata-cache", "geodata.cache", "geodata cache written by `bots geopack`")
-	datapack := fs.String("datapack", "", "local copy of the datapack's data/xml directory, holding doors.xml")
+	datapack := fs.String("datapack", "", "local copy of the datapack's data/xml directory, holding doors.xml and zones/WaterZone.xml")
 	out := fs.String("out", "nav.cache", "nav cache file to write")
 	workers := fs.Int("workers", max(1, runtime.NumCPU()/2), "clusters built at once (default half the cores)")
 	if err := fs.Parse(args); err != nil {
@@ -67,6 +69,10 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	if err != nil {
 		return err
 	}
+	water, err := botclient.LoadWater(datapack)
+	if err != nil {
+		return err
+	}
 	c, err := geodata.Open(geodataDir, settings.GeoType, settings.Regions, cachePath)
 	if err != nil {
 		return err
@@ -87,6 +93,7 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	image, stats, err := nav.Build(ctx, nav.BuildConfig{
 		Engine:   c.Engine,
 		Doors:    doors.All(),
+		Water:    water,
 		Clusters: clusters,
 		Workers:  workers,
 		Key:      nav.NavKey{GeoCRC: c.CRC(), DoorsHash: nav.DoorsHash(doorsXML)},

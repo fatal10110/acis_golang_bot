@@ -13,7 +13,7 @@ func BenchmarkLocateCold(b *testing.B) {
 	c := pointCell(geotest.PitOutside)
 	b.ReportAllocs()
 	for b.Loop() {
-		h := NewHierarchy(th.g, testEngine(b), DefaultMemberCacheBytes)
+		h := NewHierarchy(th.g, testEngine(b), nil, DefaultMemberCacheBytes)
 		if _, err := h.Locate(c, nil); err != nil {
 			b.Fatal(err)
 		}
