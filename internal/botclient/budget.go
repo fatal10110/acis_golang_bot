@@ -34,13 +34,13 @@ type want struct {
 
 // reserve is the adena a shop visit never spends: ShopPolicy.KeepAdena,
 // and at least the trip home, one Scroll of Escape at a merchant's base
-// price. The clan warehouse fees join it (M9).
+// price, plus a clan member's deposit fees (memberFees).
 func (b *Brain) reserve() int64 {
 	r := int64(b.persona.Shop.KeepAdena)
 	if m := b.cfg.Travel; m != nil {
 		r = max(r, int64(m.cheapest[scrollOfEscape]))
 	}
-	return r
+	return r + b.memberFees()
 }
 
 // floor is the adena the purchases of tier t never spend: the reserve, and
