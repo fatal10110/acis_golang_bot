@@ -91,6 +91,11 @@ type BrainConfig struct {
 	// brain gives its claim back when its party ends or its leader changes,
 	// and when it stops. Nil claims no leader.
 	PartyClaims *PartyClaims
+	// CraftBoard, when set, is the crafting order board of the process
+	// (warehouse lease, orders, ledger), shared by every bot of the process:
+	// the brain reads it on its tick and gives back what it holds when it
+	// stops. Nil crafts and orders nothing.
+	CraftBoard *CraftBoard
 
 	// markers mark the bots' names: the brain answers no whisper from a
 	// name any of them marks. A Bot sets its SessionConfig.Markers; none
@@ -281,6 +286,7 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 	defer b.leaveSpot()
 	defer b.releaseStore()
 	defer b.releasePartyClaim()
+	defer b.releaseCraftBoard()
 	due := b.due()
 	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()

@@ -78,17 +78,19 @@ type shared struct {
 	stores *botclient.StoreRegistry
 	claims *botclient.PartyClaims
 	auth   *botclient.Authority
+	board  *botclient.CraftBoard
 	// storeBudget is a merchant's store budget per session.
 	storeBudget int64
 }
 
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
-// presets get the spot registry, only merchants the store registry. With
+// presets get the spot registry, only merchants the store registry; every
+// preset gets the craft board, since any bot may order as a clan member. With
 // the travel map the persona drinks and shoots the datapack's healing
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
-	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel}
+	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board}
 	if s.travel != nil {
 		cfg.Persona = s.travel.WithItemIndex(cfg.Persona)
 	}

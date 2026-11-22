@@ -52,6 +52,7 @@ func TestPresetBrain(t *testing.T) {
 		stores:      botclient.NewStoreRegistry(nil, 5, 150),
 		claims:      botclient.NewPartyClaims(),
 		auth:        botclient.NewAuthority(botclient.AuthorityConfig{}),
+		board:       botclient.NewCraftBoard(),
 		storeBudget: 70000,
 	}
 	tests := []struct {
@@ -85,6 +86,9 @@ func TestPresetBrain(t *testing.T) {
 			}
 			if cfg.Travel != sh.travel || cfg.PartyClaims != sh.claims || cfg.Authority != sh.auth {
 				t.Errorf("travel %p, claims %p, authority %p; want the shared %p, %p, %p", cfg.Travel, cfg.PartyClaims, cfg.Authority, sh.travel, sh.claims, sh.auth)
+			}
+			if cfg.CraftBoard != sh.board {
+				t.Errorf("craft board %p, want the shared %p", cfg.CraftBoard, sh.board)
 			}
 			if cfg.Persona.JoinParty == nil {
 				t.Error("JoinParty nil: the claim and the GM hooks do not wrap the persona")
