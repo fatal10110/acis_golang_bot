@@ -60,6 +60,7 @@ type uiOptions struct {
 	spawnMultiplier float64
 	gm              gmOptions
 	store           storeOptions
+	geo             geoOptions
 }
 
 func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
@@ -84,6 +85,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	addAllowlistedFlag(fs, &o.allowlisted)
 	addGMFlags(fs, &o.gm)
 	addStoreFlags(fs, &o.store)
+	addGeoFlags(fs, &o.geo)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml); the presets town and merchant and farming need it")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
@@ -144,6 +146,9 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	if err := o.store.validate(); err != nil {
 		return o, err
 	}
+	if err := o.geo.validate(o.datapack); err != nil {
+		return o, err
+	}
 	if o.metrics != "" {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
@@ -197,6 +202,9 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 		return fmt.Errorf("preset: %w", err)
 	}
 	p, _ := findPreset(r.Preset)
+	if err := walkReady(p, u.shared.nav); err != nil {
+		return fmt.Errorf("preset: %w", err)
+	}
 	cfg := u.cfg
 	cfg.Markers = r.Markers
 	brain := p.brain(u.shared)
@@ -293,6 +301,15 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		}
 		sh.stores = o.store.registry(sh.travel, log)
 	}
+	if o.geo.set() {
+		n, closeNav, err := o.geo.open(o.datapack, log)
+		if err != nil {
+			return err
+		}
+		// The caches stay mapped until every bot returned.
+		defer closeNav()
+		runner.shared.nav = n
+	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
 	if err != nil {
 		return err
@@ -323,7 +340,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		Gate:       gate,
 		Metrics:    metrics,
 		MaxOnline:  o.maxOnline,
-		Presets:    offeredPresets(o.datapack),
+		Presets:    offeredPresets(o.datapack, runner.shared.nav != nil),
 		Spots:      runner.shared.spots,
 		Logs:       ring,
 		Log:        log,
@@ -366,12 +383,15 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 
 // offeredPresets are the presets of the catalog the panel lists: those that
 // need the datapack are disabled, with the reason, without it.
-func offeredPresets(datapack string) []botpanel.Preset {
+func offeredPresets(datapack string, walkable bool) []botpanel.Preset {
 	var out []botpanel.Preset
 	for _, p := range presets {
 		bp := botpanel.Preset{Name: p.name, Help: p.help}
-		if p.datapack && datapack == "" {
+		switch {
+		case p.datapack && datapack == "":
 			bp.Disabled = "needs -datapack"
+		case p.walks && !walkable:
+			bp.Disabled = "needs -geodata, -geoengine, -geodata-cache and -nav-cache"
 		}
 		out = append(out, bp)
 	}

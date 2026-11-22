@@ -53,6 +53,7 @@ type swarmOptions struct {
 	spawnMultiplier float64
 	gm              gmOptions
 	store           storeOptions
+	geo             geoOptions
 	// persona is what every bot plays (-persona).
 	persona string
 }
@@ -73,6 +74,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	addAllowlistedFlag(fs, &o.allowlisted)
 	addGMFlags(fs, &o.gm)
 	addStoreFlags(fs, &o.store)
+	addGeoFlags(fs, &o.geo)
 	addPersonaFlag(fs, &o.persona)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
@@ -113,6 +115,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 		return o, err
 	}
 	if err := validatePersona(o.persona, o.datapack); err != nil {
+		return o, err
+	}
+	if err := o.geo.validate(o.datapack); err != nil {
 		return o, err
 	}
 	if p, _ := findPreset(o.persona); !p.store && flagSet(fs, "store-budget") {
@@ -184,6 +189,21 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		if p.store {
 			sh.stores = o.store.registry(sh.travel, log)
 		}
+	}
+	if o.geo.set() {
+		n, closeNav, err := o.geo.open(o.datapack, log)
+		if err != nil {
+			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			return 1
+		}
+		// Deferred first of the run's pieces: the caches stay mapped until
+		// every bot returned.
+		defer closeNav()
+		sh.nav = n
+	}
+	if err := walkReady(p, sh.nav); err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
 	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
 	if err != nil {

@@ -24,13 +24,16 @@ type preset struct {
 	// store makes the bots merchants: they open private stores of their
 	// loot with the store budget.
 	store bool
+	// walks makes the bots walk on the navigation (geoOptions): they
+	// refuse to start without it (D13a).
+	walks bool
 }
 
 // presets is the persona catalog, the -persona names in order.
 var presets = []preset{
-	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true},
-	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona},
-	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true},
+	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true},
+	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
+	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true, walks: true},
 }
 
 // findPreset returns the preset of the catalog named name.
@@ -79,6 +82,8 @@ type shared struct {
 	claims *botclient.PartyClaims
 	auth   *botclient.Authority
 	board  *botclient.CraftBoard
+	// nav is the navigation the walking presets walk on.
+	nav *botclient.Nav
 	// storeBudget is a merchant's store budget per session.
 	storeBudget int64
 }
@@ -91,6 +96,9 @@ type shared struct {
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
 	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board}
+	if p.walks {
+		cfg.Nav = s.nav
+	}
 	if s.travel != nil {
 		cfg.Persona = s.travel.WithItemIndex(cfg.Persona)
 	}

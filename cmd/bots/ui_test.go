@@ -115,18 +115,23 @@ func TestPrepareRegistry(t *testing.T) {
 }
 
 func TestUIRunnerRefusesWhatItCannotRun(t *testing.T) {
-	u := uiRunner{cfg: botclient.SessionConfig{Clock: botclient.SystemClock{}}, shared: shared{claims: botclient.NewPartyClaims()}}
+	// walkable stands for the navigation the panel opened: the runs below
+	// fail before any bot would walk on it.
+	walkable := &botclient.Nav{}
 	tests := []struct {
 		name    string
+		nav     *botclient.Nav
 		run     botregistry.Run
 		wantErr string
 	}{
-		{"unknown preset", botregistry.Run{Account: "hz1", Preset: "bogus", Character: botclient.Character{Name: "AldenBot"}}, "-persona"},
-		{"preset needs the datapack", botregistry.Run{Account: "hz1", Preset: "town", Character: botclient.Character{Name: "AldenBot"}}, "-datapack"},
-		{"bad character", botregistry.Run{Account: "hz1", Preset: "support", Character: botclient.Character{Name: "A-b"}}, "character name"},
+		{"unknown preset", walkable, botregistry.Run{Account: "hz1", Preset: "bogus", Character: botclient.Character{Name: "AldenBot"}}, "-persona"},
+		{"preset needs the datapack", walkable, botregistry.Run{Account: "hz1", Preset: "town", Character: botclient.Character{Name: "AldenBot"}}, "-datapack"},
+		{"walking preset without the navigation", nil, botregistry.Run{Account: "hz1", Preset: "support", Character: botclient.Character{Name: "AldenBot"}}, "-nav-cache"},
+		{"bad character", walkable, botregistry.Run{Account: "hz1", Preset: "support", Character: botclient.Character{Name: "A-b"}}, "character name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			u := uiRunner{cfg: botclient.SessionConfig{Clock: botclient.SystemClock{}}, shared: shared{claims: botclient.NewPartyClaims(), nav: tt.nav}}
 			err := u.run(t.Context(), tt.run)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("run err = %v, want %q", err, tt.wantErr)
@@ -173,10 +178,14 @@ func TestOfferedPresets(t *testing.T) {
 		}
 		return out
 	}
-	if got := names(offeredPresets("")); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack"}) {
+	const noNav = "needs -geodata, -geoengine, -geodata-cache and -nav-cache"
+	if got := names(offeredPresets("", true)); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack"}) {
 		t.Fatalf("without a datapack offered %q, want support only, the others disabled", got)
 	}
-	if got := names(offeredPresets("dp")); !slices.Equal(got, []string{"support", "town", "merchant"}) {
+	if got := names(offeredPresets("dp", true)); !slices.Equal(got, []string{"support", "town", "merchant"}) {
 		t.Fatalf("with a datapack offered %q", got)
+	}
+	if got := names(offeredPresets("dp", false)); !slices.Equal(got, []string{"support:" + noNav, "town:" + noNav, "merchant:" + noNav}) {
+		t.Fatalf("without the navigation offered %q, want every walking preset disabled", got)
 	}
 }
