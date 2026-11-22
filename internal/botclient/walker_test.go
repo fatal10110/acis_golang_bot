@@ -76,8 +76,8 @@ func TestWalkerSegmentsFromStandstill(t *testing.T) {
 	if horizontal2(prev, dest) > walkSlop*walkSlop {
 		t.Errorf("ended at %+v, want %+v", prev, dest)
 	}
-	if s := reg.Collect(now); s.NavBlocked+s.NavDesync+s.NavDoorReplan != 0 {
-		t.Errorf("counters blocked %d desync %d door %d, want none", s.NavBlocked, s.NavDesync, s.NavDoorReplan)
+	if s := reg.Collect(now); s.NavBlocked+s.NavDesync+s.NavDoorReplan != 0 || s.NavSegments != uint64(segs) {
+		t.Errorf("counters blocked %d desync %d door %d segments %d, want none and %d segments", s.NavBlocked, s.NavDesync, s.NavDoorReplan, s.NavSegments, segs)
 	}
 }
 

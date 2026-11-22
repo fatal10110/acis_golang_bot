@@ -89,22 +89,41 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 // bot is in the world, its character one of the run's; a failed test logs
 // the bot's digest. Its walker must never desync from the server on its own
 // moves (docs/navigation.md, Testing): nav_desync_total stays 0, door
-// replans counted apart.
+// replans counted apart, nav_blocked_total at most 1 per 100 segments, and
+// every blocked stop is one the bot's step chain (WalkSteps) predicts or one
+// after a step longer than Emax.
 func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *farmer {
 	t.Helper()
 	w := NewWatch(botclient.SystemClock{})
 	setup.tap = w
+	n := tg.Nav(t)
+	var self int32
+	var speed float64
 	if setup.metrics == nil {
 		reg := botmetrics.NewRegistry()
 		setup.metrics = reg.NewBot()
 		t.Cleanup(func() {
 			s := reg.Collect(time.Now())
-			t.Logf("bot %s nav: blocked %d, desync %d, door replans %d", account, s.NavBlocked, s.NavDesync, s.NavDoorReplan)
-			if s.NavDesync != 0 {
-				t.Errorf("bot %s: nav_desync_total = %d, want 0", account, s.NavDesync)
+			t.Logf("bot %s nav: %d segments, blocked %d, desync %d, door replans %d", account, s.NavSegments, s.NavBlocked, s.NavDesync, s.NavDoorReplan)
+			for _, bad := range navVerdict(s) {
+				t.Errorf("bot %s: %s", account, bad)
 			}
 		})
 	}
+	t.Cleanup(func() {
+		if self == 0 {
+			return
+		}
+		explained, bad := stepVerdict(blockedStops(w.Seen(0), w.Sent(), self, speed), func(b blockedStop) bool {
+			return stepPredicted(n.Engine, b, speed)
+		})
+		for _, e := range explained {
+			t.Logf("bot %s step chain: %s", account, e)
+		}
+		for _, e := range bad {
+			t.Errorf("bot %s step chain: %s", account, e)
+		}
+	})
 	b := runBotWith(t, ctx, tg, account, setup)
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
@@ -115,6 +134,9 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 	}
 	ui := seen.Event.(botclient.UserInfo)
 	tg.Own(ui.Name, ui.ObjectID)
+	// A character runs unless it toggled walking (a follower matching a
+	// walking leader); the run speed is the strict reading of a stop.
+	self, speed = ui.ObjectID, float64(max(ui.RunSpeed, 1))
 	f := &farmer{bot: b, watch: w, id: ui.ObjectID, name: ui.Name}
 	t.Cleanup(func() {
 		if t.Failed() {

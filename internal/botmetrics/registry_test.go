@@ -28,6 +28,9 @@ func TestMetricsCollect(t *testing.T) {
 	b.Reconnect()
 	b.Abort()
 	b.WakeLag(1500 * time.Microsecond)
+	a.NavSegment()
+	b.NavSegment()
+	b.NavBlocked()
 	r.SetBreaker(true)
 
 	s := r.Collect(t0)
@@ -42,6 +45,9 @@ func TestMetricsCollect(t *testing.T) {
 	got := counters{s.Bots, s.Events, s.Sent, s.Paced, s.Reconnects, s.Aborts, s.BreakerOpen}
 	if want := (counters{2, 7, 2, 1, 1, 1, true}); got != want || !s.At.Equal(t0) {
 		t.Errorf("Collect = %+v at %v, want %+v at %v", got, s.At, want, t0)
+	}
+	if s.NavSegments != 2 || s.NavBlocked != 1 {
+		t.Errorf("nav segments %d blocked %d, want 2 and 1", s.NavSegments, s.NavBlocked)
 	}
 	if wantRules := map[string]uint64{"dead": 1, "idle": 2, "other": 1}; !maps.Equal(s.Rules, wantRules) {
 		t.Errorf("rules = %v, want %v", s.Rules, wantRules)

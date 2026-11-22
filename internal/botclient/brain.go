@@ -757,6 +757,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	if a.kind == b.orders.reply.kind {
 		b.orders.reply = Action{}
 	}
+	if (a.kind == actMove && a.walk) || a.kind == actTalk {
+		b.metrics.NavSegment()
+	}
 	b.walk.sent(a, now)
 	b.tradeSent(a, now)
 	b.train.sent(a, now)

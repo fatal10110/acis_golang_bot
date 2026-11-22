@@ -88,17 +88,19 @@ func LoadGM(path string) (GM, error) {
 var ErrCommandRefused = errors.New("GM command refused")
 
 // Scope is what a run's GM commands may touch: the run's e2e characters,
-// the monsters the run spawned, and the GM's current target, which the
+// the monsters the run spawned, the doors a scenario claimed, and the GM's
+// current target, which the
 // harness alone sets (GMClient.Select). It is not safe for concurrent use;
 // its Target guards it.
 type Scope struct {
 	chars  map[string]int32 // lowercased name -> object id, 0 unknown
 	npcs   map[int32]bool
+	doors  map[int32]bool
 	target int32 // 0: none
 }
 
 func newScope() *Scope {
-	return &Scope{chars: make(map[string]int32), npcs: make(map[int32]bool)}
+	return &Scope{chars: make(map[string]int32), npcs: make(map[int32]bool), doors: make(map[int32]bool)}
 }
 
 // addChar makes name one of the run's characters; a non-zero objectID
@@ -127,6 +129,13 @@ func (s *Scope) isCharID(objectID int32) bool {
 	return false
 }
 
+// ownsDoor reports whether id, a door id as text, is a door a scenario
+// claimed.
+func (s *Scope) ownsDoor(id string) bool {
+	v, err := strconv.ParseInt(id, 10, 32)
+	return err == nil && s.doors[int32(v)]
+}
+
 // owns reports an object the GM may target.
 func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharID(objectID) }
 
@@ -147,6 +156,7 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	                     1 to maxGive, 1 by default
 //	spawn ID             a monster at the GM's target or the GM; it never respawns
 //	delete               the GM's target, a monster the run spawned
+//	open|close ID        a door the scenario claimed (Target.OwnDoor)
 //	hide                 toggles the GM's own invisibility
 //	pledge create NAME   founds the clan NAME (2 to 16 letters or digits)
 //	                     led by the GM's target, a run character
@@ -179,6 +189,9 @@ func (s *Scope) check(cmd string) error {
 		ok = len(args) == 1 && allInts(args)
 	case "delete":
 		ok = len(args) == 0 && s.npcs[s.target]
+	case "open", "close":
+		// Never without an id: the server would toggle the GM's target.
+		ok = len(args) == 1 && allInts(args) && s.ownsDoor(args[0])
 	case "hide":
 		ok = len(args) == 0
 	case "pledge":
