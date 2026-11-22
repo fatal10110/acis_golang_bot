@@ -269,7 +269,8 @@ type warehouseErrand struct {
 	rows []warehouseRow
 	// openedAt is the bot's last open, zero before; exempt lets the deposit
 	// after its own withdrawal open at once; timeouts counts unanswered
-	// opens and requests in a row.
+	// opens and requests in a row, reset only by an answer that ends a
+	// transaction (a list is none).
 	openedAt time.Time
 	exempt   bool
 	timeouts int
@@ -650,11 +651,11 @@ func (b *Brain) warehouseEvent(ev Event, now time.Time) {
 		}
 	case WarehouseDepositList:
 		if e.step == whOpening && e.depositing() && m.Type == clanWarehouseType {
-			e.list, e.step, e.v.waitUntil, e.timeouts = m.Items, whListed, time.Time{}, 0
+			e.list, e.step, e.v.waitUntil = m.Items, whListed, time.Time{}
 		}
 	case WarehouseWithdrawList:
 		if e.step == whOpening && !e.depositing() && m.Type == clanWarehouseType {
-			e.list, e.step, e.v.waitUntil, e.timeouts = m.Items, whListed, time.Time{}, 0
+			e.list, e.step, e.v.waitUntil = m.Items, whListed, time.Time{}
 			e.status.Contents, e.status.Known = slices.Clone(m.Items), true
 		}
 	case SystemMessage:

@@ -319,6 +319,36 @@ func TestBrainWarehouseTimeout(t *testing.T) {
 	}
 }
 
+// TestBrainWarehouseRequestTimeoutBackoff keeps counting requests the
+// server never answers after a list: the list is no answer to the
+// transaction, so two silent refusals in a row wait four times MinOpenGap.
+func TestBrainWarehouseRequestTimeoutBackoff(t *testing.T) {
+	req := WarehouseRequest{Deposit: []WarehouseRow{{TemplateID: animalSkin}}}
+	wants := &whWants{reqs: []WarehouseRequest{req, req, req}}
+	b := newWarehouseBrain(t, wants, adenaStack(1000), whCarriedSkins)
+	list := WarehouseDepositList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{{ObjectID: 102, TemplateID: animalSkin, Count: 10}}}
+	sent := depositReq(warehouseRow{102, animalSkin, 10})
+	second := 3*time.Second + 2*warehouseOpenGap
+	steps := openSteps(0, true)
+	steps = append(steps,
+		trainerStep{name: "deposit", at: 5 * time.Second, events: []Event{list}, wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: sent},
+		trainerStep{name: "deposit unanswered", at: 5*time.Second + warehouseReplyTimeout},
+		trainerStep{name: "talk again", at: second, wantRule: "warehouse", wantKind: actTalk},
+		trainerStep{
+			name: "open again", at: second + time.Second, events: []Event{keeperPage(keeperObj, "DepositC", "WithdrawC")},
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
+		},
+		trainerStep{name: "deposit again", at: second + 2*time.Second, events: []Event{list}, wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: sent},
+		trainerStep{name: "unanswered again", at: second + 2*time.Second + warehouseReplyTimeout},
+		trainerStep{name: "backed off past twice MinOpenGap", at: second + time.Second + 4*warehouseOpenGap - time.Millisecond},
+		trainerStep{name: "open due", at: second + time.Second + 4*warehouseOpenGap, wantRule: "warehouse", wantKind: actTalk},
+	)
+	runTrainerSteps(t, b, steps)
+	if b.wh.timeouts != 2 {
+		t.Fatalf("timeouts = %d, want the two unanswered requests counted", b.wh.timeouts)
+	}
+}
+
 // TestWarehouseOpenGapBackoff doubles the gap per timeout in a row, up to
 // warehouseBackoffMax.
 func TestWarehouseOpenGapBackoff(t *testing.T) {
