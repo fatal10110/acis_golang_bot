@@ -12,6 +12,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
 // Helpers of the M3 scenarios (#115): farmers, brain-driven bots watched
@@ -114,8 +115,11 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 		if self == 0 {
 			return
 		}
+		plan := nav.Planner{Engine: n.Engine, Water: n.Water}
 		explained, bad := stepVerdict(blockedStops(w.Seen(0), w.Sent(), self, speed), func(b blockedStop) bool {
 			return stepPredicted(n.Engine, b, speed)
+		}, func(b blockedStop) bool {
+			return plan.CorridorOpen(toLocation(b.from), toLocation(b.to))
 		})
 		for _, e := range explained {
 			t.Logf("bot %s step chain: %s", account, e)
