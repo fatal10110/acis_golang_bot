@@ -42,8 +42,10 @@ type World struct {
 	Inventory Inventory
 	// Trade is the bot's open trade window.
 	Trade Trade
-	// Buffs are the bot's own effects (AbnormalStatusUpdate).
-	Buffs Buffs
+	// Buffs are the bot's own effects (AbnormalStatusUpdate), and
+	// BuffLevels the skill level of each, by skill id.
+	Buffs      Buffs
+	BuffLevels map[int32]int32
 	// Ground are the items on the ground in sight by object id.
 	Ground map[int32]GroundItem
 	// Recipes is the bot's recipe book.

@@ -120,6 +120,10 @@ func (w *World) applyEffects(ev Event, now time.Time) {
 	switch e := ev.(type) {
 	case AbnormalStatusUpdate:
 		w.Buffs = buffsOf(e.Effects, now)
+		w.BuffLevels = make(map[int32]int32, len(e.Effects))
+		for _, ef := range e.Effects {
+			w.BuffLevels[ef.SkillID] = ef.Level
+		}
 	case PartySpelled:
 		if e.Kind != partySpelledPlayer {
 			return

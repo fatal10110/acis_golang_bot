@@ -11,6 +11,15 @@ import (
 // grocers sell (aCis_datapack/data/xml/items/0700-0799.xml, buyLists.xml).
 const scrollOfEscape int32 = 736
 
+// The buff potions of the default build table (GearClass.BuffPotion), which
+// grocers sell: Potion of Alacrity (skill 2012, attack_time_down) for
+// fighters and Magic Haste Potion (skill 2169, casting_time_down) for
+// mystics (aCis_datapack/data/xml/items/0700-0799.xml, 6000-6099.xml).
+const (
+	alacrityPotion   int32 = 735
+	magicHastePotion int32 = 6035
+)
+
 // The use meter's decay and first estimate.
 const (
 	// meterHalfLife is how many minutes of fighting halve the weight of

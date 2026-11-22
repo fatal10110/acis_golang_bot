@@ -143,6 +143,10 @@ type GearClass struct {
 	// Weights are what the classes score gear by; the zero value is
 	// evenWeights.
 	Weights StatWeights
+	// BuffPotion is the buff potion template the classes drink at their
+	// spot (rule "buffpotion") and buy in the budget's comfort tier; 0 for
+	// none. It is in the keep set.
+	BuffPotion int32
 }
 
 // StatWeights weigh a piece's stats into its score: the sum of each stat,
@@ -208,18 +212,19 @@ func (w StatWeights) score(it *datapack.Item, enchant int) float64 {
 // starting set) with a shield; every other fighter swords, blunts or
 // their two-handed kinds in heavy armor with a shield (classes/*.xml,
 // model/actor/player/race.go). Mystics weigh gear as casters, every other
-// class as fighters.
+// class as fighters; mystics drink the Magic Haste Potion, every other
+// class the Potion of Alacrity.
 func defaultGearClasses() []GearClass {
 	return []GearClass{
-		{Classes: slices.Clone(mysticClasses), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC", Weights: casterWeights},
-		{Classes: []int32{7, 8, 22, 23, 35, 36, 93, 101, 108}, Weapons: []string{"DAGGER"}, Armor: "LIGHT", Weights: fighterWeights},
-		{Classes: []int32{9, 24, 37, 92, 102, 109}, Weapons: []string{"BOW"}, Armor: "LIGHT", Weights: fighterWeights},
-		{Classes: []int32{47, 48, 114}, Weapons: []string{"DUALFIST"}, Armor: "LIGHT", Weights: fighterWeights},
-		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY", Weights: fighterWeights},
-		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY", Weights: fighterWeights},
-		{Classes: []int32{46, 113}, Weapons: []string{"BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Weights: fighterWeights},
-		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true, Weights: fighterWeights},
-		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights},
+		{Classes: slices.Clone(mysticClasses), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC", Weights: casterWeights, BuffPotion: magicHastePotion},
+		{Classes: []int32{7, 8, 22, 23, 35, 36, 93, 101, 108}, Weapons: []string{"DAGGER"}, Armor: "LIGHT", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{9, 24, 37, 92, 102, 109}, Weapons: []string{"BOW"}, Armor: "LIGHT", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{47, 48, 114}, Weapons: []string{"DUALFIST"}, Armor: "LIGHT", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{46, 113}, Weapons: []string{"BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 	}
 }
 

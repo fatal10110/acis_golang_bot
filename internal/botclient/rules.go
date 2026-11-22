@@ -21,6 +21,11 @@ type Persona struct {
 	// from its target (rule 3); 0 never does any.
 	CriticalHP   int
 	FleeDistance int32
+	// CrowdedHP is the HP percent under which a bot in combat with two or
+	// more attackers it may fight already drinks a potion as under
+	// CriticalHP (rule 3), so it drinks before OutmatchedHP has it flee; it
+	// heals itself and flees only under CriticalHP. 0 never drinks early.
+	CrowdedHP int
 	// Potions are the healing potion template ids rule 3 drinks, best
 	// first; none drinks nothing. DefaultPersona's are a built-in list;
 	// TravelMap.WithItemIndex replaces it with the datapack's.
@@ -186,6 +191,7 @@ func DefaultPersona() Persona {
 		Recover:        defaultRecoverPolicy(),
 		JoinParty:      acceptParty,
 		CriticalHP:     20,
+		CrowdedHP:      60,
 		FleeDistance:   600,
 		OutmatchedHP:   50,
 		BlacklistAfter: 4,
@@ -298,7 +304,8 @@ const (
 // RequestAcquireSkillInfo and RequestAcquireSkill have no reuse gate on the
 // server: the frame bucket bounds them, restartRetry spaces a repeated
 // restart, an invitation is answered once, potionReuse spaces the potions
-// the bot drinks (the potions' shared heal over time), shotRetry the toggles
+// the bot drinks (the potions' shared heal over time), buffPotionWait a buff
+// potion until its effect shows (then its stack stops it), shotRetry the toggles
 // of a shot template, and a trainer visit sends one skill request per server
 // answer. RequestBuyItem and RequestSellItem have none either: a shop visit
 // sends one per BuyList or SellList it opened. RequestMagicSkillUse (attack,
@@ -395,7 +402,9 @@ type rule struct {
 // due reply waits for them. "leader" handles a dead or lost leader ahead of
 // following it. The shot toggle is set-up, not a plan rule: it runs once
 // per shot template carried, ahead of the fight it serves, after the flee
-// rules so it never delays one.
+// rules so it never delays one. "buffpotion" drinks the build's buff potion
+// at the farming spot out of combat, after the rebuff so a support's buff
+// lands first.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -408,6 +417,7 @@ var playRules = []rule{
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
+	{"buffpotion", (*Brain).ruleBuffPotion},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
 	{"store", (*Brain).ruleStore},
@@ -519,11 +529,19 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 
 // ruleCritical is rule 3: in combat with HP critical, stand up, then drink
 // a potion whose reuse has run out, else heal itself, else flee away from
-// the target.
+// the target. With two or more attackers on the bot and HP under CrowdedHP
+// it drinks one early, standing, and leaves the turn to the next rules
+// when none is ready.
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
-	if !s.InCombat || !below(s.HP, s.MaxHP, b.persona.CriticalHP) {
+	if !s.InCombat {
 		return Action{}, false
+	}
+	if !below(s.HP, s.MaxHP, b.persona.CriticalHP) {
+		if s.Sitting || !below(s.HP, s.MaxHP, b.persona.CrowdedHP) || len(b.attackers(now)) < 2 {
+			return Action{}, false
+		}
+		return b.drinkPotion(now)
 	}
 	if !s.Sitting {
 		if a, ok := b.drinkPotion(now); ok {
