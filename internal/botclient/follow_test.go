@@ -6,13 +6,25 @@ import (
 	"time"
 )
 
-// newFollowBrain is a started brain whose bot stands at the origin, running,
-// in gmID's party; the GM stands at (2000, 0) facing +X, running.
+// followY is the row of the synthetic open ground the follow tests stand
+// on: the bot at (followX, followY), the GM 2000 units east of it.
+const (
+	followX = 1000
+	followY = 2000
+)
+
+// followGM is where newFollowBrain's GM stands, moved by dx, dy.
+func followGM(dx, dy int32) Point { return Point{X: followX + 2000 + dx, Y: followY + dy} }
+
+// newFollowBrain is a started brain walking on the synthetic open ground
+// (walkOn), its bot at (followX, followY), running, in gmID's party; the GM
+// stands 2000 units east of it facing +X, running.
 func newFollowBrain(t *testing.T) *Brain {
 	t.Helper()
-	b, _ := newTestBrain(t, Persona{Follow: defaultFollowPolicy()})
+	b, _, _ := newNavBrain(t, testNav(t), Persona{Follow: defaultFollowPolicy()}, Point{X: followX, Y: followY})
+	b.world.Self.Running = true
 	b.world.Apply(PartySmallWindowAll{LeaderID: gmID, Members: []PartyMember{gmRow}}, t0)
-	b.world.Apply(CharInfo{ObjectID: gmID, Name: "GM", Pos: Point{X: 2000}, RunSpeed: 100, WalkSpeed: 50, Running: true}, t0)
+	b.world.Apply(CharInfo{ObjectID: gmID, Name: "GM", Pos: followGM(0, 0), RunSpeed: 100, WalkSpeed: 50, Running: true}, t0)
 	return b
 }
 
@@ -46,14 +58,15 @@ func repath(t *testing.T, b *Brain, now time.Time) (Action, time.Time) {
 	return a, due
 }
 
-// checkSlot fails unless a moves to a point MinDist-MaxDist from leader and
-// within followArc of straight behind it, away from direction back.
-func checkSlot(t *testing.T, a Action, leader Point, back float64) Point {
+// checkSlot fails unless a is the walker's first segment toward a slot
+// MinDist-MaxDist from leader and within followArc of straight behind it,
+// away from direction back, on the leader's floor; it returns the slot.
+func checkSlot(t *testing.T, b *Brain, a Action, leader Point, back float64) Point {
 	t.Helper()
-	if a.kind != actMove {
-		t.Fatalf("kind %d, want a move", a.kind)
+	if a.kind != actMove || !a.walk {
+		t.Fatalf("kind %d walk %v, want a walker segment", a.kind, a.walk)
 	}
-	to := moveTarget(a.payload)
+	to := b.follow.dest
 	d := math.Sqrt(float64(dist2(to, leader)))
 	if d < 149.5 || d > 350.5 {
 		t.Errorf("slot %v is %.0f from leader %v, want 150-350", to, d, leader)
@@ -100,14 +113,14 @@ func TestFollowEngages(t *testing.T) {
 // within Repath of the anchor, a re-path once it is past it.
 func TestFollowRepathCadence(t *testing.T) {
 	b := newFollowBrain(t)
-	gm := Point{X: 2000}
+	gm := followGM(0, 0)
 	a, due := repath(t, b, at(time.Second))
-	slot := checkSlot(t, a, gm, math.Pi) // facing +X: behind is -X
+	slot := checkSlot(t, b, a, gm, math.Pi) // facing +X: behind is -X
 	r := math.Sqrt(float64(dist2(slot, gm)))
 
 	// Arrived; the leader steps 200 units on: inside Repath, nothing.
 	b.world.Apply(StopMove{ObjectID: selfID, Pos: slot}, due)
-	gm = Point{X: 2200}
+	gm = followGM(200, 0)
 	b.world.Apply(StopMove{ObjectID: gmID, Pos: gm}, at(3*time.Second))
 	b.follow.wake = false
 	followHold(t, b, at(4*time.Second))
@@ -116,10 +129,10 @@ func TestFollowRepathCadence(t *testing.T) {
 	}
 
 	// 300 units from the anchor: re-path, behind the way it went (+X).
-	gm = Point{X: 2300}
+	gm = followGM(300, 0)
 	b.world.Apply(StopMove{ObjectID: gmID, Pos: gm}, at(5*time.Second))
 	a, _ = repath(t, b, at(6*time.Second))
-	slot = checkSlot(t, a, gm, math.Pi)
+	slot = checkSlot(t, b, a, gm, math.Pi)
 	if got := math.Sqrt(float64(dist2(slot, gm))); math.Abs(got-r) > 1 {
 		t.Errorf("slot radius %.0f, want the drawn %.0f kept for the same leader", got, r)
 	}
@@ -127,9 +140,9 @@ func TestFollowRepathCadence(t *testing.T) {
 
 func TestFollowSlotBehindMovingLeader(t *testing.T) {
 	b := newFollowBrain(t)
-	b.world.Apply(MoveToLocation{ObjectID: gmID, Origin: Point{X: 2000}, Dest: Point{X: 2000, Y: 3000}}, at(time.Second))
+	b.world.Apply(MoveToLocation{ObjectID: gmID, Origin: followGM(0, 0), Dest: followGM(0, 1500)}, at(time.Second))
 	a, due := repath(t, b, at(time.Second))
-	checkSlot(t, a, b.world.Objects[gmID].Position(due), -math.Pi/2) // heading +Y: behind is -Y
+	checkSlot(t, b, a, b.world.Objects[gmID].Position(due), -math.Pi/2) // heading +Y: behind is -Y
 }
 
 func TestFollowOutOfSight(t *testing.T) {
@@ -140,56 +153,35 @@ func TestFollowOutOfSight(t *testing.T) {
 		t.Fatal("re-path scheduled before any leader position")
 	}
 
-	b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{X: 10000, Z: -50}}}}, at(6*time.Second))
-	a, due := repath(t, b, at(7*time.Second))
-	if a.kind != actMove {
-		t.Fatalf("kind %d, want a move", a.kind)
+	report := Point{X: 7000, Y: followY}
+	b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: report}}}, at(6*time.Second))
+	a, _ := repath(t, b, at(7*time.Second))
+	if a.kind != actMove || !a.walk {
+		t.Fatalf("kind %d walk %v, want a walker segment", a.kind, a.walk)
 	}
-	slot, leg := b.follow.dest, moveTarget(a.payload)
-	whole := math.Sqrt(float64(dist2(slot, Point{})))
-	if d, rest := math.Sqrt(float64(dist2(leg, Point{}))), math.Sqrt(float64(dist2(slot, leg))); math.Abs(d-spotLeg) > 2 || math.Abs(d+rest-whole) > 2 {
-		t.Fatalf("first leg to %v, want spotLeg along the way to the slot %v", leg, slot)
-	}
-	if d := math.Sqrt(float64(dist2(slot, Point{X: 10000}))); d < 149.5 || d > 350.5 || slot.X >= 10000 {
+	slot, seg := b.follow.dest, moveTarget(a.payload)
+	if d := math.Sqrt(float64(dist2(slot, report))); d < 149.5 || d > 350.5 || slot.X >= report.X {
 		t.Errorf("slot %v, want 150-350 short of the report on the bot's side", slot)
 	}
-
-	// The leg ends: the next one goes at once. Then legs that get nowhere,
-	// and the sidesteps after them (TestFollowUnstick), give the slot up
-	// until the leader moves on.
-	stop := Point{X: spotLeg}
-	b.world.Apply(StopMove{ObjectID: selfID, Pos: stop}, due.Add(time.Second))
-	now := due.Add(2 * time.Second)
-	for i := range spotStalls + len(sidestepTurns) {
-		name, a := b.decide(now)
-		if name != "follow" || a.kind != actMove {
-			t.Fatalf("leg %d: decide = %q kind %d, want follow moving", i+2, name, a.kind)
-		}
-		now = now.Add(time.Second)
-	}
-	followHold(t, b, now)
-	b.follow.wake = false
-	followHold(t, b, now.Add(time.Second))
-	if !b.follow.dueAt.IsZero() {
-		t.Fatal("a stuck bot scheduled a re-path while the leader stayed put")
-	}
-	b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{X: 10000, Y: 1000}}}}, now)
-	if a, _ := repath(t, b, now.Add(2*time.Second)); a.kind != actMove {
-		t.Errorf("after the leader moved on: kind %d, want a move", a.kind)
+	// Open ground: the route is the straight line, in segments.
+	from := Point{X: followX, Y: followY}
+	whole := math.Sqrt(float64(dist2(slot, from)))
+	if d, rest := math.Sqrt(float64(dist2(seg, from))), math.Sqrt(float64(dist2(slot, seg))); math.Abs(d+rest-whole) > 2 {
+		t.Errorf("first segment to %v, want along the way to the slot %v", seg, slot)
 	}
 }
 
 func TestFollowDrift(t *testing.T) {
 	b := newFollowBrain(t)
 	a, due := repath(t, b, at(time.Second))
-	slot := checkSlot(t, a, Point{X: 2000}, math.Pi)
+	slot := checkSlot(t, b, a, followGM(0, 0), math.Pi)
 	b.world.Apply(StopMove{ObjectID: selfID, Pos: slot}, due)
 	followHold(t, b, due.Add(time.Second))
 
 	// A fight carried the bot off: farther than MaxDist+Repath, it walks back.
-	b.world.Apply(StopMove{ObjectID: selfID, Pos: Point{X: 2000, Y: -700}}, due.Add(2*time.Second))
+	b.world.Apply(StopMove{ObjectID: selfID, Pos: followGM(0, -700)}, due.Add(2*time.Second))
 	a, _ = repath(t, b, due.Add(3*time.Second))
-	checkSlot(t, a, Point{X: 2000}, math.Pi)
+	checkSlot(t, b, a, followGM(0, 0), math.Pi)
 }
 
 func TestFollowStandsUp(t *testing.T) {
@@ -213,7 +205,7 @@ func TestFollowMatchesWalkRun(t *testing.T) {
 		{"leader runs", func(*Brain) {}, false, true},
 		{"leader out of sight: run", func(b *Brain) {
 			b.world.Apply(DeleteObject{ObjectID: gmID}, t0)
-			b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{X: 9000}}}}, t0)
+			b.world.Apply(PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: Point{X: 7000, Y: followY}}}}, t0)
 		}, false, true},
 	}
 	for _, tt := range tests {

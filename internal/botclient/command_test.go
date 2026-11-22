@@ -225,6 +225,7 @@ func TestSessionCommandedLogout(t *testing.T) {
 // commander outside a party.
 func TestBrainCommandStayFollow(t *testing.T) {
 	b, _ := newCommandBrain(t, Persona{Follow: defaultFollowPolicy(), IdleChance: 1, IdleRadius: 300})
+	walkOn(t, b)
 	if name, _ := b.decide(at(time.Second)); name == "follow" {
 		t.Fatal("follows a commander outside a party unasked")
 	}

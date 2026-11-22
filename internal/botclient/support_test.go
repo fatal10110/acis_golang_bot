@@ -428,6 +428,10 @@ func TestSupportRules(t *testing.T) {
 			p.Follow = FollowPolicy{} // following the leader is #18's, not checked here
 			b, _ := newTestBrain(t, p)
 			tc.setup(b)
+			// A flee walks: it needs ground under it.
+			if tc.wantKind == actMove {
+				onGround(t, b)
+			}
 			rule, a := b.decide(now)
 			if rule != tc.wantRule || a.kind != tc.wantKind {
 				t.Fatalf("decide = rule %q action %d, want rule %q action %d", rule, a.kind, tc.wantRule, tc.wantKind)

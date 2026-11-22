@@ -75,9 +75,9 @@ func TestRuleTable(t *testing.T) {
 			setup:    func(b *Brain) { b.world.Self.InCombat, b.world.Self.HP, b.world.Target = true, 10, npcID },
 			wantRule: "critical", wantKind: actMove,
 			check: func(t *testing.T, _ *Brain, a Action) {
-				// The NPC stands at X 1000, the bot at the origin.
-				if to := moveTarget(a.payload); to.X != -600 || to.Y != 0 {
-					t.Errorf("flee to %+v, want X -600 Y 0", to)
+				// The NPC stands 1000 east of the bot.
+				if to := moveTarget(a.payload); to.X != groundShift.X-600 || to.Y != groundShift.Y || !a.walk {
+					t.Errorf("flee to %+v (walker %v), want a walker segment 600 west of %+v", to, a.walk, groundShift)
 				}
 			},
 		},
@@ -224,6 +224,10 @@ func TestRuleTable(t *testing.T) {
 			b, _ := newTestBrain(t, p)
 			if tc.setup != nil {
 				tc.setup(b)
+			}
+			// A flee walks: it needs ground under it.
+			if tc.wantKind == actMove {
+				onGround(t, b)
 			}
 			rule, a := b.decide(now)
 			if tc.anyAction && a.kind != actHold {

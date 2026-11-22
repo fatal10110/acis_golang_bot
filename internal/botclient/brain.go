@@ -177,6 +177,8 @@ type Brain struct {
 	buffedAt map[buffKey]time.Time
 	// follow is the slot behind the party leader (rule 9 errand).
 	follow followState
+	// fleeing is the run away from an attacker under way (flee).
+	fleeing fleeRun
 	// newbie is the Newbie Guide visit and trip the gatekeeper trip (rule
 	// 9 errands).
 	newbie newbieVisit
