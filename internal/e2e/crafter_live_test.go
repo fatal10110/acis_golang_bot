@@ -68,11 +68,14 @@ func crafterPersona() botclient.Persona {
 
 // TestLiveCrafter plays the clan crafter's cycle (#190, #194): a Dwarven
 // Fighter with Create Item 1 leads a fresh level-1 clan, carrying the steel
-// recipe's scroll and materials, with a GM order for one Steel on the
-// board. Its first cycle learns the recipe and deposits the materials no
-// plan needs yet; the next claims the order, crafts the steel from the
-// materials and deposits it, which delivers the order; the clan warehouse
-// list of the cycle after holds the steel. The leader withdraws whatever
+// recipe's scroll and materials. With no order on the board its first cycle
+// that ends with nothing to craft (learning the recipe on the account's
+// first run) deposits the materials, which no plan needs. Only then the GM
+// posts an order for one Steel, so the next cycle withdraws the materials
+// from the clan warehouse, crafts the steel and deposits it, which delivers
+// the order, on a rerun of the account as on its first run. The scenario
+// asserts the clan list before the craft held the materials and the one
+// after holds the steel and fewer materials. The leader withdraws whatever
 // MembersCanWithdrawFromClanWH says. Opens are MinOpenGap apart, so it
 // takes about six minutes. The bot records the first frame of each opcode
 // it reads into the crafter directory of BOT_E2E_RECORD when set, else a
@@ -169,14 +172,21 @@ func TestLiveCrafter(t *testing.T) {
 	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
 		t.Fatalf("clan %s at level 1: %v", clan, err)
 	}
+	// The first cycle with nothing to craft deposits the materials: the
+	// order comes after it, so the craft needs them withdrawn. One that
+	// aborted (a look before the clan level) leaves them carried.
+	waitFor(t, ctx, "a crafter cycle with nothing to craft", func() bool {
+		c := b.Status().Crafter
+		return c != nil && c.Last.Outcome == botclient.CraftCycleNothing
+	})
 	order, ok := board.PostCommand(clanID, botclient.OrderByGM, "e2e GM", steelItem, 1)
 	if !ok {
 		t.Fatal("GM order refused")
 	}
 
-	// The steel the clan's list held before the craft: a character of an
-	// earlier run may have carried some, which the first cycle deposits.
-	var before int64
+	// What the clan's list held before the craft: the materials the first
+	// cycle deposited, and steel a character of an earlier run carried.
+	var before, after whStock
 	made := false
 	for done := false; !done; {
 		select {
@@ -184,29 +194,30 @@ func TestLiveCrafter(t *testing.T) {
 			switch e := ev.(type) {
 			case botclient.RecipeItemMakeInfo:
 				t.Logf("craft result %+v", e)
-				if e.RecipeID == steelRecipe && e.Status == botclient.RecipeMadeSuccess {
+				if e.RecipeID == steelRecipe && e.Status == botclient.RecipeMadeSuccess && !made {
 					made = true
+					if before.varnish < int64(steelEach) || before.ore < int64(steelEach) {
+						t.Fatalf("steel crafted while the clan warehouse held %+v, want the materials withdrawn from it", before)
+					}
 				}
 			case botclient.WarehouseWithdrawList:
 				if e.Type != clanWHType {
 					continue
 				}
-				var n int64
-				for _, it := range e.Items {
-					if it.TemplateID == steelItem {
-						n += int64(it.Count)
-					}
-				}
-				t.Logf("clan warehouse list: %d items, %d steel", len(e.Items), n)
+				n := stockOf(e)
+				t.Logf("clan warehouse list: %d items, %+v", len(e.Items), n)
 				if !made {
 					before = n
-				} else {
-					done = n > before
+				} else if n.steel > before.steel {
+					after, done = n, true
 				}
 			}
 		case <-ctx.Done():
 			t.Fatalf("waiting for the crafted steel in the clan warehouse (crafted %v): %v; crafter %+v", made, ctx.Err(), b.Status().Crafter)
 		}
+	}
+	if after.varnish >= before.varnish || after.ore >= before.ore {
+		t.Errorf("clan warehouse held %+v before the craft and %+v after, want the materials withdrawn", before, after)
 	}
 	for _, o := range board.Orders(clanID, time.Now()) {
 		if o.ID == order {
@@ -219,4 +230,22 @@ func TestLiveCrafter(t *testing.T) {
 	if err := rec.Err(); err != nil {
 		t.Error(err)
 	}
+}
+
+// whStock is what a clan warehouse list holds of the scenario's items.
+type whStock struct{ steel, varnish, ore int64 }
+
+func stockOf(l botclient.WarehouseWithdrawList) whStock {
+	var n whStock
+	for _, it := range l.Items {
+		switch it.TemplateID {
+		case steelItem:
+			n.steel += int64(it.Count)
+		case varnish:
+			n.varnish += int64(it.Count)
+		case ironOre:
+			n.ore += int64(it.Count)
+		}
+	}
+	return n
 }
