@@ -43,7 +43,7 @@ var builtinShots = map[int32]shotItem{
 // ChargeSpiritshot).
 type weapon struct {
 	grade                  int32
-	soulshots, spiritshots int32
+	soulshots, spiritshots int
 }
 
 // indexWeapons indexes every weapon template of items by what it charges.
@@ -51,7 +51,7 @@ func indexWeapons(items map[int32]datapack.Item) map[int32]weapon {
 	out := make(map[int32]weapon)
 	for id, it := range items {
 		if it.Type == "Weapon" {
-			out[id] = weapon{grade: int32(it.Grade), soulshots: int32(it.Soulshots), spiritshots: int32(it.Spiritshots)}
+			out[id] = weapon{grade: int32(it.Grade), soulshots: it.Soulshots, spiritshots: it.Spiritshots}
 		}
 	}
 	return out
