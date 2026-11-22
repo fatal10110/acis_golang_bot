@@ -40,7 +40,7 @@ func newTripBrain(t *testing.T, items ...Item) *Brain {
 		gatekeepers: []gatekeeper{{npcID: townGK, at: town}},
 		weights:     map[int32]int32{lesserHealingPotion: 5, scrollOfEscape: 120, junkMat: 10, keptMat: 10},
 		spawnedSold: map[int32]bool{lesserHealingPotion: true},
-		aggro:       map[int32]int32{aggroMob: 300},
+		aggro:       map[int32]int64{aggroMob: 300},
 	}
 	b.world.Apply(ItemList{Items: items}, t0)
 	b.world.Self.MaxLoad = 100000

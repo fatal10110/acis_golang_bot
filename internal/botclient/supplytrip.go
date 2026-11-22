@@ -203,7 +203,7 @@ func (b *Brain) safeToEscape(now time.Time) bool {
 		if o.Kind != KindNPC || o.Dead {
 			continue
 		}
-		if r := int64(b.cfg.Travel.aggro[o.NPCID]); r > 0 && dist2(o.Position(now), at) <= r*r {
+		if r := b.cfg.Travel.aggro[o.NPCID]; r > 0 && dist2(o.Position(now), at) <= r*r {
 			return false
 		}
 	}
@@ -315,11 +315,11 @@ func (b *Brain) gearPaid() bool {
 
 // indexAggro maps each NPC template with an aggro range to it: the
 // aggressive monsters (datapack.NPC.AggroRange).
-func indexAggro(npcs map[int32]datapack.NPC) map[int32]int32 {
-	out := make(map[int32]int32)
+func indexAggro(npcs map[int32]datapack.NPC) map[int32]int64 {
+	out := make(map[int32]int64)
 	for id, n := range npcs {
 		if n.AggroRange > 0 {
-			out[id] = int32(n.AggroRange)
+			out[id] = int64(n.AggroRange)
 		}
 	}
 	return out

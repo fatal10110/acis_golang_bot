@@ -68,7 +68,7 @@ type TravelMap struct {
 	// aggro are the aggro ranges of the aggressive NPC templates
 	// (indexAggro): what a supply trip's Scroll of Escape waits out
 	// (safeToEscape).
-	aggro map[int32]int32
+	aggro map[int32]int64
 	// recipes are the craft recipes by id (datapack.Datapack.Recipes), and
 	// craftItems every template one of them uses or makes, its scroll
 	// included: what the crafter plans with and deposits (Persona.Crafter).
