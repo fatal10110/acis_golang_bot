@@ -143,6 +143,8 @@ type Persona struct {
 	Gear GearPolicy
 	// Warehouse is the clan warehouse errand (rule 9 errand "warehouse").
 	Warehouse WarehousePolicy
+	// Recipes is recipe learning (rule 9 errand "recipe").
+	Recipes RecipePolicy
 	// Loot is what the bot picks up after a fight and drops when
 	// overweight (rule 8).
 	Loot LootPolicy
@@ -281,6 +283,8 @@ const (
 	actChatReply
 	actWarehouseDeposit
 	actWarehouseWithdraw
+	actRecipeBook
+	actCraft
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -307,6 +311,8 @@ const (
 // SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
 // protector either (network/privatestore_dispatch.go): an opening sends each
 // once per answer it waits for, and StorePolicy.Retry spaces the openings.
+// RequestRecipeBookOpen has none either: the recipe errand sends one per
+// page it waits for (recipeReplyTimeout).
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -317,6 +323,8 @@ func (a Action) gate() gate {
 		return gateBypass
 	case actDrop:
 		return gateDrop
+	case actCraft:
+		return gateCraft
 	}
 	return gateNone
 }
@@ -364,7 +372,7 @@ type rule struct {
 // "assist" (the leader's target), "train" (the trainer), "gear" (wearing
 // better gear, ahead of the shop so a bought piece is worn before the next
 // sale), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
-// warehouse errand), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
+// warehouse errand), "recipe" (recipe learning), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
 // (a gatekeeper trip to a spot out of walking reach), "spot" (getting to the
 // farming spot) and "farm" (attacking a monster there) are rule 9 errands,
 // ahead of the persona's goal: a party member assists its leader, visits its
@@ -400,6 +408,7 @@ var playRules = []rule{
 	{"gear", (*Brain).ruleGear},
 	{"shop", (*Brain).ruleShop},
 	{"warehouse", (*Brain).ruleWarehouse},
+	{"recipe", (*Brain).ruleRecipe},
 	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},

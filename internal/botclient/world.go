@@ -46,6 +46,8 @@ type World struct {
 	Buffs Buffs
 	// Ground are the items on the ground in sight by object id.
 	Ground map[int32]GroundItem
+	// Recipes is the bot's recipe book.
+	Recipes RecipeBook
 }
 
 // SelfState is the bot's own character.
@@ -393,6 +395,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyEffects(ev, now)
 	case SpawnItem, DropItem, GetItem:
 		w.applyGround(ev)
+	case RecipeBookItemList:
+		w.Recipes.apply(e)
 	}
 }
 
