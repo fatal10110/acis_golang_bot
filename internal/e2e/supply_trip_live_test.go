@@ -112,45 +112,59 @@ func TestLiveSupplyTrip(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 	t.Logf("%s low on shots at %v", f.name, f.bot.Status().Position)
 
-	// Home is the recall's landing after a Scroll of Escape, or a walk to
-	// the village when no safe moment came within Supply.SafeWait.
-	var read, landed time.Time
+	// Home is the recall's landing after a Scroll of Escape, a walk to the
+	// village when no safe moment came within Supply.SafeWait, or a death
+	// on the way and the respawn in the village (Revive arms the
+	// preparation gate as an arrival does, docs/items.md section 7).
+	var read, landed, tripAt time.Time
+	var how string
 	var last string
 	var lastAt time.Time
-	// note logs the bot's state on every change, and its position and HP
-	// at least every noteEvery, so a bot that stands still shows in the log.
+	// note logs the bot's rule, spot and walk on every change, and with its
+	// supplies, position and HP at least every noteEvery, so a bot that
+	// stands still shows in the log.
 	note := func() {
 		st := f.bot.Status()
-		if now := fmt.Sprintf("rule %q spot %q walk %q, %d shots, %d potions, %d scrolls, %d adena", st.Rule, st.Spot, st.Walk,
-			f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena)); now != last || time.Since(lastAt) >= noteEvery {
+		if now := fmt.Sprintf("rule %q spot %q walk %q", st.Rule, st.Spot, st.Walk); now != last || time.Since(lastAt) >= noteEvery {
 			last, lastAt = now, time.Now()
-			t.Logf("%s %s at %v, HP %d/%d, state %v", f.name, now, st.Position, st.HP, st.MaxHP, st.State)
+			t.Logf("%s %s, %d shots, %d potions, %d scrolls, %d adena at %v, HP %d/%d, state %v", f.name, now,
+				f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), st.Position, st.HP, st.MaxHP, st.State)
 		}
 	}
 	until(t, ctx, "the trip home", func() string {
 		note()
+		st := f.bot.Status()
+		if tripAt.IsZero() && st.Rule == "supply" {
+			tripAt = time.Now()
+		}
 		// The landing follows the latest read: a read the bot died
 		// before recalls nothing, and the walk home may follow it.
 		if used := f.usedSince(scrollOfEscape, start); len(used) > 0 {
 			read = used[len(used)-1].At
 			for _, s := range f.watch.Seen(0) {
 				if tp, ok := s.Event.(botclient.TeleportToLocation); ok && tp.ObjectID == f.id && s.At.After(read) {
-					landed = s.At
+					landed, how = s.At, fmt.Sprintf("read its scroll at %v", read.Format(time.TimeOnly))
 					return ""
 				}
 			}
 		}
-		if st := f.bot.Status(); st.Rule == "supply" && dist(st.Position, townTI) < walkedHome {
-			read, landed = time.Time{}, time.Now()
+		if st.Rule == "supply" && dist(st.Position, townTI) < walkedHome {
+			landed, how = time.Now(), fmt.Sprintf("walked home, no safe moment for its scroll (#%d)", issueNeverSafe)
 			return ""
 		}
-		return fmt.Sprintf("not home: scroll read %v, rule %q at %v", !read.IsZero(), f.bot.Status().Rule, f.bot.Status().Position)
+		if !tripAt.IsZero() && dist(st.Position, townTI) < walkedHome {
+			for _, s := range f.watch.Seen(0) {
+				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && s.At.After(tripAt) {
+					landed, how = s.At, "died on the trip and respawned in the village"
+				}
+			}
+			if !landed.IsZero() {
+				return ""
+			}
+		}
+		return fmt.Sprintf("not home: scroll read %v, trip seen %v, rule %q at %v", !read.IsZero(), !tripAt.IsZero(), st.Rule, st.Position)
 	})
-	if read.IsZero() {
-		t.Logf("%s walked home, no safe moment for its scroll (#%d)", f.name, issueNeverSafe)
-	} else {
-		t.Logf("%s read its scroll at %v, landed at %v", f.name, read.Format(time.TimeOnly), landed.Format(time.TimeOnly))
-	}
+	t.Logf("%s %s, home at %v", f.name, how, landed.Format(time.TimeOnly))
 	cur, limit := f.load()
 	t.Logf("%s home with %d shots, %d potions, %d scrolls, %d adena, load %d/%d", f.name, f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), cur, limit)
 	from := 0
