@@ -165,6 +165,8 @@ type crafterCycle struct {
 	// delivering are the products of crafted orders the deposit under way
 	// carries, by order.
 	delivering map[OrderID]int64
+	// ended is how the last cycle ended; it survives the cycle's reset.
+	ended craftEnded
 }
 
 // begin starts phase ph with warehouse request req at now.

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CommandForm } from "../components/CommandForm";
+import { CrafterStatus } from "../components/CrafterStatus";
 import type { Confirm } from "../components/ConfirmDialog";
 import { PresetOptions } from "../components/CreateDialog";
 import { LogView } from "../components/LogView";
@@ -137,6 +138,7 @@ export function BotDetail({ account, bots, ask }: { account: string; bots: Bot[]
                 </Row>
                 <Row label="Rule / order">{activityOf(b)}</Row>
                 <Row label="Party">{l.leader ? [l.leader, ...(l.members ?? [])].join(", ") : ""}</Row>
+                {l.crafter && <CrafterStatus crafter={l.crafter} />}
                 <Row label="Reconnects">{l.reconnects}</Row>
                 {l.err && <Row label="Last error">{l.err}</Row>}
                 <Row label="Snapshot at">{time(l.at)}</Row>
