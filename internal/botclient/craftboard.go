@@ -260,10 +260,16 @@ func (b *CraftBoard) Crafted(clan int32, id OrderID, bot int32, now time.Time) b
 	})
 }
 
-// Deliver closes order id of clan that bot crafted, once bot deposited its
-// products: the order leaves the board and its Count of Product counts as
-// its member's. It returns the delivered order.
-func (b *CraftBoard) Deliver(clan int32, id OrderID, bot int32) (CraftOrder, bool) {
+// Deliver closes order id of clan that bot crafted, once bot deposited
+// deposited of its products: the order leaves the board and the deposited
+// count, at most the order's Count (a chain crafts as much of the count as
+// the pool covers, docs/crafting.md section 4), counts as its member's. It
+// returns the delivered order, its Count the credited count. A negative
+// deposited is refused.
+func (b *CraftBoard) Deliver(clan int32, id OrderID, bot int32, deposited int64) (CraftOrder, bool) {
+	if deposited < 0 {
+		return CraftOrder{}, false
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	c, ok := b.clans[clan]
@@ -275,6 +281,7 @@ func (b *CraftBoard) Deliver(clan int32, id OrderID, bot int32) (CraftOrder, boo
 		return CraftOrder{}, false
 	}
 	delete(c.orders, id)
+	o.Count = min(deposited, o.Count)
 	addCount(c.members, o.Member, o.Product, o.Count)
 	o.State = OrderDelivered
 	return o, true

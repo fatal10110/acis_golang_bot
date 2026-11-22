@@ -192,7 +192,7 @@ func TestCraftBoardOrders(t *testing.T) {
 					got = b.Crafted(boardClan, id, s.bot, now)
 				case "deliver":
 					var o CraftOrder
-					o, got = b.Deliver(boardClan, id, s.bot)
+					o, got = b.Deliver(boardClan, id, s.bot, 1000)
 					if got {
 						state = o.State
 					}
@@ -272,7 +272,7 @@ func TestCraftBoardLedger(t *testing.T) {
 		b.MaterialsIn(boardClan, id)
 		b.Claim(boardClan, id, boardBotA, t0)
 		b.Crafted(boardClan, id, boardBotA, t0)
-		if _, ok := b.Deliver(boardClan, id, boardBotA); !ok {
+		if _, ok := b.Deliver(boardClan, id, boardBotA, count); !ok {
 			t.Fatalf("Deliver %s %d refused", member, product)
 		}
 	}
@@ -390,7 +390,7 @@ func TestCraftBoardCopies(t *testing.T) {
 	b.MaterialsIn(boardClan, id)
 	b.Claim(boardClan, id, boardBotA, t0)
 	b.Crafted(boardClan, id, boardBotA, t0)
-	b.Deliver(boardClan, id, boardBotA)
+	b.Deliver(boardClan, id, boardBotA, 10)
 	b.Owned(boardClan, "M")[1463] = 100
 	if got := b.Owned(boardClan, "M")[1463]; got != 10 {
 		t.Errorf("owned %d after a caller's write, want 10", got)
@@ -411,5 +411,45 @@ func TestCraftBoardRunReleases(t *testing.T) {
 	}
 	if !board.TakeLease(boardClan, boardBotB, t0) {
 		t.Error("lease still held after Run returned")
+	}
+}
+
+// TestCraftBoardDeliverCount: a chain crafts as much of an order as the
+// pool covers, so the member is credited what the crafter deposited, at
+// most the order's count; a negative deposit is refused and keeps the order.
+func TestCraftBoardDeliverCount(t *testing.T) {
+	tests := []struct {
+		name      string
+		deposited int64
+		wantOK    bool
+		wantOwned int64
+	}{
+		{"whole count", 1000, true, 1000},
+		{"partial craft", 400, true, 400},
+		{"nothing crafted", 0, true, 0},
+		{"more than ordered", 5000, true, 1000},
+		{"negative", -1, false, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := NewCraftBoard()
+			id, _ := b.Post(boardClan, "Member", 1463, 1000)
+			b.MaterialsIn(boardClan, id)
+			b.Claim(boardClan, id, boardBotA, t0)
+			b.Crafted(boardClan, id, boardBotA, t0)
+			o, ok := b.Deliver(boardClan, id, boardBotA, tt.deposited)
+			if ok != tt.wantOK {
+				t.Fatalf("Deliver(%d) ok = %v, want %v", tt.deposited, ok, tt.wantOK)
+			}
+			if ok && o.Count != tt.wantOwned {
+				t.Errorf("delivered Count = %d, want %d", o.Count, tt.wantOwned)
+			}
+			if got := b.Owned(boardClan, "Member")[1463]; got != tt.wantOwned {
+				t.Errorf("Owned = %d, want %d", got, tt.wantOwned)
+			}
+			if open := len(b.Orders(boardClan, t0)); open != map[bool]int{true: 0, false: 1}[ok] {
+				t.Errorf("open orders = %d after Deliver ok=%v", open, ok)
+			}
+		})
 	}
 }
