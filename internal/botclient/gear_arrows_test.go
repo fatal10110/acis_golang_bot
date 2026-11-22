@@ -28,10 +28,10 @@ const (
 var arrowTemplates = func() map[int32]datapack.Item {
 	m := maps.Clone(gearTemplates)
 	maps.Copy(m, map[int32]datapack.Item{
-		shortBow:        {ID: shortBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Price: 768},
-		plainBow:        {ID: plainBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Price: 12500},
-		strengthenedBow: {ID: strengthenedBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Grade: 1, Price: 300000},
-		elvenBow:        {ID: elvenBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Grade: 2, Price: 900000},
+		shortBow:        {ID: shortBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Price: 768, Stats: datapack.Stats{PAtk: 16, MAtk: 6, PAtkSpd: 293}},
+		plainBow:        {ID: plainBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Price: 12500, Stats: datapack.Stats{PAtk: 23, MAtk: 9, PAtkSpd: 293}},
+		strengthenedBow: {ID: strengthenedBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Grade: 1, Price: 300000, Stats: datapack.Stats{PAtk: 82, MAtk: 26, PAtkSpd: 293}, Enchants: []string{"pAtk", "mAtk"}},
+		elvenBow:        {ID: elvenBow, Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Grade: 2, Price: 900000, Stats: datapack.Stats{PAtk: 105, MAtk: 32, PAtkSpd: 293}, Enchants: []string{"pAtk", "mAtk"}},
 		woodenArrow:     {ID: woodenArrow, Type: "EtcItem", BodyPart: "lhand", Kind: "ARROW", Price: 2},
 		boneArrow:       {ID: boneArrow, Type: "EtcItem", BodyPart: "lhand", Kind: "ARROW", Grade: 1, Price: 3},
 		// A second D-grade arrow: the lowest id is kept.

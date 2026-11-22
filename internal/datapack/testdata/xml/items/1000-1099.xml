@@ -136,4 +136,19 @@
 		<set name="handler" val="Elixirs" />
 		<set name="item_skill" val="2287-1" />
 	</item>
+	<item id="629" type="Armor" name="Kite Shield">
+		<set name="default_action" val="equip" />
+		<set name="bodypart" val="lhand" />
+		<set name="crystal_type" val="D" />
+		<set name="crystal_count" val="142" />
+		<set name="material" val="FINE_STEEL" />
+		<set name="weight" val="1320" />
+		<set name="price" val="78400" />
+		<for>
+			<sub stat="rEvas" val="8" />
+			<set stat="rShld" val="20" />
+			<set stat="sDef" val="142" />
+			<enchant val="0" stat="sDef" />
+		</for>
+	</item>
 </list>

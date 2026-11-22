@@ -33,15 +33,15 @@ const (
 	salesCat   int32 = 31075
 )
 
-// shotWeaponTemplates are the weapons of the shot tests: a D-grade sword worth less
-// than twice the no-grade one, a D-grade blade worth more, a no-grade
-// wand, and one with no spiritshot room.
+// shotWeaponTemplates are the weapons of the shot tests: a D-grade sword
+// scoring less than twice the no-grade one, a D-grade blade more, a
+// no-grade wand, and one with no spiritshot room.
 var shotWeaponTemplates = map[int32]datapack.Item{
-	ngSword:  {ID: ngSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 100000, Soulshots: 1, Spiritshots: 1},
-	dSword:   {ID: dSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 1, Price: 150000, Soulshots: 1, Spiritshots: 1},
-	dBlade:   {ID: dBlade, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 1, Price: 250000, Soulshots: 1, Spiritshots: 1},
-	ngWand:   {ID: ngWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 50000, Soulshots: 1, Spiritshots: 1},
-	bareWand: {ID: bareWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 60000, Soulshots: 1},
+	ngSword:  {ID: ngSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 100000, Soulshots: 1, Spiritshots: 1, Stats: datapack.Stats{PAtk: 30, MAtk: 20, PAtkSpd: 379}},
+	dSword:   {ID: dSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 1, Price: 150000, Soulshots: 1, Spiritshots: 1, Stats: datapack.Stats{PAtk: 45, MAtk: 30, PAtkSpd: 379}, Enchants: []string{"pAtk", "mAtk"}},
+	dBlade:   {ID: dBlade, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 1, Price: 250000, Soulshots: 1, Spiritshots: 1, Stats: datapack.Stats{PAtk: 75, MAtk: 50, PAtkSpd: 379}, Enchants: []string{"pAtk", "mAtk"}},
+	ngWand:   {ID: ngWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 50000, Soulshots: 1, Spiritshots: 1, Stats: datapack.Stats{PAtk: 10, MAtk: 20, PAtkSpd: 379}},
+	bareWand: {ID: bareWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 60000, Soulshots: 1, Stats: datapack.Stats{PAtk: 12, MAtk: 24, PAtkSpd: 379}},
 }
 
 // newShotBrain is newGearBrain for class with D-grade expertise, auto
@@ -305,7 +305,7 @@ func TestShotJunk(t *testing.T) {
 }
 
 // TestShotFactor checks the shot factor in weapon choice: a D-grade weapon
-// worth less than twice the no-grade one wielded wins only when the bot
+// scoring less than twice the no-grade one wielded wins only when the bot
 // can keep it charged, never from an unspawned merchant's list or a few
 // looted shots.
 func TestShotFactor(t *testing.T) {

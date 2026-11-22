@@ -3,7 +3,6 @@ package botclient
 import (
 	"cmp"
 	"maps"
-	"math"
 	"slices"
 	"time"
 
@@ -233,13 +232,13 @@ func (b *Brain) shotsBacked(w weapon, carried bool) bool {
 
 // shotValues are the values beats compares for weapon template id against
 // the wielded cur, gain and value, with the shot factor
-// (GearPolicy.ShotFactor): the weapon's part of the one of the two the bot
-// can keep charged (shotsBacked, carried shots counting when carried is
-// set) is multiplied by it when the other is not. Between two it can keep
+// (GearPolicy.ShotFactor): the weapon's score (gs for id, cs for cur) of
+// the one of the two the bot can keep charged (shotsBacked, carried shots
+// counting when carried is set) is multiplied by it when the other is not. Between two it can keep
 // charged, or two it cannot, the values stay as they are, so the factor
 // never shifts a choice shots do not tell apart, such as a two-handed
 // weapon against a one-handed one and its shield.
-func (b *Brain) shotValues(id, cur int32, g, c gearItem, gain, value int64, carried bool) (int64, int64) {
+func (b *Brain) shotValues(id, cur int32, gs, cs, gain, value float64, carried bool) (float64, float64) {
 	f := b.persona.Gear.ShotFactor
 	if f <= 1 {
 		return gain, value
@@ -248,12 +247,11 @@ func (b *Brain) shotValues(id, cur int32, g, c gearItem, gain, value int64, carr
 		w, ok := b.cfg.Travel.weapons[id]
 		return ok && b.shotsBacked(w, carried)
 	}
-	extra := func(price int32) int64 { return int64(math.Round(float64(price)*f)) - int64(price) }
 	switch gb, cb := backed(id), backed(cur); {
 	case gb && !cb:
-		gain += extra(g.price)
+		gain += gs * (f - 1)
 	case cb && !gb:
-		value += extra(c.price)
+		value += cs * (f - 1)
 	}
 	return gain, value
 }
@@ -396,7 +394,7 @@ func (b *Brain) fallsBack(it Item, w *worn) bool {
 	if !ok || slotOf(g.part) != slotWeapon || it.Equipped || it.Augmentation != 0 || !b.persona.Gear.Equip || b.hold(it).NoWear || !b.carriedOnly(w) {
 		return false
 	}
-	return b.beatsBy(it.TemplateID, w, false)
+	return b.beatsBy(it, w, false)
 }
 
 // shotAsk is an auto-use request the bot sent for a shot template: when,

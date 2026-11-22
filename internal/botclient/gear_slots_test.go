@@ -43,22 +43,22 @@ const (
 var slotTemplates = func() map[int32]datapack.Item {
 	m := maps.Clone(gearTemplates)
 	for _, it := range []datapack.Item{
-		{ID: leatherShield, Type: "Armor", BodyPart: "lhand", Price: 39},
-		{ID: smallShield, Type: "Armor", BodyPart: "lhand", Price: 638},
-		{ID: buckler, Type: "Armor", BodyPart: "lhand", Price: 2780},
-		{ID: necklaceOfMagic, Type: "Armor", BodyPart: "neck", Price: 66},
-		{ID: necklaceOfKnow, Type: "Armor", BodyPart: "neck", Price: 1080},
-		{ID: apprenticeEar, Type: "Armor", BodyPart: "rear;lear", Price: 49},
-		{ID: mysticsEar, Type: "Armor", BodyPart: "rear;lear", Price: 811},
-		{ID: earringStrength, Type: "Armor", BodyPart: "rear;lear", Price: 3510},
-		{ID: magicRing, Type: "Armor", BodyPart: "rfinger;lfinger", Price: 33},
-		{ID: ringOfKnowledge, Type: "Armor", BodyPart: "rfinger;lfinger", Price: 540},
-		{ID: ringOfAnguish, Type: "Armor", BodyPart: "rfinger;lfinger", Price: 2340},
-		{ID: willowStaff, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGBLUNT", Magical: true, Price: 12500},
-		{ID: dagger, Type: "Weapon", BodyPart: "rhand", Kind: "DAGGER", Price: 138},
-		{ID: redSunsetSword, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGSWORD", Price: 25500},
-		{ID: cottonRobe, Type: "Armor", BodyPart: "fullarmor", Kind: "MAGIC", Price: 3550},
-		{ID: testSword24000, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 24000},
+		{ID: leatherShield, Type: "Armor", BodyPart: "lhand", Price: 39, Stats: datapack.Stats{SDef: 47}},
+		{ID: smallShield, Type: "Armor", BodyPart: "lhand", Price: 638, Stats: datapack.Stats{SDef: 56}},
+		{ID: buckler, Type: "Armor", BodyPart: "lhand", Price: 2780, Stats: datapack.Stats{SDef: 67}},
+		{ID: necklaceOfMagic, Type: "Armor", BodyPart: "neck", Price: 66, Stats: datapack.Stats{MDef: 15}},
+		{ID: necklaceOfKnow, Type: "Armor", BodyPart: "neck", Price: 1080, Stats: datapack.Stats{MDef: 18}},
+		{ID: apprenticeEar, Type: "Armor", BodyPart: "rear;lear", Price: 49, Stats: datapack.Stats{MDef: 11}},
+		{ID: mysticsEar, Type: "Armor", BodyPart: "rear;lear", Price: 811, Stats: datapack.Stats{MDef: 13}},
+		{ID: earringStrength, Type: "Armor", BodyPart: "rear;lear", Price: 3510, Stats: datapack.Stats{MDef: 16}},
+		{ID: magicRing, Type: "Armor", BodyPart: "rfinger;lfinger", Price: 33, Stats: datapack.Stats{MDef: 7}},
+		{ID: ringOfKnowledge, Type: "Armor", BodyPart: "rfinger;lfinger", Price: 540, Stats: datapack.Stats{MDef: 9}},
+		{ID: ringOfAnguish, Type: "Armor", BodyPart: "rfinger;lfinger", Price: 2340, Stats: datapack.Stats{MDef: 11}},
+		{ID: willowStaff, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGBLUNT", Magical: true, Price: 12500, Stats: datapack.Stats{PAtk: 11, MAtk: 12, PAtkSpd: 325}},
+		{ID: dagger, Type: "Weapon", BodyPart: "rhand", Kind: "DAGGER", Price: 138, Stats: datapack.Stats{PAtk: 5, MAtk: 5, PAtkSpd: 433}},
+		{ID: redSunsetSword, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGSWORD", Price: 25500, Stats: datapack.Stats{PAtk: 16, MAtk: 10, PAtkSpd: 325}},
+		{ID: cottonRobe, Type: "Armor", BodyPart: "fullarmor", Kind: "MAGIC", Price: 3550, Stats: datapack.Stats{PDef: 35}},
+		{ID: testSword24000, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 24000, Stats: datapack.Stats{PAtk: 12, MAtk: 9, PAtkSpd: 379}},
 	} {
 		m[it.ID] = it
 	}
@@ -88,17 +88,17 @@ func carried(obj, id, part int32) Item {
 func TestIndexGearSlots(t *testing.T) {
 	gear, _ := indexGear(slotTemplates, nil)
 	for id, want := range map[int32]gearItem{
-		buckler:         {part: partLHand, price: 2780},
-		necklaceOfKnow:  {part: partNeck, price: 1080},
-		mysticsEar:      {part: partLREar, price: 811},
-		ringOfAnguish:   {part: partLRFinger, price: 2340},
-		willowStaff:     {part: partLRHand, kind: "BIGBLUNT/MAGIC", price: 12500},
-		redSunsetSword:  {part: partLRHand, kind: "BIGSWORD", price: 25500},
-		cottonRobe:      {part: partFullArmor, kind: "MAGIC", price: 3550},
-		leatherShield:   {part: partLHand, price: 39},
-		necklaceOfMagic: {part: partNeck, price: 66},
+		buckler:         {part: partLHand, tmpl: datapack.Item{Price: 2780}},
+		necklaceOfKnow:  {part: partNeck, tmpl: datapack.Item{Price: 1080}},
+		mysticsEar:      {part: partLREar, tmpl: datapack.Item{Price: 811}},
+		ringOfAnguish:   {part: partLRFinger, tmpl: datapack.Item{Price: 2340}},
+		willowStaff:     {part: partLRHand, kind: "BIGBLUNT/MAGIC", tmpl: datapack.Item{Price: 12500}},
+		redSunsetSword:  {part: partLRHand, kind: "BIGSWORD", tmpl: datapack.Item{Price: 25500}},
+		cottonRobe:      {part: partFullArmor, kind: "MAGIC", tmpl: datapack.Item{Price: 3550}},
+		leatherShield:   {part: partLHand, tmpl: datapack.Item{Price: 39}},
+		necklaceOfMagic: {part: partNeck, tmpl: datapack.Item{Price: 66}},
 	} {
-		if gear[id] != want {
+		if g := gear[id]; g.part != want.part || g.kind != want.kind || g.tmpl.Price != want.tmpl.Price {
 			t.Errorf("gear[%d] = %+v, want %+v", id, gear[id], want)
 		}
 	}
@@ -148,11 +148,11 @@ func TestGearSlotsBeats(t *testing.T) {
 		{name: "no shield over a two-hander", class: classWarrior, items: []Item{twoHander}, id: smallShield},
 		{name: "better shield", class: classHumanFight, items: []Item{sword, shield(leatherShield)}, id: buckler, want: true},
 		{name: "cheaper shield", class: classHumanFight, items: []Item{sword, shield(buckler)}, id: smallShield},
-		{name: "enchanted shield kept", class: classHumanFight, items: []Item{sword, {ObjectID: 204, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: buckler},
+		{name: "enchanted shield under a better one", class: classHumanFight, items: []Item{sword, {ObjectID: 204, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: buckler, want: true},
 		{name: "two-hander over sword and shield", class: classWarrior, items: []Item{sword, shield(buckler)}, id: redSunsetSword, want: true},
 		{name: "two-hander under sword and carried shield", class: classWarrior, items: []Item{wornAt(201, testSword24000, partRHand), carried(220, buckler, partLHand)}, id: redSunsetSword},
 		{name: "two-hander under long sword", class: classWarrior, items: []Item{wornAt(201, longSword, partRHand)}, id: redSunsetSword},
-		{name: "two-hander under sword and enchanted shield", class: classWarrior, items: []Item{sword, {ObjectID: 204, TemplateID: buckler, Equipped: true, BodySlot: partLHand, Enchant: 2}}, id: redSunsetSword},
+		{name: "two-hander over sword and enchanted shield", class: classWarrior, items: []Item{sword, {ObjectID: 204, TemplateID: buckler, Equipped: true, BodySlot: partLHand, Enchant: 2}}, id: redSunsetSword, want: true},
 		{name: "no two-hander for a first fighter", class: classHumanFight, items: []Item{sword}, id: redSunsetSword},
 		{name: "sword under a two-hander", class: classWarrior, items: []Item{twoHander}, id: testSword24000},
 		{name: "sword and carried shield over a two-hander", class: classWarrior, items: []Item{twoHander, carried(220, buckler, partLHand)}, id: testSword24000, want: true},
@@ -164,7 +164,7 @@ func TestGearSlotsBeats(t *testing.T) {
 		{name: "earring in the free side", class: classMysticHuman, items: []Item{ear(206, earringStrength)}, id: apprenticeEar, want: true},
 		{name: "earring over the lesser of a pair", class: classMysticHuman, items: []Item{ear(206, earringStrength), ear(207, apprenticeEar)}, id: mysticsEar, want: true},
 		{name: "earring under both of a pair", class: classMysticHuman, items: []Item{ear(206, earringStrength), ear(207, mysticsEar)}, id: apprenticeEar},
-		{name: "enchanted lesser earring kept", class: classMysticHuman, items: []Item{ear(206, earringStrength), {ObjectID: 207, TemplateID: apprenticeEar, Equipped: true, BodySlot: partLREar, Enchant: 1}}, id: mysticsEar},
+		{name: "enchanted lesser earring replaced", class: classMysticHuman, items: []Item{ear(206, earringStrength), {ObjectID: 207, TemplateID: apprenticeEar, Equipped: true, BodySlot: partLREar, Enchant: 1}}, id: mysticsEar, want: true},
 		{name: "ring over the lesser of a pair", class: classMysticHuman, items: []Item{wornAt(208, magicRing, partLRFinger), wornAt(209, ringOfAnguish, partLRFinger)}, id: ringOfKnowledge, want: true},
 	}
 	for _, tt := range tests {

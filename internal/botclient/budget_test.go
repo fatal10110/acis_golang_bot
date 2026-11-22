@@ -138,7 +138,7 @@ func TestKeepHook(t *testing.T) {
 		m := b.cfg.Travel
 		m.prices = maps.Clone(lootPrices)
 		m.prices[dSword] = 150000
-		m.gear = map[int32]gearItem{dSword: {part: partRHand, kind: "SWORD", grade: 1, price: 150000}}
+		m.gear = map[int32]gearItem{dSword: {part: partRHand, kind: "SWORD", grade: 1}}
 		if _, shopSells := m.cheapest[dSword]; shopSells {
 			t.Fatal("a buylist sells the D-grade sword")
 		}
