@@ -135,6 +135,9 @@ type Persona struct {
 	// Shop is what the bot buys and sells at merchants (rule 9 errand
 	// "shop").
 	Shop ShopPolicy
+	// Market is how the bot buys from other players' sell stores (rule 9
+	// errand "market").
+	Market MarketPolicy
 	// Supply sizes the shots, HP potions and Scrolls of Escape the shop
 	// errand buys from what the bot spends (the use meter).
 	Supply SupplyPolicy
@@ -212,6 +215,7 @@ func DefaultPersona() Persona {
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
+		Market:         defaultMarketPolicy(),
 		Supply:         defaultSupplyPolicy(),
 		Gear:           defaultGearPolicy(),
 		Warehouse:      defaultWarehousePolicy(),
@@ -285,6 +289,7 @@ const (
 	actWarehouseWithdraw
 	actRecipeBook
 	actCraft
+	actStoreBuy
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -311,7 +316,9 @@ const (
 // SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
 // protector either (network/privatestore_dispatch.go): an opening sends each
 // once per answer it waits for, and StorePolicy.Retry spaces the openings.
-// RequestRecipeBookOpen has none either: the recipe errand sends one per
+// RequestPrivateStoreBuy has none either: a store visit sends one per
+// PrivateStoreListSell it opened, and MarketPolicy.Cooldown spaces the
+// visits to one store. RequestRecipeBookOpen has none either: the recipe errand sends one per
 // page it waits for (recipeReplyTimeout).
 func (a Action) gate() gate {
 	switch a.kind {
@@ -371,7 +378,8 @@ type rule struct {
 // the party, ahead of fighting so a support in combat still heals;
 // "assist" (the leader's target), "train" (the trainer), "gear" (wearing
 // better gear, ahead of the shop so a bought piece is worn before the next
-// sale), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
+// sale), "market" (other players' sell stores, ahead of the shop so a
+// store's cheaper offer is taken first), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
 // warehouse errand), "recipe" (recipe learning), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
 // (a gatekeeper trip to a spot out of walking reach), "spot" (getting to the
 // farming spot) and "farm" (attacking a monster there) are rule 9 errands,
@@ -406,6 +414,7 @@ var playRules = []rule{
 	{"assist", (*Brain).ruleAssist},
 	{"train", (*Brain).ruleTrain},
 	{"gear", (*Brain).ruleGear},
+	{"market", (*Brain).ruleMarket},
 	{"shop", (*Brain).ruleShop},
 	{"warehouse", (*Brain).ruleWarehouse},
 	{"recipe", (*Brain).ruleRecipe},

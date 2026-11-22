@@ -107,10 +107,13 @@ type Object struct {
 	Heading             int32
 	PvPFlag             uint8
 	StoreType           uint8
-	Attackable, Summon  bool
-	Sitting, Running    bool
-	InCombat, Dead      bool
-	move                motion
+	// Attackable is, for an NPC, NPCInfo's attackable flag; for a player,
+	// the auto-attackable flag of its last RelationChanged (whether the bot
+	// may attack it without force), kept across CharInfo updates.
+	Attackable, Summon bool
+	Sitting, Running   bool
+	InCombat, Dead     bool
+	move               motion
 }
 
 // Position is where the object is at now, dead reckoned along its current
@@ -377,6 +380,9 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case RelationChanged:
 		if o := w.object(e.ObjectID); o != nil {
 			o.Karma, o.PvPFlag = e.Karma, e.PvPFlag
+			if o.Kind == KindPlayer {
+				o.Attackable = e.AutoAttackable
+			}
 		}
 	case NpcHtmlMessage:
 		w.Dialog = Dialog{ObjectID: e.ObjectID, Links: dialogLinks(e.HTML)}
@@ -478,7 +484,7 @@ func (w *World) applyCharInfo(e CharInfo, now time.Time) {
 		Kind: KindPlayer, Name: e.Name, ClassID: e.ClassID, Karma: e.Karma,
 		HP: o.HP, MaxHP: o.MaxHP,
 		RunSpeed: e.RunSpeed, WalkSpeed: e.WalkSpeed, Heading: e.Heading,
-		PvPFlag: uint8(e.PvPFlag), StoreType: e.StoreType,
+		PvPFlag: uint8(e.PvPFlag), StoreType: e.StoreType, Attackable: o.Attackable,
 		Sitting: e.Sitting, Running: e.Running, InCombat: e.InCombat, Dead: e.Dead,
 		move: o.move,
 	}
