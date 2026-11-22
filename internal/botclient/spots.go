@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
+	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
 // SpotPolicy is how a bot with a spot registry (BrainConfig.Spots) picks
@@ -28,14 +31,15 @@ type SpotPolicy struct {
 	// Above, it keeps the bot from flipping between spots: the spot it
 	// leaves no longer fits.
 	Outlevel int
-	// MaxTravel is the farthest spot the bot picks, from where it stands,
-	// while one fits it with room: a new character stands in its race's
-	// newbie zone, so it farms there. It is also the gatekeeper trip's walk
-	// at either end (planTrip).
+	// MaxTravel is the farthest spot, in straight line, the bot picks while
+	// one fits it with room: a new character stands in its race's newbie
+	// zone, so it farms there. Within it the spots rank by the walk there
+	// (pickSpot). It also bounds the straight line of a gatekeeper trip's
+	// walks (planTrip).
 	MaxTravel int32
-	// Wander is the farthest spot the bot walks to once every spot that
-	// fits it within MaxTravel is full; a smaller one than MaxTravel adds
-	// nothing.
+	// Wander is the farthest spot, in straight line, the bot walks to once
+	// every spot that fits it within MaxTravel is full; a smaller one than
+	// MaxTravel adds nothing.
 	Wander int32
 	// Overflow: once every spot that fits the bot within Wander is full and
 	// it takes no trip, it shares the one its bots fill least for its cap,
@@ -45,8 +49,8 @@ type SpotPolicy struct {
 	// Crowd is the number of other players within Leash of the spot's
 	// centre, party members and the bots sharing the spot's claim aside,
 	// that makes a spot crowded on arrival: the bot moves on and avoids the
-	// spot for AvoidFor (one it cannot walk to, spotUnreachable). 0 never
-	// finds one crowded.
+	// spot for AvoidFor (one whose walk ended unreachable, walkRetry). 0
+	// never finds one crowded.
 	Crowd    int
 	AvoidFor time.Duration
 	// Leash is how far from the spot's centre the bot may end a fight
@@ -79,42 +83,26 @@ func (p *SpotPolicy) fits(s *datapack.Spot, level int) bool {
 const (
 	// spotArrive is how close to a spot's centre the bot has arrived.
 	spotArrive = 200
-	// spotLeg is the longest move toward a spot, well under the 9900 the
-	// server refuses (movement.go moveLivePlayer).
-	spotLeg = 3000
-	// spotDirect is the distance from which the bot walks to the spot's
-	// centre in one move, under the 9900 cap: the server's pathfinder
-	// routes the whole way around cliffs and walls, where a leg's end on
-	// the straight line may lie on ground no path reaches (the orc start,
-	// #133).
-	spotDirect = 9000
-	// spotProgress is how much closer each leg must bring the bot;
-	// spotStalls legs in a row short of it give the spot up.
-	spotProgress = 100
-	spotStalls   = 3
 	// spotRetry is how long the bot waits to pick again after finding no
 	// spot free that fits.
 	spotRetry = time.Minute
-	// spotUnreachable is how long the bot avoids a spot its legs got no
-	// closer to: a far one (SpotPolicy.Wander) may lie past ground the
-	// server routes no walk across, and a bot sharing a spot looks for room
-	// each spotRetry, so a short avoidance would send it off on the same
-	// walk again and again (#137).
-	spotUnreachable = time.Hour
+	// spotSnap is how far from a spot's centre the bot looks for walkable
+	// ground inside the spot's territory when the centre itself lies on
+	// none (a wall, a ledge, another SCC).
+	spotSnap = 400
 )
 
 // spotVisit is the bot's farming spot (rule "spot"). It is owned by the
 // brain goroutine; the claim it holds is counted in the SpotRegistry.
 type spotVisit struct {
-	// idx is the spot held, when held.
+	// idx is the spot held, when held, and at its centre on walkable
+	// ground inside its territory, in the bot's SCC when it was claimed
+	// (spotPoint): where the bot walks and stays.
 	idx  int
 	held bool
+	at   Point
 	// arrived is set once the bot reached the spot's centre.
 	arrived bool
-	// lastDist is the distance left when the last leg went out, 0 before
-	// one; stalls counts legs in a row that got nowhere.
-	lastDist float64
-	stalls   int
 	// retryAt is when the bot may look for a spot again after finding none.
 	retryAt time.Time
 	// avoid are the spots the bot moved on from, until a time.
@@ -122,15 +110,16 @@ type spotVisit struct {
 }
 
 // ruleSpot is a rule 9 errand ahead of the persona's goal: with a spot
-// registry, the bot claims a fitting spot (pickSpot), walks there in legs,
-// moves on when it finds the spot crowded, walks back when a fight left it
-// beyond the leash, and picks a new spot once it outlevels its own or,
-// sharing one past its cap, every spotRetry. At its spot it leaves the turn
-// to rule "farm".
+// registry, the bot claims a fitting spot it can walk to (pickSpot), walks
+// there through the walker, moves on when it finds the spot crowded, walks
+// back when a fight left it beyond the leash, and picks a new spot once it
+// outlevels its own or, sharing one past its cap, every spotRetry. At its
+// spot it leaves the turn to rule "farm".
 //
-// Each leg is one MoveBackwardToLocation through the frame pacer (gateNone);
-// a spot that spotStalls legs bring no closer is avoided, and a fruitless
-// search waits spotRetry, so a bot that cannot get anywhere stops sending.
+// Every move is the walker's (goTo): one MoveBackwardToLocation per checked
+// segment through the frame pacer (gateNone). A walk that ends unreachable
+// gives the spot up for walkRetry, and a fruitless search waits spotRetry,
+// so a bot that cannot get anywhere stops sending.
 func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	r, s, v := b.cfg.Spots, &b.world.Self, &b.spot
 	if r == nil || s.InCombat {
@@ -142,94 +131,127 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	if !v.held {
 		return Action{}, false
 	}
-	sp := &r.spots[v.idx]
-	dest := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
-	from := s.Position(now)
-	d := math.Sqrt(float64(dist2(from, dest)))
-	if !v.arrived {
-		if s.Moving(now) {
-			return Action{}, true
+	if v.arrived {
+		leash := int64(b.persona.Spots.Leash)
+		if horizontal2(s.Position(now), v.at) <= leash*leash || s.Moving(now) {
+			return Action{}, false
 		}
-		if d > spotArrive {
-			return b.spotLeg(dest, from, d, now), true
-		}
-		v.arrived, v.lastDist, v.stalls = true, 0, 0
-		b.anchor = from
-		if b.crowded(dest, now) {
-			b.moveOn(now, b.persona.Spots.AvoidFor)
-			return Action{}, true
-		}
+	}
+	a, st := b.goTo(v.at, spotArrive, walkPlace, now)
+	switch st {
+	case walkWalking:
+		return a, true
+	case walkUnreachable:
+		// The walk the abstract graph promised does not hold (blocked,
+		// desync, a closed door): the walker refuses this spot for
+		// walkRetry anyway, so look for another.
+		b.moveOn(now, walkRetry)
 		return Action{}, false
 	}
-	if d > float64(b.persona.Spots.Leash) && !s.Moving(now) {
-		return b.spotLeg(dest, from, d, now), true
+	if v.arrived {
+		return Action{}, false
 	}
-	v.lastDist, v.stalls = 0, 0
+	v.arrived = true
+	b.anchor = s.Position(now)
+	if b.crowded(v.at, now) {
+		b.moveOn(now, b.persona.Spots.AvoidFor)
+		return Action{}, true
+	}
 	return Action{}, false
 }
 
-// spotLeg is the next move toward dest, d away from from: standing up
-// first, giving the spot up when the last legs got nowhere, straight to
-// dest within spotDirect in 3D (d is the distance on the X/Y plane).
-func (b *Brain) spotLeg(dest, from Point, d float64, now time.Time) Action {
-	v := &b.spot
-	if b.world.Self.Sitting {
-		return b.toggle(now)
-	}
-	if v.lastDist > 0 && v.lastDist-d < spotProgress {
-		v.stalls++
-	} else {
-		v.stalls = 0
-	}
-	if v.stalls >= spotStalls {
-		b.moveOn(now, spotUnreachable)
-		return Action{}
-	}
-	v.lastDist = d
-	// The server checks the move's 3D length (movement.go), so the height
-	// between here and the centre counts too.
-	if math.Hypot(d, float64(dest.Z-from.Z)) <= spotDirect {
-		return moveAction(dest, from)
-	}
-	if w, ok := b.spotWaypoint(from, dest, d); ok {
-		return moveAction(w, from)
-	}
-	return moveAction(legToward(from, dest, d), from)
+// navPoint is a point on walkable ground and its place in the hierarchy.
+type navPoint struct {
+	at Point
+	m  nav.Member
 }
 
-// spotWaypoint is the centre of any spot of the registry within spotDirect
-// of from (in 3D) that lies nearest dest, d away, when it is at least spotLeg
-// nearer than from: monsters spawn on ground the pathfinder reaches, so a
-// long walk hopping from spot to spot gets where a straight leg's end may
-// lie on ground no path reaches (the dark elven village, #137).
-func (b *Brain) spotWaypoint(from, dest Point, d float64) (Point, bool) {
-	r := b.cfg.Spots
-	best, bestDist, found := Point{}, d-spotLeg, false
-	for i := range r.spots {
-		sp := &r.spots[i]
-		c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
-		if math.Hypot(math.Sqrt(float64(dist2(from, c))), float64(c.Z-from.Z)) > spotDirect {
-			continue
-		}
-		if dc := math.Sqrt(float64(dist2(c, dest))); dc <= bestDist {
-			best, bestDist, found = c, dc, true
-		}
+// locate is p on the layer nearest its Z with its place in the hierarchy;
+// false without navigation or off the nav cache.
+func (b *Brain) locate(p Point) (navPoint, bool) {
+	w := &b.walk
+	if w.nav == nil {
+		return navPoint{}, false
 	}
-	return best, found
+	c, ok := w.plan.Locate(toLoc(p))
+	if !ok {
+		return navPoint{}, false
+	}
+	m, err := w.nav.Hier.Locate(c, nil)
+	if err != nil {
+		return navPoint{}, false
+	}
+	p.Z = int32(c.Z)
+	return navPoint{at: p, m: m}, true
 }
 
-// legToward is the point at most spotLeg along the line from from to to, d
-// away, z in proportion.
-func legToward(from, to Point, d float64) Point {
-	if d <= spotLeg {
-		return to
+// navDistance is the walking distance from from to to in world units by the
+// abstract graph, every door open and nothing refined (docs/navigation.md,
+// "Distances for ranking"); false when to is not in from's SCC or the search
+// ran out of its budget. From ground in no abstract SCC (one way out) it is
+// the straight-line distance to a to that ground reaches at all: the walker
+// drops into an SCC first.
+func (b *Brain) navDistance(from, to navPoint) (float64, bool) {
+	h := b.walk.nav.Hier
+	if from.m.Kind() == nav.OneWayOut {
+		if !h.Reachable(from.m, to.m) {
+			return 0, false
+		}
+		return math.Sqrt(float64(horizontal2(from.at, to.at))), true
 	}
-	f := spotLeg / d
-	return Point{
-		X: from.X + int32(math.Round(float64(to.X-from.X)*f)),
-		Y: from.Y + int32(math.Round(float64(to.Y-from.Y)*f)),
-		Z: from.Z + int32(math.Round(float64(to.Z-from.Z)*f)),
+	d, err := h.Distance(from.m, to.m)
+	if err != nil {
+		return 0, false
 	}
+	// Distance counts step costs: tenths of a cell.
+	return float64(d) * block.CellSize / 10, true
+}
+
+// spotPoint is spot sp's centre on walkable ground inside its territory and
+// reachable from from: the centre itself, else the walkable cell nearest it
+// within spotSnap; false when neither is.
+func (b *Brain) spotPoint(sp *datapack.Spot, from navPoint) (navPoint, bool) {
+	c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
+	if p, ok := b.locate(c); ok && b.walkable(from, p) {
+		return p, true
+	}
+	w := &b.walk
+	cell, ok := w.plan.NearestWalkable(toLoc(c), spotSnap)
+	if !ok {
+		return navPoint{}, false
+	}
+	at := Point{X: int32(engine.WorldX(cell.X)), Y: int32(engine.WorldY(cell.Y)), Z: int32(cell.Z)}
+	if sp.Territory != nil && !sp.Territory.Contains(datapack.Point{X: at.X, Y: at.Y}) {
+		return navPoint{}, false
+	}
+	p, ok := b.locate(at)
+	if !ok || !b.walkable(from, p) {
+		return navPoint{}, false
+	}
+	return p, true
+}
+
+// spotDest is where the bot walks for spot i when it is told to go there:
+// its centre on walkable ground in the bot's SCC (spotPoint), else the
+// centre as the datapack has it, which the walker finds unreachable.
+func (b *Brain) spotDest(i int, now time.Time) Point {
+	sp := &b.cfg.Spots.spots[i]
+	if here, ok := b.locate(b.standing(now)); ok {
+		if at, ok := b.spotPoint(sp, here); ok {
+			return at.at
+		}
+	}
+	return Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
+}
+
+// walkable reports whether the bot standing at from can walk to to: both in
+// one SCC, or to reached by dropping off one-way-out ground.
+func (b *Brain) walkable(from, to navPoint) bool {
+	h := b.walk.nav.Hier
+	if from.m.Kind() == nav.OneWayOut {
+		return h.Reachable(from.m, to.m)
+	}
+	return h.SameSCC(from.m, to.m)
 }
 
 // crowded reports whether Persona.Spots.Crowd players or more stand within
@@ -261,49 +283,86 @@ func (b *Brain) outleveled() bool {
 	return v.held && int(b.world.Self.Level) > b.cfg.Spots.spots[v.idx].MaxLevel+b.persona.Spots.Outlevel
 }
 
-// pickSpot claims a spot that fits the bot's level and is not avoided, in
-// place of the one it holds (#137): within MaxTravel, then within Wander,
-// the nearest that no bot holds, else the nearest with room. With none, it
-// looks again after spotRetry and plans a trip by gatekeeper to a spot out
-// of walking reach (rule "travel"), giving up the spot it holds for the
-// trip; with no trip either, a bot holding no spot that fits shares, past
-// its cap, the spot in Wander its bots fill least (SpotPolicy.Overflow), and
-// one that holds a spot that fits keeps it.
+// pickSpot claims a spot that fits the bot's level, is not avoided and that
+// the bot can walk to, in place of the one it holds (#137): within MaxTravel
+// in straight line, then within Wander, the nearest by the abstract graph
+// (navDistance) that no bot holds, else the nearest with room. With none,
+// it looks again after spotRetry and plans a trip by gatekeeper (rule
+// "travel", planTrip), giving up the spot it holds for the trip; with no
+// trip either, a bot holding no spot that fits shares, past its cap, the
+// spot in Wander its bots fill least (SpotPolicy.Overflow), and one that
+// holds a spot that fits keeps it. A spot in another SCC is never claimed.
 func (b *Brain) pickSpot(now time.Time) {
-	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
-	level, from := int(b.world.Self.Level), b.world.Self.Position(now)
-	near := int64(p.MaxTravel) * int64(p.MaxTravel)
-	far := max(near, int64(p.Wander)*int64(p.Wander))
-	type cand struct {
-		i int
-		d int64
+	here, ok := b.locate(b.standing(now))
+	if !ok {
+		b.claimSpot(nil, now, nil)
+		return
 	}
-	var cands []cand
+	b.claimSpot(b.spotCands(here, now), now, &here)
+}
+
+// spotCand is a spot the bot may claim: its index, the walk there by the
+// abstract graph (navDistance), the straight line there, and its centre on
+// walkable ground (spotPoint).
+type spotCand struct {
+	i       int
+	d, line float64
+	at      Point
+}
+
+// spotCands are the spots that fit the bot standing at here, are not
+// avoided and lie in its SCC within Wander in straight line, but the one it
+// holds.
+func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
+	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
+	level := int(b.world.Self.Level)
+	far := max(float64(p.MaxTravel), float64(p.Wander))
+	var cands []spotCand
 	for i := range r.spots {
 		sp := &r.spots[i]
 		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !p.fits(sp, level) {
 			continue
 		}
-		if d := dist2(from, Point{X: sp.Center.X, Y: sp.Center.Y}); d <= far {
-			cands = append(cands, cand{i, d})
+		line := math.Sqrt(float64(horizontal2(here.at, Point{X: sp.Center.X, Y: sp.Center.Y})))
+		if line > far {
+			continue
+		}
+		at, ok := b.spotPoint(sp, here)
+		if !ok {
+			continue
+		}
+		if d, ok := b.navDistance(here, at); ok {
+			cands = append(cands, spotCand{i: i, d: d, line: line, at: at.at})
 		}
 	}
-	slices.SortStableFunc(cands, func(a, b cand) int { return cmp.Compare(a.d, b.d) })
-	order := make([]int, len(cands))
-	n := 0
-	for k, c := range cands {
-		order[k] = c.i
-		if c.d <= near {
-			n = k + 1
+	return cands
+}
+
+// claimSpot claims one of cands as pickSpot says; here is where the bot
+// stands for a trip, nil for none.
+func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
+	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
+	slices.SortStableFunc(cands, func(a, b spotCand) int { return cmp.Compare(a.d, b.d) })
+	order := make([]int, 0, len(cands))
+	var beyond []int
+	for _, c := range cands {
+		if c.line <= float64(p.MaxTravel) {
+			order = append(order, c.i)
+		} else {
+			beyond = append(beyond, c.i)
 		}
 	}
+	n := len(order)
+	order = append(order, beyond...)
 	i, ok := r.claim(order[:n])
 	if !ok {
 		i, ok = r.claim(order[n:])
 	}
 	if !ok {
 		v.retryAt = now.Add(spotRetry)
-		b.planTrip(now)
+		if here != nil {
+			b.planTrip(*here, now)
+		}
 		if b.trip.v.active() {
 			// A bot on a trip farms near its destination: it gives back the
 			// spot it holds (outlevelled, or shared past its cap) rather
@@ -319,6 +378,11 @@ func (b *Brain) pickSpot(now time.Time) {
 	}
 	b.leaveSpot()
 	v.idx, v.held = i, true
+	for _, c := range cands {
+		if c.i == i {
+			v.at = c.at
+		}
+	}
 }
 
 // moveOn gives the spot up and avoids it for d.
@@ -343,5 +407,5 @@ func (b *Brain) leaveSpot() {
 	if v.held {
 		b.cfg.Spots.release(v.idx)
 	}
-	v.idx, v.held, v.arrived, v.lastDist, v.stalls = 0, false, false, 0, 0
+	v.idx, v.held, v.at, v.arrived = 0, false, Point{}, false
 }

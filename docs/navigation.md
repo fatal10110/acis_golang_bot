@@ -667,7 +667,9 @@ unreachable (with a reason).
 `unstick.go` (except the `/unstuck` for isolated ground); the detour and stall fields of `followState`;
 `spotWaypoint`, `legToward`, `spotStalls`, `spotProgress`, `spotUnreachable`; `walkStuck` and the
 errand back-off it drives; and the tests that pin those heuristics. Each consumer's PR deletes its
-own heuristics, and nothing is kept alongside the new code.
+own heuristics, and nothing is kept alongside the new code. N6 (#158) moved the spot rule off
+`legToward`, `spotLeg`, `spotStalls` and `spotProgress`; follow still walks with them, in
+`follow_legs.go`, until N7 (#159) deletes that file.
 
 ## Owner decisions
 

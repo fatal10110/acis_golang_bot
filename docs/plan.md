@@ -252,12 +252,13 @@ nearly every starter monster has an aggro range, so the strict rule left new cha
 Talking Island no spot (#133). A process-wide spot registry (one owner) caps bots per spot at about
 `maximumNpcs`/3; on arrival the bot counts visible players and moves on when crowded. Each race starts
 in its own newbie zone. Owner decision (#137): the farmers spread so that as many spots as possible
-are covered rather than waiting for one. A bot claims, within `MaxTravel` (20000) of where it stands,
-the nearest fitting spot no bot holds, else the nearest with room; with none, the same within
-`Wander` (40000), walked in legs that hop from one monster spot's centre to the next where a straight
-leg would end on ground no path reaches (a spot its legs get no closer to is avoided for an hour,
-#144); with none, a gatekeeper trip to a spot with room when it carries the
-price; with none, it shares past its cap the fitting spot within `Wander` that its bots fill least for
+are covered rather than waiting for one. A bot claims, among the fitting spots in its own SCC (D13)
+within `MaxTravel` (20000) of where it stands in straight line, the nearest by abstract-graph distance
+that no bot holds, else the nearest with room; with none, the same within `Wander` (40000); it walks
+there through its walker, and a walk that ends unreachable gives the spot up for a minute (#158,
+#144); with none, a gatekeeper trip planned by Dijkstra over its position, the gatekeepers, their
+destinations and the spots with room, walks priced by time and teleports by adena, when it carries
+the price; with none, it shares past its cap the fitting spot within `Wander` that its bots fill least for
 its cap, up to one bot per monster (`maximumNpcs`), and looks again each minute for a spot with room.
 The same choice runs at every level-up that outlevels its spot. Level 1 farmers find room at 17
 (Talking Island), 36 (elven and dark elven), 13 (orc) and 4 (dwarven) per village and share up to 58,

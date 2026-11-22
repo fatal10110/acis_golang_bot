@@ -1,7 +1,6 @@
 package botclient
 
 import (
-	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -174,12 +173,15 @@ type TravelPolicy struct {
 	// Gap is the least time from the end of one trip to the start of the
 	// next.
 	Gap time.Duration
+	// SecondPrice is the adena one second of walking is worth when a trip
+	// weighs its walks against its teleports (planTrip).
+	SecondPrice int32
 }
 
 // defaultTravelPolicy travels for up to the price of a trip between two
-// villages.
+// villages, a minute of walking worth 600 adena.
 func defaultTravelPolicy() TravelPolicy {
-	return TravelPolicy{MaxPrice: 50000, Gap: 5 * time.Minute}
+	return TravelPolicy{MaxPrice: 50000, Gap: 5 * time.Minute, SecondPrice: 10}
 }
 
 // tripDepartTimeout is how long the teleport link waits for the bot's own
@@ -339,13 +341,58 @@ func (b *Brain) tripTeleported(now time.Time) {
 	b.spot.retryAt = time.Time{}
 }
 
+// Trip search bounds (docs/navigation.md, "Cost bounds").
+const (
+	// tripExpand caps the nodes one trip search expands: running out of
+	// it is no trip for now.
+	tripExpand = 256
+	// tripSpeed is the speed a trip's walks are timed at before UserInfo
+	// reports the bot's.
+	tripSpeed = 100
+)
+
+// tripKey names a node of the trip search: where the bot stands, a
+// gatekeeper by its index in the travel map, a destination by its point
+// (many gatekeepers share one), a spot by its index in the registry.
+type tripKey struct {
+	kind tripKind
+	i    int
+	at   Point
+}
+
+type tripKind uint8
+
+const (
+	tripHere tripKind = iota
+	tripGatekeeper
+	tripDestination
+	tripSpot
+)
+
+// tripLabel is the cheapest way the trip search found to a node so far.
+type tripLabel struct {
+	key   tripKey
+	p     navPoint
+	cost  float64
+	price int32
+	// gk and dest are the path's first teleport, gk -1 before one.
+	gk   int
+	dest destination
+}
+
 // planTrip plans a trip when the spot rule found no spot to claim in
-// walking reach: from a gatekeeper in walking reach to a destination with a
-// spot that fits the bot's level and has room in walking reach of it, the
-// pair with the least walking first, at a price the bot carries and the
-// persona allows.
-func (b *Brain) planTrip(now time.Time) {
-	m, tr, p := b.cfg.Travel, &b.trip, &b.persona.Travel
+// walking reach of here, where the bot stands: Dijkstra over here, the
+// gatekeepers, their destinations and the spots that fit the bot's level
+// and have room (docs/navigation.md, "Consumers"). A walk costs its
+// abstract distance over the bot's speed, priced at TravelPolicy.SecondPrice
+// a second, and only joins two points of one SCC (navDistance) whose
+// straight line is within SpotPolicy.MaxTravel; a teleport costs its adena,
+// the path's teleports together no more than the bot carries and the
+// persona allows. The trip is the cheapest path's first teleport: once it
+// lands the spot rule picks again, and plans the next teleport, if any,
+// from there.
+func (b *Brain) planTrip(here navPoint, now time.Time) {
+	m, tr, p, s := b.cfg.Travel, &b.trip, &b.persona.Travel, &b.world.Self
 	if m == nil || tr.v.active() || p.MaxPrice <= 0 || (!tr.endedAt.IsZero() && now.Sub(tr.endedAt) < p.Gap) {
 		return
 	}
@@ -353,54 +400,109 @@ func (b *Brain) planTrip(now time.Time) {
 	if it, ok := b.world.Inventory.ByTemplate(adenaID); ok {
 		budget = min(p.MaxPrice, it.Count)
 	}
+	speed := float64(max(s.RunSpeed, s.WalkSpeed))
+	if speed <= 0 {
+		speed = tripSpeed
+	}
+	walk := func(d float64) float64 { return d / speed * float64(p.SecondPrice) }
 	reach := int64(b.persona.Spots.MaxTravel) * int64(b.persona.Spots.MaxTravel)
-	from := b.world.Self.Position(now)
-	best, bestScore := -1, math.Inf(1)
-	var bestDest destination
-	for gi := range m.gatekeepers {
-		g := &m.gatekeepers[gi]
-		dg := dist2(from, g.at)
-		if dg > reach || now.Before(tr.shunned[gi]) {
+	type located struct {
+		p  navPoint
+		ok bool
+	}
+	gks := make(map[int]located)
+	best := make(map[tripKey]float64)
+	done := make(map[tripKey]bool)
+	open := []tripLabel{{key: tripKey{kind: tripHere}, p: here, gk: -1}}
+	push := func(l tripLabel) {
+		if c, ok := best[l.key]; ok && c <= l.cost {
+			return
+		}
+		best[l.key] = l.cost
+		open = append(open, l)
+	}
+	for expanded := 0; len(open) > 0 && expanded < tripExpand; {
+		k := 0
+		for j := range open {
+			if open[j].cost < open[k].cost {
+				k = j
+			}
+		}
+		l := open[k]
+		open[k] = open[len(open)-1]
+		open = open[:len(open)-1]
+		if done[l.key] {
 			continue
 		}
-		for _, d := range g.dests {
-			if d.price > budget {
+		done[l.key] = true
+		expanded++
+		switch l.key.kind {
+		case tripSpot:
+			g := &m.gatekeepers[l.gk]
+			tr.v = npcVisit{npcID: g.npcID, at: g.at}
+			tr.step, tr.gk, tr.dest = tripTalk, l.gk, l.dest
+			return
+		case tripGatekeeper:
+			for _, d := range m.gatekeepers[l.key.i].dests {
+				price := l.price + d.price
+				if price > budget {
+					continue
+				}
+				dp, ok := b.locate(d.at)
+				if !ok {
+					continue
+				}
+				gk, first := l.gk, l.dest
+				if gk < 0 {
+					gk, first = l.key.i, d
+				}
+				push(tripLabel{key: tripKey{kind: tripDestination, at: d.at}, p: dp, cost: l.cost + float64(d.price), price: price, gk: gk, dest: first})
+			}
+			continue
+		}
+		// Where the bot stands or a destination: walks to the gatekeepers in
+		// reach, and from a destination to the spots.
+		for gi := range m.gatekeepers {
+			g := &m.gatekeepers[gi]
+			if now.Before(tr.shunned[gi]) || horizontal2(l.p.at, g.at) > reach {
 				continue
 			}
-			ds, ok := b.spotNear(d.at, reach, now)
-			if !ok {
+			at, seen := gks[gi]
+			if !seen {
+				at.p, at.ok = b.locate(g.at)
+				gks[gi] = at
+			}
+			if !at.ok {
 				continue
 			}
-			if score := math.Sqrt(float64(dg)) + math.Sqrt(float64(ds)); score < bestScore {
-				best, bestScore, bestDest = gi, score, d
+			if d, ok := b.navDistance(l.p, at.p); ok {
+				push(tripLabel{key: tripKey{kind: tripGatekeeper, i: gi}, p: at.p, cost: l.cost + walk(d), price: l.price, gk: l.gk, dest: l.dest})
 			}
 		}
+		if l.key.kind == tripDestination {
+			b.tripSpots(l, reach, walk, now, push)
+		}
 	}
-	if best < 0 {
-		return
-	}
-	g := &m.gatekeepers[best]
-	tr.v = npcVisit{npcID: g.npcID, at: g.at}
-	tr.step, tr.gk, tr.dest = tripTalk, best, bestDest
 }
 
-// spotNear is the squared distance from at to the nearest spot within
-// reach (squared) of it that fits the bot's level, is not avoided and has
-// room; false when there is none.
-func (b *Brain) spotNear(at Point, reach int64, now time.Time) (int64, bool) {
+// tripSpots pushes the walks from destination l to the spots within reach
+// (squared, straight line) of it that fit the bot's level, are not avoided,
+// have room and lie in its SCC.
+func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, now time.Time, push func(tripLabel)) {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	level := int(b.world.Self.Level)
-	best, bestDist := -1, int64(0)
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if now.Before(v.avoid[i]) || !p.fits(sp, level) {
+		if now.Before(v.avoid[i]) || !p.fits(sp, level) || !r.hasRoom(i) ||
+			horizontal2(l.p.at, Point{X: sp.Center.X, Y: sp.Center.Y}) > reach {
 			continue
 		}
-		d := dist2(at, Point{X: sp.Center.X, Y: sp.Center.Y})
-		if d > reach || (best >= 0 && d >= bestDist) || !r.hasRoom(i) {
+		at, ok := b.spotPoint(sp, l.p)
+		if !ok {
 			continue
 		}
-		best, bestDist = i, d
+		if d, ok := b.navDistance(l.p, at); ok {
+			push(tripLabel{key: tripKey{kind: tripSpot, i: i}, p: at, cost: l.cost + walk(d), price: l.price, gk: l.gk, dest: l.dest})
+		}
 	}
-	return bestDist, best >= 0
 }

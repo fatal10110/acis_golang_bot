@@ -433,7 +433,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.anchor = e.Pos
 				b.appearing = b.appearing || !e.Fast
 				// Somewhere else: walk to the spot again.
-				b.spot.arrived, b.spot.lastDist, b.spot.stalls = false, 0, 0
+				b.spot.arrived = false
 				if !e.Fast {
 					b.tripTeleported(now)
 				}

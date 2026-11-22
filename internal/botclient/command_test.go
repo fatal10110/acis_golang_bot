@@ -257,6 +257,7 @@ func TestBrainCommandStayFollow(t *testing.T) {
 func TestBrainCommandGo(t *testing.T) {
 	spots := []datapack.Spot{testSpot("Wolves", 5000, 0, 1, 3, 3), testSpot("Bears", 0, 5000, 1, 3, 3)}
 	b, _ := newCommandBrain(t, DefaultPersona())
+	walkSplit(t, b)
 	b.persona.IdleChance = 0
 	b.world.Self.Level = 2
 	b.cfg.Spots = NewSpotRegistry(spots, 1)
@@ -297,7 +298,7 @@ func TestBrainCommandGo(t *testing.T) {
 	}
 	b.orders.reply = Action{}
 	name, a := b.decide(at(3 * time.Second))
-	if to := moveTarget(a.payload); name != "spot" || a.kind != actMove || to.X <= 0 || max(to.Y, -to.Y) >= to.X {
+	if name != "spot" || a.kind != actMove || !a.walk || b.walk.dest != (Point{X: 5000}) {
 		t.Fatalf("decide = %q kind %d, want spot walking to the wolves", name, a.kind)
 	}
 	b.obey(verdict{tell: tell{sender: gmID, name: "GM", cmd: command{kind: cmdFollow}}, ok: true}, at(4*time.Second))
