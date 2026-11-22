@@ -433,9 +433,11 @@ server's pathfinder.
   same cell, with the clearance extra. The build skips the diagonal's own `CanMove`.
 - **Doors-open reads**: `engine.Static()` is an engine over the same mapped regions with no
   dynamic object. `navbuild` and `Locate` read only it.
-- **Door footprints**: a door's fully blocked cells (`NewDoorObject`), on the layers from its floor
-  minus 48 to its floor plus its height. An edge's door set holds the doors of the cells its
-  all-open path crosses; its door-free cost is the cheapest path avoiding every footprint cell.
+- **Door footprints**: a door's fully blocked cells (`NewDoorObject`), each on the one layer the
+  server's overlay lifts: the layer nearest the door's floor. An edge's door set holds the doors of
+  the cells its all-open path crosses; its door-free cost is the cheapest path avoiding every
+  footprint cell. Crossings between the same two entrance nodes merge into one edge: the cheapest
+  crossing's cost and doors, and the cheapest door-free crossing as its door-free cost.
 - **Cluster side** is a build parameter (default 256 cells) and part of the cache key; the CI
   tests run the same code on 32- and 64-cell clusters over windows of the synthetic region.
 - **`Reachable`** misses one case only: a drop between two cells of one cluster that are in no

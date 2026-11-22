@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log/slog"
+	"math"
 	"math/bits"
 	"slices"
 	"sync"
@@ -151,17 +152,25 @@ type builder struct {
 	doorCells map[[2]int][]doorFoot
 }
 
+// doorFoot is one door over one footprint cell: the door blocks the
+// cell's layer at height z only.
 type doorFoot struct {
-	id         int
-	zmin, zmax int
+	id int32
+	z  int16
 }
 
 // loadDoors builds every door's footprint over the static geodata, as the
-// server shapes a door (dynamic.NewDoorObject): its fully blocked cells,
-// from its floor up to its height.
+// server shapes a door (dynamic.NewDoorObject) and lifts it into the
+// overlay (dynamic block rebuild): each fully blocked cell of the door
+// blocks one layer, the one nearest the door's floor GeoZ.
 func (b *builder) loadDoors(templates []*door.Template, static *engine.Engine, log *slog.Logger) (doors, skipped int) {
 	b.doorCells = make(map[[2]int][]doorFoot)
 	for _, t := range templates {
+		if t.ID < math.MinInt32 || t.ID > math.MaxInt32 {
+			log.Warn("nav: door footprint skipped", "door", t.ID, "err", "id outside int32")
+			skipped++
+			continue
+		}
 		obj, err := dynamic.NewDoorObject(t, static)
 		if err != nil {
 			log.Warn("nav: door footprint skipped", "door", t.ID, "err", err)
@@ -169,12 +178,13 @@ func (b *builder) loadDoors(templates []*door.Template, static *engine.Engine, l
 			continue
 		}
 		doors++
-		foot := doorFoot{id: t.ID, zmin: obj.GeoZ() - block.CellIgnoreHeight, zmax: obj.GeoZ() + obj.Height()}
 		for ix, col := range obj.GeoData() {
 			for iy, n := range col {
 				if n == block.NoDirections {
-					k := [2]int{obj.GeoX() + ix, obj.GeoY() + iy}
-					b.doorCells[k] = append(b.doorCells[k], foot)
+					gx, gy := obj.GeoX()+ix, obj.GeoY()+iy
+					k := [2]int{gx, gy}
+					f := doorFoot{id: int32(t.ID), z: static.HeightNearest(gx, gy, obj.GeoZ())}
+					b.doorCells[k] = append(b.doorCells[k], f)
 				}
 			}
 		}
@@ -185,8 +195,8 @@ func (b *builder) loadDoors(templates []*door.Template, static *engine.Engine, l
 // doorsAt appends the doors whose footprint holds c.
 func (b *builder) doorsAt(dst []int32, c Cell) []int32 {
 	for _, f := range b.doorCells[[2]int{c.X, c.Y}] {
-		if int(c.Z) >= f.zmin && int(c.Z) <= f.zmax {
-			dst = append(dst, int32(f.id))
+		if c.Z == f.z {
+			dst = append(dst, f.id)
 		}
 	}
 	return dst
@@ -856,16 +866,22 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 	return l, nil
 }
 
-// addEdge adds e to edges, or keeps the cheaper of it and an edge to the
-// same node already there. It reports whether e's target is new.
+// addEdge merges e into edges. Crossings between the same two nodes
+// merge into one edge: its all-open cost and doors are those of the
+// cheapest crossing, a door-free one first on a tie, and its door-free
+// cost is the cheapest door-free crossing's. It reports whether e's target
+// is new.
 func addEdge(edges *[]globalEdge, e globalEdge) bool {
-	for i, old := range *edges {
-		if old.to == e.to {
-			if e.open < old.open {
-				(*edges)[i] = e
-			}
-			return false
+	for i := range *edges {
+		old := &(*edges)[i]
+		if old.to != e.to {
+			continue
 		}
+		if e.open < old.open || e.open == old.open && len(e.doors) < len(old.doors) {
+			old.open, old.doors = e.open, e.doors
+		}
+		old.free = min(old.free, e.free)
+		return false
 	}
 	*edges = append(*edges, e)
 	return true
