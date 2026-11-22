@@ -114,14 +114,21 @@ type ShopPolicy struct {
 	// SellAt is how many junk stacks make a visit to sell them due; a
 	// visit to buy sells any junk too. 0 never sells. Junk is what the bot
 	// carries unequipped, past Keep, adena, quest items, augmented items,
-	// Persona.Potions, Persona.Shots, Restock items, the wielded bow's
-	// arrows, the shots it keeps (keepsShot) and wanted books; only
-	// what the merchant's sell window lists is sold.
+	// Persona.Potions, Persona.Shots, Restock items, its supplies and the
+	// keep set (keeps), the wielded bow's arrows, the shots it keeps
+	// (keepsShot), wanted books and what the keep hook keeps
+	// (Persona.Holds); only what the merchant's sell window lists is sold.
 	SellAt int
 	// Keep are item templates the bot never sells.
 	Keep []int32
-	// KeepAdena is the adena a purchase never spends.
+	// KeepAdena is the adena a purchase never spends, the least of the
+	// budget's reserve (docs/items.md section 5), which also keeps the
+	// price of one Scroll of Escape, the trip home.
 	KeepAdena int32
+	// Comfort lets the budget's comfort tier top the trip's supplies up to
+	// their trip targets in a window a visit opened anyway (comfortWants),
+	// unless the visit saves for the gear goal (GearPolicy.SaveFrom).
+	Comfort bool
 	// Reach is how far the bot walks to a merchant's spawn (from the travel
 	// map, BrainConfig.Travel); a merchant in sight is visited from
 	// anywhere.
@@ -139,6 +146,7 @@ func defaultShopPolicy() ShopPolicy {
 		Books:     true,
 		SellAt:    5,
 		KeepAdena: 1000,
+		Comfort:   true,
 		Reach:     8000,
 	}
 }
@@ -582,93 +590,6 @@ func (b *Brain) carried(item int32) int32 {
 	return n
 }
 
-// shopWants are the items the bot buys now and how many: the wanted
-// spellbooks it lacks, by id, then the restocks of its class under their
-// minimum, in persona order, then the shots (shotWants), then the HP
-// potion and Scrolls of Escape (supplyWants), then the bows' arrows
-// (arrowWants), then the gear it buys (gearWants). Unless
-// anyAdena, only what the bot's adena past KeepAdena buys one of at a
-// merchant's base price is listed.
-func (b *Brain) shopWants(anyAdena bool) []buyRow {
-	p := &b.persona.Shop
-	var rows []buyRow
-	if p.Books {
-		for id := range b.shop.books {
-			if b.carried(id) == 0 {
-				rows = append(rows, buyRow{item: id, count: 1})
-			}
-		}
-		slices.SortFunc(rows, func(a, b buyRow) int { return int(a.item - b.item) })
-	}
-	for _, r := range p.Restock {
-		if _, shot := b.shotTable()[r.Item]; !r.For.fits(b.world.Self.ClassID) || shot && !b.usableShot(r.Item) {
-			continue
-		}
-		if have := b.carried(r.Item); have < r.Min && r.Max > have {
-			rows = append(rows, buyRow{item: r.Item, count: r.Max - have})
-		}
-	}
-	rows = append(rows, b.shotWants()...)
-	rows = append(rows, b.supplyWants()...)
-	rows = append(rows, b.arrowWants()...)
-	rows = append(rows, b.gearWants()...)
-	if anyAdena || b.cfg.Travel == nil {
-		return rows
-	}
-	budget := int64(b.carried(adenaID)) - int64(p.KeepAdena)
-	return slices.DeleteFunc(rows, func(r buyRow) bool {
-		price, ok := b.cfg.Travel.cheapest[r.item]
-		return !ok || int64(price) > budget
-	})
-}
-
-// buyRows is the purchase from window l: per wanted item it sells at a
-// price, as many as the window's stock and the adena past KeepAdena allow;
-// of the gear, the first piece per slot the adena past GearPolicy.KeepAdena
-// buys, a bow followed by its arrows (arrowRow) unless already wanted.
-func (b *Brain) buyRows(l BuyList) []buyRow {
-	budget := int64(l.Money) - int64(b.persona.Shop.KeepAdena)
-	var rows []buyRow
-	var bought [slotCount]bool
-	wants := b.shopWants(true)
-	for i := 0; i < len(wants); i++ {
-		w := wants[i]
-		slot, limit := slotNone, budget
-		if g, ok := b.gearItem(w.item); ok {
-			if slot = slotOf(g.part); bought[slot] {
-				continue
-			}
-			limit -= b.gearReserve()
-		}
-		j := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.item })
-		if j < 0 || l.Items[j].Price <= 0 {
-			continue
-		}
-		it := l.Items[j]
-		n := int64(w.count)
-		if it.Count > 0 {
-			n = min(n, int64(it.Count))
-		}
-		n = min(n, limit/int64(it.Price))
-		if n < 1 {
-			continue
-		}
-		bought[slot] = true
-		budget -= n * int64(it.Price)
-		rows = append(rows, buyRow{item: w.item, count: int32(n)})
-		if slot == slotWeapon {
-			r, ok := b.arrowRow(b.cfg.Travel.arrows[w.item])
-			if ok && !slices.ContainsFunc(wants, func(x buyRow) bool { return x.item == r.item }) {
-				wants = slices.Insert(wants, i+1, r)
-			}
-		}
-		if len(rows) == shopMaxRows {
-			break
-		}
-	}
-	return rows
-}
-
 // junk are the object ids of the stacks the bot would sell (ShopPolicy
 // SellAt). A piece the gear errand wears next is not junk, nor a weapon it
 // falls back to (fallsBack); the one it replaced otherwise is.
@@ -676,7 +597,7 @@ func (b *Brain) junk() map[int32]Item {
 	out := make(map[int32]Item)
 	w := b.worn()
 	for id, it := range b.world.Inventory.Items {
-		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) || b.fallsBack(it, &w) {
+		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) || b.fallsBack(it, &w) {
 			continue
 		}
 		out[id] = it
@@ -685,20 +606,36 @@ func (b *Brain) junk() map[int32]Item {
 }
 
 // keeps reports whether the bot keeps item template id rather than sell
-// it: adena, Shop.Keep, Potions, Shots, Restock items, the Scrolls of
-// Escape it carries for a trip (SupplyPolicy.Escapes), the arrows the
-// wielded bow and the one worn next shoot, the shots keepsShot keeps and
-// spellbooks wanted or held for a learn.
+// it: adena, Shop.Keep, Potions, Shots, Restock items, the keep set
+// (inKeepSet), every template with a trip target (supplies, the Extra
+// ones included), the arrows the wielded bow and the one worn next shoot,
+// the shots keepsShot keeps and spellbooks wanted or held for a learn.
 func (b *Brain) keeps(id int32) bool {
 	p := &b.persona
 	if _, shot := b.shotTable()[id]; shot && b.keepsShot(id) {
 		return true
 	}
-	return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
+	return id == adenaID || inKeepSet(id) || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
-		id == scrollOfEscape && p.Supply.Escapes > 0 ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
-		id == b.bowArrows() || id == b.nextBowArrows()
+		id == b.bowArrows() || id == b.nextBowArrows() ||
+		slices.ContainsFunc(b.supplies(), func(s supply) bool { return s.item == id })
+}
+
+// keepsItem reports whether the bot keeps carried item it rather than sell,
+// list or offer it: its template is kept (keeps) or the persona's keep
+// hook keeps it (Persona.Holds).
+func (b *Brain) keepsItem(it Item) bool {
+	return b.keeps(it.TemplateID) || b.hold(it).Keep
+}
+
+// hold is the persona's keep hook's answer for carried item it
+// (Persona.Holds): the zero Hold without a hook.
+func (b *Brain) hold(it Item) Hold {
+	if b.persona.Holds == nil {
+		return Hold{}
+	}
+	return b.persona.Holds(b.world, it)
 }
 
 // sellRows is the sale from window l: every junk stack it lists, whole.

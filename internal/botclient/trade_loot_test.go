@@ -47,7 +47,7 @@ func TestTradeLootPrice(t *testing.T) {
 			if tt.edit != nil {
 				tt.edit(b)
 			}
-			if p, ok := b.tradePrice(tt.id); p != tt.want || ok != tt.price {
+			if p, ok := b.tradePrice(Item{TemplateID: tt.id}); p != tt.want || ok != tt.price {
 				t.Fatalf("tradePrice(%d) = %d, %v, want %d, %v", tt.id, p, ok, tt.want, tt.price)
 			}
 		})
@@ -64,7 +64,7 @@ func TestTradeLootMatchesStore(t *testing.T) {
 		for range seed {
 			b.rng.IntN(2)
 		}
-		traded, ok := b.tradePrice(stoneSword)
+		traded, ok := b.tradePrice(Item{TemplateID: stoneSword})
 		if !ok {
 			t.Fatal("tradePrice(sword) unpriced")
 		}

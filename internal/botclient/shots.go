@@ -393,7 +393,7 @@ func (b *Brain) carriedOnly(w *worn) bool {
 // run out (carriedOnly): it is kept, not junk, so the bot switches back.
 func (b *Brain) fallsBack(it Item, w *worn) bool {
 	g, ok := b.gearItem(it.TemplateID)
-	if !ok || slotOf(g.part) != slotWeapon || it.Equipped || it.Augmentation != 0 || !b.persona.Gear.Equip || !b.carriedOnly(w) {
+	if !ok || slotOf(g.part) != slotWeapon || it.Equipped || it.Augmentation != 0 || !b.persona.Gear.Equip || b.hold(it).NoWear || !b.carriedOnly(w) {
 		return false
 	}
 	return b.beatsBy(it.TemplateID, w, false)

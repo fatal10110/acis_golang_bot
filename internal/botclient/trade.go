@@ -302,11 +302,14 @@ func (p *TradePolicy) exempt(w *World, partner int32) bool {
 // the store's price.
 func (b *Brain) tradeGoods(rows []TradeItem) (TradeItem, bool) {
 	for _, row := range rows {
-		if _, priced := b.tradePrice(row.TemplateID); !priced || row.Count <= 0 || row.SubCategory == subCategoryQuest {
+		if row.Count <= 0 || row.SubCategory == subCategoryQuest {
 			continue
 		}
 		it, ok := b.world.Inventory.Items[row.ObjectID]
 		if !ok || it.Equipped || it.SubCategory == subCategoryQuest {
+			continue
+		}
+		if _, priced := b.tradePrice(it); !priced {
 			continue
 		}
 		if _, fixed := b.persona.Trade.Prices[row.TemplateID]; fixed || b.storeLoot(it) {
@@ -432,12 +435,17 @@ func (b *Brain) tradeReceivable(exempt bool) bool {
 	return true
 }
 
-// tradePrice is the unit price the bot sells template id at in a trade:
-// the policy's price, or else its store's price of that loot (storePrice):
-// the one its store's manage lists showed, else the one of the travel
-// map's reference price, so its store and its trades sell at the same
-// prices. An item an NPC shop sells, or the bot keeps, has no store price.
-func (b *Brain) tradePrice(id int32) (int32, bool) {
+// tradePrice is the unit price the bot sells carried item it at in a
+// trade: the policy's price, or else its store's price of that loot
+// (storePrice): the one its store's manage lists showed, else the one of
+// the travel map's reference price, so its store and its trades sell at
+// the same prices. An item an NPC shop sells, or the bot keeps, has no
+// store price; one the keep hook keeps (Persona.Holds) has none at all.
+func (b *Brain) tradePrice(it Item) (int32, bool) {
+	if b.hold(it).Keep {
+		return 0, false
+	}
+	id := it.TemplateID
 	if p, ok := b.persona.Trade.Prices[id]; ok {
 		return p, true
 	}
@@ -464,9 +472,13 @@ func (b *Brain) tradePrice(id int32) (int32, bool) {
 func (b *Brain) tradePaid() bool {
 	t := &b.world.Trade
 	var price, paid int64
-	for _, it := range t.Own {
-		unit, _ := b.tradePrice(it.TemplateID)
-		price += int64(unit) * int64(it.Count)
+	for _, own := range t.Own {
+		it, ok := b.world.Inventory.Items[own.ObjectID]
+		if !ok {
+			it = Item{ObjectID: own.ObjectID, TemplateID: own.TemplateID, Count: own.Count}
+		}
+		unit, _ := b.tradePrice(it)
+		price += int64(unit) * int64(own.Count)
 	}
 	for _, it := range t.Other {
 		if it.TemplateID == adenaID {
