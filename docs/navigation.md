@@ -134,7 +134,36 @@ the static cells while closed. The client learns door state from `DoorInfo` and
 `DoorStatusUpdate`. Both carry the object id and the door id; the update also carries the
 open/closed state (`network/serverpackets/worldobjects.go:60-70`).
 
-**Other characters** never block movement. Geodata and doors are the only obstacles.
+**Dynamic objects outside `doors.xml`** (#162). The engine's `AddObject` and `RemoveObject` have
+two callers, doors and fences:
+
+- **Doors: all come from `doors.xml`.** `newDoor` (`data/manager/worldobjects.go:616-646`) is the
+  only place a door is built. Its callers are `newDoors` at startup and `ReloadDoors`, and both
+  read a `door.Table` loaded from `doors.xml`: at startup by `cmd/gameserver/data.go:176`, passed
+  to `NewWorldObjects` at `cmd/gameserver/world.go:42`, and on `//reload` by
+  `cmd/gameserver/reload.go:57` through `network/admin_reload.go:283` (the `cmd/` paths are
+  relative to the repository root). Sieges, clan halls and scripts never build doors. They change
+  the state or HP of a door that is already there, by its door id (`SetDoorSiege`, `UpgradeDoor`,
+  `SetClanCall`, `worldobjects.go:199-244`). The door table and the hierarchy's door sets
+  therefore already cover every door.
+- **Fences: GM-only, not modeled.** The only other dynamic object is a fence
+  (`fence/manager.go:90-98` adds it, `:116` removes it). Only the admin commands
+  `//spawnfence` and `//deletefence` create and remove fences (`network/admin_fence.go:37, 65`).
+  No script, siege or event places one, so fences do not reach the places bots go. A fence would
+  also be hard to model:
+  - The client learns of it from `ExColosseumFenceInfo` (`0xFE`/`0x0009`, object id, type, x, y,
+    z, size x, size y; `network/serverpackets/fence.go`). The packet does not carry the height.
+  - A fence that leaves view and a fence that is deleted reach the client as the same
+    `DeleteObject`. A bot could not tell a fence still standing out of its view from a removed
+    one, so a modeled fence would go stale.
+  - It has no door id, so it cannot be in the offline door sets.
+
+  If a GM puts a fence across a route, the server either stops the walker's segment at the fence
+  (a blocked stop, `nav_blocked_total`) or answers with a route around it (a desync,
+  `nav_desync_total`). The walker replans each time. After `walkMaxBlocked` or `walkMaxDesync`
+  of them it gives up with that reason (`internal/botclient/walker.go`).
+
+**Other characters** never block movement. Geodata, doors and GM fences are the only obstacles.
 
 **`cmd/geoprobe`**: evaluates geodata queries (height, canmove, los, path, validlocation) against
 the server engine:
@@ -785,5 +814,7 @@ heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore d
 
 ## Gaps
 
-- Fences and doors that are not in `doors.xml` (siege, scripted): N4 covers `doors.xml` doors
-  only. Tracked in #162.
+- Fences and doors outside `doors.xml`: resolved in #162. Every door, siege and scripted doors
+  included, is a `doors.xml` door, so N4 covers them all. Fences are GM-only and not modeled; a
+  fence across a route shows up as blocked stops or desyncs ("Server behavior this rests on",
+  "Dynamic objects outside `doors.xml`").
