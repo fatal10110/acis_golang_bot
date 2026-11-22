@@ -79,8 +79,8 @@ func spawnedSold(shops map[int32][]shopList, spawns map[int32][]Point) map[int32
 }
 
 // shotSource is where the bot gets more of a shot template than it
-// carries: the merchants of the travel map, and next the clan crafter
-// (M9).
+// carries: the merchants of the travel map, and the clan crafters of a
+// clan member (clanShots).
 type shotSource interface {
 	sellsShot(id int32) bool
 }
@@ -88,12 +88,17 @@ type shotSource interface {
 // sellsShot reports whether a spawned merchant sells shot template id.
 func (m *TravelMap) sellsShot(id int32) bool { return m.spawnedSold[id] }
 
-// shotSources are the bot's shot sources.
+// shotSources are the bot's shot sources: the travel map's merchants,
+// then, for a clan member, the grades its clan's crafters make now.
 func (b *Brain) shotSources() []shotSource {
 	if b.cfg.Travel == nil {
 		return nil
 	}
-	return []shotSource{b.cfg.Travel}
+	out := []shotSource{b.cfg.Travel}
+	if g := b.memberShotGrades(); len(g) > 0 {
+		out = append(out, clanShots{grades: g, table: b.shotTable()})
+	}
+	return out
 }
 
 // sourced reports whether a shot source has shot template id.

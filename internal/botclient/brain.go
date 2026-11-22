@@ -207,6 +207,9 @@ type Brain struct {
 	learn recipeLearn
 	// craft is the clan crafter's cycle (rule "craft").
 	craft crafterCycle
+	// member is the clan member option (Persona.ClanMember, rule
+	// "member").
+	member memberState
 	// store is the merchant's private sell store (rule "store").
 	store storeState
 	// gear is the gear errand (rule 9 errand "gear").
@@ -296,6 +299,9 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	}
 	if cfg.link != nil {
 		b.mail = cfg.link.mail
+	}
+	if cfg.Persona.ClanMember {
+		b.wireMember()
 	}
 	b.walk = newWalker(cfg.Nav)
 	if cfg.Nav != nil {

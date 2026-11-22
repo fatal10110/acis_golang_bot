@@ -166,6 +166,16 @@ type Persona struct {
 	// nothing more. The clan crafter plan (M9) keeps its materials and the
 	// graded gear it deposits for crystallizing with it.
 	Holds func(w *World, it Item) Hold
+	// ClanMember is the clan member option (docs/crafting.md section 7),
+	// active while the bot is in a clan with a crafter on the board: the
+	// keep hook keeps recipe scrolls, the materials of the clan crafters'
+	// recipes and the graded gear it would not wear; a supply trip's
+	// arrival in town visits the clan warehouse to withdraw the products
+	// the board credits to it and deposit what it keeps with the ore of the
+	// shot orders it posts; the extra supply hook buys that ore; and the
+	// clan crafters are a shot source. NewBrain wraps the persona's hooks
+	// for it (wireMember).
+	ClanMember bool
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
@@ -413,7 +423,8 @@ type rule struct {
 // sale), "market" (other players' sell stores, ahead of the shop so a
 // store's cheaper offer is taken first), "shop" (a merchant's buy and sell windows), "dyes" (drawing the
 // dye symbols at a Symbol Maker, after the shop that buys their dyes), "warehouse" (the clan
-// warehouse errand), "recipe" (recipe learning), "craft" (the clan
+// warehouse errand), "member" (settling a clan member's warehouse visit
+// with the craft board; it never takes the turn), "recipe" (recipe learning), "craft" (the clan
 // crafter's cycle, after the two errands that run its warehouse requests and
 // its recipe scrolls; it holds the turn while a cycle runs), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
 // (a gatekeeper trip to a spot out of walking reach), "spot" (getting to the
@@ -463,6 +474,7 @@ var playRules = []rule{
 	{"shop", (*Brain).ruleShop},
 	{"dyes", (*Brain).ruleDyes},
 	{"warehouse", (*Brain).ruleWarehouse},
+	{"member", (*Brain).ruleMember},
 	{"recipe", (*Brain).ruleRecipe},
 	{"craft", (*Brain).ruleCraft},
 	{"supply", (*Brain).ruleSupply},

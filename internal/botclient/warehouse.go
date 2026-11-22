@@ -211,11 +211,13 @@ const (
 )
 
 // WarehouseResult is the end of the last deposit or withdrawal: its
-// outcome, the system message of a refusal, and when.
+// outcome, the system message of a refusal, and when; Rows are the rows a
+// WarehouseDone moved.
 type WarehouseResult struct {
 	Outcome WarehouseOutcome
 	Msg     int32
 	At      time.Time
+	Rows    []WarehouseRow
 }
 
 // WarehouseStatus is what the errand knows: the last result of each kind,
@@ -311,6 +313,11 @@ func (e *warehouseErrand) openDue(now time.Time) bool {
 // result records the end of the transaction under way.
 func (e *warehouseErrand) result(o WarehouseOutcome, msg int32, now time.Time) {
 	r := WarehouseResult{Outcome: o, Msg: msg, At: now}
+	if o == WarehouseDone {
+		for _, row := range e.rows {
+			r.Rows = append(r.Rows, WarehouseRow{TemplateID: row.item, Count: row.count, Object: row.object})
+		}
+	}
 	if e.depositing() {
 		e.status.Deposit = r
 	} else {

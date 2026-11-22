@@ -111,8 +111,9 @@ func TestBrainWarehouseDeposit(t *testing.T) {
 		trainerStep{name: "open due again", at: 3*time.Second + warehouseOpenGap, wantRule: "warehouse", wantKind: actTalk},
 	)
 	runTrainerSteps(t, b, steps)
-	if got := b.wh.status.Deposit; got.Outcome != WarehouseDone || !got.At.Equal(at(7*time.Second)) {
-		t.Fatalf("deposit result = %+v, want done at 7s", got)
+	if got := b.wh.status.Deposit; got.Outcome != WarehouseDone || !got.At.Equal(at(7*time.Second)) ||
+		!reflect.DeepEqual(got.Rows, []WarehouseRow{{TemplateID: animalSkin, Count: 10, Object: 102}}) {
+		t.Fatalf("deposit result = %+v, want done at 7s, moving the skins", got)
 	}
 	if b.wh.status.Known {
 		t.Fatalf("contents known with no withdrawal list seen")
