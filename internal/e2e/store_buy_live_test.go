@@ -69,7 +69,9 @@ func TestLiveStoreBuy(t *testing.T) {
 		t.Errorf("%s bought %d Scrolls of Escape at %d, over the cap", buyer.name, n, storeScrollCost)
 	}
 	spent := buyer.counts(adena, from)
-	if paid := spent[0] - spent[len(spent)-1]; paid != storeShots*storeShotPrice {
+	// The counts start at 0 when from comes before the ItemList: the
+	// most it held is what it had before it paid.
+	if paid := slices.Max(spent) - spent[len(spent)-1]; paid != storeShots*storeShotPrice {
 		t.Errorf("%s paid %d adena (%v), want %d", buyer.name, paid, spent, storeShots*storeShotPrice)
 	}
 	t.Logf("%s bought shots %v for adena %v", buyer.name, buyer.counts(soulshotNG, from), spent)

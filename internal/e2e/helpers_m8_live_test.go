@@ -48,6 +48,9 @@ const (
 	dyeStr1, dyeDex1       int32 = 4445, 4450
 	dyeStr3, dyeDex3       int32 = 4481, 4486
 	dyesPerDraw            int32 = 10
+	// dyesReturned is how many of its dye a symbol's removal hands back
+	// (server symbolmaker.go, henna.RemoveAmount).
+	dyesReturned int32 = 5
 	// msgSymbolAdded and msgSymbolDeleted are SystemMessages 877 and 878
 	// (network/henna.go).
 	msgSymbolAdded   int32 = 877
@@ -202,8 +205,9 @@ func (f *farmer) carries(tmpl int32) int32 {
 	return carriedOf(inventory(f.watch.Seen(0)), tmpl)
 }
 
-// gmGiveAdena tops f, the GM's target, up to at least want adena, in gives
-// the GM's scope allows.
+// gmGiveAdena tops f, the GM's target, up to at least want adena in one
+// give, which the GM's scope bounds (maxAdenaGive): every fee here is
+// under it.
 func gmGiveAdena(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, want int32) {
 	t.Helper()
 	if have := f.carries(adena); have < want {

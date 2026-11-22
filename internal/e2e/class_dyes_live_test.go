@@ -74,6 +74,9 @@ func TestLiveClassChangeDyes(t *testing.T) {
 		if run := f.counts(dye, from); !rose(run) || run[len(run)-1] != 0 {
 			t.Errorf("%s's dyes %d: %v, want bought and spent", f.name, dye, run)
 		}
+		if soldTemplate(f.watch.Seen(0), f.watch.Sent(), dye) {
+			t.Errorf("%s sold its dyes %d before the draw", f.name, dye)
+		}
 	}
 
 	levelTo(t, ctx, gm, f, 40)
@@ -89,6 +92,12 @@ func TestLiveClassChangeDyes(t *testing.T) {
 	gmGive(t, ctx, gm, f, dyeDex3, dyesPerDraw)
 	gmGiveAdena(t, ctx, gm, f, secondDyesAdena)
 	draws(t, ctx, f, from, []int32{symbolStr3, symbolDex3, symbolStr3}, 2)
+	// A removed symbol hands back dyesReturned of its dye.
+	for _, dye := range []int32{dyeStr1, dyeDex1} {
+		if run := f.counts(dye, from); slices.Max(run)-run[0] != dyesReturned {
+			t.Errorf("%s's dyes %d after the removals: %v, want %d handed back", f.name, dye, run, dyesReturned)
+		}
+	}
 }
 
 // masterAt teleports the GM to the class master's Talking Island spawn and
