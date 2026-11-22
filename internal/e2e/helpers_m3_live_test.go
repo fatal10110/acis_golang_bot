@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -86,11 +87,24 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 // runWatched runs a whole Bot of account as setup says, through runBotWith
 // with a Watch as its frame tap (setup.tap is replaced). It returns once the
 // bot is in the world, its character one of the run's; a failed test logs
-// the bot's digest.
+// the bot's digest. Its walker must never desync from the server on its own
+// moves (docs/navigation.md, Testing): nav_desync_total stays 0, door
+// replans counted apart.
 func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *farmer {
 	t.Helper()
 	w := NewWatch(botclient.SystemClock{})
 	setup.tap = w
+	if setup.metrics == nil {
+		reg := botmetrics.NewRegistry()
+		setup.metrics = reg.NewBot()
+		t.Cleanup(func() {
+			s := reg.Collect(time.Now())
+			t.Logf("bot %s nav: blocked %d, desync %d, door replans %d", account, s.NavBlocked, s.NavDesync, s.NavDoorReplan)
+			if s.NavDesync != 0 {
+				t.Errorf("bot %s: nav_desync_total = %d, want 0", account, s.NavDesync)
+			}
+		})
+	}
 	b := runBotWith(t, ctx, tg, account, setup)
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
