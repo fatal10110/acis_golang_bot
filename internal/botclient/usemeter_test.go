@@ -203,7 +203,7 @@ func TestTripTargetWeight(t *testing.T) {
 
 // TestSupplyWants checks what the shop errand buys of the supplies: each up
 // to its trip target once under Refill percent of it, a Restock row's
-// item by the row alone, and the extra supplies not at all.
+// item by the row alone, and the extra supplies after the bot's own.
 func TestSupplyWants(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -212,9 +212,9 @@ func TestSupplyWants(t *testing.T) {
 		want    []buyRow
 		target  int32 // tripTarget of the Lesser Healing Potion
 	}{
-		{"low on everything", []Item{shotStack(2, soulshotNoGrade, 500)}, nil, []buyRow{{soulshotNoGrade, 3100}, {lesserHealingPotion, 10}, {scrollOfEscape, 2}}, 10},
-		{"enough of everything", []Item{shotStack(2, soulshotNoGrade, 900), potionStack(3), {ObjectID: 4, TemplateID: scrollOfEscape, Count: 1}}, nil, nil, 10},
-		{"restock overrides the potion", []Item{shotStack(2, soulshotNoGrade, 900)}, []Restock{{Item: lesserHealingPotion, Min: 1, Max: 5}}, []buyRow{{lesserHealingPotion, 5}, {scrollOfEscape, 2}}, 5},
+		{"low on everything", []Item{shotStack(2, soulshotNoGrade, 500)}, nil, []buyRow{{soulshotNoGrade, 3100}, {lesserHealingPotion, 10}, {scrollOfEscape, 2}, {soulOre, 500}}, 10},
+		{"enough of everything", []Item{shotStack(2, soulshotNoGrade, 900), potionStack(3), {ObjectID: 4, TemplateID: scrollOfEscape, Count: 1}, {ObjectID: 5, TemplateID: soulOre, Count: 200}}, nil, nil, 10},
+		{"restock overrides the potion", []Item{shotStack(2, soulshotNoGrade, 900)}, []Restock{{Item: lesserHealingPotion, Min: 1, Max: 5}}, []buyRow{{lesserHealingPotion, 5}, {scrollOfEscape, 2}, {soulOre, 500}}, 5},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -235,13 +235,13 @@ func TestSupplyWants(t *testing.T) {
 	}
 }
 
-// TestKeepsEscapes checks that the bot keeps the Scrolls of Escape it
-// carries for a trip, and sells them when it carries none.
+// TestKeepsEscapes checks that the bot keeps its Scrolls of Escape, the
+// trip home in the keep set, whether or not it carries any for a trip.
 func TestKeepsEscapes(t *testing.T) {
 	for _, n := range []int32{0, 2} {
 		b := newMeterBrain(t, classHumanFight)
 		b.persona.Supply.Escapes = n
-		if got := b.keeps(scrollOfEscape); got != (n > 0) {
+		if got := b.keeps(scrollOfEscape); !got {
 			t.Errorf("Escapes %d: keeps(SoE) = %v", n, got)
 		}
 	}

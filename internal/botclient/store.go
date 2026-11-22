@@ -423,11 +423,12 @@ func (b *Brain) leaveStore(now time.Time) {
 
 // storeLoot reports whether the bot sells it in its store: loot, never an
 // item an NPC shop sells (the travel map's buylists), equipped, a quest
-// item, adena, augmented or an item the bot keeps (Persona.Potions, Shots,
-// Shop.Keep and Restock, the wielded bow's arrows, wanted spellbooks) or
-// wears next (the gear errand). A bot without a travel map sells nothing.
+// item, adena, augmented or an item the bot keeps (keepsItem: its
+// supplies, Persona.Potions, Shots, Shop.Keep and Restock, the wielded
+// bow's arrows, wanted spellbooks, what the keep hook keeps) or wears next
+// (the gear errand). A bot without a travel map sells nothing.
 func (b *Brain) storeLoot(it Item) bool {
-	if b.cfg.Travel == nil || it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keeps(it.TemplateID) || b.wearsNext(it) {
+	if b.cfg.Travel == nil || it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.wearsNext(it) {
 		return false
 	}
 	_, shopSells := b.cfg.Travel.cheapest[it.TemplateID]

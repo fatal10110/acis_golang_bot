@@ -211,10 +211,10 @@ func TestBrainStoreOpen(t *testing.T) {
 	if st.active() || st.claimed || b.cfg.Stores.Open() != 0 || st.sold != 770 || !st.nextAt.Equal(at(time.Minute+5*time.Minute)) {
 		t.Errorf("store %+v, registry %d open, want it ended, released, 770 sold and the next opening Retry away", *st, b.cfg.Stores.Open())
 	}
-	if p, ok := b.tradePrice(animalSkin); !ok || p != 7 {
+	if p, ok := b.tradePrice(Item{TemplateID: animalSkin}); !ok || p != 7 {
 		t.Errorf("tradePrice(skin) = %d, %v, want the store's 7", p, ok)
 	}
-	if _, ok := b.tradePrice(woodenArrow); ok {
+	if _, ok := b.tradePrice(Item{TemplateID: woodenArrow}); ok {
 		t.Error("tradePrice(arrows) priced, want an NPC shop's item unpriced")
 	}
 }

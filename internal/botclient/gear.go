@@ -45,16 +45,22 @@ type GearPolicy struct {
 	// and no shield.
 	Classes []GearClass
 	// Buy adds, per slot, every such piece a merchant sells and the
-	// adena past KeepAdena buys to the shop errand's wants, best first:
+	// adena past KeepAdena buys to the shop errand's gear tier, best first:
 	// the visit buys the best one its merchant sells, one per slot. It
 	// needs Equip.
 	Buy bool
 	// MaxGrade caps the crystal grade bought and worn: 0 for no grade,
 	// then 1 for D up to 5 for S. The Expertise skill's level caps it too.
 	MaxGrade int32
-	// KeepAdena is the adena a gear purchase never spends; potions, shots
-	// and teleports need it.
+	// KeepAdena is the reserve floor: the adena the gear and comfort tiers
+	// of a shop visit's budget never spend, so the next trips' potions,
+	// shots and teleports are paid.
 	KeepAdena int32
+	// SaveFrom is the percent of the gear goal's price (gearGoal) from
+	// which the adena past KeepAdena counts as within reach: a visit that
+	// does not buy the goal then saves for it and skips the comfort tier.
+	// 0 never saves.
+	SaveFrom int32
 	// ShotFactor multiplies a weapon's reference price where Equip and Buy
 	// compare it with the wielded one, when the bot can keep it charged and
 	// not the other: a shot source has shots of its grade for the class (a
@@ -66,11 +72,12 @@ type GearPolicy struct {
 }
 
 // defaultGearPolicy wears and buys gear and jewelry up to the bot's
-// expertise, keeping 10000 adena, with a shot factor of 2: a soulshot
+// expertise, keeping 10000 adena and saving for the next upgrade from half
+// its price, with a shot factor of 2: a soulshot
 // doubles a physical hit's damage (skill/formulas/damage.go), a blessed
 // spiritshot four times the M. Atk a spell's damage takes the root of.
 func defaultGearPolicy() GearPolicy {
-	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, ShotFactor: 2}
+	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, ShotFactor: 2}
 }
 
 // GearClass is what classes wear where no worn piece gives a type to
@@ -496,7 +503,7 @@ func (b *Brain) carriedShield() int64 {
 // over w: it is never junk.
 func (b *Brain) upgrade(it Item, w *worn) bool {
 	p := &b.persona.Gear
-	return p.Equip && !it.Equipped && it.Augmentation == 0 && b.beats(it.TemplateID, w)
+	return p.Equip && !it.Equipped && it.Augmentation == 0 && !b.hold(it).NoWear && b.beats(it.TemplateID, w)
 }
 
 // wearsNext reports whether the gear errand wears carried item it next.
@@ -570,17 +577,29 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 	return a, true
 }
 
-// gearWants are the pieces the shop errand buys (GearPolicy.Buy), one of
-// each: per slot without a carried upgrade, every piece merchants sell
-// that beats the worn one and that the adena past GearPolicy.KeepAdena
-// buys at its cheapest base price, best first.
+// gearWants are the pieces the shop errand buys in the gear tier, one of
+// each: the gearCandidates the adena past the reserve floor buys at their
+// cheapest base price, best first.
 func (b *Brain) gearWants() []buyRow {
-	p := &b.persona.Gear
-	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
+	budget := int64(b.carried(adenaID)) - b.floor(tierGear)
+	if budget <= 0 {
 		return nil
 	}
-	budget := int64(b.carried(adenaID)) - int64(p.KeepAdena)
-	if budget <= 0 {
+	var rows []buyRow
+	for _, id := range b.gearCandidates() {
+		if int64(b.cfg.Travel.cheapest[id]) <= budget {
+			rows = append(rows, buyRow{item: id, count: 1})
+		}
+	}
+	return rows
+}
+
+// gearCandidates are the pieces the gear errand would buy (GearPolicy.Buy):
+// per slot without a carried upgrade, every piece merchants sell that
+// beats the worn one, best first.
+func (b *Brain) gearCandidates() []int32 {
+	p := &b.persona.Gear
+	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
 		return nil
 	}
 	w := b.worn()
@@ -591,20 +610,25 @@ func (b *Brain) gearWants() []buyRow {
 			held[slotOf(g.part)] = true
 		}
 	}
-	var rows []buyRow
+	var ids []int32
 	for _, id := range b.cfg.Travel.shopGear {
 		g := b.cfg.Travel.gear[id]
-		price := b.cfg.Travel.cheapest[id]
-		if held[slotOf(g.part)] || price <= 0 || int64(price) > budget || b.unarmedBow(id) || !b.beats(id, &w) {
+		if held[slotOf(g.part)] || b.cfg.Travel.cheapest[id] <= 0 || b.unarmedBow(id) || !b.beats(id, &w) {
 			continue
 		}
-		rows = append(rows, buyRow{item: id, count: 1})
+		ids = append(ids, id)
 	}
-	return rows
+	return ids
 }
 
-// gearReserve is how much more adena a gear purchase keeps than the shop
-// errand's own purchases.
-func (b *Brain) gearReserve() int64 {
-	return max(0, int64(b.persona.Gear.KeepAdena)-int64(b.persona.Shop.KeepAdena))
+// gearGoal is the next upgrade, the one the shop errand buys or saves for
+// (docs/items.md section 5): the first of gearCandidates, the best piece
+// of the first slot with one, at its cheapest base price. Scores, sets and the grade jump refine it (#172, #173,
+// #174).
+func (b *Brain) gearGoal() (id int32, price int64, ok bool) {
+	ids := b.gearCandidates()
+	if len(ids) == 0 {
+		return 0, 0, false
+	}
+	return ids[0], int64(b.cfg.Travel.cheapest[ids[0]]), true
 }

@@ -314,9 +314,8 @@ func (b *Brain) restockOf(id int32) (Restock, bool) {
 }
 
 // supplyWants are the HP potion and Scrolls of Escape the shop errand
-// buys: up to the trip target once fewer than Refill percent of it are
-// carried. A Restock row buys its item instead; shots are shotWants', and
-// the Extra supplies are not bought yet (the budget planner, #171).
+// buys (refillRow). Shots are shotWants', and the Extra supplies
+// extraWants', bought after the bot's own.
 func (b *Brain) supplyWants() []buyRow {
 	var rows []buyRow
 	potion := b.supplyPotion()
@@ -324,17 +323,27 @@ func (b *Brain) supplyWants() []buyRow {
 		if s.extra || s.item != scrollOfEscape && s.item != potion {
 			continue
 		}
-		if _, ok := b.restockOf(s.item); ok {
-			continue
-		}
-		if b.cfg.Travel != nil && !b.cfg.Travel.spawnedSold[s.item] {
-			continue
-		}
-		if have := b.carried(s.item); b.refills(have, s.count) {
-			rows = append(rows, buyRow{item: s.item, count: s.count - have})
+		if r, ok := b.refillRow(s); ok {
+			rows = append(rows, r)
 		}
 	}
 	return rows
+}
+
+// refillRow is the purchase of supply s from a spawned merchant: up to its
+// trip target once fewer than Refill percent of it are carried. ok is false
+// for one a Restock row buys instead.
+func (b *Brain) refillRow(s supply) (buyRow, bool) {
+	if _, ok := b.restockOf(s.item); ok {
+		return buyRow{}, false
+	}
+	if b.cfg.Travel != nil && !b.cfg.Travel.spawnedSold[s.item] {
+		return buyRow{}, false
+	}
+	if have := b.carried(s.item); b.refills(have, s.count) {
+		return buyRow{item: s.item, count: s.count - have}, true
+	}
+	return buyRow{}, false
 }
 
 // refills reports whether have carried of a trip target is low enough to
