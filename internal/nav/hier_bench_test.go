@@ -48,7 +48,7 @@ func BenchmarkHierRoute(b *testing.B) {
 	from, to := loc(geotest.UInside), loc(geotest.UBehind)
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := th.h.Route(p, from, to); err != nil {
+		if _, err := th.h.Route(p, from, to, nil); err != nil {
 			b.Fatal(err)
 		}
 	}

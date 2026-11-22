@@ -22,6 +22,11 @@ var (
 	// ErrUnreachable: the search ran out of cells to expand, or every way it
 	// found failed the step-chain check.
 	ErrUnreachable = errors.New("nav: no route")
+	// ErrDoor: no route with the doors as they are, but one with every door
+	// open, so a closed door is in the way. It is distinct from
+	// ErrUnreachable: the walker replans on it, and a door replan never
+	// counts toward unreachable (docs/navigation.md, "Walker").
+	ErrDoor = errors.New("nav: unreachable: door")
 )
 
 const (
