@@ -91,6 +91,10 @@ type BrainConfig struct {
 	// brain gives its claim back when its party ends or its leader changes,
 	// and when it stops. Nil claims no leader.
 	PartyClaims *PartyClaims
+	// Nav, when set, is the navigation data the bot walks on, shared by
+	// every bot of the process (D13). Nil walks nowhere: only the
+	// non-walking personas run without it (D13a).
+	Nav *Nav
 	// CraftBoard, when set, is the crafting order board of the process
 	// (warehouse lease, orders, ledger), shared by every bot of the process:
 	// the brain reads it on its tick and gives back what it holds when it
@@ -224,6 +228,11 @@ type Brain struct {
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
 	metrics *botmetrics.Bot
+	// walk walks the bot on checked segments (BrainConfig.Nav).
+	walk walker
+	// doors reports the doors the bot sees to the door table, nil without
+	// one.
+	doors *DoorReporter
 }
 
 // logoutState is a logout run inside the loop.
@@ -269,6 +278,13 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	}
 	if cfg.link != nil {
 		b.mail = cfg.link.mail
+	}
+	b.walk = newWalker(cfg.Nav)
+	if cfg.Nav != nil {
+		w.SetGround(cfg.Nav.Engine)
+		if cfg.Nav.Doors != nil {
+			b.doors = NewDoorReporter(cfg.Nav.Doors)
+		}
 	}
 	return b
 }
@@ -342,6 +358,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 	self := b.world.Self.ObjectID
 	for _, ev := range batch {
 		b.meterEvent(ev, now)
+		b.observeWalk(ev, now)
+		if b.doors != nil {
+			b.doors.Observe(ev)
+		}
 		b.world.Apply(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
@@ -706,6 +726,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	if a.kind == b.orders.reply.kind {
 		b.orders.reply = Action{}
 	}
+	b.walk.sent(a, now)
 	b.tradeSent(a, now)
 	b.train.sent(a, now)
 	b.trip.sent(a, now)

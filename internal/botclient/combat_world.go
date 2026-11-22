@@ -63,6 +63,7 @@ func (w *World) applyAttack(e Attack, now time.Time) {
 		*m = m.resample(now, e.Pos)
 	}
 	if e.AttackerID == w.Self.ObjectID {
+		w.Self.swingEnd = now.Add(swingTime(w.Self.PAtkSpd))
 		return
 	}
 	for _, h := range e.Hits {
@@ -111,3 +112,17 @@ func (w *World) applySkillList(e SkillList) {
 		w.Skills[s.ID] = s
 	}
 }
+
+// swingTime is how long a melee swing at attack speed pAtkSpd lasts: the
+// server's formulas.TimeBetweenAttacks, max(100, 500000/pAtkSpd) ms
+// (attack/controller.go). An attack speed not known yet (no UserInfo) takes
+// slowSwing, longer than any usual swing.
+func swingTime(pAtkSpd int32) time.Duration {
+	if pAtkSpd <= 0 {
+		return slowSwing
+	}
+	return max(100*time.Millisecond, 500*time.Second/time.Duration(pAtkSpd))
+}
+
+// slowSwing is the swing of an unknown attack speed: 500000/200 ms.
+const slowSwing = 2500 * time.Millisecond

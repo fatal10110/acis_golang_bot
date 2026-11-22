@@ -71,13 +71,20 @@ func (r *Registry) SetBreaker(open bool) { r.breakerOpen.Store(open) }
 // QueueDepth counts the events the brain drained at each wakeup, and
 // WakeLagMicros how late each timed wakeup ran after it was due.
 type Snapshot struct {
-	At            time.Time         `json:"at"`
-	Bots          int               `json:"bots"`
-	Events        uint64            `json:"events"`
-	Sent          uint64            `json:"sent"`
-	Paced         uint64            `json:"paced"`
-	Reconnects    uint64            `json:"reconnects"`
-	Aborts        uint64            `json:"aborts"`
+	At         time.Time `json:"at"`
+	Bots       int       `json:"bots"`
+	Events     uint64    `json:"events"`
+	Sent       uint64    `json:"sent"`
+	Paced      uint64    `json:"paced"`
+	Reconnects uint64    `json:"reconnects"`
+	Aborts     uint64    `json:"aborts"`
+	// NavBlocked, NavDesync and NavDoorReplan count the server's answers
+	// to the walker's own segments that differ from its check: a blocked
+	// stop, another destination, and another destination on a segment
+	// across a door (docs/navigation.md, "Server answers to its own moves").
+	NavBlocked    uint64            `json:"nav_blocked_total"`
+	NavDesync     uint64            `json:"nav_desync_total"`
+	NavDoorReplan uint64            `json:"nav_door_replan_total"`
 	BreakerOpen   bool              `json:"breaker_open"`
 	Rules         map[string]uint64 `json:"rules"`
 	QueueDepth    HistogramSnapshot `json:"queue_depth"`
@@ -97,6 +104,9 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.Paced += b.paced.Load()
 		s.Reconnects += b.reconnects.Load()
 		s.Aborts += b.aborts.Load()
+		s.NavBlocked += b.navBlocked.Load()
+		s.NavDesync += b.navDesync.Load()
+		s.NavDoorReplan += b.navDoorReplan.Load()
 		for i := range b.rules {
 			hits[i] += b.rules[i].Load()
 		}
@@ -139,6 +149,7 @@ func (r *Registry) Run(ctx context.Context, tick <-chan time.Time) {
 type Bot struct {
 	reg                                     *Registry
 	events, sent, paced, reconnects, aborts atomic.Uint64
+	navBlocked, navDesync, navDoorReplan    atomic.Uint64
 	rules                                   []atomic.Uint64 // indexed like reg.rules
 	depth                                   Histogram
 	wakeLag                                 Histogram // microseconds
@@ -199,5 +210,28 @@ func (b *Bot) Reconnect() {
 func (b *Bot) Abort() {
 	if b != nil {
 		b.aborts.Add(1)
+	}
+}
+
+// NavBlocked records a blocked stop of one of the walker's segments.
+func (b *Bot) NavBlocked() {
+	if b != nil {
+		b.navBlocked.Add(1)
+	}
+}
+
+// NavDesync records a segment the server answered with another destination.
+func (b *Bot) NavDesync() {
+	if b != nil {
+		b.navDesync.Add(1)
+	}
+}
+
+// NavDoorReplan records a segment across a door the server answered with
+// another destination: the door state differed, which never counts toward
+// unreachable.
+func (b *Bot) NavDoorReplan() {
+	if b != nil {
+		b.navDoorReplan.Add(1)
 	}
 }

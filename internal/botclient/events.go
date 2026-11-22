@@ -82,6 +82,12 @@ type UserInfo struct {
 	// multiplier, as the client computes them.
 	RunSpeed, WalkSpeed int32
 	Running             bool
+	// PAtkSpd is the attack speed a melee swing lasts by: about
+	// 500000/PAtkSpd ms (the server's formulas.TimeBetweenAttacks).
+	PAtkSpd int32
+	// CollisionHeight is the character's; the server adds it to the Z of
+	// every ground click (network/movement.go moveLivePlayer).
+	CollisionHeight float64
 	// StoreType is the private store mode (the server's operate type; 0
 	// for none).
 	StoreType uint8

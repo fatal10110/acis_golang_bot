@@ -247,6 +247,8 @@ type Action struct {
 	item int32
 	// skill is the skill a cast casts.
 	skill int32
+	// walk marks a move that is one of the walker's segments (goTo).
+	walk bool
 }
 
 type actionKind uint8
