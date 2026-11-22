@@ -45,6 +45,9 @@ type npcVisit struct {
 	// in sight, standFor where the NPC stood when it was chosen; both zero
 	// before one.
 	stand, standFor Point
+	// walkAt is where the walk toward the spawn heads (walkTo): at, or the
+	// bot's ground nearest it; zero before the walk.
+	walkAt Point
 }
 
 // active reports whether a visit runs.
@@ -161,9 +164,17 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 // walkTo is the next segment of visit v toward its NPC's spawn, through the
 // walker. It reports false once the bot is within visitArrive of the spawn
 // and visitLook passed since the bot appeared (the NPC is not there), or
-// when the walk there is unreachable.
+// when the walk there is unreachable. A spawn off the bot's ground, in a
+// pocket of a stall or counter no walk enters, is walked to by the bot's
+// ground nearest it within talkReach, where a click still talks (#253).
 func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
-	a, st := b.goTo(v.at, visitArrive, walkPlace, now)
+	if v.walkAt == (Point{}) {
+		v.walkAt = v.at
+		if g, ok := b.walker().groundNear(b.world.Self.Position(now), v.at, talkReach); ok && horizontal2(g, v.at) > walkSlop*walkSlop {
+			v.walkAt = g
+		}
+	}
+	a, st := b.goTo(v.walkAt, visitArrive, walkPlace, now)
 	switch st {
 	case walkUnreachable:
 		return Action{}, false
@@ -179,6 +190,11 @@ func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 // visitTalkRange is how far from an NPC a visit's stand point may lie: the
 // server's interaction distance (network/targeting.go interactionDistance).
 const visitTalkRange = 150
+
+// talkReach is how far from an NPC a stand point with no open line to it
+// may lie: the server's interaction distance less the walk's slop at the
+// stand point and the approach's last position update.
+const talkReach = visitTalkRange - 2*walkSlop
 
 // closeIn is the next segment toward a stand point of visit v's NPC in
 // sight. A click on the NPC walks the bot straight at it, never routed, and
@@ -202,7 +218,12 @@ func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, boo
 		w.talkFailed = false
 		st, ok := w.standPoint(from, to, visitTalkRange, nav.StandLine, 0)
 		if !ok {
-			return Action{}, false
+			// No open line: a click from within talkReach ends blocked
+			// short of the NPC and still talks; one from further away
+			// ends blocked across the town (#253).
+			if st, ok = w.talkPoint(from, to, talkReach); !ok {
+				return Action{}, false
+			}
 		}
 		v.stand, v.standFor = st, to
 	}

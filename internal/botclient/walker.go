@@ -759,6 +759,60 @@ func (w *walker) standPoint(from, at Point, rng float64, mode nav.StandMode, hei
 	return fromLoc(l), true
 }
 
+// talkPoint is where the bot at from clicks an NPC at at when no stand
+// point offers an open straight line to it (an NPC behind its counter or in
+// its stall): the click's straight approach ends blocked, and a blocked stop
+// within the server's interaction distance still talks (targeting.go
+// onPlayerArrivedBlocked). It is from itself when that lies within rng of
+// the NPC (in 3D, on its floor), else groundNear.
+func (w *walker) talkPoint(from, at Point, rng float64) (Point, bool) {
+	if w.nav == nil {
+		return Point{}, false
+	}
+	fl := toLoc(from)
+	if c, ok := w.plan.Locate(fl); ok {
+		if fl.Z = int(c.Z); within3(fromLoc(fl), at, rng) {
+			return fromLoc(fl), true
+		}
+	}
+	return w.groundNear(from, at, rng)
+}
+
+// groundNear is the walkable cell of the bot's SCC nearest at within rng
+// (in 3D, on its floor), the bot standing at from: at's own cell when at
+// lies on that ground.
+func (w *walker) groundNear(from, at Point, rng float64) (Point, bool) {
+	if w.nav == nil {
+		return Point{}, false
+	}
+	fc, ok := w.plan.Locate(toLoc(from))
+	if !ok {
+		return Point{}, false
+	}
+	h := w.nav.Hier
+	cur, err := h.Locate(fc, &w.pins)
+	if err != nil {
+		return Point{}, false
+	}
+	w.pins.Current = cur
+	c, ok := w.plan.NearestWalkableFunc(toLoc(at), rng, func(c nav.Cell) bool {
+		if !within3(fromLoc(c.World()), at, rng) {
+			return false
+		}
+		m, err := h.Locate(c, &w.pins)
+		return err == nil && m.Kind() != nav.Isolated && (cur.Kind() != nav.InSCC || h.SameSCC(cur, m))
+	})
+	if !ok {
+		return Point{}, false
+	}
+	return fromLoc(c.World()), true
+}
+
+// within3 reports whether p lies within rng of at in 3D.
+func within3(p, at Point, rng float64) bool {
+	return math.Hypot(math.Sqrt(float64(horizontal2(p, at))), float64(p.Z-at.Z)) <= rng
+}
+
 func toLoc(p Point) location.Location {
 	return location.Location{X: int(p.X), Y: int(p.Y), Z: int(p.Z)}
 }
