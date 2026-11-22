@@ -57,23 +57,34 @@ func newChatLog() *chatLog {
 
 // allows reports whether a reply to sender at now stays within p's caps.
 func (l *chatLog) allows(sender int32, now time.Time, p *ChatPolicy) bool {
-	l.expire(now, p)
-	if len(l.sent) >= p.Total {
+	if l.full(now, p) {
 		return false
 	}
 	last, ok := l.to[sender]
 	return !ok || now.Sub(last) >= p.PerSender
 }
 
+// full reports whether p's Total is reached at now.
+func (l *chatLog) full(now time.Time, p *ChatPolicy) bool {
+	l.expire(now, p)
+	return len(l.sent) >= p.Total
+}
+
 // record counts a reply to sender sent at now.
 func (l *chatLog) record(sender int32, now time.Time, p *ChatPolicy) {
-	l.expire(now, p)
 	for id, at := range l.to {
 		if now.Sub(at) >= p.PerSender {
 			delete(l.to, id)
 		}
 	}
 	l.to[sender] = now
+	l.count(now, p)
+}
+
+// count counts a line the bot said at now in p's Total: a reply, a craft
+// order's answer or announcement.
+func (l *chatLog) count(now time.Time, p *ChatPolicy) {
+	l.expire(now, p)
 	l.sent = append(l.sent, now)
 }
 

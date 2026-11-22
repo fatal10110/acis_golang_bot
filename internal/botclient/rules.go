@@ -294,6 +294,10 @@ const (
 	actRecipeBook
 	actCraft
 	actStoreBuy
+	// actAnswer is a craft order's answer (a whisper or a clan chat line),
+	// actAnnounce a finished GM order's clan chat line (craftorder.go).
+	actAnswer
+	actAnnounce
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -315,7 +319,8 @@ const (
 // confirmed, cancelAt). A pickup click (Action) has none: lootRetry spaces
 // the clicks on one item. A whisper (Say2 Tell), a GM command's reply or a
 // chat reply, has no server gate either (chat.go chatTell): it keeps the
-// chat gate. DlgAnswer and RequestUserCommand have none either: an offer is
+// chat gate, as does a clan chat line (Say2 Clan: no server gate either,
+// network/chat.go chatClan). DlgAnswer and RequestUserCommand have none either: an offer is
 // answered once, and escapeRetry spaces a repeated /unstuck. The sell store
 // packets (RequestPrivateStoreManageSell, SetPrivateStoreMsgSell,
 // SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
@@ -329,7 +334,7 @@ func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
-	case actSay, actTell, actChatReply:
+	case actSay, actTell, actChatReply, actAnswer, actAnnounce:
 		return gateChat
 	case actBypass:
 		return gateBypass
@@ -399,7 +404,8 @@ type rule struct {
 // holds a bot a GM told to stay, ahead of looting and every errand that
 // would move it. "chat" whispers a delayed reply to a player's whisper
 // (ChatPolicy), after the flee and heal rules so it never delays one; a
-// due reply waits for them. "leader" handles a dead or lost leader ahead of
+// due reply waits for them. "announce" says the queued craft order lines
+// (answers and finished GM orders) in turn, after "chat". "leader" handles a dead or lost leader ahead of
 // following it. The shot toggle is set-up, not a plan rule: it runs once
 // per shot template carried, ahead of the fight it serves, after the flee
 // rules so it never delays one. "buffpotion" drinks the build's buff potion
@@ -413,6 +419,7 @@ var playRules = []rule{
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"chat", (*Brain).ruleChat},
+	{"announce", (*Brain).ruleAnnounce},
 	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},

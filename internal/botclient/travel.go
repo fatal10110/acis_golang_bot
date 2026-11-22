@@ -69,6 +69,11 @@ type TravelMap struct {
 	// included: what the crafter plans with and deposits (Persona.Crafter).
 	recipes    map[int32]datapack.Recipe
 	craftItems map[int32]bool
+	// products maps the lower-case name of each recipe product to its
+	// template, and itemNames each such product to its name: what a craft
+	// order names (indexProductNames).
+	products  map[string]int32
+	itemNames map[int32]string
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -110,6 +115,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.EtcItems)
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
+	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue

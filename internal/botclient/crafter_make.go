@@ -197,10 +197,13 @@ func (b *Brain) noteDelivering(rows []WarehouseRow, now time.Time) {
 	}
 }
 
-// deliverOrders closes the crafted orders the deposit carried.
-func (b *Brain) deliverOrders() {
+// deliverOrders closes the crafted orders the deposit carried at now and
+// announces the GM orders among them.
+func (b *Brain) deliverOrders(now time.Time) {
 	for id, n := range b.craft.delivering {
-		b.cfg.CraftBoard.Deliver(b.world.Clan.ID, id, b.world.Self.ObjectID, n)
+		if o, ok := b.cfg.CraftBoard.Deliver(b.world.Clan.ID, id, b.world.Self.ObjectID, n); ok {
+			b.announceOrder(o, now)
+		}
 	}
 }
 
