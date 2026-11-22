@@ -33,6 +33,16 @@ type scratch struct {
 	// Stand points.
 	stands []standCandidate
 	layers [block.MaxLayers]block.Cell
+	// Hierarchy: the condensation walk, the abstract search and the
+	// refined cell path across clusters.
+	sccSeen   []uint32
+	sccGen    uint32
+	sccQueue  []int32
+	anodes    []anode
+	aindex    map[int32]int32
+	apath     []int32
+	waypoints []Cell
+	path      []Cell
 }
 
 var scratchPool = sync.Pool{New: func() any {
@@ -40,6 +50,7 @@ var scratchPool = sync.Pool{New: func() any {
 		index:    make(map[Cell]int32),
 		corridor: make(map[[2]int]corridorCell),
 		seen:     make(map[chainState]struct{}),
+		aindex:   make(map[int32]int32),
 	}
 }}
 

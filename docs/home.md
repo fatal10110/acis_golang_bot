@@ -101,6 +101,18 @@ bots geopack -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengi
 `geopack` prints the region-list hash; it matches the server's region list when both
 `geoengine.properties` copies list the same regions. Pack again after every geodata update.
 
+Then build the nav cache, the hierarchy walking personas plan on (docs/navigation.md, section 2).
+It reads the geodata cache and `doors.xml`, never the region files, and takes about ten minutes on
+half the cores. The nav cache is keyed by the geodata cache, `doors.xml` and the build parameters:
+build it again after every `geopack` or `doors.xml` update, since walking personas refuse a stale
+or missing one at start and the bots never rebuild it themselves.
+
+```bash
+bots navbuild -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengine.properties \
+  -geodata-cache ~/acis-datapack/geodata.cache -datapack ~/acis-datapack/xml \
+  -out ~/acis-datapack/nav.cache
+```
+
 To check the bot's geodata answers against the server's engine (before a change to
 `internal/geo`), write the parity query file and run the server's `geoprobe` on it from the
 server checkout. `geoprobe` decodes every region onto its heap (several GB), so run it only for
