@@ -500,18 +500,26 @@ Items no spawned NPC sells (Greater Healing Potion, graded shots, gear) are boug
 stores.
 
 - **Who:** a player whose `CharInfo` store type is sell (1). Package stores (8) are skipped.
-- **Never** a karma or flagged owner: the second `Action` on one attacks it.
+- **Never** a karma or flagged owner, nor one whose last `RelationChanged` says the bot may attack it
+  without force (a PvP zone, an arena, a duel): the second `Action` on one attacks it.
+- **What:** the use meter's trip targets carried under `Supply.Refill` percent, up to the target,
+  wherever they are sold, then the gear goal's pieces (`gearGoal`). Rows are taken cheapest first,
+  each tier above its budget floor (section 5); of the gear, one piece per slot, and a set piece only
+  with the rest of the set still paid.
 - **Flow:** walk to within trade interaction distance (150) of the owner, then send `Action` twice
   on it: the first selects, the second opens `PrivateStoreListSell`. There is no list-open packet
   of its own. Then send `RequestPrivateStoreBuy` for wanted rows at no more than
-  `Market.MaxOverReference` (default 1.5 × reference price, and never above an NPC's price for the
-  same item), within the budget. Each row carries the listed price exactly; any other price, or a
+  `Market.MaxOverReference` percent of the reference price (default 150, 1.5 ×; 0 buys nothing from
+  stores), and never above a spawned NPC's base price for the same item, within the budget. The
+  bot walks to within 100, inside the server's interact approach offset, so the server walks it
+  nowhere. Each row carries the listed price exactly; any other price, or a
   row sold out meanwhile, refuses the whole request in silence. Only adena, weight and slots
   refusals answer, with a `SystemMessage`. The purchase shows as one `SystemMessage` per row and
   then the batched `InventoryUpdate`; the list is not sent again. Packets, layouts and refusals:
   "Buying from a private sell store" above.
 - **Pacing:** walks and clicks through the frame pacer, one buy request per list window, and a
-  per-seller cool-down (default 10 min).
+  per-seller cool-down (`Market.Cooldown`, default 10 min) after every visit, a refused or
+  unanswered one included. The errand is rule 9 errand "market", ahead of "shop".
 - This also gives the bot merchants buyers, so trading runs both ways.
 
 ### 9. Class change and dyes (D15)

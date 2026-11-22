@@ -181,6 +181,9 @@ type Brain struct {
 	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
+	// market is the visit to another player's sell store (rule 9 errand
+	// "market").
+	market marketVisit
 	// meter is what the bot spends of each consumable in combat
 	// (Persona.Supply).
 	meter useMeter
@@ -459,6 +462,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.heard(e, now)
 		case BuyList, SellList, ItemList, InventoryUpdate:
 			b.shopEvent(ev)
+			b.marketEvent(ev)
 			b.warehouseEvent(ev, now)
 		case WarehouseDepositList, WarehouseWithdrawList:
 			b.warehouseEvent(ev, now)
@@ -466,6 +470,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.recipeEvent(ev, now)
 		case PrivateStoreManageListSell:
 			b.storeManageList(e)
+		case PrivateStoreListSell:
+			b.marketEvent(ev)
 		}
 		if b.reactAt.IsZero() && salient(ev, self) {
 			b.reactAt = now.Add(b.reactDelay())
@@ -705,6 +711,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.shop.sent(a, now)
+	b.market.sent(a, now)
 	b.wh.sent(a, now)
 	b.learn.sent(a, &b.world.Recipes, now)
 	b.gear.sent(a, now)

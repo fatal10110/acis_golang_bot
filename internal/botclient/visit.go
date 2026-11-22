@@ -120,7 +120,7 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 	}
 	// Unanswered: the server refused in silence; click again.
 	v.waitUntil = time.Time{}
-	if a, ok := b.closeIn(v, now); ok {
+	if a, ok := b.closeIn(v, visitArrive, now); ok {
 		return a, true
 	}
 	if v.clicks >= visitClicks {
@@ -200,18 +200,18 @@ func (b *Brain) npcAt(npcID int32, at Point, now time.Time) bool {
 }
 
 // closeIn is the next leg toward visit v's NPC, in sight but farther than
-// visitArrive: the server walks the approach of a click straight at the
+// arrive (visitArrive for an NPC): the server walks the approach of a click straight at the
 // NPC and ends it at the first wall (PlayerMove.moveToPawn; acis_golang
 // move.CreatureMove.MoveToPawnWithPathOutcome), while it routes a ground
 // move around obstacles. It reports false once the bot is close enough to
 // click, or when spotStalls legs in a row got nowhere: the clicks are tried
 // then. Legs go through the frame pacer like the spot rule's.
-func (b *Brain) closeIn(v *npcVisit, now time.Time) (Action, bool) {
+func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	from := s.Position(now)
 	to := b.world.object(v.obj).Position(now)
 	d := math.Sqrt(float64(dist2(from, to)))
-	if d <= visitArrive || v.stalls >= spotStalls {
+	if d <= arrive || v.stalls >= spotStalls {
 		return Action{}, false
 	}
 	if s.Moving(now) {

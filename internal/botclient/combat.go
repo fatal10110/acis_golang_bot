@@ -77,8 +77,12 @@ type SkillCoolTime struct{ Timers []SkillTimer }
 // UserInfo to the player alone (player/character_pvpflag.go).
 type RelationChanged struct {
 	ObjectID int32
-	Karma    int32
-	PvPFlag  uint8
+	// AutoAttackable is set when the bot may attack the player without
+	// force (Character.AttackableWithoutForceBy): flagged, with karma, in a
+	// PvP zone or arena with the bot, or in its duel.
+	AutoAttackable bool
+	Karma          int32
+	PvPFlag        uint8
 }
 
 func (Attack) event()             {}
@@ -184,7 +188,8 @@ func decodeSkillCoolTime(r *wire.Reader) Event {
 // karma, PvP flag (serverpackets/relationchanged.go).
 func decodeRelationChanged(r *wire.Reader) Event {
 	e := RelationChanged{ObjectID: r.ReadInt32()}
-	r.Skip(2 * 4) // relation, auto-attackable
+	r.Skip(4) // relation
+	e.AutoAttackable = r.ReadInt32() != 0
 	e.Karma = r.ReadInt32()
 	e.PvPFlag = uint8(r.ReadInt32())
 	return e
