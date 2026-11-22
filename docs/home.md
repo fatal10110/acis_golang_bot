@@ -101,6 +101,18 @@ bots geopack -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengi
 `geopack` prints the region-list hash; it matches the server's region list when both
 `geoengine.properties` copies list the same regions. Pack again after every geodata update.
 
+To check the bot's geodata answers against the server's engine (before a change to
+`internal/geo`), write the parity query file and run the server's `geoprobe` on it from the
+server checkout. `geoprobe` decodes every region onto its heap (several GB), so run it only for
+this check; it must report `agreement=100.00%`.
+
+```bash
+bots geoquery -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengine.properties \
+  -geodata-cache ~/acis-datapack/geodata.cache -out /tmp/geoquery.dump
+go run ./cmd/geoprobe -expected-dump /tmp/geoquery.dump \
+  -config ~/acis-datapack/geoengine.properties -geodata ~/acis-datapack/geodata
+```
+
 ## 4. Swarm
 
 ```bash

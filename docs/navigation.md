@@ -142,20 +142,64 @@ the server engine:
 - with `-expected-dump` it reads a dump written by anyone (`datadiff.ReadDump`), turns each record
   id such as `canmove:x,y,z->x,y,z` back into a query (`probe.ParseQuery`), and reports how far
   its answers agree (`cmd/geoprobe/main.go:186-212`, `geo/probe/query.go:41-82`);
-- it has no walk (step-chain) category;
+- it has no walk (step-chain) category (asked in fatal10110/acis_golang#5435);
 - it loads every region file in the directory onto the heap, ignoring the region list, and loads
   no doors (`geo/geodata/load.go:87-105`);
 - without `-geodata`, it takes the directory from the config's `GeoDataPath`, which is relative
   to the server checkout (`main.go:80-87`).
 
-Points N0 must settle, by test:
+**Settled by N0** (#152), from the server code and two checks: the live scenario
+`TestLiveNavFacts` (`internal/e2e/navfacts_live_test.go`) and the `bots geoquery` parity file.
 
-- which layer the target's head-level Z selects under a bridge or in a multi-storey building, and
-  so the Z the bot sends;
-- the longest tick elapsed time on the live server (`Emax`), which bounds the step lengths the
-  walker's exact check covers (section 3). It is measured live, because
-  `geoprobe` cannot answer walks;
-- that a `pathDirect` walk's `MoveToLocation` echoes the requested X and Y exactly.
+- **Head-level Z on multilayer, and the Z the bot sends.**
+  - The click's target Z is the packet's Z plus the collision height (`network/movement.go:42`).
+    The packet's origin is used only for the 9900 check (`:51-56`).
+  - A direct walk keeps that head-level Z as its destination and broadcasts it
+    (`creature.go:917-938`). Each update first lands the destination on
+    `Height(dest.X, dest.Y, dest.Z)` (`creature.go:1368-1370`), and the finish does the same
+    (`:1180-1182`). Steps on the way land on the layer nearest `origin.Z + 2*CellHeight`, that is
+    16 above the current Z (`:1397`).
+  - `Height` is the nearest layer. Of two equally near layers the lower one wins
+    (`geo/engine/engine.go:133-135`, `geo/block/multilayer.go:46-75`; the bot's copy has the same
+    rule).
+  - So the bot sends the floor Z of the layer it wants. With collision height `c`, the server lands
+    on layer `L` whenever the next layer above is at least `2c` higher: `L + c` is then no farther
+    from `L` than from the upper layer, and ties go down. Layers below never compete. A layer with
+    another layer less than `2c` above it cannot be clicked to, because the server takes the upper
+    one. The planner must not put a click target on such a cell.
+  - Pinned in CI by `TestEvaluate` (`internal/geo/geoquery`) on the synthetic bridge: the deck is at
+    160 and the ground at 0. At head level 24 each layer picks itself, 80 ties to the ground and 81
+    picks the deck. Pinned against the server by the parity file's multilayer heights: at head
+    offsets 0 to 48 above every layer, and at each layer pair's midpoint and one either side.
+- **`Emax`, measured live.**
+  - Method: the server sends no per-update position, but it answers a `ValidatePosition` that
+    drifts more than the move speed from its own position with `ValidateLocation`. That reply
+    carries the position as of the last update (`network/movement.go:185-198`,
+    `creature.go` `Position`).
+  - On a straight direct run, that position is the origin plus speed × (last update − move start).
+    So a reply's age (the time since the last update) is the time since the click less
+    distance / speed, plus a constant per leg. The speed is fitted per leg.
+  - Polls at random phases see ages from about 0 up to the longest gap between updates, so
+    `Emax ≈ max − min` age per leg. The scenario polls at most 5 times a second through the client
+    pacer; the reported position sits two run speeds off the leg, so it is corrected and never
+    adopted.
+  - Value (2026-11-22, live server, two runs of 551 polls over 6 legs of 2000 at run speed 104,
+    about 110 s each): max 115 and 141 ms; age p50 54 and 65, p90 93 and 106, p99 106 and 122 ms.
+    Network jitter between polls is included, so these are upper estimates at that load.
+  - The elapsed time is not capped (`playerPassed`, `creature.go:408-415`). The ticker owes its
+    runs at a fixed interval and runs missed ones at once (`task/positionupdates.go:12, 35-37`). So
+    a server stall gives one long step followed by near-zero ones, and `Emax` grows with load.
+  - The walker (N5) takes `Lmax` = run speed × `Emax`, with a margin over the measured 141 ms. The
+    residual is measured by `nav_blocked_total` (Risks).
+- **`pathDirect` echo: confirmed.**
+  - A direct walk's `MoveToLocation` carries the clicked X and Y exactly, and Z = clicked Z +
+    collision height. There is no rounding, clamping or `ValidLocation` trimming on the direct
+    path, and the frame writes the destination verbatim
+    (`network/serverpackets/movetolocation.go:13-22`).
+  - Its origin is the server's position, caught up to the request (`catchUpLocked`).
+  - Live: 6 of 6 direct legs echoed X and Y exactly, with Z +23 (the GM's collision height).
+  - The desync signal stands: a destination X, Y other than the click, on a segment the bot's own
+    `CanMove` passes.
 
 ## Design
 
@@ -524,9 +568,20 @@ geodata is committed here, and CI never sees it.**
 - **Parity with the server** (local, against the owner's geodata). The checks below run before
   each PR that touches `internal/geo`, and the PR body reports the result as a "Geodata parity
   (local)" line, with the same rules as e2e scenarios:
-  - N0 adds `bots geoquery`, which writes a curated query file in `geoprobe`'s dump format with
-    the bot's answers. It covers short-range `canMove` near walls, ledges both ways, multilayer
-    heights, `los` and random short pairs.
+  - N0 adds `bots geoquery -geodata <dir> -geoengine <geoengine.properties> -geodata-cache
+    <cache> -out <file> [-seed 1] [-n 1000]`. It writes a curated query file in `geoprobe`'s dump
+    format with the bot's answers (`internal/geo/geoquery`). The sites are sampled from the listed
+    regions, `-n` of each kind:
+    - walls: `canmove` both ways across a closed NSWE side and along it, and `los` across;
+    - ledges: a neighbour at least 32 higher or lower; `canmove` and `validlocation` both ways, and
+      the height on both sides;
+    - multilayer cells: the heights described in "Settled by N0", plus `canmove` and
+      `validlocation` from each layer;
+    - random short pairs within 8 cells: `canmove`, `los` and `validlocation`.
+
+    A query that reaches an unlisted region is dropped, because `geoprobe` loads every region file
+    while the bot answers an unlisted region as open ground. The path category is not used. N0's
+    run (seed 1, `-n 2000`) wrote 78,432 queries, and `geoprobe` reported `agreement=100.00%`.
   - `geoprobe -expected-dump <file> -config <geoengine.properties> -geodata
     <datapack>/data/geodata` runs from the server checkout without editing it, and must report
     full agreement. This is the server's own tool: it decodes every region onto its heap (several
@@ -534,7 +589,7 @@ geodata is committed here, and CI never sees it.**
   - Doors and the step chain are not covered by `geoprobe`. A live e2e scenario covers both: it
     walks segments along walls, ledges and stairs, and compares every blocked stop with what
     `WalkSteps` predicts for the tick timings seen. A server issue asks `geoprobe` for a walk
-    category, which would add an offline oracle.
+    category, which would add an offline oracle (fatal10110/acis_golang#5435).
 - **`nav`** (CI, synthetic regions):
   - every returned path passes both checks of the Goal, segment by segment;
   - the open-corridor test accepts open ground and rejects corridors with a multilayer cell,
@@ -620,7 +675,8 @@ heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore d
   `Emax` inside exact stretches, is measured by `nav_blocked_total` against its e2e threshold.
 - **Stale or misordered door state** (a door no bot sees, changed by a script or timer, or events
   from lagging sessions): it shows up as door replans, never as plain unreachable.
-- **Multilayer Z** (bridges, buildings): settled in N0, then pinned by the parity queries.
+- **Multilayer Z** (bridges, buildings): settled in N0 (the floor Z goes out; a layer less than
+  twice the collision height under another is no click target), pinned by the parity queries.
 - **Memory and CPU on the owner's machine**: one shared mapped engine and nav cache, both read in
   place; searches bounded by a budget and run synchronously, at most one full route per decision;
   offline builds. The thresholds above are acceptance criteria.

@@ -46,8 +46,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return runUI(ctx, args[1:], stderr)
 		case "geopack":
 			return runGeopack(args[1:], stdout, stderr)
+		case "geoquery":
+			return runGeoquery(args[1:], stdout, stderr)
 		}
 	}
-	fmt.Fprintln(stderr, "usage: bots accounts|swarm|ui|geopack [flags]")
+	fmt.Fprintln(stderr, "usage: bots accounts|swarm|ui|geopack|geoquery [flags]")
 	return 2
 }
