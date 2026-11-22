@@ -41,13 +41,16 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	// Augmentation block: 14 uint16, right hand, 12 uint16, left hand,
 	// 4 uint16.
 	r.Skip(14*2 + 4 + 12*2 + 4 + 4*2)
-	r.Skip(10 * 4) // pAtk, atkSpd, pDef, evasion, accuracy, crit, mAtk, castSpd, atkSpd, mDef
+	r.Skip(4) // pAtk
+	u.PAtkSpd = r.ReadInt32()
+	r.Skip(8 * 4) // pDef, evasion, accuracy, crit, mAtk, castSpd, atkSpd, mDef
 	u.PvPFlag, u.Karma = r.ReadInt32(), r.ReadInt32()
 	run, walk := r.ReadInt32(), r.ReadInt32()
 	r.Skip(6 * 4) // swim run, swim walk, 0, 0, fly run, fly walk
 	mult := r.ReadFloat64()
 	u.RunSpeed, u.WalkSpeed = effectiveSpeed(run, mult), effectiveSpeed(walk, mult)
-	r.Skip(3 * 8) // attack speed multiplier, collision radius and height
+	r.Skip(2 * 8) // attack speed multiplier, collision radius
+	u.CollisionHeight = r.ReadFloat64()
 	r.Skip(3 * 4) // hair style, hair color, face
 	u.IsGM = r.ReadInt32() != 0
 	r.ReadString() // title

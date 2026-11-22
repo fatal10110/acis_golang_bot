@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
@@ -75,7 +76,7 @@ func TestNavbuildWritesTheNavCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	water, err := loadWater(xml)
+	water, err := botclient.LoadWater(xml)
 	if err != nil {
 		t.Fatal(err)
 	}

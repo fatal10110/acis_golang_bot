@@ -3,55 +3,56 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 )
 
-// TestVisitClosesIn walks a bot toward an NPC in sight but far off with
-// ground moves, which the server routes around walls, before it clicks: the
-// approach of a click goes straight and ends at the first wall.
+// TestVisitClosesIn walks a bot toward an NPC in sight but far off: a click
+// on the NPC walks the bot straight at it, never routed, and a closed line
+// ends that walk at the first wall (creature.go, MoveToPawn), so the bot
+// first walks through the walker to a stand point within talking range with
+// an open line, and clicks only from there.
 func TestVisitClosesIn(t *testing.T) {
+	npc := Point{X: 5000}
 	inSight := func(b *Brain) {
-		b.world.Apply(NPCInfo{ObjectID: guideObj, NPCID: 30598, Pos: Point{X: 5000}}, t0)
+		b.world.Apply(NPCInfo{ObjectID: guideObj, NPCID: 30598, Pos: npc}, t0)
 	}
-	leg := encodeMoveBackwardToLocation(Point{X: 3000}, Point{})
 	tests := []struct {
 		name  string
 		steps []trainerStep
 	}{
 		{
-			name: "far off: legs, then clicks once close",
+			name: "far off: a walk to a stand point, then clicks once close",
 			steps: []trainerStep{
-				{name: "leg", at: time.Second, setup: inSight, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
-				{name: "walking", at: 2 * time.Second, setup: func(b *Brain) {
-					b.world.Self.move = motion{from: Point{}, to: Point{X: 3000}, start: at(time.Second), speed: 100}
-				}, wantRule: "newbie"},
+				{name: "segment", at: time.Second, setup: inSight, wantRule: "newbie", wantKind: actMove},
 				{
-					name: "last leg", at: 40 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 3000}) },
-					wantRule: "newbie", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 5000}, Point{X: 3000}),
+					name: "last segment", at: 40 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 4000}) },
+					wantRule: "newbie", wantKind: actMove, wantTo: npc, wantWithin: visitTalkRange,
 				},
 				{
-					name: "close: select", at: 70 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 4750}) },
+					name: "close: select", at: 70 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{X: 4880}) },
 					wantRule: "newbie", wantKind: actSelect,
 				},
 			},
 		},
 		{
-			name: "legs get nowhere: clicks",
+			// The NPC stands inside the walled pocket: no stand point the
+			// bot reaches, so the clicks are tried, bounded by visitClicks.
+			name: "no stand point holds: clicks",
 			steps: []trainerStep{
-				{name: "leg 1", at: time.Second, setup: inSight, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
-				{name: "leg 2", at: 2 * time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
-				{name: "leg 3", at: 3 * time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
-				{name: "select", at: 4 * time.Second, wantRule: "newbie", wantKind: actSelect},
+				{name: "select", at: time.Second, setup: func(b *Brain) {
+					b.world.Apply(NPCInfo{ObjectID: guideObj, NPCID: 30598, Pos: scenePoint(geotest.PocketInside, 0, 0)}, t0)
+					b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30598: {scenePoint(geotest.PocketInside, 0, 0)}}}
+				}, wantRule: "newbie", wantKind: actSelect},
 			},
 		},
 		{
-			name: "out of sight after stalled legs: a leg to the spawn",
+			name: "out of sight on the way: a walk to the spawn",
 			steps: []trainerStep{
-				{name: "leg 1", at: time.Second, setup: inSight, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
-				{name: "leg 2", at: 2 * time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
-				{name: "leg 3", at: 3 * time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: leg},
+				{name: "segment", at: time.Second, setup: inSight, wantRule: "newbie", wantKind: actMove},
 				{
-					name: "gone: leg to the spawn", at: 4 * time.Second, events: []Event{DeleteObject{ObjectID: guideObj}},
-					wantRule: "newbie", wantKind: actMove, wantPayload: leg,
+					name: "gone: a segment toward the spawn", at: 4 * time.Second, events: []Event{DeleteObject{ObjectID: guideObj}},
+					wantRule: "newbie", wantKind: actMove,
 				},
 			},
 		},

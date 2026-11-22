@@ -73,13 +73,43 @@ type SelfState struct {
 	Sitting, InCombat, Dead, Running bool
 	RunSpeed, WalkSpeed, Heading     int32
 	move                             motion
-	// castEnd is when the bot's own cast in progress hits.
-	castEnd time.Time
+	// castEnd is when the bot's own cast in progress hits, swingEnd when
+	// its own melee swing in progress ends.
+	castEnd, swingEnd time.Time
+	// PAtkSpd and CollisionHeight are UserInfo's.
+	PAtkSpd         int32
+	CollisionHeight float64
+	// ground, when set, is the geodata the bot's own walk is simulated on
+	// (World.SetGround).
+	ground groundHeight
 }
 
 // Position is where the character is at now, dead reckoned along its
-// current move.
-func (s *SelfState) Position(now time.Time) Point { return s.move.at(now) }
+// current move. With geodata (World.SetGround) the height on the way is the
+// floor under the dead-reckoned point, as the server's step chain lands each
+// step on the layer nearest the walker, instead of a straight line between
+// the move's two heights; the end of a move keeps the server's height.
+func (s *SelfState) Position(now time.Time) Point {
+	p := s.move.at(now)
+	if s.ground != nil && p != s.move.to {
+		p.Z = int32(s.ground.Height(int(p.X), int(p.Y), int(p.Z)))
+	}
+	return p
+}
+
+// groundHeight is the geodata height lookup the bot's walk is simulated on;
+// *engine.Engine is the real one.
+type groundHeight interface {
+	Height(worldX, worldY, worldZ int) int16
+}
+
+// SetGround simulates the bot's own walk on g (see SelfState.Position).
+func (w *World) SetGround(g groundHeight) { w.Self.ground = g }
+
+// Swinging reports whether the bot's own melee swing is in progress at now:
+// the server defers a move asked during it (network/movement.go
+// tryLiveMoveTo) and answers ActionFailed.
+func (s *SelfState) Swinging(now time.Time) bool { return now.Before(s.swingEnd) }
 
 // Moving reports whether the character is still on its way at now.
 func (s *SelfState) Moving(now time.Time) bool { return s.move.moving(now) }
@@ -416,6 +446,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.Load, s.MaxLoad = e.Load, e.MaxLoad
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
+	s.PAtkSpd, s.CollisionHeight = e.PAtkSpd, e.CollisionHeight
 	s.Heading = e.Heading
 	w.applyClanID(e.ClanID)
 	s.move = s.move.resample(now, e.Pos)

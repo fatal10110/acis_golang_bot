@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 )
 
 // newTrainerWalkBrain is a level 15 human mystic at the origin with no
@@ -18,7 +20,7 @@ func newTrainerWalkBrain(t *testing.T) *Brain {
 	s := &b.world.Self
 	s.ClassID, s.Level, s.SP = classHumanMystic, 15, 5000
 	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {{X: 5000}}}}
-	return b
+	return walkOn(t, b)
 }
 
 // TestBrainTrainerWalk walks a bot due a visit to its trainer's spawn and
@@ -26,13 +28,13 @@ func newTrainerWalkBrain(t *testing.T) *Brain {
 func TestBrainTrainerWalk(t *testing.T) {
 	b := newTrainerWalkBrain(t)
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "leg to the trainer's spawn", at: time.Second, wantRule: "train", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 3000}, Point{})},
+		{name: "a segment toward the trainer's spawn", at: time.Second, wantRule: "train", wantKind: actMove},
 		{name: "walking", at: 2 * time.Second, setup: func(b *Brain) {
 			b.world.Self.move = motion{from: Point{}, to: Point{X: 3000}, start: at(time.Second), speed: 100}
 		}, wantRule: "train"},
 		{
 			name: "trainer in sight: select", at: 40 * time.Second,
-			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 3000}) },
+			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 4800}) },
 			events:   []Event{NPCInfo{ObjectID: trainerObj, NPCID: 30022, Pos: Point{X: 5000}}},
 			wantRule: "train", wantKind: actSelect,
 		},
@@ -83,15 +85,14 @@ func TestTrainerWalkDue(t *testing.T) {
 	}
 }
 
-// TestTrainerWalkGivesUp checks a walk that finds no trainer leaves the
-// template alone, one that gets nowhere stops the walks until the next
-// level, and one the bot was teleported away from is dropped.
+// TestTrainerWalkGivesUp checks a walk that finds no trainer, or no route
+// to its spawn, leaves the template alone, and one the bot was teleported
+// away from is dropped.
 func TestTrainerWalkGivesUp(t *testing.T) {
 	tests := []struct {
 		name      string
 		steps     []trainerStep
 		wantShun  bool
-		wantStuck bool // no walk before the next level
 		wantAfter bool // a walk runs after the steps
 	}{
 		{
@@ -103,14 +104,15 @@ func TestTrainerWalkGivesUp(t *testing.T) {
 			wantShun: true,
 		},
 		{
-			name: "legs move the bot no closer",
+			// The spawn lies inside the walled pocket: no route there.
+			name: "spawn walled off",
 			steps: []trainerStep{
-				{name: "leg 1", at: time.Second, wantRule: "train", wantKind: actMove},
-				{name: "leg 2", at: 2 * time.Second, wantRule: "train", wantKind: actMove},
-				{name: "leg 3", at: 3 * time.Second, wantRule: "train", wantKind: actMove},
-				{name: "stalled", at: 4 * time.Second, setup: func(b *Brain) { b.world.Self.move = stopAt(Point{Y: 200}) }},
+				{name: "unreachable", at: time.Second, setup: func(b *Brain) {
+					b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {scenePoint(geotest.PocketInside, 0, 0)}}}
+					b.persona.TrainerReach = 1 << 20
+				}},
 			},
-			wantStuck: true,
+			wantShun: true,
 		},
 		{
 			name: "teleported out of reach",
@@ -124,9 +126,9 @@ func TestTrainerWalkGivesUp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTrainerWalkBrain(t)
 			runTrainerSteps(t, b, tt.steps)
-			if b.train.walk.active() != tt.wantAfter || b.train.walkShunned[30022].IsZero() == tt.wantShun || (b.train.stuckLevel != 0) != tt.wantStuck {
-				t.Fatalf("walk %+v shunned %v stuck at level %d, want walk %v shunned %v stuck %v",
-					b.train.walk, b.train.walkShunned, b.train.stuckLevel, tt.wantAfter, tt.wantShun, tt.wantStuck)
+			if b.train.walk.active() != tt.wantAfter || b.train.walkShunned[30022].IsZero() == tt.wantShun {
+				t.Fatalf("walk %+v shunned %v, want walk %v shunned %v",
+					b.train.walk, b.train.walkShunned, tt.wantAfter, tt.wantShun)
 			}
 		})
 	}

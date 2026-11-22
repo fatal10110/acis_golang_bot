@@ -60,8 +60,8 @@ func TestLiveMysticStart(t *testing.T) {
 	until(t, wctx, f.name+" done with its trainer errand", func() string {
 		s := f.bot.Status()
 		echoes, _, casts := f.echoes(seen)
-		state := fmt.Sprintf("rule %q at %v (%.0f from the trainers), %d moves, %d refused in place, %d /unstuck casts",
-			s.Rule, s.Position, dist(s.Position, tiTrainers), moves(), echoes, casts)
+		state := fmt.Sprintf("rule %q at %v (%.0f from the trainers), %d moves, %d refused in place, %d /unstuck casts, walk %q",
+			s.Rule, s.Position, dist(s.Position, tiTrainers), moves(), echoes, casts, s.Walk)
 		if time.Since(logged) >= 10*time.Second {
 			logged = time.Now()
 			t.Logf("%s after %v: %s", f.name, time.Since(start).Round(time.Second), state)

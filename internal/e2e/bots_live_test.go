@@ -38,6 +38,7 @@ type botSetup struct {
 // it.
 func runBotWith(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *botclient.Bot {
 	t.Helper()
+	walkOn := tg.Nav(t) // before Hold: a skip there would keep the slot
 	release, err := tg.Hold(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +50,7 @@ func runBotWith(t *testing.T, ctx context.Context, tg *Target, account string, s
 	if setup.persona != nil {
 		persona = setup.persona
 	}
-	brain := botclient.BrainConfig{Persona: persona(), Metrics: setup.metrics}
+	brain := botclient.BrainConfig{Persona: persona(), Metrics: setup.metrics, Nav: walkOn}
 	if setup.brain != nil {
 		setup.brain(&brain)
 	}

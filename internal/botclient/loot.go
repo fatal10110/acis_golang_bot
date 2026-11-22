@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
 // Loot timing. lootRetry and dropRetry bound how often the bot repeats a
@@ -162,6 +163,10 @@ type lootQueue struct {
 	fought map[int32]time.Time
 	// dropped is when the bot last asked to drop each carried stack.
 	dropped map[int32]time.Time
+	// stand is the stand point the bot walks to before it picks up item
+	// standFor (0 for none).
+	stand    Point
+	standFor int32
 }
 
 // next drops the head items that left the ground or ran out of time and
@@ -176,6 +181,14 @@ func (l *lootQueue) next(ground map[int32]GroundItem, timeout time.Duration, now
 		l.started, l.clicked = time.Time{}, time.Time{}
 	}
 	return 0
+}
+
+// skip gives up the item at the head of the queue: no walk reaches it.
+func (l *lootQueue) skip() {
+	if len(l.items) > 0 {
+		l.items = l.items[1:]
+	}
+	l.started, l.clicked, l.standFor = time.Time{}, time.Time{}, 0
 }
 
 // sent records a pickup or a drop that went out at now.
@@ -313,8 +326,35 @@ func (b *Brain) ruleLoot(now time.Time) (Action, bool) {
 	if !l.clicked.IsZero() && (s.Moving(now) || now.Sub(l.clicked) < lootRetry) {
 		return Action{}, true
 	}
-	return pickupAction(id, s.Position(now)), true
+	from, at := s.Position(now), b.world.Ground[id].Pos
+	w := b.walker()
+	if w.pickUpOpen(from, at) {
+		return pickupAction(id, from), true
+	}
+	// Closed from here: walk to a stand point the pick-up holds from first;
+	// an item with none the bot reaches is given up.
+	if l.standFor != id {
+		st, ok := w.standPoint(from, at, pickupStand, nav.StandPickUp, 0)
+		if !ok {
+			l.skip()
+			return Action{}, false
+		}
+		l.stand, l.standFor = st, id
+	}
+	a, st := b.goTo(l.stand, walkSlop, walkPickup, now)
+	if st != walkWalking {
+		// Unreachable, or there and the pick-up still closed (the item
+		// lies off the stand point's floor): give it up.
+		l.skip()
+		return Action{}, false
+	}
+	return a, true
 }
+
+// pickupStand is how far from an item a pick-up stand point may lie:
+// inside the server's 36-unit pick-up range (network/dispatch.go), so the
+// pick-up from there needs no walk.
+const pickupStand = 30
 
 // dropJunk drops the junk stack with the lowest object id the bot carries,
 // unequipped and not asked to drop within dropRetry, when its weight is at

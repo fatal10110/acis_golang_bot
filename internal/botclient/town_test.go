@@ -40,7 +40,7 @@ func newTownBrain(t *testing.T, adena int32) *Brain {
 	b, _ := newTestBrain(t, p)
 	b.cfg.Travel = townTravelMap()
 	b.world.Inventory.Items = map[int32]Item{1: {ObjectID: 1, TemplateID: adenaID, Count: adena}}
-	return b
+	return walkOn(t, b)
 }
 
 func TestTownPersona(t *testing.T) {
@@ -74,7 +74,7 @@ func TestBrainTownHop(t *testing.T) {
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "first decision starts the idle spell", at: time.Second},
 		{name: "idle", at: 60 * time.Second},
-		{name: "hop due: leg to the gatekeeper", at: 61 * time.Second, wantRule: "travel", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 2000}, Point{})},
+		{name: "hop due: leg to the gatekeeper", at: 61 * time.Second, wantRule: "travel", wantKind: actMove},
 		{
 			name: "gatekeeper in sight: select", at: 62 * time.Second,
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1900}) },
@@ -120,12 +120,6 @@ func TestPlanHop(t *testing.T) {
 		{name: "no travel map", adena: 5000, setup: func(b *Brain) { b.cfg.Travel = nil }, wantGK: -1},
 		{name: "gatekeeper beyond reach", adena: 5000, setup: func(b *Brain) { b.persona.Town.Reach = 1999 }, wantGK: -1},
 		{name: "gatekeeper shunned", adena: 5000, setup: func(b *Brain) { b.trip.shunned = map[int]time.Time{0: due.Add(time.Hour)} }, wantGK: -1},
-		{name: "walk got nowhere", adena: 5000, setup: func(b *Brain) { b.trip.stuckUntil = due.Add(time.Second) }, wantGK: -1},
-		{name: "walk got nowhere, gatekeeper in sight", adena: 5000, setup: func(b *Brain) {
-			b.trip.stuckUntil = due.Add(time.Second)
-			b.world.Apply(NPCInfo{ObjectID: gkObj, NPCID: 30006, Pos: Point{X: 2000}}, t0)
-		}, wantGK: 0, wantDests: []int{2}},
-		{name: "walk got nowhere long ago", adena: 5000, setup: func(b *Brain) { b.trip.stuckUntil = due }, wantGK: 0, wantDests: []int{2}},
 		{name: "nearest gatekeeper", adena: 50000, setup: func(b *Brain) {
 			b.persona.Town.Reach = 100000
 			b.world.Self.move = stopAt(Point{X: 95000})

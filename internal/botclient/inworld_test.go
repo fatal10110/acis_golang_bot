@@ -218,7 +218,7 @@ var (
 		ObjectID: 0x10000001, Name: "bot7", Pos: Point{X: -71000, Y: 258000, Z: -3100}, Heading: 49152,
 		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
 		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000,
-		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, Running: true, StoreType: 3, IsGM: true,
+		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, Running: true, PAtkSpd: 301, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
 		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001,
 	}
 	testCharInfo = CharInfo{

@@ -227,19 +227,19 @@ type trainerVisit struct {
 	shunned map[int32]time.Time
 	// walk is the walk to a trainer's spawn while none is in sight (zero
 	// for none); walkShunned are the trainer templates whose spawn the bot
-	// reached without finding one, until a time. stuckLevel is the bot's
-	// level when a walk last got nowhere, 0 before: no walk starts again
-	// before the next level.
+	// reached without finding one or that no route reaches, until a time.
 	walk        npcVisit
 	walkShunned map[int32]time.Time
-	stuckLevel  int32
+	// near holds the stand point of the trainer in sight the bot walks to
+	// before it clicks (closeIn): its object and stand point only.
+	near npcVisit
 }
 
 // reset ends the visit in progress.
 func (t *trainerVisit) reset() {
 	t.npc, t.step, t.waitUntil, t.clicks = 0, trainTalk, time.Time{}, 0
 	t.offer, t.pending, t.skipped, t.short, t.again = nil, AcquirableSkill{}, nil, 0, false
-	t.walk = npcVisit{}
+	t.walk, t.near = npcVisit{}, npcVisit{}
 }
 
 // finish ends a visit that got the trainer's list as far as it could go at
@@ -315,9 +315,12 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	}
 	o := b.world.object(t.npc)
 	if o == nil || o.Dead {
-		// Out of sight: the visit starts over once a trainer is seen.
+		// Out of sight: the visit starts over in this decision, by the walk
+		// to a spawn when no other trainer is in sight, so the errand runs
+		// on without a gap. The trainer is gone or dead, so startVisit
+		// cannot pick it again.
 		t.reset()
-		return Action{}, false
+		return b.ruleTrain(now)
 	}
 	if !t.waitUntil.IsZero() {
 		if now.Before(t.waitUntil) {
@@ -347,6 +350,14 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 		sk := t.pending
 		return Action{kind: actLearnSkill, payload: encodeSkillRequest(opGameRequestAcquireSkill, sk.ID, sk.Level, acquireSkillUsual)}, true
 	}
+	// The click walks the bot straight at the trainer, never routed: walk
+	// to a stand point with an open line first, as every NPC visit does.
+	if t.near.obj != t.npc {
+		t.near = npcVisit{obj: t.npc}
+	}
+	if a, ok := b.closeIn(&t.near, visitArrive, now); ok {
+		return a, true
+	}
 	if t.clicks >= trainerClicks {
 		t.shun(now)
 		return Action{}, false
@@ -357,6 +368,7 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	if b.world.Target != t.npc {
 		return selectAction(t.npc, s.Position(now)), true
 	}
+	b.walk.talking(o.Position(now), now)
 	return talkAction(t.npc, s.Position(now)), true
 }
 
@@ -401,8 +413,7 @@ func (b *Brain) startVisit(now time.Time) bool {
 func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 	t, m := &b.train, b.cfg.Travel
 	reach := int64(b.persona.TrainerReach) * int64(b.persona.TrainerReach)
-	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 ||
-		(t.stuckLevel != 0 && b.world.Self.Level <= t.stuckLevel) {
+	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 {
 		t.walk = npcVisit{}
 		return false
 	}
@@ -427,17 +438,11 @@ func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 
 // trainerLeg is the next leg of the walk to a trainer's spawn. Arrived
 // with no trainer in sight, the bot leaves that trainer template alone for
-// visitShunFor. Getting nowhere, its sidesteps and /unstuck spent
-// (walkStuck), it walks to no trainer before the next level (#134).
+// visitShunFor, and so with no route there that holds.
 func (b *Brain) trainerLeg(now time.Time) (Action, bool) {
 	t := &b.train
 	if a, ok := b.walkTo(&t.walk, now); ok {
 		return a, true
-	}
-	if b.walkStuck(&t.walk, now) {
-		t.stuckLevel = b.world.Self.Level
-		t.walk = npcVisit{}
-		return Action{}, false
 	}
 	if t.walkShunned == nil {
 		t.walkShunned = make(map[int32]time.Time)

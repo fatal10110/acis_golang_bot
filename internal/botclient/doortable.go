@@ -141,3 +141,47 @@ func (r *DoorReporter) report(id int32, closed bool) {
 	r.seen[id] = closed
 	r.table.Set(int(id), closed)
 }
+
+// Crosses reports whether the segment from a to b passes over a door's
+// footprint, one cell of margin around both: the server's answer to such a
+// segment that differs from the bot's check is a door replan
+// (docs/navigation.md, "Server answers to its own moves"). It reads only
+// what newDoorTable built, so it never blocks.
+func (t *DoorTable) Crosses(a, b Point) bool {
+	ax, ay := engine.GeoX(int(a.X)), engine.GeoY(int(a.Y))
+	bx, by := engine.GeoX(int(b.X)), engine.GeoY(int(b.Y))
+	x0, x1 := min(ax, bx)-1, max(ax, bx)+1
+	y0, y1 := min(ay, by)-1, max(ay, by)+1
+	for _, o := range t.objs {
+		data := o.GeoData()
+		if len(data) == 0 {
+			continue
+		}
+		ox, oy := o.GeoX(), o.GeoY()
+		if ox > x1 || ox+len(data)-1 < x0 || oy > y1 || oy+len(data[0])-1 < y0 {
+			continue
+		}
+		if segmentNearBox(ax, ay, bx, by, ox-1, oy-1, ox+len(data), oy+len(data[0])) {
+			return true
+		}
+	}
+	return false
+}
+
+// segmentNearBox reports whether the segment from (ax, ay) to (bx, by), in
+// cells, touches the box from (x0, y0) to (x1, y1): sampled every half cell.
+func segmentNearBox(ax, ay, bx, by, x0, y0, x1, y1 int) bool {
+	n := 2 * max(abs(bx-ax), abs(by-ay))
+	for i := 0; i <= n; i++ {
+		f := 0.0
+		if n > 0 {
+			f = float64(i) / float64(n)
+		}
+		x := float64(ax) + f*float64(bx-ax)
+		y := float64(ay) + f*float64(by-ay)
+		if x >= float64(x0) && x <= float64(x1) && y >= float64(y0) && y <= float64(y1) {
+			return true
+		}
+	}
+	return false
+}

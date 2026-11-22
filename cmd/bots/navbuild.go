@@ -13,7 +13,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
@@ -69,7 +69,7 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	if err != nil {
 		return err
 	}
-	water, err := loadWater(datapack)
+	water, err := botclient.LoadWater(datapack)
 	if err != nil {
 		return err
 	}
@@ -114,19 +114,4 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	fmt.Fprintf(stdout, "SCCs %d (largest %d nodes), condensation edges %d\n", stats.SCCs, stats.LargestSCC, stats.CondEdges)
 	fmt.Fprintf(stdout, "wrote %s (%.1f MB)\n", out, float64(stats.Bytes)/1e6)
 	return nil
-}
-
-// loadWater reads the datapack's water zones (xmlDir/zones/WaterZone.xml)
-// into the planner's water model, the one a walker builds the same way to
-// open the nav cache (NavKey.WaterHash).
-func loadWater(xmlDir string) (*nav.Water, error) {
-	zones, err := datapack.LoadWaterZones(filepath.Join(xmlDir, "zones", "WaterZone.xml"))
-	if err != nil {
-		return nil, err
-	}
-	boxes := make([]nav.WaterBox, len(zones))
-	for i, z := range zones {
-		boxes[i] = nav.WaterBox{X1: int(z.X1), Y1: int(z.Y1), X2: int(z.X2), Y2: int(z.Y2), MinZ: int(z.MinZ), MaxZ: int(z.MaxZ)}
-	}
-	return nav.NewWater(boxes), nil
 }

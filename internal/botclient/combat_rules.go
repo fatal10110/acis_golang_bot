@@ -138,8 +138,10 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 }
 
 // fight attacks id: select it, then cast the persona's first ready attack
-// skill or click it once for melee, side stepping when stuck. A target out
-// of attempts is blacklisted instead.
+// skill or click it once for melee, side stepping when stuck. Either goes
+// out only while the straight line to id is open, else the bot walks to a
+// stand point first (engageWalk). A target out of attempts is blacklisted
+// instead.
 func (b *Brain) fight(id int32, now time.Time) Action {
 	s := &b.world.Self
 	from := s.Position(now)
@@ -162,12 +164,19 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 			if b.exhausted(id, now) {
 				return Action{}
 			}
+			if a, walk := b.engageWalk(id, true, now); walk {
+				return a
+			}
 			return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, forced), object: id, skill: skill}
 		}
 	}
+	ranged := b.bowEquipped()
 	if b.engaged != id {
 		if b.exhausted(id, now) {
 			return Action{}
+		}
+		if a, walk := b.engageWalk(id, ranged, now); walk {
+			return a
 		}
 		if forced {
 			return Action{kind: actAttack, payload: encodeAttackRequest(id, from), object: id}
@@ -177,6 +186,12 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	if s.Moving(now) {
 		b.progressAt = now
 		return Action{}
+	}
+	// The target moved where the straight line to it is closed: walk to a
+	// new stand point (the move drops the attack; it goes out again from
+	// there).
+	if a, walk := b.engageWalk(id, ranged, now); walk {
+		return a
 	}
 	if now.Sub(b.progressAt) >= stuckAfter {
 		return b.sideStep(id, now)

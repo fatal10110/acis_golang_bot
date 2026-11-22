@@ -92,6 +92,7 @@ func TestRunSwarm(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
+	geo := testGeoArgs(t)
 	tests := []struct {
 		name string
 		ctx  context.Context
@@ -105,7 +106,8 @@ func TestRunSwarm(t *testing.T) {
 		{"bad flag", t.Context(), []string{"-interval", "1s"}, 2, "-interval"},
 		{"help", t.Context(), []string{"-h"}, 0, "-name-marker"},
 		// A signal before any turn of the gate: every bot returns at once.
-		{"signal before the first login", canceled, []string{"-persistent", "-secret-file", good, "-prefix", "bot", "-bots", "3", "-record", filepath.Join(dir, "fx")}, 0, "swarm stopped"},
+		{"signal before the first login", canceled, append([]string{"-persistent", "-secret-file", good, "-prefix", "bot", "-bots", "3", "-record", filepath.Join(dir, "fx")}, geo...), 0, "swarm stopped"},
+		{"walking preset without the navigation", canceled, []string{"-persistent", "-secret-file", good, "-prefix", "bot", "-bots", "3"}, 1, "bots navbuild"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

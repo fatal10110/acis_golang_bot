@@ -113,6 +113,14 @@ bots navbuild -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoeng
   -out ~/acis-datapack/nav.cache
 ```
 
+The walking presets (`support`, `town`, `merchant`) run only on both caches: `bots swarm` refuses
+to start them, and `bots ui` does not offer them, without the run-time flags below. Both commands
+map the caches read-only, log the region-list hash at start, and never rebuild a cache: a missing
+or stale one is an error naming `bots geopack` or `bots navbuild`. `-nav-lru-bytes` bounds the
+process-wide cluster cache of the hierarchy (default 64 MB). The flags are `-geodata`,
+`-geoengine`, `-geodata-cache` and `-nav-cache` (all four, with `-datapack` for `doors.xml`), as in
+the swarm example of section 4.
+
 To check the bot's geodata answers against the server's engine (before a change to
 `internal/geo`), write the parity query file and run the server's `geoprobe` on it from the
 server checkout. `geoprobe` decodes every region onto its heap (several GB), so run it only for
@@ -132,6 +140,8 @@ GOMEMLIMIT=1GiB bots swarm \
   -secret-file ~/.config/acis-bots/secret -prefix hz -bots 50 -persistent \
   -login game.example.org:2106 -allowlisted \
   -datapack ~/acis-datapack/xml \
+  -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengine.properties \
+  -geodata-cache ~/acis-datapack/geodata.cache -nav-cache ~/acis-datapack/nav.cache \
   -metrics 127.0.0.1:6060 \
   -gm-dsn-file ~/.config/acis-bots/gm-dsn
 ```

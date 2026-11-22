@@ -24,6 +24,9 @@ type preset struct {
 	// store makes the bots merchants: they open private stores of their
 	// loot with the store budget.
 	store bool
+	// walks makes the bots walk on the navigation (geoOptions): they
+	// refuse to start without it (D13a).
+	walks bool
 	// class, when set, is the starting class of every character the bots
 	// create; nil draws one.
 	class *botclient.StartingClass
@@ -34,12 +37,12 @@ type preset struct {
 
 // presets is the persona catalog, the -persona names in order.
 var presets = []preset{
-	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true},
-	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona},
-	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true},
+	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true},
+	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
+	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true, walks: true},
 	{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
-		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true,
+		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
 	},
 }
 
@@ -94,6 +97,8 @@ type shared struct {
 	claims *botclient.PartyClaims
 	auth   *botclient.Authority
 	board  *botclient.CraftBoard
+	// nav is the navigation the walking presets walk on.
+	nav *botclient.Nav
 	// storeBudget is a merchant's store budget per session.
 	storeBudget int64
 	// clanInviters are the names a crafter accepts a clan invitation from
@@ -109,6 +114,9 @@ type shared struct {
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
 	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board}
+	if p.walks {
+		cfg.Nav = s.nav
+	}
 	if s.travel != nil {
 		cfg.Persona = s.travel.WithItemIndex(cfg.Persona)
 	}
