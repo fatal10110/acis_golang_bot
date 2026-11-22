@@ -16,6 +16,13 @@ import (
 // RefreshExpertisePenalty). The server equips gear of any grade.
 const expertiseSkill int32 = 239
 
+// expertiseLevels are the levels at which a character gets each Expertise
+// level, D (1) to S (5), for free and on its own: skill 239 at minLvl 20,
+// 40, 52, 61 and 76 in every class file (aCis_datapack/data/xml/classes,
+// e.g. humanFighter.xml; model/actor/player/template.go
+// AutoGetSkillGrants).
+var expertiseLevels = [...]int32{20, 40, 52, 61, 76}
+
 // gearTimeout is how long the bot waits for an item it used to show up
 // equipped (an InventoryUpdate). The server defers the use of a weapon
 // while the bot casts (network/use_item_intention.go), and answers a
@@ -63,6 +70,19 @@ type GearPolicy struct {
 	// does not buy the goal then saves for it and skips the comfort tier.
 	// 0 never saves.
 	SaveFrom int32
+	// SaveBefore is the grade jump's window: within this many levels
+	// below the level of the next Expertise grade the bot may wear
+	// (expertiseLevels, MaxGrade), its shop visits save for that grade's
+	// core pieces (jumpGoal), and buy a piece of the grade it wears only
+	// when the piece is worth it (SaveWorth). 0 never saves for a jump.
+	SaveBefore int32
+	// SaveWorth is what a piece of the bot's grade must be worth to be
+	// bought in the grade jump's window, the gear and set pieces it would
+	// throw away at the jump: its score gain over the pieces it replaces,
+	// as a fraction of their score, at least SaveWorth times its price as
+	// a fraction of the jump goal's (worthBefore). An empty slot's piece is
+	// always worth it. 0 buys every one.
+	SaveWorth float64
 	// ShotFactor multiplies a weapon's score where Equip and Buy compare it
 	// with the wielded one, when the bot can keep it charged and not the
 	// other: a shot source has shots of its grade for the class (a spawned
@@ -87,10 +107,12 @@ type GearPolicy struct {
 // its price, with a shot factor of 2: a soulshot
 // doubles a physical hit's damage (skill/formulas/damage.go), a blessed
 // spiritshot four times the M. Atk a spell's damage takes the root of. A
-// complete armor set is worth 15 % more than its pieces (docs/items.md
-// section 6).
+// complete armor set is worth 15 % more than its pieces. Two levels before
+// a grade jump it saves for the next grade, buying a piece of its grade
+// only when its score gain is at least the share of the jump goal's price
+// it costs (docs/items.md section 6).
 func defaultGearPolicy() GearPolicy {
-	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, ShotFactor: 2, SetBonus: 0.15}
+	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, SaveBefore: 2, SaveWorth: 1, ShotFactor: 2, SetBonus: 0.15}
 }
 
 // GearClass is a build: what classes wear where no worn piece gives a type
@@ -370,6 +392,9 @@ type gearState struct {
 	// refused are the templates the server left unequipped past
 	// gearTimeout: never worn, bought or kept again.
 	refused map[int32]bool
+	// ahead plans one grade above the bot's (gearGrade) while jumpGoal
+	// runs, and is false otherwise.
+	ahead bool
 }
 
 // sent records a gear UseItem that went out at now.
@@ -446,9 +471,13 @@ func (g *gearItem) score(wt StatWeights, it Item) float64 {
 }
 
 // gearGrade is the highest grade the bot wears: its Expertise level,
-// capped by GearPolicy.MaxGrade.
+// capped by GearPolicy.MaxGrade; one more while jumpGoal plans ahead.
 func (b *Brain) gearGrade() int32 {
-	return min(b.world.Skills[expertiseSkill].Level, b.persona.Gear.MaxGrade)
+	g := b.world.Skills[expertiseSkill].Level
+	if b.gear.ahead {
+		g++
+	}
+	return min(g, b.persona.Gear.MaxGrade)
 }
 
 // beats reports whether wearing template id beats what the bot wears, w
@@ -735,7 +764,16 @@ func (b *Brain) gearCandidates() []int32 {
 // only when the adena past the gear tier's floor pays for them or has
 // them within reach (reaches), so it saves for the set; out of reach, the
 // set's slots take single pieces like the others.
+//
+// In the grade jump's window (GearPolicy.SaveBefore) every piece and set
+// must also be worth its price against the jump goal's (worthBefore).
 func (b *Brain) gearPlan() (ids, set []int32) {
+	return b.planGear(b.price(b.jumpGoal()))
+}
+
+// planGear is gearPlan with the grade jump's goal priced at jump; 0 for
+// none, which buys every piece that beats the worn one.
+func (b *Brain) planGear(jump int64) (ids, set []int32) {
 	p := &b.persona.Gear
 	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
 		return nil, nil
@@ -758,7 +796,7 @@ func (b *Brain) gearPlan() (ids, set []int32) {
 		}
 		budget := int64(b.carried(adenaID)) - b.floor(tierGear)
 		price := b.price(missing)
-		planned = price <= budget || b.reaches(price, budget)
+		planned = (price <= budget || b.reaches(price, budget)) && b.worthBefore(missing, &w, jump)
 	}
 	for _, id := range b.cfg.Travel.shopGear {
 		g := b.cfg.Travel.gear[id]
@@ -773,7 +811,7 @@ func (b *Brain) gearPlan() (ids, set []int32) {
 		if held[s] || b.cfg.Travel.cheapest[id] <= 0 {
 			continue
 		}
-		if b.unarmedBow(id) || !b.beats(id, &w) {
+		if b.unarmedBow(id) || !b.beats(id, &w) || !b.worthBefore([]int32{id}, &w, jump) {
 			continue
 		}
 		ids = append(ids, id)
@@ -790,7 +828,9 @@ func (b *Brain) gearPlan() (ids, set []int32) {
 // (docs/items.md section 5): the first of gearCandidates, the best piece
 // of the first slot with one, or every piece of the planned set to buy
 // when that is one of them (gearPlan, docs/items.md section 6); set is that
-// set's pieces to buy. The grade jump refines it (#174).
+// set's pieces to buy. In the grade jump's window it holds only the pieces
+// worth buying before the jump, and a visit saves for the jump goal
+// instead (jumpGoal, buyRows).
 func (b *Brain) gearGoal() (goal, set []int32) {
 	ids, set := b.gearPlan()
 	switch {
@@ -800,4 +840,93 @@ func (b *Brain) gearGoal() (goal, set []int32) {
 		return set, set
 	}
 	return ids[:1], set
+}
+
+// nextGrade is the grade of the next grade jump: the grade above the one
+// the bot wears (gearGrade), when GearPolicy.MaxGrade allows it and the
+// bot's level is within GearPolicy.SaveBefore levels below the level that
+// grade's Expertise comes at (expertiseLevels).
+func (b *Brain) nextGrade() (int32, bool) {
+	p := &b.persona.Gear
+	next := b.gearGrade() + 1
+	if next > p.MaxGrade || int(next) > len(expertiseLevels) {
+		return 0, false
+	}
+	lvl, at := b.world.Self.Level, expertiseLevels[next-1]
+	return next, lvl < at && at-lvl <= p.SaveBefore
+}
+
+// jumpGoal is what a shop visit saves for in the grade jump's window
+// (nextGrade, docs/items.md section 6): the next grade's core pieces the
+// gear errand would buy once it wears that grade (gearPlan one grade
+// ahead), weapon first: the best such weapon; with none, or one carried,
+// the planned set of that grade, else its best body piece and, unless that
+// is full armor, its best legs piece. Nil outside the window. They are
+// saved for, never bought before the jump.
+func (b *Brain) jumpGoal() []int32 {
+	next, ok := b.nextGrade()
+	if !ok || !b.persona.Gear.Buy || !b.persona.Gear.Equip || b.cfg.Travel == nil {
+		return nil
+	}
+	b.gear.ahead = true
+	ids, set := b.planGear(0)
+	b.gear.ahead = false
+	best := func(s gearSlot) (gearItem, int32, bool) {
+		for _, id := range ids {
+			if g := b.cfg.Travel.gear[id]; slotOf(g.part) == s && g.grade == next {
+				return g, id, true
+			}
+		}
+		return gearItem{}, 0, false
+	}
+	if _, id, ok := best(slotWeapon); ok {
+		return []int32{id}
+	}
+	if len(set) > 0 && b.cfg.Travel.gear[set[0]].grade == next {
+		return set
+	}
+	var goal []int32
+	body, id, ok := best(slotBody)
+	if ok {
+		goal = append(goal, id)
+	}
+	if !ok || body.part != partFullArmor {
+		if _, id, ok := best(slotLegs); ok {
+			goal = append(goal, id)
+		}
+	}
+	return goal
+}
+
+// worthBefore reports whether buying ids before the grade jump is worth
+// it against a jump goal costing jump (GearPolicy.SaveWorth): their score
+// gain over what the bot wears in the slots they fill, full armor filling
+// the legs too, is at least SaveWorth times the share of jump their price
+// is, both as fractions, and the shot factor and set bonus left out. True
+// with no goal (jump 0), and for pieces that fill empty slots.
+func (b *Brain) worthBefore(ids []int32, w *worn, jump int64) bool {
+	f := b.persona.Gear.SaveWorth
+	if jump <= 0 || f <= 0 || len(ids) == 0 {
+		return true
+	}
+	wt := b.gearWeights()
+	var slots [slotCount]bool
+	var gain, value float64
+	for _, id := range ids {
+		g := b.cfg.Travel.gear[id]
+		gain += g.score(wt, Item{})
+		slots[slotOf(g.part)] = true
+		if g.part == partFullArmor {
+			slots[slotLegs] = true
+		}
+	}
+	for s, on := range slots {
+		if c, ok := b.gearItem(w[s].TemplateID); on && ok {
+			value += c.score(wt, w[s])
+		}
+	}
+	if value <= 0 {
+		return true
+	}
+	return (gain-value)*float64(jump) >= f*float64(b.price(ids))*value
 }

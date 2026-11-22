@@ -115,14 +115,18 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 // slot, a bow followed by its arrows (arrowRow) unless already wanted, and
 // a piece of the planned set (gearGoal) only with the rest of the set
 // still paid at its cheapest base price, wherever it is sold. The
-// comfort tier is skipped while the visit saves for the gear goal
-// (saves), and tops up nothing an earlier row bought.
+// comfort tier is skipped while the visit saves for the gear goal, or in
+// the grade jump's window for the jump goal (jumpGoal, saves), and tops up
+// nothing an earlier row bought.
 func (b *Brain) buyRows(l BuyList) []buyRow {
 	var spent int64
 	var rows []buyRow
 	var bought [slotCount]bool
 	wants := b.wants(true)
 	goal, set := b.gearGoal()
+	if jump := b.jumpGoal(); len(jump) > 0 {
+		goal = jump
+	}
 	checked, saving := false, false
 	for i := 0; i < len(wants); i++ {
 		w := wants[i]

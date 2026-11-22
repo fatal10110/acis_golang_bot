@@ -459,6 +459,17 @@ grocer lists).
 - **Grade jump.** Within `Gear.SaveBefore` levels (default 2) of the next Expertise level, the bot
   skips same-grade purchases worth less than a persona fraction of their price in score, and saves
   for the next grade's core pieces (weapon, then chest and legs).
+  - The Expertise levels are a bot-owned table (20, 40, 52, 61, 76 for D to S, the class files'
+    skill 239 `minLvl`), capped by `Gear.MaxGrade`.
+  - The jump goal is what the bot would buy once it wears the next grade: the best weapon of that
+    grade, then, once one is carried, its set, else its best body piece and legs. It is saved for
+    through the budget's gear goal (section 5), so a visit with it within reach skips the comfort
+    tier. It is never bought before the jump.
+  - A piece (or set) of the current grade is bought in the window only when its score gain over
+    what it replaces, as a fraction of that score, is at least `Gear.SaveWorth` (default 1) times
+    its price as a fraction of the jump goal's. A Falchion over a Long Sword (+29 % for 38 % of an
+    Artisan's Sword) waits, a Falchion over a Short Sword or a cheap shirt does not. The shot factor
+    and set bonus are left out of that comparison.
 - Kept as they are: bows wait for their arrows, refused templates stay refused, and one UseItem
   waits at a time.
 
