@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
@@ -38,6 +39,9 @@ func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	}
 	return 0
 }
+
+// navbuildHeapLimit is the soft heap limit navbuild runs under.
+const navbuildHeapLimit = 1 << 30
 
 func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, out string, workers int, stdout, stderr io.Writer) error {
 	if geodataDir == "" || geoengine == "" || datapack == "" {
@@ -72,6 +76,12 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	var clusters []nav.ClusterKey
 	for _, r := range settings.Regions {
 		clusters = append(clusters, nav.RegionClusters(r.X, r.Y, nav.DefaultClusterCells)...)
+	}
+	// A soft heap limit: the GC works harder rather than let the build
+	// pass 1 GiB of heap (docs/navigation.md, navbuild peak heap). It
+	// keeps a lower limit the operator set with GOMEMLIMIT.
+	if debug.SetMemoryLimit(-1) > navbuildHeapLimit {
+		debug.SetMemoryLimit(navbuildHeapLimit)
 	}
 	began := time.Now()
 	image, stats, err := nav.Build(ctx, nav.BuildConfig{

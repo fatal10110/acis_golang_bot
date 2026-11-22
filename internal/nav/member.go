@@ -351,11 +351,23 @@ func (h *Hierarchy) compute(ci int) (*clusterResult, error) {
 	r := &clusterResult{cluster: int32(ci), x0: x0, y0: y0, size: size}
 	entryOf := make([]uint32, nLabels)
 	inSCC := map[int32]uint32{}
+	// SCC lists are shared between the entries with the same set: a slope
+	// of one-way cells has thousands of entries and a handful of sets. A
+	// cluster with at most 64 abstract SCCs (nearly all) keys the set by its
+	// one word, without allocating.
 	lists := map[string][2]int32{}
+	small := map[uint64][2]int32{}
 	list := func(bitsOf []uint64) (int32, int32) {
-		key := string(u64Bytes(bitsOf))
-		if l, ok := lists[key]; ok {
-			return l[0], l[1]
+		var key string
+		if len(bitsOf) == 1 {
+			if l, ok := small[bitsOf[0]]; ok {
+				return l[0], l[1]
+			}
+		} else {
+			key = string(u64Bytes(bitsOf))
+			if l, ok := lists[key]; ok {
+				return l[0], l[1]
+			}
 		}
 		off := int32(len(r.sccs))
 		for w, word := range bitsOf {
@@ -366,7 +378,11 @@ func (h *Hierarchy) compute(ci int) (*clusterResult, error) {
 			}
 		}
 		l := [2]int32{off, int32(len(r.sccs)) - off}
-		lists[key] = l
+		if len(bitsOf) == 1 {
+			small[bitsOf[0]] = l
+		} else {
+			lists[key] = l
+		}
 		return l[0], l[1]
 	}
 	for l := range nLabels {

@@ -43,6 +43,9 @@ type localGraph struct {
 	// next holds four entries per cell, in cardinals order: the index of
 	// the neighbour a crossing lands on inside the cluster, or -1.
 	next []int32
+	// edge marks a cell next to a wall, a climb over 48 or a drop, which
+	// costs costClearance more to leave.
+	edge []bool
 	// layers is scratch for AppendLayers.
 	layers [block.MaxLayers]block.Cell
 }
@@ -72,15 +75,58 @@ func (g *localGraph) load(p *Planner, x0, y0, size int) {
 	n := len(g.z)
 	g.colStart[cols] = int32(n)
 	g.next = resize(g.next, 4*n)
+	g.edge = resize(g.edge, n)
 	for i := range n {
 		c := g.cell(int32(i))
+		g.edge[i] = g.nswe[i] != block.AllDirections
 		for d, dir := range cardinals {
 			g.next[4*i+d] = -1
-			if nc, _, ok := p.cross(c, g.nswe[i], dir); ok {
+			nc, _, ok := p.cross(c, g.nswe[i], dir)
+			if !ok || nc.Z < c.Z-block.CellIgnoreHeight {
+				g.edge[i] = true // a wall, a climb over 48, no-go ground or a drop
+			}
+			if ok {
 				g.next[4*i+d] = g.index(nc)
 			}
 		}
 	}
+}
+
+// appendSteps appends the weighted steps out of cell i that stay inside the
+// cluster, with the step costs of Planner.neighbours: cardinals, and a
+// diagonal where both L-shaped detours land on the same cell, plus the
+// clearance extra next to a wall or drop. It skips the diagonal's own
+// CanMove: the costs only rank, and the build makes no CanMove call per
+// cell this way.
+func (g *localGraph) appendSteps(dst []step, i int32) []step {
+	extra := int32(0)
+	if g.edge[i] {
+		extra = costClearance
+	}
+	nx := g.next[4*i : 4*i+4]
+	for _, t := range nx {
+		if t >= 0 {
+			dst = append(dst, step{t, costCardinal + extra})
+		}
+	}
+	for _, xi := range [2]int{0, 1} {
+		for _, yi := range [2]int{2, 3} {
+			a, b := nx[xi], nx[yi]
+			if a < 0 || b < 0 {
+				continue
+			}
+			if via := g.next[4*a+int32(yi)]; via >= 0 && via == g.next[4*b+int32(xi)] {
+				dst = append(dst, step{via, costDiagonal + extra})
+			}
+		}
+	}
+	return dst
+}
+
+// step is one weighted edge of a localGraph.
+type step struct {
+	to   int32
+	cost int32
 }
 
 // cells returns the number of cell layers loaded.

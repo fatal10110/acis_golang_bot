@@ -153,7 +153,8 @@ func BenchmarkOwnerNav(b *testing.B) {
 				}
 			})
 		})
-		h := NewHierarchy(g, e, DefaultMemberCacheBytes)
+		// Warm: an LRU holding every sampled cluster.
+		h := NewHierarchy(g, e, 4<<30)
 		for i := range n {
 			if _, err := h.Locate(from[i], nil); err != nil {
 				b.Fatal(err)
@@ -162,6 +163,8 @@ func BenchmarkOwnerNav(b *testing.B) {
 				b.Fatal(err)
 			}
 		}
+		b.Logf("LRU: %d cluster results, %.1f MB, %.0f KB each on average",
+			len(h.cache.items), float64(h.cache.used)/1e6, float64(h.cache.used)/1e3/float64(max(len(h.cache.items), 1)))
 		b.Run("LocateSameSCCWarm", func(b *testing.B) {
 			measure(b, n, func(i int) {
 				ma, _ := h.Locate(from[i], nil)

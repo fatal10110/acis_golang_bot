@@ -44,10 +44,10 @@ const (
 	edgeRecSize    = 20
 	// noCost marks an edge with no door-free way.
 	noCost = math.MaxUint32
-	// MaxNavCacheBytes bounds the nav cache file a process maps. N3 measured
-	// the owner's 139 regions at well under it (docs/navigation.md,
-	// "Measured by N3"); a larger file is refused as corrupt.
-	MaxNavCacheBytes = 1 << 30
+	// MaxNavCacheBytes bounds the nav cache file a process maps: about four
+	// times the 113 MB N3 measured for the owner's 139 regions
+	// (docs/navigation.md, "Measured by N3"). A larger file is refused.
+	MaxNavCacheBytes = 512 << 20
 )
 
 var navCRC = crc32.MakeTable(crc32.Castagnoli)

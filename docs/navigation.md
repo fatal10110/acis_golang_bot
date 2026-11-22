@@ -418,10 +418,19 @@ server's pathfinder.
   detours open, so a cardinal path always joins the same two cells: leaving diagonals out changes
   no reachability, only the ranking costs a little. For the same reason the cluster-local Tarjan
   in `Locate` reads cardinal crossings only, which keeps it free of `CanMove` calls.
-- **A node is a run on one side of a border**: neighbouring border cells (cells a crossing leaves
-  from or lands on) in the same cluster-local SCC, its representative the run's middle cell. Each
-  node's cells are mutually reachable inside its cluster, which is what keeps the membership rule
-  exact; the crossing between two runs is an edge of its own.
+- **A node is a run on one side of a border**: border cells (cells a crossing leaves from or lands
+  on) of one cluster-local SCC, at most 16 positions apart, its representative the run's middle
+  cell. Each node's cells are mutually reachable inside its cluster, which is what keeps the
+  membership rule exact; the crossing between two runs is an edge of its own.
+- **Two build phases.** First, per cluster, the entrances and which nodes reach which inside it
+  (one cycle per local SCC, plus the transitive reduction between local SCCs). That is enough to
+  label the abstract SCCs exactly. Second, per cluster, costs by Dijkstra, and only between nodes
+  of one abstract SCC: those are the only edges a route or distance search follows, and the
+  condensation carries the rest. An edge whose shortest path runs through another node's
+  representative is dropped, since it is the sum of two kept edges (no distance changes). Edges
+  where a door lies are kept, so their door-free costs stay per pair.
+- **Ranking costs** use the cardinal steps and the diagonals whose two L-shaped detours land on the
+  same cell, with the clearance extra. The build skips the diagonal's own `CanMove`.
 - **Doors-open reads**: `engine.Static()` is an engine over the same mapped regions with no
   dynamic object. `navbuild` and `Locate` read only it.
 - **Door footprints**: a door's fully blocked cells (`NewDoorObject`), on the layers from its floor
@@ -437,7 +446,24 @@ server's pathfinder.
 **Measured by N3** on the owner's 139 regions (`bots navbuild` with 2 workers on 4 cores; the
 benchmarks are `BenchmarkOwnerNav`, local only):
 
-MEASURED_TABLE
+| Measure | Target | Measured |
+| --- | --- | --- |
+| `navbuild` wall time | ≤ 15 min | 7 min 27 s |
+| `navbuild` heap | ≤ 1 GB | 1044 MB from the OS under a 1 GiB soft limit; max RSS 1.08 GB, mapped geodata included |
+| entrance nodes | — | 850,612 (largest SCC 332,109); 421,077 SCCs, mostly one-way slope cells |
+| edges | — | 4,257,722: 3,814,436 intra-cluster after pruning (13.2 M before), 443,286 crossings; 648,246 condensation edges |
+| doors | — | 547, 16,069 door refs |
+| nav cache | — | 113.4 MB; `MaxNavCacheBytes` is set to 512 MiB from it |
+| `Locate` cold | p99 ≤ 30 ms | p50 9.5 ms, p99 21-23 ms |
+| `Locate` + `SameSCC` warm | p99 ≤ 1 ms | p99 0.02 ms |
+| abstract distance warm | p99 ≤ 2 ms | p50 0.14 ms, p99 22.9 ms (#209) |
+| 40000-unit route warm | p99 ≤ 10 ms | p50 182 ms, p99 1262 ms (#209) |
+| 40000-unit route cold | p99 ≤ 150 ms | p50 194 ms, p99 1238 ms (#209) |
+| heap per query | ≤ 4 MB | cold `Locate` up to 21.6 MB, route up to 86 MB (#209) |
+
+The cluster-level targets hold. Route time is spent in N2's pull (each candidate gets a full
+corridor test) and in the map-indexed cell and abstract searches. #209 tracks bringing distance,
+route and heap to their targets.
 
 ### 3. `botclient`: door table and walker
 

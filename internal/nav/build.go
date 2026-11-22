@@ -204,11 +204,19 @@ func (b *builder) clusterIndex(k ClusterKey) int {
 	return i
 }
 
+// runGap is the widest gap along a border side that one entrance node
+// spans: border cells of one local SCC at most this many positions apart
+// join one node. Joining them is exact, since they are mutually reachable
+// inside the cluster; it keeps a border broken up by rocks and walls from
+// costing a node, and squared edges, per piece.
+const runGap = 16
+
 // clusterOut is one built cluster, in local node indices.
 type clusterOut struct {
 	nodes      []buildNode
-	reach      [][2]int32 // node pairs joined inside the cluster, transitively reduced
-	edges      []buildEdge
+	reach      [][2]int32  // node pairs joined inside the cluster, transitively reduced
+	edges      []buildEdge // sorted by from, then to
+	edgeDoors  []int32
 	cross      []buildCross
 	crossDoors []int32      // the door sets of the crossings
 	border     []borderCell // sorted by side, pos, z
@@ -221,9 +229,9 @@ type buildNode struct {
 }
 
 type buildEdge struct {
-	from, to   int32
-	open, free uint32
-	doors      []int32
+	from, to       int32
+	open, free     uint32
+	doorOff, doorN int32 // the door set, in clusterOut.edgeDoors
 }
 
 // buildCross is a crossing out of the cluster: from a cell of node from
@@ -312,11 +320,13 @@ type buildScratch struct {
 	wStart  []int32
 	wTo     []int32
 	wCost   []int32
-	edges   []neighbour
+	steps   []step
 	dist    []uint32
 	parent  []int32
 	heap    []distItem
 	isDoor  []bool
+	target  []bool
+	via     []bool
 	doors   []int32
 	// reach edges
 	holders  []int32
@@ -422,7 +432,7 @@ func (b *builder) cluster(s *buildScratch, i int) clusterOut {
 	for lo := 0; lo < len(s.entries); {
 		hi := lo + 1
 		for hi < len(s.entries) && s.entries[hi].side == s.entries[lo].side && s.entries[hi].label == s.entries[lo].label &&
-			s.entries[hi].pos <= s.entries[hi-1].pos+1 {
+			s.entries[hi].pos <= s.entries[hi-1].pos+runGap {
 			hi++
 		}
 		n := int32(len(out.nodes))
@@ -600,12 +610,10 @@ func (b *builder) intraEdges(s *buildScratch, ci int, out *clusterOut, l *linked
 	for i := range int32(n) {
 		s.wStart[i] = int32(len(s.wTo))
 		c := g.cell(i)
-		s.edges = b.p.neighbours(s.edges[:0], c)
-		for _, e := range s.edges {
-			if j := g.index(e.cell); j >= 0 {
-				s.wTo = append(s.wTo, j)
-				s.wCost = append(s.wCost, e.cost)
-			}
+		s.steps = g.appendSteps(s.steps[:0], i)
+		for _, st := range s.steps {
+			s.wTo = append(s.wTo, st.to)
+			s.wCost = append(s.wCost, st.cost)
 		}
 		s.doors = b.doorsAt(s.doors[:0], c)
 		s.isDoor[i] = len(s.doors) > 0
@@ -637,20 +645,26 @@ func (b *builder) intraEdges(s *buildScratch, ci int, out *clusterOut, l *linked
 		b.dijkstra(s, reps[u], targets, false)
 		for _, vv := range grp {
 			v, r := int(vv), reps[vv]
-			if v == u || s.dist[r] == noCost {
+			// An edge whose shortest path runs through another node's
+			// representative is the sum of two edges kept anyway: drop it,
+			// which keeps every distance exact (edge pruning). Kept where a
+			// door lies, so the door-free costs stay per pair.
+			if v == u || s.dist[r] == noCost || !anyDoor && s.via[r] {
 				continue
 			}
 			e := buildEdge{from: int32(u), to: int32(v), open: s.dist[r], free: s.dist[r]}
 			if anyDoor {
 				e.free = free[v]
-				var doors []int32
+				s.doors = s.doors[:0]
 				for c := r; c >= 0; c = s.parent[c] {
 					if s.isDoor[c] {
-						doors = b.doorsAt(doors, g.cell(c))
+						s.doors = b.doorsAt(s.doors, g.cell(c))
 					}
 				}
-				slices.Sort(doors)
-				e.doors = slices.Compact(doors)
+				slices.Sort(s.doors)
+				doors := slices.Compact(s.doors)
+				e.doorOff, e.doorN = int32(len(out.edgeDoors)), int32(len(doors))
+				out.edgeDoors = append(out.edgeDoors, doors...)
 			}
 			out.edges = append(out.edges, e)
 		}
@@ -673,15 +687,28 @@ func (b *builder) dijkstra(s *buildScratch, src int32, targets []int32, noDoors 
 		return
 	}
 	s.dist[src] = 0
+	s.via = fill(s.via, n, false)
 	s.heap = pushDist(s.heap, distItem{0, src})
-	left := len(targets)
+	s.target = resize(s.target, n)
+	left := 0
+	for _, t := range targets {
+		if !s.target[t] {
+			s.target[t] = true
+			left++
+		}
+	}
+	defer func() {
+		for _, t := range targets {
+			s.target[t] = false
+		}
+	}()
 	for len(s.heap) > 0 && left > 0 {
 		var it distItem
 		it, s.heap = popDist(s.heap)
 		if it.d != s.dist[it.v] {
 			continue
 		}
-		if slices.Contains(targets, it.v) {
+		if s.target[it.v] {
 			left--
 		}
 		for k := s.wStart[it.v]; k < s.wStart[it.v+1]; k++ {
@@ -691,6 +718,7 @@ func (b *builder) dijkstra(s *buildScratch, src int32, targets []int32, noDoors 
 			}
 			if d := it.d + uint32(s.wCost[k]); d < s.dist[w] {
 				s.dist[w], s.parent[w] = d, it.v
+				s.via[w] = s.via[it.v] || it.v != src && s.target[it.v]
 				s.heap = pushDist(s.heap, distItem{d, w})
 			}
 		}
@@ -791,6 +819,9 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 			}
 		}
 	}
+	for v := range l.cross {
+		slices.SortFunc(l.cross[v], func(a, c globalEdge) int { return cmp.Compare(a.to, c.to) })
+	}
 	// The crossings and border cells are resolved: free them.
 	for ci := range outs {
 		o := &outs[ci]
@@ -840,36 +871,62 @@ func addEdge(edges *[]globalEdge, e globalEdge) bool {
 	return true
 }
 
+// eachEdge calls fn for every stored edge, in node order and each node's
+// edges by target: the intra-cluster edges and the crossings between two
+// nodes of one abstract SCC.
+func eachEdge(outs []clusterOut, l *linked, fn func(v int, e globalEdge, intra bool)) {
+	for ci := range outs {
+		o := &outs[ci]
+		base := l.base[ci]
+		k := 0
+		for u := range o.nodes {
+			v := base + u
+			cross := l.cross[v]
+			x := 0
+			for {
+				for x < len(cross) && l.scc[cross[x].to] != l.scc[v] {
+					x++
+				}
+				hasIntra := k < len(o.edges) && int(o.edges[k].from) == u
+				switch {
+				case hasIntra && (x >= len(cross) || uint32(base+int(o.edges[k].to)) < cross[x].to):
+					in := &o.edges[k]
+					fn(v, globalEdge{
+						to: uint32(base + int(in.to)), open: in.open, free: in.free,
+						doors: o.edgeDoors[in.doorOff : in.doorOff+in.doorN],
+					}, true)
+					k++
+				case x < len(cross):
+					fn(v, cross[x], false)
+					x++
+				default:
+					x = -1
+				}
+				if x < 0 {
+					break
+				}
+			}
+		}
+	}
+}
+
 // encode writes the nav cache image: every edge between two nodes of one
 // abstract SCC, intra-cluster with its two costs and door set, or a
 // crossing.
 func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildStats) ([]byte, error) {
 	nNodes := l.base[len(outs)]
-	edges := make([][]globalEdge, nNodes)
-	for v := range nNodes {
-		for _, e := range l.cross[v] {
-			if l.scc[e.to] == l.scc[v] {
-				edges[v] = append(edges[v], e)
-				stats.CrossEdges++
-			}
-		}
-	}
-	for ci, o := range outs {
-		for _, e := range o.edges {
-			from := l.base[ci] + int(e.from)
-			if addEdge(&edges[from], globalEdge{to: uint32(l.base[ci] + int(e.to)), open: e.open, free: e.free, doors: e.doors}) {
-				stats.IntraEdges++
-			}
-		}
-	}
+	counts := make([]uint32, nNodes)
 	nEdges, nDoorRefs := 0, 0
-	for i := range edges {
-		slices.SortFunc(edges[i], func(a, c globalEdge) int { return cmp.Compare(a.to, c.to) })
-		nEdges += len(edges[i])
-		for _, e := range edges[i] {
-			nDoorRefs += len(e.doors)
+	eachEdge(outs, l, func(v int, e globalEdge, intra bool) {
+		counts[v]++
+		nEdges++
+		nDoorRefs += len(e.doors)
+		if intra {
+			stats.IntraEdges++
+		} else {
+			stats.CrossEdges++
 		}
-	}
+	})
 	stats.DoorRefs = nDoorRefs
 	nSCC, nCond := l.nSCC, stats.CondEdges
 	cond := l.cond
@@ -896,7 +953,7 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 		img = le.AppendUint32(img, uint32(k.Y))
 		img = le.AppendUint32(img, uint32(base[ci]))
 	}
-	firstEdge := 0
+	firstEdge := uint32(0)
 	for ci, o := range outs {
 		for li, nd := range o.nodes {
 			v := base[ci] + li
@@ -908,28 +965,24 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 			img = le.AppendUint16(img, uint16(nd.pos1))
 			img = le.AppendUint32(img, uint32(ci))
 			img = le.AppendUint32(img, uint32(l.scc[v]))
-			img = le.AppendUint32(img, uint32(firstEdge))
-			firstEdge += len(edges[v])
+			img = le.AppendUint32(img, firstEdge)
+			firstEdge += counts[v]
 		}
 	}
 	firstDoor := 0
-	for v := range edges {
-		for _, e := range edges[v] {
-			img = le.AppendUint32(img, e.to)
-			img = le.AppendUint32(img, e.open)
-			img = le.AppendUint32(img, e.free)
-			img = le.AppendUint32(img, uint32(firstDoor))
-			img = le.AppendUint32(img, uint32(len(e.doors)))
-			firstDoor += len(e.doors)
+	eachEdge(outs, l, func(_ int, e globalEdge, _ bool) {
+		img = le.AppendUint32(img, e.to)
+		img = le.AppendUint32(img, e.open)
+		img = le.AppendUint32(img, e.free)
+		img = le.AppendUint32(img, uint32(firstDoor))
+		img = le.AppendUint32(img, uint32(len(e.doors)))
+		firstDoor += len(e.doors)
+	})
+	eachEdge(outs, l, func(_ int, e globalEdge, _ bool) {
+		for _, d := range e.doors {
+			img = le.AppendUint32(img, uint32(d))
 		}
-	}
-	for v := range edges {
-		for _, e := range edges[v] {
-			for _, d := range e.doors {
-				img = le.AppendUint32(img, uint32(d))
-			}
-		}
-	}
+	})
 	first := 0
 	for _, c := range cond {
 		img = le.AppendUint32(img, uint32(first))
