@@ -234,6 +234,7 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 		wait += time.Duration(b.rng.Int64N(int64(p.CheckJitter) + 1))
 	}
 	c.noteCraftEnd(now, now.Add(wait), ok)
+	b.notePoolGear()
 	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended}
 }
 

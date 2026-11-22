@@ -100,6 +100,12 @@ func TestCrystallizeWant(t *testing.T) {
 			map[int32]int64{czWeapon: 1},
 			1, 0, nil,
 		},
+		{
+			"a +0 beside an enchanted one stays whole",
+			[]WarehouseItem{{ObjectID: 1, TemplateID: czWeapon, Count: 1, Enchant: 3}, {ObjectID: 2, TemplateID: czWeapon, Count: 1}, {ObjectID: 3, TemplateID: czCWeapon, Count: 1}},
+			nil, 2, 0,
+			map[int32]int32{czCWeapon: 1},
+		},
 		{"the weight room", two, nil, 1, 2000, map[int32]int32{czWeapon: 1}},
 		{"the cycle's cap", many, nil, 1, 0, map[int32]int32{czWeapon: crystallizePerCycle}},
 	}
@@ -234,7 +240,7 @@ func TestBrainCrystallizeAnswers(t *testing.T) {
 		}
 		b.decide(t0.Add(time.Second))
 		c := &b.craft
-		if c.fails != 1 || c.phase != craftDeposit || !reflect.DeepEqual(c.req.Deposit, []WarehouseRow{{TemplateID: czWeapon, Count: 2}}) {
+		if c.fails != 1 || c.phase != craftDeposit || !reflect.DeepEqual(c.req.Deposit, bothWhole) {
 			t.Fatalf("fails %d phase %d deposit %+v, want both weapons deposited whole", c.fails, c.phase, c.req.Deposit)
 		}
 	})
@@ -249,11 +255,14 @@ func TestBrainCrystallizeAnswers(t *testing.T) {
 		sendCz(t, b, later, gotOther.ObjectID)
 		b.decide(later.Add(crystallizeTimeout))
 		c := &b.craft
-		if !c.tripped || c.phase != craftDeposit || !reflect.DeepEqual(c.req.Deposit, []WarehouseRow{{TemplateID: czWeapon, Count: 2}}) {
+		if !c.tripped || c.phase != craftDeposit || !reflect.DeepEqual(c.req.Deposit, bothWhole) {
 			t.Fatalf("tripped %v phase %d deposit %+v, want the breaker and both weapons deposited", c.tripped, c.phase, c.req.Deposit)
 		}
 	})
 }
+
+// bothWhole deposits the two withdrawn weapons, never the bot's own spare.
+var bothWhole = []WarehouseRow{{TemplateID: czWeapon, Count: 1, Object: gotWeapon.ObjectID}, {TemplateID: czWeapon, Count: 1, Object: gotOther.ObjectID}}
 
 // sendCz decides and sends the crystallizing of object at now.
 func sendCz(t *testing.T, b *Brain, now time.Time, object int32) {

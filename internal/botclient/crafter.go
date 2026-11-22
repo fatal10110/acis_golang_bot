@@ -512,7 +512,9 @@ func (b *Brain) craftDepositRows(keep map[int32]int64, now time.Time) []Warehous
 			rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(n, int64(1<<31-1)))})
 		}
 	}
-	slices.SortFunc(rows, func(a, b WarehouseRow) int { return cmp.Compare(a.TemplateID, b.TemplateID) })
+	slices.SortFunc(rows, func(a, b WarehouseRow) int {
+		return cmp.Or(cmp.Compare(a.TemplateID, b.TemplateID), cmp.Compare(a.Object, b.Object))
+	})
 	return rows
 }
 
@@ -544,6 +546,7 @@ func (b *Brain) startMake(now time.Time) {
 	c := &b.craft
 	c.phase, c.req, c.deadline = craftMake, WarehouseRequest{}, now.Add(crafterPhaseTimeout)
 	c.chain, c.step, c.done, c.pending, c.replan = 0, 0, 0, false, false
+	b.notePoolGear()
 	b.craftAdvance(now)
 	if _, ok := c.current(); !ok && len(b.crystalTargets()) == 0 {
 		b.finishCraftCycle(now)

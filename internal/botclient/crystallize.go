@@ -89,23 +89,26 @@ func (m *TravelMap) worthCrystallizing(t, level int32) (crystalYield, bool) {
 // level (worthCrystallizing), never the ledger's reserved counts (every
 // member's items and the other crafters' reservations), which it takes
 // from the +0 unaugmented items first since the ledger names no object, at
-// most
-// crystallizePerCycle of them and, when room is positive, no more weight
-// than room.
+// most crystallizePerCycle of them and, when room is positive, no more
+// weight than room. A template the contents also hold enchanted or
+// augmented is left whole: the withdrawal takes a template's items in the
+// list's order, so it could take the one never crystallized.
 func (m *TravelMap) crystallizeWant(contents []WarehouseItem, reserved map[int32]int64, level int32, room int64) map[int32]int32 {
 	if level <= 0 {
 		return nil
 	}
-	plain := make(map[int32]int64)
+	plain, whole := make(map[int32]int64), make(map[int32]bool)
 	for _, it := range contents {
 		if it.Enchant == 0 && it.Augmentation == 0 {
 			plain[it.TemplateID] += int64(it.Count)
+		} else {
+			whole[it.TemplateID] = true
 		}
 	}
 	out := make(map[int32]int32)
 	left, weight := int64(crystallizePerCycle), int64(0)
 	for _, t := range slices.Sorted(maps.Keys(plain)) {
-		if _, ok := m.worthCrystallizing(t, level); !ok {
+		if _, ok := m.worthCrystallizing(t, level); !ok || whole[t] {
 			continue
 		}
 		n := min(plain[t]-reserved[t], left)
@@ -146,9 +149,12 @@ func crystallizeAction(object int32) Action {
 // goroutine.
 type crystalStep struct {
 	// want is the gear the cycle withdraws to crystallize, by template;
-	// own the object ids of what the bot carried before, which it never
+	// pool the object ids of the clan's gear an earlier cycle withdrew and
+	// the bot still carries (CraftBoard.PoolGear); own the object ids of
+	// the rest of what the bot carried before, which it never
 	// crystallizes; tried the objects asked once, never asked again.
 	want  map[int32]int32
+	pool  map[int32]bool
 	own   map[int32]bool
 	tried map[int32]bool
 	// pending is set from a request's send to its answer, sentAt when it
@@ -162,10 +168,18 @@ type crystalStep struct {
 
 // planCrystallize picks the gear of the fresh warehouse list the cycle
 // withdraws to crystallize (crystallizeWant), with the weight guard's room
-// left, and notes what the bot carries now as its own.
+// left, and notes what the bot carries now as its own, less the clan's
+// gear an earlier cycle withdrew (pool), which this one crystallizes or
+// deposits.
 func (b *Brain) planCrystallize() {
 	cz, s := &b.craft.crystal, &b.world.Self
-	*cz = crystalStep{}
+	*cz = crystalStep{pool: b.cfg.CraftBoard.PoolGear(b.world.Clan.ID, s.ObjectID)}
+	cz.own = make(map[int32]bool, len(b.world.Inventory.Items))
+	for _, it := range b.world.Inventory.Items {
+		if !cz.pool[it.ObjectID] {
+			cz.own[it.ObjectID] = true
+		}
+	}
 	var room int64
 	if s.MaxLoad > 0 {
 		if room = int64(s.MaxLoad)*crafterWeightPercent/100 - int64(s.Load); room <= 0 {
@@ -174,13 +188,22 @@ func (b *Brain) planCrystallize() {
 	}
 	reserved := b.cfg.CraftBoard.Reserved(b.world.Clan.ID, b.world.Self.ObjectID)
 	cz.want = b.cfg.Travel.crystallizeWant(b.wh.status.Contents, reserved, b.world.Skills[skillCrystallize].Level, room)
-	if cz.want == nil {
+}
+
+// notePoolGear notes the withdrawn gear the bot carries on the board
+// (CraftBoard.NotePoolGear), so gear a cycle ends without depositing, on a
+// deadline, a refused deposit or a reconnect, is the next cycle's to
+// crystallize or deposit, never the bot's own. Nothing before the cycle's
+// look planned.
+func (b *Brain) notePoolGear() {
+	if b.craft.crystal.own == nil {
 		return
 	}
-	cz.own = make(map[int32]bool, len(b.world.Inventory.Items))
-	for _, it := range b.world.Inventory.Items {
-		cz.own[it.ObjectID] = true
+	var ids []int32
+	for _, it := range b.withdrawnGear() {
+		ids = append(ids, it.ObjectID)
 	}
+	b.cfg.CraftBoard.NotePoolGear(b.world.Clan.ID, b.world.Self.ObjectID, ids)
 }
 
 // rows are the withdrawal rows of the gear to crystallize.
@@ -192,13 +215,17 @@ func (cz *crystalStep) rows() []WarehouseRow {
 	return rows
 }
 
-// withdrawnGear are the carried items the cycle withdrew to crystallize:
-// unequipped, of a wanted template, not the bot's own.
+// withdrawnGear are the carried items withdrawn to crystallize:
+// unequipped, of a wanted template or an earlier cycle's (pool), not the
+// bot's own.
 func (b *Brain) withdrawnGear() []Item {
 	cz := &b.craft.crystal
+	if cz.own == nil {
+		return nil
+	}
 	var out []Item
 	for _, it := range b.world.Inventory.Items {
-		if _, ok := cz.want[it.TemplateID]; ok && !it.Equipped && !cz.own[it.ObjectID] {
+		if _, ok := cz.want[it.TemplateID]; (ok || cz.pool[it.ObjectID]) && !it.Equipped && !cz.own[it.ObjectID] {
 			out = append(out, it)
 		}
 	}
@@ -211,7 +238,7 @@ func (b *Brain) withdrawnGear() []Item {
 // the skill answered too low.
 func (b *Brain) crystalTargets() []Item {
 	cz := &b.craft.crystal
-	if cz.stopped || cz.want == nil {
+	if cz.stopped {
 		return nil
 	}
 	level := b.world.Skills[skillCrystallize].Level
@@ -226,8 +253,8 @@ func (b *Brain) crystalTargets() []Item {
 
 // crystalsDue moves the crystals the cycle's crystallizing will give into
 // the planner's inventory inv: from the wanted gear, out of warehouse, while
-// the look plans (fromWarehouse), else from the withdrawn items still to
-// crystallize, out of inv.
+// the look plans (fromWarehouse), and from the withdrawn items carried
+// still to crystallize, out of inv.
 func (b *Brain) crystalsDue(inv, warehouse map[int32]int64, fromWarehouse bool) {
 	m, cz := b.cfg.Travel, &b.craft.crystal
 	if fromWarehouse && b.craft.phase == craftLook {
@@ -236,7 +263,6 @@ func (b *Brain) crystalsDue(inv, warehouse map[int32]int64, fromWarehouse bool) 
 			inv[y.crystal] += int64(n) * int64(y.count)
 			warehouse[t] = max(warehouse[t]-int64(n), 0)
 		}
-		return
 	}
 	for _, it := range b.crystalTargets() {
 		y := m.crystals[it.TemplateID]
@@ -248,20 +274,55 @@ func (b *Brain) crystalsDue(inv, warehouse map[int32]int64, fromWarehouse bool) 
 }
 
 // crystalLeftovers are the deposit rows of the withdrawn gear not
-// crystallized (enchanted, refused or unanswered), by template, less the
-// crafting stock's own rows (craftDepositRows).
+// crystallized (enchanted, refused or unanswered) nor still to crystallize
+// (crystalTargets), one per object so the bot's own items of a template
+// stay, less the crafting stock's own rows (craftDepositRows).
 func (b *Brain) crystalLeftovers() []WarehouseRow {
-	counts := make(map[int32]int64)
+	due := make(map[int32]bool)
+	for _, it := range b.crystalTargets() {
+		due[it.ObjectID] = true
+	}
+	var rows []WarehouseRow
 	for _, it := range b.withdrawnGear() {
-		if !b.cfg.Travel.craftItems[it.TemplateID] {
-			counts[it.TemplateID] += int64(it.Count)
+		if !b.cfg.Travel.craftItems[it.TemplateID] && !due[it.ObjectID] {
+			rows = append(rows, WarehouseRow{TemplateID: it.TemplateID, Count: it.Count, Object: it.ObjectID})
 		}
 	}
-	rows := make([]WarehouseRow, 0, len(counts))
-	for _, t := range slices.Sorted(maps.Keys(counts)) {
-		rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(counts[t], int64(1<<31-1)))})
-	}
 	return rows
+}
+
+// PoolGear is the object ids of the clan's gear bot withdrew to
+// crystallize and carried when it last noted them (NotePoolGear).
+func (b *CraftBoard) PoolGear(clan, bot int32) map[int32]bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if c, ok := b.clans[clan]; ok {
+		return maps.Clone(c.pool[bot])
+	}
+	return nil
+}
+
+// NotePoolGear sets objects as the clan's gear bot carries withdrawn to
+// crystallize, replacing its last; none clears it.
+func (b *CraftBoard) NotePoolGear(clan, bot int32, objects []int32) {
+	if clan == 0 || bot == 0 {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	c := b.clan(clan)
+	if len(objects) == 0 {
+		delete(c.pool, bot)
+		return
+	}
+	if c.pool == nil {
+		c.pool = make(map[int32]map[int32]bool)
+	}
+	set := make(map[int32]bool, len(objects))
+	for _, o := range objects {
+		set[o] = true
+	}
+	c.pool[bot] = set
 }
 
 // crystallizeNext is the cycle's next crystallizing, ahead of its crafts:
