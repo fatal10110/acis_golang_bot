@@ -337,6 +337,9 @@ type shopVisit struct {
 	// the bot carries too few of its arrows (armedBow): the visit ends
 	// with the next one due at once instead of after shopRetry.
 	armed bool
+	// rounds counts the visits ended and the searches that found no
+	// merchant (startShop): the town preparation gate opens on one.
+	rounds int
 	// shunned are the merchants, by template id, not at their spawn or
 	// whose page had none of the links the bot needed, until a time.
 	shunned map[int32]time.Time
@@ -364,6 +367,7 @@ func (sh *shopVisit) end(now time.Time, shun bool) {
 	}
 	*sh = shopVisit{
 		nextAt: next, shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held,
+		rounds: sh.rounds + 1,
 	}
 }
 
@@ -550,6 +554,7 @@ func (b *Brain) startShop(now time.Time) bool {
 	}
 	if !best.v.active() {
 		sh.nextAt = now.Add(shopRetry)
+		sh.rounds++
 		return false
 	}
 	sh.v, sh.lists, sh.sell = best.v, best.lists, sell

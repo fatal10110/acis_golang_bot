@@ -156,17 +156,22 @@ func (t *supplyTrip) sent(a Action, now time.Time) {
 
 // teleported ends the trip on the bot's own loading-screen teleport: the
 // recall's landing in town, or a teleport of another cause (a restart, a
-// GM) that took it elsewhere.
-func (t *supplyTrip) teleported(now time.Time) {
-	if t.active() {
-		t.end(now)
+// GM) that took it elsewhere. It reports whether that was the recall's
+// landing, an arrival (townArrival): the Scroll of Escape went out
+// (escapeAt). A restart arms the gate through its Revive instead.
+func (t *supplyTrip) teleported(now time.Time) bool {
+	if !t.active() {
+		return false
 	}
+	landed := !t.escapeAt.IsZero()
+	t.end(now)
+	return landed
 }
 
 // walkHome walks the trip to the town nearest where it started walking (the
-// travel map's towns, by their gatekeeper) and ends it on arrival. A town
-// it cannot walk to ends the trip there: the bot farms on and tries again
-// after supplyTripGap.
+// travel map's towns, by their gatekeeper) and ends it on arrival
+// (townArrival). A town it cannot walk to ends the trip there: the bot
+// farms on and tries again after supplyTripGap.
 func (b *Brain) walkHome(now time.Time) (Action, bool) {
 	v := &b.supplyTrip
 	if v.town == (Point{}) {
@@ -182,6 +187,9 @@ func (b *Brain) walkHome(now time.Time) (Action, bool) {
 		return a, true
 	}
 	v.end(now)
+	if st == walkArrived {
+		b.townArrival()
+	}
 	return Action{}, false
 }
 
@@ -286,13 +294,16 @@ func (b *Brain) overloaded() bool {
 }
 
 // shed is the weight a town visit takes off the bot: the junk it sells
-// (ShopPolicy.SellAt). Items it keeps with nowhere to go shed nothing;
-// what the "trip in town" hook hands off joins it with #182.
+// (ShopPolicy.SellAt) and what the trip in town hook hands off
+// (SupplyPolicy.HandOff). Items it keeps with nowhere to go shed nothing.
 func (b *Brain) shed() int64 {
-	if b.persona.Shop.SellAt <= 0 {
-		return 0
-	}
 	var w int64
+	if f := b.persona.Supply.HandOff; f != nil {
+		w = max(f(b.world), 0)
+	}
+	if b.persona.Shop.SellAt <= 0 {
+		return w
+	}
 	for _, it := range b.junk() {
 		w += int64(it.Count) * int64(b.cfg.Travel.weights[it.TemplateID])
 	}

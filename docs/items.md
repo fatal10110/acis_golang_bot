@@ -508,11 +508,21 @@ grocer lists).
   returning bot picks again, as at a level-up.
 - **In town.** Arrival resets `shop.nextAt`, because a miss from the spot would otherwise push the
   first visit up to 5 min out. Then the errands run in the existing order: sell, shop (the budget),
-  gear, trainer, Newbie Guide.
+  gear, trainer, Newbie Guide. The persona's "trip in town" hook is called once per arrival (a
+  scroll landing or a walk that reached the gatekeeper; a walk that found no town, or a teleport
+  of another cause during the trip such as a GM's, is none).
 - **Preparation.** No farmer leaves town for a spot until its supplies meet the trip target, the
   budget has spent all it may, or no spawned merchant within reach sells what is missing. A broke
   bot still goes and farms. The same gate applies after a death and respawn in town and at a fresh
   login in town.
+  - The gate is armed by those events (arrival, `Revive`, login), not by a town radius: the
+    merchant-in-reach test is what makes it a town gate. While armed, the shop errand buys the
+    bot's own supplies up to the trip target, not only under `Supply.Refill` percent; the extra
+    supplies count toward neither.
+  - It opens for good, until armed again, once the targets are met, nothing short is sold in
+    reach (`Shop.Reach`) at a price the supplies tier pays, or the shop errand ends a round (a
+    visit over, so the budget spent what it may, or a search that found no merchant).
+  - It holds only the spot claim; every errand ahead of rule "spot" runs as before.
 - Dependency: walks go through M7 navigation (#151). This lands after N6 (#158).
 
 ### 8. Buying from player stores
