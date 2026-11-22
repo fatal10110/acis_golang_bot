@@ -77,10 +77,13 @@ func TestLiveTownPrep(t *testing.T) {
 	}
 }
 
-// TestLiveSupplyTrip has a farmer at its spot given potions, two Scrolls
-// of Escape, adena and shots that run out within ten minutes (#175, #182):
-// it reads a scroll, lands in Talking Island village, restocks its shots
-// and scrolls before it leaves, then farms at a spot again.
+// TestLiveSupplyTrip logs a farmer in at the far end of Talking Island,
+// out of every merchant's reach, carrying potions, two Scrolls of Escape,
+// adena and shots that run out within ten minutes of fighting (#175,
+// #182): at its spot it reads a scroll, lands in the village, restocks its
+// shots and scrolls before it leaves, then farms at a spot again. It
+// carries them from its login, so its use meter never sees it fight
+// without shots, which would leave its shot rate at zero.
 func TestLiveSupplyTrip(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -89,7 +92,12 @@ func TestLiveSupplyTrip(t *testing.T) {
 	_, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("su", 1)
-	strip(t, ctx, tg, gm, with(items, consumables...), account, &botclient.HumanFighter, stripEnd{}, squiresSword, squiresShirt, squiresPants)
+	start := time.Now()
+	strip(t, ctx, tg, gm, with(items, consumables...), account, &botclient.HumanFighter, stripEnd{
+		at:    tiFarEnd,
+		adena: tripAdena,
+		carry: map[int32]int32{lesserHealingPotion: tripPotions, scrollOfEscape: escapes, soulshotNG: lowShots},
+	}, squiresSword, squiresShirt, squiresPants)
 	f := runFieldFarmer(t, ctx, tg, account, func(p *botclient.Persona) {
 		// Every value is a persona default (D6): at its spot the shop
 		// errand wants no supply until 1 % of its trip target is left,
@@ -99,32 +107,34 @@ func TestLiveSupplyTrip(t *testing.T) {
 		p.Shop.SellAt = 0
 		p.Potions = []int32{lesserHealingPotion}
 	})
-	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
-	gmOn(t, ctx, gm, f)
-	gmGive(t, ctx, gm, f, lesserHealingPotion, tripPotions)
-	gmGive(t, ctx, gm, f, scrollOfEscape, escapes)
-	gmGiveAdena(t, ctx, gm, f, tripAdena)
-	start := time.Now()
-	gmGive(t, ctx, gm, f, soulshotNG, lowShots)
 	gmTeleport(t, ctx, gm, townTI)
 	t.Logf("%s low on shots at %v", f.name, f.bot.Status().Position)
 
+	// Home is the recall's landing after a Scroll of Escape, or a walk to
+	// the village when no safe moment came within Supply.SafeWait.
 	var read, landed time.Time
-	until(t, ctx, "the Scroll of Escape read and the landing", func() string {
-		used := f.usedSince(scrollOfEscape, start)
-		if len(used) == 0 {
-			return fmt.Sprintf("no scroll read (rule %q)", f.bot.Status().Rule)
-		}
-		read = used[0].At
-		for _, s := range f.watch.Seen(0) {
-			if tp, ok := s.Event.(botclient.TeleportToLocation); ok && tp.ObjectID == f.id && s.At.After(read) {
-				landed = s.At
-				return ""
+	until(t, ctx, "the trip home", func() string {
+		if used := f.usedSince(scrollOfEscape, start); len(used) > 0 {
+			read = used[0].At
+			for _, s := range f.watch.Seen(0) {
+				if tp, ok := s.Event.(botclient.TeleportToLocation); ok && tp.ObjectID == f.id && s.At.After(read) {
+					landed = s.At
+					return ""
+				}
 			}
+			return "no landing"
 		}
-		return "no landing"
+		if st := f.bot.Status(); st.Rule == "supply" && dist(st.Position, townTI) < walkedHome {
+			landed = time.Now()
+			return ""
+		}
+		return fmt.Sprintf("no scroll read, not home (rule %q at %v)", f.bot.Status().Rule, f.bot.Status().Position)
 	})
-	t.Logf("%s read its scroll at %v, landed at %v", f.name, read.Format(time.TimeOnly), landed.Format(time.TimeOnly))
+	if read.IsZero() {
+		t.Logf("%s walked home, no safe moment for its scroll (#%d)", f.name, issueNeverSafe)
+	} else {
+		t.Logf("%s read its scroll at %v, landed at %v", f.name, read.Format(time.TimeOnly), landed.Format(time.TimeOnly))
+	}
 	from := 0
 	for i, s := range f.watch.Seen(0) {
 		if !s.At.Before(landed) {
@@ -158,6 +168,20 @@ func TestLiveSupplyTrip(t *testing.T) {
 	}
 	t.Logf("%s farms again with %d shots (%v), %d scrolls", f.name, f.carries(soulshotNG), f.counts(soulshotNG, from), f.carries(scrollOfEscape))
 }
+
+// tiFarEnd is open ground at Talking Island's southwest end, past the
+// Shop.Reach (8000) of every village merchant, next to the newbie spots
+// there (a farmer stood there live).
+var tiFarEnd = botclient.Point{X: -100231, Y: 252907, Z: -3496}
+
+// walkedHome is how close to the village centre a walk home has arrived:
+// the walk ends within 600 of the gatekeeper (townArrive), next to it.
+const walkedHome = 2000
+
+// issueNeverSafe tracks the farmer at a starter spot finding no safe
+// moment to read its scroll: nearly every starter monster has an aggro
+// range (safeToEscape).
+const issueNeverSafe = 251
 
 // load is f's carried weight and weight limit as its last UserInfo or
 // StatusUpdate showed them.

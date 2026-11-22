@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -53,8 +54,9 @@ func TestLiveStoreBuy(t *testing.T) {
 		switch {
 		case len(sentOf(buyer.watch.Sent(), botclient.OpRequestPrivateStoreBuy)) == 0:
 			return fmt.Sprintf("no RequestPrivateStoreBuy (rule %q)", buyer.bot.Status().Rule)
-		case buyer.carries(soulshotNG) < storeShots:
-			return fmt.Sprintf("%d shots", buyer.carries(soulshotNG))
+		case slices.Max(buyer.counts(soulshotNG, from)) < storeShots:
+			// Its auto use charges one as soon as they come.
+			return fmt.Sprintf("shots %v", buyer.counts(soulshotNG, from))
 		}
 		return ""
 	})
@@ -70,7 +72,7 @@ func TestLiveStoreBuy(t *testing.T) {
 	if paid := spent[0] - spent[len(spent)-1]; paid != storeShots*storeShotPrice {
 		t.Errorf("%s paid %d adena (%v), want %d", buyer.name, paid, spent, storeShots*storeShotPrice)
 	}
-	t.Logf("%s bought %d shots for %v adena", buyer.name, buyer.carries(soulshotNG), spent)
+	t.Logf("%s bought shots %v for adena %v", buyer.name, buyer.counts(soulshotNG, from), spent)
 }
 
 // openSellStore opens c's private sell store listing, of each template of

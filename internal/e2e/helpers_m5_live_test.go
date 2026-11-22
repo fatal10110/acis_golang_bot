@@ -281,6 +281,9 @@ func soldObjects(p Sent) []int32 {
 type stripEnd struct {
 	at    botclient.Point
 	adena int32
+	// carry are templates, and how many of each, the GM gives the
+	// character after the strip and before it logs out.
+	carry map[int32]int32
 }
 
 // destroyRefusals are the SystemMessages refusing a RequestDestroyItem
@@ -428,6 +431,14 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 			await(fmt.Sprintf("%d adena", want), func() bool { return carriedOf(inv, adena) >= want })
 			have = carriedOf(inv, adena)
 		}
+	}
+	for _, tmpl := range slices.Sorted(maps.Keys(end.carry)) {
+		gmNext()
+		n := end.carry[tmpl]
+		if err := gm.Give(ctx, c.Self.ObjectID, tmpl, n); err != nil {
+			t.Fatal(err)
+		}
+		await(fmt.Sprintf("%d of %d", n, tmpl), func() bool { return carriedOf(inv, tmpl) >= n })
 	}
 	if end.at != (botclient.Point{}) {
 		gmTeleport(t, ctx, gm, end.at)
