@@ -1,6 +1,7 @@
 package nav
 
 import (
+	"cmp"
 	"math"
 	"slices"
 
@@ -19,20 +20,39 @@ func (p *Planner) walkable(s *scratch, c Cell) bool {
 // NearestWalkable snaps a target point (a spot centre, a follow slot, an NPC
 // spawn) to the walkable cell nearest it within r world units: the layer
 // nearest the point's Z in each cell, ranked by horizontal distance and then
-// by height difference. Restricting the answer to the walker's strongly
-// connected component needs the hierarchy (N3, #155), which adds it.
+// by height difference.
 func (p *Planner) NearestWalkable(at location.Location, r float64) (Cell, bool) {
+	return p.NearestWalkableFunc(at, r, nil)
+}
+
+// NearestWalkableFunc is NearestWalkable restricted to the cells accept
+// takes (nil takes every one), such as the cells inside a spot's territory
+// in the walker's strongly connected component. accept sees only walkable
+// cells, nearest first, until it takes one.
+func (p *Planner) NearestWalkableFunc(at location.Location, r float64, accept func(Cell) bool) (Cell, bool) {
 	s := getScratch()
 	defer putScratch(s)
-	var best Cell
-	bestD, bestDZ := math.Inf(1), math.MaxInt
+	type ranked struct {
+		c  Cell
+		d  float64
+		dz int
+	}
+	var cs []ranked
 	p.cellsWithin(at, r, func(c Cell, d float64) {
-		dz := abs(int(c.Z) - at.Z)
-		if (d < bestD || (d == bestD && dz < bestDZ)) && p.walkable(s, c) {
-			best, bestD, bestDZ = c, d, dz
-		}
+		cs = append(cs, ranked{c: c, d: d, dz: abs(int(c.Z) - at.Z)})
 	})
-	return best, !math.IsInf(bestD, 1)
+	slices.SortStableFunc(cs, func(a, b ranked) int {
+		if c := cmp.Compare(a.d, b.d); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.dz, b.dz)
+	})
+	for _, c := range cs {
+		if p.walkable(s, c.c) && (accept == nil || accept(c.c)) {
+			return c.c, true
+		}
+	}
+	return Cell{}, false
 }
 
 // cellsWithin calls fn with every cell whose centre lies within r of at

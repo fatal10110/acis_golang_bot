@@ -15,15 +15,13 @@ import (
 var darkElvenStart = botclient.Point{X: 28295, Y: 11063, Z: -4224}
 
 // TestLiveSpotSpread runs a level 1 dark elf farmer on a registry that
-// lacks the spots fitting it within fullNear of its village's start, as
-// though bots filled them all: brought to the start, it claims a fitting
-// spot further away and walks there (#137). The farmer goes back to level 1
-// at the end, so the next run finds it a new character again; each run
-// brings it to the start first.
-//
-// The full spots are the nearest ones, not all within MaxTravel: from the
-// dark elven village the server routes no walk across to the elven
-// village's spots beyond it (#144), which TestSpotSpread covers as a choice.
+// lacks the spots fitting it within fullNear of its village's start, every
+// one within MaxTravel, as though bots filled them all: brought to the
+// start, it claims a fitting spot beyond MaxTravel within Wander, near the
+// elven village, and walks there through its walker (#137, #144, #158);
+// runWatched checks its walker never desynced (nav_desync_total 0). The
+// farmer goes back to level 1 at the end, so the next run finds it a new
+// character again; each run brings it to the start first.
 func TestLiveSpotSpread(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -40,9 +38,10 @@ func TestLiveSpotSpread(t *testing.T) {
 	fitsNewbie := func(s datapack.Spot) bool {
 		return fitsAny(botclient.SpotStatus{MinLevel: s.MinLevel, MaxLevel: s.MaxLevel, AggroLevel: s.AggroLevel}, []int{1})
 	}
-	// fullNear takes the three nearest spots out (3389-4228 from the
-	// start); the next ones lie 5464 and 6778 away.
-	const fullNear = 5000
+	// fullNear takes every spot within the default MaxTravel out: the
+	// farmer has to walk out of the Dark Forest to the elven village's
+	// spots, where the old straight legs stalled (#144).
+	const fullNear = 20000
 	near := int64(fullNear) * int64(fullNear)
 	var kept []datapack.Spot
 	full := 0

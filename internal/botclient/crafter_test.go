@@ -299,7 +299,7 @@ func TestBrainCrafterWeightGuard(t *testing.T) {
 // craft end the cycle with nothing to deposit; the bot farms its spot and
 // checks again ReturnEvery later.
 func TestBrainCrafterIdleFarming(t *testing.T) {
-	b := newCrafterBrain(t, adenaStack(1000))
+	b := walkSplit(t, newCrafterBrain(t, adenaStack(1000)))
 	b.world.Self.Level = 10
 	b.cfg.Spots = NewSpotRegistry([]datapack.Spot{testSpot("Wolves", 5000, 0, 8, 10, 3)}, 1)
 	steps := []trainerStep{{name: "check due: look", wantRule: "craft"}}

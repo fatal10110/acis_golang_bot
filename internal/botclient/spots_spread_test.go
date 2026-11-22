@@ -16,11 +16,13 @@ import (
 func TestSpotSpread(t *testing.T) {
 	now := at(time.Second)
 	// Each spot takes 3 bots, 9 once shared; all fit level 5 but "high".
+	// MaxTravel and Wander are cut to 4000 and 7000 to fit the split
+	// navigation.
 	spots := []datapack.Spot{
 		testSpot("a", 2000, 0, 3, 6, 9),
-		testSpot("b", 0, 6000, 3, 6, 9),
-		testSpot("c", 30000, 0, 3, 6, 9),
-		testSpot("beyond", 50000, 0, 3, 6, 9),
+		testSpot("b", 0, 3500, 3, 6, 9),
+		testSpot("c", 6000, 0, 3, 6, 9),
+		testSpot("beyond", 6000, 6000, 3, 6, 9),
 		testSpot("high", 100, 0, 9, 9, 9),
 	}
 	hold := func(r *SpotRegistry, i, n int) {
@@ -83,6 +85,7 @@ func TestSpotSpread(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newSpotBrain(t, 5, spots...)
+			b.persona.Spots.MaxTravel, b.persona.Spots.Wander = 4000, 7000
 			if tt.setup != nil {
 				tt.setup(b)
 			}
@@ -139,7 +142,7 @@ func TestSpotSpreadLevels(t *testing.T) {
 		testSpot("newbie", 1000, 0, 1, 3, 30),
 		testSpot("near", 3000, 0, 8, 11, 9),
 		testSpot("mid", 0, 8000, 8, 11, 9),
-		testSpot("far", 15000, 0, 8, 11, 9),
+		testSpot("far", 6000, 6000, 8, 11, 9),
 	}, 1)
 	bots := make([]*Brain, 3)
 	for i := range bots {
@@ -174,7 +177,8 @@ var homeRun = map[string]int{
 }
 
 // TestStarterSpread ramps the home run's level 1 farmers of every village
-// at once on one registry over the real datapack's starter spots (#137):
+// at once on one registry over the real datapack's starter spots (#137),
+// on open ground (pickStraight):
 // every spot that fits them within Wander of a start is held, none past its
 // limit, and a farmer holds nothing only when every spot that fits it in
 // reach is at its limit.
@@ -200,7 +204,7 @@ func TestStarterSpread(t *testing.T) {
 			b := newSpotBrain(t, 1)
 			b.cfg.Spots = r
 			b.world.Self.move = stopAt(st.at)
-			b.pickSpot(now)
+			pickStraight(b, now)
 			farmers = append(farmers, farmer{st.village, b})
 		}
 	}
@@ -240,37 +244,6 @@ func TestStarterSpread(t *testing.T) {
 	}
 }
 
-// TestSpotWaypoint: a walk beyond spotDirect hops to the spot centre within
-// spotDirect that lies nearest the destination, at least spotLeg nearer;
-// with none, it takes a straight leg.
-func TestSpotWaypoint(t *testing.T) {
-	far := testSpot("far", 30000, 0, 3, 6, 9)
-	tests := []struct {
-		name string
-		hops []datapack.Spot
-		want Point
-	}{
-		{name: "no spot on the way: a straight leg", want: Point{X: spotLeg}},
-		{
-			name: "the hop nearest the destination",
-			hops: []datapack.Spot{testSpot("w1", 4000, 3000, 20, 30, 9), testSpot("w2", 7000, -4000, 20, 30, 9)},
-			want: Point{X: 7000, Y: -4000},
-		},
-		{name: "beyond spotDirect: a straight leg", hops: []datapack.Spot{testSpot("w", 9500, 0, 20, 30, 9)}, want: Point{X: spotLeg}},
-		{name: "behind: a straight leg", hops: []datapack.Spot{testSpot("w", -3000, 0, 20, 30, 9)}, want: Point{X: spotLeg}},
-		{name: "less than a leg nearer: a straight leg", hops: []datapack.Spot{testSpot("w", 2000, 8000, 20, 30, 9)}, want: Point{X: spotLeg}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b := newSpotBrain(t, 5, append([]datapack.Spot{far}, tt.hops...)...)
-			name, act := b.decide(at(time.Second))
-			if got := moveTarget(act.payload); name != "spot" || act.kind != actMove || got != tt.want {
-				t.Fatalf("decide = %q kind %v, move to %v; want a move to %v", name, act.kind, got, tt.want)
-			}
-		})
-	}
-}
-
 // TestSpotTripLeavesSpot: a bot sharing a fitting spot past its cap that
 // plans a trip gives its place back at once, and after the teleport claims
 // the spot near the destination even when its old spot fell back to its cap
@@ -278,7 +251,7 @@ func TestSpotWaypoint(t *testing.T) {
 func TestSpotTripLeavesSpot(t *testing.T) {
 	b := newTravelBrain(t, 5000)
 	b.cfg.Spots = NewSpotRegistry([]datapack.Spot{
-		testSpot("low", 1000, 0, 1, 5, 9), testSpot("far", 95500, 0, 18, 21, 9), testSpot("home", 3000, 0, 18, 21, 9),
+		testSpot("low", 1000, 0, 1, 5, 9), testSpot("far", travelFar, 0, 18, 21, 9), testSpot("home", 3000, 0, 18, 21, 9),
 	}, 1)
 	r := b.cfg.Spots
 	r.held[2] = 4 // three bots and this one: one past the cap of 3
@@ -288,7 +261,7 @@ func TestSpotTripLeavesSpot(t *testing.T) {
 		t.Fatalf("trip %+v, spot %+v, home held by %d: want a trip, no spot, home back to 3", b.trip, b.spot, r.Held(2))
 	}
 	r.release(2) // another bot left home during the trip
-	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 95000}}}, at(11*time.Second)); err != nil {
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: travelDest}}}, at(11*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	b.appearing = false
