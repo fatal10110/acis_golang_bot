@@ -15,7 +15,8 @@ func testSpot(name string, x, y int32, lo, hi, maxNPCs int) datapack.Spot {
 }
 
 // newSpotBrain is a level brain at the origin with the default persona and
-// no idle drift, picking from spots (spawn multiplier 1).
+// no idle drift, picking from spots (spawn multiplier 1), walking on the
+// split navigation (walkSplit).
 func newSpotBrain(t *testing.T, level int32, spots ...datapack.Spot) *Brain {
 	t.Helper()
 	p := DefaultPersona()
@@ -23,7 +24,7 @@ func newSpotBrain(t *testing.T, level int32, spots ...datapack.Spot) *Brain {
 	b, _ := newTestBrain(t, p)
 	b.world.Self.Level = level
 	b.cfg.Spots = NewSpotRegistry(spots, 1)
-	return b
+	return walkSplit(t, b)
 }
 
 func TestSpotCap(t *testing.T) {
@@ -137,7 +138,7 @@ func TestSpotPolicyFits(t *testing.T) {
 func TestRuleSpot(t *testing.T) {
 	now := at(time.Second)
 	// near and far fit level 5; low is outlevelled, high too strong,
-	// distant out of reach.
+	// distant off the navigation.
 	spots := []datapack.Spot{
 		testSpot("low", 100, 0, 1, 1, 9),
 		testSpot("high", 100, 0, 8, 9, 9),
@@ -150,7 +151,7 @@ func TestRuleSpot(t *testing.T) {
 		setup    func(b *Brain)
 		wantRule string
 		wantKind actionKind
-		// wantMove is the leg's destination of a move.
+		// wantMove is the walk's destination of a move.
 		wantMove Point
 		wantHeld int
 		// wantSpot is the spot held after, -1 for none.
@@ -250,7 +251,7 @@ func TestRuleSpot(t *testing.T) {
 			name: "beyond the leash: back",
 			setup: func(b *Brain) {
 				b.cfg.Spots.claim([]int{3})
-				b.spot.idx, b.spot.held, b.spot.arrived = 3, true, true
+				b.spot.idx, b.spot.held, b.spot.arrived, b.spot.at = 3, true, true, Point{X: 4000}
 				b.world.Self.move = stopAt(Point{X: 2000})
 			},
 			wantRule: "spot", wantKind: actMove, wantMove: Point{X: 4000}, wantHeld: 1, wantSpot: 3,
@@ -259,7 +260,7 @@ func TestRuleSpot(t *testing.T) {
 			name: "within the leash after a fight",
 			setup: func(b *Brain) {
 				b.cfg.Spots.claim([]int{3})
-				b.spot.idx, b.spot.held, b.spot.arrived = 3, true, true
+				b.spot.idx, b.spot.held, b.spot.arrived, b.spot.at = 3, true, true, Point{X: 4000}
 				b.world.Self.move = stopAt(Point{X: 3000})
 			},
 			wantHeld: 1, wantSpot: 3,
@@ -276,10 +277,8 @@ func TestRuleSpot(t *testing.T) {
 			if rule != tt.wantRule || a.kind != tt.wantKind {
 				t.Fatalf("decide = rule %q action %d, want rule %q action %d", rule, a.kind, tt.wantRule, tt.wantKind)
 			}
-			if a.kind == actMove {
-				if got := moveTarget(a.payload); got != tt.wantMove {
-					t.Fatalf("move to %+v, want %+v", got, tt.wantMove)
-				}
+			if a.kind == actMove && (!a.walk || b.walk.dest != tt.wantMove) {
+				t.Fatalf("move walk %v to %+v, want a walker segment to %+v", a.walk, b.walk.dest, tt.wantMove)
 			}
 			gotSpot := -1
 			if b.spot.held {
@@ -317,52 +316,55 @@ func TestSpotCrowdMovesOn(t *testing.T) {
 	if rule != "spot" || a.kind != actMove || b.spot.idx != 1 {
 		t.Fatalf("after moving on = %q %d spot %d, want a move to spot 1", rule, a.kind, b.spot.idx)
 	}
-	if got, want := moveTarget(a.payload), (Point{Y: 2000}); got != want {
-		t.Fatalf("move to %+v, want %+v", got, want)
+	if got, want := b.walk.dest, (Point{Y: 2000}); !a.walk || got != want {
+		t.Fatalf("walk %v to %+v, want a walker segment to %+v", a.walk, got, want)
 	}
 }
 
 // TestSpotTeleportWalksBack checks an own teleport away from the spot keeps
-// the claim and walks back to the spot's centre, the leg count starting over.
+// the claim and walks back to the spot's centre.
 func TestSpotTeleportWalksBack(t *testing.T) {
 	b := newSpotBrain(t, 3, testSpot("near", 4000, 0, 1, 3, 9))
 	b.world.Objects = map[int32]*Object{}
 	b.world.Self.move = stopAt(Point{X: 3950})
 	b.decide(at(time.Second))
-	b.spot.lastDist, b.spot.stalls = 50, 2
 	if !b.spot.held || !b.spot.arrived {
 		t.Fatalf("not at the spot: held %v arrived %v", b.spot.held, b.spot.arrived)
 	}
-	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 9000}}}, at(2*time.Second)); err != nil {
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 7000}}}, at(2*time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if b.spot.arrived || b.spot.lastDist != 0 || b.spot.stalls != 0 || !b.spot.held || b.cfg.Spots.Held(0) != 1 {
+	if b.spot.arrived || !b.spot.held || b.cfg.Spots.Held(0) != 1 {
 		t.Fatalf("after teleport: %+v held %d, want the claim kept and the walk reset", b.spot, b.cfg.Spots.Held(0))
 	}
-	b.world.Self.move = stopAt(Point{X: 9000})
+	b.world.Self.move = stopAt(Point{X: 7000})
 	b.appearing = false // the Appearing the teleport asks went out
 	rule, a := b.decide(at(3 * time.Second))
 	if rule != "spot" || a.kind != actMove {
-		t.Fatalf("after teleport = %q %d, want a leg to the spot", rule, a.kind)
+		t.Fatalf("after teleport = %q %d, want a walk to the spot", rule, a.kind)
 	}
-	if got, want := moveTarget(a.payload), (Point{X: 4000}); got != want {
-		t.Fatalf("leg to %+v, want %+v", got, want)
+	if got, want := b.walk.dest, (Point{X: 4000}); !a.walk || got != want {
+		t.Fatalf("walk %v to %+v, want a walker segment to %+v", a.walk, got, want)
 	}
 }
 
-// TestSpotStalls checks legs that get nowhere give the spot up.
-func TestSpotStalls(t *testing.T) {
-	b := newSpotBrain(t, 3, testSpot("near", 4000, 0, 1, 3, 9), testSpot("next", 0, -5000, 1, 3, 9))
-	for i := range spotStalls {
-		if rule, a := b.decide(at(time.Duration(i+1) * time.Second)); rule != "spot" || a.kind != actMove {
-			t.Fatalf("leg %d = %q %d, want a move", i, rule, a.kind)
-		}
+// TestSpotWalkUnreachable checks a spot whose walk ends unreachable is given
+// up and avoided for walkRetry, and the next decision walks to another.
+func TestSpotWalkUnreachable(t *testing.T) {
+	b := newSpotBrain(t, 3, testSpot("near", 4000, 0, 1, 3, 9), testSpot("next", 0, 5000, 1, 3, 9))
+	b.world.Objects = map[int32]*Object{}
+	if rule, a := b.decide(at(time.Second)); rule != "spot" || a.kind != actMove || b.spot.idx != 0 {
+		t.Fatalf("first decide = %q %d spot %d, want a walk to spot 0", rule, a.kind, b.spot.idx)
 	}
-	if rule, a := b.decide(at(10 * time.Second)); rule != "spot" || a.kind != actHold || b.spot.held {
-		t.Fatalf("stalled = %q %d held %v, want the spot given up", rule, a.kind, b.spot.held)
+	b.walk.unreachable(reasonBlocked)
+	if rule, _ := b.decide(at(2 * time.Second)); rule == "spot" || b.spot.held {
+		t.Fatalf("unreachable = %q held %v, want the spot given up", rule, b.spot.held)
 	}
-	if !b.spot.avoid[0].Equal(at(10*time.Second).Add(spotUnreachable)) || b.cfg.Spots.Held(0) != 0 {
-		t.Fatalf("stalled spot not avoided or still held: %v, %d", b.spot.avoid, b.cfg.Spots.Held(0))
+	if !b.spot.avoid[0].Equal(at(2*time.Second).Add(walkRetry)) || b.cfg.Spots.Held(0) != 0 {
+		t.Fatalf("unreachable spot not avoided for walkRetry or still held: %v, %d", b.spot.avoid, b.cfg.Spots.Held(0))
+	}
+	if rule, a := b.decide(at(3 * time.Second)); rule != "spot" || a.kind != actMove || !b.spot.held || b.spot.idx != 1 {
+		t.Fatalf("next decide = %q %d spot %+v, want a walk to spot 1", rule, a.kind, b.spot)
 	}
 }
 
@@ -425,31 +427,5 @@ func TestSpotReleased(t *testing.T) {
 	}
 	if b.cfg.Spots.Held(0) != 0 {
 		t.Fatalf("after Run: held %d, want 0", b.cfg.Spots.Held(0))
-	}
-}
-
-// TestSpotLegLength: a spot within spotDirect is one move to its centre,
-// for the server's pathfinder to route; a farther one, on the plane or in
-// 3D (the server's move cap counts height), a spotLeg leg.
-func TestSpotLegLength(t *testing.T) {
-	tests := []struct {
-		name string
-		x, z int32
-		want Point
-	}{
-		{"within spotDirect", spotDirect, 0, Point{X: spotDirect}},
-		{"beyond spotDirect", spotDirect + 1000, 0, Point{X: spotLeg}},
-		{"within on the plane, beyond in 3D", spotDirect - 100, 5000, Point{X: spotLeg, Z: 1685}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sp := testSpot("s", tt.x, 0, 3, 6, 9)
-			sp.Z = tt.z
-			b := newSpotBrain(t, 5, sp)
-			name, act := b.decide(at(time.Second))
-			if got := moveTarget(act.payload); name != "spot" || act.kind != actMove || got != tt.want {
-				t.Fatalf("decide = %q kind %v, move to %v; want a move to %v", name, act.kind, moveTarget(act.payload), tt.want)
-			}
-		})
 	}
 }

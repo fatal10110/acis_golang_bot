@@ -35,20 +35,27 @@ var (
 // testNav is the shared synthetic navigation, built once per test binary.
 func testNav(tb testing.TB) *Nav {
 	tb.Helper()
-	navOnce.Do(func() { navShared, navErr = buildTestNav() })
+	navOnce.Do(func() {
+		// Row 0 holds the open flat ground along the X axis from the world
+		// origin, where the consumer tests put their NPCs (walkOn); row 1 the
+		// scenes.
+		navShared, navErr = buildTestNav(geotest.Scenes(), append(navWindow(0, 0, 1, 0), navWindow(1, 1, 6, 1)...))
+	})
 	if navErr != nil {
 		tb.Fatal(navErr)
 	}
 	return navShared
 }
 
-func buildTestNav() (*Nav, error) {
+// buildTestNav is the navigation over terrain t, its hierarchy built over
+// the clusters keys.
+func buildTestNav(t *geotest.Terrain, keys []nav.ClusterKey) (*Nav, error) {
 	dir, err := os.MkdirTemp("", "botnav")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	path, err := geotest.Scenes().WriteL2OFF(dir)
+	path, err := t.WriteL2OFF(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -68,10 +75,6 @@ func buildTestNav() (*Nav, error) {
 	if err := e.SetRegion(geotest.RegionX, geotest.RegionY, region); err != nil {
 		return nil, err
 	}
-	// Row 0 holds the open flat ground along the X axis from the world
-	// origin, where the consumer tests put their NPCs (walkOn); row 1 the
-	// scenes.
-	keys := append(navWindow(0, 0, 1, 0), navWindow(1, 1, 6, 1)...)
 	key := nav.NavKey{ClusterCells: navTestCluster}
 	image, _, err := nav.Build(context.Background(), nav.BuildConfig{Engine: e, Clusters: keys, ClusterCells: navTestCluster, Workers: 2, Key: key})
 	if err != nil {

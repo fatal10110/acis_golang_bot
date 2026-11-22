@@ -239,7 +239,7 @@ func (b *Brain) goToSpot(name string, now time.Time) error {
 		return ErrSpotFull
 	}
 	b.leaveSpot()
-	b.spot.idx, b.spot.held, b.spot.retryAt = i, true, now
+	b.spot.idx, b.spot.held, b.spot.at, b.spot.retryAt = i, true, b.spotDest(i, now), now
 	return nil
 }
 

@@ -31,23 +31,34 @@ func gkList(obj int32, indexes ...int) string {
 
 // testTravelMap has gatekeeper 30006 standing at (2000, 0), its destination
 // index 2 at (95000, 0) for 1000 adena.
+// travelDest is the X of the test gatekeeper's second destination, east of
+// the split navigation's wall, and travelFar the X of the spot that fits
+// the travel brain there: in straight line well within MaxTravel of the
+// origin, but in the other SCC, more than spotSnap past the wall so its
+// centre never snaps to the west side.
+const (
+	travelDest = 9000
+	travelFar  = 8700
+)
+
 func testTravelMap() *TravelMap {
 	return &TravelMap{gatekeepers: []gatekeeper{{
 		npcID: 30006, at: Point{X: 2000},
-		dests: []destination{{index: 0, at: Point{X: -50000}, price: 18000}, {index: 2, at: Point{X: 95000}, price: 1000}},
+		dests: []destination{{index: 0, at: Point{X: 6000, Y: 7000}, price: 18000}, {index: 2, at: Point{X: travelDest}, price: 1000}},
 	}}}
 }
 
 // newTravelBrain is a level 20 bot at the origin carrying adena, holding no
 // spot, with spot "low" in walking reach that does not fit it and spot
-// "far" out of reach that does, near the gatekeeper's second destination.
+// "far" across the split navigation's wall that does, near the gatekeeper's
+// second destination.
 func newTravelBrain(t *testing.T, adena int32) *Brain {
 	t.Helper()
-	b := newSpotBrain(t, 20, testSpot("low", 1000, 0, 1, 5, 9), testSpot("far", 95500, 0, 18, 21, 9))
+	b := newSpotBrain(t, 20, testSpot("low", 1000, 0, 1, 5, 9), testSpot("far", travelFar, 0, 18, 21, 9))
 	b.persona.Newbie.MaxLevel = 0
 	b.cfg.Travel = testTravelMap()
 	b.world.Inventory.Items = map[int32]Item{1: {ObjectID: 1, TemplateID: adenaID, Count: adena}}
-	return walkOn(t, b)
+	return b
 }
 
 func TestNewTravelMap(t *testing.T) {
@@ -148,7 +159,7 @@ func TestBrainTravel(t *testing.T) {
 		{name: "destination link", at: 8 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkList(gkObj, 0, 2)}}, wantRule: "travel", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport 2")},
 		{name: "wait for the teleport", at: 10 * time.Second, wantRule: "travel"},
 	})
-	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 95000}}}, at(11*time.Second)); err != nil {
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: travelDest}}}, at(11*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if b.trip.v.active() || !b.appearing {
@@ -157,7 +168,7 @@ func TestBrainTravel(t *testing.T) {
 	b.appearing = false // the Appearing went out
 	rule, a := b.decide(at(12 * time.Second))
 	if rule != "spot" || a.kind != actMove || !b.spot.held || b.spot.idx != 1 {
-		t.Fatalf("after arrival = %q %d spot %+v, want a leg to spot far", rule, a.kind, b.spot)
+		t.Fatalf("after arrival = %q %d spot %+v, want a walk to spot far", rule, a.kind, b.spot)
 	}
 }
 
@@ -180,6 +191,8 @@ func TestTravelPlan(t *testing.T) {
 		{name: "travel off", adena: 5000, setup: func(b *Brain) { b.persona.Travel.MaxPrice = 0 }, wantIndex: -1},
 		{name: "no travel map", adena: 5000, setup: func(b *Brain) { b.cfg.Travel = nil }, wantIndex: -1},
 		{name: "gatekeeper out of walking reach", adena: 5000, setup: func(b *Brain) { b.cfg.Travel.gatekeepers[0].at = Point{X: 30000} }, wantIndex: -1},
+		{name: "gatekeeper across the wall", adena: 5000, setup: func(b *Brain) { b.cfg.Travel.gatekeepers[0].at = Point{X: travelDest + 500} }, wantIndex: -1},
+		{name: "destination off the navigation", adena: 5000, setup: func(b *Brain) { b.cfg.Travel.gatekeepers[0].dests[1].at = Point{X: 95000} }, wantIndex: -1},
 		{name: "gatekeeper shunned", adena: 5000, setup: func(b *Brain) { b.trip.shunned = map[int]time.Time{0: at(time.Hour)} }, wantIndex: -1},
 		{name: "within the gap after the last trip", adena: 5000, setup: func(b *Brain) { b.trip.endedAt = at(-time.Minute) }, wantIndex: -1},
 		{name: "after the gap", adena: 5000, setup: func(b *Brain) { b.trip.endedAt = at(-5 * time.Minute) }, wantGK: 30006, wantIndex: 2},
@@ -188,15 +201,90 @@ func TestTravelPlan(t *testing.T) {
 		{name: "no fitting spot near any destination", adena: 5000, setup: func(b *Brain) { b.world.Self.Level = 40 }, wantIndex: -1},
 		{name: "fitting spot in reach: claimed, no trip", adena: 5000, setup: func(b *Brain) { b.world.Self.Level = 4 }, wantIndex: -1},
 		{
-			name: "least walking first", adena: 50000,
+			// A second gatekeeper nearer the bot, its destination right at
+			// the spot: walks of 500 and 0 at 10 adena for 100 units
+			// (SecondPrice 10, run speed 100) and 1100 adena, 1150, beat
+			// walks of 2000 and 500 and 1000 adena, 1250.
+			name: "cheapest path first", adena: 5000,
 			setup: func(b *Brain) {
-				// A second gatekeeper farther from the bot, its destination
-				// right at the spot: 1500+0 beats 2000+500.
 				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
-					npcID: 30059, at: Point{X: -1500}, dests: []destination{{index: 5, at: Point{X: 95500}, price: 20000}},
+					npcID: 30059, at: Point{X: 500}, dests: []destination{{index: 5, at: Point{X: travelFar}, price: 1100}},
 				})
 			},
 			wantGK: 30059, wantIndex: 5,
+		},
+		{
+			name: "a dear teleport loses to a longer walk", adena: 50000,
+			setup: func(b *Brain) {
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 500}, dests: []destination{{index: 5, at: Point{X: travelFar}, price: 20000}},
+				})
+			},
+			wantGK: 30006, wantIndex: 2,
+		},
+		{
+			// Two teleports: the gatekeeper's first destination has a
+			// gatekeeper in walking reach whose destination is the spot's;
+			// the trip is the first teleport.
+			name: "two teleports: the first", adena: 50000,
+			setup: func(b *Brain) {
+				// Walks of at most 5000: the second gatekeeper is out of
+				// the bot's reach, in its first destination's.
+				b.persona.Spots.MaxTravel = 5000
+				b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+				})
+			},
+			wantGK: 30006, wantIndex: 0,
+		},
+		{
+			// A nearer gatekeeper reaches the first destination cheaper in
+			// cost (walk 0, 18050 adena) but dearer in adena: the only
+			// path within 19000 adena is the costlier one by 30006.
+			name: "two teleports: the path within the budget", adena: 19000,
+			setup: func(b *Brain) {
+				b.persona.Spots.MaxTravel = 5000
+				b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+				}, gatekeeper{
+					npcID: 30060, dests: []destination{{index: 1, at: Point{X: 6000, Y: 7000}, price: 18050}},
+				})
+			},
+			wantGK: 30006, wantIndex: 0,
+		},
+		{
+			// Landing with one teleport onward: the plan is due within the
+			// gap, but a path of two is not taken.
+			name: "onward: no more teleports than the rest", adena: 50000,
+			setup: func(b *Brain) {
+				b.persona.Spots.MaxTravel = 5000
+				b.trip.endedAt, b.trip.onward = at(-time.Minute), 1
+				b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+				})
+			},
+			wantIndex: -1,
+		},
+		{
+			name: "onward: due within the gap", adena: 5000,
+			setup:  func(b *Brain) { b.trip.endedAt, b.trip.onward = at(-time.Minute), 1 },
+			wantGK: 30006, wantIndex: 2,
+		},
+		{
+			name: "two teleports past the budget", adena: 18500,
+			setup: func(b *Brain) {
+				// Walks of at most 5000: the second gatekeeper is out of
+				// the bot's reach, in its first destination's.
+				b.persona.Spots.MaxTravel = 5000
+				b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+				})
+			},
+			wantIndex: -1,
 		},
 	}
 	for _, tt := range tests {

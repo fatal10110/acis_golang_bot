@@ -153,14 +153,14 @@ func TestStarterSpots(t *testing.T) {
 
 			plan := farmer(NewSpotRegistry(spots, 1))
 			plan.persona.Spots.Newbie = 0
-			plan.pickSpot(now)
+			pickStraight(plan, now)
 			if plan.spot.held != tt.planRule {
 				t.Errorf("plan rule alone: spot held %v, want %v", plan.spot.held, tt.planRule)
 			}
 
 			r := NewSpotRegistry(spots, 1)
 			first := farmer(r)
-			first.pickSpot(now)
+			pickStraight(first, now)
 			if !first.spot.held {
 				t.Fatal("a level 1 farmer finds no spot")
 			}
@@ -178,7 +178,7 @@ func TestStarterSpots(t *testing.T) {
 				for n := 0; ; n++ {
 					f := farmer(r)
 					f.persona.Spots.Overflow = overflow
-					if f.pickSpot(now); !f.spot.held {
+					if pickStraight(f, now); !f.spot.held {
 						return n, f
 					}
 				}
@@ -193,10 +193,10 @@ func TestStarterSpots(t *testing.T) {
 			// Overflow: the next farmer waits, and finds the spot a farmer
 			// gives up once the wait is over.
 			first.leaveSpot()
-			if _, ok := last.ruleSpot(now.Add(spotRetry - time.Second)); ok || last.spot.held {
-				t.Fatalf("overflow farmer looked again before spotRetry")
+			if last.spot.held || !last.spot.retryAt.Equal(now.Add(spotRetry)) {
+				t.Fatalf("overflow farmer: held %v, looks again at %v, want spotRetry later", last.spot.held, last.spot.retryAt)
 			}
-			if last.ruleSpot(now.Add(spotRetry)); !last.spot.held {
+			if pickStraight(last, now.Add(spotRetry)); !last.spot.held {
 				t.Fatalf("overflow farmer finds no spot after spotRetry, a spot free")
 			}
 		})
