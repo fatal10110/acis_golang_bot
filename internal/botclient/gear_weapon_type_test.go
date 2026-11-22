@@ -8,7 +8,7 @@ import (
 )
 
 // pricyDagger is a dagger worth more than every bow of the weapon type
-// tests.
+// tests, and stronger than the plain dagger.
 const pricyDagger int32 = 90002
 
 // newDaggerArcher is newArcherBrain with daggers and a shield indexed too:
@@ -21,7 +21,7 @@ func newDaggerArcher(t *testing.T, items ...Item) *Brain {
 	m[leatherShield] = slotTemplates[leatherShield]
 	m[pricyDagger] = slotTemplates[dagger]
 	d := m[pricyDagger]
-	d.ID, d.Price = pricyDagger, 50000
+	d.ID, d.Price, d.Stats.PAtk = pricyDagger, 50000, 10
 	m[pricyDagger] = d
 	b.cfg.Travel.gear, b.cfg.Travel.shopGear = indexGear(m, b.cfg.Travel.cheapest)
 	return b
@@ -29,7 +29,7 @@ func newDaggerArcher(t *testing.T, items ...Item) *Brain {
 
 // TestGearBeatsUnlistedWeapon checks the replacement of a worn weapon of a
 // type the class does not wield: any listed type beats it whatever the
-// prices, nothing unlisted does, and a listed one is never replaced by an
+// scores and its enchant, nothing unlisted does, and a listed one is never replaced by an
 // unlisted one.
 func TestGearBeatsUnlistedWeapon(t *testing.T) {
 	wornDagger := wornAt(220, dagger, partRHand)
@@ -45,11 +45,11 @@ func TestGearBeatsUnlistedWeapon(t *testing.T) {
 		{name: "archer: cheap bow over a pricy dagger", class: classHawkeye, items: []Item{wornAt(220, pricyDagger, partRHand)}, id: shortBow, want: true},
 		{name: "archer: no better dagger", class: classHawkeye, items: []Item{wornDagger}, id: pricyDagger},
 		{name: "archer: no dagger over a bow", class: classHawkeye, items: []Item{wornShortBow}, id: pricyDagger},
-		{name: "archer: enchanted dagger kept", class: classHawkeye, items: []Item{{ObjectID: 220, TemplateID: dagger, Equipped: true, BodySlot: partRHand, Enchant: 1}}, id: plainBow},
+		{name: "archer: bow over an enchanted dagger", class: classHawkeye, items: []Item{{ObjectID: 220, TemplateID: dagger, Equipped: true, BodySlot: partRHand, Enchant: 1}}, id: plainBow, want: true},
 		{name: "archer: bow above expertise", class: classHawkeye, items: []Item{wornDagger}, id: strengthenedBow},
 		{name: "archer: bow takes a shield off", class: classHawkeye, items: []Item{wornDagger, wornAt(221, leatherShield, partLHand)}, id: plainBow, want: true},
 		{name: "archer: unknown shield kept", class: classHawkeye, items: []Item{wornDagger, wornAt(221, 99999, partLHand)}, id: plainBow},
-		{name: "archer: enchanted shield kept", class: classHawkeye, items: []Item{wornDagger, {ObjectID: 221, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: plainBow},
+		{name: "archer: bow takes an enchanted shield off", class: classHawkeye, items: []Item{wornDagger, {ObjectID: 221, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: plainBow, want: true},
 		{name: "dagger user: dagger over a bow", class: classTreasureHunter, items: []Item{wornShortBow}, id: dagger, want: true},
 		{name: "dagger user: better dagger as before", class: classTreasureHunter, items: []Item{wornDagger}, id: pricyDagger, want: true},
 		{name: "class with no weapons keeps its own", class: classHawkeye, items: []Item{wornDagger}, edit: func(b *Brain) { b.persona.Gear.Classes = []GearClass{{Armor: "LIGHT"}} }, id: plainBow},

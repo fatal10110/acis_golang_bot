@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"cmp"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -27,8 +28,9 @@ const gearTimeout = 5 * time.Second
 type GearPolicy struct {
 	// Equip wears a carried piece that beats the one worn in its slot
 	// (gearSlot): of the worn piece's weapon type and hands or armor type,
-	// of a grade the bot wears without penalty, of a higher reference
-	// price, and not over an enchanted piece. An empty slot takes what the
+	// of a grade the bot wears without penalty, and of a higher score, its
+	// stats and enchant weighed by the class's build (GearClass.Weights),
+	// the worn piece's enchant counted too. An empty slot takes what the
 	// bot's class wears (Classes), and so does a worn weapon of a type the
 	// class does not wield (GearClass.Weapons). The piece it replaces is
 	// junk the shop errand sells once the new one is worn. A bow waits
@@ -61,13 +63,13 @@ type GearPolicy struct {
 	// does not buy the goal then saves for it and skips the comfort tier.
 	// 0 never saves.
 	SaveFrom int32
-	// ShotFactor multiplies a weapon's reference price where Equip and Buy
-	// compare it with the wielded one, when the bot can keep it charged and
-	// not the other: a shot source has shots of its grade for the class (a
-	// spawned merchant), or the bot carries ShopPolicy's restock minimum of
-	// them, any while it wields a weapon firing the same shots (shotsBacked). So a no-grade
-	// weapon with shots beats a D-grade one without them until the D one's
-	// price wins on its own. 1 or less compares prices alone.
+	// ShotFactor multiplies a weapon's score where Equip and Buy compare it
+	// with the wielded one, when the bot can keep it charged and not the
+	// other: a shot source has shots of its grade for the class (a spawned
+	// merchant), or the bot carries ShopPolicy's restock minimum of them,
+	// any while it wields a weapon firing the same shots (shotsBacked). So a
+	// no-grade weapon with shots beats a D-grade one without them until the
+	// D one's score wins on its own. 1 or less compares scores alone.
 	ShotFactor float64
 }
 
@@ -80,9 +82,9 @@ func defaultGearPolicy() GearPolicy {
 	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, ShotFactor: 2}
 }
 
-// GearClass is what classes wear where no worn piece gives a type to
-// match (GearPolicy.Classes). The server equips any weapon or armor type
-// on any class: this is a preference.
+// GearClass is a build: what classes wear where no worn piece gives a type
+// to match, and what they weigh gear by (GearPolicy.Classes). The server
+// equips any weapon or armor type on any class: this is a preference.
 type GearClass struct {
 	// Classes are the class ids of the entry; none for every class.
 	Classes []int32
@@ -92,20 +94,76 @@ type GearClass struct {
 	// one ("SWORD" and "BIGSWORD", "BLUNT" and "BIGBLUNT") replace each
 	// other when both are listed: a two-handed weapon is worth more than
 	// the one-handed weapon and the shield it takes off, a one-handed one
-	// more than the two-handed weapon less the best shield the bot carries.
-	// A worn weapon of a type not listed (an archer's dagger from its
-	// dagger days) gives way to any listed one, whatever the prices, the
-	// best the bot carries or buys first; nothing unlisted replaces it, and
-	// nothing unlisted replaces a listed one, so the bot never swaps back.
-	// An enchanted one is kept, as is a shield that is enchanted or unknown
-	// a two-handed weapon would take off. A class listing none keeps
-	// whatever it wields.
+	// more than the two-handed weapon less the best shield the bot carries,
+	// by score. A worn weapon of a type not listed (an archer's dagger from
+	// its dagger days) gives way to any listed one, whatever the scores and
+	// its enchant, the best the bot carries or buys first, unless a
+	// two-handed one would take an unknown shield off; nothing unlisted
+	// replaces it, and nothing unlisted replaces a listed one, so the bot
+	// never swaps back. A class listing none keeps whatever it wields.
 	Weapons []string
 	// Armor is the armor type (LIGHT, HEAVY or MAGIC) of the body and
 	// legs pieces a bot wearing neither wears.
 	Armor string
 	// Shield wears a shield with a one-handed weapon or none.
 	Shield bool
+	// Weights are what the classes score gear by; the zero value is
+	// evenWeights.
+	Weights StatWeights
+}
+
+// StatWeights weigh a piece's stats into its score: the sum of each stat,
+// its enchant gain included (datapack.Item.EnchantGain), times its weight.
+// A weapon scores its attack, armor its P. Def, jewelry its M. Def and a
+// shield its shield defense, so the weights put a weapon and a shield on
+// one scale only where a two-handed weapon trades against a one-handed
+// one and its shield. The datapack reads no MP stat: a healer weighs
+// M. Atk as a caster does.
+type StatWeights struct {
+	PAtk, MAtk, PDef, MDef float64
+	// PAtkSpd is how much a weapon's attack speed counts: its P. Atk is
+	// multiplied by its pAtkSpd over a sword's (379) to this power, so 1
+	// scores the damage a weapon deals in a given time, and 0 ignores speed.
+	// Two weapons of a type share their speed (a bow 293, a two-handed
+	// sword 325, a dagger 433); it tells a two-handed weapon from a
+	// one-handed one, and the odd slow bow from the others.
+	PAtkSpd float64
+	// SDef weighs a shield's defense, which counts only on the hits the
+	// shield blocks (rShld 20 for every shield) and then only cuts the hit
+	// it is added to the P. Def of.
+	SDef float64
+}
+
+// Builds of the default class table: fighters weigh their damage, P. Atk
+// and attack speed, casters (and healers) M. Atk, and both defense alike.
+// evenWeights scores a class entry without weights, every attack and
+// defense stat alike.
+var (
+	fighterWeights = StatWeights{PAtk: 1, PAtkSpd: 1, PDef: 1, MDef: 1, SDef: 0.05}
+	casterWeights  = StatWeights{MAtk: 1, PDef: 1, MDef: 1, SDef: 0.05}
+	evenWeights    = StatWeights{PAtk: 1, MAtk: 1, PDef: 1, MDef: 1, SDef: 0.05}
+)
+
+// swordAtkSpd is a sword's attack speed, the one PAtkSpd scales from.
+const swordAtkSpd = 379
+
+// weights are the class's stat weights: evenWeights when it sets none.
+func (c *GearClass) weights() StatWeights {
+	if c.Weights == (StatWeights{}) {
+		return evenWeights
+	}
+	return c.Weights
+}
+
+// score is the score of gear template it at enchant level enchant.
+func (w StatWeights) score(it *datapack.Item, enchant int) float64 {
+	stat := func(name string, base float64) float64 { return base + float64(it.EnchantGain(name, enchant)) }
+	atk := stat("pAtk", it.Stats.PAtk)
+	if spd := it.Stats.PAtkSpd; w.PAtkSpd != 0 && spd > 0 {
+		atk *= math.Pow(spd/swordAtkSpd, w.PAtkSpd)
+	}
+	return w.PAtk*atk + w.MAtk*stat("mAtk", it.Stats.MAtk) + w.PDef*stat("pDef", it.Stats.PDef) +
+		w.MDef*stat("mDef", it.Stats.MDef) + w.SDef*stat("sDef", it.Stats.SDef)
 }
 
 // defaultGearClasses is the class table of the default persona: mystics
@@ -116,18 +174,19 @@ type GearClass struct {
 // armor; the first fighter classes swords or blunts in light armor (their
 // starting set) with a shield; every other fighter swords, blunts or
 // their two-handed kinds in heavy armor with a shield (classes/*.xml,
-// model/actor/player/race.go).
+// model/actor/player/race.go). Mystics weigh gear as casters, every other
+// class as fighters.
 func defaultGearClasses() []GearClass {
 	return []GearClass{
-		{Classes: slices.Clone(mysticClasses), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC"},
-		{Classes: []int32{7, 8, 22, 23, 35, 36, 93, 101, 108}, Weapons: []string{"DAGGER"}, Armor: "LIGHT"},
-		{Classes: []int32{9, 24, 37, 92, 102, 109}, Weapons: []string{"BOW"}, Armor: "LIGHT"},
-		{Classes: []int32{47, 48, 114}, Weapons: []string{"DUALFIST"}, Armor: "LIGHT"},
-		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY"},
-		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY"},
-		{Classes: []int32{46, 113}, Weapons: []string{"BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY"},
-		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true},
-		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true},
+		{Classes: slices.Clone(mysticClasses), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC", Weights: casterWeights},
+		{Classes: []int32{7, 8, 22, 23, 35, 36, 93, 101, 108}, Weapons: []string{"DAGGER"}, Armor: "LIGHT", Weights: fighterWeights},
+		{Classes: []int32{9, 24, 37, 92, 102, 109}, Weapons: []string{"BOW"}, Armor: "LIGHT", Weights: fighterWeights},
+		{Classes: []int32{47, 48, 114}, Weapons: []string{"DUALFIST"}, Armor: "LIGHT", Weights: fighterWeights},
+		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY", Weights: fighterWeights},
+		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY", Weights: fighterWeights},
+		{Classes: []int32{46, 113}, Weapons: []string{"BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Weights: fighterWeights},
+		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true, Weights: fighterWeights},
+		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights},
 	}
 }
 
@@ -140,6 +199,13 @@ func (b *Brain) gearClass() GearClass {
 		}
 	}
 	return GearClass{}
+}
+
+// gearWeights are the stat weights of the bot's class entry
+// (GearClass.weights).
+func (b *Brain) gearWeights() StatWeights {
+	c := b.gearClass()
+	return c.weights()
 }
 
 // gearSlot is a paperdoll slot the bot keeps gear in. Accessories (hair,
@@ -230,13 +296,16 @@ type gearItem struct {
 	// feet piece, or jewelry, which fits any.
 	kind  string
 	grade int32
-	price int32
+	// tmpl is the template, whose stats and enchant gain score it
+	// (StatWeights.score).
+	tmpl datapack.Item
 }
 
 // indexGear indexes the templates the bot may wear: a weapon of a wielded
-// type, or an armor piece (a shield or jewelry too) of a gear slot, with a reference price, no use
-// or equip condition and no mana to run out. shopGear are the ones in
-// cheapest, the items merchants sell, by slot then price, best first.
+// type, or an armor piece (a shield or jewelry too) of a gear slot, with a
+// reference price, no use or equip condition and no mana to run out.
+// shopGear are the ones in cheapest, the items merchants sell, by slot
+// then price; gearCandidates ranks them by the bot's scores.
 func indexGear(items map[int32]datapack.Item, cheapest map[int32]int32) (map[int32]gearItem, []int32) {
 	gear := make(map[int32]gearItem)
 	for id, it := range items {
@@ -244,7 +313,7 @@ func indexGear(items map[int32]datapack.Item, cheapest map[int32]int32) (map[int
 		if !ok || it.Price <= 0 || it.Conditional || it.Duration > 0 {
 			continue
 		}
-		g := gearItem{part: part, grade: int32(it.Grade), price: it.Price}
+		g := gearItem{part: part, grade: int32(it.Grade), tmpl: it}
 		switch slotOf(part) {
 		case slotWeapon:
 			if it.Type != "Weapon" || slices.Contains([]string{"", "NONE", "ETC", "PET", "FISHINGROD"}, it.Kind) {
@@ -274,7 +343,7 @@ func indexGear(items map[int32]datapack.Item, cheapest map[int32]int32) (map[int
 	}
 	slices.SortFunc(sold, func(a, b int32) int {
 		ga, gb := gear[a], gear[b]
-		return cmp.Or(cmp.Compare(slotOf(ga.part), slotOf(gb.part)), cmp.Compare(gb.price, ga.price), cmp.Compare(a, b))
+		return cmp.Or(cmp.Compare(slotOf(ga.part), slotOf(gb.part)), cmp.Compare(gb.tmpl.Price, ga.tmpl.Price), cmp.Compare(a, b))
 	})
 	return gear, sold
 }
@@ -315,6 +384,7 @@ func (b *Brain) gearItem(id int32) (gearItem, bool) {
 
 // worn is what the bot wears now.
 func (b *Brain) worn() worn {
+	wt := b.gearWeights()
 	var w, first worn
 	for _, it := range b.world.Inventory.Items {
 		if !it.Equipped {
@@ -326,7 +396,7 @@ func (b *Brain) worn() worn {
 			if first[s].ObjectID == 0 {
 				first[s] = it
 			} else {
-				w[s] = b.paired(first[s], it)
+				w[s] = b.paired(first[s], it, wt)
 			}
 		default:
 			w[s] = it
@@ -336,12 +406,12 @@ func (b *Brain) worn() worn {
 }
 
 // paired is the piece of the worn pair x, y a new one replaces: the
-// cheaper of the ones the gear errand may replace (known, not enchanted).
-func (b *Brain) paired(x, y Item) Item {
+// lower scoring of the ones the gear errand may replace (known), enchant
+// counted.
+func (b *Brain) paired(x, y Item, wt StatWeights) Item {
 	gx, okx := b.gearItem(x.TemplateID)
 	gy, oky := b.gearItem(y.TemplateID)
-	okx, oky = okx && x.Enchant == 0, oky && y.Enchant == 0
-	if c := cmp.Or(-cmpBool(okx, oky), cmp.Compare(gx.price, gy.price), cmp.Compare(x.ObjectID, y.ObjectID)); c > 0 {
+	if c := cmp.Or(-cmpBool(okx, oky), cmp.Compare(gx.score(wt, x), gy.score(wt, y)), cmp.Compare(x.ObjectID, y.ObjectID)); c > 0 {
 		return y
 	}
 	return x
@@ -358,6 +428,12 @@ func cmpBool(a, b bool) int {
 	return -1
 }
 
+// score is the score of g worn as item it, its enchant counted; 0 for an
+// unknown template (the zero g).
+func (g *gearItem) score(wt StatWeights, it Item) float64 {
+	return wt.score(&g.tmpl, int(it.Enchant))
+}
+
 // gearGrade is the highest grade the bot wears: its Expertise level,
 // capped by GearPolicy.MaxGrade.
 func (b *Brain) gearGrade() int32 {
@@ -367,15 +443,16 @@ func (b *Brain) gearGrade() int32 {
 // beats reports whether wearing template id beats what the bot wears, w
 // (GearPolicy.Equip): an empty weapon slot, or empty body and legs slots,
 // give no type to match and take what the bot's class wears
-// (GearPolicy.Classes). Weapon prices count with the shot factor
-// (shotValue).
+// (GearPolicy.Classes). Pieces compare by score (StatWeights), the worn
+// ones' enchant counted, a weapon's with the shot factor (shotValues).
 func (b *Brain) beats(id int32, w *worn) bool {
-	return b.beatsBy(id, w, true)
+	return b.beatsBy(Item{TemplateID: id}, w, true)
 }
 
-// beatsBy is beats, counting the shots the bot carries towards the shot
-// factor only when carried is set.
-func (b *Brain) beatsBy(id int32, w *worn, carried bool) bool {
+// beatsBy is beats for carried item it, its enchant counted, counting the
+// shots the bot carries towards the shot factor only when carried is set.
+func (b *Brain) beatsBy(it Item, w *worn, carried bool) bool {
+	id := it.TemplateID
 	g, ok := b.gearItem(id)
 	if !ok || b.gear.refused[id] || g.grade > b.gearGrade() {
 		return false
@@ -417,13 +494,15 @@ func (b *Brain) beatsBy(id int32, w *worn, carried bool) bool {
 		return true
 	}
 	c, ok := b.gearItem(cur.TemplateID)
-	if !ok || cur.Enchant > 0 {
+	if !ok {
 		return false
 	}
 	if s == slotWeapon && len(class.Weapons) > 0 && !slices.Contains(class.Weapons, c.kind) {
 		return b.leavesUnlisted(g, w, &class)
 	}
-	gain, value := int64(g.price), int64(c.price)
+	wt := class.weights()
+	gs, cs := g.score(wt, it), c.score(wt, cur)
+	gain, value := gs, cs
 	switch {
 	case s == slotWeapon && c.part != g.part:
 		// A two-handed weapon for a one-handed one and its shield, or the
@@ -434,47 +513,47 @@ func (b *Brain) beatsBy(id int32, w *worn, carried bool) bool {
 		// Both directions value the one-handed side with the best shield
 		// it would hold, worn or carried, so the trade-off never flips.
 		if g.part == partLRHand {
-			var shield int64
+			var shield float64
 			if sh := w[slotShield]; sh.ObjectID != 0 {
 				worn, ok := b.gearItem(sh.TemplateID)
-				if !ok || sh.Enchant > 0 {
+				if !ok {
 					return false
 				}
-				shield = int64(worn.price)
+				shield = worn.score(wt, sh)
 			}
 			if class.Shield {
-				shield = max(shield, b.carriedShield())
+				shield = max(shield, b.carriedShield(wt))
 			}
 			value += shield
 		} else if class.Shield {
-			gain += b.carriedShield()
+			gain += b.carriedShield(wt)
 		}
 	case c.kind != g.kind:
 		return false
 	case g.part == partFullArmor && c.part == partChest && w[slotLegs].ObjectID != 0:
 		// Full armor replaces the legs too.
 		legs, ok := b.gearItem(w[slotLegs].TemplateID)
-		if !ok || w[slotLegs].Enchant > 0 {
+		if !ok {
 			return false
 		}
-		value += int64(legs.price)
+		value += legs.score(wt, w[slotLegs])
 	}
 	if s == slotWeapon {
-		gain, value = b.shotValues(id, cur.TemplateID, g, c, gain, value, carried)
+		gain, value = b.shotValues(id, cur.TemplateID, gs, cs, gain, value, carried)
 	}
 	return gain > value
 }
 
 // leavesUnlisted reports whether weapon g replaces a worn weapon of a type
 // class does not wield (GearClass.Weapons): g is of a type it does, and
-// takes no enchanted or unknown shield off.
+// takes no unknown shield off.
 func (b *Brain) leavesUnlisted(g gearItem, w *worn, class *GearClass) bool {
 	if !slices.Contains(class.Weapons, g.kind) {
 		return false
 	}
 	if sh := w[slotShield]; g.part == partLRHand && sh.ObjectID != 0 {
 		_, ok := b.gearItem(sh.TemplateID)
-		return ok && sh.Enchant == 0
+		return ok
 	}
 	return true
 }
@@ -486,14 +565,14 @@ func (c *GearClass) swaps(a, b string) bool {
 		slices.Contains(c.Weapons, a) && slices.Contains(c.Weapons, b)
 }
 
-// carriedShield is the reference price of the best shield the bot carries
-// and would wear with a one-handed weapon; 0 for none.
-func (b *Brain) carriedShield() int64 {
-	var best int64
+// carriedShield is the score by wt of the best shield the bot carries and
+// would wear with a one-handed weapon; 0 for none.
+func (b *Brain) carriedShield(wt StatWeights) float64 {
+	var best float64
 	for _, it := range b.world.Inventory.Items {
 		g, ok := b.gearItem(it.TemplateID)
 		if ok && g.part == partLHand && !it.Equipped && it.Augmentation == 0 && !b.gear.refused[it.TemplateID] && g.grade <= b.gearGrade() {
-			best = max(best, int64(g.price))
+			best = max(best, g.score(wt, it))
 		}
 	}
 	return best
@@ -503,7 +582,7 @@ func (b *Brain) carriedShield() int64 {
 // over w: it is never junk.
 func (b *Brain) upgrade(it Item, w *worn) bool {
 	p := &b.persona.Gear
-	return p.Equip && !it.Equipped && it.Augmentation == 0 && !b.hold(it).NoWear && b.beats(it.TemplateID, w)
+	return p.Equip && !it.Equipped && it.Augmentation == 0 && !b.hold(it).NoWear && b.beatsBy(it, w, true)
 }
 
 // wearsNext reports whether the gear errand wears carried item it next.
@@ -516,7 +595,7 @@ func (b *Brain) wearsNext(it Item) bool {
 }
 
 // ruleGear is a rule 9 errand: standing, out of combat and trade, the bot uses the
-// best carried piece that beats the one worn in its slot (UseItem equips
+// best (highest scoring) carried piece that beats the one worn in its slot (UseItem equips
 // it), the first slot first. For an earring or ring with both sides worn
 // it first uses the piece it replaces (UseItem takes it off,
 // network/inventory.go toggleEquipItem), and wears the new one in the
@@ -552,6 +631,7 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 		}
 	}
 	w := b.worn()
+	wt := b.gearWeights()
 	var best Item
 	var bestG gearItem
 	for _, it := range b.world.Inventory.Items {
@@ -559,7 +639,7 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 			continue
 		}
 		gi, _ := b.gearItem(it.TemplateID)
-		if best.ObjectID == 0 || cmp.Or(cmp.Compare(slotOf(gi.part), slotOf(bestG.part)), cmp.Compare(bestG.price, gi.price), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
+		if best.ObjectID == 0 || cmp.Or(cmp.Compare(slotOf(gi.part), slotOf(bestG.part)), cmp.Compare(bestG.score(wt, best), gi.score(wt, it)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
 			best, bestG = it, gi
 		}
 	}
@@ -596,7 +676,7 @@ func (b *Brain) gearWants() []buyRow {
 
 // gearCandidates are the pieces the gear errand would buy (GearPolicy.Buy):
 // per slot without a carried upgrade, every piece merchants sell that
-// beats the worn one, best first.
+// beats the worn one, by slot then score, best first.
 func (b *Brain) gearCandidates() []int32 {
 	p := &b.persona.Gear
 	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
@@ -618,13 +698,18 @@ func (b *Brain) gearCandidates() []int32 {
 		}
 		ids = append(ids, id)
 	}
+	wt := b.gearWeights()
+	slices.SortStableFunc(ids, func(x, y int32) int {
+		gx, gy := b.cfg.Travel.gear[x], b.cfg.Travel.gear[y]
+		return cmp.Or(cmp.Compare(slotOf(gx.part), slotOf(gy.part)), cmp.Compare(gy.score(wt, Item{}), gx.score(wt, Item{})))
+	})
 	return ids
 }
 
 // gearGoal is the next upgrade, the one the shop errand buys or saves for
 // (docs/items.md section 5): the first of gearCandidates, the best piece
-// of the first slot with one, at its cheapest base price. Scores, sets and the grade jump refine it (#172, #173,
-// #174).
+// of the first slot with one, at its cheapest base price. Sets and the
+// grade jump refine it (#173, #174).
 func (b *Brain) gearGoal() (id int32, price int64, ok bool) {
 	ids := b.gearCandidates()
 	if len(ids) == 0 {

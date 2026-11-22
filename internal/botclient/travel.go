@@ -29,7 +29,8 @@ type TravelMap struct {
 	shops    map[int32][]shopList
 	cheapest map[int32]int32
 	// gear are the weapon and armor templates bots may wear, and shopGear
-	// the ones merchants sell, by slot then price, best first.
+	// the ones merchants sell, by slot then price (gearCandidates ranks
+	// them by score).
 	gear     map[int32]gearItem
 	shopGear []int32
 	// arrows maps each bow template to the arrow template it shoots
