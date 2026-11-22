@@ -183,13 +183,13 @@ the server engine:
     `Emax ≈ max − min` age per leg. The scenario polls at most 5 times a second through the client
     pacer; the reported position sits two run speeds off the leg, so it is corrected and never
     adopted.
-  - Value (2026-11-22, live server, 551 polls over 6 legs of 2000 at run speed 104, about 110 s):
-    max 115 ms; age p50 54, p90 93, p99 106 ms. Network jitter between polls is included, so this
-    is an upper estimate for a quiet server.
+  - Value (2026-11-22, live server, two runs of 551 polls over 6 legs of 2000 at run speed 104,
+    about 110 s each): max 115 and 141 ms; age p50 54 and 65, p90 93 and 106, p99 106 and 122 ms.
+    Network jitter between polls is included, so these are upper estimates at that load.
   - The elapsed time is not capped (`playerPassed`, `creature.go:408-415`). The ticker owes its
     runs at a fixed interval and runs missed ones at once (`task/positionupdates.go:12, 35-37`). So
     a server stall gives one long step followed by near-zero ones, and `Emax` grows with load.
-  - The walker (N5) takes `Lmax` = run speed × `Emax`, with a margin over the measured 115 ms. The
+  - The walker (N5) takes `Lmax` = run speed × `Emax`, with a margin over the measured 141 ms. The
     residual is measured by `nav_blocked_total` (Risks).
 - **`pathDirect` echo: confirmed.**
   - A direct walk's `MoveToLocation` carries the clicked X and Y exactly, and Z = clicked Z +
