@@ -201,15 +201,108 @@ func TestMemberHandOffAndFees(t *testing.T) {
 	if m := b.cfg.Travel; int64(m.cheapest[scrollOfEscape]) > base {
 		base = int64(m.cheapest[scrollOfEscape])
 	}
-	if got := b.reserve(); got != base+4*warehouseFee {
-		t.Errorf("reserve = %d, want %d plus four rows' fees", got, base)
+	// The fees are reserved from the trip's arrival in town until the
+	// visit is settled, never planned on the reserve's own (per tick) path.
+	now := at(time.Minute)
+	steps := []struct {
+		name string
+		step func()
+		want int64
+	}{
+		{"before a trip", func() {}, base},
+		{"arrived in town", b.townArrival, base + 4*warehouseFee},
+		{"visit asked", func() {
+			if req := b.persona.Warehouse.Want(b.world, b.wh.status, now); len(req.Deposit) != 4 {
+				t.Fatalf("deposit = %+v, want four rows", req.Deposit)
+			}
+		}, base + 4*warehouseFee},
+		{"visit settled", func() { b.ruleMember(now.Add(10 * time.Second)) }, base},
+	}
+	for _, s := range steps {
+		s.step()
+		if got := b.reserve(); got != s.want {
+			t.Errorf("%s: reserve = %d, want %d", s.name, got, s.want)
+		}
 	}
 	b.world.Clan.ID = 0
 	if got := b.persona.Supply.HandOff(b.world); got != 0 {
 		t.Errorf("HandOff without a clan = %d, want 0", got)
 	}
+	b.townArrival()
 	if got := b.reserve(); got != base {
 		t.Errorf("reserve without a clan = %d, want %d", got, base)
+	}
+}
+
+// TestMemberVisitLeaseAndRunning checks the visit's lease and settle
+// guards: with the board's warehouse lease held by a crafter the visit
+// deposits only and leaves that lease alone, and nothing is settled while
+// the errand still runs (its deposit after the withdrawal).
+func TestMemberVisitLeaseAndRunning(t *testing.T) {
+	const crafterObj = 0x5000
+	tests := []struct {
+		name         string
+		crafterLease bool
+	}{
+		{"lease held by a crafter", true},
+		{"errand still running", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newMemberBrain(t, wielded(1, dSword), lootStack(3, soulOre, 60), lootStack(10, ironOre, 7), lootStack(11, ironScroll, 1), adenaStack(5000))
+			board, now := b.cfg.CraftBoard, at(time.Minute)
+			deliver(t, board, memberName, dSoulshot, 312, now)
+			if tt.crafterLease && !board.TakeLease(memberClan, crafterObj, now) {
+				t.Fatal("crafter did not take the lease")
+			}
+			b.townArrival()
+			req := b.persona.Warehouse.Want(b.world, b.wh.status, now)
+			if len(req.Deposit) == 0 {
+				t.Fatalf("visit = %+v, want a deposit", req)
+			}
+			self := b.world.Self.ObjectID
+			if tt.crafterLease {
+				if len(req.Withdraw) != 0 {
+					t.Errorf("withdraw = %+v, want none without the lease", req.Withdraw)
+				}
+				if board.HoldsLease(memberClan, self, now) {
+					t.Error("member took the crafter's lease")
+				}
+			} else if len(req.Withdraw) == 0 || !board.HoldsLease(memberClan, self, now) {
+				t.Fatalf("visit = %+v, want a withdrawal under the lease", req)
+			}
+			end := now.Add(10 * time.Second)
+			b.wh.status.Withdraw = WarehouseResult{Outcome: WarehouseDone, At: end, Rows: []WarehouseRow{{TemplateID: dSoulshot, Count: 312}}}
+			if !tt.crafterLease {
+				// The withdrawal ended, the deposit still runs.
+				b.wh.running = true
+				b.ruleMember(end)
+				if !b.member.asked || !board.HoldsLease(memberClan, self, end) {
+					t.Fatal("visit settled while the errand runs")
+				}
+				if got := board.Owned(memberClan, memberName); got[dSoulshot] != 312 {
+					t.Errorf("owned while running = %v, want 312 Soulshots D", got)
+				}
+				b.wh.running = false
+			}
+			b.ruleMember(end)
+			wantOwned := map[int32]int64{}
+			if tt.crafterLease {
+				wantOwned = map[int32]int64{dSoulshot: 312}
+			}
+			if got := board.Owned(memberClan, memberName); !reflect.DeepEqual(got, wantOwned) {
+				t.Errorf("owned = %v, want %v", got, wantOwned)
+			}
+			if board.HoldsLease(memberClan, self, end) {
+				t.Error("member still holds the lease")
+			}
+			if tt.crafterLease && !board.HoldsLease(memberClan, crafterObj, end) {
+				t.Error("member released the crafter's lease")
+			}
+			if b.member.asked {
+				t.Error("visit not settled")
+			}
+		})
 	}
 }
 

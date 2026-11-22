@@ -29,6 +29,11 @@ type memberState struct {
 	// refusal fails the whole request, and the deposit must not wait on a
 	// withdrawal that never comes.
 	skipWithdraw bool
+	// fees are the deposit fees the shop visit leaves (memberFees): the
+	// planned visit's on the trip's arrival in town, the asked visit's
+	// exact ones once handed to the errand, zero once it is settled. They
+	// are fixed at those two points because reserve runs on every tick.
+	fees int64
 	// scrolls maps each recipe scroll template of the travel map to the
 	// recipes it teaches, built on first use.
 	scrolls map[int32][]int32
@@ -70,6 +75,7 @@ func (b *Brain) wireMember() {
 		}
 		if b.memberActive() {
 			b.member.due = true
+			b.member.fees = depositFees(b.memberDeposit(b.memberOrders()))
 		}
 	}
 	p.Supply.HandOff = func(w *World) int64 {
@@ -108,7 +114,14 @@ func (b *Brain) memberHold(it Item) Hold {
 	if st.inHold || it.Equipped || it.Augmentation != 0 || !b.memberActive() {
 		return Hold{}
 	}
-	if _, ok := b.recipeScrolls()[it.TemplateID]; ok || b.memberMaterials()[it.TemplateID] {
+	return b.memberKeep(it, b.memberMaterials())
+}
+
+// memberKeep is memberHold for an item none of its guards excludes, with
+// the materials the member keeps (memberMaterials) built by the caller.
+func (b *Brain) memberKeep(it Item, materials map[int32]bool) Hold {
+	st := &b.member
+	if _, ok := b.recipeScrolls()[it.TemplateID]; ok || materials[it.TemplateID] {
 		return Hold{Keep: true}
 	}
 	if _, graded := b.cfg.Travel.crystals[it.TemplateID]; !graded {
@@ -312,8 +325,10 @@ func (b *Brain) memberOrders() map[int32]int64 {
 // (keeps), quest items aside, by object; then the ore of orders.
 func (b *Brain) memberDeposit(orders map[int32]int64) []WarehouseRow {
 	var rows []WarehouseRow
+	materials := b.memberMaterials()
 	for _, it := range b.world.Inventory.Items {
-		if it.Equipped || it.SubCategory == subCategoryQuest || b.keeps(it.TemplateID) || !b.memberHold(it).Keep {
+		if it.Equipped || it.Augmentation != 0 || it.SubCategory == subCategoryQuest || b.member.inHold ||
+			b.keeps(it.TemplateID) || !b.memberKeep(it, materials).Keep {
 			continue
 		}
 		rows = append(rows, WarehouseRow{TemplateID: it.TemplateID, Count: it.Count, Object: it.ObjectID})
@@ -347,13 +362,17 @@ func (b *Brain) memberHandOff() int64 {
 	return w
 }
 
-// memberFees are the deposit fees of the member's next visit, warehouseFee
-// a row up to warehouseMaxRows: the shop visit leaves them (reserve).
+// memberFees are the deposit fees of the member's visit due or asked
+// (memberState.fees), none without one: the shop visit leaves them
+// (reserve). reserve runs on every tick, so this never plans the visit.
 func (b *Brain) memberFees() int64 {
-	if !b.memberActive() {
-		return 0
-	}
-	return int64(warehouseFee) * int64(min(len(b.memberDeposit(b.memberOrders())), warehouseMaxRows))
+	return b.member.fees
+}
+
+// depositFees are the fees of depositing rows, warehouseFee a row up to
+// warehouseMaxRows.
+func depositFees(rows []WarehouseRow) int64 {
+	return int64(warehouseFee) * int64(min(len(rows), warehouseMaxRows))
 }
 
 // memberWant is the member's warehouse visit, once a supply trip's arrival
@@ -367,7 +386,7 @@ func (b *Brain) memberWant(now time.Time) WarehouseRequest {
 	if !st.due || st.asked {
 		return WarehouseRequest{}
 	}
-	st.due = false
+	st.due, st.fees = false, 0
 	if !b.memberActive() {
 		return WarehouseRequest{}
 	}
@@ -391,6 +410,7 @@ func (b *Brain) memberWant(now time.Time) WarehouseRequest {
 		return WarehouseRequest{}
 	}
 	st.asked, st.askedAt, st.orders, st.lease = true, now, orders, lease
+	st.fees = depositFees(req.Deposit)
 	return req
 }
 
@@ -438,6 +458,6 @@ func (b *Brain) ruleMember(now time.Time) (Action, bool) {
 			}
 		}
 	}
-	st.asked, st.orders, st.lease = false, nil, false
+	st.asked, st.orders, st.lease, st.fees = false, nil, false, 0
 	return Action{}, false
 }
