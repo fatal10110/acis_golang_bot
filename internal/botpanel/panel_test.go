@@ -159,14 +159,30 @@ func (g *rig) run(log *slog.Logger) botregistry.RunFunc {
 	}
 }
 
+// next awaits the next run and returns it once the supervisor holds its
+// bot: Run.Live posts the bot to the supervisor's mailbox, so the run can
+// reach the test first, and a command or a status read then would find no
+// live bot (#207).
 func (g *rig) next() *run {
 	g.t.Helper()
+	var r *run
 	select {
-	case r := <-g.runs:
-		return r
+	case r = <-g.runs:
 	case err := <-g.done:
 		g.t.Fatalf("supervisor returned %v while a run was awaited", err)
+		return nil
 	}
+	for range 10000 {
+		list, err := g.sup.List(g.t.Context())
+		if err != nil {
+			g.t.Fatal(err)
+		}
+		if slices.ContainsFunc(list, func(s botregistry.Status) bool { return s.Account == r.Account && s.Live != nil }) {
+			return r
+		}
+		runtime.Gosched()
+	}
+	g.t.Fatalf("bot %s never handed over to the supervisor", r.Account)
 	return nil
 }
 
@@ -446,8 +462,14 @@ func TestPanelCommandAnswer(t *testing.T) {
 		code, body := g.do("POST", "/api/bots/hz1/command", map[string]any{"command": "follow Alden"})
 		got <- answer{code, body}
 	}()
-	// The panel logs the command once the bot's mailbox took it.
+	// The panel logs the command once the bot's mailbox took it. A refused
+	// command is never logged: its early answer fails the test.
 	for !slices.ContainsFunc(g.ring.Lines("hz1", 0), func(l Line) bool { return strings.Contains(l.Text, "follow Alden") }) {
+		select {
+		case a := <-got:
+			t.Fatalf("command answered %d %s before the mailbox took it", a.code, a.body)
+		default:
+		}
 		runtime.Gosched()
 	}
 	// The bot stops before a session carried it out: its answer is
