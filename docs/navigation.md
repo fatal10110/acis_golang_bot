@@ -139,8 +139,10 @@ two callers, doors and fences:
 
 - **Doors: all come from `doors.xml`.** `newDoor` (`data/manager/worldobjects.go:616-646`) is the
   only place a door is built. Its callers are `newDoors` at startup and `ReloadDoors`, and both
-  read a `door.Table` loaded from `doors.xml` (`network/admin_reload.go:283`,
-  `network/clanhall_grounds.go:21`). Sieges, clan halls and scripts never build doors. They change
+  read a `door.Table` loaded from `doors.xml`: at startup by `cmd/gameserver/data.go:176`, passed
+  to `NewWorldObjects` at `cmd/gameserver/world.go:42`, and on `//reload` by
+  `cmd/gameserver/reload.go:57` through `network/admin_reload.go:283` (the `cmd/` paths are
+  relative to the repository root). Sieges, clan halls and scripts never build doors. They change
   the state or HP of a door that is already there, by its door id (`SetDoorSiege`, `UpgradeDoor`,
   `SetClanCall`, `worldobjects.go:199-244`). The door table and the hierarchy's door sets
   therefore already cover every door.
