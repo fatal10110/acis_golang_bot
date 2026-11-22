@@ -77,9 +77,13 @@ func (c *crafterCycle) remainingNeeds(recipes map[int32]datapack.Recipe) map[int
 	return needs
 }
 
-// craftSent records a craft that went out at now.
+// craftSent records a craft that went out at now, and renews the board's
+// warehouse lease on every action the withdrawal's errand sends.
 func (b *Brain) craftSent(a Action, now time.Time) {
 	c := &b.craft
+	if c.phase == craftWithdraw && b.wh.running {
+		b.cfg.CraftBoard.TakeLease(b.world.Clan.ID, b.world.Self.ObjectID, now)
+	}
 	if a.kind != actCraft || c.phase != craftMake {
 		return
 	}
@@ -167,6 +171,13 @@ func (b *Brain) finishCraftCycle(now time.Time) {
 // beginDeposit starts the deposit of rows, noting the products of the
 // crafted orders it carries for their delivery.
 func (b *Brain) beginDeposit(rows []WarehouseRow, now time.Time) {
+	b.noteDelivering(rows, now)
+	b.craft.begin(craftDeposit, WarehouseRequest{Deposit: rows}, now)
+}
+
+// noteDelivering notes the products of the bot's crafted orders that the
+// deposit of rows carries, by order, for deliverOrders once it lands.
+func (b *Brain) noteDelivering(rows []WarehouseRow, now time.Time) {
 	c := &b.craft
 	c.delivering = nil
 	carried := make(map[int32]int64)
@@ -184,7 +195,6 @@ func (b *Brain) beginDeposit(rows []WarehouseRow, now time.Time) {
 		}
 		c.delivering[o.ID] = n
 	}
-	c.begin(craftDeposit, WarehouseRequest{Deposit: rows}, now)
 }
 
 // deliverOrders closes the crafted orders the deposit carried.

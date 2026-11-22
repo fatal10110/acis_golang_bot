@@ -244,9 +244,6 @@ func (b *Brain) ruleCraft(now time.Time) (Action, bool) {
 		return b.craftNext(now)
 	}
 	if !c.asked || b.wh.running {
-		if c.phase == craftWithdraw && b.wh.running {
-			b.cfg.CraftBoard.TakeLease(b.world.Clan.ID, b.world.Self.ObjectID, now)
-		}
 		return Action{}, true
 	}
 	b.craftErrandDone(now)
@@ -304,6 +301,12 @@ func (b *Brain) craftErrandDone(now time.Time) {
 		b.craftPlan(now, true)
 	case craftWithdraw:
 		b.cfg.CraftBoard.ReleaseLease(b.world.Clan.ID, b.world.Self.ObjectID)
+		// The deposit after the withdrawal can carry the products of
+		// orders an earlier cycle's failed deposit left crafted.
+		if r := st.Deposit; !r.At.Before(c.askedAt) && r.Outcome == WarehouseDone {
+			b.deliverOrders()
+		}
+		c.delivering = nil
 		if r := st.Withdraw; r.At.Before(c.askedAt) || r.Outcome != WarehouseDone {
 			// Nothing came: plan again from what the bot carries.
 			b.craftPlan(now, false)
@@ -341,7 +344,9 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 		for _, g := range c.plan.Withdraw {
 			rows = append(rows, WarehouseRow{TemplateID: g.ItemID, Count: g.Count})
 		}
-		c.begin(craftWithdraw, WarehouseRequest{Withdraw: rows, Deposit: b.craftDepositRows(ingredientCounts(c.plan.Keep))}, now)
+		deposit := b.craftDepositRows(ingredientCounts(c.plan.Keep))
+		b.noteDelivering(deposit, now)
+		c.begin(craftWithdraw, WarehouseRequest{Withdraw: rows, Deposit: deposit}, now)
 		return
 	}
 	b.startMake(now)
