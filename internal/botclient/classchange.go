@@ -2,7 +2,6 @@ package botclient
 
 import (
 	"maps"
-	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -201,10 +200,7 @@ func (b *Brain) classChanged() {
 }
 
 // startClassChange starts a visit when the build's next profession is due
-// at the bot's level: at the nearest master in sight, else at the nearest
-// master spawn within Reach, reporting whether it did. A party member stays
-// with its party and a bot told to follow stays with its commander: neither
-// walks to a master out of sight.
+// at the bot's level (pickVisit), reporting whether it did.
 func (b *Brain) startClassChange(now time.Time) bool {
 	c, s, p := &b.class, &b.world.Self, &b.persona.ClassChange
 	if p.Builds[s.ClassID] == 0 || now.Before(c.retryAt) {
@@ -213,28 +209,8 @@ func (b *Brain) startClassChange(now time.Time) bool {
 	if level, _ := transferTier(s.ClassID); s.Level < level {
 		return false
 	}
-	from := s.Position(now)
-	var best npcVisit
-	bestDist := int64(math.MaxInt64)
-	for _, npcID := range p.Masters {
-		if id := b.nearestNPC(npcID, from, now); id != 0 {
-			at := b.world.Objects[id].Position(now)
-			if d := dist2(from, at); d < bestDist || best.obj == 0 {
-				best, bestDist = npcVisit{npcID: npcID, at: at, obj: id}, d
-			}
-		}
-	}
-	if !best.active() && b.cfg.Travel != nil && !b.world.Party.In() && b.orders.follow == 0 {
-		reach := int64(p.Reach) * int64(p.Reach)
-		for _, npcID := range p.Masters {
-			for _, at := range b.cfg.Travel.spawns[npcID] {
-				if d := dist2(from, at); d <= reach && d < bestDist {
-					best, bestDist = npcVisit{npcID: npcID, at: at}, d
-				}
-			}
-		}
-	}
-	if !best.active() {
+	best, ok := b.pickVisit(p.Masters, p.Reach, now)
+	if !ok {
 		return false
 	}
 	c.v, c.from, c.menu, c.asked = best, s.ClassID, false, false

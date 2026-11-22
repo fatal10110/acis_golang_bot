@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"math"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
@@ -74,6 +75,36 @@ func (v *npcVisit) page(ev NpcHtmlMessage) bool {
 	}
 	v.opened, v.waitUntil = true, time.Time{}
 	return true
+}
+
+// pickVisit is a visit to the nearest NPC of the templates npcs in sight,
+// else to the nearest of their spawns within reach (from the travel map),
+// reporting whether there is one. A party member stays with its party and
+// a bot told to follow stays with its commander: neither walks to an NPC
+// out of sight.
+func (b *Brain) pickVisit(npcs []int32, reach int32, now time.Time) (npcVisit, bool) {
+	from := b.world.Self.Position(now)
+	var best npcVisit
+	bestDist := int64(math.MaxInt64)
+	for _, npcID := range npcs {
+		if id := b.nearestNPC(npcID, from, now); id != 0 {
+			at := b.world.Objects[id].Position(now)
+			if d := dist2(from, at); d < bestDist || best.obj == 0 {
+				best, bestDist = npcVisit{npcID: npcID, at: at, obj: id}, d
+			}
+		}
+	}
+	if !best.active() && b.cfg.Travel != nil && !b.world.Party.In() && b.orders.follow == 0 {
+		r := int64(reach) * int64(reach)
+		for _, npcID := range npcs {
+			for _, at := range b.cfg.Travel.spawns[npcID] {
+				if d := dist2(from, at); d <= r && d < bestDist {
+					best, bestDist = npcVisit{npcID: npcID, at: at}, d
+				}
+			}
+		}
+	}
+	return best, best.active()
 }
 
 // bypassTo sends bypass command cmd, a link of the page npc obj opened.
