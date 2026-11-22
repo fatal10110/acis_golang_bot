@@ -31,6 +31,23 @@ export interface Live {
   order?: string;
   reconnects: number;
   err?: string;
+  crafter?: Crafter;
+}
+
+/** A crafter's status (botclient.CrafterStatus); times are RFC 3339. */
+export interface Crafter {
+  create_item: number;
+  recipes: number;
+  book_known: boolean;
+  orders: number;
+  claimed: number;
+  phase: string;
+  chains: number;
+  chains_done: number;
+  next_check?: string;
+  last_cycle?: string;
+  last_cycle_at?: string;
+  breaker_until?: string;
 }
 
 /** A bot of the registry, its run and its live snapshot. */

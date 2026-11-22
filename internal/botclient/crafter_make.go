@@ -225,7 +225,8 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 	if p.CheckJitter > 0 {
 		wait += time.Duration(b.rng.Int64N(int64(p.CheckJitter) + 1))
 	}
-	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn}
+	c.noteCraftEnd(now, now.Add(wait), ok)
+	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended}
 }
 
 // craftLearn takes the first recipe scroll of the plan's to learn that the
