@@ -38,49 +38,30 @@ func indexPotions(etc map[int32]datapack.EtcItem, skills map[datapack.SkillRef]d
 	return ids
 }
 
-// shotKinds are the player's shot kinds in the order indexShots lists them.
+// shotKinds are the player's shot kinds.
 var shotKinds = []datapack.EtcKind{datapack.EtcSoulshot, datapack.EtcSpiritshot, datapack.EtcBlessedSpiritshot}
 
-// indexShots lists the soulshots, spiritshots and blessed spiritshots of a
-// datapack, in that order, each kind by grade, the beginners' unsellable
-// ones before the others of their grade, then by id.
-func indexShots(etc map[int32]datapack.EtcItem) []int32 {
-	var ids []int32
+// indexShots indexes the soulshots, spiritshots and blessed spiritshots of
+// a datapack by kind, grade and whether they are a beginner's: the
+// beginners' shots are not sellable.
+func indexShots(etc map[int32]datapack.EtcItem) map[int32]shotItem {
+	out := make(map[int32]shotItem)
 	for id, it := range etc {
 		if slices.Contains(shotKinds, it.Kind) {
-			ids = append(ids, id)
+			out[id] = shotItem{kind: it.Kind, grade: int32(it.Grade), beginner: !it.Sellable}
 		}
 	}
-	slices.SortFunc(ids, func(a, b int32) int {
-		x, y := etc[a], etc[b]
-		return cmp.Or(
-			cmp.Compare(slices.Index(shotKinds, x.Kind), slices.Index(shotKinds, y.Kind)),
-			cmp.Compare(x.Grade, y.Grade),
-			cmp.Compare(boolRank(x.Sellable), boolRank(y.Sellable)),
-			cmp.Compare(a, b),
-		)
-	})
-	return ids
+	return out
 }
 
-// boolRank orders false before true.
-func boolRank(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-// WithItemIndex returns p with the healing potions and shots of m's
-// datapack in place of the built-in lists DefaultPersona carries for a bot
-// without a datapack (healingPotions, shotTemplates). A persona that sets
-// lists of its own keeps them, and so does one whose datapack lists none.
+// WithItemIndex returns p with the healing potions of m's datapack in
+// place of the built-in list DefaultPersona carries for a bot without a
+// datapack (healingPotions). A persona that sets a list of its own keeps
+// it, and so does one whose datapack lists none. The shots a bot uses come
+// from the datapack's shot table by themselves (shotsFor).
 func (m *TravelMap) WithItemIndex(p Persona) Persona {
 	if len(m.potions) > 0 && slices.Equal(p.Potions, healingPotions) {
 		p.Potions = slices.Clone(m.potions)
-	}
-	if len(m.shots) > 0 && slices.Equal(p.Shots, shotTemplates) {
-		p.Shots = slices.Clone(m.shots)
 	}
 	return p
 }

@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"maps"
 	"os"
 	"slices"
 	"testing"
@@ -41,45 +42,44 @@ func TestIndexPotions(t *testing.T) {
 }
 
 func TestIndexShots(t *testing.T) {
-	shot := func(kind datapack.EtcKind, grade int, sellable bool) datapack.EtcItem {
-		return datapack.EtcItem{Kind: kind, Grade: grade, Sellable: sellable}
-	}
 	etc := map[int32]datapack.EtcItem{
-		1467: shot(datapack.EtcSoulshot, 5, true),
-		1463: shot(datapack.EtcSoulshot, 1, true),
-		1835: shot(datapack.EtcSoulshot, 0, true),
-		5789: shot(datapack.EtcSoulshot, 0, false),
-		2510: shot(datapack.EtcSpiritshot, 1, true),
-		2509: shot(datapack.EtcSpiritshot, 0, true),
-		5790: shot(datapack.EtcSpiritshot, 0, false),
-		3948: shot(datapack.EtcBlessedSpiritshot, 1, true),
-		3947: shot(datapack.EtcBlessedSpiritshot, 0, true),
+		1463: {Kind: datapack.EtcSoulshot, Grade: 1, Sellable: true},
+		1835: {Kind: datapack.EtcSoulshot, Sellable: true},
+		5789: {Kind: datapack.EtcSoulshot},
+		2510: {Kind: datapack.EtcSpiritshot, Grade: 1, Sellable: true},
+		3948: {Kind: datapack.EtcBlessedSpiritshot, Grade: 1, Sellable: true},
 		1061: {Kind: datapack.EtcPotion},
 	}
-	want := []int32{5789, 1835, 1463, 1467, 5790, 2509, 2510, 3947, 3948}
-	if got := indexShots(etc); !slices.Equal(got, want) {
+	want := map[int32]shotItem{
+		1463: {datapack.EtcSoulshot, 1, false},
+		1835: {datapack.EtcSoulshot, 0, false},
+		5789: {datapack.EtcSoulshot, 0, true},
+		2510: {datapack.EtcSpiritshot, 1, false},
+		3948: {datapack.EtcBlessedSpiritshot, 1, false},
+	}
+	if got := indexShots(etc); !maps.Equal(got, want) {
 		t.Errorf("indexShots = %v, want %v", got, want)
 	}
 }
 
 func TestWithItemIndex(t *testing.T) {
-	index := &TravelMap{potions: []int32{1539, 1061}, shots: []int32{5789, 1835}}
+	index := &TravelMap{potions: []int32{1539, 1061}}
 	tests := []struct {
-		name                string
-		m                   *TravelMap
-		potions, shots      []int32
-		wantPots, wantShots []int32
+		name     string
+		m        *TravelMap
+		potions  []int32
+		wantPots []int32
 	}{
-		{"built-in lists", index, healingPotions, shotTemplates, []int32{1539, 1061}, []int32{5789, 1835}},
-		{"own lists", index, []int32{1060}, []int32{1835}, []int32{1060}, []int32{1835}},
-		{"none", index, nil, nil, nil, nil},
-		{"index lists none", &TravelMap{}, healingPotions, shotTemplates, healingPotions, shotTemplates},
+		{"built-in list", index, healingPotions, []int32{1539, 1061}},
+		{"own list", index, []int32{1060}, []int32{1060}},
+		{"none", index, nil, nil},
+		{"index lists none", &TravelMap{}, healingPotions, healingPotions},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := tt.m.WithItemIndex(Persona{Potions: tt.potions, Shots: tt.shots, CriticalHP: 20})
-			if !slices.Equal(p.Potions, tt.wantPots) || !slices.Equal(p.Shots, tt.wantShots) || p.CriticalHP != 20 {
-				t.Errorf("WithItemIndex = potions %v shots %v critical %d, want %v %v 20", p.Potions, p.Shots, p.CriticalHP, tt.wantPots, tt.wantShots)
+			p := tt.m.WithItemIndex(Persona{Potions: tt.potions, Shots: []int32{1835}, CriticalHP: 20})
+			if !slices.Equal(p.Potions, tt.wantPots) || !slices.Equal(p.Shots, []int32{1835}) || p.CriticalHP != 20 {
+				t.Errorf("WithItemIndex = potions %v shots %v critical %d, want %v [1835] 20", p.Potions, p.Shots, p.CriticalHP, tt.wantPots)
 			}
 		})
 	}
@@ -87,7 +87,8 @@ func TestWithItemIndex(t *testing.T) {
 
 // TestItemIndexShipped checks the index of a real datapack when
 // BOT_DATAPACK_XML names its data/xml directory, and skips otherwise: the
-// shots are the built-in list, in its order; the potions are the built-in
+// shots are the built-in table, no spawned merchant sells D-grade shots
+// and the grocers sell no-grade ones; the potions are the built-in
 // ones, best first, with the Beginner's Potion and the event Greater
 // Healing Potion, which heal alike.
 func TestItemIndexShipped(t *testing.T) {
@@ -100,8 +101,13 @@ func TestItemIndexShipped(t *testing.T) {
 		t.Fatalf("Load(%s): %v", dir, err)
 	}
 	m := NewTravelMap(dp)
-	if !slices.Equal(m.shots, shotTemplates) {
-		t.Errorf("shots = %v, want %v", m.shots, shotTemplates)
+	if !maps.Equal(m.shots, builtinShots) {
+		t.Errorf("shots = %v, want %v", m.shots, builtinShots)
+	}
+	for id, sold := range map[int32]bool{1835: true, 2509: true, 1463: false, 2510: false, 3948: false} {
+		if m.sellsShot(id) != sold {
+			t.Errorf("sellsShot(%d) = %v, want %v", id, !sold, sold)
+		}
 	}
 	if want := []int32{1539, 9206, 1061, 1060, 1073}; !slices.Equal(m.potions, want) {
 		t.Errorf("potions = %v, want %v", m.potions, want)
