@@ -194,8 +194,8 @@ func TestEntrancesKeepOneWayTerrainApart(t *testing.T) {
 			e := tc.e(t)
 			th := buildHier(t, e, tc.size, nil, tc.keys)
 			b := th.builder()
-			outs, err := b.clusters(t.Context(), 1, nil)
-			if err != nil {
+			outs := make([]clusterOut, len(b.keys))
+			if err := b.parallel(t.Context(), 1, nil, func(s *buildScratch, i int) { outs[i] = b.cluster(s, i) }); err != nil {
 				t.Fatal(err)
 			}
 			var g localGraph
@@ -205,7 +205,7 @@ func TestEntrancesKeepOneWayTerrainApart(t *testing.T) {
 				g.load(&b.p, int(k.X)*tc.size, int(k.Y)*tc.size, tc.size)
 				s.localSCCs(&g)
 				for _, bc := range o.border {
-					lx, ly, _, _ := b.sidePos(&g, bc.side, bc.pos)
+					lx, ly, _, _ := b.sidePos(&g, int(bc.side), int(bc.pos))
 					cell := g.index(Cell{X: g.x0 + lx, Y: g.y0 + ly, Z: bc.z})
 					rep := g.index(o.nodes[bc.node].rep)
 					if cell < 0 || rep < 0 || s.label[cell] != s.label[rep] {

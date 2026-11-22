@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log/slog"
+	"math/bits"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -97,13 +98,35 @@ func Build(ctx context.Context, cfg BuildConfig) ([]byte, BuildStats, error) {
 	var stats BuildStats
 	stats.Doors, stats.SkippedDoors = b.loadDoors(cfg.Doors, static, log)
 
-	outs, err := b.clusters(ctx, max(cfg.Workers, 1), cfg.onCluster)
+	workers := max(cfg.Workers, 1)
+	progress := func(phase string) func() {
+		var done atomic.Int64
+		step := int64(max(len(keys)/20, 1))
+		return func() {
+			if d := done.Add(1); d%step == 0 || d == int64(len(keys)) {
+				log.Info("nav: clusters done", "phase", phase, "done", d, "of", len(keys))
+			}
+			if cfg.onCluster != nil {
+				cfg.onCluster()
+			}
+		}
+	}
+	outs := make([]clusterOut, len(keys))
+	if err := b.parallel(ctx, workers, progress("entrances"), func(s *buildScratch, i int) { outs[i] = b.cluster(s, i) }); err != nil {
+		return nil, stats, err
+	}
+	l, err := b.link(outs, &stats)
 	if err != nil {
+		return nil, stats, err
+	}
+	// Edge costs only between nodes of one abstract SCC: the only edges a
+	// route or distance search follows; the condensation holds the rest.
+	if err := b.parallel(ctx, workers, progress("costs"), func(s *buildScratch, i int) { b.intraEdges(s, i, &outs[i], l) }); err != nil {
 		return nil, stats, err
 	}
 	key := cfg.Key
 	key.ClusterCells = size
-	image, err := b.assemble(outs, key, &stats)
+	image, err := b.encode(outs, l, key, &stats)
 	if err != nil {
 		return nil, stats, err
 	}
@@ -183,10 +206,12 @@ func (b *builder) clusterIndex(k ClusterKey) int {
 
 // clusterOut is one built cluster, in local node indices.
 type clusterOut struct {
-	nodes  []buildNode
-	edges  []buildEdge
-	cross  []buildCross
-	border []borderCell // sorted by side, pos, z
+	nodes      []buildNode
+	reach      [][2]int32 // node pairs joined inside the cluster, transitively reduced
+	edges      []buildEdge
+	cross      []buildCross
+	crossDoors []int32      // the door sets of the crossings
+	border     []borderCell // sorted by side, pos, z
 }
 
 type buildNode struct {
@@ -202,22 +227,30 @@ type buildEdge struct {
 }
 
 // buildCross is a crossing out of the cluster: from a cell of node from
-// into cell to of the next cluster through side.
+// into cell (x, y, z) of the next cluster through side. Its door set (the
+// doors at either end) is crossDoors[doorOff:doorOff+doorN]. A build holds
+// one per border cell of the world, so the record is kept small.
 type buildCross struct {
-	from  int32
-	side  int
-	to    Cell
-	doors []int32 // doors at either end of the crossing
+	from    int32
+	x, y    int32
+	doorOff int32
+	z       int16
+	side    uint8
+	doorN   uint8
 }
+
+func (x buildCross) to() Cell { return Cell{X: int(x.x), Y: int(x.y), Z: x.z} }
 
 // borderCell is one cell an entrance node holds.
 type borderCell struct {
-	side, pos int
-	z         int16
-	node      int32
+	node int32
+	pos  uint16
+	z    int16
+	side uint8
 }
 
 func cmpBorder(a, b borderCell) int {
+	// side, then pos, then z
 	if c := cmp.Compare(a.side, b.side); c != 0 {
 		return c
 	}
@@ -228,17 +261,17 @@ func cmpBorder(a, b borderCell) int {
 }
 
 func (o *clusterOut) nodeAt(side, pos int, z int16) (int32, bool) {
-	i, ok := slices.BinarySearchFunc(o.border, borderCell{side: side, pos: pos, z: z}, cmpBorder)
+	i, ok := slices.BinarySearchFunc(o.border, borderCell{side: uint8(side), pos: uint16(pos), z: z}, cmpBorder)
 	if !ok {
 		return 0, false
 	}
 	return o.border[i].node, true
 }
 
-// clusters builds every cluster on workers goroutines, joined before it
-// returns.
-func (b *builder) clusters(ctx context.Context, workers int, onCluster func()) ([]clusterOut, error) {
-	outs := make([]clusterOut, len(b.keys))
+// parallel runs fn on every cluster index on at most workers goroutines,
+// each with its own scratch, and joins them all before it returns. On ctx
+// cancellation the workers stop at their next cluster.
+func (b *builder) parallel(ctx context.Context, workers int, onCluster func(), fn func(s *buildScratch, i int)) error {
 	var (
 		next    atomic.Int64
 		wg      sync.WaitGroup
@@ -259,7 +292,7 @@ func (b *builder) clusters(ctx context.Context, workers int, onCluster func()) (
 					errOnce.Do(func() { failed = err })
 					return
 				}
-				outs[i] = b.cluster(s, i)
+				fn(s, i)
 				if onCluster != nil {
 					onCluster()
 				}
@@ -267,10 +300,7 @@ func (b *builder) clusters(ctx context.Context, workers int, onCluster func()) (
 		}()
 	}
 	wg.Wait()
-	if failed != nil {
-		return nil, failed
-	}
-	return outs, nil
+	return failed
 }
 
 // buildScratch is one worker's working memory.
@@ -288,6 +318,13 @@ type buildScratch struct {
 	heap    []distItem
 	isDoor  []bool
 	doors   []int32
+	// reach edges
+	holders  []int32
+	holderOf map[int32]int
+	bits     []uint64
+	lstart   []int32
+	lto      []int32
+	lpos     []int32
 }
 
 type borderEntry struct {
@@ -396,7 +433,7 @@ func (b *builder) cluster(s *buildScratch, i int) clusterOut {
 			pos1: s.entries[hi-1].pos,
 		})
 		for _, e := range s.entries[lo:hi] {
-			out.border = append(out.border, borderCell{side: e.side, pos: e.pos, z: g.z[e.cell], node: n})
+			out.border = append(out.border, borderCell{side: uint8(e.side), pos: uint16(e.pos), z: g.z[e.cell], node: n})
 		}
 		lo = hi
 	}
@@ -410,22 +447,151 @@ func (b *builder) cluster(s *buildScratch, i int) clusterOut {
 			pos = lx
 		}
 		from, _ := out.nodeAt(oc.side, pos, c.Z)
-		doors := b.doorsAt(b.doorsAt(nil, c), oc.to)
-		out.cross = append(out.cross, buildCross{from: from, side: oc.side, to: oc.to, doors: doors})
+		off := len(out.crossDoors)
+		out.crossDoors = b.doorsAt(b.doorsAt(out.crossDoors, c), oc.to)
+		out.cross = append(out.cross, buildCross{
+			from: from, x: int32(oc.to.X), y: int32(oc.to.Y), z: oc.to.Z, side: uint8(oc.side),
+			doorOff: int32(off), doorN: uint8(len(out.crossDoors) - off),
+		})
 	}
 
-	if len(out.nodes) > 1 {
-		b.intraEdges(s, &out)
-	}
+	b.reachEdges(s, &out)
 	return out
+}
+
+// reachEdges records which of the cluster's nodes reach which inside it:
+// the nodes of one local SCC in a cycle, and between local SCCs the
+// transitive reduction of their reachability over the local condensation.
+// That is exact for the abstract SCCs at a few edges per node, where all
+// pairs would grow with the square of a fragmented border's node count.
+func (b *builder) reachEdges(s *buildScratch, out *clusterOut) {
+	if len(out.nodes) < 2 {
+		return
+	}
+	g := &s.g
+	label := s.scc.label
+	// The labels holding nodes, each with its nodes.
+	s.holders = s.holders[:0]
+	clear(s.holderOf)
+	if s.holderOf == nil {
+		s.holderOf = map[int32]int{}
+	}
+	byHolder := make([][]int32, 0, len(out.nodes))
+	for u, nd := range out.nodes {
+		l := label[g.index(nd.rep)]
+		h, ok := s.holderOf[l]
+		if !ok {
+			h = len(s.holders)
+			s.holderOf[l] = h
+			s.holders = append(s.holders, l)
+			byHolder = append(byHolder, nil)
+		}
+		byHolder[h] = append(byHolder[h], int32(u))
+	}
+	for _, nodes := range byHolder {
+		for i := range nodes {
+			if len(nodes) > 1 {
+				out.reach = append(out.reach, [2]int32{nodes[i], nodes[(i+1)%len(nodes)]})
+			}
+		}
+	}
+	k := len(s.holders)
+	if k < 2 {
+		return
+	}
+	// Reachability between holders over the local condensation, whose
+	// edges all go from a higher label to a lower one.
+	words := (k + 63) / 64
+	nLabels := 0
+	for _, l := range label[:g.cells()] {
+		nLabels = max(nLabels, int(l)+1)
+	}
+	s.bits = fill(s.bits, nLabels*words, 0)
+	for h, l := range s.holders {
+		s.bits[int(l)*words+h/64] |= 1 << (h % 64)
+	}
+	s.lstart = fill(s.lstart, nLabels+1, 0)
+	n := g.cells()
+	for v := range n {
+		for d := range 4 {
+			if w := g.next[4*v+d]; w >= 0 && label[w] != label[v] {
+				s.lstart[label[v]+1]++
+			}
+		}
+	}
+	for l := range nLabels {
+		s.lstart[l+1] += s.lstart[l]
+	}
+	s.lto = resize(s.lto, int(s.lstart[nLabels]))
+	s.lpos = append(s.lpos[:0], s.lstart[:nLabels]...)
+	for v := range n {
+		for d := range 4 {
+			if w := g.next[4*v+d]; w >= 0 && label[w] != label[v] {
+				s.lto[s.lpos[label[v]]] = label[w]
+				s.lpos[label[v]]++
+			}
+		}
+	}
+	for l := range nLabels {
+		row := s.bits[l*words : (l+1)*words]
+		for _, m := range s.lto[s.lstart[l]:s.lstart[l+1]] {
+			for w := range words {
+				row[w] |= s.bits[int(m)*words+w]
+			}
+		}
+	}
+	// reach[h]: the holders h reaches, itself excluded; then drop every
+	// holder reached through another (the transitive reduction of a DAG).
+	reach := make([]uint64, k*words)
+	for h, l := range s.holders {
+		copy(reach[h*words:(h+1)*words], s.bits[int(l)*words:(int(l)+1)*words])
+		reach[h*words+h/64] &^= 1 << (h % 64)
+	}
+	imm := make([]uint64, words)
+	for h := range k {
+		row := reach[h*words : (h+1)*words]
+		copy(imm, row)
+		for w, word := range row {
+			for word != 0 {
+				t := w*64 + bits.TrailingZeros64(word)
+				word &= word - 1
+				for x := range words {
+					imm[x] &^= reach[t*words+x]
+				}
+			}
+		}
+		for w, word := range imm {
+			for word != 0 {
+				t := w*64 + bits.TrailingZeros64(word)
+				word &= word - 1
+				out.reach = append(out.reach, [2]int32{byHolder[h][0], byHolder[t][0]})
+			}
+		}
+	}
 }
 
 // intraEdges adds the directed edges between the cluster's nodes: for each
 // ordered pair joined inside the cluster, the cheapest cost with every door
 // open and the doors that path crosses, and the cheapest cost crossing no
 // door (docs/navigation.md, "Doors in the hierarchy").
-func (b *builder) intraEdges(s *buildScratch, out *clusterOut) {
+func (b *builder) intraEdges(s *buildScratch, ci int, out *clusterOut, l *linked) {
+	// Group the nodes by abstract SCC; only groups of two or more need
+	// costs.
+	groups := map[int32][]int32{}
+	for u := range out.nodes {
+		x := l.scc[l.base[ci]+u]
+		groups[x] = append(groups[x], int32(u))
+	}
+	need := false
+	for _, grp := range groups {
+		need = need || len(grp) > 1
+	}
+	if !need {
+		return
+	}
 	g := &s.g
+	k := b.keys[ci]
+	g.load(&b.p, int(k.X)*b.size, int(k.Y)*b.size, b.size)
 	n := g.cells()
 	s.wStart = resize(s.wStart, n+1)
 	s.wTo, s.wCost = s.wTo[:0], s.wCost[:0]
@@ -452,15 +618,25 @@ func (b *builder) intraEdges(s *buildScratch, out *clusterOut) {
 		reps[u] = g.index(nd.rep)
 	}
 	free := make([]uint32, len(out.nodes))
+	var targets []int32
 	for u := range out.nodes {
+		grp := groups[l.scc[l.base[ci]+u]]
+		if len(grp) < 2 {
+			continue
+		}
+		targets = targets[:0]
+		for _, v := range grp {
+			targets = append(targets, reps[v])
+		}
 		if anyDoor {
-			b.dijkstra(s, reps[u], reps, true)
-			for v, r := range reps {
-				free[v] = s.dist[r]
+			b.dijkstra(s, reps[u], targets, true)
+			for _, v := range grp {
+				free[v] = s.dist[reps[v]]
 			}
 		}
-		b.dijkstra(s, reps[u], reps, false)
-		for v, r := range reps {
+		b.dijkstra(s, reps[u], targets, false)
+		for _, vv := range grp {
+			v, r := int(vv), reps[vv]
 			if v == u || s.dist[r] == noCost {
 				continue
 			}
@@ -562,53 +738,128 @@ type globalEdge struct {
 	doors      []int32
 }
 
-// assemble joins the clusters into the abstract graph, labels its SCCs and
-// condensation, and encodes the nav cache image.
-func (b *builder) assemble(outs []clusterOut, key NavKey, stats *BuildStats) ([]byte, error) {
-	base := make([]int, len(outs)+1)
+// linked is the abstract graph before costs: node ids, each node's SCC and
+// the condensation, and the crossing edges.
+type linked struct {
+	base  []int // first global node of each cluster
+	scc   []int32
+	nSCC  int
+	cond  [][]uint32
+	cross [][]globalEdge // per node
+}
+
+// link joins the clusters into the abstract graph and labels its SCCs, every
+// door open, and its condensation.
+func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
+	l := &linked{base: make([]int, len(outs)+1)}
 	for i, o := range outs {
-		base[i+1] = base[i] + len(o.nodes)
+		l.base[i+1] = l.base[i] + len(o.nodes)
 	}
-	nNodes := base[len(outs)]
-	edges := make([][]globalEdge, nNodes)
-	add := func(from int, e globalEdge) {
-		for i, old := range edges[from] {
-			if old.to == e.to {
-				if e.open < old.open {
-					edges[from][i] = e
-				}
-				return
+	nNodes := l.base[len(outs)]
+	adj := make([][]uint32, nNodes)
+	l.cross = make([][]globalEdge, nNodes)
+	for ci := range outs {
+		o := &outs[ci]
+		for _, r := range o.reach {
+			adj[l.base[ci]+int(r[0])] = append(adj[l.base[ci]+int(r[0])], uint32(l.base[ci]+int(r[1])))
+		}
+		for _, x := range o.cross {
+			xto := x.to()
+			ti := b.clusterIndex(b.clusterOf(xto))
+			if ti < 0 {
+				return nil, fmt.Errorf("nav: crossing into unbuilt cluster at %d,%d", xto.X, xto.Y)
+			}
+			side := opposite(int(x.side))
+			ox, oy := int(b.keys[ti].X)*b.size, int(b.keys[ti].Y)*b.size
+			pos := xto.Y - oy
+			if side == sideSouth || side == sideNorth {
+				pos = xto.X - ox
+			}
+			to, ok := outs[ti].nodeAt(side, pos, xto.Z)
+			if !ok {
+				return nil, fmt.Errorf("nav: crossing target %d,%d,%d is no entrance", xto.X, xto.Y, xto.Z)
+			}
+			from := l.base[ci] + int(x.from)
+			cost := uint32(max(costCardinal, heuristic(o.nodes[x.from].rep, outs[ti].nodes[to].rep)))
+			e := globalEdge{to: uint32(l.base[ti] + int(to)), open: cost, free: cost}
+			if x.doorN > 0 {
+				e.doors = slices.Clone(o.crossDoors[x.doorOff : x.doorOff+int32(x.doorN)])
+				e.free = noCost
+			}
+			if addEdge(&l.cross[from], e) {
+				adj[from] = append(adj[from], e.to)
 			}
 		}
-		edges[from] = append(edges[from], e)
+	}
+	// The crossings and border cells are resolved: free them.
+	for ci := range outs {
+		o := &outs[ci]
+		o.cross, o.crossDoors, o.border, o.reach = nil, nil, nil, nil
+	}
+
+	var scc sccScratch
+	l.nSCC = scc.run(nNodes,
+		func(v int32) int32 { return int32(len(adj[v])) },
+		func(v, k int32) int32 { return int32(adj[v][k]) })
+	l.scc = scc.label
+	sizes := make([]int, l.nSCC)
+	l.cond = make([][]uint32, l.nSCC)
+	for v := range nNodes {
+		sv := l.scc[v]
+		sizes[sv]++
+		for _, t := range adj[v] {
+			if st := l.scc[t]; st != sv {
+				l.cond[sv] = append(l.cond[sv], uint32(st))
+			}
+		}
+	}
+	for i := range l.cond {
+		slices.Sort(l.cond[i])
+		l.cond[i] = slices.Compact(l.cond[i])
+		stats.CondEdges += len(l.cond[i])
+	}
+	stats.Clusters, stats.Nodes, stats.SCCs = len(outs), nNodes, l.nSCC
+	for _, n := range sizes {
+		stats.LargestSCC = max(stats.LargestSCC, n)
+	}
+	return l, nil
+}
+
+// addEdge adds e to edges, or keeps the cheaper of it and an edge to the
+// same node already there. It reports whether e's target is new.
+func addEdge(edges *[]globalEdge, e globalEdge) bool {
+	for i, old := range *edges {
+		if old.to == e.to {
+			if e.open < old.open {
+				(*edges)[i] = e
+			}
+			return false
+		}
+	}
+	*edges = append(*edges, e)
+	return true
+}
+
+// encode writes the nav cache image: every edge between two nodes of one
+// abstract SCC, intra-cluster with its two costs and door set, or a
+// crossing.
+func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildStats) ([]byte, error) {
+	nNodes := l.base[len(outs)]
+	edges := make([][]globalEdge, nNodes)
+	for v := range nNodes {
+		for _, e := range l.cross[v] {
+			if l.scc[e.to] == l.scc[v] {
+				edges[v] = append(edges[v], e)
+				stats.CrossEdges++
+			}
+		}
 	}
 	for ci, o := range outs {
 		for _, e := range o.edges {
-			add(base[ci]+int(e.from), globalEdge{to: uint32(base[ci] + int(e.to)), open: e.open, free: e.free, doors: e.doors})
-			stats.IntraEdges++
-		}
-		for _, x := range o.cross {
-			ti := b.clusterIndex(b.clusterOf(x.to))
-			if ti < 0 {
-				return nil, fmt.Errorf("nav: crossing into unbuilt cluster at %d,%d", x.to.X, x.to.Y)
+			from := l.base[ci] + int(e.from)
+			if addEdge(&edges[from], globalEdge{to: uint32(l.base[ci] + int(e.to)), open: e.open, free: e.free, doors: e.doors}) {
+				stats.IntraEdges++
 			}
-			side := opposite(x.side)
-			ox, oy := int(b.keys[ti].X)*b.size, int(b.keys[ti].Y)*b.size
-			pos := x.to.Y - oy
-			if side == sideSouth || side == sideNorth {
-				pos = x.to.X - ox
-			}
-			to, ok := outs[ti].nodeAt(side, pos, x.to.Z)
-			if !ok {
-				return nil, fmt.Errorf("nav: crossing target %d,%d,%d is no entrance", x.to.X, x.to.Y, x.to.Z)
-			}
-			from := base[ci] + int(x.from)
-			cost := uint32(max(costCardinal, heuristic(o.nodes[x.from].rep, outs[ti].nodes[to].rep)))
-			e := globalEdge{to: uint32(base[ti] + int(to)), open: cost, free: cost, doors: x.doors}
-			if len(x.doors) > 0 {
-				e.free = noCost
-			}
-			add(from, e)
 		}
 	}
 	nEdges, nDoorRefs := 0, 0
@@ -619,35 +870,10 @@ func (b *builder) assemble(outs []clusterOut, key NavKey, stats *BuildStats) ([]
 			nDoorRefs += len(e.doors)
 		}
 	}
-	stats.CrossEdges = nEdges - stats.IntraEdges
-
-	// Abstract SCCs with every door open, and the condensation.
-	var scc sccScratch
-	nSCC := scc.run(nNodes,
-		func(v int32) int32 { return int32(len(edges[v])) },
-		func(v, k int32) int32 { return int32(edges[v][k].to) })
-	sizes := make([]int, nSCC)
-	cond := make([][]uint32, nSCC)
-	for v := range nNodes {
-		sv := scc.label[v]
-		sizes[sv]++
-		for _, e := range edges[v] {
-			if st := scc.label[e.to]; st != sv {
-				cond[sv] = append(cond[sv], uint32(st))
-			}
-		}
-	}
-	nCond := 0
-	for i := range cond {
-		slices.Sort(cond[i])
-		cond[i] = slices.Compact(cond[i])
-		nCond += len(cond[i])
-	}
-
-	stats.Clusters, stats.Nodes, stats.DoorRefs, stats.SCCs, stats.CondEdges = len(outs), nNodes, nDoorRefs, nSCC, nCond
-	for _, n := range sizes {
-		stats.LargestSCC = max(stats.LargestSCC, n)
-	}
+	stats.DoorRefs = nDoorRefs
+	nSCC, nCond := l.nSCC, stats.CondEdges
+	cond := l.cond
+	base := l.base
 
 	size := navHeaderSize + len(outs)*clusterRecSize + nNodes*nodeRecSize + nEdges*edgeRecSize + nDoorRefs*4 + (nSCC+1)*4 + nCond*4
 	if size > MaxNavCacheBytes {
@@ -681,7 +907,7 @@ func (b *builder) assemble(outs []clusterOut, key NavKey, stats *BuildStats) ([]
 			img = le.AppendUint16(img, uint16(nd.pos0))
 			img = le.AppendUint16(img, uint16(nd.pos1))
 			img = le.AppendUint32(img, uint32(ci))
-			img = le.AppendUint32(img, uint32(scc.label[v]))
+			img = le.AppendUint32(img, uint32(l.scc[v]))
 			img = le.AppendUint32(img, uint32(firstEdge))
 			firstEdge += len(edges[v])
 		}

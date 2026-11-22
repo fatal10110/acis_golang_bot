@@ -412,6 +412,33 @@ server's pathfinder.
   never rebuilt silently inside `bots ui`. The build works region by region with at most half the
   cores, so its working set stays at a few clusters' scratch per worker.
 
+**Built by N3** (#155). Choices the design left open:
+
+- **Entrances are cardinal crossings.** A diagonal step across a border needs both L-shaped
+  detours open, so a cardinal path always joins the same two cells: leaving diagonals out changes
+  no reachability, only the ranking costs a little. For the same reason the cluster-local Tarjan
+  in `Locate` reads cardinal crossings only, which keeps it free of `CanMove` calls.
+- **A node is a run on one side of a border**: neighbouring border cells (cells a crossing leaves
+  from or lands on) in the same cluster-local SCC, its representative the run's middle cell. Each
+  node's cells are mutually reachable inside its cluster, which is what keeps the membership rule
+  exact; the crossing between two runs is an edge of its own.
+- **Doors-open reads**: `engine.Static()` is an engine over the same mapped regions with no
+  dynamic object. `navbuild` and `Locate` read only it.
+- **Door footprints**: a door's fully blocked cells (`NewDoorObject`), on the layers from its floor
+  minus 48 to its floor plus its height. An edge's door set holds the doors of the cells its
+  all-open path crosses; its door-free cost is the cheapest path avoiding every footprint cell.
+- **Cluster side** is a build parameter (default 256 cells) and part of the cache key; the CI
+  tests run the same code on 32- and 64-cell clusters over windows of the synthetic region.
+- **`Reachable`** misses one case only: a drop between two cells of one cluster that are in no
+  abstract SCC (a ledge inside a pit). It answers false there, which is the safe side.
+- The persona-start check on a missing or stale nav cache lands with the walker (N5, #157): N3
+  ships `OpenNavCache` and its errors.
+
+**Measured by N3** on the owner's 139 regions (`bots navbuild` with 2 workers on 4 cores; the
+benchmarks are `BenchmarkOwnerNav`, local only):
+
+MEASURED_TABLE
+
 ### 3. `botclient`: door table and walker
 
 **Door table (process-wide).**
