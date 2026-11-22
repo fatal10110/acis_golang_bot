@@ -112,7 +112,9 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 // buyRows is the purchase from window l, the budget spent tier by tier:
 // per wanted item it sells at a price, as many as the window's stock and
 // the adena past the tier's floor allow; of the gear, the first piece per
-// slot, a bow followed by its arrows (arrowRow) unless already wanted. The
+// slot, a bow followed by its arrows (arrowRow) unless already wanted, and
+// a piece of the planned set (gearGoal) only with the rest of the set
+// still paid at its cheapest base price, wherever it is sold. The
 // comfort tier is skipped while the visit saves for the gear goal
 // (saves), and tops up nothing an earlier row bought.
 func (b *Brain) buyRows(l BuyList) []buyRow {
@@ -120,7 +122,7 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 	var rows []buyRow
 	var bought [slotCount]bool
 	wants := b.wants(true)
-	goal, goalPrice, hasGoal := b.gearGoal()
+	goal, set := b.gearGoal()
 	checked, saving := false, false
 	for i := 0; i < len(wants); i++ {
 		w := wants[i]
@@ -129,7 +131,7 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 			if !checked {
 				checked = true
 				left := int64(l.Money) - spent - b.floor(tierComfort)
-				saving = hasGoal && b.saves(goal, goalPrice, left, rows)
+				saving = b.saves(goal, left, rows)
 			}
 			if saving || slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == w.item }) {
 				continue
@@ -142,6 +144,14 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 			}
 			t = max(t, tierGear)
 		}
+		var rest int64 // the planned set's pieces still to buy after this one
+		if slices.Contains(set, w.item) {
+			for _, id := range set {
+				if id != w.item && !slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
+					rest += int64(b.cfg.Travel.cheapest[id])
+				}
+			}
+		}
 		j := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.item })
 		if j < 0 || l.Items[j].Price <= 0 {
 			continue
@@ -151,7 +161,7 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 		if it.Count > 0 {
 			n = min(n, int64(it.Count))
 		}
-		n = min(n, (int64(l.Money)-spent-b.floor(t))/int64(it.Price))
+		n = min(n, (int64(l.Money)-spent-b.floor(t)-rest)/int64(it.Price))
 		if n < 1 {
 			continue
 		}
@@ -171,16 +181,26 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 	return rows
 }
 
-// saves reports whether a visit that bought rows saves for gear goal id
-// costing price, so it skips the comfort tier: the goal is not among rows
-// and left, the adena past the reserve floor, is at least
-// GearPolicy.SaveFrom percent of its price, so the goal is within reach.
-func (b *Brain) saves(id int32, price, left int64, rows []buyRow) bool {
-	from := int64(b.persona.Gear.SaveFrom)
-	if from <= 0 || slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
-		return false
+// saves reports whether a visit that bought rows saves for gear goal
+// (gearGoal), so it skips the comfort tier: part of the goal is not among
+// rows and left, the adena past the reserve floor, has that part's
+// cheapest base price within reach (reaches).
+func (b *Brain) saves(goal []int32, left int64, rows []buyRow) bool {
+	var rest []int32
+	for _, id := range goal {
+		if !slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
+			rest = append(rest, id)
+		}
 	}
-	return left > 0 && left*100 >= price*from
+	return len(rest) > 0 && b.reaches(b.price(rest), left)
+}
+
+// reaches reports whether left adena has a goal costing price within
+// reach: it is at least GearPolicy.SaveFrom percent of the price, so the
+// bot saves for the goal.
+func (b *Brain) reaches(price, left int64) bool {
+	from := int64(b.persona.Gear.SaveFrom)
+	return from > 0 && left > 0 && left*100 >= price*from
 }
 
 // extraWants are the Extra supplies (SupplyPolicy.Extra) the shop errand

@@ -71,15 +71,26 @@ type GearPolicy struct {
 	// no-grade weapon with shots beats a D-grade one without them until the
 	// D one's score wins on its own. 1 or less compares scores alone.
 	ShotFactor float64
+	// SetBonus values a complete armor set (armorSets.xml) at its pieces'
+	// score times one plus this fraction, the set shield's too while it is
+	// worn: the bot reads no set skill's stats. Equip, Buy and the gear
+	// goal compare armor by combination: a set the bot carries, or could
+	// buy, whole beats the pieces it would replace when its value does,
+	// the best mix of single pieces for its slots and a worn set's bonus
+	// counted (setPlan); a piece that breaks a worn set must beat the
+	// set's bonus too. 0 ignores sets.
+	SetBonus float64
 }
 
 // defaultGearPolicy wears and buys gear and jewelry up to the bot's
 // expertise, keeping 10000 adena and saving for the next upgrade from half
 // its price, with a shot factor of 2: a soulshot
 // doubles a physical hit's damage (skill/formulas/damage.go), a blessed
-// spiritshot four times the M. Atk a spell's damage takes the root of.
+// spiritshot four times the M. Atk a spell's damage takes the root of. A
+// complete armor set is worth 15 % more than its pieces (docs/items.md
+// section 6).
 func defaultGearPolicy() GearPolicy {
-	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, ShotFactor: 2}
+	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, ShotFactor: 2, SetBonus: 0.15}
 }
 
 // GearClass is a build: what classes wear where no worn piece gives a type
@@ -451,7 +462,25 @@ func (b *Brain) beats(id int32, w *worn) bool {
 
 // beatsBy is beats for carried item it, its enchant counted, counting the
 // shots the bot carries towards the shot factor only when carried is set.
+// In a slot the armor set the bot wears next decides (wearSet), only that
+// set's piece beats what the bot wears; elsewhere pieces compare one by
+// one (beatsPiece).
 func (b *Brain) beatsBy(it Item, w *worn, carried bool) bool {
+	if g, ok := b.gearItem(it.TemplateID); ok && b.cfg.Travel.setPieces != nil {
+		if s := slotOf(g.part); s >= slotShield && s <= slotFeet {
+			if p, ok := b.wearSet(w); ok && p.decides(s) {
+				return p.pieces[s] == it.TemplateID && w[s].TemplateID != it.TemplateID
+			}
+		}
+	}
+	return b.beatsPiece(it, w, carried)
+}
+
+// beatsPiece is beatsBy for it alone: the scores of it and the worn piece,
+// and for armor the bonus of the set the bot wears with it against the
+// worn set's (setBonus), so a piece that breaks a set must beat its bonus
+// too.
+func (b *Brain) beatsPiece(it Item, w *worn, carried bool) bool {
 	id := it.TemplateID
 	g, ok := b.gearItem(id)
 	if !ok || b.gear.refused[id] || g.grade > b.gearGrade() {
@@ -540,6 +569,10 @@ func (b *Brain) beatsBy(it Item, w *worn, carried bool) bool {
 	}
 	if s == slotWeapon {
 		gain, value = b.shotValues(id, cur.TemplateID, gs, cs, gain, value, carried)
+	} else if s >= slotShield && s <= slotFeet {
+		next := wearing(w, it, &g)
+		gain += b.setBonus(&next, wt)
+		value += b.setBonus(w, wt)
 	}
 	return gain > value
 }
@@ -659,28 +692,53 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 
 // gearWants are the pieces the shop errand buys in the gear tier, one of
 // each: the gearCandidates the adena past the reserve floor buys at their
-// cheapest base price, best first.
+// cheapest base price, best first; the planned set's pieces (gearPlan)
+// only when it buys all of them, so the bot saves for a set rather than
+// buy part of it.
 func (b *Brain) gearWants() []buyRow {
 	budget := int64(b.carried(adenaID)) - b.floor(tierGear)
 	if budget <= 0 {
 		return nil
 	}
+	ids, set := b.gearPlan()
+	setFits := b.price(set) <= budget
 	var rows []buyRow
-	for _, id := range b.gearCandidates() {
-		if int64(b.cfg.Travel.cheapest[id]) <= budget {
+	for _, id := range ids {
+		if slices.Contains(set, id) && setFits || !slices.Contains(set, id) && int64(b.cfg.Travel.cheapest[id]) <= budget {
 			rows = append(rows, buyRow{item: id, count: 1})
 		}
 	}
 	return rows
 }
 
-// gearCandidates are the pieces the gear errand would buy (GearPolicy.Buy):
-// per slot without a carried upgrade, every piece merchants sell that
-// beats the worn one, by slot then score, best first.
+// price is the cost of one of each of ids at their cheapest base price.
+func (b *Brain) price(ids []int32) int64 {
+	var sum int64
+	for _, id := range ids {
+		sum += int64(b.cfg.Travel.cheapest[id])
+	}
+	return sum
+}
+
+// gearCandidates are the pieces the gear errand would buy (gearPlan).
 func (b *Brain) gearCandidates() []int32 {
+	ids, _ := b.gearPlan()
+	return ids
+}
+
+// gearPlan is what the gear errand would buy (GearPolicy.Buy): per slot
+// without a carried upgrade, every piece merchants sell that beats the worn
+// one, by slot then score, best first. In a slot the armor set the bot
+// buys towards decides (bestSet on shopPool), the set's piece is the only
+// one, a carried upgrade there notwithstanding, and set are those pieces:
+// the ones the bot neither wears nor carries. The bot buys towards the set
+// only when the adena past the gear tier's floor pays for them or has
+// them within reach (reaches), so it saves for the set; out of reach, the
+// set's slots take single pieces like the others.
+func (b *Brain) gearPlan() (ids, set []int32) {
 	p := &b.persona.Gear
 	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
-		return nil
+		return nil, nil
 	}
 	w := b.worn()
 	var held [slotCount]bool
@@ -690,10 +748,32 @@ func (b *Brain) gearCandidates() []int32 {
 			held[slotOf(g.part)] = true
 		}
 	}
-	var ids []int32
+	plan, planned := b.bestSet(&w, b.shopPool())
+	if planned {
+		var missing []int32
+		for s, id := range plan.pieces {
+			if plan.missing[s] {
+				missing = append(missing, id)
+			}
+		}
+		budget := int64(b.carried(adenaID)) - b.floor(tierGear)
+		price := b.price(missing)
+		planned = price <= budget || b.reaches(price, budget)
+	}
 	for _, id := range b.cfg.Travel.shopGear {
 		g := b.cfg.Travel.gear[id]
-		if held[slotOf(g.part)] || b.cfg.Travel.cheapest[id] <= 0 || b.unarmedBow(id) || !b.beats(id, &w) {
+		s := slotOf(g.part)
+		if planned && plan.decides(s) {
+			if plan.pieces[s] == id && plan.missing[s] {
+				ids = append(ids, id)
+				set = append(set, id)
+			}
+			continue
+		}
+		if held[s] || b.cfg.Travel.cheapest[id] <= 0 {
+			continue
+		}
+		if b.unarmedBow(id) || !b.beats(id, &w) {
 			continue
 		}
 		ids = append(ids, id)
@@ -703,17 +783,21 @@ func (b *Brain) gearCandidates() []int32 {
 		gx, gy := b.cfg.Travel.gear[x], b.cfg.Travel.gear[y]
 		return cmp.Or(cmp.Compare(slotOf(gx.part), slotOf(gy.part)), cmp.Compare(gy.score(wt, Item{}), gx.score(wt, Item{})))
 	})
-	return ids
+	return ids, set
 }
 
 // gearGoal is the next upgrade, the one the shop errand buys or saves for
 // (docs/items.md section 5): the first of gearCandidates, the best piece
-// of the first slot with one, at its cheapest base price. Sets and the
-// grade jump refine it (#173, #174).
-func (b *Brain) gearGoal() (id int32, price int64, ok bool) {
-	ids := b.gearCandidates()
-	if len(ids) == 0 {
-		return 0, 0, false
+// of the first slot with one, or every piece of the planned set to buy
+// when that is one of them (gearPlan, docs/items.md section 6); set is that
+// set's pieces to buy. The grade jump refines it (#174).
+func (b *Brain) gearGoal() (goal, set []int32) {
+	ids, set := b.gearPlan()
+	switch {
+	case len(ids) == 0:
+		return nil, set
+	case slices.Contains(set, ids[0]):
+		return set, set
 	}
-	return ids[0], int64(b.cfg.Travel.cheapest[ids[0]]), true
+	return ids[:1], set
 }
