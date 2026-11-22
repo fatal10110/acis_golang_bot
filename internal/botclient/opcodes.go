@@ -56,6 +56,8 @@ const (
 	opGameAutoAttackStop   = 0x2c // autoattack.go
 	opGameChangeWaitType   = 0x2f // stance_social.go
 	opGameCreatureSay      = 0x4a // creaturesay.go
+	opGameDoorInfo         = 0x4c // worldobjects.go
+	opGameDoorStatusUpdate = 0x4d // worldobjects.go
 	opGameMoveToPawn       = 0x60 // movetopawn.go
 	opGameSystemMessage    = 0x64 // systemmessage.go
 	opGameMyTargetSelected = 0xa6 // targeting.go

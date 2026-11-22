@@ -186,7 +186,7 @@ func BenchmarkOwnerNav(b *testing.B) {
 		failed := 0
 		route := func(h *Hierarchy) func(i int) {
 			return func(i int) {
-				if _, err := h.Route(p, from[i].World(), to[i].World()); err != nil {
+				if _, err := h.Route(p, from[i].World(), to[i].World(), nil); err != nil {
 					failed++
 				}
 			}

@@ -136,7 +136,7 @@ func TestRouteSucceedsExactlyWhenSameSCC(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		route, err := th.h.Route(p, from, to)
+		route, err := th.h.Route(p, from, to, nil)
 		if want := th.h.SameSCC(ma, mb); (err == nil) != want {
 			t.Errorf("%v -> %v: route error %v, SameSCC %v", pr[0], pr[1], err, want)
 			continue
@@ -167,7 +167,7 @@ func TestRouteNeverEntersThePit(t *testing.T) {
 	th := hierScenes32(t)
 	p := testPlanner(t)
 	beyond := geotest.Point{CellX: 1065, CellY: 287, Z: geotest.Ground}
-	route, err := th.h.Route(p, loc(geotest.PitOutside), loc(beyond))
+	route, err := th.h.Route(p, loc(geotest.PitOutside), loc(beyond), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestRouteNeverEntersThePit(t *testing.T) {
 		{"out of the pit", loc(geotest.PitInside), loc(geotest.PitOutside)},
 		{"off the ledge", loc(geotest.LedgeHigh), loc(geotest.LedgeLow)},
 	} {
-		if _, err := th.h.Route(p, tc.from, tc.to); !errors.Is(err, ErrUnreachable) {
+		if _, err := th.h.Route(p, tc.from, tc.to, nil); !errors.Is(err, ErrUnreachable) {
 			t.Errorf("%s: %v, want ErrUnreachable", tc.name, err)
 		}
 	}
