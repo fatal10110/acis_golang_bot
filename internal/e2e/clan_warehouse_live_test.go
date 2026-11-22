@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,39 +49,66 @@ func carriedOfWorld(w *botclient.World, tmpl int32) int32 {
 	return n
 }
 
-// warehouseScript is the bot's Persona.Warehouse.Want for the scenario:
-// deposit the skins once it carries them, then take them all back, and
-// report the end of each part on out. It runs on the bot's brain
-// goroutine.
-func warehouseScript(out chan<- whReport) func(*botclient.World, botclient.WarehouseStatus, time.Time) botclient.WarehouseRequest {
-	var phase atomic.Int32
-	var before int32 // owned by the brain goroutine, as the script
-	report := func(w *botclient.World, st botclient.WarehouseStatus) {
-		select {
-		case out <- whReport{st: st, carried: carriedOfWorld(w, whSkin), before: before}:
-		default:
+// whScript is the bot's Persona.Warehouse.Want for the scenario. Until the
+// test arms it, it only publishes how many skins the bot carries; armed, it
+// deposits the skins, then takes them all back, and reports the end of each
+// part on out. want runs on the bot's brain goroutine, which owns phase and
+// before.
+type whScript struct {
+	// carried is the skins the bot carried at the latest ask, -1 before
+	// the first; armed is set by the test once the clan may use its
+	// warehouse and the bot carries the skins.
+	carried atomic.Int32
+	armed   atomic.Bool
+	out     chan whReport
+	phase   int
+	before  int32
+}
+
+func newWHScript() *whScript {
+	s := &whScript{out: make(chan whReport, 2)}
+	s.carried.Store(-1)
+	return s
+}
+
+func (s *whScript) report(w *botclient.World, st botclient.WarehouseStatus) {
+	select {
+	case s.out <- whReport{st: st, carried: carriedOfWorld(w, whSkin), before: s.before}:
+	default:
+	}
+}
+
+func (s *whScript) want(w *botclient.World, st botclient.WarehouseStatus, _ time.Time) botclient.WarehouseRequest {
+	s.carried.Store(carriedOfWorld(w, whSkin))
+	if !s.armed.Load() {
+		return botclient.WarehouseRequest{}
+	}
+	switch s.phase {
+	case 0:
+		s.before, s.phase = carriedOfWorld(w, whSkin), 1
+		return botclient.WarehouseRequest{Deposit: []botclient.WarehouseRow{{TemplateID: whSkin, Count: whSkins}}}
+	case 1:
+		if st.Deposit.Outcome != botclient.WarehouseNone {
+			s.report(w, st)
+			s.phase = 2
+			return botclient.WarehouseRequest{Withdraw: []botclient.WarehouseRow{{TemplateID: whSkin}}}
+		}
+	case 2:
+		if st.Withdraw.Outcome != botclient.WarehouseNone {
+			s.report(w, st)
+			s.phase = 3
 		}
 	}
-	return func(w *botclient.World, st botclient.WarehouseStatus, _ time.Time) botclient.WarehouseRequest {
-		switch phase.Load() {
-		case 0:
-			if before = carriedOfWorld(w, whSkin); before >= whSkins {
-				phase.Store(1)
-				return botclient.WarehouseRequest{Deposit: []botclient.WarehouseRow{{TemplateID: whSkin, Count: whSkins}}}
-			}
-		case 1:
-			if st.Deposit.Outcome != botclient.WarehouseNone {
-				report(w, st)
-				phase.Store(2)
-				return botclient.WarehouseRequest{Withdraw: []botclient.WarehouseRow{{TemplateID: whSkin}}}
-			}
-		case 2:
-			if st.Withdraw.Outcome != botclient.WarehouseNone {
-				report(w, st)
-				phase.Store(3)
-			}
-		}
-		return botclient.WarehouseRequest{}
+	return botclient.WarehouseRequest{}
+}
+
+// clanLevelSet matches the GM's word that clan is at level: the server
+// sends it once the clan has the level (network/admin_pledge.go).
+func clanLevelSet(clan string, level int) func(botclient.Event) bool {
+	want := fmt.Sprintf("You have set clan %s to level %d", clan, level)
+	return func(ev botclient.Event) bool {
+		m, ok := ev.(botclient.SystemMessage)
+		return ok && m.Text[0] == want
 	}
 }
 
@@ -104,12 +132,12 @@ func TestLiveClanWarehouse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reports := make(chan whReport, 2)
+	script := newWHScript()
 	travel := travelMap(t, tg)
 	botAcc, _ := tg.Account("wh", 1)
 	b := runBotWith(t, ctx, tg, botAcc, botSetup{tap: rec, brain: withTravel(travel), persona: func() botclient.Persona {
 		p := partyPersona()
-		p.Warehouse.Want = warehouseScript(reports)
+		p.Warehouse.Want = script.want
 		return p
 	}})
 	name := botOnline(t, ctx, tg, b)
@@ -136,16 +164,19 @@ func TestLiveClanWarehouse(t *testing.T) {
 		}
 		waitFor(t, ctx, "the bot at the founding level", func() bool { return b.Status().Level >= clanCreateLevel })
 	}
-	// The items first: the errand starts once the bot is in a clan, and
-	// the server sends the give's InventoryUpdate before the clan's frames.
-	for _, cmd := range []string{fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d %d", whSkin, whSkins)} {
-		if err := gm.Command(ctx, cmd); err != nil {
-			t.Fatal(err)
-		}
-	}
 	clan := "wh" + strconv.FormatInt(time.Now().UnixNano()%1e12, 36)
 	if err := gm.Command(ctx, "pledge create "+clan); err != nil {
 		t.Fatal(err)
+	}
+	said, err := gm.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
+		m, ok := ev.(botclient.SystemMessage)
+		return ok && (strings.HasPrefix(m.Text[0], "Clan "+clan+" ") || strings.Contains(m.Text[0], "creating the clan"))
+	})
+	if err != nil {
+		t.Fatalf("pledge create %s: %v", clan, err)
+	}
+	if m := said.(botclient.SystemMessage); !strings.HasPrefix(m.Text[0], "Clan "+clan+" have been created") {
+		t.Fatalf("pledge create %s: %q", clan, m.Text[0])
 	}
 	waitFor(t, ctx, "the bot leading its clan", func() bool { return b.Status().ClanID != 0 })
 	t.Cleanup(func() {
@@ -157,15 +188,29 @@ func TestLiveClanWarehouse(t *testing.T) {
 			t.Errorf("dismiss clan %s: %v", clan, err)
 		}
 	})
+	// The script asks once the bot is in a clan; a character of an
+	// earlier run may carry skins already.
+	waitFor(t, ctx, "the warehouse script asked", func() bool { return script.carried.Load() >= 0 })
+	left := script.carried.Load()
+	for _, cmd := range []string{fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d %d", whSkin, whSkins)} {
+		if err := gm.Command(ctx, cmd); err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitFor(t, ctx, "the skins in the bot's bag", func() bool { return script.carried.Load() >= left+whSkins })
 	// The clan warehouse needs clan level 1 (clan/warehouse.go).
 	if err := gm.Command(ctx, "pledge level 1"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
+		t.Fatalf("clan %s at level 1: %v", clan, err)
+	}
+	script.armed.Store(true)
 
 	next := func(what string) whReport {
 		t.Helper()
 		select {
-		case r := <-reports:
+		case r := <-script.out:
 			return r
 		case <-ctx.Done():
 			t.Fatalf("waiting for the %s: %v", what, ctx.Err())
