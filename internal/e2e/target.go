@@ -198,6 +198,15 @@ func (t *Target) Own(name string, objectID int32) {
 	t.scope.addChar(name, objectID)
 }
 
+// OwnDoor makes the door id one the scenario may open and close. A door is
+// the world's, not the run's: a scenario claims only doors no other
+// scenario touches, and leaves each as the datapack starts it.
+func (t *Target) OwnDoor(id int32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.scope.doors[id] = true
+}
+
 // Enter logs account in and enters the world as ch on a place of its own,
 // recording every game frame read into rec when it is set. A refused
 // credential trips the breaker. The character becomes one of the

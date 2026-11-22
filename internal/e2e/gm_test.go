@@ -51,12 +51,13 @@ func TestLoadGM(t *testing.T) {
 }
 
 func TestScopeCheck(t *testing.T) {
-	const bot, other, mob, strangerMob = 101, 102, 201, 202
+	const bot, other, mob, strangerMob, door = 101, 102, 201, 202, 17220005
 	scope := func(target int32) *Scope {
 		s := newScope()
 		s.addChar("e2eBot", bot)
 		s.addChar("e2eOther", other)
 		s.npcs[mob] = true
+		s.doors[door] = true
 		s.target = target
 		return s
 	}
@@ -146,6 +147,11 @@ func TestScopeCheck(t *testing.T) {
 		{"delete", mob, true},
 		{"delete", strangerMob, false},
 		{"delete", bot, false},
+		{"open 17220005", 0, true},
+		{"close 17220005", 0, true},
+		{"open 17220006", 0, false},
+		{"close", mob, false},
+		{"open 17220005 1", 0, false},
 		{"announce hello", 0, false},
 		{"shutdown 1", 0, false},
 		{"reload npc", 0, false},
