@@ -173,10 +173,18 @@ func (b *Brain) shotNeed(w weapon) int32 {
 }
 
 // supplyPotion is the HP potion the bot carries for a trip: the best of
-// Potions a spawned merchant sells; 0 for none.
+// Potions a merchant the shop errand can visit sells (soldNear), else the
+// best one a spawned merchant sells; 0 for none. A newbie village grocer
+// sells only the Lesser Healing Potion while town merchants sell the
+// Healing Potion too.
 func (b *Brain) supplyPotion() int32 {
 	if b.cfg.Travel == nil {
 		return 0
+	}
+	for _, id := range b.persona.Potions {
+		if b.soldNear(id) {
+			return id
+		}
 	}
 	for _, id := range b.persona.Potions {
 		if b.cfg.Travel.spawnedSold[id] {
@@ -184,6 +192,28 @@ func (b *Brain) supplyPotion() int32 {
 		}
 	}
 	return 0
+}
+
+// soldNear reports whether a merchant the shop errand can visit sells
+// item (startShop): one in sight, or one spawned within Shop.Reach of
+// where the bot stands or heads.
+func (b *Brain) soldNear(item int32) bool {
+	shops := b.cfg.Travel.shops
+	sells := func(npcID int32) bool {
+		return slices.ContainsFunc(shops[npcID], func(l shopList) bool { _, ok := l.sells(item); return ok })
+	}
+	for _, o := range b.world.Objects {
+		if o.Kind == KindNPC && !o.Dead && sells(o.NPCID) {
+			return true
+		}
+	}
+	from, reach := b.world.Self.move.to, int64(b.persona.Shop.Reach)*int64(b.persona.Shop.Reach)
+	for npcID := range shops {
+		if slices.ContainsFunc(b.cfg.Travel.spawns[npcID], func(at Point) bool { return dist2(from, at) <= reach }) && sells(npcID) {
+			return true
+		}
+	}
+	return false
 }
 
 // supply is a consumable the bot carries for a trip and its trip target.
@@ -289,8 +319,9 @@ func (b *Brain) restockOf(id int32) (Restock, bool) {
 // the Extra supplies are not bought yet (the budget planner, #171).
 func (b *Brain) supplyWants() []buyRow {
 	var rows []buyRow
+	potion := b.supplyPotion()
 	for _, s := range b.supplies() {
-		if s.extra || s.item != scrollOfEscape && s.item != b.supplyPotion() {
+		if s.extra || s.item != scrollOfEscape && s.item != potion {
 			continue
 		}
 		if _, ok := b.restockOf(s.item); ok {

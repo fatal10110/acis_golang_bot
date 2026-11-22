@@ -167,13 +167,19 @@ func (b *Brain) shotStock() ShotStock {
 
 // shotTarget is how many shots weapon w charges the bot carries before
 // they alone back it (shotsBacked): the Min of a ShotStock the persona
-// sets, else a trip's worth of them (shotNeed), clamped by the weight left
-// under SupplyPolicy.BuyLoad as if they came first (supplies).
+// sets, else the Max of a Restock row for the shot it buys (buyShot) or a
+// trip's worth of them (shotNeed), clamped by the weight left under
+// SupplyPolicy.BuyLoad as if they came first (supplies).
 func (b *Brain) shotTarget(w weapon) int32 {
 	if st := b.shotStock(); st.Max > 0 {
 		return st.Min
 	}
-	n := b.shotNeed(w)
+	var n int32
+	if r, ok := b.restockOf(b.buyShot(w)); ok {
+		n = r.Max
+	} else {
+		n = b.shotNeed(w)
+	}
 	ids := b.shotsFor(w)
 	sup := make([]supply, len(ids))
 	for i, id := range ids {
