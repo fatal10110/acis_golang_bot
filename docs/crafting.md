@@ -133,6 +133,14 @@ Input: a fresh warehouse list, the crafter's inventory, recipes, the recipe book
 level, MP, the board's orders and reservations. Output: what to withdraw, an ordered craft list and
 what to keep.
 
+It is `craftplan.Build(Input, Config) Plan` (`internal/craftplan`). `Config` holds `MinGain`,
+`MaxChains` and `MaxWork`, a bound on the nodes one plan visits; the defaults are any positive
+margin, 20 chains for the clan and 200000 nodes. A plan takes from the crafter's inventory before
+the warehouse. It crafts only recipes already in the book: a scroll it learns counts from the next
+plan, once the server has answered. A chain for the clan is one craft of its top step, so
+`MaxChains` bounds the top crafts in a cycle; an order's chain crafts its whole count, or as much
+of it as the pool covers.
+
 1. **Orders**: the board's member orders, then the clan leader's and GMs' orders (section 8).
 2. **Recipe scrolls** in the warehouse the crafter can register now (level and room): withdraw one
    copy and use it. Further copies stay, as the materials of recipes that consume their own scroll.
