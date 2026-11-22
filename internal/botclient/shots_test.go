@@ -53,8 +53,7 @@ func newShotBrain(t *testing.T, class int32, catSpawned bool, items ...Item) *Br
 	b := newGearBrain(t, 1)
 	b.world.Self.ClassID = class
 	b.persona.AutoShots = true
-	def := defaultShopPolicy()
-	b.persona.Shop.Soulshots, b.persona.Shop.Spiritshots = def.Soulshots, def.Spiritshots
+	b.persona.Shop.Soulshots, b.persona.Shop.Spiritshots = fixedSoulshots, fixedSpiritshots
 	shops, cheapest := indexShops([]datapack.BuyList{
 		{ID: 1, NPCID: shotGrocer, Products: []datapack.Product{{ItemID: soulshotNoGrade, Price: 8}, {ItemID: spiritshotNoGrade, Price: 17}, {ItemID: blessedNoGrade, Price: 35}}},
 		{ID: 5720, NPCID: salesCat, Products: []datapack.Product{{ItemID: dSoulshot, Price: 20}, {ItemID: dSpiritshot, Price: 40}}},

@@ -166,13 +166,16 @@ var (
 )
 
 // newShopBrain is a level 15 human mystic at the origin with the default
-// persona (no idle drift, no shot toggles) carrying items, grocer 30004
+// persona (no idle drift, no shot toggles) and a fixed stock (5-20 Lesser
+// Healing Potions, fixedSoulshots, fixedSpiritshots) carrying items, grocer 30004
 // (list 14) spawned at (5000, 0) and spellbook seller 30094 (list 29) on
 // its travel map.
 func newShopBrain(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	p := DefaultPersona()
 	p.IdleChance, p.AutoShots = 0, false
+	p.Shop.Restock = []Restock{{Item: lesserHealingPotion, Min: 5, Max: 20}}
+	p.Shop.Soulshots, p.Shop.Spiritshots = fixedSoulshots, fixedSpiritshots
 	b, _ := newTestBrain(t, p)
 	b.world.Self.ClassID, b.world.Self.Level = classHumanMystic, 15
 	shops, cheapest := indexShops([]datapack.BuyList{

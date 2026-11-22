@@ -41,9 +41,13 @@ var builtinShots = map[int32]shotItem{
 // with room for its kind; blessed and plain spiritshots share the
 // spiritshot room (character_attack_shots.go ChargeSoulshot,
 // ChargeSpiritshot).
+//
+// atkSpd is the template's attack speed, the use meter's first estimate
+// (firstShotRate).
 type weapon struct {
 	grade                  int32
 	soulshots, spiritshots int
+	atkSpd                 int
 }
 
 // indexWeapons indexes every weapon template of items by what it charges.
@@ -51,7 +55,7 @@ func indexWeapons(items map[int32]datapack.Item) map[int32]weapon {
 	out := make(map[int32]weapon)
 	for id, it := range items {
 		if it.Type == "Weapon" {
-			out[id] = weapon{grade: int32(it.Grade), soulshots: it.Soulshots, spiritshots: it.Spiritshots}
+			out[id] = weapon{grade: int32(it.Grade), soulshots: it.Soulshots, spiritshots: it.Spiritshots, atkSpd: int(it.Stats.PAtkSpd)}
 		}
 	}
 	return out
@@ -161,11 +165,32 @@ func (b *Brain) shotStock() ShotStock {
 	return b.persona.Shop.Soulshots
 }
 
-// shotTarget is how many shots of a weapon's the bot carries before they
-// alone back it (shotsBacked): the restock minimum, until the trip target
-// of the use meter (#170) replaces it.
-func (b *Brain) shotTarget() int32 {
-	return b.shotStock().Min
+// shotTarget is how many shots weapon w charges the bot carries before
+// they alone back it (shotsBacked): the Min of a ShotStock the persona
+// sets, else a trip's worth of them (shotNeed), clamped by the weight left
+// under SupplyPolicy.BuyLoad as if they came first (supplies).
+func (b *Brain) shotTarget(w weapon) int32 {
+	if st := b.shotStock(); st.Max > 0 {
+		return st.Min
+	}
+	n := b.shotNeed(w)
+	ids := b.shotsFor(w)
+	sup := make([]supply, len(ids))
+	for i, id := range ids {
+		sup[i] = supply{item: id}
+	}
+	room, capped := b.weightCap(sup)
+	if !capped {
+		return n
+	}
+	var wt int32
+	for _, id := range ids {
+		wt = max(wt, b.cfg.Travel.weights[id])
+	}
+	if wt <= 0 {
+		return n
+	}
+	return int32(min(int64(n), max(room, 0)/int64(wt)))
 }
 
 // carriedShots is how many shots weapon w charges the bot carries.
@@ -193,7 +218,7 @@ func (b *Brain) shotsBacked(w weapon, carried bool) bool {
 	if !carried || have == 0 {
 		return false
 	}
-	if have >= b.shotTarget() {
+	if have >= b.shotTarget(w) {
 		return true
 	}
 	ww, ok := b.wornWeapon()
@@ -287,19 +312,37 @@ func (b *Brain) buyShot(w weapon) int32 {
 	return 0
 }
 
-// shotWants are the shots the shop errand buys (ShopPolicy.Soulshots or
-// Spiritshots): per weapon of shotWeapons, its buyShot up to the stock's
-// Max once fewer than Min of the shots it charges are carried.
+// shotWants are the shots the shop errand buys: per weapon of
+// shotWeapons, its buyShot up to the stock's Max once fewer than Min of the
+// shots it charges are carried, when the persona sets a ShotStock
+// (ShopPolicy.Soulshots or Spiritshots); else up to their trip target
+// (supplies) once fewer than SupplyPolicy.Refill percent of it are
+// carried, unless a Restock row buys them.
 func (b *Brain) shotWants() []buyRow {
 	st := b.shotStock()
 	var rows []buyRow
+	var sup []supply
 	for _, w := range b.shotWeapons() {
 		id := b.buyShot(w)
 		if id == 0 || slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
 			continue
 		}
-		if have := b.carriedShots(w); have < st.Min && st.Max > have {
-			rows = append(rows, buyRow{item: id, count: st.Max - have})
+		have := b.carriedShots(w)
+		if st.Max > 0 {
+			if have < st.Min && st.Max > have {
+				rows = append(rows, buyRow{item: id, count: st.Max - have})
+			}
+			continue
+		}
+		if _, ok := b.restockOf(id); ok {
+			continue
+		}
+		if sup == nil {
+			sup = b.supplies()
+		}
+		i := slices.IndexFunc(sup, func(s supply) bool { return s.item == id })
+		if i >= 0 && b.refills(have, sup[i].count) {
+			rows = append(rows, buyRow{item: id, count: sup[i].count - have})
 		}
 	}
 	return rows

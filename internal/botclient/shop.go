@@ -89,13 +89,16 @@ type Restock struct {
 type ShopPolicy struct {
 	// Restock are the items the bot keeps in stock, first listed bought
 	// first. A shot no weapon the bot wields or wears next charges is not
-	// bought (usableShot).
+	// bought (usableShot). A row is the explicit override of its item's
+	// trip target (Persona.Supply): the bot buys it by the row instead.
 	Restock []Restock
 	// Soulshots and Spiritshots restock the shots of the bot's class's kind
 	// that the weapon it wields and the one the gear errand wears next
 	// charge (shotWants), after Restock: under Min of them carried, the bot
 	// buys up to Max of the one a merchant sells (buyShot). Min is also how
-	// many carried shots alone back a weapon's grade (shotsBacked).
+	// many carried shots alone back a weapon's grade (shotsBacked). A zero
+	// Max, the default, sizes them by the use meter instead
+	// (Persona.Supply).
 	Soulshots, Spiritshots ShotStock
 	// ArrowsMin and ArrowsMax restock the arrows the bow the bot wields
 	// shoots, the ones of its grade (bowArrows), after Restock: under
@@ -125,23 +128,18 @@ type ShopPolicy struct {
 	Reach int32
 }
 
-// defaultShopPolicy restocks Lesser Healing Potions, the shots of the
-// wielded weapon by class and the arrows of a wielded bow (weight 6 each at
+// defaultShopPolicy restocks the arrows of a wielded bow (weight 6 each at
 // most), buys spellbooks and sells junk at a merchant nearby (docs/plan.md,
-// town persona).
+// town persona); the shots, HP potions and Scrolls of Escape it buys are
+// sized by the use meter (defaultSupplyPolicy).
 func defaultShopPolicy() ShopPolicy {
 	return ShopPolicy{
-		Restock: []Restock{
-			{Item: lesserHealingPotion, Min: 5, Max: 20},
-		},
-		Soulshots:   ShotStock{Min: 100, Max: 500},
-		Spiritshots: ShotStock{Min: 50, Max: 200},
-		ArrowsMin:   200,
-		ArrowsMax:   1000,
-		Books:       true,
-		SellAt:      5,
-		KeepAdena:   1000,
-		Reach:       8000,
+		ArrowsMin: 200,
+		ArrowsMax: 1000,
+		Books:     true,
+		SellAt:    5,
+		KeepAdena: 1000,
+		Reach:     8000,
 	}
 }
 
@@ -586,8 +584,9 @@ func (b *Brain) carried(item int32) int32 {
 
 // shopWants are the items the bot buys now and how many: the wanted
 // spellbooks it lacks, by id, then the restocks of its class under their
-// minimum, in persona order, then the shots (shotWants), then the bows'
-// arrows (arrowWants), then the gear it buys (gearWants). Unless
+// minimum, in persona order, then the shots (shotWants), then the HP
+// potion and Scrolls of Escape (supplyWants), then the bows' arrows
+// (arrowWants), then the gear it buys (gearWants). Unless
 // anyAdena, only what the bot's adena past KeepAdena buys one of at a
 // merchant's base price is listed.
 func (b *Brain) shopWants(anyAdena bool) []buyRow {
@@ -610,6 +609,7 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 		}
 	}
 	rows = append(rows, b.shotWants()...)
+	rows = append(rows, b.supplyWants()...)
 	rows = append(rows, b.arrowWants()...)
 	rows = append(rows, b.gearWants()...)
 	if anyAdena || b.cfg.Travel == nil {
@@ -685,7 +685,8 @@ func (b *Brain) junk() map[int32]Item {
 }
 
 // keeps reports whether the bot keeps item template id rather than sell
-// it: adena, Shop.Keep, Potions, Shots, Restock items, the arrows the
+// it: adena, Shop.Keep, Potions, Shots, Restock items, the Scrolls of
+// Escape it carries for a trip (SupplyPolicy.Escapes), the arrows the
 // wielded bow and the one worn next shoot, the shots keepsShot keeps and
 // spellbooks wanted or held for a learn.
 func (b *Brain) keeps(id int32) bool {
@@ -695,6 +696,7 @@ func (b *Brain) keeps(id int32) bool {
 	}
 	return id == adenaID || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
+		id == scrollOfEscape && p.Supply.Escapes > 0 ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
 		id == b.bowArrows() || id == b.nextBowArrows()
 }

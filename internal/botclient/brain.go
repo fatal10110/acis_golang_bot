@@ -176,6 +176,9 @@ type Brain struct {
 	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
+	// meter is what the bot spends of each consumable in combat
+	// (Persona.Supply).
+	meter useMeter
 	// wh is the clan warehouse errand (rule 9 errand "warehouse").
 	wh warehouseErrand
 	// store is the merchant's private sell store (rule "store").
@@ -327,7 +330,9 @@ func (b *Brain) start(now time.Time) {
 func (b *Brain) handle(batch []Event, now time.Time) error {
 	self := b.world.Self.ObjectID
 	for _, ev := range batch {
+		b.meterEvent(ev, now)
 		b.world.Apply(ev, now)
+		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
 		b.partyClaimEvent(ev)
 		switch e := ev.(type) {
