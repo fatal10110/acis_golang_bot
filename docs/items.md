@@ -492,13 +492,18 @@ grocer lists).
 
   It reads SoE only with no attacker and nothing aggressive within its aggro range. If that does
   not happen within `Supply.SafeWait` (default 2 min), as at a spot that always has an aggressive
-  monster in range, it walks out instead.
+  monster in range, it walks out instead. The triggers are read at the bot's spot every 5 s, and
+  not within 10 min of the last trip's end, so a bot back no better off farms a while first.
 - **SoE.** It stands up if sitting, then sends one UseItem of a carried SoE. While the cast runs it
   is in an **escaping hold**: every rule that moves, attacks, loots or clicks returns a hold until
   the teleport (`TeleportToLocation`) or the cast's end. This matters because a move sent mid-cast
   is queued by the server and would run on arrival. If the cast ends with no teleport, it walks.
   Pacing: one UseItem, with no repeat before the cast ends or `escapeRetry` (30 s, `death.go`).
-- **Without SoE,** it walks or takes a gatekeeper with the travel errand.
+  The hold (rule "escape") sits right after "critical": a potion still goes down, while a heal
+  cast or a run away, also queued mid-cast, waits. The hold lasts until the teleport, or
+  `escapeRetry` past the cast's end (the walker's `/unstuck` wait).
+- **Without SoE,** it walks to the nearest town (the travel map's town gatekeepers). Taking a
+  gatekeeper when the town is out of walking reach is #234.
 - **Spot.** The trip releases its hold in the spot registry, so another bot may take the spot; the
   returning bot picks again, as at a level-up.
 - **In town.** Arrival resets `shop.nextAt`, because a miss from the spot would otherwise push the

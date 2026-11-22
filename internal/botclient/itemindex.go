@@ -55,10 +55,15 @@ func indexShots(etc map[int32]datapack.EtcItem) map[int32]shotItem {
 	return out
 }
 
-// indexWeights indexes the weight of every etc item template that weighs
-// anything.
-func indexWeights(etc map[int32]datapack.EtcItem) map[int32]int32 {
+// indexWeights indexes the weight of every item and etc item template that
+// weighs anything.
+func indexWeights(items map[int32]datapack.Item, etc map[int32]datapack.EtcItem) map[int32]int32 {
 	out := make(map[int32]int32)
+	for id, it := range items {
+		if it.Weight > 0 {
+			out[id] = it.Weight
+		}
+	}
 	for id, it := range etc {
 		if it.Weight > 0 {
 			out[id] = it.Weight

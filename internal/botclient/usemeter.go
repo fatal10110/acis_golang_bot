@@ -59,6 +59,16 @@ type SupplyPolicy struct {
 	PotionsPerHour float64
 	// Escapes is how many Scrolls of Escape the bot carries.
 	Escapes int32
+	// The supply trip home (rule "supply", docs/items.md section 7) starts
+	// when a consumable runs out within ReturnMinutes of fighting (0 never),
+	// or the load passes ReturnLoad percent of the weight limit (0 never)
+	// with a town visit shedding at least ShedMin percent of it. It reads
+	// its Scroll of Escape only once no attacker and no aggressive monster
+	// in its aggro range is about; past SafeWait without one, it walks.
+	ReturnMinutes int
+	ReturnLoad    int
+	ShedMin       int
+	SafeWait      time.Duration
 	// Extra adds supply targets (template id to count) after the use
 	// meter's, clamped by weight like the rest; nil adds none. The clan
 	// crafter plan (M9) asks for ore with it. They count toward neither the
@@ -68,8 +78,15 @@ type SupplyPolicy struct {
 
 // defaultSupplyPolicy carries an hour of fighting's shots and HP potions,
 // a fifth more, and two Scrolls of Escape, within 45 % of the weight limit.
+// It goes home with ten minutes of fighting left, or past 70 % of the
+// weight limit (well above the 45 %, so a bot that bought to the cap does
+// not turn round at its first loot) with a tenth of it to sell, waiting up
+// to two minutes for a safe moment to read its scroll.
 func defaultSupplyPolicy() SupplyPolicy {
-	return SupplyPolicy{TripMinutes: 60, Margin: 20, BuyLoad: 45, Refill: 25, PotionsPerHour: 10, Escapes: 2}
+	return SupplyPolicy{
+		TripMinutes: 60, Margin: 20, BuyLoad: 45, Refill: 25, PotionsPerHour: 10, Escapes: 2,
+		ReturnMinutes: 10, ReturnLoad: 70, ShedMin: 10, SafeWait: 2 * time.Minute,
+	}
 }
 
 // useMeter is what the bot spends of each consumable per minute of

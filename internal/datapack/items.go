@@ -30,6 +30,8 @@ type Item struct {
 	Grade int
 	// Price is the reference price in adena.
 	Price int32
+	// Weight is the template's weight, what one carried adds to the load.
+	Weight int32
 	// Duration is a shadow item's mana in minutes, 0 for an ordinary item.
 	Duration int
 	// Conditional is set for a template with use or equip conditions (a
@@ -252,6 +254,7 @@ func buildItem(el itemElement) (Item, bool, error) {
 	it.Kind = a.strDefault(kindKey, "")
 	it.Magical = a.boolDefault("is_magical", false)
 	it.Price = a.int32Default("price", 0)
+	it.Weight = a.int32Default("weight", 0)
 	it.Duration = a.intDefault("duration", 0)
 	grade, ok := grades[a.strDefault("crystal_type", "NONE")]
 	if !ok {

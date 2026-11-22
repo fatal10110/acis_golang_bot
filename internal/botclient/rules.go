@@ -410,12 +410,16 @@ type rule struct {
 // per shot template carried, ahead of the fight it serves, after the flee
 // rules so it never delays one. "buffpotion" drinks the build's buff potion
 // at the farming spot out of combat, after the rebuff so a support's buff
-// lands first.
+// lands first. "supply" is the farmer's trip home to restock (D16), after
+// the errands that already serve it and ahead of following and farming;
+// "escape" holds every rule after it while its Scroll of Escape's recall
+// runs, after "critical" so a potion still goes down.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
 	{"command", (*Brain).ruleCommand},
 	{"critical", (*Brain).ruleCritical},
+	{"escape", (*Brain).ruleEscape},
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"chat", (*Brain).ruleChat},
@@ -436,6 +440,7 @@ var playRules = []rule{
 	{"warehouse", (*Brain).ruleWarehouse},
 	{"recipe", (*Brain).ruleRecipe},
 	{"craft", (*Brain).ruleCraft},
+	{"supply", (*Brain).ruleSupply},
 	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},
@@ -555,6 +560,11 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 		if a, ok := b.drinkPotion(now); ok {
 			return a, true
 		}
+	}
+	if b.escaping(now) {
+		// A heal or a run away sent mid-recall would run after the
+		// teleport (ruleEscape); the potion above does not wait.
+		return Action{}, true
 	}
 	if a, ok := b.heal(s.ObjectID, now); ok {
 		return a, true
