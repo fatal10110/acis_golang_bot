@@ -55,10 +55,13 @@ type Hierarchy struct {
 	cache  *memberCache
 }
 
-// NewHierarchy returns the hierarchy over g, reading e's static regions,
-// with a cluster result LRU bounded by cacheBytes.
-func NewHierarchy(g *Graph, e *engine.Engine, cacheBytes int64) *Hierarchy {
-	return &Hierarchy{graph: g, static: Planner{Engine: e.Static()}, cache: newMemberCache(cacheBytes)}
+// NewHierarchy returns the hierarchy over g, reading e's static regions and
+// the water w (nil: none) g was built with, with a cluster result LRU bounded
+// by cacheBytes. A w whose Hash is not g's key's WaterHash would place cells
+// in clusters the graph does not know; OpenNavCache refuses such a pair when
+// the key is built from w.
+func NewHierarchy(g *Graph, e *engine.Engine, w *Water, cacheBytes int64) *Hierarchy {
+	return &Hierarchy{graph: g, static: Planner{Engine: e.Static(), Water: w}, cache: newMemberCache(cacheBytes)}
 }
 
 // Graph returns the abstract graph.

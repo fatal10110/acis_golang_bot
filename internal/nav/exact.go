@@ -97,7 +97,8 @@ func (p *Planner) stepChainOK(s *scratch, a, b location.Location) bool {
 // Lmax + stepSlack ahead, and between the state and b on each axis (the chain
 // is monotone per axis, see quadrant). The first step can be any length, so
 // a stretch near a starts from a alone; any other starts from every band
-// point within Lmax + stepSlack before it, on its one floor.
+// point within Lmax + stepSlack before it, on its one floor. A state in
+// water fails the stretch: the server would swim the walker from there.
 func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) bool {
 	dx, dy := float64(b.X-a.X), float64(b.Y-a.Y)
 	length := math.Hypot(dx, dy)
@@ -129,6 +130,9 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 		}
 		cur := s.queue[head]
 		cx, cy, cz := int(cur.x), int(cur.y), int(cur.z)
+		if p.Water.Contains(cx, cy, cz) {
+			return false
+		}
 		ct := (float64(cx-a.X)*dx + float64(cy-a.Y)*dy) / length
 		if ct > t1 {
 			continue // past the stretch: the corridor test holds from here

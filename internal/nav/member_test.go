@@ -284,7 +284,7 @@ func TestLocateIgnoresDoorState(t *testing.T) {
 	if n := e.NSWENearest(door.X, door.Y, 0); n != 0 {
 		t.Fatalf("door cell NSWE %v with the door closed, want none", n)
 	}
-	closed := NewHierarchy(open.g, e, DefaultMemberCacheBytes)
+	closed := NewHierarchy(open.g, e, nil, DefaultMemberCacheBytes)
 	for i, c := range cells {
 		m, err := closed.Locate(c, nil)
 		if err != nil {
@@ -310,7 +310,7 @@ func TestLocatePinsAndConcurrency(t *testing.T) {
 		}
 		want[i] = keyOf(m)
 	}
-	small := NewHierarchy(th.g, testEngine(t), 64<<10)
+	small := NewHierarchy(th.g, testEngine(t), nil, 64<<10)
 	var wg sync.WaitGroup
 	for w := range 8 {
 		wg.Add(1)
@@ -336,7 +336,7 @@ func TestLocatePinsAndConcurrency(t *testing.T) {
 		t.Errorf("LRU holds %d bytes over its %d bound", small.cache.used, small.cache.max)
 	}
 
-	none := NewHierarchy(th.g, testEngine(t), 0)
+	none := NewHierarchy(th.g, testEngine(t), nil, 0)
 	m, err := none.Locate(pointCell(geotest.PitInside), nil)
 	if err != nil {
 		t.Fatal(err)

@@ -68,7 +68,7 @@ talk) and pick-up walks.
 Non-goals:
 
 - server changes (none are needed);
-- flying and boats; swimming is a gap (see "Gaps");
+- flying, boats and swimming: routes keep out of water (see "Water");
 - a navigation mesh in another format: the bot uses the server's geodata cells as they are, so its
   answers match the server's exactly.
 
@@ -400,11 +400,11 @@ server's pathfinder.
   - A refinement's open set and its closed set (a map) are sized by the node budget, not by the
     region.
 - **Build** (`bots navbuild -geodata-cache FILE -geoengine FILE -datapack DIR`): reads the packed
-  geodata cache and `doors.xml`, never the raw region files. It writes the cluster graph, the door
+  geodata cache, `doors.xml` and `zones/WaterZone.xml`, never the raw region files. It writes the cluster graph, the door
   tags, the SCC labels and the condensation to a nav cache file with the geodata cache's
   discipline:
   - a magic and version, a CRC-32C, and keyed by the geodata cache's own CRC, a hash of
-    `doors.xml` and the build parameters;
+    `doors.xml`, the build parameters and a hash of the water zones (see "Water");
   - written to a temporary file, synced, then renamed;
   - mapped read-only at run time, with the graph read in place.
 
@@ -466,6 +466,47 @@ benchmarks are `BenchmarkOwnerNav`, local only):
 The cluster-level targets hold. Route time is spent in N2's pull (each candidate gets a full
 corridor test) and in the map-indexed cell and abstract searches. #209 tracks bringing distance,
 route and heap to their targets.
+
+### Water
+
+While a player's position is inside a water zone the server moves it as a swimmer, not a walker
+(acis_golang `model/actor/move/creature.go`: `waterLocked`, and the swim branch of
+`resolvePathLocked`, which checks `CanMove` and then `HasLayerAtOrBelow` at the target, never
+pathfinds, and measures legs in 3D). Swimming also costs breath (`SwimStateChanged`, drowning
+damage). The planner does not model any of it: **routes keep out of water** (#161).
+
+- **Data**: `datapack.LoadWaterZones` reads `zones/WaterZone.xml` (373 zones in the shipped
+  datapack, every one a `Cuboid` of two nodes); `datapack.Load` fills `Datapack.WaterZones`. Any
+  other shape fails the load rather than leave water the planner cannot see. A zone contains a
+  point when X, Y and Z all lie within its bounds, inclusive, as the server's cuboid form does.
+- **Model**: `nav.Water` indexes the boxes by region tile. A cell is *wet* when any point of its
+  square lies in a zone at the cell's floor height: a walker on that floor can stand anywhere in
+  the cell. Water above the floor (a pool's band under a bridge deck, say) leaves the floor dry.
+- **Planner**: no crossing (`cross`, so the cell search, the build and the cluster results alike)
+  enters or leaves a wet cell; the open-corridor test fails a wet cell, and the exact step-chain
+  check fails at any step point in water, so no segment passes water; `NearestWalkable` and
+  `StandPoint` never answer a wet cell; an endpoint on a wet cell is `ErrWater`.
+- **Hierarchy**: `BuildConfig.Water` keeps wet cells out of the abstract graph, the nav cache key
+  carries `Water.Hash` (`NavKey.WaterHash`, nav cache format version 2), and `NewHierarchy`
+  takes the same `Water` for its cluster results. A walker builds its `Water` from the datapack
+  the way `bots navbuild` does.
+- **Getting out**: a bot that ends up in water (a fall, a knockback, a fear) gets `ErrWater` from
+  the planner; the walker steps it to the nearest dry cell (#157).
+
+**Measured for #161** on the owner's 139 regions and the shipped datapack, with the cell planner.
+The sample was every third farming spot, routed from the nearest STANDARD teleport destination
+within 8000 units:
+
+| Measure | Result |
+| --- | --- |
+| spot centres on a wet cell | 37 of 4664 (0.8%) |
+| wet STANDARD teleport destinations | 0 of 429 |
+| routes planned without water that pass water | 23 of 488 (4.7%) |
+| of those, with water avoided | 9 detour (most under 1.15× the length), 4 have no dry cell within 300 of an endpoint, 4 no route, 6 exceed a 400000-cell budget |
+
+The losses are spots reachable only through water, such as Schuttgart's region 23_11 and part
+of region 21_24, where the sea cuboid's band (maxZ -3780) covers low ground. Planning swim
+moves to reach them is #223.
 
 ### 3. `botclient`: door table and walker
 
@@ -744,8 +785,5 @@ heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore d
 
 ## Gaps
 
-- Swimming: water zones are not in the bot's world model, and the planner treats water cells as
-  ground, while the server switches to swim moves in water (`waterLocked`). Bots rarely enter
-  water today. Tracked in #161.
 - Fences and doors that are not in `doors.xml` (siege, scripted): N4 covers `doors.xml` doors
   only. Tracked in #162.

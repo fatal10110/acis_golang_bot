@@ -179,7 +179,8 @@ func (p *Planner) lineCellOpen(s *scratch, lc lineCell) bool {
 
 // corridorCell reads conditions 1 and 2 for one cell: geodata, exactly one
 // layer (so belowCell, HeightNearest and Height can only answer that floor),
-// and NSWE allowing the quadrant's crossings.
+// and NSWE allowing the quadrant's crossings. A cell whose floor is in water
+// fails too, so the exact check walks that stretch point by point.
 func (p *Planner) corridorCell(s *scratch, gx, gy int, req block.NSWE) corridorCell {
 	if !p.hasGeo(gx, gy) {
 		return corridorCell{}
@@ -188,5 +189,6 @@ func (p *Planner) corridorCell(s *scratch, gx, gy int, req block.NSWE) corridorC
 	if len(layers) != 1 {
 		return corridorCell{}
 	}
-	return corridorCell{h: layers[0].Height, ok: layers[0].NSWE.Allows(req)}
+	h := layers[0].Height
+	return corridorCell{h: h, ok: layers[0].NSWE.Allows(req) && !p.Water.wet(gx, gy, h)}
 }

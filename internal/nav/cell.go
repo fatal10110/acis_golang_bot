@@ -38,6 +38,9 @@ type Planner struct {
 	CollisionHeight float64
 	// Budget caps the cells a route search expands, across its replans.
 	Budget int
+	// Water is the water zones routes keep out of; nil is none. A planner
+	// for a hierarchy reads the Water its nav cache was built with.
+	Water *Water
 }
 
 // Locate snaps a world point to its cell and the layer nearest its Z, as the
@@ -88,8 +91,9 @@ var cardinals = [4]direction{
 // the neighbour d, exactly as CanMove takes it: n must allow d, and the walker
 // lands on the neighbour's layer nearest at or below c's floor plus
 // block.CellIgnoreHeight. So a step goes down any height and up at most 48.
+// A crossing neither leaves nor enters a cell whose floor is in water.
 func (p *Planner) cross(c Cell, n block.NSWE, d direction) (Cell, block.NSWE, bool) {
-	if !n.Allows(d.flag) {
+	if !n.Allows(d.flag) || p.Water.wet(c.X, c.Y, c.Z) {
 		return Cell{}, 0, false
 	}
 	nx, ny := c.X+d.dx, c.Y+d.dy
@@ -97,7 +101,7 @@ func (p *Planner) cross(c Cell, n block.NSWE, d direction) (Cell, block.NSWE, bo
 		return Cell{}, 0, false
 	}
 	h, nn, ok := p.Engine.NodeBelow(nx, ny, int(c.Z)+block.CellIgnoreHeight)
-	if !ok {
+	if !ok || p.Water.wet(nx, ny, h) {
 		return Cell{}, 0, false
 	}
 	return Cell{X: nx, Y: ny, Z: h}, nn, true
