@@ -179,6 +179,10 @@ const (
 	opGameRequestRecipeItemMakeSelf = 0xaf
 )
 
+// RequestCrystallizeItem (clientpackets/item_ops.go): the crafter breaks an
+// item into crystals.
+const opGameRequestCrystallizeItem = 0x72
+
 // Dye symbols, both directions: HennaEquipList (serverpackets/henna.go),
 // HennaInfo (serverpackets/hennainfo.go), and RequestHennaEquip and
 // RequestHennaUnequip (clientpackets/henna.go). The draw window opens from

@@ -189,6 +189,8 @@ type crafterCycle struct {
 	resume, made bool
 	// crafted is set once a chain was crafted this cycle.
 	crafted bool
+	// crystal is the cycle's crystallizing, ahead of its crafts.
+	crystal crystalStep
 	// delivering are the products of crafted orders the deposit under way
 	// carries, by order.
 	delivering map[OrderID]int64
@@ -358,10 +360,15 @@ func (b *Brain) craftErrandDone(now time.Time) {
 
 // craftPlan plans the cycle from the fresh warehouse list (fromWarehouse)
 // or from the carried stock alone, claims the board orders it can make and
-// publishes the bot's crafter entry, then withdraws or crafts.
+// publishes the bot's crafter entry, then withdraws or crafts. From the
+// list it picks the gear to crystallize too (planCrystallize), withdrawn
+// with the plan's materials, its crystals planned with as carried.
 func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 	c := &b.craft
 	c.orders = b.claimCraftOrders(now)
+	if fromWarehouse {
+		b.planCrystallize()
+	}
 	in := b.craftInput(c.orders, fromWarehouse, now)
 	c.plan = craftplan.Build(in, b.persona.Crafter.Plan)
 	if fromWarehouse && !c.plan.Exhausted {
@@ -371,12 +378,13 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 	b.cfg.CraftBoard.Publish(b.world.Clan.ID, CrafterEntry{
 		Bot: b.world.Self.ObjectID, Name: b.world.Self.Name, Recipes: in.Book, CreateItem: in.DwarvenLevel,
 	})
-	if fromWarehouse && len(c.plan.Withdraw) > 0 {
-		rows := make([]WarehouseRow, 0, len(c.plan.Withdraw))
+	if fromWarehouse && (len(c.plan.Withdraw) > 0 || len(c.crystal.want) > 0) {
+		rows := make([]WarehouseRow, 0, len(c.plan.Withdraw)+len(c.crystal.want))
 		for _, g := range c.plan.Withdraw {
 			rows = append(rows, WarehouseRow{TemplateID: g.ItemID, Count: g.Count})
 		}
-		deposit := b.craftDepositRows(ingredientCounts(c.plan.Keep))
+		rows = append(rows, c.crystal.rows()...)
+		deposit := b.craftDepositRows(ingredientCounts(c.plan.Keep), now)
 		b.noteDelivering(deposit, now)
 		c.begin(craftWithdraw, WarehouseRequest{Withdraw: rows, Deposit: deposit}, now)
 		return
@@ -421,7 +429,8 @@ func (b *Brain) renewCraftClaims(now time.Time) {
 // craftInput is the planner's input: the carried crafting stock less the
 // products of the orders the bot crafted, the fresh warehouse list when
 // fromWarehouse, the board's reservations and orders, the recipes and
-// reference prices, the book and the craft levels.
+// reference prices, the book and the craft levels; the crystals the
+// cycle's crystallizing will give count as carried (crystalsDue).
 func (b *Brain) craftInput(orders []CraftOrder, fromWarehouse bool, now time.Time) craftplan.Input {
 	m, clan, self := b.cfg.Travel, b.world.Clan.ID, b.world.Self.ObjectID
 	inv := b.craftStock()
@@ -448,6 +457,7 @@ func (b *Brain) craftInput(orders []CraftOrder, fromWarehouse bool, now time.Tim
 			in.Warehouse[it.TemplateID] += int64(it.Count)
 		}
 	}
+	b.crystalsDue(inv, in.Warehouse, fromWarehouse)
 	for _, o := range orders {
 		in.Orders = append(in.Orders, craftplan.Order{Product: o.Product, Count: o.Count})
 	}
@@ -473,15 +483,38 @@ func (b *Brain) craftStock() map[int32]int64 {
 }
 
 // craftDepositRows are the deposit rows of the crafting stock beyond keep,
-// by template.
-func (b *Brain) craftDepositRows(keep map[int32]int64) []WarehouseRow {
-	var rows []WarehouseRow
-	for t, n := range b.craftStock() {
+// of the gear withdrawn to crystallize and left whole (crystalLeftovers),
+// and of the bot's crafted orders whose product the stock leaves out as
+// its own supplies (shots, potions, Scrolls of Escape), as many as it
+// carries, by template.
+func (b *Brain) craftDepositRows(keep map[int32]int64, now time.Time) []WarehouseRow {
+	rows := b.crystalLeftovers()
+	stock := b.craftStock()
+	for t, n := range stock {
 		if left := n - keep[t]; left > 0 {
 			rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(left, int64(1<<31-1)))})
 		}
 	}
-	slices.SortFunc(rows, func(a, b WarehouseRow) int { return cmp.Compare(a.TemplateID, b.TemplateID) })
+	ordered := make(map[int32]int64)
+	for _, o := range b.cfg.CraftBoard.Orders(b.world.Clan.ID, now) {
+		if _, inStock := stock[o.Product]; o.State == OrderCrafted && o.Crafter == b.world.Self.ObjectID && !inStock {
+			ordered[o.Product] += o.Count
+		}
+	}
+	for t, n := range ordered {
+		var carried int64
+		for _, it := range b.world.Inventory.Items {
+			if it.TemplateID == t && !it.Equipped {
+				carried += int64(it.Count)
+			}
+		}
+		if n = min(n, carried); n > 0 {
+			rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(n, int64(1<<31-1)))})
+		}
+	}
+	slices.SortFunc(rows, func(a, b WarehouseRow) int {
+		return cmp.Or(cmp.Compare(a.TemplateID, b.TemplateID), cmp.Compare(a.Object, b.Object))
+	})
 	return rows
 }
 
@@ -507,13 +540,15 @@ func ingredientCounts(gs []datapack.Ingredient) map[int32]int64 {
 	return out
 }
 
-// startMake starts crafting the plan's first step.
+// startMake starts crystallizing the withdrawn gear, then crafting the
+// plan's first step.
 func (b *Brain) startMake(now time.Time) {
 	c := &b.craft
 	c.phase, c.req, c.deadline = craftMake, WarehouseRequest{}, now.Add(crafterPhaseTimeout)
 	c.chain, c.step, c.done, c.pending, c.replan = 0, 0, 0, false, false
+	b.notePoolGear()
 	b.craftAdvance(now)
-	if _, ok := c.current(); !ok {
+	if _, ok := c.current(); !ok && len(b.crystalTargets()) == 0 {
 		b.finishCraftCycle(now)
 	}
 }

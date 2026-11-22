@@ -153,6 +153,9 @@ type clanBoard struct {
 	// heard are the clan chat lines a crafter took, by speaker and text,
 	// until when (Heard).
 	heard map[string]time.Time
+	// pool are the object ids of the clan's gear each crafter carries
+	// withdrawn to crystallize (NotePoolGear).
+	pool map[int32]map[int32]bool
 }
 
 // NewCraftBoard returns an empty board.

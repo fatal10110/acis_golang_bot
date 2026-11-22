@@ -163,8 +163,9 @@ func encodeWarehouseRequest(op byte, rows []warehouseRow) []byte {
 }
 
 // WarehouseRow is one row a clan warehouse errand asks for: an item
-// template and how many, 0 for every one the list shows.
-type WarehouseRow struct{ TemplateID, Count int32 }
+// template and how many, 0 for every one the list shows; Object, when set,
+// names the one item object of the template it takes.
+type WarehouseRow struct{ TemplateID, Count, Object int32 }
 
 // WarehouseRequest is a clan warehouse errand: a withdrawal of Withdraw,
 // then a deposit of Deposit, either one empty for none. Look opens the
@@ -494,13 +495,14 @@ func (b *Brain) warehouseRequest(now time.Time) (Action, bool) {
 type whStock struct{ object, item, count int32 }
 
 // pickRows picks the rows of want from stock, in want's order then
-// stock's, each count no more than stock holds, at most warehouseMaxRows.
+// stock's, each count no more than stock holds, a row naming an object
+// that object only, at most warehouseMaxRows.
 func pickRows(want []WarehouseRow, stock []whStock) []warehouseRow {
 	var rows []warehouseRow
 	for _, w := range want {
 		left := w.Count
 		for _, s := range stock {
-			if s.item != w.TemplateID || s.count <= 0 || (w.Count > 0 && left <= 0) {
+			if s.item != w.TemplateID || s.count <= 0 || (w.Count > 0 && left <= 0) || (w.Object != 0 && s.object != w.Object) {
 				continue
 			}
 			n := s.count

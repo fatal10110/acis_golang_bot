@@ -414,6 +414,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.warehouseEvent(ev, now)
 			b.recipeEvent(ev, now)
 			b.craftEvent(ev, now)
+			b.crystallizeEvent(e.ID, now)
 			b.dyeRefused(e.ID, now)
 		case ExAutoSoulShot:
 			if e.Enabled {

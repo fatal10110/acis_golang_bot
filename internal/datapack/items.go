@@ -28,6 +28,11 @@ type Item struct {
 	// Grade is the crystal grade: 0 for none, then 1 for D up to 5 for S,
 	// the level of the Expertise skill that wears it without a penalty.
 	Grade int
+	// CrystalCount is how many crystals of its grade crystallizing a +0
+	// one gives (crystal_count, model/item/crystal.go CrystalCountAt); 0
+	// for none: the server crystallizes a template only with a grade and a
+	// count.
+	CrystalCount int32
 	// Price is the reference price in adena.
 	Price int32
 	// Weight is the template's weight, what one carried adds to the load.
@@ -227,7 +232,7 @@ func buildPrice(el itemElement) (id, price int32, priced bool, err error) {
 
 // buildItem reads a weapon, armor or arrow template, reporting false for
 // any other: id, type and name are required, price, duration and the shot
-// counts default to 0, crystal_type to none.
+// counts and crystal_count default to 0, crystal_type to none.
 func buildItem(el itemElement) (Item, bool, error) {
 	a := itemAttrs(el)
 	it := Item{ID: a.int32("id"), Type: a.str("type"), Name: a.str("name")}
@@ -261,6 +266,7 @@ func buildItem(el itemElement) (Item, bool, error) {
 		return Item{}, false, fmt.Errorf("item %d: crystal_type %q", it.ID, a.vals["crystal_type"])
 	}
 	it.Grade = grade
+	it.CrystalCount = a.int32Default("crystal_count", 0)
 	_, use := a.vals["use_condition"]
 	_, equip := a.vals["equip_condition"]
 	it.Conditional = len(el.Conds) > 0 || use || equip

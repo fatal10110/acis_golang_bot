@@ -7,6 +7,7 @@
 		<set name="weapon_type" val="BOW" />
 		<set name="bodypart" val="lrhand" />
 		<set name="crystal_type" val="B" />
+		<set name="crystal_count" val="1746" />
 		<set name="weight" val="1700" />
 		<set name="price" val="13100000" />
 		<set name="soulshots" val="3" />

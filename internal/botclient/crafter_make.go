@@ -8,7 +8,8 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
-// craftNext is the cycle's next craft: after the answer to the last, or
+// craftNext is the cycle's next craft: the crystallizing of the withdrawn
+// gear first (crystallizeNext); after the answer to the last craft, or
 // its timeout; the weight guard's deposit first when the bot carries 50 %
 // or more of its limit; a rest first when its MP is short of the recipe's
 // cost; and at least craftGap plus jitter after the last craft.
@@ -24,6 +25,9 @@ func (b *Brain) craftNext(now time.Time) (Action, bool) {
 			return Action{}, true
 		}
 	}
+	if a, ok := b.crystallizeNext(now); ok {
+		return a, true
+	}
 	if c.replan {
 		c.replan = false
 		b.craftPlan(now, false)
@@ -37,7 +41,7 @@ func (b *Brain) craftNext(now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	if c.made && s.MaxLoad > 0 && int64(s.Load)*100 >= int64(s.MaxLoad)*crafterWeightPercent {
-		if rows := b.craftDepositRows(c.remainingNeeds(b.cfg.Travel.recipes)); len(rows) > 0 {
+		if rows := b.craftDepositRows(c.remainingNeeds(b.cfg.Travel.recipes), now); len(rows) > 0 {
 			c.resume = true
 			b.beginDeposit(rows, now)
 			return Action{}, true
@@ -83,6 +87,10 @@ func (b *Brain) craftSent(a Action, now time.Time) {
 	c := &b.craft
 	if c.phase == craftWithdraw && b.wh.running {
 		b.cfg.CraftBoard.TakeLease(b.world.Clan.ID, b.world.Self.ObjectID, now)
+	}
+	if a.kind == actCrystallize && c.phase == craftMake {
+		b.crystallizeSent(a, now)
+		return
 	}
 	if a.kind != actCraft || c.phase != craftMake {
 		return
@@ -144,10 +152,10 @@ func (b *Brain) craftFailed(now time.Time) {
 	}
 }
 
-// tripCrafter stops the cycle on a breaker: it deposits, then holds the
-// next check for BreakerHold.
+// tripCrafter stops the cycle on a breaker: it deposits, the gear left to
+// crystallize among it, then holds the next check for BreakerHold.
 func (b *Brain) tripCrafter(now time.Time) {
-	b.craft.tripped = true
+	b.craft.tripped, b.craft.crystal.stopped = true, true
 	b.finishCraftCycle(now)
 }
 
@@ -159,7 +167,7 @@ func (b *Brain) finishCraftCycle(now time.Time) {
 	c := &b.craft
 	c.pending, c.replan = false, false
 	next := craftplan.Build(b.craftInput(nil, b.wh.status.Known, now), b.persona.Crafter.Plan)
-	rows := b.craftDepositRows(ingredientCounts(next.Keep))
+	rows := b.craftDepositRows(ingredientCounts(next.Keep), now)
 	if len(rows) == 0 {
 		b.endCraftCycle(now, true)
 		return
@@ -226,6 +234,7 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 		wait += time.Duration(b.rng.Int64N(int64(p.CheckJitter) + 1))
 	}
 	c.noteCraftEnd(now, now.Add(wait), ok)
+	b.notePoolGear()
 	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended}
 }
 
