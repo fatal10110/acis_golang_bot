@@ -230,6 +230,8 @@ type Brain struct {
 	metrics *botmetrics.Bot
 	// walk walks the bot on checked segments (BrainConfig.Nav).
 	walk walker
+	// engage is the stand point the fight walks to (engageWalk).
+	engage engageState
 	// doors reports the doors the bot sees to the door table, nil without
 	// one.
 	doors *DoorReporter

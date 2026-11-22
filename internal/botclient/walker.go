@@ -574,6 +574,33 @@ func (w *walker) lineOpen(from, to Point) bool {
 	return w.segmentOK(fromLoc(a), fromLoc(b))
 }
 
+// sightOpen reports whether the bot at from sees a target of collision
+// height height at to (CanSeeActor with both heights): a bow shot or a
+// cast in range needs no walk then. Without geodata it is true.
+func (w *walker) sightOpen(from, to Point, height float64) bool {
+	if w.nav == nil {
+		return true
+	}
+	return w.nav.Engine.CanSeeActor(int(from.X), int(from.Y), int(from.Z), w.plan.CollisionHeight,
+		int(to.X), int(to.Y), int(to.Z), height)
+}
+
+// pickUpOpen reports whether a pick-up of the item at item may go out from
+// from: the server routes the walk to an item out of range
+// (network/targeting.go), so the bot sends it only when CanMove onto the
+// item's raw Z and the step chain hold from where it stands. Without
+// geodata it is true.
+func (w *walker) pickUpOpen(from, item Point) bool {
+	if w.nav == nil {
+		return true
+	}
+	a := toLoc(from)
+	if c, ok := w.plan.Locate(a); ok {
+		a.Z = int(c.Z)
+	}
+	return w.segmentOK(fromLoc(a), item)
+}
+
 // standPoint is a point within rng of target at offering mode toward it,
 // the nearest to the bot at from, in the bot's SCC.
 func (w *walker) standPoint(from, at Point, rng float64, mode nav.StandMode, height float64) (Point, bool) {
