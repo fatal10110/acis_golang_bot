@@ -288,7 +288,7 @@ func gmGive(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl, co
 				had = n
 			}
 		}
-		if err := gm.Command(ctx, fmt.Sprintf("give %d %d", tmpl, count)); err != nil {
+		if err := gm.Give(ctx, f.id, tmpl, count); err != nil {
 			t.Fatal(err)
 		}
 		// Any rise counts, from what the stock was just before: a bot

@@ -168,7 +168,7 @@ func gmGiveGear(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl
 	seen := f.watch.Seen(0)
 	inv := inventory(seen)
 	had := carriedOf(inv, tmpl)
-	if err := gm.Command(ctx, fmt.Sprintf("give %d %d", tmpl, n)); err != nil {
+	if err := gm.Give(ctx, f.id, tmpl, n); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -394,7 +394,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 			continue
 		}
 		gmNext()
-		if err := gm.Command(ctx, fmt.Sprintf("give %d", tmpl)); err != nil {
+		if err := gm.Give(ctx, c.Self.ObjectID, tmpl, 1); err != nil {
 			t.Fatal(err)
 		}
 		await(fmt.Sprintf("the GM's %d", tmpl), func() bool {
@@ -421,7 +421,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		gmNext()
 		for have < end.adena {
 			n := min(end.adena-have, maxGive)
-			if err := gm.Command(ctx, fmt.Sprintf("give %d %d", adena, n)); err != nil {
+			if err := gm.Give(ctx, c.Self.ObjectID, adena, n); err != nil {
 				t.Fatal(err)
 			}
 			want := have + n

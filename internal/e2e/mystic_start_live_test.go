@@ -17,7 +17,7 @@ var mysticStart = botclient.Point{X: -90875, Y: 248162, Z: -3570}
 // opMoveBackward is MoveBackwardToLocation's opcode: a ground move.
 const opMoveBackward = 0x01
 
-// TestLiveMysticStart runs a level 1 human mystic from its start point, out
+// TestLiveMysticStart runs a low level human mystic from its start point, out
 // of sight of any trainer: its trainer errand walks to the Talking Island
 // village trainers, and within a few minutes it is over, learned or given
 // up, and stays over, never a loop of legs and /unstuck where the bot
@@ -39,10 +39,16 @@ func TestLiveMysticStart(t *testing.T) {
 	})
 	t.Cleanup(func() { gmReset(t, gm, f) })
 
-	gmOn(t, ctx, gm, f, "set level 1", "set sp 0")
+	// The bot plays from the moment it enters the world: one that logged
+	// in by the trainers is over its errand before the recall (#241), and
+	// a visit done at a level ends the errand until a higher level
+	// (trainerVisit.finish). A level up after the recall starts a visit
+	// from the start point whatever ran before it.
+	level := levelOf(t, ctx, f)
 	gmTeleport(t, ctx, gm, mysticStart)
 	recallBot(t, ctx, tg, gm, f.name)
 	sent, seen, start := len(f.watch.Sent()), f.watch.Len(), time.Now()
+	gmOn(t, ctx, gm, f, "set sp 0", fmt.Sprintf("set level %d", level+1))
 
 	moves := func() int {
 		n := 0
