@@ -245,6 +245,26 @@ func TestBrainDyes(t *testing.T) {
 	}
 }
 
+// TestBrainDyesInventoryFirst draws on when the InventoryUpdate of a draw
+// comes before its HennaInfo (the server flushes inventory updates from its
+// own 333 ms ticker): HennaInfo alone settles the draw at dyeReplyTimeout,
+// with no back-off.
+func TestBrainDyesInventoryFirst(t *testing.T) {
+	b := newDyeBrain(t, 1, 30, 2, nil, adenaStack(200000), dyeStack(200, dyeStr, 10), dyeStack(201, dyeDex, 10))
+	runTrainerSteps(t, b, []trainerStep{
+		{name: "talk", at: time.Second, setup: makerInSight, wantRule: "dyes", wantKind: actTalk},
+		{name: "the Draw link", at: 3 * time.Second, events: []Event{makerPage(makerObj)}, wantRule: "dyes", wantKind: actBypass, wantPayload: masterBypass(makerObj, "Draw")},
+		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(1)},
+		{name: "the inventory first", at: 6 * time.Second, events: []Event{spent(200, dyeStr, 0)}, wantRule: "dyes"},
+		{name: "HennaInfo after it", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{1, 1}}}}, wantRule: "dyes"},
+		{name: "still waiting", at: 5*time.Second + dyeReplyTimeout - time.Millisecond, wantRule: "dyes"},
+		{name: "draw symbol 6", at: 5*time.Second + dyeReplyTimeout, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(6)},
+	})
+	if !b.dyes.retryAt.IsZero() {
+		t.Fatalf("visit %+v, want no back-off", b.dyes)
+	}
+}
+
 // TestBrainDyesSecondProfession takes a gladiator wearing its first
 // profession's inactive symbols to the maker: it removes both, one per
 // answer, then draws the second profession's rows into all 3 slots.
@@ -287,9 +307,8 @@ func TestBrainDyesSecondProfession(t *testing.T) {
 
 // TestBrainDyesBacksOff checks that a refused or unanswered request ends
 // the visit for RetryAfter: a refusal at once, a silence (the server drops
-// an unknown symbol) or a HennaInfo with no InventoryUpdate after
-// dyeReplyTimeout, a draw window that never comes, and a window that does
-// not offer the symbol.
+// an unknown symbol) after dyeReplyTimeout, a draw window that never comes,
+// and a window that does not offer the symbol.
 func TestBrainDyesBacksOff(t *testing.T) {
 	const sentAt = time.Second
 	tests := []struct {
@@ -309,7 +328,6 @@ func TestBrainDyesBacksOff(t *testing.T) {
 		{name: "YouNotEnoughAdena", listed: true, events: []Event{SystemMessage{ID: msgNotEnoughAdena}}, wantKind: actHennaEquip},
 		{name: "NotEnoughItems", listed: true, events: []Event{SystemMessage{ID: msgNotEnoughItems}}, wantKind: actHennaEquip},
 		{name: "silence", listed: true, after: dyeReplyTimeout, wantKind: actHennaEquip},
-		{name: "HennaInfo, no inventory", listed: true, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{1, 1}}}}, after: dyeReplyTimeout, wantKind: actHennaEquip},
 		{name: "no window", after: dyeReplyTimeout, wantKind: actBypass},
 		{name: "symbol not offered", listed: true, window: drawWindow(8)},
 	}

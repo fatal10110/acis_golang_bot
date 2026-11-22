@@ -135,7 +135,9 @@ func (d *dyeVisit) sent(a Action, now time.Time) {
 // symbols (RequestHennaUnequip), follows the page's Draw link and draws
 // the table's symbols the window offers into its free slots
 // (RequestHennaEquip). One request per answer: the draw window, or
-// HennaInfo then the InventoryUpdate after it, waited for dyeReplyTimeout.
+// HennaInfo then the InventoryUpdate after it, waited for dyeReplyTimeout
+// (HennaInfo alone settles the request at the timeout: the update may
+// have come first).
 // A refusal (CantDrawSymbol, SymbolsFull, YouNotEnoughAdena,
 // NotEnoughItems), a silence, a page without the link or a maker not found
 // ends the visit for RetryAfter. Since the server takes the adena before
@@ -152,9 +154,15 @@ func (b *Brain) ruleDyes(now time.Time) (Action, bool) {
 		if now.Before(d.waitUntil) {
 			return Action{}, true
 		}
-		// Unanswered: the server dropped the request in silence.
-		d.backOff(now, p.RetryAfter)
-		return Action{}, false
+		if !d.answered {
+			// Unanswered: the server dropped the request in silence.
+			d.backOff(now, p.RetryAfter)
+			return Action{}, false
+		}
+		// HennaInfo came but no InventoryUpdate after it: the server
+		// flushes inventory updates from its own 333 ms ticker, so the
+		// update can come before HennaInfo (task/inventoryupdates.go).
+		d.asked, d.waitUntil, d.answered = actHold, time.Time{}, false
 	}
 	v := &d.v
 	if !v.opened && !d.listed {
@@ -171,11 +179,7 @@ func (b *Brain) ruleDyes(now time.Time) (Action, bool) {
 	}
 	if _, ok := b.nextDraw(draw, nil); !ok {
 		// Nothing left to draw this visit.
-		if b.dyesDue() {
-			d.backOff(now, p.RetryAfter)
-		} else {
-			d.end()
-		}
+		d.end()
 		return Action{}, false
 	}
 	if !d.listed {
