@@ -183,6 +183,8 @@ type Brain struct {
 	// 9 errands).
 	newbie newbieVisit
 	trip   travelTrip
+	// supplyTrip is the farmer's trip home to restock (rule "supply").
+	supplyTrip supplyTrip
 	// loot is the loot queue (rule 8).
 	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
@@ -438,6 +440,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.spot.arrived = false
 				if !e.Fast {
 					b.tripTeleported(now)
+					b.supplyTrip.teleported(now)
 				}
 			}
 		case Revive:
@@ -726,6 +729,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.world.Prompts.Clan = ClanInvite{}
 	case actUseItem:
 		b.usedAt[a.item] = now
+		b.supplyTrip.sent(a, now)
 	case actAutoShot:
 		b.shotAsked[a.item] = shotAsk{at: now, on: true}
 	case actAutoShotOff:

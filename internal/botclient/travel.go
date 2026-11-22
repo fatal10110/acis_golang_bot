@@ -61,9 +61,14 @@ type TravelMap struct {
 	spawnedSold map[int32]bool
 	// keepers are the warehouse keeper templates with a fixed spawn.
 	keepers map[int32]bool
-	// weights are the weights of the etc item templates that weigh
-	// anything: the supplies' (SupplyPolicy.BuyLoad).
+	// weights are the weights of the item templates that weigh anything:
+	// the supplies' (SupplyPolicy.BuyLoad) and the junk's a town visit
+	// sheds (SupplyPolicy.ShedMin).
 	weights map[int32]int32
+	// aggro are the aggro ranges of the aggressive NPC templates
+	// (indexAggro): what a supply trip's Scroll of Escape waits out
+	// (safeToEscape).
+	aggro map[int32]int32
 	// recipes are the craft recipes by id (datapack.Datapack.Recipes), and
 	// craftItems every template one of them uses or makes, its scroll
 	// included: what the crafter plans with and deposits (Persona.Crafter).
@@ -100,8 +105,8 @@ type destination struct {
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear and
 // its armor sets, the arrows each bow shoots, the items' reference prices, the healing
-// and buff potions and shots, the etc items' weights, the warehouse keepers
-// and the craft recipes.
+// and buff potions and shots, the items' weights, the aggressive NPCs' aggro
+// ranges, the warehouse keepers and the craft recipes.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
@@ -113,7 +118,8 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
-	m.weights = indexWeights(dp.EtcItems)
+	m.weights = indexWeights(dp.Items, dp.EtcItems)
+	m.aggro = indexAggro(dp.NPCs)
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {
