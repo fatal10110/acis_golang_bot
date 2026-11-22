@@ -196,8 +196,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLivePartyGMInviteLeave` | GM | #17 GM invite, GM leads; #19 whispered `leave` |
 | `TestLivePartySwarmOneJoins` | login | #72 a player invites two bots of one swarm, one joins |
 | `TestLiveWhisperCommands` | GM | #19 `invite me`, `follow`; a non-commander's `follow` ignored |
-| `TestLiveFollow` | GM | #18 follow from out of sight, settle, walk and run |
-| `TestLiveFollowAcrossBand` | GM | #141 follow out of sight across Talking Island's band of refused cells (acis_golang#5412): the bot detours along it |
+| `TestLiveFollow` | GM | #18 follow from out of sight, settle, walk and run; #148 the GM leaves the bot's sight by teleport |
+| `TestLiveFollowAcrossBand` | GM | #141 follow out of sight across Talking Island's band of refused cells (acis_golang#5412), on the bot's own route (#159) |
+| `TestLiveFollowLedge` | GM | #147 follow out of sight over the ledges past that band, on the bot's own route |
 | `TestLiveSupport` | GM | #22 buffs, heal under 60 %, assist after the leader's hit, renewal |
 | `TestLiveRecoverVillageRestart` | GM | #24 village restart after `ResurrectWait`, back to the GM |
 | `TestLiveRecoverLeaderLogout` | GM | #24 leader logout: `LeaderWait`, `/unstuck`, town |

@@ -375,6 +375,10 @@ func TestCrowdedPotion(t *testing.T) {
 			b.world.Apply(ItemList{Items: []Item{potion}}, t0)
 			b.world.Self.InCombat, b.world.Self.HP = true, tt.hp
 			tt.setup(b)
+			// A flee walks: it needs ground under it.
+			if tt.wantKind == actMove {
+				onGround(t, b)
+			}
 			rule, a := b.decide(at(time.Second))
 			if rule != tt.wantRule || tt.wantKind != 0 && a.kind != tt.wantKind {
 				t.Fatalf("decide = %q %v, want %q kind %v", rule, a.kind, tt.wantRule, tt.wantKind)

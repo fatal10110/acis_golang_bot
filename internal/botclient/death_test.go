@@ -168,8 +168,9 @@ func TestRuleDeadRecover(t *testing.T) {
 func TestDeadBotReturnsToLeader(t *testing.T) {
 	p := DefaultPersona()
 	b, out := newTestBrain(t, p)
+	walkOn(t, b)
 	b.persona.Follow = defaultFollowPolicy()
-	leaderAt := Point{X: 2000}
+	leaderAt := Point{X: 6000, Y: 2000}
 	deathApply(t, b, t0,
 		PartySmallWindowAll{LeaderID: gmID, Members: []PartyMember{gmRow}},
 		PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: gmID, Pos: leaderAt}}},
@@ -187,7 +188,7 @@ func TestDeadBotReturnsToLeader(t *testing.T) {
 	if name, a := deathStep(t, b, at(2*time.Minute)); name != "dead" || a.kind != actRestart {
 		t.Fatalf("after the wait: %q kind %d, want a restart", name, a.kind)
 	}
-	town := Point{X: 80000, Y: 80000}
+	town := Point{X: 1000, Y: 2000}
 	deathApply(t, b, at(2*time.Minute+time.Second), Revive{ObjectID: selfID}, TeleportToLocation{ObjectID: selfID, Pos: town})
 	if err := b.wake(at(2*time.Minute + 2*time.Second)); err != nil {
 		t.Fatal(err)

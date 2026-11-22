@@ -114,7 +114,18 @@ const (
 	walkMelee
 	walkPickup
 	walkRanged
+	// walkFollow is a follower's walk to its slot behind the leader, and
+	// back to the leader after a death; walkFlee and walkIdle are a run away
+	// from an attacker and an idle drift.
+	walkFollow
+	walkFlee
+	walkIdle
 )
+
+// drops reports whether a walk for p may take a one-way drop toward its
+// destination: only following the leader does (docs/navigation.md,
+// "Queries"), and never down to isolated ground only /unstuck leaves.
+func (p walkPurpose) drops() bool { return p == walkFollow }
 
 // segment is one move the walker sent: from the server-confirmed standstill
 // from to to, both on their floor.
@@ -381,15 +392,24 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 		}
 		w.escaping = true
 		return escapeAction(), false
-	case nav.OneWayOut:
-		route, err = w.drop(from, cur)
 	default:
-		to, ok := w.target(w.dest)
-		if !ok {
+		to, same, ok := w.target(w.dest)
+		switch {
+		case cur.Kind() == nav.OneWayOut:
+			// Drop into the nearest abstract SCC first, whatever the
+			// destination: the next plan routes from there with the
+			// hierarchy, or with the cell search across a further drop.
+			route, err = w.drop(from, cur)
+		case ok && !same:
+			// A one-way drop toward the destination: the cell search
+			// routes across it, as the drop off one-way-out ground does.
+			route, err = w.plan.Route(from, to)
+		case ok:
+			route, err = h.Route(&w.plan, from, to, w.nav.closed())
+		default:
 			w.unreachable(reasonNoRoute)
 			return Action{}, false
 		}
-		route, err = h.Route(&w.plan, from, to, w.nav.closed())
 	}
 	switch {
 	case errors.Is(err, nav.ErrDoor):
@@ -410,31 +430,78 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 }
 
 // target is dest on walkable ground in the bot's SCC: dest itself, or the
-// walkable cell nearest it within the walk's arrive radius.
-func (w *walker) target(dest Point) (location.Location, bool) {
-	to := toLoc(dest)
-	try := func(c nav.Cell) (location.Location, bool) {
-		m, err := w.nav.Hier.Locate(c, &w.pins)
-		if err != nil || !w.nav.Hier.SameSCC(w.pins.Current, m) {
-			return location.Location{}, false
+// walkable cell nearest it within the walk's arrive radius. A walk that may
+// take one-way drops (walkPurpose.drops) also takes ground the bot only
+// reaches one way, unless that ground is isolated; same is false for it.
+func (w *walker) target(dest Point) (to location.Location, same, ok bool) {
+	at := toLoc(dest)
+	h := w.nav.Hier
+	try := func(c nav.Cell) (location.Location, bool, bool) {
+		m, err := h.Locate(c, &w.pins)
+		if err != nil {
+			return location.Location{}, false, false
+		}
+		same := h.SameSCC(w.pins.Current, m)
+		if !same && (!w.purpose.drops() || m.Kind() == nav.Isolated || !h.Reachable(w.pins.Current, m)) {
+			return location.Location{}, false, false
 		}
 		w.pins.Destination = m
-		return location.Location{X: to.X, Y: to.Y, Z: int(c.Z)}, true
+		return location.Location{X: at.X, Y: at.Y, Z: int(c.Z)}, same, true
 	}
-	if c, ok := w.plan.Locate(to); ok {
-		if l, ok := try(c); ok {
-			return l, true
+	if c, ok := w.plan.Locate(at); ok {
+		if l, same, ok := try(c); ok {
+			return l, same, true
 		}
 	}
-	c, ok := w.plan.NearestWalkable(to, float64(max(w.arrive, walkSlop)))
+	c, ok := w.plan.NearestWalkable(at, float64(max(w.arrive, walkSlop)))
 	if !ok {
-		return location.Location{}, false
+		return location.Location{}, false, false
 	}
-	l, ok := try(c)
+	l, same, ok := try(c)
 	if ok {
 		l.X, l.Y = engine.WorldX(c.X), engine.WorldY(c.Y)
 	}
-	return l, ok
+	return l, same, ok
+}
+
+// inSCC is p moved toward at onto ground of at's SCC: the first point of the
+// line from p to at, a cell apart, whose cell (on the layer nearest at's
+// height) shares at's SCC; at itself when none does or at has no member, p
+// as it is without geodata. A follow slot drawn behind the leader across a
+// wall or down a ledge, or a flee or drift point past a wall's far side,
+// becomes ground the walker plans to.
+func (w *walker) inSCC(at, p Point) Point {
+	if w.nav == nil {
+		return p
+	}
+	h := w.nav.Hier
+	ac, ok := w.plan.Locate(toLoc(at))
+	if !ok {
+		return p
+	}
+	am, err := h.Locate(ac, nil)
+	if err != nil {
+		return p
+	}
+	n := int(math.Sqrt(float64(horizontal2(at, p))) / walkSlop)
+	for i := range n {
+		f := float64(i) / float64(n)
+		q := Point{
+			X: p.X + int32(math.Round(float64(at.X-p.X)*f)),
+			Y: p.Y + int32(math.Round(float64(at.Y-p.Y)*f)),
+			Z: at.Z,
+		}
+		c, ok := w.plan.Locate(toLoc(q))
+		if !ok {
+			continue
+		}
+		if m, err := h.Locate(c, nil); err == nil && h.SameSCC(am, m) {
+			q.Z = int32(c.Z)
+			return q
+		}
+	}
+	at.Z = int32(ac.Z)
+	return at
 }
 
 // drop is the one checked route from one-way-out ground at from into the

@@ -146,9 +146,9 @@ func TestCombatRules(t *testing.T) {
 			},
 			wantRule: "outnumbered", wantKind: actMove,
 			check: func(t *testing.T, _ *Brain, a Action) {
-				// The player stands at Y 1000, the bot at the origin.
-				if to := moveTarget(a.payload); to.X != 0 || to.Y != -600 {
-					t.Errorf("flee to %+v, want X 0 Y -600", to)
+				// The player stands 1000 north of the bot.
+				if to := moveTarget(a.payload); to.X != groundShift.X || to.Y != groundShift.Y-600 {
+					t.Errorf("flee to %+v, want 600 south of %+v", to, groundShift)
 				}
 			},
 		},
@@ -263,8 +263,8 @@ func TestCombatRules(t *testing.T) {
 			},
 			wantRule: "attacked", wantKind: actMove,
 			check: func(t *testing.T, b *Brain, a Action) {
-				npc := b.world.Objects[npcID].Position(now)
-				if to := moveTarget(a.payload); to.X*npc.X+to.Y*npc.Y >= 0 {
+				npc, self := b.world.Objects[npcID].Position(now), b.world.Self.Position(now)
+				if to := moveTarget(a.payload); (to.X-self.X)*(npc.X-self.X)+(to.Y-self.Y)*(npc.Y-self.Y) >= 0 {
 					t.Errorf("flee to %+v, want away from the NPC at %+v", to, npc)
 				}
 			},
@@ -309,9 +309,10 @@ func TestCombatRules(t *testing.T) {
 				b.world.Target, b.engaged, b.progressAt = npcID, npcID, now.Add(-stuckAfter)
 			},
 			wantRule: "attacked", wantKind: actMove,
-			check: func(t *testing.T, _ *Brain, a Action) {
-				// The NPC stands on the X axis: the step goes along Y.
-				if to := moveTarget(a.payload); math.Abs(float64(to.X)) > 1 || math.Abs(float64(to.Y)) != sideStep {
+			check: func(t *testing.T, b *Brain, a Action) {
+				// The NPC stands on the bot's X axis: the step goes along Y.
+				self := b.world.Self.Position(now)
+				if to := moveTarget(a.payload); math.Abs(float64(to.X-self.X)) > 1 || math.Abs(float64(to.Y-self.Y)) != sideStep {
 					t.Errorf("side step to %+v, want X 0 Y ±%d", to, sideStep)
 				}
 			},
@@ -350,6 +351,10 @@ func TestCombatRules(t *testing.T) {
 			}
 			b, _ := newTestBrain(t, p)
 			tc.setup(b)
+			// A flee walks: it needs ground under it.
+			if tc.wantKind == actMove {
+				onGround(t, b)
+			}
 			rule, a := b.decide(now)
 			if rule != tc.wantRule || a.kind != tc.wantKind {
 				t.Fatalf("decide = rule %q action %d, want rule %q action %d", rule, a.kind, tc.wantRule, tc.wantKind)
