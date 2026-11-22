@@ -12,6 +12,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
+	"github.com/fatal10110/acis_golang_bot/internal/mmap"
 )
 
 // A geodata cache file holds the stored form of every listed region:
@@ -46,7 +47,12 @@ type sourceFile struct {
 type Cache struct {
 	Engine  *engine.Engine
 	mapping []byte
+	crc     uint32
 }
+
+// CRC returns the cache's CRC-32C, the geodata half of the nav cache's key:
+// a nav cache built over any other geodata cache is stale.
+func (c *Cache) CRC() uint32 { return c.crc }
 
 // Open maps the geodata cache file at cachePath, built by `bots geopack` (or
 // the server's geopack) from the listed region files in dir, and returns
@@ -71,11 +77,11 @@ func Open(dir string, geoType GeoType, regions []Region, cachePath string, optio
 	e := engine.New(options...)
 	for i, r := range regions {
 		if err := e.SetRegion(r.X, r.Y, stored[i]); err != nil {
-			unmapFile(mapping)
+			mmap.Unmap(mapping)
 			return nil, err
 		}
 	}
-	return &Cache{Engine: e, mapping: mapping}, nil
+	return &Cache{Engine: e, mapping: mapping, crc: binary.LittleEndian.Uint32(mapping[20:])}, nil
 }
 
 // Close unmaps the cache. The process keeps its cache mapped for its whole
@@ -83,7 +89,7 @@ func Open(dir string, geoType GeoType, regions []Region, cachePath string, optio
 // after it, since its regions point into the mapping.
 func (c *Cache) Close() {
 	if c.mapping != nil {
-		unmapFile(c.mapping)
+		mmap.Unmap(c.mapping)
 		c.mapping = nil
 	}
 }
@@ -225,16 +231,16 @@ func openCache(cachePath string, geoType GeoType, sources []sourceFile) ([]*bloc
 		return nil, nil, fmt.Errorf("geodata: geodata cache %s is truncated", cachePath)
 	}
 
-	b, err := mapFile(f, int(info.Size()))
+	b, err := mmap.Map(f, int(info.Size()))
 	if err != nil {
 		return nil, nil, fmt.Errorf("geodata: map geodata cache %s: %w", cachePath, err)
 	}
 	regions, err := parseCache(b, geoType, sources)
 	if err != nil {
-		unmapFile(b)
+		mmap.Unmap(b)
 		return nil, nil, fmt.Errorf("geodata: geodata cache %s: %w", cachePath, err)
 	}
-	adviseRandom(b)
+	mmap.AdviseRandom(b)
 	return regions, b, nil
 }
 

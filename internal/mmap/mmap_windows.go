@@ -1,6 +1,6 @@
 //go:build windows
 
-package geodata
+package mmap
 
 import (
 	"os"
@@ -9,10 +9,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// mapFile maps the whole file read-only (PAGE_READONLY, FILE_MAP_READ). The
+// Map maps the whole file read-only (PAGE_READONLY, FILE_MAP_READ). The
 // mapping handle is closed once the view exists; the view keeps the section
-// alive until unmapFile.
-func mapFile(f *os.File, size int) ([]byte, error) {
+// alive until Unmap.
+func Map(f *os.File, size int) ([]byte, error) {
 	h, err := windows.CreateFileMapping(windows.Handle(f.Fd()), nil, windows.PAGE_READONLY, 0, 0, nil)
 	if err != nil {
 		return nil, os.NewSyscallError("CreateFileMapping", err)
@@ -26,10 +26,11 @@ func mapFile(f *os.File, size int) ([]byte, error) {
 	return unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(nil), addr)), size), nil
 }
 
-// adviseRandom has no Windows counterpart worth the call: a view faults in
+// AdviseRandom has no Windows counterpart worth the call: a view faults in
 // only the pages queries touch.
-func adviseRandom([]byte) {}
+func AdviseRandom([]byte) {}
 
-func unmapFile(b []byte) {
+// Unmap releases a mapping Map returned; nothing may read it afterwards.
+func Unmap(b []byte) {
 	_ = windows.UnmapViewOfFile(uintptr(unsafe.Pointer(unsafe.SliceData(b))))
 }
