@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -126,12 +127,21 @@ func TestKeepsLoadout(t *testing.T) {
 	}
 }
 
-// TestKeepHook checks that what the persona's keep hook keeps, a material
-// and a weapon, is neither sold to a merchant, listed in the store nor
-// priced or offered in a trade.
+// TestKeepHook checks that what the persona's keep hook keeps, a material,
+// a no-grade weapon and an unworn D-grade weapon no buylist sells, is
+// neither sold to a merchant, listed in the store nor priced or offered in
+// a trade.
 func TestKeepHook(t *testing.T) {
-	for _, kept := range []Item{skinLoot, swordLoot} {
-		b := newLootTrader(t, adenaStack(1000), skinLoot, swordLoot)
+	dLoot := Item{ObjectID: 110, TemplateID: dSword, Count: 1, BodySlot: partRHand}
+	for _, kept := range []Item{skinLoot, swordLoot, dLoot} {
+		b := newLootTrader(t, adenaStack(1000), skinLoot, swordLoot, dLoot)
+		m := b.cfg.Travel
+		m.prices = maps.Clone(lootPrices)
+		m.prices[dSword] = 150000
+		m.gear = map[int32]gearItem{dSword: {part: partRHand, kind: "SWORD", grade: 1, price: 150000}}
+		if _, shopSells := m.cheapest[dSword]; shopSells {
+			t.Fatal("a buylist sells the D-grade sword")
+		}
 		rows := []TradeItem{{ObjectID: kept.ObjectID, TemplateID: kept.TemplateID, Count: 1}}
 		if _, ok := b.junk()[kept.ObjectID]; !ok || !b.storeLoot(kept) {
 			t.Fatalf("%d without a hook: junk %v, storeLoot %v, want both", kept.TemplateID, ok, b.storeLoot(kept))
