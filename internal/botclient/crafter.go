@@ -377,6 +377,7 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 	c.learn = slices.Clone(c.plan.Learn)
 	b.cfg.CraftBoard.Publish(b.world.Clan.ID, CrafterEntry{
 		Bot: b.world.Self.ObjectID, Name: b.world.Self.Name, Recipes: in.Book, CreateItem: in.DwarvenLevel,
+		ShotGrades: b.shotGradesNow(in),
 	})
 	if fromWarehouse && (len(c.plan.Withdraw) > 0 || len(c.crystal.want) > 0) {
 		rows := make([]WarehouseRow, 0, len(c.plan.Withdraw)+len(c.crystal.want))

@@ -33,13 +33,17 @@ type preset struct {
 	// inviters makes the bots join the clan of the players named by
 	// -clan-inviters only, when it names some (botclient.AcceptClanFrom).
 	inviters bool
+	// member gives the bots the clan member option
+	// (botclient.Persona.ClanMember): in a clan with a crafter on the
+	// board they keep and deposit materials, order shots and collect them.
+	member bool
 }
 
 // presets is the persona catalog, the -persona names in order.
 var presets = []preset{
-	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true},
+	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true, member: true},
 	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
-	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true, walks: true},
+	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true, walks: true, member: true},
 	{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
 		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
@@ -109,11 +113,13 @@ type shared struct {
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
 // presets get the spot registry, only merchants the store registry; every
-// preset gets the craft board, since any bot may order as a clan member. With
+// preset gets the craft board, and the support and merchant presets the
+// clan member option that orders from it (preset.member). With
 // the travel map the persona drinks and shoots the datapack's healing
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
 	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board}
+	cfg.Persona.ClanMember = p.member
 	if p.walks {
 		cfg.Nav = s.nav
 	}
