@@ -142,6 +142,13 @@ type walker struct {
 	floor Point
 	// The failures of the route so far.
 	blocked, desync, watchdog, doors int
+	// talkTo is where the NPC stood when the bot's last talk click went
+	// out, talkAt when (zero for none pending); talkFailed is set when the
+	// StopMove of that click ended its straight approach short of talking
+	// range, so the visit walks to a new stand point.
+	talkTo     Point
+	talkAt     time.Time
+	talkFailed bool
 	// escaping is set from the /unstuck the walker asked until its landing;
 	// escapeAt is when the last went out.
 	escaping bool
@@ -470,11 +477,21 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			seg.deadline = seg.eta.Add(run/2 + walkSlack)
 		}
 	case StopMove:
-		if e.ObjectID != s.ObjectID || w.seg.sentAt.IsZero() {
+		if e.ObjectID != s.ObjectID {
 			return
 		}
-		if horizontal2(e.Pos, w.seg.to) > walkSlop*walkSlop {
-			b.walkBlocked()
+		switch {
+		case !w.seg.sentAt.IsZero():
+			if horizontal2(e.Pos, w.seg.to) > walkSlop*walkSlop {
+				b.walkBlocked()
+			}
+		case !w.talkAt.IsZero():
+			// The talk click's straight approach stopped: short of talking
+			// range it opens no page (targeting.go onPlayerArrivedBlocked).
+			if horizontal2(e.Pos, w.talkTo) > visitTalkRange*visitTalkRange {
+				b.talkBlocked()
+			}
+			w.talkAt = time.Time{}
 		}
 	case TeleportToLocation:
 		if e.ObjectID == s.ObjectID {
@@ -513,12 +530,17 @@ func (b *Brain) walkDesync(door bool) {
 	}
 }
 
+// talking records the talk click about to go out on an NPC standing at
+// npc at now.
+func (w *walker) talking(npc Point, now time.Time) { w.talkTo, w.talkAt = npc, now }
+
 // talkBlocked takes the StopMove that ends a click on an NPC whose straight
 // approach stopped short of talking range (targeting.go
 // onPlayerArrivedBlocked): a blocked stop of the talk approach.
 func (b *Brain) talkBlocked() {
 	b.metrics.NavBlocked()
 	w := &b.walk
+	w.talkFailed = true
 	if w.blocked++; w.blocked >= walkMaxBlocked {
 		w.unreachable(reasonBlocked)
 	}
@@ -594,4 +616,15 @@ func abs(v int) int {
 		return -v
 	}
 	return v
+}
+
+// escapeWait is when the wait for an /unstuck asked at asked counts from:
+// the end of the recall cast when one ran after it (the server teleports
+// when the cast completes, so the TeleportToLocation lands just after
+// castEnd), else when it was asked.
+func escapeWait(asked, castEnd time.Time) time.Time {
+	if castEnd.After(asked) {
+		return castEnd
+	}
+	return asked
 }

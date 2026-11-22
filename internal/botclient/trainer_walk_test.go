@@ -124,9 +124,9 @@ func TestTrainerWalkGivesUp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTrainerWalkBrain(t)
 			runTrainerSteps(t, b, tt.steps)
-			if b.train.walk.active() != tt.wantAfter || b.train.walkShunned[30022].IsZero() == tt.wantShun || (b.train.stuckLevel != 0) != tt.wantStuck {
-				t.Fatalf("walk %+v shunned %v stuck at level %d, want walk %v shunned %v stuck %v",
-					b.train.walk, b.train.walkShunned, b.train.stuckLevel, tt.wantAfter, tt.wantShun, tt.wantStuck)
+			if b.train.walk.active() != tt.wantAfter || b.train.walkShunned[30022].IsZero() == tt.wantShun {
+				t.Fatalf("walk %+v shunned %v, want walk %v shunned %v",
+					b.train.walk, b.train.walkShunned, tt.wantAfter, tt.wantShun)
 			}
 		})
 	}

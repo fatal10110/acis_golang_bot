@@ -347,10 +347,6 @@ type shopVisit struct {
 	// held are the bought spellbooks the bot carries until a learn uses
 	// them; they are never junk.
 	held map[int32]bool
-	// stuckUntil is when a walk to a merchant's spawn last got nowhere
-	// (walkStuck) plus Persona.WalkStuckFor: no walk to a merchant out of
-	// sight starts before then.
-	stuckUntil time.Time
 }
 
 // end ends the visit; shun leaves its merchant alone for visitShunFor. No
@@ -368,7 +364,6 @@ func (sh *shopVisit) end(now time.Time, shun bool) {
 	}
 	*sh = shopVisit{
 		nextAt: next, shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held,
-		stuckUntil: sh.stuckUntil,
 	}
 }
 
@@ -489,21 +484,16 @@ func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 	}
 	a, ok := b.approach(v, now)
 	if !ok {
-		// A walk that got nowhere backs off every walk, not the merchant:
-		// one in sight is still visited.
-		stuck := b.walkStuck(v, now)
-		if stuck {
-			sh.stuckUntil = now.Add(b.persona.WalkStuckFor)
-		}
-		sh.end(now, !stuck)
+		// Not there, the clicks ran out or no route there holds: that
+		// merchant is left alone.
+		sh.end(now, true)
 		return Action{}, false
 	}
 	return a, true
 }
 
 // startShop starts a visit when one is due: at the merchant in sight, else
-// at the merchant spawn within Reach unless a walk got nowhere less than
-// Persona.WalkStuckFor ago, nearest the bot that sells something it wants,
+// at the merchant spawn within Reach, nearest the bot that sells something it wants,
 // or for a visit only to sell, at any merchant. It reports whether it
 // started one.
 func (b *Brain) startShop(now time.Time) bool {
@@ -546,7 +536,7 @@ func (b *Brain) startShop(now time.Time) bool {
 			}
 		}
 	}
-	if !best.v.active() && !now.Before(sh.stuckUntil) {
+	if !best.v.active() {
 		reach := int64(p.Reach) * int64(p.Reach)
 		for npcID := range shops {
 			for _, at := range b.cfg.Travel.spawns[npcID] {

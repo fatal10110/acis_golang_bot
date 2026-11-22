@@ -227,12 +227,9 @@ type trainerVisit struct {
 	shunned map[int32]time.Time
 	// walk is the walk to a trainer's spawn while none is in sight (zero
 	// for none); walkShunned are the trainer templates whose spawn the bot
-	// reached without finding one, until a time. stuckLevel is the bot's
-	// level when a walk last got nowhere, 0 before: no walk starts again
-	// before the next level.
+	// reached without finding one or that no route reaches, until a time.
 	walk        npcVisit
 	walkShunned map[int32]time.Time
-	stuckLevel  int32
 }
 
 // reset ends the visit in progress.
@@ -401,8 +398,7 @@ func (b *Brain) startVisit(now time.Time) bool {
 func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 	t, m := &b.train, b.cfg.Travel
 	reach := int64(b.persona.TrainerReach) * int64(b.persona.TrainerReach)
-	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 ||
-		(t.stuckLevel != 0 && b.world.Self.Level <= t.stuckLevel) {
+	if m == nil || reach == 0 || b.world.Party.In() || b.orders.follow != 0 {
 		t.walk = npcVisit{}
 		return false
 	}
@@ -427,17 +423,11 @@ func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 
 // trainerLeg is the next leg of the walk to a trainer's spawn. Arrived
 // with no trainer in sight, the bot leaves that trainer template alone for
-// visitShunFor. Getting nowhere, its sidesteps and /unstuck spent
-// (walkStuck), it walks to no trainer before the next level (#134).
+// visitShunFor, and so with no route there that holds.
 func (b *Brain) trainerLeg(now time.Time) (Action, bool) {
 	t := &b.train
 	if a, ok := b.walkTo(&t.walk, now); ok {
 		return a, true
-	}
-	if b.walkStuck(&t.walk, now) {
-		t.stuckLevel = b.world.Self.Level
-		t.walk = npcVisit{}
-		return Action{}, false
 	}
 	if t.walkShunned == nil {
 		t.walkShunned = make(map[int32]time.Time)

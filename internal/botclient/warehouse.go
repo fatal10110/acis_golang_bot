@@ -279,9 +279,6 @@ type warehouseErrand struct {
 	// noClan the ones whose pages link no clan warehouse.
 	shunned map[int32]time.Time
 	noClan  map[int32]bool
-	// stuckUntil is when a walk to a keeper's spawn last got nowhere plus
-	// Persona.WalkStuckFor: no walk to a keeper out of sight before then.
-	stuckUntil time.Time
 	// retryAt is when a request may start after one that ended before an
 	// open: no keeper, or a deposit failing its checks.
 	retryAt time.Time
@@ -411,14 +408,10 @@ func (b *Brain) ruleWarehouse(now time.Time) (Action, bool) {
 	}
 	a, ok := b.approach(v, now)
 	if !ok {
-		if b.walkStuck(v, now) {
-			e.stuckUntil = now.Add(b.persona.WalkStuckFor)
-		} else {
-			if e.shunned == nil {
-				e.shunned = make(map[int32]time.Time)
-			}
-			e.shunned[v.npcID] = now.Add(visitShunFor)
+		if e.shunned == nil {
+			e.shunned = make(map[int32]time.Time)
 		}
+		e.shunned[v.npcID] = now.Add(visitShunFor)
 		e.fail(WarehouseUnreachable, now)
 		return Action{}, false
 	}
@@ -566,9 +559,8 @@ func merges(r warehouseRow, contents []WarehouseItem) bool {
 // startWarehouse starts a request when one is due: the bot is in a clan,
 // an open is due and Persona.Warehouse.Want asks for one. A deposit whose
 // carried items fail its checks ends before any open. The keeper is the
-// nearest one in sight, else the nearest spawn within Reach unless a walk
-// got nowhere less than Persona.WalkStuckFor ago. It reports whether a
-// request runs.
+// nearest one in sight, else the nearest spawn within Reach. It reports
+// whether a request runs.
 func (b *Brain) startWarehouse(now time.Time) bool {
 	e, p := &b.wh, &b.persona.Warehouse
 	m := b.cfg.Travel
@@ -604,7 +596,7 @@ func (b *Brain) startWarehouse(now time.Time) bool {
 			best, bestDist = npcVisit{npcID: o.NPCID, at: at, obj: id}, d
 		}
 	}
-	if !best.active() && !now.Before(e.stuckUntil) {
+	if !best.active() {
 		reach := int64(p.Reach) * int64(p.Reach)
 		for npcID := range m.keepers {
 			if !usable(npcID) {

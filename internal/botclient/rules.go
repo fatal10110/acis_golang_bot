@@ -115,12 +115,6 @@ type Persona struct {
 	// BrainConfig.Travel); 0 visits only one in sight.
 	Trainers     map[int32][]int32
 	TrainerReach int32
-	// WalkStuckFor is how long after a walk to an NPC's spawn got nowhere,
-	// its sidesteps and /unstuck spent, the shop and gatekeeper errands
-	// walk to no NPC out of sight; one in sight is still visited. The
-	// trainer and Newbie Guide errands, due once per level, walk again only
-	// at the next level instead. 0 backs off no walk.
-	WalkStuckFor time.Duration
 	// Spots is how the bot picks and keeps its farming spot when the brain
 	// has a spot registry (BrainConfig.Spots, rule 9 errand "spot").
 	Spots SpotPolicy
@@ -209,7 +203,6 @@ func DefaultPersona() Persona {
 		LearnSkills:    defaultLearnSkills(),
 		Trainers:       defaultTrainers(),
 		TrainerReach:   8000,
-		WalkStuckFor:   time.Hour,
 		Spots:          defaultSpotPolicy(),
 		MPReserve:      50,
 		Heals:          defaultHeals,
