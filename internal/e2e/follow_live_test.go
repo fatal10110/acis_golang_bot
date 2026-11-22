@@ -115,14 +115,16 @@ func TestLiveFollow(t *testing.T) {
 	// scenario asserts: its travel to the GM's last PartyMemberPosition is.
 	gmTeleport(t, ctx, gm, villageGround)
 	botID := recallBot(t, ctx, tg, gm, name)
+	botLanded(t, ctx, gm, b, gm.Pos())
 	if !ui.Running {
 		if err := gm.Send(ctx, botclient.EncodeWalkRunToggle()); err != nil {
 			t.Fatal(err)
 		}
 	}
+	from := b.Status().Position
 	gmTeleport(t, ctx, gm, villageFar)
 	gone := true
-	t.Logf("%s out of the GM's sight, %.0f away", name, dist(b.Status().Position, gm.Pos()))
+	t.Logf("%s out of the GM's sight at %v, %.0f away", name, from, dist(from, gm.Pos()))
 
 	if r := invite(t, ctx, gm.Client, name); r != 1 {
 		t.Fatalf("%s answered %d, want 1", name, r)

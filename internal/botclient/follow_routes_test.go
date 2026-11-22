@@ -249,3 +249,43 @@ func member(t *testing.T, b *Brain, p Point) nav.Member {
 	}
 	return m
 }
+
+// TestFollowOffOneWayGround: a follower on one-way-out ground (a deck it
+// cannot climb back onto) whose leader stands in an abstract SCC drops into
+// the nearest SCC first, as every walk does, rather than routing the whole
+// way with the cell search alone; the next plan routes from there.
+func TestFollowOffOneWayGround(t *testing.T) {
+	n := testNav(t)
+	from := scenePoint(geotest.BridgeWestDeck, 0, 0)
+	b := sceneFollower(t, from, scenePoint(geotest.PitOutside, 0, 0))
+	now := at(time.Second)
+	a := followDecide(t, b)(now)
+	if a.kind != actMove {
+		t.Fatalf("kind %d (%s), want the first segment", a.kind, b.walk.reason)
+	}
+	end := moveTarget(a.payload)
+	if r := b.walk.route; len(r) > 0 {
+		end = r[len(r)-1]
+	}
+	c, ok := b.walk.plan.Locate(toLoc(end))
+	if !ok {
+		t.Fatalf("plan end %+v off the geodata", end)
+	}
+	if m, err := n.Hier.Locate(c, nil); err != nil || m.Kind() != nav.InSCC {
+		t.Errorf("plan end %+v: kind %v err %v, want InSCC ground", end, m.Kind(), err)
+	}
+	if reach := int64(walkDropCells * 16); horizontal2(end, from) > reach*reach {
+		t.Errorf("plan end %+v, %v from the deck; want the drop within %d, not the route to the slot %+v",
+			end, horizontal2(end, from), reach, b.follow.dest)
+	}
+	// The whole walk, on a fresh brain, reaches the slot.
+	b = sceneFollower(t, from, scenePoint(geotest.PitOutside, 0, 0))
+	ends, _ := walkRule(t, b, now, followDecide(t, b), func() bool { return b.follow.traveling })
+	if len(ends) == 0 {
+		t.Fatalf("no segment (%s), want the walk to the slot", b.walk.reason)
+	}
+	last := ends[len(ends)-1]
+	if b.follow.stuck || horizontal2(last, b.follow.dest) > followArrive*followArrive {
+		t.Fatalf("ended at %+v (stuck %v, %s), want within %d of the slot %+v", last, b.follow.stuck, b.walk.reason, followArrive, b.follow.dest)
+	}
+}

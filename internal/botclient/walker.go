@@ -395,12 +395,15 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 	default:
 		to, same, ok := w.target(w.dest)
 		switch {
+		case cur.Kind() == nav.OneWayOut:
+			// Drop into the nearest abstract SCC first, whatever the
+			// destination: the next plan routes from there with the
+			// hierarchy, or with the cell search across a further drop.
+			route, err = w.drop(from, cur)
 		case ok && !same:
 			// A one-way drop toward the destination: the cell search
 			// routes across it, as the drop off one-way-out ground does.
 			route, err = w.plan.Route(from, to)
-		case cur.Kind() == nav.OneWayOut:
-			route, err = w.drop(from, cur)
 		case ok:
 			route, err = h.Route(&w.plan, from, to, w.nav.closed())
 		default:

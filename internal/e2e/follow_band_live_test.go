@@ -58,6 +58,10 @@ func followAcross(t *testing.T, prefix string, from, to botclient.Point) {
 	f := runWatched(t, ctx, tg, account, botSetup{persona: partyPersona})
 	b, name := f.bot, f.name
 	recallBot(t, ctx, tg, gm, name)
+	botLanded(t, ctx, gm, b, gm.Pos())
+	if d := dist(b.Status().Position, to); d <= followReach {
+		t.Fatalf("%s at %v, %.0f from %v before the trip; want farther than %d", name, b.Status().Position, d, to, followReach)
+	}
 	gmTeleport(t, ctx, gm, to)
 
 	at, seen := b.Status().Position, f.watch.Len()
@@ -76,6 +80,19 @@ func followAcross(t *testing.T, prefix string, from, to botclient.Point) {
 	if n, at, _ := f.echoes(seen); n > 0 {
 		t.Logf("%s: %d ground moves refused in place on the way, first at %v", name, n, at)
 	}
+}
+
+// botLanded reads gm until b's own session has it within followReach of
+// at, where the GM recalled it. recallBot returns once the GM sees the bot,
+// before the bot's session has applied the teleport, and a bot that logged
+// out where the last run left it still stands there until then.
+func botLanded(t *testing.T, ctx context.Context, gm *GMClient, b *botclient.Bot, at botclient.Point) {
+	t.Helper()
+	wctx, stop := context.WithTimeout(ctx, EntryTimeout)
+	defer stop()
+	watchUntil(t, wctx, gm.Client, "the bot landed at the GM", func() bool {
+		return dist(b.Status().Position, at) <= followReach
+	}, nil)
 }
 
 // logRoute logs where the server moved f since index from, one line per
