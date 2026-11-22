@@ -230,13 +230,16 @@ type trainerVisit struct {
 	// reached without finding one or that no route reaches, until a time.
 	walk        npcVisit
 	walkShunned map[int32]time.Time
+	// near holds the stand point of the trainer in sight the bot walks to
+	// before it clicks (closeIn): its object and stand point only.
+	near npcVisit
 }
 
 // reset ends the visit in progress.
 func (t *trainerVisit) reset() {
 	t.npc, t.step, t.waitUntil, t.clicks = 0, trainTalk, time.Time{}, 0
 	t.offer, t.pending, t.skipped, t.short, t.again = nil, AcquirableSkill{}, nil, 0, false
-	t.walk = npcVisit{}
+	t.walk, t.near = npcVisit{}, npcVisit{}
 }
 
 // finish ends a visit that got the trainer's list as far as it could go at
@@ -344,6 +347,14 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 		sk := t.pending
 		return Action{kind: actLearnSkill, payload: encodeSkillRequest(opGameRequestAcquireSkill, sk.ID, sk.Level, acquireSkillUsual)}, true
 	}
+	// The click walks the bot straight at the trainer, never routed: walk
+	// to a stand point with an open line first, as every NPC visit does.
+	if t.near.obj != t.npc {
+		t.near = npcVisit{obj: t.npc}
+	}
+	if a, ok := b.closeIn(&t.near, visitArrive, now); ok {
+		return a, true
+	}
 	if t.clicks >= trainerClicks {
 		t.shun(now)
 		return Action{}, false
@@ -354,6 +365,7 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	if b.world.Target != t.npc {
 		return selectAction(t.npc, s.Position(now)), true
 	}
+	b.walk.talking(o.Position(now), now)
 	return talkAction(t.npc, s.Position(now)), true
 }
 
