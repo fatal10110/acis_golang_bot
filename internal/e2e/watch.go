@@ -25,10 +25,12 @@ type Watch struct {
 	changed chan struct{} // guarded by mu; closed and replaced on every append
 }
 
-// Seen is an event a watched connection read, at At.
+// Seen is an event a watched connection read, at At, after the connections
+// wrote SentBefore packets: the packets it may answer.
 type Seen struct {
-	At    time.Time
-	Event botclient.Event
+	At         time.Time
+	Event      botclient.Event
+	SentBefore int
 }
 
 // Sent is a packet a watched connection wrote, at At. Target is the first
@@ -55,7 +57,7 @@ func (w *Watch) Record(payload []byte) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.seen = append(w.seen, Seen{At: w.clock.Now(), Event: ev})
+	w.seen = append(w.seen, Seen{At: w.clock.Now(), Event: ev, SentBefore: len(w.sent)})
 	w.notify()
 }
 

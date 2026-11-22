@@ -50,7 +50,7 @@ func TestLiveStoreBuy(t *testing.T) {
 		p.Gear.Buy = false
 	})
 	from := buyer.seen()
-	until(t, ctx, buyer.name+" buys the shots", func() string {
+	untilServed(t, ctx, buyer.name+" buys the shots", buyer.watch, storeBuyRefused(buyer.watch, seller.Self.ObjectID), func() string {
 		switch {
 		case len(sentOf(buyer.watch.Sent(), botclient.OpRequestPrivateStoreBuy)) == 0:
 			return fmt.Sprintf("no RequestPrivateStoreBuy (rule %q)", buyer.bot.Status().Rule)
