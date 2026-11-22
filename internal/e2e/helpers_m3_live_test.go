@@ -336,7 +336,9 @@ func gmTeleport(t *testing.T, ctx context.Context, gm *GMClient, p botclient.Poi
 	}
 }
 
-// gmOn brings the GM next to f, selects it and runs cmds on it.
+// gmOn brings the GM next to f, selects it and runs cmds with f as its
+// target: each one reselects f when the server cleared the GM's target
+// (#206).
 func gmOn(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, cmds ...string) {
 	t.Helper()
 	gmTo(t, ctx, gm, f)
@@ -344,7 +346,7 @@ func gmOn(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, cmds ...st
 		t.Fatal(err)
 	}
 	for _, cmd := range cmds {
-		if err := gm.Command(ctx, cmd); err != nil {
+		if err := gm.OnTarget(ctx, f.id, cmd); err != nil {
 			t.Fatal(err)
 		}
 	}

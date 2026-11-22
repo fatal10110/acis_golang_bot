@@ -604,28 +604,34 @@ func (g *GMClient) Select(ctx context.Context, objectID int32) error {
 	return nil
 }
 
-// Give has the GM give objectID, a run character, count of template tmpl.
-// The server gives to the GM's target, or to the GM itself with none
-// (adminGive), and may clear the target a moment after selecting it, as
-// it does around a recalled character's arrival (#206). So the GM first
-// reads its pending frames for giveSettle, and selects objectID again
-// while its target is another or none, up to selectTries times.
+// Give has the GM give objectID, a run character, count of template tmpl
+// (adminGive gives to the GM's target, or to the GM itself with none).
 func (g *GMClient) Give(ctx context.Context, objectID, tmpl, count int32) error {
+	return g.OnTarget(ctx, objectID, fmt.Sprintf("give %d %d", tmpl, count))
+}
+
+// OnTarget runs the admin command cmd with objectID, a run character, as
+// the GM's target. The server runs a target command on the GM itself when
+// it has none, and may clear the target a moment after selecting it, as it
+// does around a recalled character's arrival (#206). So the GM first reads
+// its pending frames for giveSettle, and selects objectID again while its
+// target is another or none, up to selectTries times.
+func (g *GMClient) OnTarget(ctx context.Context, objectID int32, cmd string) error {
 	for range selectTries {
 		if err := g.Watch(ctx, giveSettle, func(botclient.Event) {}); err != nil {
 			return err
 		}
 		if g.Target() == objectID {
-			return g.Command(ctx, fmt.Sprintf("give %d %d", tmpl, count))
+			return g.Command(ctx, cmd)
 		}
 		if err := g.Select(ctx, objectID); err != nil {
 			return err
 		}
 	}
-	return fmt.Errorf("give %d of %d: the GM's selection of %d does not hold", count, tmpl, objectID)
+	return fmt.Errorf("%s: the GM's selection of %d does not hold", cmd, objectID)
 }
 
-// giveSettle is how long Give reads the GM's frames before it trusts its
+// giveSettle is how long OnTarget reads the GM's frames before it trusts its
 // target: the server's TargetUnselected follows the selection within a
 // frame or two.
 const giveSettle = 500 * time.Millisecond
