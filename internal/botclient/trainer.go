@@ -315,9 +315,12 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	}
 	o := b.world.object(t.npc)
 	if o == nil || o.Dead {
-		// Out of sight: the visit starts over once a trainer is seen.
+		// Out of sight: the visit starts over in this decision, by the walk
+		// to a spawn when no other trainer is in sight, so the errand runs
+		// on without a gap. The trainer is gone or dead, so startVisit
+		// cannot pick it again.
 		t.reset()
-		return Action{}, false
+		return b.ruleTrain(now)
 	}
 	if !t.waitUntil.IsZero() {
 		if now.Before(t.waitUntil) {

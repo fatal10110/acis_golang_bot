@@ -48,3 +48,23 @@ func TestTrainerClosesIn(t *testing.T) {
 		})
 	}
 }
+
+// TestTrainerOutOfSightWalksOn has the trainer the visit closes in on leave
+// sight (seen from far, as from the hill above Talking Island): the same
+// decision walks on to the trainer's spawn, with no decision off the
+// errand.
+func TestTrainerOutOfSightWalksOn(t *testing.T) {
+	trainer := Point{X: 5000}
+	b := newTrainerWalkBrain(t)
+	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {trainer}}}
+	b.world.Apply(NPCInfo{ObjectID: trainerObj, NPCID: 30022, Pos: trainer}, t0)
+	runTrainerSteps(t, b, []trainerStep{
+		{name: "segment to the stand point", at: time.Second, wantRule: "train", wantKind: actMove, wantTo: trainer, wantWithin: visitTalkRange},
+		{
+			name: "out of sight: the walk to the spawn", at: 70 * time.Second,
+			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1000}) },
+			events:   []Event{DeleteObject{ObjectID: trainerObj}},
+			wantRule: "train", wantKind: actMove, wantTo: trainer, wantWithin: visitArrive,
+		},
+	})
+}
