@@ -48,6 +48,8 @@ type TravelMap struct {
 	shots       map[int32]shotItem
 	weapons     map[int32]weapon
 	spawnedSold map[int32]bool
+	// keepers are the warehouse keeper templates with a fixed spawn.
+	keepers map[int32]bool
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -74,7 +76,7 @@ type destination struct {
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear, the
 // arrows each bow shoots, the items' reference prices, and the healing
-// potions and shots.
+// potions and shots, and the warehouse keepers.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
@@ -97,6 +99,12 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 		}
 	}
 	m.spawnedSold = spawnedSold(m.shops, m.spawns)
+	m.keepers = make(map[int32]bool)
+	for id := range m.spawns {
+		if dp.NPCs[id].Type == npcTypeWarehouseKeeper {
+			m.keepers[id] = true
+		}
+	}
 	ids := make([]int32, 0, len(dp.Teleports))
 	for id := range dp.Teleports {
 		ids = append(ids, id)

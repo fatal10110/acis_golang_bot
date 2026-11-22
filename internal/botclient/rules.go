@@ -138,6 +138,8 @@ type Persona struct {
 	// Gear is how the bot wears and buys better weapons and armor (rule 9
 	// errand "gear", and the shop errand).
 	Gear GearPolicy
+	// Warehouse is the clan warehouse errand (rule 9 errand "warehouse").
+	Warehouse WarehousePolicy
 	// Loot is what the bot picks up after a fight and drops when
 	// overweight (rule 8).
 	Loot LootPolicy
@@ -189,6 +191,7 @@ func DefaultPersona() Persona {
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
 		Gear:           defaultGearPolicy(),
+		Warehouse:      defaultWarehousePolicy(),
 		Loot:           defaultLootPolicy(),
 		Trade:          defaultTradePolicy(),
 		Store:          defaultStorePolicy(),
@@ -255,6 +258,8 @@ const (
 	actStoreList
 	actStoreQuit
 	actChatReply
+	actWarehouseDeposit
+	actWarehouseWithdraw
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -337,8 +342,8 @@ type rule struct {
 // the party, ahead of fighting so a support in combat still heals;
 // "assist" (the leader's target), "train" (the trainer), "gear" (wearing
 // better gear, ahead of the shop so a bought piece is worn before the next
-// sale), "shop" (a merchant's buy and sell windows), "follow" (the slot
-// behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
+// sale), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
+// warehouse errand), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
 // (a gatekeeper trip to a spot out of walking reach), "spot" (getting to the
 // farming spot) and "farm" (attacking a monster there) are rule 9 errands,
 // ahead of the persona's goal: a party member assists its leader, visits its
@@ -373,6 +378,7 @@ var playRules = []rule{
 	{"train", (*Brain).ruleTrain},
 	{"gear", (*Brain).ruleGear},
 	{"shop", (*Brain).ruleShop},
+	{"warehouse", (*Brain).ruleWarehouse},
 	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},
