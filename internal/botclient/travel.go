@@ -74,6 +74,10 @@ type TravelMap struct {
 	// included: what the crafter plans with and deposits (Persona.Crafter).
 	recipes    map[int32]datapack.Recipe
 	craftItems map[int32]bool
+	// crystals are the gear templates the server crystallizes, with what
+	// a +0 one gives (indexCrystals): what the crafter weighs to
+	// crystallize.
+	crystals map[int32]crystalYield
 	// hennas are the dye symbols by id (datapack.Datapack.Hennas): what
 	// the dye errand checks prices, dyes and class lists with.
 	hennas map[int32]datapack.Henna
@@ -109,7 +113,8 @@ type destination struct {
 // of every NPC template, the merchants' buylists, the gear bots wear and
 // its armor sets, the arrows each bow shoots, the items' reference prices, the healing
 // and buff potions and shots, the items' weights, the aggressive NPCs' aggro
-// ranges, the warehouse keepers, the craft recipes and the dye symbols.
+// ranges, the warehouse keepers, the craft recipes, the crystals gear
+// breaks into and the dye symbols.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
@@ -124,6 +129,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.weights = indexWeights(dp.Items, dp.EtcItems)
 	m.aggro = indexAggro(dp.NPCs)
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
+	m.crystals = indexCrystals(dp.Items)
 	m.hennas = dp.Hennas
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {

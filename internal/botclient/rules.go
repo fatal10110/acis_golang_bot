@@ -301,6 +301,8 @@ const (
 	actWarehouseWithdraw
 	actRecipeBook
 	actCraft
+	// actCrystallize breaks an item into crystals (crystallize.go).
+	actCrystallize
 	actStoreBuy
 	// actAnswer is a craft order's answer (a whisper or a clan chat line),
 	// actAnnounce a finished GM order's clan chat line (craftorder.go).
@@ -355,7 +357,10 @@ func (a Action) gate() gate {
 		return gateBypass
 	case actDrop:
 		return gateDrop
-	case actCraft:
+	case actCraft, actCrystallize:
+		// RequestCrystallizeItem has no server gate (network/client_dispatch.go
+		// registers it whenLive, no flood protector): the crafter sends one
+		// per answer or crystallizeTimeout, and it keeps the craft gate.
 		return gateCraft
 	}
 	return gateNone

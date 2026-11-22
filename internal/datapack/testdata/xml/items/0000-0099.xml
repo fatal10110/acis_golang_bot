@@ -39,6 +39,7 @@
 		<set name="bodypart" val="chest" />
 		<set name="armor_type" val="LIGHT" />
 		<set name="crystal_type" val="D" />
+		<set name="crystal_count" val="135" />
 		<set name="price" val="74600" />
 	</item>
 	<!-- A use condition: the server may refuse to equip it. -->

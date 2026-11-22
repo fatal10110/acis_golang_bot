@@ -18,12 +18,12 @@ func TestLoadItems(t *testing.T) {
 		6:    {ID: 6, Name: "Apprentice's Wand", Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138},
 		17:   {ID: 17, Name: "Wooden Arrow", Type: "EtcItem", BodyPart: "lhand", Kind: "ARROW", Price: 2},
 		49:   {ID: 49, Name: "Gloves", Type: "Armor", BodyPart: "gloves", Price: 2650},
-		398:  {ID: 398, Name: "Plate Leather", Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Grade: 1, Price: 74600},
+		398:  {ID: 398, Name: "Plate Leather", Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Grade: 1, CrystalCount: 135, Price: 74600},
 		6611: {ID: 6611, Name: "Infinity Blade", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Conditional: true},
 		6702: {ID: 6702, Name: "Shadow Item: Falchion", Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Duration: 120, Conditional: true},
 		10:   {ID: 10, Name: "Dagger", Type: "Weapon", BodyPart: "rhand", Kind: "DAGGER", Price: 138},
 		287: {
-			ID: 287, Name: "Bow of Peril", Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Grade: 3, Price: 13100000, Weight: 1700,
+			ID: 287, Name: "Bow of Peril", Type: "Weapon", BodyPart: "lrhand", Kind: "BOW", Grade: 3, CrystalCount: 1746, Price: 13100000, Weight: 1700,
 			Stats: Stats{PAtk: 400, MAtk: 99, PAtkSpd: 293, RCrit: 12}, Enchants: []string{"pAtk", "mAtk"}, Soulshots: 3, Spiritshots: 1,
 		},
 		352: {
@@ -31,7 +31,7 @@ func TestLoadItems(t *testing.T) {
 			Stats: Stats{PDef: 103}, Enchants: []string{"pDef"},
 		},
 		629: {
-			ID: 629, Name: "Kite Shield", Type: "Armor", BodyPart: "lhand", Grade: 1, Price: 78400, Weight: 1320,
+			ID: 629, Name: "Kite Shield", Type: "Armor", BodyPart: "lhand", Grade: 1, CrystalCount: 142, Price: 78400, Weight: 1320,
 			Stats: Stats{SDef: 142}, Enchants: []string{"sDef"},
 		},
 	}
@@ -57,6 +57,7 @@ func TestLoadItemsRejects(t *testing.T) {
 		{"baseadd", `<item id="1" type="Armor" name="x"><for><baseadd stat="pDef" val="1,5"/></for></item>`, `stat="pDef"`},
 		{"enchant stat", `<item id="1" type="Armor" name="x"><for><enchant val="0"/></for></item>`, "<enchant>"},
 		{"soulshots", `<item id="1" type="Weapon" name="x"><set name="soulshots" val="x"/></item>`, `"soulshots"`},
+		{"crystal count", `<item id="1" type="Armor" name="x"><set name="crystal_count" val="x"/></item>`, `"crystal_count"`},
 		{"etc grade", `<item id="1" type="EtcItem" name="x"><set name="etcitem_type" val="POTION"/><set name="crystal_type" val="Z"/></item>`, "crystal_type"},
 		{"etc weight", `<item id="1" type="EtcItem" name="x"><set name="etcitem_type" val="DYE"/><set name="weight" val="1.5"/></item>`, `"weight"`},
 		{"etc reuse", `<item id="1" type="EtcItem" name="x"><set name="etcitem_type" val="POTION"/><set name="reuse_delay" val="10s"/></item>`, `"reuse_delay"`},

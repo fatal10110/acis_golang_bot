@@ -8,7 +8,8 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
-// craftNext is the cycle's next craft: after the answer to the last, or
+// craftNext is the cycle's next craft: the crystallizing of the withdrawn
+// gear first (crystallizeNext); after the answer to the last craft, or
 // its timeout; the weight guard's deposit first when the bot carries 50 %
 // or more of its limit; a rest first when its MP is short of the recipe's
 // cost; and at least craftGap plus jitter after the last craft.
@@ -23,6 +24,9 @@ func (b *Brain) craftNext(now time.Time) (Action, bool) {
 			b.tripCrafter(now)
 			return Action{}, true
 		}
+	}
+	if a, ok := b.crystallizeNext(now); ok {
+		return a, true
 	}
 	if c.replan {
 		c.replan = false
@@ -84,6 +88,10 @@ func (b *Brain) craftSent(a Action, now time.Time) {
 	if c.phase == craftWithdraw && b.wh.running {
 		b.cfg.CraftBoard.TakeLease(b.world.Clan.ID, b.world.Self.ObjectID, now)
 	}
+	if a.kind == actCrystallize && c.phase == craftMake {
+		b.crystallizeSent(a, now)
+		return
+	}
 	if a.kind != actCraft || c.phase != craftMake {
 		return
 	}
@@ -144,10 +152,10 @@ func (b *Brain) craftFailed(now time.Time) {
 	}
 }
 
-// tripCrafter stops the cycle on a breaker: it deposits, then holds the
-// next check for BreakerHold.
+// tripCrafter stops the cycle on a breaker: it deposits, the gear left to
+// crystallize among it, then holds the next check for BreakerHold.
 func (b *Brain) tripCrafter(now time.Time) {
-	b.craft.tripped = true
+	b.craft.tripped, b.craft.crystal.stopped = true, true
 	b.finishCraftCycle(now)
 }
 
