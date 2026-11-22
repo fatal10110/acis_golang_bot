@@ -775,6 +775,20 @@ geodata is committed here, and CI never sees it.**
     segments;
   - the step-chain scenario above;
   - a door scenario asserts door replans and no plain unreachable.
+  - Delivered by N8 (#160): every scenario that runs a whole bot through `runWatched`
+    (`internal/e2e`) asserts the two thresholds, with `nav_segments_total` (the walker's segments
+    and talk clicks) as the base of the blocked rate, and checks every blocked stop it saw: one
+    `WalkSteps` predicts from the stop for the step seen is explained, so is one after a step
+    longer than `Emax` on a segment that fails the open-corridor test, any other fails. The long
+    walk is `TestLiveSpotSpread` (the trip of #144), the ledges `TestLiveFollowLedge` and
+    `TestLiveFollowAcrossBand`, the grocer `TestLiveTownErrands`; `TestLiveNavStepChain` walks
+    along Gludin's walls (a stair leg is #243), `TestLiveNavMeleeObstacle` walks round an
+    obstacle before its first click on the monster and asserts the click's origin has a straight
+    walk to it, and `TestLiveNavDoor` toggles the doors of a Gludin clan hall (the GM's `//open`
+    and `//close`, only on doors a scenario claims). A follower that sees a door change replans
+    before it clicks, so door replans by the server's answer are rare: the door scenario asserts
+    that a walk shut in by the closed doors ends unreachable for the door, that every walk ending
+    unreachable ends for the door, and that the bot walks through once the door opens.
 
 ## Delivery (milestone M7, "Own navigation", epic #151)
 
