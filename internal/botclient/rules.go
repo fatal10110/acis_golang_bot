@@ -299,9 +299,9 @@ const (
 	actRecipeBook
 	actCraft
 	actStoreBuy
-	// actClanSay is a craft order's answer in clan chat, actAnnounce a
-	// finished GM order's line there (craftorder.go).
-	actClanSay
+	// actAnswer is a craft order's answer (a whisper or a clan chat line),
+	// actAnnounce a finished GM order's clan chat line (craftorder.go).
+	actAnswer
 	actAnnounce
 )
 
@@ -339,7 +339,7 @@ func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
-	case actSay, actTell, actChatReply, actClanSay, actAnnounce:
+	case actSay, actTell, actChatReply, actAnswer, actAnnounce:
 		return gateChat
 	case actBypass:
 		return gateBypass
@@ -409,7 +409,8 @@ type rule struct {
 // holds a bot a GM told to stay, ahead of looting and every errand that
 // would move it. "chat" whispers a delayed reply to a player's whisper
 // (ChatPolicy), after the flee and heal rules so it never delays one; a
-// due reply waits for them. "leader" handles a dead or lost leader ahead of
+// due reply waits for them. "announce" says the queued craft order lines
+// (answers and finished GM orders) in turn, after "chat". "leader" handles a dead or lost leader ahead of
 // following it. The shot toggle is set-up, not a plan rule: it runs once
 // per shot template carried, ahead of the fight it serves, after the flee
 // rules so it never delays one. "buffpotion" drinks the build's buff potion

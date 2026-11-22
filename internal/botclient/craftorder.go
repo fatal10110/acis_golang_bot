@@ -179,20 +179,24 @@ func (b *Brain) orderCovers(product int32, count int64, now time.Time) (made int
 }
 
 // answerOrder queues text as the one answer to the craft order t, on the
-// channel it came by: a whisper back, or a clan chat line. None to a name
-// with the bot marker, none past the ChatPolicy's Total; the answer counts
-// in it. It is no reply to a whisper, so PerSender does not hold it back.
+// channel it came by: a whisper back, or a clan chat line. It joins the
+// queue of craft order lines (rule "announce"), so answers to orders inside
+// one chat gap go out in turn and never replace a command's reply. None to
+// a name with the bot marker, none with craftCommandCap lines queued, none
+// past the ChatPolicy's Total; the answer counts in it. It is no reply to a
+// whisper, so PerSender does not hold it back.
 func (b *Brain) answerOrder(t tell, text string, now time.Time) {
 	p := &b.persona.Chat
-	if text == "" || b.cfg.markers.Marks(t.name) || b.cfg.chat.full(now, p) {
+	if text == "" || b.cfg.markers.Marks(t.name) || len(b.announce) >= craftCommandCap || b.cfg.chat.full(now, p) {
 		return
 	}
 	b.cfg.chat.count(now, p)
-	if text = clipChat(text); t.clan {
-		b.orders.reply = Action{kind: actClanSay, payload: encodeSay2(text, chatClan)}
-		return
+	text = clipChat(text)
+	payload := encodeSay2(text, chatClan)
+	if !t.clan {
+		payload = encodeSay2Tell(t.name, text)
 	}
-	b.orders.reply = tellAction(t.name, text)
+	b.announce = append(b.announce, Action{kind: actAnswer, payload: payload})
 }
 
 // announceOrder queues the one clan chat line that says GM order o was
@@ -213,8 +217,9 @@ func (b *Brain) announceOrder(o CraftOrder, now time.Time) {
 	b.announce = append(b.announce, Action{kind: actAnnounce, payload: encodeSay2(text, chatClan)})
 }
 
-// ruleAnnounce says the first finished GM order's line in clan chat once
-// the chat gate lets it go (clan chat has no server gate), and passes until
+// ruleAnnounce says the first queued craft order line (an order's answer,
+// or a finished GM order's clan chat line) once the chat gate lets it go
+// (clan chat and whispers have no server flood gate), and passes until
 // then.
 func (b *Brain) ruleAnnounce(now time.Time) (Action, bool) {
 	if len(b.announce) == 0 || !b.pace.allow(gateChat, now) {

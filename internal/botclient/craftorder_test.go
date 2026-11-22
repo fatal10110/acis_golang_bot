@@ -339,6 +339,45 @@ func TestBrainCraftOrderAnnounce(t *testing.T) {
 	}
 }
 
+// TestBrainCraftOrderAnswersQueued: two orders inside one chat gap get
+// both answers, chatGap apart, and neither replaces a command's reply.
+func TestBrainCraftOrderAnswersQueued(t *testing.T) {
+	b := newOrderBrain(t)
+	knownWarehouse(b, 10)
+	reply := tellAction("GM", "ok")
+	b.orders.reply = reply
+	if err := b.handle([]Event{
+		whisper(leaderID, leaderName, "craft steel"),
+		CreatureSay{ObjectID: leaderID, Type: chatClan, Name: leaderName, Text: "craft 2 steel"},
+	}, t0); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b.orders.reply.payload, reply.payload) {
+		t.Fatalf("command reply replaced by %q", b.orders.reply.payload)
+	}
+	b.orders.reply = Action{}
+	var sent []time.Time
+	var payloads [][]byte
+	for d := time.Duration(0); d <= 3*chatGap; d += 100 * time.Millisecond {
+		now := t0.Add(d)
+		if rule, a := b.decide(now); rule == "announce" {
+			if a.kind != actAnswer {
+				t.Fatalf("answer kind %d, want actAnswer", a.kind)
+			}
+			if ok, err := b.send(a, now); err != nil || !ok {
+				t.Fatalf("send = %v, %v", ok, err)
+			}
+			sent, payloads = append(sent, now), append(payloads, a.payload)
+		}
+	}
+	if len(sent) != 2 || sent[1].Sub(sent[0]) < chatGap {
+		t.Fatalf("answered at %v, want twice chatGap apart", sent)
+	}
+	if !bytes.Contains(payloads[0], []byte{byte(chatTell), 0, 0, 0}) || !bytes.HasSuffix(payloads[1], []byte{byte(chatClan), 0, 0, 0}) {
+		t.Fatalf("answers %q, want a whisper then a clan line", payloads)
+	}
+}
+
 // TestBrainCraftOrderAnswerCountsInTotal: an order's answer counts in the
 // ChatPolicy's Total, so the whisper replies after it stay capped.
 func TestBrainCraftOrderAnswerCountsInTotal(t *testing.T) {

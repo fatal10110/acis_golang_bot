@@ -27,8 +27,9 @@ const (
 	// cancelled.
 	craftCommandCap = 10
 	// craftHeardTTL is how long a clan chat line stays taken (Heard): the
-	// crafters of a clan hear one line at once, and one answers it.
-	craftHeardTTL = 30 * time.Second
+	// crafters of a clan hear one line at once, and one answers it. A few
+	// seconds cover that; the same line said again later is a new order.
+	craftHeardTTL = 5 * time.Second
 )
 
 // OrderID names an order on a CraftBoard, unique in its process.
