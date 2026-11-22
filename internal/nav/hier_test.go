@@ -219,7 +219,7 @@ func TestNavCacheRoundTrip(t *testing.T) {
 	if string(g.b) != string(image) || g.Nodes() != th.g.Nodes() || g.Edges() != th.g.Edges() {
 		t.Error("the mapped graph differs from the written image")
 	}
-	h := NewHierarchy(g, onewayEngine(t), DefaultMemberCacheBytes)
+	h := NewHierarchy(g, onewayEngine(t), nil, DefaultMemberCacheBytes)
 	if _, err := h.Locate(geoCell(1700, 1700, 0), nil); err != nil {
 		t.Errorf("Locate over the mapped cache: %v", err)
 	}

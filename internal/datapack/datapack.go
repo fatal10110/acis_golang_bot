@@ -3,9 +3,10 @@
 // (spawnlist/*.xml), gatekeeper destinations (teleports.xml), merchant
 // buylists (buyLists.xml), weapon, armor and etc item templates
 // (items/*.xml), skill templates (skills/*.xml), craft recipes
-// (recipes.xml) and armor sets (armorSets.xml). Parse rules follow the server's loaders (acis_golang
-// internal/gameserver/data/xml npc.go, spawnlist.go, item.go, skill.go and
-// economy.go), reduced to the fields bots use.
+// (recipes.xml), armor sets (armorSets.xml) and water zones
+// (zones/WaterZone.xml). Parse rules follow the server's loaders (acis_golang
+// internal/gameserver/data/xml npc.go, spawnlist.go, item.go, skill.go,
+// economy.go and zone.go), reduced to the fields bots use.
 //
 // Load runs once per process. The returned Datapack is never mutated after
 // Load returns, so any number of goroutines may read it without locking.
@@ -44,12 +45,15 @@ type Datapack struct {
 	Recipes map[int32]Recipe
 	// ArmorSets maps an armor set's chest template id to the set.
 	ArmorSets map[int32]ArmorSet
+	// WaterZones are the water zones in file order: where a player swims.
+	WaterZones []WaterZone
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
 // and skills/*.xml file directly under it, its teleports.xml, its
-// buyLists.xml, its recipes.xml and its armorSets.xml. xmlDir is configuration; the bot ships no datapack of its
+// buyLists.xml, its recipes.xml, its armorSets.xml and its
+// zones/WaterZone.xml. xmlDir is configuration; the bot ships no datapack of its
 // own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
@@ -84,10 +88,14 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
+	water, err := LoadWaterZones(filepath.Join(xmlDir, "zones", "WaterZone.xml"))
+	if err != nil {
+		return nil, err
+	}
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
 		Items: items, EtcItems: etc, Prices: prices, Skills: skills, Recipes: recipes,
-		ArmorSets: armorSets,
+		ArmorSets: armorSets, WaterZones: water,
 	}, nil
 }
 

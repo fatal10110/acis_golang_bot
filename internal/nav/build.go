@@ -28,6 +28,9 @@ type BuildConfig struct {
 	// Doors are the door templates (doors.xml) whose footprints tag the
 	// edges that cross them.
 	Doors []*door.Template
+	// Water is the water zones no edge enters or leaves (nil: none); Build
+	// sets the key's WaterHash from it.
+	Water *Water
 	// Clusters lists the clusters to build; a crossing into a cluster not
 	// listed is not an entrance. `bots navbuild` lists every cluster of the
 	// loaded regions (RegionClusters).
@@ -38,7 +41,7 @@ type BuildConfig struct {
 	// uses half the cores (docs/home.md, resource cap).
 	Workers int
 	// Key carries the geodata cache CRC and the doors.xml hash the image is
-	// keyed by; Build sets its ClusterCells.
+	// keyed by; Build sets its ClusterCells and WaterHash.
 	Key NavKey
 	// Log reports skipped doors; nil discards.
 	Log *slog.Logger
@@ -92,7 +95,7 @@ func Build(ctx context.Context, cfg BuildConfig) ([]byte, BuildStats, error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 	static := cfg.Engine.Static()
-	b := &builder{size: size, keys: keys, p: Planner{Engine: static}, built: make(map[ClusterKey]bool, len(keys))}
+	b := &builder{size: size, keys: keys, p: Planner{Engine: static, Water: cfg.Water}, built: make(map[ClusterKey]bool, len(keys))}
 	for _, k := range keys {
 		b.built[k] = true
 	}
@@ -127,6 +130,7 @@ func Build(ctx context.Context, cfg BuildConfig) ([]byte, BuildStats, error) {
 	}
 	key := cfg.Key
 	key.ClusterCells = size
+	key.WaterHash = cfg.Water.Hash()
 	image, err := b.encode(outs, l, key, &stats)
 	if err != nil {
 		return nil, stats, err
@@ -963,7 +967,7 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 	for _, n := range []int{len(outs), nNodes, nEdges, nDoorRefs, nSCC, nCond} {
 		img = le.AppendUint32(img, uint32(n))
 	}
-	img = append(img, make([]byte, navHeaderSize-len(img))...)
+	img = append(img, key.WaterHash[:]...)
 	for ci, k := range b.keys {
 		img = le.AppendUint32(img, uint32(k.X))
 		img = le.AppendUint32(img, uint32(k.Y))

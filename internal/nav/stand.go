@@ -10,9 +10,10 @@ import (
 )
 
 // walkable reports whether c can be stood on and clicked to: it has geodata,
-// its layer allows at least one direction, and it is a click target.
+// its floor is out of water, its layer allows at least one direction, and it
+// is a click target.
 func (p *Planner) walkable(s *scratch, c Cell) bool {
-	return p.hasGeo(c.X, c.Y) && p.nswe(c) != block.NoDirections && p.clickable(c, &s.layers)
+	return p.hasGeo(c.X, c.Y) && !p.Water.wet(c.X, c.Y, c.Z) && p.nswe(c) != block.NoDirections && p.clickable(c, &s.layers)
 }
 
 // NearestWalkable snaps a target point (a spot centre, a follow slot, an NPC

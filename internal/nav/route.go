@@ -44,7 +44,8 @@ const (
 
 // Route plans a ground route from from (a standstill position) to to. It
 // returns the waypoints, from first (on its floor) and to last (snapped to
-// the floor as the server snaps a destination). Each consecutive pair is one
+// the floor as the server snaps a destination). An endpoint whose cell is in
+// water is ErrWater. Each consecutive pair is one
 // segment of at most navSegment units that passes CanMove and StepChainOK;
 // the planner takes a segment only after both checks pass, and every
 // intermediate waypoint is a click target on its layer.
@@ -70,6 +71,9 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 	}
 	if !p.clickable(goal, &s.layers) {
 		return nil, ErrUnclickable
+	}
+	if p.Water.wet(start.X, start.Y, start.Z) || p.Water.wet(goal.X, goal.Y, goal.Z) {
+		return nil, ErrWater
 	}
 	from.Z, to.Z = int(start.Z), int(goal.Z)
 

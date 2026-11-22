@@ -18,9 +18,9 @@ import (
 //
 //	header    magic "ACISNAV\0", version u32, CRC-32C u32 of every byte after
 //	          the CRC field, then the key (geodata cache CRC u32, cluster
-//	          side u32, doors.xml hash 8 bytes) and the section counts
+//	          side u32, doors.xml hash 8 bytes), the section counts
 //	          (clusters, nodes, edges, door refs, SCCs, condensation edges,
-//	          u32 each), padded to navHeaderSize
+//	          u32 each) and the water hash (8 bytes), navHeaderSize in all
 //	clusters  x i32, y i32, first node u32; sorted by (y, x)
 //	nodes     representative cell x i32, y i32, z i16, border side u8, pad
 //	          u8, run first and last position u16 each, cluster u32, SCC
@@ -33,11 +33,11 @@ import (
 //	condEdges target SCC u32
 //
 // The graph is read in place from the read-only mapping; nothing is decoded
-// onto the heap. A file built for another geodata cache, doors.xml or cluster
-// side is stale and refused, as is a corrupt one.
+// onto the heap. A file built for another geodata cache, doors.xml, cluster
+// side or water is stale and refused, as is a corrupt one.
 const (
 	navMagic       = "ACISNAV\x00"
-	navVersion     = 1
+	navVersion     = 2
 	navHeaderSize  = 64
 	clusterRecSize = 12
 	nodeRecSize    = 28
@@ -60,11 +60,12 @@ var (
 )
 
 // NavKey is what a nav cache is built for: the geodata cache's CRC, a hash
-// of doors.xml and the build parameters.
+// of doors.xml, the build parameters and the water zones' Hash.
 type NavKey struct {
 	GeoCRC       uint32
 	DoorsHash    [8]byte
 	ClusterCells int
+	WaterHash    [8]byte
 }
 
 // DoorsHash returns the doors.xml half of the nav cache key: the first 8
@@ -110,6 +111,7 @@ func parseGraph(b []byte) (*Graph, error) {
 	for i, p := range []*int{&c.clusters, &c.nodes, &c.edges, &c.doorRefs, &c.sccs, &c.condEdges} {
 		*p = int(binary.LittleEndian.Uint32(b[32+4*i:]))
 	}
+	copy(g.key.WaterHash[:], b[56:64])
 	off := navHeaderSize
 	for _, s := range []struct {
 		at   *int
@@ -159,8 +161,8 @@ func OpenNavCache(path string, key NavKey) (*Graph, error) {
 	}
 	g, err := parseGraph(b)
 	if err == nil && g.key != key {
-		err = fmt.Errorf("built for geodata cache %08x, doors %x, cluster side %d; want %08x, %x, %d",
-			g.key.GeoCRC, g.key.DoorsHash, g.key.ClusterCells, key.GeoCRC, key.DoorsHash, key.ClusterCells)
+		err = fmt.Errorf("built for geodata cache %08x, doors %x, cluster side %d, water %x; want %08x, %x, %d, %x",
+			g.key.GeoCRC, g.key.DoorsHash, g.key.ClusterCells, g.key.WaterHash, key.GeoCRC, key.DoorsHash, key.ClusterCells, key.WaterHash)
 	}
 	if err != nil {
 		mmap.Unmap(b)
