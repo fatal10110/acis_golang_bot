@@ -97,8 +97,14 @@ func CrafterPersona(inviters ...string) Persona {
 	p := DefaultPersona()
 	p.Crafter = defaultCrafterPolicy()
 	p.JoinClan = AcceptClanFrom(inviters...)
-	p.LearnSkills[DwarvenFighter.ID] = []int32{skillCreateItem}
-	p.Trainers[DwarvenFighter.ID] = dwarvenTrainers
+	// The crafter line, Artisan at 20 and Warsmith at 40 (D18), learns
+	// Create Item at the same trainers as the Dwarven Fighter.
+	p.ClassChange.Builds[DwarvenFighter.ID] = classArtisan
+	p.ClassChange.Builds[classArtisan] = classWarsmith
+	for _, c := range []int32{DwarvenFighter.ID, classArtisan, classWarsmith} {
+		p.LearnSkills[c] = []int32{skillCreateItem}
+		p.Trainers[c] = dwarvenTrainers
+	}
 	return p
 }
 
