@@ -198,6 +198,16 @@ func (e *Engine) NodeAtOrAbove(geoX, geoY, worldZ int, accept func(height int16)
 	return 0, 0, false
 }
 
+// AppendLayers appends every layer of the geodata cell at (geoX, geoY), in
+// stored order (lowest floor first), to dst and returns the extended slice.
+// With a dst whose capacity covers block.MaxLayers it never allocates. A cell
+// without geodata answers one open layer at height 0, as every null-block
+// query on this engine does; callers that treat such cells as no-go check
+// HasGeo first.
+func (e *Engine) AppendLayers(dst []block.Cell, geoX, geoY int) []block.Cell {
+	return e.blockAtGeo(geoX, geoY).AppendCells(dst, localCell(geoX), localCell(geoY))
+}
+
 // Above returns the first layer above worldZ at geodata cell coordinates.
 func (e *Engine) Above(geoX, geoY, worldZ int) (int16, bool) {
 	b := e.blockAtGeo(geoX, geoY)

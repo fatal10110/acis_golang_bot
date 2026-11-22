@@ -452,9 +452,11 @@ unreachable (with a reason).
     1. the cell has exactly one layer (a flat or complex block, or a multilayer cell holding one
        layer), so `belowCell`, `HeightNearest` and `Height` can only ever answer that floor,
        whatever Z the chain carries;
-    2. the NSWE flags allow crossing in both directions of the segment's quadrant. For a line close
-       to an axis, and for the end cell and its neighbours (where the minor-axis step can reverse
-       by one unit whatever the slope), both senses across the minor axis must be allowed too;
+    2. the NSWE flags allow crossing in both directions of the segment's quadrant. No step turns
+       back on either axis: a step adds (destination − rounded origin) × a fraction below 1 to a
+       float position that rounds half up to the origin, so it never passes the destination's
+       integer coordinate (`stepLocked`; N2 found the reversal earlier assumed here does not
+       occur, and `TestStepChainAgreesWithWalkSteps` checks it against `WalkSteps`);
     3. no step up between neighbouring corridor cells is more than 48.
 
     Under those conditions every per-step `CanMove` between two points in the corridor holds,
@@ -472,8 +474,10 @@ unreachable (with a reason).
     - It starts from every rounded point within one unit of the line and within `Lmax` before the
       stretch, at its one floor.
     - The server carries a float position inside each rounded point. So from each state, every
-      rounded point within `Lmax + 1` ahead and within one unit of the line must pass `CanMove`,
-      with Z from `Height(next, prevZ + 2*CellHeight)`.
+      rounded point within `Lmax + 1.5` ahead, within 1.5 units of the line, and between the state
+      and the destination on each axis must pass `CanMove`, with Z from
+      `Height(next, prevZ + 2*CellHeight)`. The float position stays within √2/2 of the line and
+      rounding adds √2/2 more, so 1.5 bounds both (N2, `internal/nav/exact.go`).
     - The stretch passes when every reachable state does, up to the far side.
     - It runs only on the final segments of a route, not on pull candidates. A stretch is a few
       cells long, so it costs a few thousand short `CanMove` calls; N1 benchmarks one call, and N3
