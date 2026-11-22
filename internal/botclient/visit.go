@@ -145,13 +145,6 @@ func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 	return a, true
 }
 
-// npcAt reports whether an NPC of template npcID stands in sight within
-// visitArrive of at: a visit to it walks no leg out of sight.
-func (b *Brain) npcAt(npcID int32, at Point, now time.Time) bool {
-	id := b.nearestNPC(npcID, at, now)
-	return id != 0 && dist2(b.world.object(id).Position(now), at) <= visitArrive*visitArrive
-}
-
 // visitTalkRange is how far from an NPC a visit's stand point may lie: the
 // server's interaction distance (network/targeting.go interactionDistance).
 const visitTalkRange = 150

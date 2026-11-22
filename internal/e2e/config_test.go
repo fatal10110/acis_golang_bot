@@ -52,8 +52,10 @@ func TestConfigMissing(t *testing.T) {
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	full := Config{Login: "h:2106", SecretFile: file, GMFiles: []string{file}, Datapack: dir, AllowLoginFail: true,
-		Nav: botclient.NavFiles{Geodata: dir, Geoengine: file, Cache: file, NavCache: file}}
+	full := Config{
+		Login: "h:2106", SecretFile: file, GMFiles: []string{file}, Datapack: dir, AllowLoginFail: true,
+		Nav: botclient.NavFiles{Geodata: dir, Geoengine: file, Cache: file, NavCache: file},
+	}
 	tests := []struct {
 		name  string
 		cfg   Config
