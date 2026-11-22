@@ -153,6 +153,9 @@ type Persona struct {
 	Warehouse WarehousePolicy
 	// Recipes is recipe learning (rule 9 errand "recipe").
 	Recipes RecipePolicy
+	// Crafter is the clan crafter's cycle (rule "craft"); the zero
+	// CrafterPolicy crafts nothing.
+	Crafter CrafterPolicy
 	// Loot is what the bot picks up after a fight and drops when
 	// overweight (rule 8).
 	Loot LootPolicy
@@ -387,7 +390,9 @@ type rule struct {
 // better gear, ahead of the shop so a bought piece is worn before the next
 // sale), "market" (other players' sell stores, ahead of the shop so a
 // store's cheaper offer is taken first), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
-// warehouse errand), "recipe" (recipe learning), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
+// warehouse errand), "recipe" (recipe learning), "craft" (the clan
+// crafter's cycle, after the two errands that run its warehouse requests and
+// its recipe scrolls; it holds the turn while a cycle runs), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
 // (a gatekeeper trip to a spot out of walking reach), "spot" (getting to the
 // farming spot) and "farm" (attacking a monster there) are rule 9 errands,
 // ahead of the persona's goal: a party member assists its leader, visits its
@@ -428,6 +433,7 @@ var playRules = []rule{
 	{"shop", (*Brain).ruleShop},
 	{"warehouse", (*Brain).ruleWarehouse},
 	{"recipe", (*Brain).ruleRecipe},
+	{"craft", (*Brain).ruleCraft},
 	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},

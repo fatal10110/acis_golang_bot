@@ -24,6 +24,12 @@ type preset struct {
 	// store makes the bots merchants: they open private stores of their
 	// loot with the store budget.
 	store bool
+	// class, when set, is the starting class of every character the bots
+	// create; nil draws one.
+	class *botclient.StartingClass
+	// inviters makes the bots join the clan of the players named by
+	// -clan-inviters only, when it names some (botclient.AcceptClanFrom).
+	inviters bool
 }
 
 // presets is the persona catalog, the -persona names in order.
@@ -31,7 +37,16 @@ var presets = []preset{
 	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true},
 	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona},
 	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true},
+	{
+		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
+		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true,
+	},
 }
+
+// crafterPersona is the crafter preset's persona: botclient.CrafterPersona
+// accepting any player's clan invitation; preset.brain narrows it to
+// -clan-inviters.
+func crafterPersona() botclient.Persona { return botclient.CrafterPersona() }
 
 // findPreset returns the preset of the catalog named name.
 func findPreset(name string) (preset, bool) {
@@ -81,6 +96,9 @@ type shared struct {
 	board  *botclient.CraftBoard
 	// storeBudget is a merchant's store budget per session.
 	storeBudget int64
+	// clanInviters are the names a crafter accepts a clan invitation from
+	// (-clan-inviters); none accepts any player's.
+	clanInviters []string
 }
 
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
@@ -100,6 +118,9 @@ func (p preset) brain(s shared) botclient.BrainConfig {
 	if p.store && s.stores != nil {
 		cfg.Stores = s.stores
 		cfg.Persona.Store.Budget = s.storeBudget
+	}
+	if p.inviters && len(s.clanInviters) > 0 {
+		cfg.Persona.JoinClan = botclient.AcceptClanFrom(s.clanInviters...)
 	}
 	applyPartyAndAuthority(&cfg, s.claims, s.auth)
 	return cfg

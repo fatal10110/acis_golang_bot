@@ -173,10 +173,10 @@ func TestOfferedPresets(t *testing.T) {
 		}
 		return out
 	}
-	if got := names(offeredPresets("")); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack"}) {
+	if got := names(offeredPresets("")); !slices.Equal(got, []string{"support", "town:needs -datapack", "merchant:needs -datapack", "crafter:needs -datapack"}) {
 		t.Fatalf("without a datapack offered %q, want support only, the others disabled", got)
 	}
-	if got := names(offeredPresets("dp")); !slices.Equal(got, []string{"support", "town", "merchant"}) {
+	if got := names(offeredPresets("dp")); !slices.Equal(got, []string{"support", "town", "merchant", "crafter"}) {
 		t.Fatalf("with a datapack offered %q", got)
 	}
 }

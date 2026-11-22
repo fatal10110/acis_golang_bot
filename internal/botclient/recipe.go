@@ -324,13 +324,17 @@ func (b *Brain) ruleRecipe(now time.Time) (Action, bool) {
 	return useItemAction(it), true
 }
 
-// startLearn starts the attempt Learn asks for, if one is due.
+// startLearn starts the attempt the crafter's plan (craftLearn) or Learn
+// asks for, if one is due.
 func (b *Brain) startLearn(now time.Time) bool {
 	e, p := &b.learn, &b.persona.Recipes
-	if p.Learn == nil || b.world.Self.InCombat || now.Before(e.retryAt) {
+	if b.world.Self.InCombat || now.Before(e.retryAt) {
 		return false
 	}
-	scroll := p.Learn(b.world, e.last, now)
+	scroll := b.craftLearn()
+	if scroll == 0 && p.Learn != nil {
+		scroll = p.Learn(b.world, e.last, now)
+	}
 	if scroll == 0 {
 		return false
 	}
