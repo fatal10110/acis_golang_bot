@@ -51,23 +51,49 @@ const (
 	skillMight       int32 = 1068
 )
 
-// mysticSkills are the support persona's skills by mystic base class
-// (docs/plan.md, support persona): human, elven and dark elven mystics heal
-// and buff, orc mystics buff. Ids and levels are the datapack's class skill
-// trees (data/xml/classes).
+// Class ids of the healer and buffer professions of the support build
+// (supportBuilds; data/xml/classes).
+const (
+	classCleric         int32 = 15
+	classBishop         int32 = 16
+	classElvenOracle    int32 = 29
+	classElvenElder     int32 = 30
+	classShillienOracle int32 = 42
+	classShillienElder  int32 = 43
+	classOrcShaman      int32 = 50
+	classWarcryer       int32 = 52
+)
+
+// mysticSkills are the support persona's skills by mystic base class and by
+// profession of the support build (docs/plan.md, support persona): human,
+// elven and dark elven mystics heal and buff, orc mystics buff. A
+// profession's trainer offers the next level of every skill of its tree
+// merged with its parents' (Cleric: Heal, Battle Heal, Might and Shield up
+// to 35; Shillien and Elven Elder: Might and Shield at 40-44; Orc Shaman:
+// Soul Shield and Chant of Battle at 25-35, Warcryer at 44). Ids and levels
+// are the datapack's class skill trees (data/xml/classes).
 var mysticSkills = map[int32][]int32{
-	classHumanMystic: {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classElvenMystic: {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classDarkMystic:  {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classOrcMystic:   {skillSoulShield, skillChantBattle},
+	classHumanMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classElvenMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classDarkMystic:     {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classOrcMystic:      {skillSoulShield, skillChantBattle},
+	classCleric:         {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classBishop:         {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classElvenOracle:    {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classElvenElder:     {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classShillienOracle: {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classShillienElder:  {skillHeal, skillBattleHeal, skillMight, skillShield},
+	classOrcShaman:      {skillSoulShield, skillChantBattle},
+	classWarcryer:       {skillSoulShield, skillChantBattle},
 }
 
 // mysticTrainers are the NPC template ids of the trainers that teach each
-// mystic base class: the datapack NPCs whose teachTo lists it
-// (data/xml/npcs). A trainer for another class opens its no-skills page.
-// Grand Magister Celes (32098) teaches human mystics too but is left out:
-// its first page (data/html/villagemaster/32098.htm) has no skill list
-// link, so a visit would only end in a shun.
+// mystic base class and support build profession: the datapack NPCs whose
+// teachTo lists it (data/xml/npcs). A trainer for another class opens its
+// no-skills page. Grand Magister Celes (32098) teaches human mystics, Clerics
+// and Bishops too but is left out: its first page
+// (data/html/villagemaster/32098.htm) has no skill list link, so a visit
+// would only end in a shun.
 var mysticTrainers = map[int32][]int32{
 	classHumanMystic: {
 		30022, 30030, 30032, 30033, 30034, 30035, 30036, 30067, 30069, 30110, 30111, 30114,
@@ -79,15 +105,40 @@ var mysticTrainers = map[int32][]int32{
 		30473, 30680, 30697, 30698, 30717, 30718, 30856, 30860, 30861, 30908, 30909, 31280,
 		31281, 31283, 31330, 31333, 31970, 31971, 31972,
 	},
-	classDarkMystic: {
+	classDarkMystic: darkMysticTrainers,
+	classOrcMystic:  orcMysticTrainers,
+	classCleric:     clericTrainers,
+	classBishop:     clericTrainers,
+	classElvenOracle: {
+		30068, 30119, 30158, 30293, 30375, 30473, 30680, 30698, 30860, 30861, 30908, 31280,
+		31281, 31283, 31330, 31333, 31970, 31971, 31972,
+	},
+	classElvenElder: {
+		30068, 30119, 30158, 30293, 30375, 30473, 30680, 30698, 30860, 30861, 30908, 31280,
+		31281, 31283, 31330, 31333, 31970, 31972,
+	},
+	classShillienOracle: darkMysticTrainers,
+	classShillienElder:  darkMysticTrainers,
+	classOrcShaman:      orcMysticTrainers,
+	classWarcryer:       orcMysticTrainers,
+}
+
+// The trainers that teach a whole line alike (teachTo, data/xml/npcs): the
+// dark elven mystic line, the orc mystic line, and Clerics and Bishops.
+var (
+	darkMysticTrainers = []int32{
 		30144, 30145, 30194, 30330, 30377, 30464, 30476, 30701, 30720, 30721, 30833, 30864,
 		30912, 31287, 31335, 31581, 31976,
-	},
-	classOrcMystic: {
+	}
+	orcMysticTrainers = []int32{
 		30502, 30507, 30510, 30515, 30571, 30572, 30682, 30706, 30867, 30915, 31290, 31337,
 		31979,
-	},
-}
+	}
+	clericTrainers = []int32{
+		30022, 30030, 30032, 30036, 30067, 30116, 30117, 30118, 30188, 30835, 30858, 30859,
+		30906, 31280, 31281, 31282, 31329, 31332, 31969,
+	}
+)
 
 // defaultLearnSkills and defaultTrainers return fresh maps for a persona;
 // the id slices are shared and never written.

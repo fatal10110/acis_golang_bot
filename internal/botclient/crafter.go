@@ -87,6 +87,23 @@ var dwarvenTrainers = []int32{
 	31315, 31316, 31583, 31956, 31957, 31959, 31960, 31990,
 }
 
+// artisanTrainers are the dwarvenTrainers whose teachTo lists the Artisan
+// (class 56): the blacksmiths and warehouse keepers of the crafter line,
+// not the fighter-only ones. The Trader 30516 teaches it too but links no
+// skill list, as for the Dwarven Fighter.
+var artisanTrainers = []int32{
+	30298, 30300, 30317, 30458, 30471, 30526, 30527, 30678, 30688, 30846, 30898, 31267,
+	31268, 31270, 31271, 31311, 31312, 31313, 31315, 31316, 31583, 31960, 31990,
+}
+
+// warsmithTrainers are the dwarvenTrainers whose teachTo lists the Warsmith
+// (class 57): the Artisan's list without 31990, which teaches 53, 56 and
+// 118 only.
+var warsmithTrainers = []int32{
+	30298, 30300, 30317, 30458, 30471, 30526, 30527, 30678, 30688, 30846, 30898, 31267,
+	31268, 31270, 31271, 31311, 31312, 31313, 31315, 31316, 31583, 31960,
+}
+
 // CrafterPersona is the clan crafter (docs/crafting.md section 5), played
 // by a Dwarven Fighter: DefaultPersona plus the crafter's cycle, Create
 // Item learned at the dwarven trainers, and the clan invitation of any
@@ -97,8 +114,18 @@ func CrafterPersona(inviters ...string) Persona {
 	p := DefaultPersona()
 	p.Crafter = defaultCrafterPolicy()
 	p.JoinClan = AcceptClanFrom(inviters...)
-	p.LearnSkills[DwarvenFighter.ID] = []int32{skillCreateItem}
-	p.Trainers[DwarvenFighter.ID] = dwarvenTrainers
+	// The crafter line, Artisan at 20 and Warsmith at 40 (D18), learns
+	// Create Item at the trainers whose teachTo lists its class.
+	p.ClassChange.Builds[DwarvenFighter.ID] = classArtisan
+	p.ClassChange.Builds[classArtisan] = classWarsmith
+	for c, trainers := range map[int32][]int32{
+		DwarvenFighter.ID: dwarvenTrainers,
+		classArtisan:      artisanTrainers,
+		classWarsmith:     warsmithTrainers,
+	} {
+		p.LearnSkills[c] = []int32{skillCreateItem}
+		p.Trainers[c] = trainers
+	}
 	return p
 }
 

@@ -560,9 +560,11 @@ stores.
   `2ndClass` at 40, then the `change_class N` link of the menu page for the profession. The bot
   stands within 150 of the master and clicks only links of the last page it got, since the server
   drops any other. Pacing: `bypassGap` (500 ms). The page's answer, a new page or the class change
-  in `UserInfo`, is waited for 5 s; then the visit backs off for `WalkStuckFor`. The build table
-  includes the dwarf crafter line the clan crafter plan (M9) needs: 53 → 56 Artisan (20) → 57
-  Warsmith (40). That plan owns the Create Item (172) learn data.
+  in `UserInfo`, is waited for 5 s; then the visit backs off for `ClassChange.RetryAfter` (10
+  min). A menu without the build's profession also backs off: the bot never takes another class.
+  The build table includes the dwarf crafter line the clan crafter plan (M9) needs: 53 → 56
+  Artisan (20) → 57 Warsmith (40); the crafter learns Create Item (172) as 53, 56 and 57, each at
+  the dwarven trainers whose `teachTo` lists that class (23 for 56, 22 for 57).
 - **After the change.**
   - The change sends `HennaInfo` and `UserInfo` (new class id), then the changed page. It sends no
     `SkillList`, because `AutoLearnSkills` is off by default. The page's `learn_skills` link would

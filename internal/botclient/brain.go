@@ -183,6 +183,8 @@ type Brain struct {
 	// 9 errands).
 	newbie newbieVisit
 	trip   travelTrip
+	// class is the class master visit (rule 9 errand "classchange").
+	class classVisit
 	// supplyTrip is the farmer's trip home to restock (rule "supply").
 	supplyTrip supplyTrip
 	// prep is the town preparation gate.
@@ -497,6 +499,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.trainEvent(ev, now)
 			b.tripPage(e, now)
 			b.newbiePage(e)
+			b.classPage(e)
 			b.shopEvent(ev)
 			b.warehouseEvent(ev, now)
 		case AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
@@ -759,6 +762,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.train.sent(a, now)
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
+	b.class.sent(a, now)
 	b.shop.sent(a, now)
 	b.market.sent(a, now)
 	b.wh.sent(a, now)

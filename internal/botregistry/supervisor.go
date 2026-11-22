@@ -503,14 +503,17 @@ func (s *Supervisor) handle(e event) {
 	s.ended(e.account, st, e.err)
 }
 
-// keepProgress copies the level and position of a run's last snapshot into
-// its registry bot (docs/plan.md section 8, "Status"); a snapshot of a bot
-// that never entered the world (level 0) keeps the stored ones.
+// keepProgress copies the level, class and position of a run's last
+// snapshot into its registry bot (docs/plan.md section 8, "Status"), so a
+// class changed at the class master is kept; a snapshot of a bot that never
+// entered the world (level 0) keeps the stored ones.
 func keepProgress(b *Bot, st botclient.Status) {
 	if st.Level <= 0 {
 		return
 	}
 	b.Level = st.Level
+	class := st.ClassID
+	b.Class = &class
 	b.Position = &Position{X: st.Position.X, Y: st.Position.Y, Z: st.Position.Z}
 }
 
