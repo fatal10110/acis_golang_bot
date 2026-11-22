@@ -182,10 +182,11 @@ type Brain struct {
 	gear gearState
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
-	// shotAskedAt is when the bot last asked auto use of each shot template.
-	shotAskedAt map[int32]time.Time
+	// shotAsked is the last auto-use request of each shot template.
+	shotAsked map[int32]shotAsk
 	// shotOff are the shot templates the bot itself turned auto use off
-	// for, until it turns them on again.
+	// for, until the server reports them on again (ExAutoSoulShot), so a
+	// request to turn one on again that the server dropped is repeated.
 	shotOff map[int32]bool
 	// tradedAt is when the bot last accepted each partner's trade request,
 	// by partner object id (TradePolicy.Every).
@@ -247,7 +248,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	b := &Brain{
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
-		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time), shotOff: make(map[int32]bool),
+		usedAt: make(map[int32]time.Time), shotAsked: make(map[int32]shotAsk), shotOff: make(map[int32]bool),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
 		verdicts: make(chan verdict, verdictQueue),
 	}
@@ -352,6 +353,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case SystemMessage:
 			b.castRefused(e.ID, now)
+		case ExAutoSoulShot:
+			if e.Enabled {
+				delete(b.shotOff, e.TemplateID)
+			}
 		case MyTargetSelected:
 			if e.ObjectID != b.engaged {
 				b.engaged = 0
@@ -660,10 +665,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actUseItem:
 		b.usedAt[a.item] = now
 	case actAutoShot:
-		b.shotAskedAt[a.item] = now
-		delete(b.shotOff, a.item)
+		b.shotAsked[a.item] = shotAsk{at: now, on: true}
 	case actAutoShotOff:
-		b.shotAskedAt[a.item] = now
+		b.shotAsked[a.item] = shotAsk{at: now}
 		b.shotOff[a.item] = true
 	case actWalkRun:
 		b.follow.runToggledAt = now

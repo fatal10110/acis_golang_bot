@@ -59,9 +59,9 @@ type GearPolicy struct {
 	// compare it with the wielded one, when the bot can keep it charged and
 	// not the other: a shot source has shots of its grade for the class (a
 	// spawned merchant), or the bot carries ShopPolicy's restock minimum of
-	// them (shotsBacked). So a no-grade weapon with shots beats a D-grade
-	// one without them until the D one's price wins on its own. 0 or 1
-	// compares prices alone.
+	// them, any once it wields the weapon (shotsBacked). So a no-grade
+	// weapon with shots beats a D-grade one without them until the D one's
+	// price wins on its own. 1 or less compares prices alone.
 	ShotFactor float64
 }
 

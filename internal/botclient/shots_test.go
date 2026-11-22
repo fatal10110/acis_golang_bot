@@ -351,8 +351,9 @@ func TestShotFactorBuy(t *testing.T) {
 }
 
 // TestShotFallback: with D shots carried at the target the bot wears the D
-// weapon, keeps the no-grade one and its shots, and switches back once the
-// D shots fall under the target; a few looted D shots switch nothing.
+// weapon, keeps the no-grade one and its shots, fires the D shots to the
+// last one, and switches back once they are gone; a few looted D shots
+// switch nothing.
 func TestShotFallback(t *testing.T) {
 	soul := shotStack(10, soulshotNoGrade, 500)
 	b := newShotBrain(t, classHumanFight, false, wielded(1, ngSword), spare(2, dSword), soul, shotStack(11, dSoulshot, 50))
@@ -375,8 +376,60 @@ func TestShotFallback(t *testing.T) {
 	}
 
 	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, shotStack(11, dSoulshot, 99)}}}, at(5*time.Second))
-	a, ok = b.ruleGear(at(5 * time.Second))
+	if a, ok := b.ruleGear(at(5 * time.Second)); ok {
+		t.Fatalf("D shots under the target, D sword wielded: gear %+v, want none", a)
+	}
+	junk = slices.Collect(maps.Keys(b.junk()))
+	for _, obj := range []int32{1, 2, 10, 11} {
+		if slices.Contains(junk, obj) {
+			t.Errorf("D shots under the target: junk %v holds object %d", junk, obj)
+		}
+	}
+
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, shotStack(11, dSoulshot, 0)}}}, at(6*time.Second))
+	a, ok = b.ruleGear(at(6 * time.Second))
 	if !ok || a.object != 1 {
-		t.Fatalf("D shots under the target: gear %+v %v, want the no-grade sword used", a, ok)
+		t.Fatalf("D shots gone: gear %+v %v, want the no-grade sword used", a, ok)
+	}
+}
+
+// TestShotReOn: a template the bot turned off and then asks on again is
+// asked again after shotRetry while the server leaves the request
+// unanswered, and once the server reports it on, a stock-out disable keeps
+// it off.
+func TestShotReOn(t *testing.T) {
+	soul, dSoul := shotStack(10, soulshotNoGrade, 500), shotStack(11, dSoulshot, 500)
+	b := newShotBrain(t, classHumanFight, false, wielded(1, dSword), spare(2, ngSword), soul, dSoul)
+	out := b.out.(*recordSender)
+	answer := func(id int32, on bool, now time.Time) {
+		t.Helper()
+		if err := b.handle([]Event{ExAutoSoulShot{TemplateID: id, Enabled: on}}, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	answer(soulshotNoGrade, true, t0)
+	answer(dSoulshot, true, t0)
+	if got, want := runShots(t, b, out, at(time.Second)), []toggle{{soulshotNoGrade, false}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("toggles = %v, want %v", got, want)
+	}
+	answer(soulshotNoGrade, false, at(time.Second))
+
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, spare(1, dSword)}, {ItemModified, wielded(2, ngSword)}}}, at(time.Minute))
+	switched := at(time.Minute)
+	if got, want := runShots(t, b, out, switched), []toggle{{soulshotNoGrade, true}, {dSoulshot, false}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("toggles after the switch = %v, want %v", got, want)
+	}
+	answer(dSoulshot, false, switched)
+	if got := runShots(t, b, out, switched.Add(shotRetry-time.Millisecond)); got != nil {
+		t.Fatalf("unanswered re-on repeated before shotRetry: %v", got)
+	}
+	if got, want := runShots(t, b, out, switched.Add(shotRetry)), []toggle{{soulshotNoGrade, true}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("unanswered re-on at shotRetry: toggles %v, want %v", got, want)
+	}
+
+	answer(soulshotNoGrade, true, switched.Add(shotRetry))
+	answer(soulshotNoGrade, false, switched.Add(2*shotRetry))
+	if got := runShots(t, b, out, switched.Add(3*shotRetry)); got != nil {
+		t.Fatalf("server-disabled template asked again: %v", got)
 	}
 }

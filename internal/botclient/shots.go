@@ -177,16 +177,21 @@ func (b *Brain) carriedShots(w weapon) int32 {
 	return n
 }
 
-// shotsBacked reports whether the bot can keep weapon w charged: a shot
-// source has a shot w charges, or, when carried is set, the bot carries at
-// least shotTarget of them. A few looted shots do not back a weapon.
-func (b *Brain) shotsBacked(w weapon, carried bool) bool {
+// shotsBacked reports whether the bot can keep weapon w, template id,
+// charged: a shot source has a shot w charges, or, when carried is set, the
+// bot carries enough of them. Enough is shotTarget to switch to w, so a few
+// looted shots do not back a weapon, and any once w is wielded, so the bot
+// fires the stack it switched for to the last shot before it switches back.
+func (b *Brain) shotsBacked(id int32, w weapon, carried bool) bool {
 	ids := b.shotsFor(w)
 	if slices.ContainsFunc(ids, b.sourced) {
 		return true
 	}
 	have := b.carriedShots(w)
-	return carried && have > 0 && have >= b.shotTarget()
+	if !carried || have == 0 {
+		return false
+	}
+	return have >= b.shotTarget() || b.worn()[slotWeapon].TemplateID == id
 }
 
 // shotValues are the values beats compares for weapon template id against
@@ -199,12 +204,12 @@ func (b *Brain) shotsBacked(w weapon, carried bool) bool {
 // weapon against a one-handed one and its shield.
 func (b *Brain) shotValues(id, cur int32, g, c gearItem, gain, value int64, carried bool) (int64, int64) {
 	f := b.persona.Gear.ShotFactor
-	if f <= 0 {
+	if f <= 1 {
 		return gain, value
 	}
 	backed := func(id int32) bool {
 		w, ok := b.cfg.Travel.weapons[id]
-		return ok && b.shotsBacked(w, carried)
+		return ok && b.shotsBacked(id, w, carried)
 	}
 	extra := func(price int32) int64 { return int64(math.Round(float64(price)*f)) - int64(price) }
 	switch gb, cb := backed(id), backed(cur); {
@@ -325,7 +330,7 @@ func (b *Brain) carriedOnly(w *worn) bool {
 		return false
 	}
 	wp, ok := b.cfg.Travel.weapons[cur.TemplateID]
-	return ok && b.shotsBacked(wp, true) && !b.shotsBacked(wp, false)
+	return ok && b.shotsBacked(cur.TemplateID, wp, true) && !b.shotsBacked(cur.TemplateID, wp, false)
 }
 
 // fallsBack reports whether carried item it is a weapon the gear errand
@@ -337,6 +342,13 @@ func (b *Brain) fallsBack(it Item, w *worn) bool {
 		return false
 	}
 	return b.beatsBy(it.TemplateID, w, false)
+}
+
+// shotAsk is an auto-use request the bot sent for a shot template: when,
+// and whether it asked the template on.
+type shotAsk struct {
+	at time.Time
+	on bool
 }
 
 // ruleShots turns auto use on for the shot template the wielded weapon
@@ -353,18 +365,18 @@ func (b *Brain) ruleShots(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	inv := &b.world.Inventory
-	ready := func(id int32) bool {
-		at, asked := b.shotAskedAt[id]
-		return !asked || now.Sub(at) >= shotRetry
+	// Only a repeat of the last request for a template, the same way,
+	// waits for shotRetry.
+	ready := func(id int32, on bool) bool {
+		a, asked := b.shotAsked[id]
+		return !asked || a.on != on || now.Sub(a.at) >= shotRetry
 	}
-	// A request repeats the last one for its template unless that was
-	// the other way (shotOff): only a repeat waits for shotRetry.
 	use := b.useShot()
-	if on, known := inv.AutoShots[use]; use != 0 && (!known || !on && b.shotOff[use]) && (b.shotOff[use] || ready(use)) {
+	if on, known := inv.AutoShots[use]; use != 0 && (!known || !on && b.shotOff[use]) && ready(use, true) {
 		return autoShotAction(use, true), true
 	}
 	for _, id := range slices.Sorted(maps.Keys(inv.AutoShots)) {
-		if inv.AutoShots[id] && id != use && (!b.shotOff[id] || ready(id)) {
+		if inv.AutoShots[id] && id != use && ready(id, false) {
 			return autoShotAction(id, false), true
 		}
 	}
