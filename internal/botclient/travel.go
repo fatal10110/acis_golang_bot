@@ -50,6 +50,9 @@ type TravelMap struct {
 	spawnedSold map[int32]bool
 	// keepers are the warehouse keeper templates with a fixed spawn.
 	keepers map[int32]bool
+	// weights are the weights of the etc item templates that weigh
+	// anything: the supplies' (SupplyPolicy.BuyLoad).
+	weights map[int32]int32
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -76,7 +79,7 @@ type destination struct {
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear, the
 // arrows each bow shoots, the items' reference prices, and the healing
-// potions and shots, and the warehouse keepers.
+// potions and shots, the etc items' weights, and the warehouse keepers.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
@@ -86,6 +89,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
+	m.weights = indexWeights(dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue

@@ -135,6 +135,9 @@ type Persona struct {
 	// Shop is what the bot buys and sells at merchants (rule 9 errand
 	// "shop").
 	Shop ShopPolicy
+	// Supply sizes the shots, HP potions and Scrolls of Escape the shop
+	// errand buys from what the bot spends (the use meter).
+	Supply SupplyPolicy
 	// Gear is how the bot wears and buys better weapons and armor (rule 9
 	// errand "gear", and the shop errand).
 	Gear GearPolicy
@@ -190,6 +193,7 @@ func DefaultPersona() Persona {
 		Newbie:         defaultNewbiePolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
+		Supply:         defaultSupplyPolicy(),
 		Gear:           defaultGearPolicy(),
 		Warehouse:      defaultWarehousePolicy(),
 		Loot:           defaultLootPolicy(),

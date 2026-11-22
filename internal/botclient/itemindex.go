@@ -54,6 +54,18 @@ func indexShots(etc map[int32]datapack.EtcItem) map[int32]shotItem {
 	return out
 }
 
+// indexWeights indexes the weight of every etc item template that weighs
+// anything.
+func indexWeights(etc map[int32]datapack.EtcItem) map[int32]int32 {
+	out := make(map[int32]int32)
+	for id, it := range etc {
+		if it.Weight > 0 {
+			out[id] = it.Weight
+		}
+	}
+	return out
+}
+
 // WithItemIndex returns p with the healing potions of m's datapack in
 // place of the built-in list DefaultPersona carries for a bot without a
 // datapack (healingPotions). A persona that sets a list of its own keeps
