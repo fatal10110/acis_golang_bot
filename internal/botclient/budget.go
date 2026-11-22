@@ -223,8 +223,8 @@ func (b *Brain) extraWants() []buyRow {
 // bot's own supplies the use meter sizes (the HP potion, the Scrolls of
 // Escape and shots without a ShotStock Max), each from a spawned merchant
 // and topped up to its trip target where the supplies tier, buying only
-// under Refill percent, left it short. The build's buff potion joins them
-// (#176).
+// under Refill percent, left it short; then the build's buff potion
+// (buffPotionRow).
 func (b *Brain) comfortWants() []buyRow {
 	if !b.persona.Shop.Comfort {
 		return nil
@@ -242,13 +242,16 @@ func (b *Brain) comfortWants() []buyRow {
 			rows = append(rows, buyRow{item: s.item, count: s.count - have})
 		}
 	}
+	if r, ok := b.buffPotionRow(); ok {
+		rows = append(rows, r)
+	}
 	return rows
 }
 
 // inKeepSet reports whether template id is in the loadout's keep set: what
 // the bot buys beyond its trip targets and never sells. The Scroll of
-// Escape is, the trip home; the build's buff potion (#176) and the planned
-// dyes (#179) join it.
-func inKeepSet(id int32) bool {
-	return id == scrollOfEscape
+// Escape is, the trip home, and the build's buff potion
+// (GearClass.BuffPotion); the planned dyes (#179) join them.
+func (b *Brain) inKeepSet(id int32) bool {
+	return id == scrollOfEscape || id != 0 && id == b.gearClass().BuffPotion
 }

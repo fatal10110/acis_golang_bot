@@ -616,7 +616,7 @@ func (b *Brain) keeps(id int32) bool {
 	if _, shot := b.shotTable()[id]; shot && b.keepsShot(id) {
 		return true
 	}
-	return id == adenaID || inKeepSet(id) || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
+	return id == adenaID || b.inKeepSet(id) || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
 		id == b.bowArrows() || id == b.nextBowArrows() ||

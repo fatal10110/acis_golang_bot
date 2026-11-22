@@ -47,6 +47,12 @@ type TravelMap struct {
 	// potions are the datapack's healing potions, best first
 	// (indexPotions): what WithItemIndex puts in a persona.
 	potions []int32
+	// buffPotions are the datapack's buff potions (indexBuffPotions), and
+	// stacks the stack effect of every skill level that shares a stack type
+	// with one of them, by skill id then level: what stackOf reads the
+	// bot's effects with.
+	buffPotions map[int32]buffPotion
+	stacks      map[int32]map[int32]stackEffect
 	// shots are the datapack's player shots (indexShots), weapons what
 	// each weapon template charges (indexWeapons), and spawnedSold the
 	// items spawned merchants sell (spawnedSold).
@@ -83,8 +89,8 @@ type destination struct {
 // a fixed spawn outside an event, with its standard adena-priced
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear and
-// its armor sets, the arrows each bow shoots, the items' reference prices, and the healing
-// potions and shots, the etc items' weights, and the warehouse keepers.
+// its armor sets, the arrows each bow shoots, the items' reference prices, the healing
+// and buff potions and shots, the etc items' weights, and the warehouse keepers.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
@@ -93,6 +99,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.arrows = indexArrows(dp.Items)
 	m.prices = dp.Prices
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
+	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.EtcItems)

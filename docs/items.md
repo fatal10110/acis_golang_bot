@@ -398,14 +398,19 @@ picks one per persona.
   50 %) and by the budget (section 5).
 - The default list: shots (section 3); the best HP potion a merchant sells (1061 over 1060); 1-2
   Scrolls of Escape; the class's buff potion only when the budget's comfort tier allows it.
-- **HP potions** keep rule 3, with a persona threshold that also allows drinking early when two or
-  more attackers are on the bot. Pacing: `potionReuse` as today.
-- **Buff potions** are drunk at the spot, out of combat, only when no effect of the same stack type
+- **HP potions** keep rule 3, with a persona threshold (`CrowdedHP`, default 60 %, above
+  `OutmatchedHP`) that also allows drinking early when two or more attackers are on the bot; the
+  heal and the flee stay under `CriticalHP`. Pacing: `potionReuse` as today.
+- **Buff potions** (`GearClass.BuffPotion`, rule `buffpotion` after the rebuff) are drunk at the
+  claimed spot, standing, out of combat with no attacker, only when no effect of the same stack type
   with an equal or higher order is on the bot. The bot's effects carry skill id and level
-  (`support.go` `Effect`), which it maps through the skill reader to stack type and order. This covers a support bot's Haste or Acumen and the Newbie
-  Guide's beginner buffs, which would make the potion a waste. Pacing: per potion, one UseItem, then
-  none until its effect shows in the abnormals or 5 s pass (the server drops a use still in its
-  500 ms reuse in silence).
+  (`support.go` `Effect`, kept in `World.BuffLevels`), which it maps through the skill reader to
+  stack type and order at that level (`TravelMap.stackOf`; an enchanted level stacks as the top
+  plain one). This covers a support bot's Haste or Acumen and the Newbie Guide's beginner buffs,
+  which would make the potion a waste. Pacing: per potion, one UseItem, then none until its effect
+  shows in the abnormals (its own stack then stops the next) or 5 s pass (`buffPotionWait`; the
+  server drops a use still in its 500 ms reuse in silence). The comfort tier buys one per effect
+  time of `TripMinutes`, margin included, within the weight the supplies leave under `BuyLoad`.
 
 ### 5. One budget
 
