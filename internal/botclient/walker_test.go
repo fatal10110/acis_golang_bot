@@ -102,13 +102,32 @@ func TestWalkerServerAnswers(t *testing.T) {
 			from:    func(o, _ Point) Point { return o },
 		},
 		{
-			name: "StopMove short of the end is a blocked stop",
+			// A step failing mid-way: the server answered the segment,
+			// then sends its blocked correction (move/controller.go
+			// BroadcastBlockedCorrection).
+			name: "same-point MoveToLocation short of the end after the answer is a blocked stop",
+			reply: func(o, to Point) []Event {
+				mid := Point{X: (o.X + to.X) / 2, Y: (o.Y + to.Y) / 2, Z: o.Z}
+				return []Event{segAnswer(o, to), MoveToLocation{ObjectID: selfID, Origin: mid, Dest: mid}}
+			},
+			blocked: 1,
+			from:    func(o, to Point) Point { return Point{X: (o.X + to.X) / 2, Y: (o.Y + to.Y) / 2, Z: o.Z} },
+		},
+		{
+			name: "same-point MoveToLocation on the end after the answer is its arrival",
+			reply: func(o, to Point) []Event {
+				return []Event{segAnswer(o, to), MoveToLocation{ObjectID: selfID, Origin: to, Dest: to}}
+			},
+			from: func(_, to Point) Point { return to },
+		},
+		{
+			// A stun or a stop: no blocked step, the route replans.
+			name: "StopMove short of the end replans without a blocked stop",
 			reply: func(o, to Point) []Event {
 				mid := Point{X: (o.X + to.X) / 2, Y: (o.Y + to.Y) / 2, Z: o.Z}
 				return []Event{segAnswer(o, to), StopMove{ObjectID: selfID, Pos: mid}}
 			},
-			blocked: 1,
-			from:    func(o, to Point) Point { return Point{X: (o.X + to.X) / 2, Y: (o.Y + to.Y) / 2, Z: o.Z} },
+			from: func(o, to Point) Point { return Point{X: (o.X + to.X) / 2, Y: (o.Y + to.Y) / 2, Z: o.Z} },
 		},
 		{
 			name: "another destination is a desync",

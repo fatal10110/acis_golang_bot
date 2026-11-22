@@ -56,8 +56,18 @@ const (
 	walkMaxDesync   = 3
 	walkMaxWatchdog = 3
 	walkMaxDoor     = 8
-	// walkBudget caps the cells one route search expands.
-	walkBudget = 60000
+	// walkBudget caps the cells one route search expands: the budget the
+	// water measurement of #161 routed up to 8000 units with. The 6800
+	// units from the human start point to Talking Island's trainers take
+	// more than 60000.
+	walkBudget = 400000
+	// walkRetry is how long a walk that ended unreachable stays so for the
+	// same destination and purpose: a consumer asking again after it
+	// gives up gets a fresh walk.
+	walkRetry = time.Minute
+	// talkWait bounds how long a talk click's answer is waited for: the
+	// straight approach of a click from within visitArrive.
+	talkWait = 10 * time.Second
 	// walkSameDest is how far a consumer's destination may move without
 	// a new route: the server rounds, a stand point snaps.
 	walkSameDest = 32
@@ -90,12 +100,12 @@ const (
 	reasonDoor     = "door"
 	reasonWatchdog = "watchdog"
 	reasonNoRoute  = "no route"
+	reasonBudget   = "route budget"
 	reasonIsolated = "isolated"
 	reasonNoNav    = "no nav"
 )
 
-// walkPurpose is what a walk is for. A talk approach also takes the
-// StopMove that ends a blocked click on the NPC as a blocked stop.
+// walkPurpose is what a walk is for.
 type walkPurpose uint8
 
 const (
@@ -134,6 +144,8 @@ type walker struct {
 	purpose walkPurpose
 	status  walkStatus
 	reason  string
+	// endedAt is when a decision first saw the walk unreachable.
+	endedAt time.Time
 	// route is the rest of the route: route[0] is the next segment's end.
 	route []Point
 	// next is the segment the last decision returned, seg the one in
@@ -147,8 +159,8 @@ type walker struct {
 	blocked, desync, watchdog, doors int
 	// talkTo is where the NPC stood when the bot's last talk click went
 	// out, talkAt when (zero for none pending); talkFailed is set when the
-	// StopMove of that click ended its straight approach short of talking
-	// range, so the visit walks to a new stand point.
+	// server's blocked correction ended that click's straight approach short
+	// of talking range, so the visit walks to a new stand point.
 	talkTo     Point
 	talkAt     time.Time
 	talkFailed bool
@@ -169,7 +181,7 @@ func newWalker(n *Nav) walker {
 // reset starts a new walk to dest; a segment in flight runs out first.
 func (w *walker) reset(dest Point, arrive int32, purpose walkPurpose) {
 	w.dest, w.arrive, w.purpose = dest, arrive, purpose
-	w.status, w.reason = walkWalking, ""
+	w.status, w.reason, w.endedAt = walkWalking, "", time.Time{}
 	w.route = nil
 	w.blocked, w.desync, w.watchdog, w.doors = 0, 0, 0, 0
 }
@@ -199,13 +211,26 @@ func (w *walker) failed() string {
 // Pacing: one MoveBackwardToLocation per segment through the frame pacer
 // (gateNone); a segment waits for the previous one's arrival, so a running
 // bot sends about one move a second, far below the server's 80 frames/s.
+//
+// A walk that ended unreachable stays so for walkRetry, then a goTo to the
+// same place starts afresh; a new destination or purpose, or the bot's own
+// teleport, starts afresh at once.
 func (b *Brain) goTo(dest Point, arrive int32, purpose walkPurpose, now time.Time) (Action, walkStatus) {
+	a, st := b.walkStep(dest, arrive, purpose, now)
+	if w := &b.walk; st == walkUnreachable && w.endedAt.IsZero() {
+		w.endedAt = now
+	}
+	return a, st
+}
+
+func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time.Time) (Action, walkStatus) {
 	w := &b.walk
 	if w.nav == nil {
 		w.status, w.reason = walkUnreachable, reasonNoNav
 		return Action{}, walkUnreachable
 	}
-	if w.dest == (Point{}) || horizontal2(w.dest, dest) > walkSameDest*walkSameDest || w.purpose != purpose {
+	if w.dest == (Point{}) || horizontal2(w.dest, dest) > walkSameDest*walkSameDest || w.purpose != purpose ||
+		w.status == walkUnreachable && !w.endedAt.IsZero() && now.Sub(w.endedAt) >= walkRetry {
 		w.reset(dest, arrive, purpose)
 	}
 	w.arrive = arrive
@@ -254,7 +279,7 @@ func (b *Brain) goTo(dest Point, arrive int32, purpose walkPurpose, now time.Tim
 		// was planned: plan again from here next decision.
 		w.route = nil
 		if w.watchdog++; w.watchdog >= walkMaxWatchdog {
-			w.unreachable(reasonBlocked)
+			w.unreachable(reasonWatchdog)
 			return Action{}, walkUnreachable
 		}
 		return Action{}, walkWalking
@@ -370,6 +395,9 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 	case errors.Is(err, nav.ErrDoor):
 		w.unreachable(reasonDoor)
 		return Action{}, false
+	case errors.Is(err, nav.ErrBudget):
+		w.unreachable(reasonBudget)
+		return Action{}, false
 	case err != nil || len(route) < 2:
 		w.unreachable(reasonNoRoute)
 		return Action{}, false
@@ -439,14 +467,19 @@ func (w *walker) drop(from location.Location, cur nav.Member) ([]location.Locati
 	return nil, nav.ErrUnreachable
 }
 
-// sent records the walker's packet that went out at now.
+// sent records the walker's packet that went out at now. Any packet but a
+// talk click ends the wait for a talk click's answer: its answer can no
+// longer be told from the new action's.
 func (w *walker) sent(a Action, now time.Time) {
+	if a.kind != actTalk {
+		w.talkAt = time.Time{}
+	}
 	switch {
 	case a.kind == actMove && a.walk:
 		w.seg = w.next
 		w.seg.sentAt = now
 		w.seg.door = w.nav.Doors != nil && w.nav.Doors.Crosses(w.seg.from, w.seg.to)
-	case a.kind == actMove, a.kind == actAttack:
+	case a.kind == actMove, a.kind == actAttack, a.kind == actTalk:
 		// Another rule moved the bot (or clicked, which may walk it): the
 		// route no longer starts where the bot stands.
 		w.seg, w.route = segment{}, nil
@@ -455,60 +488,80 @@ func (w *walker) sent(a Action, now time.Time) {
 	}
 }
 
-// observe reads the server's answers to the walker's own segments
-// (docs/navigation.md, "Server answers to its own moves"): a MoveToLocation
-// whose origin is its destination is a blocked stop, one toward another
-// destination a desync (a door replan when the segment crosses a door), and
-// a StopMove short of a talk approach's NPC is a blocked stop too. A move of
-// the bot the walker did not send drops the route; a teleport too.
-// ActionFailed is no navigation signal.
+// observeWalk reads the server's answers to the walker's own segments
+// (docs/navigation.md, "Server answers to its own moves"). The server ends a
+// move whose step fails with its blocked correction, a MoveToLocation whose
+// origin is its destination (move/controller.go blocked,
+// BroadcastBlockedCorrection): before or after it answered the segment,
+// short of the segment's end that is a blocked stop. An answer toward
+// another destination is a desync (a door replan when the segment crosses
+// a door). With no segment in flight, the blocked correction of a talk
+// click's straight approach short of talking range is a blocked stop of the
+// talk approach (targeting.go onPlayerArrivedBlocked; in range the server
+// sends StopMove and opens the page). Any other move of the bot the walker
+// did not send, a StopMove mid-segment (a stun, a stop) and a teleport drop
+// the route; a teleport also starts the next walk afresh. ActionFailed is no
+// navigation signal.
 func (b *Brain) observeWalk(ev Event, now time.Time) {
 	w, s := &b.walk, &b.world.Self
+	if !w.talkAt.IsZero() && now.Sub(w.talkAt) > talkWait {
+		w.talkAt = time.Time{}
+	}
 	switch e := ev.(type) {
 	case MoveToLocation:
 		if e.ObjectID != s.ObjectID {
 			return
 		}
+		still := e.Origin.X == e.Dest.X && e.Origin.Y == e.Dest.Y
 		seg := &w.seg
-		if seg.sentAt.IsZero() || seg.answered {
-			w.seg, w.route = segment{}, nil
-			return
-		}
-		seg.answered = true
 		switch {
-		case e.Origin.X == e.Dest.X && e.Origin.Y == e.Dest.Y:
-			b.walkBlocked()
-		case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
-			b.walkDesync(seg.door)
-		default:
-			speed := float64(pace(s.Running, s.RunSpeed, s.WalkSpeed))
-			if speed <= 0 {
-				speed = 1
+		case !seg.sentAt.IsZero() && !seg.answered:
+			seg.answered = true
+			switch {
+			case still:
+				b.walkBlocked()
+			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
+				b.walkDesync(seg.door)
+			default:
+				speed := float64(pace(s.Running, s.RunSpeed, s.WalkSpeed))
+				if speed <= 0 {
+					speed = 1
+				}
+				run := time.Duration(math.Sqrt(float64(horizontal2(e.Origin, e.Dest))) / speed * float64(time.Second))
+				seg.eta = now.Add(run)
+				seg.deadline = seg.eta.Add(run/2 + walkSlack)
 			}
-			run := time.Duration(math.Sqrt(float64(horizontal2(e.Origin, e.Dest))) / speed * float64(time.Second))
-			seg.eta = now.Add(run)
-			seg.deadline = seg.eta.Add(run/2 + walkSlack)
+		case !seg.sentAt.IsZero() && still:
+			if horizontal2(e.Dest, seg.to) > walkSlop*walkSlop {
+				b.walkBlocked()
+				return
+			}
+			// Stopped on the segment's end: it arrived.
+			seg.eta, seg.deadline = now, now.Add(walkSlack)
+		case still && !w.talkAt.IsZero():
+			if horizontal2(e.Dest, w.talkTo) > visitTalkRange*visitTalkRange {
+				b.talkBlocked()
+			}
+			w.talkAt = time.Time{}
+			w.route = nil
+		default:
+			w.seg, w.route = segment{}, nil
 		}
 	case StopMove:
 		if e.ObjectID != s.ObjectID {
 			return
 		}
-		switch {
-		case !w.seg.sentAt.IsZero():
-			if horizontal2(e.Pos, w.seg.to) > walkSlop*walkSlop {
-				b.walkBlocked()
-			}
-		case !w.talkAt.IsZero():
-			// The talk click's straight approach stopped: short of talking
-			// range it opens no page (targeting.go onPlayerArrivedBlocked).
-			if horizontal2(e.Pos, w.talkTo) > visitTalkRange*visitTalkRange {
-				b.talkBlocked()
-			}
-			w.talkAt = time.Time{}
+		// A talk click's approach in range: the page follows.
+		w.talkAt = time.Time{}
+		if !w.seg.sentAt.IsZero() && horizontal2(e.Pos, w.seg.to) > walkSlop*walkSlop {
+			w.seg, w.route = segment{}, nil
 		}
+	case NpcHtmlMessage:
+		w.talkAt = time.Time{}
 	case TeleportToLocation:
 		if e.ObjectID == s.ObjectID {
 			w.seg, w.route, w.escaping = segment{}, nil, false
+			w.dest = Point{}
 		}
 	}
 }
@@ -547,8 +600,8 @@ func (b *Brain) walkDesync(door bool) {
 // npc at now.
 func (w *walker) talking(npc Point, now time.Time) { w.talkTo, w.talkAt = npc, now }
 
-// talkBlocked takes the StopMove that ends a click on an NPC whose straight
-// approach stopped short of talking range (targeting.go
+// talkBlocked takes the blocked correction that ends a click on an NPC whose
+// straight approach stopped short of talking range (targeting.go
 // onPlayerArrivedBlocked): a blocked stop of the talk approach.
 func (b *Brain) talkBlocked() {
 	b.metrics.NavBlocked()
