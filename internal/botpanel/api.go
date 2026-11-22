@@ -73,6 +73,39 @@ type live struct {
 	Order      string    `json:"order,omitempty"`
 	Reconnects int       `json:"reconnects"`
 	Err        string    `json:"err,omitempty"`
+	// Crafter is the crafter's cycle (botclient.CrafterStatus), absent for
+	// a bot that plays none.
+	Crafter *crafterLive `json:"crafter,omitempty"`
+}
+
+// crafterLive is a crafter's status (botclient.CrafterStatus).
+type crafterLive struct {
+	CreateItem   int32     `json:"create_item"`
+	Recipes      int       `json:"recipes"`
+	BookKnown    bool      `json:"book_known"`
+	Orders       int       `json:"orders"`
+	Claimed      int       `json:"claimed"`
+	Phase        string    `json:"phase"`
+	Chains       int       `json:"chains"`
+	ChainsDone   int       `json:"chains_done"`
+	NextCheck    time.Time `json:"next_check,omitzero"`
+	LastCycle    string    `json:"last_cycle,omitempty"`
+	LastCycleAt  time.Time `json:"last_cycle_at,omitzero"`
+	BreakerUntil time.Time `json:"breaker_until,omitzero"`
+}
+
+func crafterOf(c *botclient.CrafterStatus) *crafterLive {
+	if c == nil {
+		return nil
+	}
+	v := &crafterLive{
+		CreateItem: c.CreateItem, Recipes: c.Recipes, BookKnown: c.BookKnown, Orders: c.Orders, Claimed: c.Claimed,
+		Phase: c.Phase, Chains: c.Chains, ChainsDone: c.ChainsDone, NextCheck: c.NextCheck, BreakerUntil: c.BreakerUntil,
+	}
+	if c.Last.Outcome != botclient.CraftCycleNone {
+		v.LastCycle, v.LastCycleAt = c.Last.Outcome.String(), c.Last.At
+	}
+	return v
 }
 
 // botView is a bot of the registry, its run state and its live snapshot.
@@ -90,7 +123,7 @@ func viewOf(s botregistry.Status) botView {
 			At: st.At, State: st.State.String(), Character: st.Character, ClassID: st.ClassID, Level: st.Level,
 			HP: st.HP, MaxHP: st.MaxHP, MP: st.MP, MaxMP: st.MaxMP, CP: st.CP, MaxCP: st.MaxCP,
 			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Leader: st.Leader, Members: st.Members,
-			Order: st.Order.String(), Reconnects: st.Reconnects,
+			Order: st.Order.String(), Reconnects: st.Reconnects, Crafter: crafterOf(st.Crafter),
 		}
 		if st.Town != nil {
 			t := point(*st.Town)

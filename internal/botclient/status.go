@@ -49,7 +49,8 @@ func (s BotState) String() string {
 }
 
 // Status is a snapshot of a Bot (Bot.Status). It is immutable once
-// published: Members is shared by every copy and must not be changed.
+// published: Members and Crafter are shared by every copy and must not be
+// changed.
 // Between sessions it keeps what the last session saw of the character.
 type Status struct {
 	// At is when it was taken, on the bot's clock.
@@ -84,6 +85,9 @@ type Status struct {
 	// name, "" until the clan's roster arrived.
 	ClanID     int32
 	ClanLeader string
+	// Crafter is the crafter's cycle while online, nil for a bot that
+	// plays none (BrainConfig.CraftBoard, Persona.Crafter) and offline.
+	Crafter *CrafterStatus
 	// Order is the standing order of the panel, the zero Command for none.
 	Order Command
 	// Reconnects counts the bot's attempts after its first.
@@ -112,7 +116,7 @@ func (b *Bot) Status() Status { return b.link.board.load() }
 // goroutine.
 func (b *Bot) publish(state BotState, err error) {
 	st := b.link.board.load()
-	st.At, st.State, st.Rule, st.Spot, st.Walk = b.cfg.Clock.Now(), state, "", "", ""
+	st.At, st.State, st.Rule, st.Spot, st.Walk, st.Crafter = b.cfg.Clock.Now(), state, "", "", "", nil
 	st.Character, st.Order, st.Reconnects = cmp.Or(b.char.Name, st.Character), b.link.order.cmd, b.reconnects
 	if err != nil {
 		st.Err = err
@@ -140,6 +144,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st.Position = s.Position(now)
 	st.Town = b.nearestTown(st.Position)
 	st.ClanID, st.ClanLeader = w.Clan.ID, w.Clan.Leader
+	st.Crafter = b.crafterStatus(now)
 	st.Leader, st.Members = "", nil
 	if p := &w.Party; p.In() {
 		if p.LeaderID == s.ObjectID {
