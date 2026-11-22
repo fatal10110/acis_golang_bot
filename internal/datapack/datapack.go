@@ -2,8 +2,8 @@
 // with: NPC templates (npcs/*.xml), spawn territories and makers
 // (spawnlist/*.xml), gatekeeper destinations (teleports.xml), merchant
 // buylists (buyLists.xml), weapon, armor and etc item templates
-// (items/*.xml), skill templates (skills/*.xml) and craft recipes
-// (recipes.xml). Parse rules follow the server's loaders (acis_golang
+// (items/*.xml), skill templates (skills/*.xml), craft recipes
+// (recipes.xml) and armor sets (armorSets.xml). Parse rules follow the server's loaders (acis_golang
 // internal/gameserver/data/xml npc.go, spawnlist.go, item.go, skill.go and
 // economy.go), reduced to the fields bots use.
 //
@@ -42,12 +42,14 @@ type Datapack struct {
 	Prices map[int32]int32
 	// Recipes maps a craft recipe id to its recipe.
 	Recipes map[int32]Recipe
+	// ArmorSets maps an armor set's chest template id to the set.
+	ArmorSets map[int32]ArmorSet
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
 // and skills/*.xml file directly under it, its teleports.xml, its
-// buyLists.xml and its recipes.xml. xmlDir is configuration; the bot ships no datapack of its
+// buyLists.xml, its recipes.xml and its armorSets.xml. xmlDir is configuration; the bot ships no datapack of its
 // own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
@@ -78,9 +80,14 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
+	armorSets, err := LoadArmorSets(filepath.Join(xmlDir, "armorSets.xml"))
+	if err != nil {
+		return nil, err
+	}
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
 		Items: items, EtcItems: etc, Prices: prices, Skills: skills, Recipes: recipes,
+		ArmorSets: armorSets,
 	}, nil
 }
 

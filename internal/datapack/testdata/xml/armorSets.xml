@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<list>
+	<armorset name="Wooden Set" chest="23" legs="2386" head="43" gloves="0" feet="0" skillId="3500" shield="0" shieldSkillId="0" enchant6Skill="0"/>
+	<armorset name="Mithril Heavy Set" chest="58" legs="59" head="47" gloves="0" feet="0" skillId="3502" shield="628" shieldSkillId="3543" enchant6Skill="3611"/>
+	<armorset name="Composite Set" chest="60" legs="0" head="517" gloves="0" feet="0" skillId="3512" shield="107" shieldSkillId="3546" enchant6Skill="3614"/>
+</list>

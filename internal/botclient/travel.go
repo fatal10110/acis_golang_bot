@@ -33,6 +33,10 @@ type TravelMap struct {
 	// them by score).
 	gear     map[int32]gearItem
 	shopGear []int32
+	// sets are the armor sets of gear pieces, by chest (indexSets), and
+	// setPieces every template one of them names.
+	sets      map[int32]armorSet
+	setPieces map[int32]bool
 	// arrows maps each bow template to the arrow template it shoots
 	// (indexArrows).
 	arrows map[int32]int32
@@ -78,13 +82,14 @@ type destination struct {
 // NewTravelMap builds the travel map of dp: every gatekeeper template with
 // a fixed spawn outside an event, with its standard adena-priced
 // destinations (the ones its list page shows), and the fixed spawn points
-// of every NPC template, the merchants' buylists, the gear bots wear, the
-// arrows each bow shoots, the items' reference prices, and the healing
+// of every NPC template, the merchants' buylists, the gear bots wear and
+// its armor sets, the arrows each bow shoots, the items' reference prices, and the healing
 // potions and shots, the etc items' weights, and the warehouse keepers.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
 	m.gear, m.shopGear = indexGear(dp.Items, m.cheapest)
+	m.sets, m.setPieces = indexSets(dp.ArmorSets, m.gear)
 	m.arrows = indexArrows(dp.Items)
 	m.prices = dp.Prices
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
