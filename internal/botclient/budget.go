@@ -11,8 +11,9 @@ const (
 	// spellbooks, the Restock rows, the shots, the HP potion and Scrolls
 	// of Escape, the arrows, then the Extra supplies.
 	tierSupplies tier = iota
-	// tierGear is the gear goal and the other upgrades (gearWants), above
-	// the reserve floor.
+	// tierGear is the gear goal and the other upgrades (gearWants), then
+	// the dyes of the symbols the bot draws next (dyeWants), above the
+	// reserve floor.
 	tierGear
 	// tierComfort tops the supplies up (comfortWants), above the reserve
 	// floor. A visit saving for the gear goal skips it.
@@ -24,6 +25,11 @@ const (
 type want struct {
 	buyRow
 	tier tier
+	// whole marks a row bought in full or not at all (a symbol's dyes),
+	// keep the adena its purchase leaves on top of the tier's floor (the
+	// Symbol Maker's fees).
+	whole bool
+	keep  int64
 }
 
 // reserve is the adena a shop visit never spends: ShopPolicy.KeepAdena,
@@ -51,7 +57,8 @@ func (b *Brain) floor(t tier) int64 {
 // supplies tier (the wanted spellbooks it lacks, by id, the restocks of
 // its class under their minimum, in persona order, then shotWants,
 // supplyWants, arrowWants and extraWants), then the gear tier
-// (gearWants), then, with comfort, the comfort tier (comfortWants).
+// (gearWants, then dyeWants), then, with comfort, the comfort tier
+// (comfortWants).
 func (b *Brain) wants(comfort bool) []want {
 	p := &b.persona.Shop
 	var out []want
@@ -83,6 +90,10 @@ func (b *Brain) wants(comfort bool) []want {
 	add(tierSupplies, b.arrowWants())
 	add(tierSupplies, b.extraWants())
 	add(tierGear, b.gearWants())
+	dyes, fee := b.dyeWants()
+	for _, r := range dyes {
+		out = append(out, want{buyRow: r, tier: tierGear, whole: true, keep: fee})
+	}
 	if comfort {
 		add(tierComfort, b.comfortWants())
 	}
@@ -114,7 +125,8 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 // the adena past the tier's floor allow; of the gear, the first piece per
 // slot, a bow followed by its arrows (arrowRow) unless already wanted, and
 // a piece of the planned set (gearGoal) only with the rest of the set
-// still paid at its cheapest base price, wherever it is sold. The
+// still paid at its cheapest base price, wherever it is sold; a whole row
+// in full only, leaving its keep. The
 // comfort tier is skipped while the visit saves for the gear goal, or in
 // the grade jump's window for the jump goal (jumpGoal, saves), and tops up
 // nothing an earlier row bought.
@@ -165,8 +177,8 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 		if it.Count > 0 {
 			n = min(n, int64(it.Count))
 		}
-		n = min(n, (int64(l.Money)-spent-b.floor(t)-rest)/int64(it.Price))
-		if n < 1 {
+		n = min(n, (int64(l.Money)-spent-b.floor(t)-rest-w.keep)/int64(it.Price))
+		if n < 1 || w.whole && n < int64(w.count) {
 			continue
 		}
 		bought[slot] = true
@@ -250,8 +262,9 @@ func (b *Brain) comfortWants() []buyRow {
 
 // inKeepSet reports whether template id is in the loadout's keep set: what
 // the bot buys beyond its trip targets and never sells. The Scroll of
-// Escape is, the trip home, and the build's buff potion
-// (GearClass.BuffPotion); the planned dyes (#179) join them.
+// Escape is, the trip home, the build's buff potion
+// (GearClass.BuffPotion), and the dyes of the symbols the bot draws next
+// until they are drawn (plannedDye).
 func (b *Brain) inKeepSet(id int32) bool {
-	return id == scrollOfEscape || id != 0 && id == b.gearClass().BuffPotion
+	return id == scrollOfEscape || id != 0 && id == b.gearClass().BuffPotion || b.plannedDye(id)
 }

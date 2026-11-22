@@ -50,6 +50,17 @@ type World struct {
 	Ground map[int32]GroundItem
 	// Recipes is the bot's recipe book.
 	Recipes RecipeBook
+	// Symbols are the bot's dye symbols (HennaInfo).
+	Symbols Symbols
+}
+
+// Symbols are the bot's dye symbols as the last HennaInfo told them: the
+// slots its class has and the symbols worn, in slot order. Known is set
+// once a HennaInfo came (at login, a class change, a draw or a removal).
+type Symbols struct {
+	Known    bool
+	MaxSlots int32
+	Worn     []WornSymbol
 }
 
 // SelfState is the bot's own character.
@@ -435,6 +446,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyGround(ev)
 	case RecipeBookItemList:
 		w.Recipes.apply(e)
+	case HennaInfo:
+		w.Symbols = Symbols{Known: true, MaxSlots: e.MaxSlots, Worn: e.Worn}
 	}
 }
 

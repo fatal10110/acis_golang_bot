@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<list>
+	<henna symbolId="1" dyeId="4445" price="37000" STR="1" CON="-3" classes="1;4;7;11;15;19;22;26;29;32;35;39;42;45;47;50;54;56"/>
+	<henna symbolId="8" dyeId="4452" price="37000" INT="1" WIT="-3" classes="1;4;7;11;19;22;26;32;35;39;45;47;54;56"/>
+	<henna symbolId="10" dyeId="4454" price="37000" MEN="1" WIT="-3" classes="11;15;26;29;39;42;50"/>
+	<henna symbolId="46" dyeId="4490" STR="0" classes="16;30"/>
+</list>

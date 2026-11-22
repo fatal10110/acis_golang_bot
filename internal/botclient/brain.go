@@ -185,6 +185,8 @@ type Brain struct {
 	trip   travelTrip
 	// class is the class master visit (rule 9 errand "classchange").
 	class classVisit
+	// dyes is the Symbol Maker visit (rule 9 errand "dyes").
+	dyes dyeVisit
 	// supplyTrip is the farmer's trip home to restock (rule "supply").
 	supplyTrip supplyTrip
 	// prep is the town preparation gate.
@@ -412,6 +414,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.warehouseEvent(ev, now)
 			b.recipeEvent(ev, now)
 			b.craftEvent(ev, now)
+			b.dyeRefused(e.ID, now)
 		case ExAutoSoulShot:
 			if e.Enabled {
 				delete(b.shotOff, e.TemplateID)
@@ -500,6 +503,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.tripPage(e, now)
 			b.newbiePage(e)
 			b.classPage(e)
+			b.dyePage(e)
 			b.shopEvent(ev)
 			b.warehouseEvent(ev, now)
 		case AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
@@ -507,6 +511,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case CreatureSay:
 			b.heard(e, now)
 		case BuyList, SellList, ItemList, InventoryUpdate:
+			b.dyeSettled()
 			b.shopEvent(ev)
 			b.marketEvent(ev)
 			b.warehouseEvent(ev, now)
@@ -516,6 +521,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.recipeEvent(ev, now)
 		case RecipeItemMakeInfo:
 			b.craftEvent(ev, now)
+		case HennaEquipList:
+			b.dyeList(e)
+		case HennaInfo:
+			b.dyeAnswered()
 		case PrivateStoreManageListSell:
 			b.storeManageList(e)
 		case PrivateStoreListSell:
@@ -546,7 +555,7 @@ func salient(ev Event, self int32) bool {
 	case TeleportToLocation:
 		return e.ObjectID == self
 	case MyTargetSelected, AskJoinParty, AskJoinPledge, ConfirmDlg, NpcHtmlMessage, AcquireSkillList, AcquireSkillInfo, AcquireSkillDone, BuyList, SellList,
-		PrivateStoreManageListSell:
+		PrivateStoreManageListSell, HennaEquipList:
 		return true
 	case SendTradeRequest, TradeStart, TradeOwnAdd, TradeOtherAdd, TradePressOtherOk:
 		return true
@@ -766,6 +775,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.class.sent(a, now)
+	b.dyes.sent(a, now)
 	b.shop.sent(a, now)
 	b.market.sent(a, now)
 	b.wh.sent(a, now)

@@ -45,6 +45,8 @@ type Datapack struct {
 	Recipes map[int32]Recipe
 	// ArmorSets maps an armor set's chest template id to the set.
 	ArmorSets map[int32]ArmorSet
+	// Hennas maps a dye symbol id to its symbol.
+	Hennas map[int32]Henna
 	// WaterZones are the water zones in file order: where a player swims.
 	WaterZones []WaterZone
 }
@@ -52,7 +54,7 @@ type Datapack struct {
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
 // and skills/*.xml file directly under it, its teleports.xml, its
-// buyLists.xml, its recipes.xml, its armorSets.xml and its
+// buyLists.xml, its recipes.xml, its armorSets.xml, its hennas.xml and its
 // zones/WaterZone.xml. xmlDir is configuration; the bot ships no datapack of its
 // own.
 func Load(xmlDir string) (*Datapack, error) {
@@ -88,6 +90,10 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
+	hennas, err := LoadHennas(filepath.Join(xmlDir, "hennas.xml"))
+	if err != nil {
+		return nil, err
+	}
 	water, err := LoadWaterZones(filepath.Join(xmlDir, "zones", "WaterZone.xml"))
 	if err != nil {
 		return nil, err
@@ -95,7 +101,7 @@ func Load(xmlDir string) (*Datapack, error) {
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
 		Items: items, EtcItems: etc, Prices: prices, Skills: skills, Recipes: recipes,
-		ArmorSets: armorSets, WaterZones: water,
+		ArmorSets: armorSets, Hennas: hennas, WaterZones: water,
 	}, nil
 }
 
