@@ -89,8 +89,9 @@ func (p *Planner) stepChainOK(s *scratch, a, b location.Location) bool {
 // rounded (X, Y, Z) state the step chain can reach, starting before the
 // stretch and stopping past it. From each state, every rounded point that a
 // step of at most Lmax can reach must pass CanMove with the Z the chain
-// carries, Height(next, Z + 2*CellHeight); a state within Lmax of b must also
-// pass CanMove onto b itself (the final step lands on the destination).
+// carries, Height(next, Z + 2*CellHeight), the state's own point included (a
+// short update rounds back onto it); a state within Lmax of b must also pass
+// CanMove onto b itself (the final step lands on the destination).
 //
 // Reachable points are rounded points within bandRadius of the line, at most
 // Lmax + stepSlack ahead, and between the state and b on each axis (the chain
@@ -133,6 +134,11 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 			continue // past the stretch: the corridor test holds from here
 		}
 		if hypot(b.X-cx, b.Y-cy) <= p.Lmax && !p.Engine.CanMove(cx, cy, cz, b.X, b.Y, bz) {
+			return false
+		}
+		// A short update rounds back onto cur itself, and the chain re-floors
+		// it like any other step: a layer just above cz wins and blocks.
+		if sz := p.Engine.Height(cx, cy, cz+2*block.CellHeight); !p.Engine.CanMove(cx, cy, cz, cx, cy, int(sz)) {
 			return false
 		}
 		first := sort.Search(len(s.band), func(i int) bool { return s.band[i].t >= ct-stepSlack })
