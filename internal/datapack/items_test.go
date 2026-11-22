@@ -30,13 +30,17 @@ func TestLoadItems(t *testing.T) {
 			ID: 352, Name: "Brigandine Tunic", Type: "Armor", BodyPart: "chest", Kind: "HEAVY", Grade: 1, Price: 299000,
 			Stats: Stats{PDef: 103}, Enchants: []string{"pDef"},
 		},
+		629: {
+			ID: 629, Name: "Kite Shield", Type: "Armor", BodyPart: "lhand", Grade: 1, Price: 78400,
+			Stats: Stats{SDef: 142}, Enchants: []string{"sDef"},
+		},
 	}
 	if !reflect.DeepEqual(dp.Items, want) {
 		t.Errorf("Items = %+v, want %+v", dp.Items, want)
 	}
 	// Every priced template, the steel powder too; never the untradable
 	// dagger, nor 6611 and 6702 priced 0.
-	if want := map[int32]int32{1: 768, 6: 138, 17: 2, 49: 2650, 398: 74600, 1664: 80, 287: 13100000, 352: 299000, 1061: 330}; !reflect.DeepEqual(dp.Prices, want) {
+	if want := map[int32]int32{1: 768, 6: 138, 17: 2, 49: 2650, 398: 74600, 1664: 80, 287: 13100000, 352: 299000, 629: 78400, 1061: 330}; !reflect.DeepEqual(dp.Prices, want) {
 		t.Errorf("Prices = %v, want %v", dp.Prices, want)
 	}
 }

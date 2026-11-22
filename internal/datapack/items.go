@@ -51,9 +51,10 @@ type Item struct {
 // (<baseadd>, armor), the phases the server runs before it scales a stat by
 // level and attributes (skill/effect/mod.go Op.order). The flat <add>,
 // <sub> and <mul> modifiers that run after that scaling are not read; in
-// the shipped datapack only pet weapons <add> to these stats.
+// the shipped datapack only pet weapons <add> to these stats. SDef is a
+// shield's defense, which counts on a hit the shield blocks.
 type Stats struct {
-	PAtk, MAtk, PDef, MDef, PAtkSpd, RCrit float64
+	PAtk, MAtk, PDef, MDef, PAtkSpd, RCrit, SDef float64
 }
 
 // field returns the field of s that the stat named name (as the files spell
@@ -72,6 +73,8 @@ func (s *Stats) field(name string) *float64 {
 		return &s.PAtkSpd
 	case "rCrit":
 		return &s.RCrit
+	case "sDef":
+		return &s.SDef
 	}
 	return nil
 }

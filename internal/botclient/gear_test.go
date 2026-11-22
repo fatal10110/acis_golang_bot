@@ -35,25 +35,25 @@ const (
 // gearTemplates are the templates of the gear tests, and some the bot
 // never wears.
 var gearTemplates = map[int32]datapack.Item{
-	shortSword:     {ID: shortSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 768},
-	longSword:      {ID: longSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 136000},
-	falchion:       {ID: falchion, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 244000},
-	twoHanded:      {ID: twoHanded, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGSWORD", Grade: 1, Price: 967000},
-	artisansSword:  {ID: artisansSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 1, Price: 644000},
-	squireShirt:    {ID: squireShirt, Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Price: 26},
-	squirePants:    {ID: squirePants, Type: "Armor", BodyPart: "legs", Kind: "LIGHT", Price: 6},
-	leatherShirt22: {ID: leatherShirt22, Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Price: 2430},
-	bronzePlate:    {ID: bronzePlate, Type: "Armor", BodyPart: "chest", Kind: "HEAVY", Price: 49200},
-	woodenGaiters:  {ID: woodenGaiters, Type: "Armor", BodyPart: "legs", Kind: "LIGHT", Price: 4970},
-	salamanderMail: {ID: salamanderMail, Type: "Armor", BodyPart: "fullarmor", Kind: "LIGHT", Grade: 1, Price: 429000},
-	leatherHelmet:  {ID: leatherHelmet, Type: "Armor", BodyPart: "head", Price: 10200},
-	leatherBoots:   {ID: leatherBoots, Type: "Armor", BodyPart: "feet", Grade: 1, Price: 20900},
-	club:           {ID: club, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Price: 768},
-	apprenticeWand: {ID: apprenticeWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138},
-	wandOfAdept:    {ID: wandOfAdept, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 25500},
+	shortSword:     {ID: shortSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 768, Stats: datapack.Stats{PAtk: 8, MAtk: 6, PAtkSpd: 379}},
+	longSword:      {ID: longSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 136000, Stats: datapack.Stats{PAtk: 24, MAtk: 17, PAtkSpd: 379}},
+	falchion:       {ID: falchion, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 244000, Stats: datapack.Stats{PAtk: 31, MAtk: 21, PAtkSpd: 379}},
+	twoHanded:      {ID: twoHanded, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGSWORD", Grade: 1, Price: 967000, Stats: datapack.Stats{PAtk: 78, MAtk: 39, PAtkSpd: 325}, Enchants: []string{"pAtk", "mAtk"}},
+	artisansSword:  {ID: artisansSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 1, Price: 644000, Stats: datapack.Stats{PAtk: 51, MAtk: 32, PAtkSpd: 379}, Enchants: []string{"pAtk", "mAtk"}},
+	squireShirt:    {ID: squireShirt, Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Price: 26, Stats: datapack.Stats{PDef: 33}},
+	squirePants:    {ID: squirePants, Type: "Armor", BodyPart: "legs", Kind: "LIGHT", Price: 6, Stats: datapack.Stats{PDef: 20}},
+	leatherShirt22: {ID: leatherShirt22, Type: "Armor", BodyPart: "chest", Kind: "LIGHT", Price: 2430, Stats: datapack.Stats{PDef: 43}},
+	bronzePlate:    {ID: bronzePlate, Type: "Armor", BodyPart: "chest", Kind: "HEAVY", Price: 49200, Stats: datapack.Stats{PDef: 68}},
+	woodenGaiters:  {ID: woodenGaiters, Type: "Armor", BodyPart: "legs", Kind: "LIGHT", Price: 4970, Stats: datapack.Stats{PDef: 29}},
+	salamanderMail: {ID: salamanderMail, Type: "Armor", BodyPart: "fullarmor", Kind: "LIGHT", Grade: 1, Price: 429000, Stats: datapack.Stats{PDef: 136}, Enchants: []string{"pDef"}},
+	leatherHelmet:  {ID: leatherHelmet, Type: "Armor", BodyPart: "head", Price: 10200, Stats: datapack.Stats{PDef: 23}},
+	leatherBoots:   {ID: leatherBoots, Type: "Armor", BodyPart: "feet", Grade: 1, Price: 20900, Stats: datapack.Stats{PDef: 19}, Enchants: []string{"pDef"}},
+	club:           {ID: club, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Price: 768, Stats: datapack.Stats{PAtk: 8, MAtk: 6, PAtkSpd: 379}},
+	apprenticeWand: {ID: apprenticeWand, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 138, Stats: datapack.Stats{PAtk: 5, MAtk: 7, PAtkSpd: 379}},
+	wandOfAdept:    {ID: wandOfAdept, Type: "Weapon", BodyPart: "rhand", Kind: "BLUNT", Magical: true, Price: 25500, Stats: datapack.Stats{PAtk: 11, MAtk: 13, PAtkSpd: 379}},
 	// A necklace and a shield.
-	906: {ID: 906, Type: "Armor", BodyPart: "neck", Price: 1},
-	18:  {ID: 18, Type: "Armor", BodyPart: "lhand", Price: 1},
+	906: {ID: 906, Type: "Armor", BodyPart: "neck", Price: 1, Stats: datapack.Stats{MDef: 18}},
+	18:  {ID: 18, Type: "Armor", BodyPart: "lhand", Price: 1, Stats: datapack.Stats{SDef: 47}},
 	// Never worn: a hero weapon, a shadow weapon, a fishing rod, a pet's
 	// armor and a priceless weapon.
 	6611: {ID: 6611, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 5, Price: 1, Conditional: true},
@@ -110,7 +110,7 @@ func TestIndexGear(t *testing.T) {
 	if got := slices.Sorted(maps.Keys(gear)); !reflect.DeepEqual(got, slices.Sorted(slices.Values(want))) {
 		t.Errorf("gear = %v, want %v", got, want)
 	}
-	if g := gear[twoHanded]; g != (gearItem{part: partLRHand, kind: "BIGSWORD", grade: 1, price: 967000}) {
+	if g := gear[twoHanded]; g.part != partLRHand || g.kind != "BIGSWORD" || g.grade != 1 || g.tmpl.ID != twoHanded {
 		t.Errorf("two-handed sword = %+v", g)
 	}
 	if g := gear[apprenticeWand]; g.kind != "BLUNT/MAGIC" {
@@ -119,7 +119,7 @@ func TestIndexGear(t *testing.T) {
 	if g := gear[leatherHelmet]; g.kind != "" || g.part != partHead {
 		t.Errorf("helmet = %+v, want a head piece of any kind", g)
 	}
-	// By slot, then price, best first.
+	// By slot, then price; gearCandidates ranks them by score.
 	if wantSold := []int32{falchion, longSword, squireShirt, woodenGaiters, leatherHelmet}; !reflect.DeepEqual(sold, wantSold) {
 		t.Errorf("shopGear = %v, want %v", sold, wantSold)
 	}
@@ -145,7 +145,7 @@ func TestGearBeats(t *testing.T) {
 		{name: "D grade without expertise", worn: std, id: artisansSword},
 		{name: "D grade with expertise", worn: std, expertise: 1, id: artisansSword, want: true},
 		{name: "MaxGrade caps expertise", worn: std, expertise: 1, maxGrade: -1, id: artisansSword},
-		{name: "enchanted sword kept", worn: []Item{{ObjectID: 201, TemplateID: shortSword, Equipped: true, BodySlot: partRHand, Enchant: 3}}, id: longSword},
+		{name: "enchanted sword under a better one", worn: []Item{{ObjectID: 201, TemplateID: shortSword, Equipped: true, BodySlot: partRHand, Enchant: 3}}, id: longSword, want: true},
 		{name: "unknown worn sword kept", worn: []Item{{ObjectID: 201, TemplateID: 2369, Equipped: true, BodySlot: partRHand}}, id: longSword},
 		{name: "unarmed", worn: []Item{wornShirt}, id: longSword},
 		{name: "physical blunt over a wand", worn: []Item{wand}, id: club},
@@ -154,7 +154,7 @@ func TestGearBeats(t *testing.T) {
 		{name: "heavy over light", worn: std, id: bronzePlate},
 		{name: "better shirt", worn: std, id: leatherShirt22, want: true},
 		{name: "full armor over shirt and pants", worn: std, expertise: 1, id: salamanderMail, want: true},
-		{name: "full armor over enchanted pants", worn: []Item{wornSword, wornShirt, {ObjectID: 203, TemplateID: squirePants, Equipped: true, BodySlot: partLegs, Enchant: 1}}, expertise: 1, id: salamanderMail},
+		{name: "full armor over enchanted pants", worn: []Item{wornSword, wornShirt, {ObjectID: 203, TemplateID: squirePants, Equipped: true, BodySlot: partLegs, Enchant: 1}}, expertise: 1, id: salamanderMail, want: true},
 		{name: "legs under full armor", worn: []Item{wornSword, mail}, expertise: 1, id: woodenGaiters},
 		{name: "bare body takes the legs' type", worn: []Item{wornPants}, id: leatherShirt22, want: true},
 		{name: "bare body, other type", worn: []Item{wornPants}, id: bronzePlate},
