@@ -127,6 +127,9 @@ type Persona struct {
 	// ClassChange is when and to what the bot changes class at the class
 	// master (rule 9 errand "classchange").
 	ClassChange ClassChangePolicy
+	// Dyes is which dye symbols the bot wears and where it draws them
+	// (rule 9 errand "dyes").
+	Dyes DyePolicy
 	// Travel is how the bot travels by gatekeeper to a spot out of walking
 	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
 	// errand "travel").
@@ -219,6 +222,7 @@ func DefaultPersona() Persona {
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
 		ClassChange:    defaultClassChangePolicy(),
+		Dyes:           defaultDyePolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
 		Market:         defaultMarketPolicy(),
@@ -302,6 +306,10 @@ const (
 	// actAnnounce a finished GM order's clan chat line (craftorder.go).
 	actAnswer
 	actAnnounce
+	// actHennaEquip draws a dye symbol, actHennaUnequip removes one
+	// (dyes.go).
+	actHennaEquip
+	actHennaUnequip
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -333,7 +341,10 @@ const (
 // RequestPrivateStoreBuy has none either: a store visit sends one per
 // PrivateStoreListSell it opened, and MarketPolicy.Cooldown spaces the
 // visits to one store. RequestRecipeBookOpen has none either: the recipe errand sends one per
-// page it waits for (recipeReplyTimeout).
+// page it waits for (recipeReplyTimeout). RequestHennaEquip and
+// RequestHennaUnequip have none either (network/henna.go): the dye errand
+// sends one per answer it waits for (dyeReplyTimeout), and a refused or
+// unanswered one ends the visit for DyePolicy.RetryAfter.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -395,7 +406,8 @@ type rule struct {
 // trainer), "gear" (wearing
 // better gear, ahead of the shop so a bought piece is worn before the next
 // sale), "market" (other players' sell stores, ahead of the shop so a
-// store's cheaper offer is taken first), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
+// store's cheaper offer is taken first), "shop" (a merchant's buy and sell windows), "dyes" (drawing the
+// dye symbols at a Symbol Maker, after the shop that buys their dyes), "warehouse" (the clan
 // warehouse errand), "recipe" (recipe learning), "craft" (the clan
 // crafter's cycle, after the two errands that run its warehouse requests and
 // its recipe scrolls; it holds the turn while a cycle runs), "follow" (the slot behind the party leader), "newbie" (the Newbie Guide's buffs), "travel"
@@ -444,6 +456,7 @@ var playRules = []rule{
 	{"gear", (*Brain).ruleGear},
 	{"market", (*Brain).ruleMarket},
 	{"shop", (*Brain).ruleShop},
+	{"dyes", (*Brain).ruleDyes},
 	{"warehouse", (*Brain).ruleWarehouse},
 	{"recipe", (*Brain).ruleRecipe},
 	{"craft", (*Brain).ruleCraft},

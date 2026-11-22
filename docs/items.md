@@ -580,26 +580,42 @@ stores.
     the starting-class check in `character()` is skipped once the bot has a name. The one-shot
     `pin` report (`session.go`), which fires once per run, is not used for this.
 - **Dyes:**
-  1. **Buy.** The dyes go on the shop errand's list from merchant buylists, under the budget's gear
-     tier: 10 per symbol plus the fee.
-  2. **Draw.** The bot walks to a Symbol Maker, as a player does, although the server does not
-     require one. There it sends `RequestHennaItemList` and waits for the list, then
-     `RequestHennaEquip` per symbol into its free slots. The list shows only symbols whose dye the
-     bot carries, so the dyes are bought first. One request per answer (`SymbolAdded` or a refusal
-     message), waited for 5 s: the server drops an unknown symbol in silence
-     (`network/henna.go:62-66`). A missing dye and a class refusal answer the same CantDrawSymbol,
-     and the adena goes before the dyes, so the bot checks dyes, class list and adena itself
-     before it sends. On a timeout the visit ends and backs off for `WalkStuckFor`. Bypass links
-     are paced by `bypassGap`.
+  1. **Buy.** The dyes go on the shop errand's list from merchant buylists, after the gear in the
+     budget's gear tier: 10 per symbol, in full or not at all, with the draw fees (and the fees of
+     the removals ahead) left above the tier's floor. A symbol is planned only while the adena
+     pays both its dyes and its fee. Bought dyes join the keep set until they are drawn. They
+     count toward neither the preparation gate nor the run-out trigger.
+  2. **Draw.** The bot walks to a Symbol Maker and talks to it, as a player does, although the
+     server does not require one. It follows the page's `Draw` link (`npc_<id>_Draw`, a bypass
+     answered by `HennaEquipList`, `npc/folk_bypass.go`), as the client does: the server opens the
+     draw window only from the dialog, and `RequestHennaItemList` only asks for it again, so the
+     bot never sends it. Then it sends `RequestHennaEquip` per symbol into its free slots. The list
+     shows only symbols whose dye the bot carries, so the dyes are bought first. One request per
+     answer, waited for 5 s (`dyeReplyTimeout`): a draw's answer is `HennaInfo` and then the
+     `InventoryUpdate` behind it (the server batches inventory changes every 333 ms,
+     `task/inventoryupdates.go`), so the next draw sees the dyes and adena the last one spent; a
+     refusal is CantDrawSymbol, SymbolsFull, YouNotEnoughAdena or NotEnoughItems. The server drops
+     an unknown symbol in silence (`network/henna.go:62-66`). A missing dye and a class refusal
+     answer the same CantDrawSymbol, and the adena goes before the dyes, so the bot checks the
+     class list (`hennas.xml`, read into the travel map), its 10 dyes and the price past the
+     reserve before it sends. A refusal, a timeout, a page without the link, a window without the
+     symbol, or a maker not found ends the visit and backs off for `Dyes.RetryAfter` (default
+     `visitShunFor`, 10 min). The `Draw` link is paced by `bypassGap`; the henna requests have no
+     server gate and go one per answer.
   3. **At the second profession.** First-profession dyes (`hennas.xml` symbols 1-36) list only
      first-profession ids, so after the change at 40 they stay in their slots but add nothing
-     (`model/henna/list.go` `recalculateLocked`). The bot removes them (`RequestHennaUnequip`,
-     fee: a fifth of the price, 5 dyes back), then draws the second-profession rows (37+) into all
-     3 slots. It uses the same one-request-per-answer pacing and 5 s timeout.
+     (`model/henna/list.go` `recalculateLocked`; `HennaInfo` reports their active id as 0). The
+     bot removes them (`RequestHennaUnequip`, fee: a fifth of the price, 5 dyes back), then draws
+     the second-profession rows (37+) into all 3 slots. It uses the same one-request-per-answer
+     pacing and 5 s timeout. A worn active symbol off the table is left in place.
   4. **Which dyes.** A persona table per profession that respects each row's trade (+1 of one stat
      for -1 to -3 of another, by price) and its class list. For example: warriors STR+1 CON-3 and
      DEX+1 CON-3; nukers INT+1 WIT-3 or WIT+1 INT-3; healers (Cleric 15, Oracle 29, Shillien
      Oracle 42, Shaman 50), whom the INT/WIT rows exclude, MEN+1 WIT-3 (`hennas.xml:12`).
+     Shipped default (`Dyes.Symbols`, by class id, drawn in order): first-profession fighters 1
+     and 6, nukers 8 twice, healers 10 twice (37000 each); second-profession fighters 37, 42, 37,
+     nukers 44 three times, healers 46 three times (87000 each). Each row is checked against the
+     shipped `hennas.xml` class lists and prices (`TestDefaultDyeTableShipped`).
 
 ### 10. Enchant to the safe level (backlog)
 

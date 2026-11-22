@@ -364,7 +364,7 @@ func (b *Brain) storeReady(now time.Time) bool {
 	if w.Prompts.Trade.Pending(now) || w.Trade.Open() {
 		return false
 	}
-	if b.shop.v.active() || b.trip.v.active() || b.newbie.v.active() || b.class.v.active() || b.train.npc != 0 {
+	if b.shop.v.active() || b.trip.v.active() || b.newbie.v.active() || b.class.v.active() || b.dyes.v.active() || b.train.npc != 0 {
 		return false
 	}
 	if b.called() {

@@ -179,6 +179,19 @@ const (
 	opGameRequestRecipeItemMakeSelf = 0xaf
 )
 
+// Dye symbols, both directions: HennaEquipList (serverpackets/henna.go),
+// HennaInfo (serverpackets/hennainfo.go), and RequestHennaEquip and
+// RequestHennaUnequip (clientpackets/henna.go). The draw window opens from
+// the Symbol Maker's Draw link (a bypass), so RequestHennaItemList is not
+// sent.
+const (
+	opGameHennaEquipList = 0xe2
+	opGameHennaInfo      = 0xe4
+
+	opGameRequestHennaEquip   = 0xbc
+	opGameRequestHennaUnequip = 0xbf
+)
+
 // Questions and slash commands, both directions: ConfirmDlg
 // (serverpackets/confirmdlg.go), DlgAnswer (clientpackets/wiresafe.go,
 // dlganswer.go) and RequestUserCommand (clientpackets/usercommand.go).
