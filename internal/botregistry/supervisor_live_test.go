@@ -83,17 +83,20 @@ func TestKeepProgress(t *testing.T) {
 		name      string
 		st        botclient.Status
 		wantLevel int32
+		wantClass int32
 		wantPos   *Position
 	}{
-		{"never entered keeps the stored ones", botclient.Status{State: botclient.StateStopped}, 7, old},
-		{"entered copies level and position", botclient.Status{Level: 12, Position: botclient.Point{X: -5, Y: 6, Z: -7}}, 12, &Position{X: -5, Y: 6, Z: -7}},
+		{"never entered keeps the stored ones", botclient.Status{State: botclient.StateStopped, ClassID: 15}, 7, 10, old},
+		{"entered copies level, class and position", botclient.Status{Level: 12, ClassID: 10, Position: botclient.Point{X: -5, Y: 6, Z: -7}}, 12, 10, &Position{X: -5, Y: 6, Z: -7}},
+		{"a class changed at the master is kept", botclient.Status{Level: 20, ClassID: 15, Position: botclient.Point{X: 1}}, 20, 15, &Position{X: 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := Bot{Level: 7, Position: old}
+			class := int32(10)
+			b := Bot{Level: 7, Class: &class, Position: old}
 			keepProgress(&b, tt.st)
-			if b.Level != tt.wantLevel || *b.Position != *tt.wantPos {
-				t.Fatalf("level %d position %+v, want %d %+v", b.Level, *b.Position, tt.wantLevel, *tt.wantPos)
+			if b.Level != tt.wantLevel || *b.Class != tt.wantClass || *b.Position != *tt.wantPos {
+				t.Fatalf("level %d class %d position %+v, want %d %d %+v", b.Level, *b.Class, *b.Position, tt.wantLevel, tt.wantClass, *tt.wantPos)
 			}
 		})
 	}

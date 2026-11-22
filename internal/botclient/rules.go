@@ -124,6 +124,9 @@ type Persona struct {
 	// Newbie is when the bot asks a Newbie Guide for the newbie buffs
 	// (rule 9 errand "newbie").
 	Newbie NewbiePolicy
+	// ClassChange is when and to what the bot changes class at the class
+	// master (rule 9 errand "classchange").
+	ClassChange ClassChangePolicy
 	// Travel is how the bot travels by gatekeeper to a spot out of walking
 	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
 	// errand "travel").
@@ -215,6 +218,7 @@ func DefaultPersona() Persona {
 		AssistMax:      1500 * time.Millisecond,
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
+		ClassChange:    defaultClassChangePolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
 		Market:         defaultMarketPolicy(),
@@ -386,7 +390,9 @@ type rule struct {
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
 // the party, ahead of fighting so a support in combat still heals;
-// "assist" (the leader's target), "train" (the trainer), "gear" (wearing
+// "assist" (the leader's target), "classchange" (the class master, ahead
+// of the trainer so the new class learns its skills there), "train" (the
+// trainer), "gear" (wearing
 // better gear, ahead of the shop so a bought piece is worn before the next
 // sale), "market" (other players' sell stores, ahead of the shop so a
 // store's cheaper offer is taken first), "shop" (a merchant's buy and sell windows), "warehouse" (the clan
@@ -433,6 +439,7 @@ var playRules = []rule{
 	{"loot", (*Brain).ruleLoot},
 	{"store", (*Brain).ruleStore},
 	{"assist", (*Brain).ruleAssist},
+	{"classchange", (*Brain).ruleClassChange},
 	{"train", (*Brain).ruleTrain},
 	{"gear", (*Brain).ruleGear},
 	{"market", (*Brain).ruleMarket},
