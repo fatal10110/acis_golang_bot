@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -223,6 +224,10 @@ type travelTrip struct {
 	dest destination
 	// endedAt is when the last trip ended, zero before one.
 	endedAt time.Time
+	// onward is how many teleports the planned path takes after this
+	// trip's: on landing the next plan, which may take at most that many,
+	// is due at once rather than after TravelPolicy.Gap (planTrip).
+	onward int
 	// shunned are the gatekeepers that took the bot nowhere, by index in
 	// the travel map, until a time.
 	shunned map[int]time.Time
@@ -240,7 +245,7 @@ func (tr *travelTrip) end(now time.Time, shunFor time.Duration) {
 		}
 		tr.shunned[tr.gk] = now.Add(shunFor)
 	}
-	tr.v, tr.step, tr.dest, tr.endedAt = npcVisit{}, tripTalk, destination{}, now
+	tr.v, tr.step, tr.dest, tr.endedAt, tr.onward = npcVisit{}, tripTalk, destination{}, now, 0
 }
 
 // sent records a packet of the trip that went out at now.
@@ -332,12 +337,16 @@ func (b *Brain) tripPage(ev NpcHtmlMessage, now time.Time) {
 
 // tripTeleported ends the trip on the bot's own loading-screen teleport:
 // its arrival, or a teleport of another cause that left the gatekeeper
-// behind. The spot rule picks again at once.
+// behind. The spot rule picks again at once, and plans the path's next
+// teleport, if any, without waiting out the gap.
 func (b *Brain) tripTeleported(now time.Time) {
-	if !b.trip.v.active() {
+	tr := &b.trip
+	if !tr.v.active() {
 		return
 	}
-	b.trip.end(now, 0)
+	onward := tr.onward
+	tr.end(now, 0)
+	tr.onward = onward
 	b.spot.retryAt = time.Time{}
 }
 
@@ -375,6 +384,8 @@ type tripLabel struct {
 	p     navPoint
 	cost  float64
 	price int32
+	// hops counts the path's teleports.
+	hops int
 	// gk and dest are the path's first teleport, gk -1 before one.
 	gk   int
 	dest destination
@@ -390,11 +401,20 @@ type tripLabel struct {
 // the path's teleports together no more than the bot carries and the
 // persona allows. The trip is the cheapest path's first teleport: once it
 // lands the spot rule picks again, and plans the next teleport, if any,
-// from there.
+// from there at once (travelTrip.onward), on a path of no more teleports
+// than the rest of the last, so a chain of trips ends. Labels are kept per
+// node while no other there is as cheap, as dear and as short in teleports,
+// so the budget never prunes the only path within it.
 func (b *Brain) planTrip(here navPoint, now time.Time) {
 	m, tr, p, s := b.cfg.Travel, &b.trip, &b.persona.Travel, &b.world.Self
-	if m == nil || tr.v.active() || p.MaxPrice <= 0 || (!tr.endedAt.IsZero() && now.Sub(tr.endedAt) < p.Gap) {
+	onward := tr.onward
+	if m == nil || tr.v.active() || p.MaxPrice <= 0 || (onward == 0 && !tr.endedAt.IsZero() && now.Sub(tr.endedAt) < p.Gap) {
 		return
+	}
+	tr.onward = 0
+	maxHops := math.MaxInt
+	if onward > 0 {
+		maxHops = onward
 	}
 	var budget int32
 	if it, ok := b.world.Inventory.ByTemplate(adenaID); ok {
@@ -411,14 +431,15 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 		ok bool
 	}
 	gks := make(map[int]located)
-	best := make(map[tripKey]float64)
-	done := make(map[tripKey]bool)
+	labels := make(map[tripKey][]tripLabel)
 	open := []tripLabel{{key: tripKey{kind: tripHere}, p: here, gk: -1}}
 	push := func(l tripLabel) {
-		if c, ok := best[l.key]; ok && c <= l.cost {
-			return
+		for _, o := range labels[l.key] {
+			if o.cost <= l.cost && o.price <= l.price && o.hops <= l.hops {
+				return
+			}
 		}
-		best[l.key] = l.cost
+		labels[l.key] = append(labels[l.key], l)
 		open = append(open, l)
 	}
 	for expanded := 0; len(open) > 0 && expanded < tripExpand; {
@@ -431,18 +452,17 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 		l := open[k]
 		open[k] = open[len(open)-1]
 		open = open[:len(open)-1]
-		if done[l.key] {
-			continue
-		}
-		done[l.key] = true
 		expanded++
 		switch l.key.kind {
 		case tripSpot:
 			g := &m.gatekeepers[l.gk]
 			tr.v = npcVisit{npcID: g.npcID, at: g.at}
-			tr.step, tr.gk, tr.dest = tripTalk, l.gk, l.dest
+			tr.step, tr.gk, tr.dest, tr.onward = tripTalk, l.gk, l.dest, l.hops-1
 			return
 		case tripGatekeeper:
+			if l.hops >= maxHops {
+				continue
+			}
 			for _, d := range m.gatekeepers[l.key.i].dests {
 				price := l.price + d.price
 				if price > budget {
@@ -456,7 +476,7 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 				if gk < 0 {
 					gk, first = l.key.i, d
 				}
-				push(tripLabel{key: tripKey{kind: tripDestination, at: d.at}, p: dp, cost: l.cost + float64(d.price), price: price, gk: gk, dest: first})
+				push(tripLabel{key: tripKey{kind: tripDestination, at: d.at}, p: dp, cost: l.cost + float64(d.price), price: price, hops: l.hops + 1, gk: gk, dest: first})
 			}
 			continue
 		}
@@ -476,7 +496,7 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 				continue
 			}
 			if d, ok := b.navDistance(l.p, at.p); ok {
-				push(tripLabel{key: tripKey{kind: tripGatekeeper, i: gi}, p: at.p, cost: l.cost + walk(d), price: l.price, gk: l.gk, dest: l.dest})
+				push(tripLabel{key: tripKey{kind: tripGatekeeper, i: gi}, p: at.p, cost: l.cost + walk(d), price: l.price, hops: l.hops, gk: l.gk, dest: l.dest})
 			}
 		}
 		if l.key.kind == tripDestination {
@@ -502,7 +522,7 @@ func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, 
 			continue
 		}
 		if d, ok := b.navDistance(l.p, at); ok {
-			push(tripLabel{key: tripKey{kind: tripSpot, i: i}, p: at, cost: l.cost + walk(d), price: l.price, gk: l.gk, dest: l.dest})
+			push(tripLabel{key: tripKey{kind: tripSpot, i: i}, p: at, cost: l.cost + walk(d), price: l.price, hops: l.hops, gk: l.gk, dest: l.dest})
 		}
 	}
 }

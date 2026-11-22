@@ -115,12 +115,12 @@ func TestSpotPickReachable(t *testing.T) {
 	}{
 		{
 			name: "nearest across the wall: never claimed", self: Point{X: 7900},
-			spots: []datapack.Spot{testSpot("across", 8500, 0, 3, 6, 9), testSpot("west", 4000, 0, 3, 6, 9)},
+			spots: []datapack.Spot{testSpot("across", 8700, 0, 3, 6, 9), testSpot("west", 4000, 0, 3, 6, 9)},
 			want:  1,
 		},
 		{
 			name: "only across the wall: none", self: Point{X: 7900},
-			spots: []datapack.Spot{testSpot("across", 8500, 0, 3, 6, 9)},
+			spots: []datapack.Spot{testSpot("across", 8700, 0, 3, 6, 9)},
 			want:  -1,
 		},
 		{
@@ -180,5 +180,75 @@ func TestSpotTripOtherSCC(t *testing.T) {
 	b.decide(at(time.Second))
 	if b.spot.held || !b.trip.v.active() || b.trip.v.npcID != 30006 || b.trip.dest.index != 2 {
 		t.Fatalf("spot %+v trip %+v, want no spot and the trip to destination 2", b.spot, b.trip)
+	}
+}
+
+// TestSpotSnapFiltered checks that a spot centre off the bot's SCC, on the
+// wall or across it, snaps to the nearest cell inside the spot's territory
+// on the bot's side, not just to the nearest walkable cell (#158).
+func TestSpotSnapFiltered(t *testing.T) {
+	now := at(time.Second)
+	square := func(x0, x1 int32) *datapack.Territory {
+		return &datapack.Territory{Name: "t", Nodes: []datapack.Point{{X: x0, Y: 1800}, {X: x1, Y: 1800}, {X: x1, Y: 2200}, {X: x0, Y: 2200}}}
+	}
+	tests := []struct {
+		name      string
+		x         int32
+		territory *datapack.Territory
+		// claimed reports whether the bot claims the spot, at a point west
+		// of the wall.
+		claimed bool
+	}{
+		{name: "centre on the wall, territory reaching west", x: 8224, territory: square(7800, 8300), claimed: true},
+		{name: "centre across the wall, territory reaching west", x: 8300, territory: square(7800, 8400), claimed: true},
+		{name: "centre on the wall, no territory", x: 8224, claimed: true},
+		{name: "territory only on the wall and across it", x: 8224, territory: square(8200, 8600)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := testSpot("wall", tt.x, 2000, 3, 6, 9)
+			sp.Territory = tt.territory
+			b := newSpotBrain(t, 5, sp)
+			b.world.Self.move = stopAt(Point{X: 7900, Y: 2000})
+			here, ok := b.locate(Point{X: 7900, Y: 2000})
+			if !ok {
+				t.Fatal("bot off the navigation")
+			}
+			cands := b.spotCands(here, now)
+			if !tt.claimed {
+				if len(cands) != 0 {
+					t.Fatalf("candidates %+v, want none", cands)
+				}
+				return
+			}
+			if len(cands) != 1 || cands[0].at.X >= 8192 || 8192-cands[0].at.X > 100 {
+				t.Fatalf("candidates %+v, want the spot at a point just west of the wall", cands)
+			}
+			b.pickSpot(now)
+			if !b.spot.held {
+				t.Fatal("spot not claimed")
+			}
+		})
+	}
+}
+
+// TestTravelOnward checks that on a path of two teleports the first
+// landing plans the second at once, not after TravelPolicy.Gap (#158).
+func TestTravelOnward(t *testing.T) {
+	b := newTravelBrain(t, 50000)
+	b.persona.Spots.MaxTravel = 5000
+	b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+	b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+		npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+	})
+	b.decide(at(time.Second))
+	if tr := &b.trip; tr.v.npcID != 30006 || tr.dest.index != 0 || tr.onward != 1 {
+		t.Fatalf("trip %+v, want gatekeeper 30006 destination 0 with one teleport onward", b.trip)
+	}
+	b.world.Self.move = stopAt(Point{X: 6000, Y: 7000})
+	b.tripTeleported(at(2 * time.Second))
+	b.decide(at(3 * time.Second))
+	if tr := &b.trip; tr.v.npcID != 30059 || tr.dest.index != 5 || tr.onward != 0 {
+		t.Fatalf("after the first landing: trip %+v, want gatekeeper 30059 destination 5, the last teleport", b.trip)
 	}
 }

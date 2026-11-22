@@ -34,10 +34,11 @@ func gkList(obj int32, indexes ...int) string {
 // travelDest is the X of the test gatekeeper's second destination, east of
 // the split navigation's wall, and travelFar the X of the spot that fits
 // the travel brain there: in straight line well within MaxTravel of the
-// origin, but in the other SCC.
+// origin, but in the other SCC, more than spotSnap past the wall so its
+// centre never snaps to the west side.
 const (
 	travelDest = 9000
-	travelFar  = 8500
+	travelFar  = 8700
 )
 
 func testTravelMap() *TravelMap {
@@ -236,6 +237,41 @@ func TestTravelPlan(t *testing.T) {
 				})
 			},
 			wantGK: 30006, wantIndex: 0,
+		},
+		{
+			// A nearer gatekeeper reaches the first destination cheaper in
+			// cost (walk 0, 18050 adena) but dearer in adena: the only
+			// path within 19000 adena is the costlier one by 30006.
+			name: "two teleports: the path within the budget", adena: 19000,
+			setup: func(b *Brain) {
+				b.persona.Spots.MaxTravel = 5000
+				b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+				}, gatekeeper{
+					npcID: 30060, dests: []destination{{index: 1, at: Point{X: 6000, Y: 7000}, price: 18050}},
+				})
+			},
+			wantGK: 30006, wantIndex: 0,
+		},
+		{
+			// Landing with one teleport onward: the plan is due within the
+			// gap, but a path of two is not taken.
+			name: "onward: no more teleports than the rest", adena: 50000,
+			setup: func(b *Brain) {
+				b.persona.Spots.MaxTravel = 5000
+				b.trip.endedAt, b.trip.onward = at(-time.Minute), 1
+				b.cfg.Travel.gatekeepers[0].dests = b.cfg.Travel.gatekeepers[0].dests[:1]
+				b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{
+					npcID: 30059, at: Point{X: 6500, Y: 7000}, dests: []destination{{index: 5, at: Point{X: travelDest}, price: 1000}},
+				})
+			},
+			wantIndex: -1,
+		},
+		{
+			name: "onward: due within the gap", adena: 5000,
+			setup:  func(b *Brain) { b.trip.endedAt, b.trip.onward = at(-time.Minute), 1 },
+			wantGK: 30006, wantIndex: 2,
 		},
 		{
 			name: "two teleports past the budget", adena: 18500,

@@ -209,26 +209,27 @@ func (b *Brain) navDistance(from, to navPoint) (float64, bool) {
 
 // spotPoint is spot sp's centre on walkable ground inside its territory and
 // reachable from from: the centre itself, else the walkable cell nearest it
-// within spotSnap; false when neither is.
+// within spotSnap that is inside the territory and reachable; false when
+// none is.
 func (b *Brain) spotPoint(sp *datapack.Spot, from navPoint) (navPoint, bool) {
 	c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
 	if p, ok := b.locate(c); ok && b.walkable(from, p) {
 		return p, true
 	}
-	w := &b.walk
-	cell, ok := w.plan.NearestWalkable(toLoc(c), spotSnap)
-	if !ok {
-		return navPoint{}, false
-	}
-	at := Point{X: int32(engine.WorldX(cell.X)), Y: int32(engine.WorldY(cell.Y)), Z: int32(cell.Z)}
-	if sp.Territory != nil && !sp.Territory.Contains(datapack.Point{X: at.X, Y: at.Y}) {
-		return navPoint{}, false
-	}
-	p, ok := b.locate(at)
-	if !ok || !b.walkable(from, p) {
-		return navPoint{}, false
-	}
-	return p, true
+	var got navPoint
+	_, ok := b.walk.plan.NearestWalkableFunc(toLoc(c), spotSnap, func(cell nav.Cell) bool {
+		at := Point{X: int32(engine.WorldX(cell.X)), Y: int32(engine.WorldY(cell.Y)), Z: int32(cell.Z)}
+		if sp.Territory != nil && !sp.Territory.Contains(datapack.Point{X: at.X, Y: at.Y}) {
+			return false
+		}
+		p, ok := b.locate(at)
+		if !ok || !b.walkable(from, p) {
+			return false
+		}
+		got = p
+		return true
+	})
+	return got, ok
 }
 
 // spotDest is where the bot walks for spot i when it is told to go there:
@@ -376,6 +377,8 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 			return
 		}
 	}
+	// A spot claimed after a landing ends the path the trip was on.
+	b.trip.onward = 0
 	b.leaveSpot()
 	v.idx, v.held = i, true
 	for _, c := range cands {
