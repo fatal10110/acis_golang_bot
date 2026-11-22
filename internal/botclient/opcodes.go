@@ -166,6 +166,17 @@ const (
 	opGameSendWareHouseWithdrawList = 0x32
 )
 
+// Recipe book and crafting, both directions: RecipeBookItemList and
+// RecipeItemMakeInfo (serverpackets/recipe.go), RequestRecipeBookOpen and
+// RequestRecipeItemMakeSelf (clientpackets/recipe.go).
+const (
+	opGameRecipeBookItemList = 0xd6
+	opGameRecipeItemMakeInfo = 0xd7
+
+	opGameRequestRecipeBookOpen     = 0xac
+	opGameRequestRecipeItemMakeSelf = 0xaf
+)
+
 // Questions and slash commands, both directions: ConfirmDlg
 // (serverpackets/confirmdlg.go), DlgAnswer (clientpackets/wiresafe.go,
 // dlganswer.go) and RequestUserCommand (clientpackets/usercommand.go).

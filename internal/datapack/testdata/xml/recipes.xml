@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<list>
+	<recipe alias="mk_wooden_arrow" id="1" material="1864-4;1869-2" product="17-500" itemId="1666" level="1" mpConsume="30" successRate="100" isDwarven="true"/>
+	<recipe alias="mk_soulshot_d" id="20" material="1785-3;1458-1" product="1463-156" itemId="1804" level="2" mpConsume="40" successRate="100" isDwarven="true"/>
+	<recipe alias="mk_steel" id="300" material="1869-5;1870-5" product="1880-1" itemId="2141" level="1" mpConsume="30" successRate="100" isDwarven="false"/>
+	<recipe alias="mk_steel_mold" id="301" material="1880-2;2141-1" product="1888-1" itemId="2142" level="2" mpConsume="40" successRate="70" isDwarven="True"/>
+</list>

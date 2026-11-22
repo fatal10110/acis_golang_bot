@@ -71,11 +71,16 @@ const (
 	</buyList>
 </list>
 `
+	spotsRecipes = `<?xml version="1.0" encoding="utf-8"?>
+<list>
+	<recipe alias="mk_wooden_arrow" id="1" material="1864-4;1869-2" product="17-500" itemId="1666" level="1" mpConsume="30" successRate="100" isDwarven="true"/>
+</list>
+`
 )
 
 func TestLoadSpots(t *testing.T) {
 	dir := t.TempDir()
-	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills} {
+	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes} {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
