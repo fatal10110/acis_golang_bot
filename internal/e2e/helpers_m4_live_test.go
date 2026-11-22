@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -123,10 +122,7 @@ func fell(run []int32) bool {
 // waits until c's inventory shows it, returning c's count then.
 func giveClient(t *testing.T, ctx context.Context, gm *GMClient, c *Client, tmpl, count int32) int32 {
 	t.Helper()
-	if err := gm.Select(ctx, c.Self.ObjectID); err != nil {
-		t.Fatal(err)
-	}
-	if err := gm.Command(ctx, fmt.Sprintf("give %d %d", tmpl, count)); err != nil {
+	if err := gm.Give(ctx, c.Self.ObjectID, tmpl, count); err != nil {
 		t.Fatal(err)
 	}
 	ev, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {

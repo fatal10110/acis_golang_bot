@@ -366,12 +366,20 @@ type Client struct {
 	// pos is the character's position as the server last placed or sent
 	// it: entry, its own teleports, moves and stops.
 	pos botclient.Point
+	// target is the character's target as the server last confirmed it
+	// (MyTargetSelected) or cleared it (its own TargetUnselected); 0 for
+	// none.
+	target int32
 }
 
 // Pos is where the character stands, or heads to while it moves: where it
 // entered, or where the server last put it (its own teleport, stop or
 // position fix) or sends it (its own move's destination).
 func (c *Client) Pos() botclient.Point { return c.pos }
+
+// Target is the character's target as of the last event read: what the
+// server last selected for it, 0 once it cleared it.
+func (c *Client) Target() int32 { return c.target }
 
 // Send sends payload once the pacer lets one more frame out.
 func (c *Client) Send(ctx context.Context, payload []byte) error {
@@ -413,10 +421,16 @@ func (c *Client) Await(ctx context.Context, timeout time.Duration, match func(bo
 	}
 }
 
-// follow moves Pos after an event about the character itself, and answers
-// its teleport with Appearing.
+// follow moves Pos after an event about the character itself, answers its
+// teleport with Appearing, and keeps Target.
 func (c *Client) follow(ctx context.Context, ev botclient.Event) error {
 	switch e := ev.(type) {
+	case botclient.MyTargetSelected:
+		c.target = e.ObjectID
+	case botclient.TargetUnselected:
+		if e.ObjectID == c.Self.ObjectID {
+			c.target = 0
+		}
 	case botclient.TeleportToLocation:
 		if e.ObjectID == c.Self.ObjectID {
 			c.pos = e.Pos
@@ -589,6 +603,38 @@ func (g *GMClient) Select(ctx context.Context, objectID int32) error {
 	g.t.mu.Unlock()
 	return nil
 }
+
+// Give has the GM give objectID, a run character, count of template tmpl
+// (adminGive gives to the GM's target, or to the GM itself with none).
+func (g *GMClient) Give(ctx context.Context, objectID, tmpl, count int32) error {
+	return g.OnTarget(ctx, objectID, fmt.Sprintf("give %d %d", tmpl, count))
+}
+
+// OnTarget runs the admin command cmd with objectID, a run character, as
+// the GM's target. The server runs a target command on the GM itself when
+// it has none, and may clear the target a moment after selecting it, as it
+// does around a recalled character's arrival (#206). So the GM first reads
+// its pending frames for giveSettle, and selects objectID again while its
+// target is another or none, up to selectTries times.
+func (g *GMClient) OnTarget(ctx context.Context, objectID int32, cmd string) error {
+	for range selectTries {
+		if err := g.Watch(ctx, giveSettle, func(botclient.Event) {}); err != nil {
+			return err
+		}
+		if g.Target() == objectID {
+			return g.Command(ctx, cmd)
+		}
+		if err := g.Select(ctx, objectID); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("%s: the GM's selection of %d does not hold", cmd, objectID)
+}
+
+// giveSettle is how long OnTarget reads the GM's frames before it trusts its
+// target: the server's TargetUnselected follows the selection within a
+// frame or two.
+const giveSettle = 500 * time.Millisecond
 
 // selectTries is how often Select clicks an object the server does not
 // select: one that just teleported is out of the GM's world until it

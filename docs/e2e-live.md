@@ -70,8 +70,9 @@ variables and `BOT_REQUIRE_E2E=1`.
 - **GM pool:** each scenario that needs a GM leases one from the pool (`.e2e/gm*`, or the
   `BOT_E2E_GM_FILE` list) through a lock on its lock file, held until the GM logs out, so two
   scenarios of one process, of two processes or of two runs never share a GM. With every GM
-  held, the scenario waits. The kernel drops the lock of a process that dies, so a killed run
-  never blocks a later one.
+  held, the scenario waits, and the wait counts against its time budget: pin at least as many GMs
+  as `-parallel`, or run a one-GM pin with `-parallel 1`. The kernel drops the lock of a process
+  that dies, so a killed run never blocks a later one.
 - **Packages:** `./internal/e2e/` and `./cmd/bots/` are separate test processes, each with its own
   login gate. They run at the same time only with `BOT_E2E_ALLOWLISTED=1`: two spaced gates
   dialing at once would burst the accept filter.
@@ -132,7 +133,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 ## What a run creates and leaves behind
 
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
-  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu2`,
+  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2ewl1`-`e2ewl2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu2`,
   `e2erv1`-`e2erv3`, `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`,
   `e2est1`-`e2est3`, `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`,
   `e2epn1`) and
@@ -196,6 +197,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLivePartyGMInviteLeave` | GM | #17 GM invite, GM leads; #19 whispered `leave` |
 | `TestLivePartySwarmOneJoins` | login | #72 a player invites two bots of one swarm, one joins |
 | `TestLiveWhisperCommands` | GM | #19 `invite me`, `follow`; a non-commander's `follow` ignored |
+| `TestLiveWhisperLookup` | GM | #19 commands through the access level check (a counting stand-in for the database): a non-GM's three `invite me` checked once and never answered, the GM's checked once and answered |
 | `TestLiveFollow` | GM | #18 follow from out of sight, settle, walk and run; #148 the GM leaves the bot's sight by teleport |
 | `TestLiveFollowAcrossBand` | GM | #141 follow out of sight across Talking Island's band of refused cells (acis_golang#5412), on the bot's own route (#159) |
 | `TestLiveFollowLedge` | GM | #147 follow out of sight over the ledges past that band, on the bot's own route |
@@ -214,9 +216,12 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveMerchantSwarm` | GM, datapack | #111 a merchant-preset bot with loot in town opens its store, seen by the GM |
 | `TestLiveChatReplies` | GM | #36 one whispered reply after the delay; none to a repeat sender, a marked name, shout or trade |
 | `TestLiveTrainer` | GM, datapack | #21 a level 10 mystic visits its class trainer (the spellbook when asked), #39 Heal's level offered from level 14 learned after the level-up to 15 |
-| `TestLiveMysticStart` | GM, datapack | #134 a level 1 human mystic at its start point, whose legs and /unstuck recall the server keeps there (acis_golang#5412), gives its trainer walk up within minutes and stays off it |
+| `TestLiveMysticStart` | GM, datapack | #134 a low level human mystic at its start point (a level up after the recall starts its errand there, #241), whose legs and /unstuck recall the server keeps there (acis_golang#5412), gives its trainer walk up within minutes and stays off it |
 | `TestLiveGearWear` | GM, datapack | #79 shield, necklace and two rings worn, a better ring for the lesser, a two-handed sword worn and the shield taken off |
 | `TestLiveGearBuy` | GM, datapack | #40 a better piece bought and worn, the old one sold; #79 a rogue's table buys and wears a dagger |
 | `TestLiveArrows` | GM, datapack | #85, #102 an archer's table wielding a sword buys a bow and its arrows, wears the bow, and shoots without NotEnoughArrows |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
+
+No scenario covers #28, a monster another player fights skipped: #138 dropped that rule, and a
+farmer may take such a monster.
