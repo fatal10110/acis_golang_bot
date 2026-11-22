@@ -509,7 +509,8 @@ grocer lists).
 - **In town.** Arrival resets `shop.nextAt`, because a miss from the spot would otherwise push the
   first visit up to 5 min out. Then the errands run in the existing order: sell, shop (the budget),
   gear, trainer, Newbie Guide. The persona's "trip in town" hook is called once per arrival (a
-  scroll landing or a walk that reached the gatekeeper; a walk that found no town is none).
+  scroll landing or a walk that reached the gatekeeper; a walk that found no town, or a teleport
+  of another cause during the trip such as a GM's, is none).
 - **Preparation.** No farmer leaves town for a spot until its supplies meet the trip target, the
   budget has spent all it may, or no spawned merchant within reach sells what is missing. A broke
   bot still goes and farms. The same gate applies after a death and respawn in town and at a fresh

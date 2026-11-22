@@ -156,14 +156,16 @@ func (t *supplyTrip) sent(a Action, now time.Time) {
 
 // teleported ends the trip on the bot's own loading-screen teleport: the
 // recall's landing in town, or a teleport of another cause (a restart, a
-// GM) that took it elsewhere. It reports whether it ended one: an arrival
-// (townArrival).
+// GM) that took it elsewhere. It reports whether that was the recall's
+// landing, an arrival (townArrival): the Scroll of Escape went out
+// (escapeAt). A restart arms the gate through its Revive instead.
 func (t *supplyTrip) teleported(now time.Time) bool {
 	if !t.active() {
 		return false
 	}
+	landed := !t.escapeAt.IsZero()
 	t.end(now)
-	return true
+	return landed
 }
 
 // walkHome walks the trip to the town nearest where it started walking (the

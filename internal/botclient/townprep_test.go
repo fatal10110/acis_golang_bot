@@ -166,6 +166,18 @@ func TestTownArrival(t *testing.T) {
 			},
 		},
 		{
+			name: "teleport of another cause during the trip",
+			run: func(t *testing.T, b *Brain, now time.Time) {
+				b.supplyTrip.since = now.Add(-time.Minute)
+				if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: town}}, now); err != nil {
+					t.Fatal(err)
+				}
+				if b.supplyTrip.active() {
+					t.Fatal("trip active after the teleport, want it ended")
+				}
+			},
+		},
+		{
 			name: "teleport with no trip",
 			run: func(t *testing.T, b *Brain, now time.Time) {
 				if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: town}}, now); err != nil {
@@ -220,5 +232,25 @@ func TestSupplyCauseHandOff(t *testing.T) {
 				t.Fatalf("supplyDue = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestTownPrepGoToSpot checks that an order to a spot disarms the town
+// preparation gate, so the bot at its spot buys no supply above Refill
+// percent of its target.
+func TestTownPrepGoToSpot(t *testing.T) {
+	b := newPrepBrain(t, Point{X: 5000}, adenaStack(10000), potionStack(5))
+	b.armPrep()
+	if !b.refills(5, 50) {
+		t.Fatal("refills armed = false, want true under the target")
+	}
+	if err := b.goToSpot("s", at(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if b.prep.armed {
+		t.Fatal("gate armed after goToSpot, want disarmed")
+	}
+	if b.refills(40, 50) {
+		t.Fatal("refills after goToSpot at 80% = true, want false over Refill")
 	}
 }
