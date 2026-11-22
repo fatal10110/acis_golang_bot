@@ -322,6 +322,7 @@ func TestShotFactor(t *testing.T) {
 		{name: "a few looted D shots", items: []Item{wielded(1, ngSword), shotStack(11, dSoulshot, 99)}, id: dSword},
 		{name: "D shots carried at the target", items: []Item{wielded(1, ngSword), shotStack(11, dSoulshot, 100)}, id: dSword, want: true},
 		{name: "D weapon wins on its own", items: []Item{wielded(1, ngSword)}, id: dBlade, want: true},
+		{name: "a better weapon firing the wielded one's shots", items: []Item{wielded(1, dSword), shotStack(11, dSoulshot, 50)}, id: dBlade, want: true},
 		{name: "no factor", items: []Item{wielded(1, ngSword)}, id: dSword, want: true},
 	}
 	for _, tt := range tests {

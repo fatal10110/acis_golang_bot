@@ -177,12 +177,14 @@ func (b *Brain) carriedShots(w weapon) int32 {
 	return n
 }
 
-// shotsBacked reports whether the bot can keep weapon w, template id,
-// charged: a shot source has a shot w charges, or, when carried is set, the
-// bot carries enough of them. Enough is shotTarget to switch to w, so a few
-// looted shots do not back a weapon, and any once w is wielded, so the bot
-// fires the stack it switched for to the last shot before it switches back.
-func (b *Brain) shotsBacked(id int32, w weapon, carried bool) bool {
+// shotsBacked reports whether the bot can keep weapon w charged: a shot
+// source has a shot w charges, or, when carried is set, the bot carries
+// enough of them. Enough is shotTarget to switch to shots the wielded
+// weapon does not fire, so a few looted shots do not back a weapon, and any
+// for a weapon firing the wielded weapon's shots, so the bot fires the
+// stack it switched for to the last shot before it switches back, and a
+// better weapon firing the same shots still beats the wielded one.
+func (b *Brain) shotsBacked(w weapon, carried bool) bool {
 	ids := b.shotsFor(w)
 	if slices.ContainsFunc(ids, b.sourced) {
 		return true
@@ -191,7 +193,11 @@ func (b *Brain) shotsBacked(id int32, w weapon, carried bool) bool {
 	if !carried || have == 0 {
 		return false
 	}
-	return have >= b.shotTarget() || b.worn()[slotWeapon].TemplateID == id
+	if have >= b.shotTarget() {
+		return true
+	}
+	ww, ok := b.wornWeapon()
+	return ok && slices.Equal(b.shotsFor(ww), ids)
 }
 
 // shotValues are the values beats compares for weapon template id against
@@ -209,7 +215,7 @@ func (b *Brain) shotValues(id, cur int32, g, c gearItem, gain, value int64, carr
 	}
 	backed := func(id int32) bool {
 		w, ok := b.cfg.Travel.weapons[id]
-		return ok && b.shotsBacked(id, w, carried)
+		return ok && b.shotsBacked(w, carried)
 	}
 	extra := func(price int32) int64 { return int64(math.Round(float64(price)*f)) - int64(price) }
 	switch gb, cb := backed(id), backed(cur); {
@@ -330,7 +336,7 @@ func (b *Brain) carriedOnly(w *worn) bool {
 		return false
 	}
 	wp, ok := b.cfg.Travel.weapons[cur.TemplateID]
-	return ok && b.shotsBacked(cur.TemplateID, wp, true) && !b.shotsBacked(cur.TemplateID, wp, false)
+	return ok && b.shotsBacked(wp, true) && !b.shotsBacked(wp, false)
 }
 
 // fallsBack reports whether carried item it is a weapon the gear errand
