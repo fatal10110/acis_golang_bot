@@ -114,6 +114,17 @@ func (e *Engine) SetRegion(regionX, regionY int, region *block.Region) error {
 	return nil
 }
 
+// Static returns an engine over the same static regions and options with no
+// dynamic object: every door open. It shares the regions, which are only read
+// after boot, so it costs one region table. The nav hierarchy reads it, so
+// its labels never depend on the door state (docs/navigation.md,
+// "Reachability"). Call it after the regions are set.
+func (e *Engine) Static() *Engine {
+	e.regionsMu.Lock()
+	defer e.regionsMu.Unlock()
+	return &Engine{regions: e.regions, maxObstacleHeight: e.maxObstacleHeight, partOfCharacterHeight: e.partOfCharacterHeight}
+}
+
 // AddObject applies obj's geodata changes to every loaded block it touches.
 func (e *Engine) AddObject(obj dynamic.Object) {
 	e.toggleObject(obj, true)

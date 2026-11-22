@@ -10,6 +10,16 @@
 // exact check over every step sequence the server can take (section 3,
 // "Step-chain check").
 //
+// The hierarchy (HPA*) groups cells into clusters of DefaultClusterCells
+// square. Entrance nodes are runs of border cells with a crossing, merged
+// only inside one cluster-local SCC; directed edges between them carry a
+// cost with every door open, the doors that path crosses and a door-free
+// cost; the abstract SCCs and their condensation are labelled with every
+// door open. `bots navbuild` builds it (Build) into a nav cache file read
+// in place (OpenNavCache). Hierarchy.Locate places a cell by Tarjan bounded
+// to its cluster on the static blocks: in an abstract SCC, one-way out or
+// isolated; results live in a byte-bounded LRU, and walkers pin theirs.
+//
 // Searches are synchronous on the caller's goroutine and start no goroutine.
 // Scratch buffers come from a sync.Pool and grow with the node budget, never
 // with the size of the world. Regions without geodata are no-go.

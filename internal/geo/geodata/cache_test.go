@@ -17,6 +17,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
+	"github.com/fatal10110/acis_golang_bot/internal/mmap"
 )
 
 // writeMixedL2OFF writes a full-size L2OFF region whose blocks cycle through
@@ -112,7 +113,7 @@ func TestOpenServesTheRegionFilesFromTheMapping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openCache(): %v", err)
 	}
-	t.Cleanup(func() { unmapFile(mapping) })
+	t.Cleanup(func() { mmap.Unmap(mapping) })
 
 	lo := uintptr(unsafe.Pointer(unsafe.SliceData(mapping)))
 	hi := lo + uintptr(len(mapping))
