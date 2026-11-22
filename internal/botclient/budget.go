@@ -183,21 +183,24 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 
 // saves reports whether a visit that bought rows saves for gear goal
 // (gearGoal), so it skips the comfort tier: part of the goal is not among
-// rows and left, the adena past the reserve floor, is at least
-// GearPolicy.SaveFrom percent of that part's cheapest base price, so the
-// goal is within reach.
+// rows and left, the adena past the reserve floor, has that part's
+// cheapest base price within reach (reaches).
 func (b *Brain) saves(goal []int32, left int64, rows []buyRow) bool {
-	from := int64(b.persona.Gear.SaveFrom)
 	var rest []int32
 	for _, id := range goal {
 		if !slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
 			rest = append(rest, id)
 		}
 	}
-	if from <= 0 || len(rest) == 0 {
-		return false
-	}
-	return left > 0 && left*100 >= b.price(rest)*from
+	return len(rest) > 0 && b.reaches(b.price(rest), left)
+}
+
+// reaches reports whether left adena has a goal costing price within
+// reach: it is at least GearPolicy.SaveFrom percent of the price, so the
+// bot saves for the goal.
+func (b *Brain) reaches(price, left int64) bool {
+	from := int64(b.persona.Gear.SaveFrom)
+	return from > 0 && left > 0 && left*100 >= price*from
 }
 
 // extraWants are the Extra supplies (SupplyPolicy.Extra) the shop errand

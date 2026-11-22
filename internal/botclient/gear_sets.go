@@ -298,8 +298,9 @@ func (b *Brain) wearSet(w *worn) (setPlan, bool) {
 }
 
 // keepsForSet reports whether carried item it is a piece of the set the
-// bot buys towards (bestSet on shopPool): it is not junk while the rest is
-// bought, though it beats nothing alone.
+// bot buys towards (bestSet on shopPool), whatever adena it has now
+// (gearPlan saves for the set only within reach): it is not junk while the
+// rest is bought, though it beats nothing alone.
 func (b *Brain) keepsForSet(it Item, w *worn) bool {
 	if b.cfg.Travel == nil || !b.cfg.Travel.setPieces[it.TemplateID] || it.Equipped || !b.persona.Gear.Buy {
 		return false

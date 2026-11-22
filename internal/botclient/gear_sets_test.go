@@ -236,6 +236,36 @@ func TestGearSetBuy(t *testing.T) {
 			t.Fatalf("buyRows = %v, want none", rows)
 		}
 	})
+	t.Run("out of reach: single pieces in the set's slots", func(t *testing.T) {
+		// 1000 is under SaveFrom (50 %) of the set's 2900.
+		b := newSetBrain(t, setShop, append(old, adenaStack(keep+1000))...)
+		if goal, set := b.gearGoal(); len(set) != 0 || slices.Equal(goal, []int32{setShield, setChest, setLegs, setHead}) {
+			t.Fatalf("gearGoal = %v, set %v, want no set out of reach", goal, set)
+		}
+		var got []int32
+		for _, r := range b.gearWants() {
+			got = append(got, r.item)
+		}
+		if !slices.Contains(got, setLegs) {
+			t.Fatalf("gearWants = %v, want the affordable setLegs over oldPants", got)
+		}
+		if rows := b.buyRows(BuyList{Money: keep + 1000, ListID: 1, Items: shopItems(setShop)}); len(rows) == 0 {
+			t.Fatal("buyRows = none, want an affordable upgrade")
+		}
+	})
+	t.Run("carried upgrade in a set slot: the set still whole", func(t *testing.T) {
+		b := newSetBrain(t, setShop, append(slices.Clone(old), carried(14, mixLegs, partLegs), adenaStack(keep+2900))...)
+		if goal, s := b.gearGoal(); !slices.Equal(goal, set) || !slices.Equal(s, set) {
+			t.Fatalf("gearGoal = %v, set %v, want the whole set %v", goal, s, set)
+		}
+		var got []int32
+		for _, r := range b.gearWants() {
+			got = append(got, r.item)
+		}
+		if !slices.Equal(got, set) {
+			t.Fatalf("gearWants = %v, want the set %v", got, set)
+		}
+	})
 	t.Run("part sold here: the rest still paid", func(t *testing.T) {
 		b := newSetBrain(t, setShop, append(old, adenaStack(keep+2900))...)
 		window := shopItems(setShop[:1]) // the chest only
@@ -257,6 +287,26 @@ func TestGearSetKeepsParts(t *testing.T) {
 		b.persona.Gear.SetBonus = bonus
 		if _, junk := b.junk()[part.ObjectID]; junk != (bonus == 0) {
 			t.Errorf("SetBonus %v: setChest junk = %v, want %v", bonus, junk, bonus == 0)
+		}
+	}
+}
+
+// TestGearSetStoreKeepsParts checks that the store does not list a carried
+// set piece no merchant sells while the rest of its set is bought, and
+// lists it without sets.
+func TestGearSetStoreKeepsParts(t *testing.T) {
+	var shop []datapack.Product // setShop without setHead
+	for _, p := range setShop {
+		if p.ItemID != setHead {
+			shop = append(shop, p)
+		}
+	}
+	part := carried(11, setHead, partHead)
+	for _, bonus := range []float64{0.15, 0} {
+		b := newSetBrain(t, shop, wornAt(1, strongShirt, partChest), wornAt(2, oldPants, partLegs), wornAt(3, oldHead, partHead), part, adenaStack(100))
+		b.persona.Gear.SetBonus = bonus
+		if got := b.storeLoot(part); got != (bonus == 0) {
+			t.Errorf("SetBonus %v: storeLoot(setHead) = %v, want %v", bonus, got, bonus == 0)
 		}
 	}
 }

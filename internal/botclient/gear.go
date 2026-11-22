@@ -730,8 +730,11 @@ func (b *Brain) gearCandidates() []int32 {
 // without a carried upgrade, every piece merchants sell that beats the worn
 // one, by slot then score, best first. In a slot the armor set the bot
 // buys towards decides (bestSet on shopPool), the set's piece is the only
-// one, and set are those pieces: the ones the bot neither wears nor
-// carries.
+// one, a carried upgrade there notwithstanding, and set are those pieces:
+// the ones the bot neither wears nor carries. The bot buys towards the set
+// only when the adena past the gear tier's floor pays for them or has
+// them within reach (reaches), so it saves for the set; out of reach, the
+// set's slots take single pieces like the others.
 func (b *Brain) gearPlan() (ids, set []int32) {
 	p := &b.persona.Gear
 	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
@@ -746,17 +749,28 @@ func (b *Brain) gearPlan() (ids, set []int32) {
 		}
 	}
 	plan, planned := b.bestSet(&w, b.shopPool())
+	if planned {
+		var missing []int32
+		for s, id := range plan.pieces {
+			if plan.missing[s] {
+				missing = append(missing, id)
+			}
+		}
+		budget := int64(b.carried(adenaID)) - b.floor(tierGear)
+		price := b.price(missing)
+		planned = price <= budget || b.reaches(price, budget)
+	}
 	for _, id := range b.cfg.Travel.shopGear {
 		g := b.cfg.Travel.gear[id]
 		s := slotOf(g.part)
-		if held[s] || b.cfg.Travel.cheapest[id] <= 0 {
-			continue
-		}
 		if planned && plan.decides(s) {
 			if plan.pieces[s] == id && plan.missing[s] {
 				ids = append(ids, id)
 				set = append(set, id)
 			}
+			continue
+		}
+		if held[s] || b.cfg.Travel.cheapest[id] <= 0 {
 			continue
 		}
 		if b.unarmedBow(id) || !b.beats(id, &w) {
