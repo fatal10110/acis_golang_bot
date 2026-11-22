@@ -278,6 +278,28 @@ func TestBuildTables(t *testing.T) {
 			t.Errorf("crafter class %d: learn %v, want Create Item at the dwarven trainers", cl, crafter.LearnSkills[cl])
 		}
 	}
+	// Each crafter class walks only to trainers whose teachTo lists it
+	// (data/xml/npcs): 30298 teaches 53-57, 30057 only 53-55, 31990 53, 56
+	// and 118.
+	for _, tc := range []struct {
+		class   int32
+		in, out []int32
+	}{
+		{DwarvenFighter.ID, []int32{30298, 30057, 31990}, nil},
+		{classArtisan, []int32{30298, 31990}, []int32{30057, 30058, 30103, 30104}},
+		{classWarsmith, []int32{30298}, []int32{30057, 31990}},
+	} {
+		for _, id := range tc.in {
+			if !slices.Contains(crafter.Trainers[tc.class], id) {
+				t.Errorf("crafter class %d trainers lack %d", tc.class, id)
+			}
+		}
+		for _, id := range tc.out {
+			if slices.Contains(crafter.Trainers[tc.class], id) {
+				t.Errorf("crafter class %d trainers hold %d, which does not teach it", tc.class, id)
+			}
+		}
+	}
 	if support.ClassChange.Builds[DwarvenFighter.ID] != 54 {
 		t.Errorf("support dwarf builds %d, want 54: the crafter's table is its own", support.ClassChange.Builds[DwarvenFighter.ID])
 	}
