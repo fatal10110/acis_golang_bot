@@ -131,7 +131,7 @@ func freeLoopback(t *testing.T) string {
 // first bot's account still lists exactly one character.
 func TestLivePanelBots(t *testing.T) {
 	t.Parallel()
-	tg := e2e.Live(t, e2e.NeedDatapack)
+	tg := e2e.Live(t, e2e.NeedDatapack, e2e.NeedNav) // support and town walk (D13a)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Minute)
 	defer cancel()
 	cfg := tg.Config()
@@ -147,6 +147,7 @@ func TestLivePanelBots(t *testing.T) {
 		"-secret-file", cfg.SecretFile, "-data-dir", t.TempDir(), "-prefix", cfg.Prefix + "p",
 		"-login", cfg.Login, "-server-id", fmt.Sprint(e2e.ServerID), "-max-online", "2", "-datapack", cfg.Datapack,
 	}
+	args = append(args, "-geodata", cfg.Nav.Geodata, "-geoengine", cfg.Nav.Geoengine, "-geodata-cache", cfg.Nav.Cache, "-nav-cache", cfg.Nav.NavCache)
 	if cfg.Allowlisted {
 		args = append(args, "-allowlisted")
 	}

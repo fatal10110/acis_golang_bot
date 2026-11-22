@@ -45,6 +45,15 @@ const (
 	// EnvAllowLoginFail=1 enables the wrong-password scenario, which trips
 	// the credential breaker for the rest of its process.
 	EnvAllowLoginFail = "BOT_E2E_ALLOW_LOGINFAIL"
+	// EnvGeodata, EnvGeoengine, EnvGeodataCache and EnvNavCache are the
+	// navigation the whole bots walk on (botclient.NavFiles, D13a): the
+	// geodata region directory, the local copy of the server's
+	// geoengine.properties, the `bots geopack` cache and the `bots navbuild`
+	// cache, all built outside the worktree (docs/home.md).
+	EnvGeodata      = "BOT_E2E_GEODATA"
+	EnvGeoengine    = "BOT_E2E_GEOENGINE"
+	EnvGeodataCache = "BOT_E2E_GEODATA_CACHE"
+	EnvNavCache     = "BOT_E2E_NAV_CACHE"
 )
 
 // DefaultPrefix is the e2e accounts' prefix when EnvPrefix is unset.
@@ -70,6 +79,8 @@ type Config struct {
 	GMFiles        []string
 	Datapack       string
 	AllowLoginFail bool
+	// Nav names the caches of NeedNav.
+	Nav botclient.NavFiles
 }
 
 // ConfigFromEnv reads the config through getenv; the secret and GM files
@@ -82,6 +93,10 @@ func ConfigFromEnv(getenv func(string) string, dir string) Config {
 		Allowlisted:    getenv(EnvAllowlisted) == "1",
 		Datapack:       getenv(EnvDatapack),
 		AllowLoginFail: getenv(EnvAllowLoginFail) == "1",
+		Nav: botclient.NavFiles{
+			Geodata: getenv(EnvGeodata), Geoengine: getenv(EnvGeoengine),
+			Cache: getenv(EnvGeodataCache), NavCache: getenv(EnvNavCache),
+		},
 	}
 	if v := getenv(EnvGMFile); v != "" {
 		c.GMFiles = filepath.SplitList(v)
@@ -174,6 +189,9 @@ const (
 	NeedDatapack
 	// NeedLoginFail is EnvAllowLoginFail.
 	NeedLoginFail
+	// NeedNav is the navigation a whole bot walks on: the geodata and nav
+	// caches with the datapack, whose doors.xml the door table reads.
+	NeedNav
 )
 
 // Missing names what c lacks for a scenario of needs: an unset variable or
@@ -199,6 +217,12 @@ func (c Config) Missing(needs ...Need) []string {
 			if !c.AllowLoginFail {
 				miss = append(miss, EnvAllowLoginFail+"=1 unset")
 			}
+		case NeedNav:
+			miss = missingFile(miss, EnvDatapack, c.Datapack)
+			miss = missingFile(miss, EnvGeodata, c.Nav.Geodata)
+			miss = missingFile(miss, EnvGeoengine, c.Nav.Geoengine)
+			miss = missingFile(miss, EnvGeodataCache, c.Nav.Cache)
+			miss = missingFile(miss, EnvNavCache, c.Nav.NavCache)
 		}
 	}
 	return miss

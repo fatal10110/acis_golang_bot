@@ -5,11 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
-	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
@@ -55,45 +52,10 @@ func (o geoOptions) validate(datapack string) error {
 	return nil
 }
 
-// open maps the geodata cache and the nav cache and builds the door table
-// over doors.xml of datapack: the navigation every bot of the process
-// shares. The caches stay mapped until close, which the caller runs once
-// every bot returned. A missing, stale or corrupt cache is an error naming
-// the command that builds it. It logs the region-list hash, to compare with
-// the server's.
+// open maps the caches the flags name (botclient.OpenNav): the navigation
+// every bot of the process shares, mapped until closeNav.
 func (o geoOptions) open(datapack string, log *slog.Logger) (n *botclient.Nav, closeNav func(), err error) {
-	settings, err := geodata.LoadSettings(o.geoengine)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(settings.Regions) == 0 {
-		return nil, nil, fmt.Errorf("%s lists no regions", o.geoengine)
-	}
-	doorsPath := filepath.Join(datapack, "doors.xml")
-	doorsXML, err := os.ReadFile(doorsPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	doors, err := geodata.LoadDoors(doorsPath, log)
-	if err != nil {
-		return nil, nil, err
-	}
-	c, err := geodata.Open(o.geodata, settings.GeoType, settings.Regions, o.cache, settings.Options)
-	if err != nil {
-		return nil, nil, err
-	}
-	g, err := nav.OpenNavCache(o.navCache, nav.NavKey{GeoCRC: c.CRC(), DoorsHash: nav.DoorsHash(doorsXML), ClusterCells: nav.DefaultClusterCells})
-	if err != nil {
-		c.Close()
-		return nil, nil, err
-	}
-	log.Info("geodata", "regions", len(settings.Regions), "region_hash", geodata.RegionListHash(settings.Regions), "geo_crc", c.CRC())
-	n = &botclient.Nav{
-		Engine: c.Engine,
-		Hier:   nav.NewHierarchy(g, c.Engine, o.lruBytes),
-		Doors:  botclient.NewDoorTable(c.Engine, doors, log),
-	}
-	return n, func() { g.Close(); c.Close() }, nil
+	return botclient.OpenNav(botclient.NavFiles{Geodata: o.geodata, Geoengine: o.geoengine, Cache: o.cache, NavCache: o.navCache, LRUBytes: o.lruBytes}, datapack, log)
 }
 
 // walkReady refuses a walking preset without the navigation (D13a): it

@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
 func TestConfigFromEnv(t *testing.T) {
@@ -25,9 +27,13 @@ func TestConfigFromEnv(t *testing.T) {
 			map[string]string{
 				EnvLogin: "h:2106", EnvSecretFile: "/s", EnvPrefix: "e2x", EnvAllowlisted: "1",
 				EnvGMFile: "/g", EnvDatapack: "/d", EnvAllowLoginFail: "1",
+				EnvGeodata: "/geo", EnvGeoengine: "/ge", EnvGeodataCache: "/gc", EnvNavCache: "/nc",
 			},
 			"/p/.e2e",
-			Config{Login: "h:2106", SecretFile: "/s", Prefix: "e2x", Allowlisted: true, GMFiles: []string{"/g"}, Datapack: "/d", AllowLoginFail: true},
+			Config{
+				Login: "h:2106", SecretFile: "/s", Prefix: "e2x", Allowlisted: true, GMFiles: []string{"/g"}, Datapack: "/d", AllowLoginFail: true,
+				Nav: botclient.NavFiles{Geodata: "/geo", Geoengine: "/ge", Cache: "/gc", NavCache: "/nc"},
+			},
 		},
 		{"only 1 switches on", map[string]string{EnvAllowlisted: "true", EnvAllowLoginFail: "yes"}, "", Config{Prefix: DefaultPrefix}},
 	}
@@ -46,7 +52,8 @@ func TestConfigMissing(t *testing.T) {
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	full := Config{Login: "h:2106", SecretFile: file, GMFiles: []string{file}, Datapack: dir, AllowLoginFail: true}
+	full := Config{Login: "h:2106", SecretFile: file, GMFiles: []string{file}, Datapack: dir, AllowLoginFail: true,
+		Nav: botclient.NavFiles{Geodata: dir, Geoengine: file, Cache: file, NavCache: file}}
 	tests := []struct {
 		name  string
 		cfg   Config
@@ -55,7 +62,9 @@ func TestConfigMissing(t *testing.T) {
 	}{
 		{"nothing configured", Config{}, []Need{NeedGM}, []string{EnvLogin, EnvSecretFile, EnvGMFile}},
 		{"login only", full, nil, nil},
-		{"every need", full, []Need{NeedGM, NeedDatapack, NeedLoginFail}, nil},
+		{"every need", full, []Need{NeedGM, NeedDatapack, NeedLoginFail, NeedNav}, nil},
+		{"nav unset", Config{Login: "h:2106", SecretFile: file, Datapack: dir}, []Need{NeedNav}, []string{EnvGeodata, EnvGeoengine, EnvGeodataCache, EnvNavCache}},
+		{"nav cache absent", Config{Login: "h:2106", SecretFile: file, Datapack: dir, Nav: botclient.NavFiles{Geodata: dir, Geoengine: file, Cache: file, NavCache: filepath.Join(dir, "none")}}, []Need{NeedNav}, []string{EnvNavCache}},
 		{"secret file absent", Config{Login: "h:2106", SecretFile: filepath.Join(dir, "none")}, nil, []string{EnvSecretFile}},
 		{"GM not needed is not checked", Config{Login: "h:2106", SecretFile: file}, nil, nil},
 		{"GM file absent", Config{Login: "h:2106", SecretFile: file, GMFiles: []string{file, filepath.Join(dir, "none")}}, []Need{NeedGM}, []string{EnvGMFile}},
