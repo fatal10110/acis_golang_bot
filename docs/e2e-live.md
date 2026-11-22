@@ -220,6 +220,12 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveGearWear` | GM, datapack | #79 shield, necklace and two rings worn, a better ring for the lesser, a two-handed sword worn and the shield taken off |
 | `TestLiveGearBuy` | GM, datapack | #40 a better piece bought and worn, the old one sold; #79 a rogue's table buys and wears a dagger |
 | `TestLiveArrows` | GM, datapack | #85, #102 an archer's table wielding a sword buys a bow and its arrows, wears the bow, and shoots without NotEnoughArrows |
+| `TestLiveShotsByGrade` | GM, datapack | #169 a level 20 fighter with a no-grade Falchion, its shots and a D Saber but no D shots keeps the Falchion, no-grade shots on and spent; given D shots past its minimum it wears the Saber, D shots on and spent, no-grade ones off |
+| `TestLiveTownPrep` | GM, datapack | #170, #182 a farmer logged in next to the grocer with adena buys shots, Lesser Healing Potions and two Scrolls of Escape before it claims a spot, under 45 % load, and keeps the scrolls |
+| `TestLiveSupplyTrip` | GM, datapack | #175, #182 a farmer whose shots run out within ten minutes reads a Scroll of Escape, lands in the village, restocks its shots and scrolls before it leaves, and farms a spot again |
+| `TestLiveBuffPotion` | GM, datapack | #176 a fighter drinks a Potion of Alacrity at its spot; one hasted (Haste given by the GM, of the potion's stack type and order) drinks none |
+| `TestLiveStoreBuy` | GM, datapack | #177 a bot buys the shots it wants from a second client's sell store at the listed price, not a Scroll of Escape listed over its price cap |
+| `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols; skipped while acis_golang#5419's spawn is missing |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
 

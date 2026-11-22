@@ -153,7 +153,7 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	set sp N             the GM's target, a run character; N 0 to maxSP
 //	skill set ID LEVEL   the GM's target, a run character; also skill set all
 //	give ID [COUNT]      items to the GM's target, a run character; COUNT
-//	                     1 to maxGive, 1 by default
+//	                     1 to maxGive (maxAdenaGive for adena), 1 by default
 //	spawn ID             a monster at the GM's target or the GM; it never respawns
 //	delete               the GM's target, a monster the run spawned
 //	open|close ID        a door the scenario claimed (Target.OwnDoor)
@@ -184,7 +184,7 @@ func (s *Scope) check(cmd string) error {
 		ok = (len(args) == 3 && args[0] == "set" && allInts(args[1:]) ||
 			len(args) == 2 && args[0] == "set" && args[1] == "all") && s.isCharID(s.target)
 	case "give":
-		ok = (len(args) == 1 || len(args) == 2 && validGive(args[1])) && allInts(args[:1]) && s.isCharID(s.target)
+		ok = (len(args) == 1 || len(args) == 2 && validGive(args[0], args[1])) && allInts(args[:1]) && s.isCharID(s.target)
 	case "spawn":
 		ok = len(args) == 1 && allInts(args)
 	case "delete":
@@ -208,12 +208,22 @@ func (s *Scope) check(cmd string) error {
 }
 
 // maxGive bounds the count of one //give: a scenario seeds a few stacks
-// (potions, shots, junk), never a fortune.
-const maxGive = 10000
+// (potions, shots, junk), never a fortune. maxAdenaGive bounds a give of
+// adena (adenaItem): the fees of a second profession's three dye symbols
+// (3 x 87000, hennas.xml) and a removal's, in one give.
+const (
+	maxGive      = 10000
+	maxAdenaGive = 500000
+	adenaItem    = "57"
+)
 
-func validGive(count string) bool {
+func validGive(item, count string) bool {
 	n, err := strconv.Atoi(count)
-	return err == nil && n >= 1 && n <= maxGive
+	limit := maxGive
+	if item == adenaItem {
+		limit = maxAdenaGive
+	}
+	return err == nil && n >= 1 && n <= limit
 }
 
 // maxSP bounds the SP of a //set sp: a trainer scenario seeds the cost of

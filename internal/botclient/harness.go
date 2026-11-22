@@ -59,6 +59,13 @@ const (
 	OpRequestAcquireSkill  byte = opGameRequestAcquireSkill
 	OpRequestBuyItem       byte = opGameRequestBuyItem
 	OpRequestSellItem      byte = opGameRequestSellItem
+	// OpRequestPrivateStoreBuy's first field is the store's owner
+	// (encodeRequestPrivateStoreBuy); OpRequestHennaEquip's the symbol it
+	// draws and OpRequestHennaUnequip's the symbol it removes
+	// (encodeRequestHennaEquip, encodeRequestHennaUnequip).
+	OpRequestPrivateStoreBuy byte = opGameRequestPrivateStoreBuy
+	OpRequestHennaEquip      byte = opGameRequestHennaEquip
+	OpRequestHennaUnequip    byte = opGameRequestHennaUnequip
 	// OpMoveBackwardToLocation's first fields are the X and Y it goes to
 	// (encodeMoveBackwardToLocation).
 	OpMoveBackwardToLocation byte = opGameMoveBackwardToLocation
@@ -147,6 +154,23 @@ func EncodeRequestPrivateStoreBuy(owner int32, rows []StoreBuy) []byte {
 		r[i] = storeRow{object: row.ObjectID, count: row.Count, price: row.Price}
 	}
 	return encodeRequestPrivateStoreBuy(owner, r)
+}
+
+// EncodeRequestPrivateStoreManageSell opens the sell store manage window
+// (PrivateStoreManageListSell answers it).
+func EncodeRequestPrivateStoreManageSell() []byte { return encodeRequestPrivateStoreManageSell() }
+
+// EncodeSetPrivateStoreMsgSell sets the sell store's title.
+func EncodeSetPrivateStoreMsgSell(title string) []byte { return encodeSetPrivateStoreMsgSell(title) }
+
+// EncodeSetPrivateStoreListSell lists rows for sale, each an object of the
+// seller's at a unit price, and opens the store.
+func EncodeSetPrivateStoreListSell(rows []StoreBuy) []byte {
+	r := make([]storeRow, len(rows))
+	for i, row := range rows {
+		r[i] = storeRow{object: row.ObjectID, count: row.Count, price: row.Price}
+	}
+	return encodeSetPrivateStoreListSell(false, r)
 }
 
 // DecodeEvent decodes one server game frame (non-empty) as the session's
