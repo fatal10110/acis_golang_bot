@@ -20,13 +20,12 @@ const skillEscape int32 = 2099
 
 // recoverGround is where the GM waits for the bot it killed: on open
 // ground whose dead restart in Talking Island village (restartPointAreas:
-// outside Cedric's Training Hall) and walk back over the island (#128,
-// #131), about 8000 out on the road the bots took toward the human newbie
-// start. Past it, beyond (-75767,251135), the ground drops into a pit, and
-// around x -71700..-70600, y 252800..253400 the server refuses the legs
-// cell after cell (acis_golang#5412): the walk back from there took longer
-// than the scenario.
-var recoverGround = botclient.Point{X: -78500, Y: 248900, Z: -3600}
+// outside Cedric's Training Hall), about 4000 out of the village on dry
+// ground the bot routes back over (#128, #131, #159). The old spot
+// (-78500,248900), on the ground at Z -4088, lies in the region's water zone
+// (WaterZone.xml 17_25_water1, Z -4779..-3779), which the bot does not walk
+// (#161, #223).
+var recoverGround = botclient.Point{X: -80994, Y: 246472, Z: -3696}
 
 func recoverPersona() botclient.Persona {
 	p := partyPersona()

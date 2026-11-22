@@ -12,7 +12,7 @@ func followNotice(t *testing.T, b *Brain, notice time.Time, delay time.Duration)
 	t.Helper()
 	_, due := repath(t, b, at(time.Second))
 	b.world.Apply(StopMove{ObjectID: selfID, Pos: b.follow.dest}, due)
-	b.world.Apply(StopMove{ObjectID: gmID, Pos: Point{X: 2300}}, notice.Add(-time.Second))
+	b.world.Apply(StopMove{ObjectID: gmID, Pos: followGM(300, 0)}, notice.Add(-time.Second))
 	b.persona.Follow.DelayMin, b.persona.Follow.DelayMax = delay, delay
 	b.reactAt, b.nextTick = time.Time{}, notice
 	if err := b.wake(notice); err != nil {

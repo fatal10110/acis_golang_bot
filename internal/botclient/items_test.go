@@ -265,6 +265,10 @@ func TestBrainPotion(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(b)
 			}
+			// A flee walks: it needs ground under it.
+			if tt.want == actMove {
+				onGround(t, b)
+			}
 			now := at(10 * time.Second)
 			rule, a := b.decide(now)
 			if rule != "critical" || a.kind != tt.want {

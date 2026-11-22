@@ -562,24 +562,76 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	return b.flee(b.world.Target, now), true
 }
 
+// fleeRun is the run away from an attacker under way.
+type fleeRun struct {
+	// from is the attacker the run is away from, to where it goes, at the
+	// last decision that kept it.
+	from int32
+	to   Point
+	at   time.Time
+}
+
+// fleeKeep is how long after the last decision that kept it a run away is
+// kept: a flee again later picks a fresh point away from the attacker.
+const fleeKeep = 5 * time.Second
+
+// fleeTurns are the directions a flee point is tried in, in turn, off
+// straight away from the attacker: ahead first, then wider either side.
+var fleeTurns = [...]float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi / 2, 3 * math.Pi / 4, -3 * math.Pi / 4, math.Pi}
+
 // flee runs FleeDistance away from object id, or in a random direction
-// when id is not in sight, standing up first.
+// when id is not in sight, standing up first. The point is on ground of the
+// bot's SCC (walker.inSCC), walked through the walker as checked segments
+// (D13), each from standstill; a run that arrived or ended unreachable
+// picks a fresh point at once.
 func (b *Brain) flee(id int32, now time.Time) Action {
-	s := &b.world.Self
+	s, v := &b.world.Self, &b.fleeing
 	if s.Sitting {
 		return b.toggle(now)
 	}
 	if s.Moving(now) {
 		return Action{}
 	}
-	from := s.Position(now)
+	keep := v.from == id && v.to != (Point{}) && now.Sub(v.at) <= fleeKeep
+	for range 2 {
+		if !keep {
+			v.from, v.to = id, b.fleePoint(id, now)
+		}
+		v.at = now
+		a, st := b.goTo(v.to, walkSlop, walkFlee, now)
+		if st == walkWalking {
+			return a
+		}
+		keep = false
+	}
+	v.to = Point{}
+	return Action{}
+}
+
+// fleePoint is where the bot flees to from id: FleeDistance away from it, on
+// ground of the bot's SCC, in the first of fleeTurns off straight away that
+// leaves at least half that distance, else the farthest of them.
+func (b *Brain) fleePoint(id int32, now time.Time) Point {
+	from := b.world.Self.Position(now)
 	angle := b.rng.Float64() * 2 * math.Pi
 	if o := b.world.object(id); o != nil {
 		if t := o.Position(now); t.X != from.X || t.Y != from.Y {
 			angle = math.Atan2(float64(from.Y-t.Y), float64(from.X-t.X))
 		}
 	}
-	return moveAction(offset(from, angle, b.persona.FleeDistance), from)
+	w, dist := b.walker(), b.persona.FleeDistance
+	best, bestD := from, int64(-1)
+	for _, turn := range fleeTurns {
+		to := w.inSCC(from, offset(from, angle+turn, dist))
+		d := horizontal2(from, to)
+		if 4*d >= int64(dist)*int64(dist) {
+			return to
+		}
+		if d > bestD {
+			best, bestD = to, d
+		}
+	}
+	return best
 }
 
 // ruleAttacked is rule 5: in combat, stand up and fight back. The selected
@@ -661,7 +713,16 @@ func (b *Brain) ruleGoal(now time.Time) (Action, bool) {
 // sit; a bot sitting idle stands up instead.
 func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 	s, p := &b.world.Self, &b.persona
-	if s.InCombat || s.Moving(now) || b.rng.Float64() >= p.IdleChance {
+	if s.InCombat || s.Moving(now) {
+		return Action{}, false
+	}
+	if w := &b.walk; w.purpose == walkIdle && w.status == walkWalking && w.dest != (Point{}) {
+		// The drift under way goes on, segment by segment.
+		if a, st := b.goTo(w.dest, walkSlop, walkIdle, now); st == walkWalking {
+			return a, true
+		}
+	}
+	if b.rng.Float64() >= p.IdleChance {
 		return Action{}, false
 	}
 	if s.Sitting {
@@ -674,7 +735,12 @@ func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 		dist := int32(float64(p.IdleRadius) * math.Sqrt(b.rng.Float64()))
 		to := offset(b.anchor, angle, dist)
 		to.Z = from.Z
-		return moveAction(to, from), true
+		to = b.walker().inSCC(from, to)
+		if a, st := b.goTo(to, walkSlop, walkIdle, now); st == walkWalking {
+			return a, true
+		}
+		// No drift from here (no geodata, or nowhere to go): a turn.
+		return moveAction(offset(from, angle, turnStep), from), true
 	case r < 7:
 		return moveAction(offset(from, angle, turnStep), from), true
 	case r < 9 && len(p.Emotes) > 0:
