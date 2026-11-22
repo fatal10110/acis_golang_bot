@@ -154,6 +154,18 @@ const (
 	opGameRequestAnswerJoinPledge = 0x25
 )
 
+// Clan warehouse, both directions: WarehouseDepositList and
+// WarehouseWithdrawList (serverpackets/warehouse.go),
+// SendWareHouseDepositList and SendWareHouseWithDrawList
+// (clientpackets/warehouse.go; network/state.go).
+const (
+	opGameWarehouseDepositList  = 0x41
+	opGameWarehouseWithdrawList = 0x42
+
+	opGameSendWareHouseDepositList  = 0x31
+	opGameSendWareHouseWithdrawList = 0x32
+)
+
 // Questions and slash commands, both directions: ConfirmDlg
 // (serverpackets/confirmdlg.go), DlgAnswer (clientpackets/wiresafe.go,
 // dlganswer.go) and RequestUserCommand (clientpackets/usercommand.go).

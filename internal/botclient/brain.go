@@ -176,6 +176,8 @@ type Brain struct {
 	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
+	// wh is the clan warehouse errand (rule 9 errand "warehouse").
+	wh warehouseErrand
 	// store is the merchant's private sell store (rule "store").
 	store storeState
 	// gear is the gear errand (rule 9 errand "gear").
@@ -353,6 +355,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case SystemMessage:
 			b.castRefused(e.ID, now)
+			b.warehouseEvent(ev, now)
 		case ExAutoSoulShot:
 			if e.Enabled {
 				delete(b.shotOff, e.TemplateID)
@@ -435,12 +438,16 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.tripPage(e, now)
 			b.newbiePage(e)
 			b.shopEvent(ev)
+			b.warehouseEvent(ev, now)
 		case AcquireSkillList, AcquireSkillInfo, AcquireSkillDone:
 			b.trainEvent(ev, now)
 		case CreatureSay:
 			b.heard(e, now)
 		case BuyList, SellList, ItemList, InventoryUpdate:
 			b.shopEvent(ev)
+			b.warehouseEvent(ev, now)
+		case WarehouseDepositList, WarehouseWithdrawList:
+			b.warehouseEvent(ev, now)
 		case PrivateStoreManageListSell:
 			b.storeManageList(e)
 		}
@@ -682,6 +689,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.shop.sent(a, now)
+	b.wh.sent(a, now)
 	b.gear.sent(a, now)
 	b.storeSent(a, now)
 	b.loot.sent(a, now)

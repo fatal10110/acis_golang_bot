@@ -152,6 +152,8 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	                     led by the GM's target, a run character
 //	pledge dismiss       dissolves the clan of the GM's target, a run
 //	                     character
+//	pledge level N       sets the clan level of the GM's target, a run
+//	                     character, to N (0 to 8, admin_pledge.go)
 func (s *Scope) check(cmd string) error {
 	f := strings.Fields(cmd)
 	if len(f) == 0 {
@@ -183,6 +185,7 @@ func (s *Scope) check(cmd string) error {
 		// Never without a target: the server would act on the GM itself
 		// (admin_pledge.go).
 		ok = (len(args) == 2 && args[0] == "create" && validClanName(args[1]) ||
+			len(args) == 2 && args[0] == "level" && validClanLevel(args[1]) ||
 			len(args) == 1 && args[0] == "dismiss") && s.isCharID(s.target)
 	}
 	if !ok {
@@ -220,6 +223,13 @@ func validClanName(name string) bool {
 		n++
 	}
 	return n >= 2 && n <= 16
+}
+
+// validClanLevel reports whether level is a clan level the server sets:
+// 0 to 8 (admin_pledge.go adminPledgeLevel).
+func validClanLevel(level string) bool {
+	n, err := strconv.Atoi(level)
+	return err == nil && n >= 0 && n <= 8
 }
 
 func allInts(ss []string) bool {
