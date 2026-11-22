@@ -13,9 +13,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
-// chatClan is the Say2 channel of clan chat (say2.go).
-const chatClan int32 = 4
-
 const (
 	clanID    = int32(0x0a000001)
 	otherClan = int32(0x0a000002)

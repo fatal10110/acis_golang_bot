@@ -299,6 +299,10 @@ const (
 	actRecipeBook
 	actCraft
 	actStoreBuy
+	// actClanSay is a craft order's answer in clan chat, actAnnounce a
+	// finished GM order's line there (craftorder.go).
+	actClanSay
+	actAnnounce
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -320,7 +324,8 @@ const (
 // confirmed, cancelAt). A pickup click (Action) has none: lootRetry spaces
 // the clicks on one item. A whisper (Say2 Tell), a GM command's reply or a
 // chat reply, has no server gate either (chat.go chatTell): it keeps the
-// chat gate. DlgAnswer and RequestUserCommand have none either: an offer is
+// chat gate, as does a clan chat line (Say2 Clan: no server gate either,
+// network/chat.go chatClan). DlgAnswer and RequestUserCommand have none either: an offer is
 // answered once, and escapeRetry spaces a repeated /unstuck. The sell store
 // packets (RequestPrivateStoreManageSell, SetPrivateStoreMsgSell,
 // SetPrivateStoreListSell, RequestPrivateStoreQuitSell) have no flood
@@ -334,7 +339,7 @@ func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
 		return gateEmote
-	case actSay, actTell, actChatReply:
+	case actSay, actTell, actChatReply, actClanSay, actAnnounce:
 		return gateChat
 	case actBypass:
 		return gateBypass
@@ -418,6 +423,7 @@ var playRules = []rule{
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"chat", (*Brain).ruleChat},
+	{"announce", (*Brain).ruleAnnounce},
 	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},

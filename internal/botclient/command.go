@@ -39,23 +39,33 @@ const (
 	cmdInviteMe
 	cmdLeave
 	cmdLogout
+	// cmdCraft is the craft order of a clan crafter (docs/crafting.md
+	// section 8): the clan leader may give it too, and in clan chat.
+	cmdCraft
 )
 
-// command is a parsed whispered command; spot is the argument of "go".
+// command is a parsed whispered command; spot is the argument of "go",
+// item and count those of "craft" (count 0: out of bounds).
 type command struct {
-	kind commandKind
-	spot string
+	kind  commandKind
+	spot  string
+	item  string
+	count int64
 }
 
 // parseCommand reads text as a command: one of "follow", "assist", "stay",
-// "go <spot>", "invite me", "leave" and "logout", in any case, with any
-// spacing around and between the words. Any other text is no command.
+// "go <spot>", "invite me", "leave", "logout" and "craft <item name>
+// [count]", in any case, with any spacing around and between the words.
+// Any other text is no command.
 func parseCommand(text string) (command, bool) {
 	f := strings.Fields(text)
 	if len(f) == 0 {
 		return command{}, false
 	}
 	verb := strings.ToLower(f[0])
+	if verb == "craft" {
+		return parseCraft(f[1:]), true
+	}
 	if len(f) == 1 {
 		switch verb {
 		case "follow":
@@ -118,10 +128,19 @@ type orders struct {
 // heard takes a chat line at now: a whisper from another player that
 // parses as a command goes to the authority, other lines never do; any
 // other whisper may get a chat reply (chatHeard), a command never does,
-// whoever sent it. The sender is the line's object id, which the server
-// fills from the speaker.
+// whoever sent it. A craft order, by whisper or in clan chat, goes to
+// heardCraft: the clan leader's needs no authority. The sender is the
+// line's object id, which the server fills from the speaker.
 func (b *Brain) heard(e CreatureSay, now time.Time) {
-	if e.Type != chatTell || e.ObjectID == 0 || e.ObjectID == b.world.Self.ObjectID || strings.HasPrefix(e.Name, echoPrefix) {
+	if e.ObjectID == 0 || e.ObjectID == b.world.Self.ObjectID || strings.HasPrefix(e.Name, echoPrefix) {
+		return
+	}
+	switch e.Type {
+	case chatTell:
+	case chatClan:
+		b.heardClan(e, now)
+		return
+	default:
 		return
 	}
 	cmd, ok := parseCommand(e.Text)
@@ -129,10 +148,21 @@ func (b *Brain) heard(e CreatureSay, now time.Time) {
 		b.chatHeard(e, now)
 		return
 	}
+	t := tell{sender: e.ObjectID, name: e.Name, cmd: cmd}
+	if cmd.kind == cmdCraft {
+		b.heardCraft(t, now)
+		return
+	}
+	b.askAuthority(t, now)
+}
+
+// askAuthority asks the authority about t at now and obeys an answer it
+// gives at once; a database check's answer comes later (verdicts).
+func (b *Brain) askAuthority(t tell, now time.Time) {
 	if b.cfg.Authority == nil {
 		return
 	}
-	if v, done := b.cfg.Authority.ask(tell{sender: e.ObjectID, name: e.Name, cmd: cmd}, now, b.verdicts); done {
+	if v, done := b.cfg.Authority.ask(t, now, b.verdicts); done {
 		b.obey(v, now)
 	}
 }
@@ -171,6 +201,8 @@ func (b *Brain) obey(v verdict, now time.Time) {
 		if b.world.Party.In() {
 			o.reply = leavePartyAction()
 		}
+	case cmdCraft:
+		b.craftOrder(v.tell, OrderByGM, now)
 	case cmdLogout:
 		b.logout.commanded = true
 		if !b.logout.requested {

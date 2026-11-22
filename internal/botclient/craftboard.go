@@ -22,6 +22,13 @@ const (
 	// again) on its tick while it works the order, resting for MP between
 	// steps. A lapsed claim frees the order for another crafter.
 	craftClaimTTL = 10 * time.Minute
+	// craftCommandCap bounds the open leader and GM orders of a clan
+	// (PostCommand): the board keeps them in memory until delivered or
+	// cancelled.
+	craftCommandCap = 10
+	// craftHeardTTL is how long a clan chat line stays taken (Heard): the
+	// crafters of a clan hear one line at once, and one answers it.
+	craftHeardTTL = 30 * time.Second
 )
 
 // OrderID names an order on a CraftBoard, unique in its process.
@@ -64,13 +71,31 @@ func (s OrderState) String() string {
 	return "unknown"
 }
 
-// CraftOrder is a member's order: Count units of Product for Member.
+// OrderSource is who placed an order.
+type OrderSource uint8
+
+// The order sources.
+const (
+	// OrderByMember: a member's order, crafted from the materials it
+	// deposited.
+	OrderByMember OrderSource = iota
+	// OrderByLeader and OrderByGM: an order the clan leader (D20) or a GM
+	// (D3) whispered or said in clan chat (docs/crafting.md section 8),
+	// crafted from the clan's pool; a finished GM order is announced in
+	// clan chat.
+	OrderByLeader
+	OrderByGM
+)
+
+// CraftOrder is an order: Count units of Product for Member, who placed it
+// or, for a leader or GM order, whose name ordered it.
 type CraftOrder struct {
 	ID      OrderID
 	Member  string
 	Product int32
 	Count   int64
 	State   OrderState
+	By      OrderSource
 	// Crafter is the bot that claimed the order, from OrderClaimed on, and
 	// ClaimUntil the claim's expiry while it is OrderClaimed. A crafted
 	// order keeps its Crafter without a claim: the products are in that
@@ -124,6 +149,9 @@ type clanBoard struct {
 	// reserved for its chains. The rest of the warehouse is the clan's.
 	members map[string]map[int32]int64
 	chains  map[int32]map[int32]int64
+	// heard are the clan chat lines a crafter took, by speaker and text,
+	// until when (Heard).
+	heard map[string]time.Time
 }
 
 // NewCraftBoard returns an empty board.
@@ -140,6 +168,7 @@ func (b *CraftBoard) clan(id int32) *clanBoard {
 			orders:   make(map[OrderID]CraftOrder),
 			members:  make(map[string]map[int32]int64),
 			chains:   make(map[int32]map[int32]int64),
+			heard:    make(map[string]time.Time),
 		}
 		b.clans[id] = c
 	}
@@ -219,6 +248,73 @@ func (b *CraftBoard) Post(clan int32, member string, product int32, count int64)
 	b.nextID++
 	b.clan(clan).orders[b.nextID] = CraftOrder{ID: b.nextID, Member: member, Product: product, Count: count}
 	return b.nextID, true
+}
+
+// PostCommand adds the order of the clan leader or a GM (by), named name,
+// for count units of product to clan. It needs no member materials (the
+// clan's pool pays), so it starts with them in: a crafter may claim it at
+// once. False for no clan, no name, nothing to make, a member source, or
+// craftCommandCap such orders open in clan.
+func (b *CraftBoard) PostCommand(clan int32, by OrderSource, name string, product int32, count int64) (OrderID, bool) {
+	if clan == 0 || by == OrderByMember || name == "" || product <= 0 || count <= 0 {
+		return 0, false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	c := b.clan(clan)
+	open := 0
+	for _, o := range c.orders {
+		if o.By != OrderByMember {
+			open++
+		}
+	}
+	if open >= craftCommandCap {
+		return 0, false
+	}
+	b.nextID++
+	c.orders[b.nextID] = CraftOrder{ID: b.nextID, Member: name, Product: product, Count: count, State: OrderMaterialsIn, By: by}
+	return b.nextID, true
+}
+
+// Cancel drops leader or GM order id of clan, claimed by bot: one its
+// plan from a fresh warehouse list cannot start, the pool short of every
+// material. A member order is never cancelled.
+func (b *CraftBoard) Cancel(clan int32, id OrderID, bot int32) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	c, ok := b.clans[clan]
+	if !ok {
+		return false
+	}
+	o, ok := c.orders[id]
+	if !ok || o.By == OrderByMember || o.State != OrderClaimed || o.Crafter != bot || bot == 0 {
+		return false
+	}
+	delete(c.orders, id)
+	return true
+}
+
+// Heard takes the clan chat line text that speaker said in clan, at now:
+// true for the first crafter of the clan to ask within craftHeardTTL, which
+// answers it; false for the others, and for no clan.
+func (b *CraftBoard) Heard(clan int32, speaker, text string, now time.Time) bool {
+	if clan == 0 {
+		return false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	c := b.clan(clan)
+	for k, until := range c.heard {
+		if !now.Before(until) {
+			delete(c.heard, k)
+		}
+	}
+	k := speaker + "\x00" + text
+	if _, ok := c.heard[k]; ok {
+		return false
+	}
+	c.heard[k] = now.Add(craftHeardTTL)
+	return true
 }
 
 // MaterialsIn moves posted order id of clan to materials deposited.

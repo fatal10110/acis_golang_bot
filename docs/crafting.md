@@ -232,6 +232,15 @@ Active when the bot is in a clan with a crafter on the board.
   crafter answers once with the plan or the reason it cannot (unknown recipe, Create Item too low,
   materials missing), through the chat gates and caps. A finished order is announced once in clan
   chat.
+- The leader is the clan roster's leader name (0x53); it reaches `craft` only. Anyone else's order
+  goes to the authority (D3). The answer goes back on the order's channel, at most 100 characters
+  (the server's `MaxTextLength`), counts in the persona's chat `Total` and passes the chat gate;
+  none to a name with the bot marker. A clan line is answered by the first crafter of the clan to
+  hear it (the board's `Heard`).
+- The order goes on the board with its materials "in" (the clan's pool pays), behind the members'
+  orders in the plan, at most 10 open per clan. Materials are judged from the last warehouse list
+  and what the crafter carries; it opens no warehouse to answer. A cycle whose plan from a fresh
+  list cannot start it cancels it. Only a GM's finished order is announced.
 
 ### 9. Panel
 

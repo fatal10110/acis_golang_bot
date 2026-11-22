@@ -92,11 +92,13 @@ type knownGM struct {
 	at   time.Time
 }
 
-// tell is a command whispered to a bot by sender, named name.
+// tell is a command whispered to a bot by sender, named name, or said in
+// its clan chat (clan; a craft order only).
 type tell struct {
 	sender int32
 	name   string
 	cmd    command
+	clan   bool
 }
 
 // verdict is the authority's answer to a tell.
