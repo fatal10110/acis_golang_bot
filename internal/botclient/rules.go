@@ -146,9 +146,26 @@ type Persona struct {
 	// Loot is what the bot picks up after a fight and drops when
 	// overweight (rule 8).
 	Loot LootPolicy
+	// Holds is the persona's keep hook (docs/items.md section 5), asked per
+	// carried item: an item it keeps is never sold to a merchant (junk),
+	// listed in the store (storeLoot) or offered in a trade (tradePrice),
+	// and one it marks NoWear is never worn by the gear errand. nil keeps
+	// nothing more. The clan crafter plan (M9) keeps its materials and the
+	// graded gear it deposits for crystallizing with it.
+	Holds func(w *World, it Item) Hold
 	// Goal is the persona's goal (rule 9). It reports false when it has
 	// nothing to do, which leaves the turn to idle drift.
 	Goal func(w *World, now time.Time) (Action, bool)
+}
+
+// Hold is the persona's keep hook's answer for one carried item
+// (Persona.Holds).
+type Hold struct {
+	// Keep keeps the item: never sold, listed or offered.
+	Keep bool
+	// NoWear keeps the gear errand from wearing it, so a piece kept for
+	// crystallizing is deposited, not worn.
+	NoWear bool
 }
 
 // DefaultPersona is a support player that rests when low, fights back when
