@@ -22,13 +22,18 @@ type Persona struct {
 	CriticalHP   int
 	FleeDistance int32
 	// Potions are the healing potion template ids rule 3 drinks, best
-	// first; none drinks nothing.
+	// first; none drinks nothing. DefaultPersona's are a built-in list;
+	// TravelMap.WithItemIndex replaces it with the datapack's.
 	Potions []int32
-	// Shots are the shot template ids whose auto use the bot turns on when
-	// it carries them (rule "shots"); none turns none on. DefaultPersona's
-	// Potions and Shots are built-in lists; TravelMap.WithItemIndex
-	// replaces them with the datapack's.
-	Shots []int32
+	// AutoShots turns auto use on for the shots the wielded weapon charges
+	// (rule "shots"): of its grade and the class's kind, soulshots, or
+	// blessed spiritshots before plain ones for a mystic, the beginners'
+	// ones first while carried; and off for any other shot the server has
+	// on. Shots are shot templates the bot keeps besides: shots no weapon it
+	// wields, wears next or falls back to charges, beginners' ones aside,
+	// are junk.
+	AutoShots bool
+	Shots     []int32
 	// OutmatchedHP is the HP percent under which a bot hit by two or more
 	// attackers flees from the hardest hitter instead of fighting it (rule
 	// 4); 0 always fights.
@@ -160,7 +165,7 @@ func DefaultPersona() Persona {
 		BlacklistFor:   3 * time.Minute,
 		PvP:            PvPPolicy{FightFlagged: true},
 		Potions:        healingPotions,
-		Shots:          shotTemplates,
+		AutoShots:      true,
 		SitHP:          40,
 		SitMP:          30,
 		StandHP:        90,
@@ -228,6 +233,7 @@ const (
 	actLeaveParty
 	actUseItem
 	actAutoShot
+	actAutoShotOff
 	actTalk
 	actBypass
 	actSkillInfo

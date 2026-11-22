@@ -152,7 +152,7 @@ func TestIndexShops(t *testing.T) {
 
 // Carried stacks of the shop tests.
 var (
-	sword      = Item{ObjectID: 104, TemplateID: 2369, Count: 1, SubCategory: 0, Equipped: true}
+	sword      = Item{ObjectID: 104, TemplateID: 2369, Count: 1, SubCategory: 0, Equipped: true, BodySlot: partRHand}
 	questItem  = Item{ObjectID: 103, TemplateID: 1000, Count: 1, SubCategory: subCategoryQuest}
 	skin       = Item{ObjectID: 102, TemplateID: animalSkin, Count: 10, SubCategory: 5}
 	shirt      = Item{ObjectID: 105, TemplateID: leatherShirt, Count: 1, SubCategory: 1}
@@ -172,14 +172,15 @@ var (
 func newShopBrain(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	p := DefaultPersona()
-	p.IdleChance, p.Shots = 0, nil
+	p.IdleChance, p.AutoShots = 0, false
 	b, _ := newTestBrain(t, p)
 	b.world.Self.ClassID, b.world.Self.Level = classHumanMystic, 15
 	shops, cheapest := indexShops([]datapack.BuyList{
 		{ID: 14, NPCID: 30004, Products: []datapack.Product{{ItemID: 1835, Price: 8}, {ItemID: 2509, Price: 17}, {ItemID: 1060, Price: 103}}},
 		{ID: 29, NPCID: 30094, Products: []datapack.Product{{ItemID: healBook, Price: 110}}},
 	})
-	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30004: {{X: 5000}}}, shops: shops, cheapest: cheapest}
+	spawns := map[int32][]Point{30004: {{X: 5000}}}
+	b.cfg.Travel = &TravelMap{spawns: spawns, shops: shops, cheapest: cheapest, spawnedSold: spawnedSold(shops, spawns)}
 	b.world.Apply(ItemList{Items: items}, t0)
 	return b
 }
@@ -311,7 +312,8 @@ func TestShopDue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newShopBrain(t, tt.items...)
+			// The sword its spiritshots charge.
+			b := newShopBrain(t, slices.Concat(tt.items, []Item{sword})...)
 			if tt.setup != nil {
 				tt.setup(b)
 			}
@@ -429,7 +431,7 @@ func TestShopGivesUp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newShopBrain(t, tt.items...)
+			b := newShopBrain(t, slices.Concat(tt.items, []Item{sword})...)
 			runTrainerSteps(t, b, tt.steps)
 			end := tt.steps[len(tt.steps)-1].at
 			if b.shop.v.active() || !b.shop.nextAt.Equal(at(end+shopRetry)) {
@@ -456,10 +458,10 @@ func TestShopGivesUp(t *testing.T) {
 // visited again.
 func TestTrainerBuysSpellbook(t *testing.T) {
 	b := newTrainerBrain(t, 200)
-	b.persona.Shots = nil
+	b.persona.AutoShots = false
 	shops, cheapest := indexShops([]datapack.BuyList{{ID: 29, NPCID: 30094, Products: []datapack.Product{{ItemID: healBook, Price: 110}}}})
 	b.cfg.Travel = &TravelMap{shops: shops, cheapest: cheapest}
-	b.world.Apply(ItemList{Items: []Item{adenaStack(2000), potionsOf(20), spiritsOf(100)}}, t0)
+	b.world.Apply(ItemList{Items: []Item{adenaStack(2000), potionsOf(20), spiritsOf(100), sword}}, t0)
 	b.world.Apply(NPCInfo{ObjectID: bookSellerObj, NPCID: 30094, Pos: Point{X: -300}}, t0)
 	heal1 := AcquirableSkill{skillHeal, 1, 160}
 	book := AcquireSkillInfo{ID: skillHeal, Level: 1, Cost: 160, Requirements: []SkillRequirement{{Type: spellbookRequirement, ItemID: healBook, Count: 1}}}

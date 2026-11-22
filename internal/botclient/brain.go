@@ -184,6 +184,9 @@ type Brain struct {
 	usedAt map[int32]time.Time
 	// shotAskedAt is when the bot last asked auto use of each shot template.
 	shotAskedAt map[int32]time.Time
+	// shotOff are the shot templates the bot itself turned auto use off
+	// for, until it turns them on again.
+	shotOff map[int32]bool
 	// tradedAt is when the bot last accepted each partner's trade request,
 	// by partner object id (TradePolicy.Every).
 	tradedAt map[int32]time.Time
@@ -244,7 +247,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	b := &Brain{
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
-		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time),
+		usedAt: make(map[int32]time.Time), shotAskedAt: make(map[int32]time.Time), shotOff: make(map[int32]bool),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
 		verdicts: make(chan verdict, verdictQueue),
 	}
@@ -658,6 +661,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.usedAt[a.item] = now
 	case actAutoShot:
 		b.shotAskedAt[a.item] = now
+		delete(b.shotOff, a.item)
+	case actAutoShotOff:
+		b.shotAskedAt[a.item] = now
+		b.shotOff[a.item] = true
 	case actWalkRun:
 		b.follow.runToggledAt = now
 	case actChatReply:

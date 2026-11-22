@@ -57,12 +57,18 @@ func (b *Brain) bowArrows() int32 {
 }
 
 // nextBowArrows is the arrow template of the bow the gear errand wears
-// next: the best carried weapon that beats the worn one, in ruleGear's
-// order, when it is a bow; 0 otherwise.
+// next (nextWeapon), when it is a bow; 0 otherwise.
 func (b *Brain) nextBowArrows() int32 {
 	if b.cfg.Travel == nil {
 		return 0
 	}
+	return b.cfg.Travel.arrows[b.nextWeapon().TemplateID]
+}
+
+// nextWeapon is the weapon the gear errand wears next: the best carried
+// weapon that beats the wielded one, in ruleGear's order; a zero Item for
+// none.
+func (b *Brain) nextWeapon() Item {
 	w := b.worn()
 	var best Item
 	var bestG gearItem
@@ -75,7 +81,7 @@ func (b *Brain) nextBowArrows() int32 {
 			best, bestG = it, g
 		}
 	}
-	return b.cfg.Travel.arrows[best.TemplateID]
+	return best
 }
 
 // bowWaits reports whether carried item it is a bow the bot carries no

@@ -36,7 +36,7 @@ func TestLiveFarmFight(t *testing.T) {
 		// No merchant visits here: what it loots stays, run after run,
 		// until its inventory refuses the GM's gifts. All it carries but
 		// adena, potions and shots is junk, dropped at any load.
-		p.Loot.Junk = junkBut(slices.Concat([]int32{adena}, p.Potions, p.Shots)...)
+		p.Loot.Junk = junkBut(slices.Concat([]int32{adena, soulshotNG}, p.Potions)...)
 		p.Loot.DropAbove = 1
 	})
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
