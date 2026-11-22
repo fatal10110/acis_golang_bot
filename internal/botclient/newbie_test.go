@@ -24,7 +24,7 @@ func newNewbieBrain(t *testing.T, level int32) *Brain {
 	b, _ := newTestBrain(t, p)
 	b.world.Self.Level = level
 	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30598: {{X: 5000}}}}
-	return b
+	return walkOn(t, b)
 }
 
 // guideInSight puts the guide in sight 200 units away, selected.
@@ -40,15 +40,15 @@ var supportMagic = encodeRequestBypassToServer(supportMagicBypass)
 func TestBrainNewbieBuffs(t *testing.T) {
 	b := newNewbieBrain(t, 8)
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "leg to the guide's spawn", at: time.Second, wantRule: "newbie", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 3000}, Point{})},
+		{name: "a segment toward the guide's spawn", at: time.Second, wantRule: "newbie", wantKind: actMove},
 		{name: "walking", at: 2 * time.Second, setup: func(b *Brain) {
 			b.world.Self.move = motion{from: Point{}, to: Point{X: 3000}, start: at(time.Second), speed: 100}
 		}, wantRule: "newbie"},
 		{
-			name: "guide in sight far off: a leg to it", at: 40 * time.Second,
-			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 3000}) },
+			name: "guide in sight far off: a walk to a stand point by it", at: 40 * time.Second,
+			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 4000}) },
 			events:   []Event{NPCInfo{ObjectID: guideObj, NPCID: 30598, Pos: Point{X: 5000}}},
-			wantRule: "newbie", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 5000}, Point{X: 3000}),
+			wantRule: "newbie", wantKind: actMove, wantTo: Point{X: 5000}, wantWithin: visitTalkRange,
 		},
 		{
 			name: "close: select", at: 41 * time.Second,

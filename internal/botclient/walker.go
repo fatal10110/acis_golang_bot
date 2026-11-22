@@ -239,8 +239,7 @@ func (b *Brain) goTo(dest Point, arrive int32, purpose walkPurpose, now time.Tim
 	if s.Sitting {
 		return b.toggle(now), walkWalking
 	}
-	w.plan.Lmax = float64(max(s.RunSpeed, s.WalkSpeed)) * navEmax.Seconds()
-	w.plan.CollisionHeight = cmpOr(s.CollisionHeight, defaultCollisionHeight)
+	b.walker()
 	if len(w.route) == 0 {
 		if a, ok := b.planWalk(pos, now); !ok {
 			return a, w.status
@@ -261,6 +260,17 @@ func (b *Brain) goTo(dest Point, arrive int32, purpose walkPurpose, now time.Tim
 	a := moveAction(to, pos)
 	a.walk = true
 	return a, walkWalking
+}
+
+// walker is the bot's walker with its checks sized for the bot as it is
+// now: the longest later step is the bot's speed times Emax, and the
+// collision height its own. Every check of a segment or a straight line
+// goes through it.
+func (b *Brain) walker() *walker {
+	s, w := &b.world.Self, &b.walk
+	w.plan.Lmax = float64(max(s.RunSpeed, s.WalkSpeed)) * navEmax.Seconds()
+	w.plan.CollisionHeight = cmpOr(s.CollisionHeight, defaultCollisionHeight)
+	return w
 }
 
 // standing is where the bot stands at now, on its floor: the end of the
@@ -582,9 +592,18 @@ func (w *walker) standPoint(from, at Point, rng float64, mode nav.StandMode, hei
 	if err != nil {
 		return Point{}, false
 	}
-	if cur := w.pins.Current; cur.Kind() == nav.InSCC && !w.nav.Hier.SameSCC(cur, m) {
-		// Not reachable from where the bot stands: StandPoint is not
-		// restricted to the bot's SCC.
+	// StandPoint is not restricted to the bot's SCC: refuse a point not
+	// reachable from where the bot stands.
+	fc, ok := w.plan.Locate(toLoc(from))
+	if !ok {
+		return Point{}, false
+	}
+	cur, err := w.nav.Hier.Locate(fc, &w.pins)
+	if err != nil {
+		return Point{}, false
+	}
+	w.pins.Current = cur
+	if cur.Kind() == nav.InSCC && !w.nav.Hier.SameSCC(cur, m) {
 		return Point{}, false
 	}
 	return fromLoc(l), true

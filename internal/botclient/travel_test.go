@@ -47,7 +47,7 @@ func newTravelBrain(t *testing.T, adena int32) *Brain {
 	b.persona.Newbie.MaxLevel = 0
 	b.cfg.Travel = testTravelMap()
 	b.world.Inventory.Items = map[int32]Item{1: {ObjectID: 1, TemplateID: adenaID, Count: adena}}
-	return b
+	return walkOn(t, b)
 }
 
 func TestNewTravelMap(t *testing.T) {
@@ -134,7 +134,7 @@ func TestBrainTravel(t *testing.T) {
 	b := newTravelBrain(t, 5000)
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "no spot in reach plans a trip", at: time.Second},
-		{name: "leg to the gatekeeper", at: 2 * time.Second, wantRule: "travel", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 2000}, Point{})},
+		{name: "leg to the gatekeeper", at: 2 * time.Second, wantRule: "travel", wantKind: actMove},
 		{
 			name: "gatekeeper in sight: select", at: 3 * time.Second,
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1900}) },

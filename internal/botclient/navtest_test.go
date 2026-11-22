@@ -23,7 +23,9 @@ import (
 // (synthetic regions, never real geodata), with a nav hierarchy built over
 // the clusters holding the corridor, the U, the ledge, the pit, the bridge
 // and the pocket at the default cluster side, where each scene lies inside
-// one cluster, as the nav package's own tests build it.
+// one cluster, as the nav package's own tests build it, and over the open
+// ground along the X axis east of the world origin (the fixture region's
+// north-west corner), where the consumer tests stand.
 var (
 	navOnce   sync.Once
 	navShared *Nav
@@ -66,7 +68,10 @@ func buildTestNav() (*Nav, error) {
 	if err := e.SetRegion(geotest.RegionX, geotest.RegionY, region); err != nil {
 		return nil, err
 	}
-	keys := navWindow(1, 1, 6, 1)
+	// Row 0 holds the open flat ground along the X axis from the world
+	// origin, where the consumer tests put their NPCs (walkOn); row 1 the
+	// scenes.
+	keys := append(navWindow(0, 0, 1, 0), navWindow(1, 1, 6, 1)...)
 	key := nav.NavKey{ClusterCells: navTestCluster}
 	image, _, err := nav.Build(context.Background(), nav.BuildConfig{Engine: e, Clusters: keys, ClusterCells: navTestCluster, Workers: 2, Key: key})
 	if err != nil {
@@ -134,4 +139,38 @@ func segAnswer(origin, dest Point) MoveToLocation {
 // one position tick.
 func runFor(a, b Point) time.Duration {
 	return time.Duration(float64(time.Second)*math.Sqrt(float64(horizontal2(a, b)))/100) + positionTick
+}
+
+// walkOn has brain b walk on the shared synthetic navigation, as NewBrain
+// sets it up from BrainConfig.Nav: the consumer tests' points along the X
+// axis east of the origin lie on its open flat ground at height 0.
+func walkOn(t *testing.T, b *Brain) *Brain {
+	t.Helper()
+	n := testNav(t)
+	b.walk = newWalker(n)
+	b.world.SetGround(n.Engine)
+	return b
+}
+
+// TestWalkOnOrigin pins the ground walkOn puts the consumer tests on: the
+// origin and the points east of it are walkable at height 0 in one SCC.
+func TestWalkOnOrigin(t *testing.T) {
+	n := testNav(t)
+	w := newWalker(n)
+	var first nav.Member
+	for i, p := range []Point{{}, {X: 300}, {X: 3000}, {X: 5000}, {X: 8000}} {
+		c, ok := w.plan.Locate(toLoc(p))
+		if !ok || c.Z != 0 {
+			t.Fatalf("%+v: cell %+v %v, want walkable at 0", p, c, ok)
+		}
+		m, err := n.Hier.Locate(c, nil)
+		if err != nil || m.Kind() != nav.InSCC {
+			t.Fatalf("%+v: member %v %v, want in an SCC", p, m, err)
+		}
+		if i == 0 {
+			first = m
+		} else if !n.Hier.SameSCC(first, m) {
+			t.Fatalf("%+v not in the origin's SCC", p)
+		}
+	}
 }

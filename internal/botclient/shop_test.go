@@ -185,7 +185,7 @@ func newShopBrain(t *testing.T, items ...Item) *Brain {
 	spawns := map[int32][]Point{30004: {{X: 5000}}}
 	b.cfg.Travel = &TravelMap{spawns: spawns, shops: shops, cheapest: cheapest, spawnedSold: spawnedSold(shops, spawns)}
 	b.world.Apply(ItemList{Items: items}, t0)
-	return b
+	return walkOn(t, b)
 }
 
 // TestBrainShopVisit walks a bot low on potions and spiritshots to the

@@ -40,7 +40,7 @@ func newTownBrain(t *testing.T, adena int32) *Brain {
 	b, _ := newTestBrain(t, p)
 	b.cfg.Travel = townTravelMap()
 	b.world.Inventory.Items = map[int32]Item{1: {ObjectID: 1, TemplateID: adenaID, Count: adena}}
-	return b
+	return walkOn(t, b)
 }
 
 func TestTownPersona(t *testing.T) {
@@ -74,7 +74,7 @@ func TestBrainTownHop(t *testing.T) {
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "first decision starts the idle spell", at: time.Second},
 		{name: "idle", at: 60 * time.Second},
-		{name: "hop due: leg to the gatekeeper", at: 61 * time.Second, wantRule: "travel", wantKind: actMove, wantPayload: encodeMoveBackwardToLocation(Point{X: 2000}, Point{})},
+		{name: "hop due: leg to the gatekeeper", at: 61 * time.Second, wantRule: "travel", wantKind: actMove},
 		{
 			name: "gatekeeper in sight: select", at: 62 * time.Second,
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1900}) },

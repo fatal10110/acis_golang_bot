@@ -38,7 +38,7 @@ func newMarketBrain(t *testing.T, items ...Item) *Brain {
 		prices: map[int32]int32{greaterPotion: 300, lesserHealingPotion: 100},
 	}
 	b.world.Apply(ItemList{Items: items}, t0)
-	return b
+	return walkOn(t, b)
 }
 
 // sellStore is player id's sell store at x on the x axis.

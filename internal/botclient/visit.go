@@ -168,7 +168,7 @@ func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, boo
 	s := &b.world.Self
 	from := s.Position(now)
 	to := b.world.object(v.obj).Position(now)
-	w := &b.walk
+	w := b.walker()
 	if !w.talkFailed && float64(dist2(from, to)) <= arrive*arrive && w.lineOpen(from, to) {
 		return Action{}, false
 	}

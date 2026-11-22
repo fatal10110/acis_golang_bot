@@ -59,7 +59,7 @@ func newWarehouseBrain(t *testing.T, wants *whWants, items ...Item) *Brain {
 	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{keeperNPC: {{X: 300}}}, keepers: map[int32]bool{keeperNPC: true}}
 	b.world.Apply(ItemList{Items: items}, t0)
 	b.world.Apply(NPCInfo{ObjectID: keeperObj, NPCID: keeperNPC, Pos: Point{X: 300}}, t0)
-	return b
+	return walkOn(t, b)
 }
 
 func depositReq(rows ...warehouseRow) []byte {

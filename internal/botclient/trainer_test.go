@@ -204,6 +204,11 @@ type trainerStep struct {
 	wantKind actionKind
 	// wantPayload, when set, is the exact packet.
 	wantPayload []byte
+	// wantWithin, when set, is how far (horizontally) from wantTo the
+	// destination of the walk the move belongs to may lie: a walk to a
+	// stand point near an NPC.
+	wantTo     Point
+	wantWithin int32
 }
 
 // runTrainerSteps feeds each step's events, decides and sends the action.
@@ -223,6 +228,11 @@ func runTrainerSteps(t *testing.T, b *Brain, steps []trainerStep) {
 		}
 		if st.wantPayload != nil && !bytes.Equal(a.payload, st.wantPayload) {
 			t.Fatalf("%s: payload % x, want % x", st.name, a.payload, st.wantPayload)
+		}
+		if st.wantWithin > 0 {
+			if to := b.walk.dest; !a.walk || horizontal2(to, st.wantTo) > int64(st.wantWithin)*int64(st.wantWithin) {
+				t.Fatalf("%s: walk %v to %+v, want a walk within %d of %+v", st.name, a.walk, to, st.wantWithin, st.wantTo)
+			}
 		}
 		if a.kind != actHold {
 			if sent, err := b.send(a, now); err != nil || !sent {
