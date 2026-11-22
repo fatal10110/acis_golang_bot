@@ -290,13 +290,16 @@ func TestBrainPotion(t *testing.T) {
 	}
 }
 
-// TestBrainShots: auto use is asked once per carried shot template, again
-// only when the server left the request unanswered for shotRetry, and not
-// after the server reported a state, until a new stack arrives.
+// TestBrainShots: auto use of the shot the wielded weapon charges is asked
+// once, again only when the server left the request unanswered for
+// shotRetry, and not after the server reported a state, until a new stack
+// arrives. A bot without a datapack takes its weapon as a no-grade one:
+// a fighter's no-grade soulshots, not the spiritshots it carries.
 func TestBrainShots(t *testing.T) {
 	spirit := Item{ObjectID: 0x30000021, TemplateID: 2509, Count: 100}
-	b, out := newTestBrain(t, Persona{Shots: DefaultPersona().Shots})
-	b.world.Apply(ItemList{Items: []Item{potionRow, shotRow, spirit}}, t0)
+	weapon := Item{ObjectID: 0x30000022, TemplateID: 2369, Count: 1, Equipped: true, BodySlot: partRHand}
+	b, out := newTestBrain(t, Persona{AutoShots: true})
+	b.world.Apply(ItemList{Items: []Item{potionRow, shotRow, spirit, weapon}}, t0)
 
 	step := func(now time.Time) string {
 		t.Helper()
@@ -318,25 +321,22 @@ func TestBrainShots(t *testing.T) {
 		return ids
 	}
 
-	// Two decisions ask both templates in persona order, the third has
-	// nothing left to ask.
-	for i, want := range []string{"shots", "shots", ""} {
+	for i, want := range []string{"shots", ""} {
 		if rule := step(at(time.Duration(i+1) * time.Second)); rule != want {
 			t.Fatalf("decision %d: rule %q, want %q", i, rule, want)
 		}
 	}
-	if got := toggles(); !reflect.DeepEqual(got, []int32{1835, 2509}) {
-		t.Fatalf("toggled %v, want [1835 2509]", got)
+	if got := toggles(); !reflect.DeepEqual(got, []int32{1835}) {
+		t.Fatalf("toggled %v, want [1835]", got)
 	}
-	// The server acknowledged 1835 only; 2509 is asked again after shotRetry.
-	b.world.Apply(ExAutoSoulShot{TemplateID: 1835, Enabled: true}, at(4*time.Second))
-	if rule := step(at(2*time.Second + shotRetry - time.Millisecond)); rule != "" {
+	// Left unanswered, 1835 is asked again after shotRetry.
+	if rule := step(at(time.Second + shotRetry - time.Millisecond)); rule != "" {
 		t.Fatalf("asked again before shotRetry: rule %q", rule)
 	}
-	if rule := step(at(2*time.Second + shotRetry)); rule != "shots" {
+	if rule := step(at(time.Second + shotRetry)); rule != "shots" {
 		t.Fatalf("no retry after shotRetry: rule %q", rule)
 	}
-	b.world.Apply(ExAutoSoulShot{TemplateID: 2509, Enabled: true}, at(time.Minute))
+	b.world.Apply(ExAutoSoulShot{TemplateID: 1835, Enabled: true}, at(time.Minute))
 	// The server disables 1835 on a short stack, still carried: it stays
 	// off while the stack does not grow.
 	short := shotRow
@@ -358,7 +358,7 @@ func TestBrainShots(t *testing.T) {
 	if rule := step(at(3 * time.Minute)); rule != "shots" {
 		t.Fatalf("new stack not turned on: rule %q", rule)
 	}
-	if got := toggles(); !reflect.DeepEqual(got, []int32{1835, 2509, 2509, 1835, 1835}) {
-		t.Fatalf("toggled %v, want [1835 2509 2509 1835 1835]", got)
+	if got := toggles(); !reflect.DeepEqual(got, []int32{1835, 1835, 1835, 1835}) {
+		t.Fatalf("toggled %v, want [1835 1835 1835 1835]", got)
 	}
 }

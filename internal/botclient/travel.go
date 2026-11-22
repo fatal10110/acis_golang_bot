@@ -39,10 +39,15 @@ type TravelMap struct {
 	// list (datapack.Datapack.Prices): the price a store's manage list shows, which
 	// prices the loot a bot sells by trade (Brain.tradePrice).
 	prices map[int32]int32
-	// potions are the datapack's healing potions, best first, and shots
-	// its player shots (indexPotions, indexShots): what WithItemIndex puts
-	// in a persona.
-	potions, shots []int32
+	// potions are the datapack's healing potions, best first
+	// (indexPotions): what WithItemIndex puts in a persona.
+	potions []int32
+	// shots are the datapack's player shots (indexShots), weapons what
+	// each weapon template charges (indexWeapons), and spawnedSold the
+	// items spawned merchants sell (spawnedSold).
+	shots       map[int32]shotItem
+	weapons     map[int32]weapon
+	spawnedSold map[int32]bool
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -78,6 +83,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.prices = dp.Prices
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
 	m.shots = indexShots(dp.EtcItems)
+	m.weapons = indexWeapons(dp.Items)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue
@@ -90,6 +96,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 			m.spawns[sp.NPCID] = append(m.spawns[sp.NPCID], Point{X: p.X, Y: p.Y, Z: p.Z})
 		}
 	}
+	m.spawnedSold = spawnedSold(m.shops, m.spawns)
 	ids := make([]int32, 0, len(dp.Teleports))
 	for id := range dp.Teleports {
 		ids = append(ids, id)

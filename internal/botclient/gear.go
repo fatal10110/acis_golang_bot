@@ -55,12 +55,22 @@ type GearPolicy struct {
 	// KeepAdena is the adena a gear purchase never spends; potions, shots
 	// and teleports need it.
 	KeepAdena int32
+	// ShotFactor multiplies a weapon's reference price where Equip and Buy
+	// compare it with the wielded one, when the bot can keep it charged and
+	// not the other: a shot source has shots of its grade for the class (a
+	// spawned merchant), or the bot carries ShopPolicy's restock minimum of
+	// them, any while it wields a weapon firing the same shots (shotsBacked). So a no-grade
+	// weapon with shots beats a D-grade one without them until the D one's
+	// price wins on its own. 1 or less compares prices alone.
+	ShotFactor float64
 }
 
 // defaultGearPolicy wears and buys gear and jewelry up to the bot's
-// expertise, keeping 10000 adena.
+// expertise, keeping 10000 adena, with a shot factor of 2: a soulshot
+// doubles a physical hit's damage (skill/formulas/damage.go), a blessed
+// spiritshot four times the M. Atk a spell's damage takes the root of.
 func defaultGearPolicy() GearPolicy {
-	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000}
+	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, ShotFactor: 2}
 }
 
 // GearClass is what classes wear where no worn piece gives a type to
@@ -350,8 +360,15 @@ func (b *Brain) gearGrade() int32 {
 // beats reports whether wearing template id beats what the bot wears, w
 // (GearPolicy.Equip): an empty weapon slot, or empty body and legs slots,
 // give no type to match and take what the bot's class wears
-// (GearPolicy.Classes).
+// (GearPolicy.Classes). Weapon prices count with the shot factor
+// (shotValue).
 func (b *Brain) beats(id int32, w *worn) bool {
+	return b.beatsBy(id, w, true)
+}
+
+// beatsBy is beats, counting the shots the bot carries towards the shot
+// factor only when carried is set.
+func (b *Brain) beatsBy(id int32, w *worn, carried bool) bool {
 	g, ok := b.gearItem(id)
 	if !ok || b.gear.refused[id] || g.grade > b.gearGrade() {
 		return false
@@ -434,6 +451,9 @@ func (b *Brain) beats(id int32, w *worn) bool {
 			return false
 		}
 		value += int64(legs.price)
+	}
+	if s == slotWeapon {
+		gain, value = b.shotValues(id, cur.TemplateID, g, c, gain, value, carried)
 	}
 	return gain > value
 }

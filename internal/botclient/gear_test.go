@@ -92,6 +92,7 @@ func newGearBrain(t *testing.T, expertise int32, items ...Item) *Brain {
 	t.Helper()
 	b := newShopBrain(t, items...)
 	b.persona.Shop.Restock = nil
+	b.persona.Shop.Soulshots, b.persona.Shop.Spiritshots = ShotStock{}, ShotStock{}
 	b.persona.Gear.Classes = append([]GearClass{{Classes: []int32{classHumanMystic}, Armor: "MAGIC"}}, defaultGearClasses()...)
 	if expertise > 0 {
 		b.world.Apply(SkillList{Skills: []KnownSkill{{ID: expertiseSkill, Level: expertise, Passive: true}}}, t0)

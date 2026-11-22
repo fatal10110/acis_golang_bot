@@ -24,23 +24,13 @@ const potionReuse = 14 * time.Second
 // (handleAutoSoulShot, network/inventory.go).
 const shotRetry = 30 * time.Second
 
-// Healing potions and shots by template id (aCis_datapack/data/xml/items).
-// The wire carries no item class that tells them apart from other etc
-// items, so the persona lists them by id. These are the lists of a bot
-// without a datapack; with one, TravelMap.WithItemIndex puts the datapack's
-// in their place.
-var (
-	// healingPotions are Greater Healing Potion, Healing Potion and Lesser
-	// Healing Potion, best first.
-	healingPotions = []int32{1539, 1061, 1060}
-	// shotTemplates are the soulshots, spiritshots and blessed spiritshots
-	// of every grade, the beginners' ones included.
-	shotTemplates = []int32{
-		5789, 1835, 1463, 1464, 1465, 1466, 1467, // soulshots
-		5790, 2509, 2510, 2511, 2512, 2513, 2514, // spiritshots
-		3947, 3948, 3949, 3950, 3951, 3952, // blessed spiritshots
-	}
-)
+// healingPotions are the healing potions by template id
+// (aCis_datapack/data/xml/items), best first: Greater Healing Potion,
+// Healing Potion and Lesser Healing Potion. The wire carries no item class
+// that tells them apart from other etc items, so the persona lists them by
+// id. This is the list of a bot without a datapack; with one,
+// TravelMap.WithItemIndex puts the datapack's in its place.
+var healingPotions = []int32{1539, 1061, 1060}
 
 // Item is one item the bot carries, as ItemList and InventoryUpdate report
 // it.
@@ -169,9 +159,14 @@ func useItemAction(it Item) Action {
 	return Action{kind: actUseItem, payload: encodeUseItem(it.ObjectID), item: it.TemplateID}
 }
 
-// autoShotAction turns auto use of the shot template templateID on.
-func autoShotAction(templateID int32) Action {
-	return Action{kind: actAutoShot, payload: encodeRequestAutoSoulShot(templateID, true), item: templateID}
+// autoShotAction turns auto use of the shot template templateID on, or
+// off.
+func autoShotAction(templateID int32, enable bool) Action {
+	kind := actAutoShot
+	if !enable {
+		kind = actAutoShotOff
+	}
+	return Action{kind: kind, payload: encodeRequestAutoSoulShot(templateID, enable), item: templateID}
 }
 
 // Inventory is what the bot carries. Its weight is the character's:
@@ -264,27 +259,6 @@ func (b *Brain) drinkPotion(now time.Time) (Action, bool) {
 		if it, ok := b.world.Inventory.ByTemplate(id); ok && it.Count > 0 {
 			return useItemAction(it), true
 		}
-	}
-	return Action{}, false
-}
-
-// ruleShots turns auto use on for each of the persona's shot templates the
-// bot carries and the server reported no state for. A template the server
-// disabled (its stock ran out) stays off until a new stack arrives; a
-// request left unanswered is repeated after shotRetry.
-func (b *Brain) ruleShots(now time.Time) (Action, bool) {
-	inv := &b.world.Inventory
-	for _, id := range b.persona.Shots {
-		if _, known := inv.AutoShots[id]; known {
-			continue
-		}
-		if _, ok := inv.ByTemplate(id); !ok {
-			continue
-		}
-		if at, asked := b.shotAskedAt[id]; asked && now.Sub(at) < shotRetry {
-			continue
-		}
-		return autoShotAction(id), true
 	}
 	return Action{}, false
 }
