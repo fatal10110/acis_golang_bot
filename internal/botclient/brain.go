@@ -185,6 +185,8 @@ type Brain struct {
 	trip   travelTrip
 	// supplyTrip is the farmer's trip home to restock (rule "supply").
 	supplyTrip supplyTrip
+	// prep is the town preparation gate.
+	prep townPrep
 	// loot is the loot queue (rule 8).
 	loot lootQueue
 	// shop is the merchant visit (rule 9 errand).
@@ -360,6 +362,8 @@ func (b *Brain) start(now time.Time) {
 	b.pace = newPacer(now)
 	b.nextTick = now.Add(b.tickDelay())
 	b.anchor = b.world.Self.Position(now)
+	// A fresh login prepares before it leaves for a spot.
+	b.armPrep()
 	b.applyStanding(now)
 	b.publishStatus(now, true)
 }
@@ -440,12 +444,17 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.spot.arrived = false
 				if !e.Fast {
 					b.tripTeleported(now)
-					b.supplyTrip.teleported(now)
+					if b.supplyTrip.teleported(now) {
+						b.townArrival()
+					}
 				}
 			}
 		case Revive:
 			if e.ObjectID == self {
 				b.restartedAt = time.Time{}
+				// Back on its feet, mostly in town: it prepares before it
+				// leaves for a spot.
+				b.armPrep()
 			}
 		case Attack:
 			if e.AttackerID == self {

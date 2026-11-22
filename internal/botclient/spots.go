@@ -114,7 +114,8 @@ type spotVisit struct {
 // there through the walker, moves on when it finds the spot crowded, walks
 // back when a fight left it beyond the leash, and picks a new spot once it
 // outlevels its own or, sharing one past its cap, every spotRetry. At its
-// spot it leaves the turn to rule "farm".
+// spot it leaves the turn to rule "farm". A bot holding none claims none
+// while the town preparation gate holds it (preparing).
 //
 // Every move is the walker's (goTo): one MoveBackwardToLocation per checked
 // segment through the frame pacer (gateNone). A walk that ends unreachable
@@ -123,6 +124,11 @@ type spotVisit struct {
 func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	r, s, v := b.cfg.Spots, &b.world.Self, &b.spot
 	if r == nil || s.InCombat {
+		return Action{}, false
+	}
+	if !v.held && b.preparing() {
+		// The town preparation gate: no spot before the errands ahead
+		// stocked the bot up.
 		return Action{}, false
 	}
 	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || r.overCap(v.idx)) {

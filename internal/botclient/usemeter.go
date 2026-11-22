@@ -74,6 +74,13 @@ type SupplyPolicy struct {
 	// crafter plan (M9) asks for ore with it. They count toward neither the
 	// preparation gate nor the run-out trigger.
 	Extra func(w *World) map[int32]int32
+	// InTown is the "trip in town" hook, called once per supply trip
+	// arrival in town, and HandOff the weight it will hand off there,
+	// which a town visit sheds toward ReturnLoad (shed); nil for none.
+	// The clan crafter plan (M9) fills them to deposit materials and
+	// collect products. The brain goroutine calls both.
+	InTown  func(w *World)
+	HandOff func(w *World) int64
 }
 
 // defaultSupplyPolicy carries an hour of fighting's shots and HP potions,
@@ -373,7 +380,8 @@ func (b *Brain) refillRow(s supply) (buyRow, bool) {
 }
 
 // refills reports whether have carried of a trip target is low enough to
-// buy up to it: under Refill percent of it.
+// buy up to it: under Refill percent of it, or under it at all while the
+// town preparation gate holds (townPrep).
 func (b *Brain) refills(have, target int32) bool {
-	return target > have && int64(have)*100 < int64(target)*int64(b.persona.Supply.Refill)
+	return target > have && (b.prep.armed || int64(have)*100 < int64(target)*int64(b.persona.Supply.Refill))
 }
