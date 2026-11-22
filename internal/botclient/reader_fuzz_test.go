@@ -14,6 +14,8 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(moveToLocation(1, Point{X: 1}, Point{Y: 2}))
 	f.Add(stopMove(1, Point{Z: 3}, 4))
 	f.Add(packet(opGameDeleteObject, 1, 0))
+	f.Add(packet(opGameDoorInfo, 0x10000001, 24190001, 0, 1, 1, 1000, 1000, 0, 0))
+	f.Add(packet(opGameDoorStatusUpdate, 0x10000001, 0, 0, 0, 24190001, 1000, 1000))
 	f.Add(packet(opGameTeleportToLocation, 1, 2, 3, 4))
 	f.Add(packet(opGameLeaveWorld))
 	f.Add([]byte{opGameUserInfo, 1})

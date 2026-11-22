@@ -84,6 +84,8 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameChangeWaitType:   decodeChangeWaitType,
 	opGameAutoAttackStart:  func(r *wire.Reader) Event { return AutoAttackStart{ObjectID: r.ReadInt32()} },
 	opGameAutoAttackStop:   func(r *wire.Reader) Event { return AutoAttackStop{ObjectID: r.ReadInt32()} },
+	opGameDoorInfo:         decodeDoorInfo,
+	opGameDoorStatusUpdate: decodeDoorStatusUpdate,
 
 	opGameAttack:                    decodeAttack,
 	opGameMagicSkillUse:             decodeMagicSkillUse,
