@@ -76,11 +76,16 @@ const (
 	<recipe alias="mk_wooden_arrow" id="1" material="1864-4;1869-2" product="17-500" itemId="1666" level="1" mpConsume="30" successRate="100" isDwarven="true"/>
 </list>
 `
+	spotsArmorSets = `<?xml version="1.0" encoding="utf-8"?>
+<list>
+	<armorset name="Wooden Set" chest="23" legs="2386" head="43" gloves="0" feet="0" skillId="3500" shield="0" shieldSkillId="0" enchant6Skill="0"/>
+</list>
+`
 )
 
 func TestLoadSpots(t *testing.T) {
 	dir := t.TempDir()
-	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes} {
+	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes, "armorSets.xml": spotsArmorSets} {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
