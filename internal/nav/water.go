@@ -44,8 +44,7 @@ const (
 )
 
 // NewWater indexes boxes by region tile. A box with its corners or Z band
-// swapped is normalized; a box outside the world is kept for Contains and
-// never matches a cell.
+// swapped is normalized; a box outside the world matches no point.
 func NewWater(boxes []WaterBox) *Water {
 	w := &Water{boxes: make([]WaterBox, len(boxes))}
 	sum := sha256.New()
@@ -92,12 +91,15 @@ func (w *Water) Hash() [8]byte {
 }
 
 // Contains reports whether the world point lies in a water zone, as the
-// server tests a position.
+// server tests a position. A point outside the geodata world is never in
+// water: no walker stands there.
 func (w *Water) Contains(x, y, z int) bool {
-	if w == nil {
+	if w == nil || x < geo.WorldXMin || x > geo.WorldXMax || y < geo.WorldYMin || y > geo.WorldYMax {
 		return false
 	}
-	for _, b := range w.boxes {
+	t := tileIndex(x, geo.WorldXMin, tilesX)*tilesY + tileIndex(y, geo.WorldYMin, tilesY)
+	for _, i := range w.tiles[t] {
+		b := &w.boxes[i]
 		if x >= b.X1 && x <= b.X2 && y >= b.Y1 && y <= b.Y2 && z >= b.MinZ && z <= b.MaxZ {
 			return true
 		}

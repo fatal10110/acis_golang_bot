@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/fatal10110/acis_golang_bot/internal/geo"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
@@ -57,6 +58,39 @@ func TestWaterContains(t *testing.T) {
 	var none *Water
 	if none.Contains(200, 300, 0) {
 		t.Error("nil water contains a point")
+	}
+}
+
+// TestWaterContainsTileBorder checks Contains through the region tile
+// index: a box across a tile border holds points on both sides of it, and a
+// point outside the world is never in water.
+func TestWaterContainsTileBorder(t *testing.T) {
+	border := geo.WorldXMin + 5*geo.TileSize // first X of tile 5
+	yb := geo.WorldYMin + 3*geo.TileSize     // first Y of tile 3
+	w := NewWater([]WaterBox{
+		{X1: border - 10, Y1: yb - 10, X2: border, Y2: yb, MinZ: -10, MaxZ: 10},
+		{X1: geo.WorldXMin - 100, Y1: geo.WorldYMin - 100, X2: geo.WorldXMin + 100, Y2: geo.WorldYMin + 100, MinZ: -10, MaxZ: 10},
+	})
+	tests := []struct {
+		name string
+		x, y int
+		want bool
+	}{
+		{"box low corner, tiles 4/2", border - 10, yb - 10, true},
+		{"last X of tile 4", border - 1, yb - 5, true},
+		{"first X of tile 5, box edge", border, yb - 5, true},
+		{"first Y of tile 3, box edge", border - 5, yb, true},
+		{"high corner, tiles 5/3", border, yb, true},
+		{"past the edge in tile 5", border + 1, yb - 5, false},
+		{"past the edge in tile 3", border - 5, yb + 1, false},
+		{"world corner box, inside the world", geo.WorldXMin, geo.WorldYMin, true},
+		{"world corner box, west of the world", geo.WorldXMin - 1, geo.WorldYMin, false},
+		{"world corner box, south of the world", geo.WorldXMin, geo.WorldYMin - 1, false},
+	}
+	for _, tt := range tests {
+		if got := w.Contains(tt.x, tt.y, 0); got != tt.want {
+			t.Errorf("%s: Contains(%d, %d, 0) = %v, want %v", tt.name, tt.x, tt.y, got, tt.want)
+		}
 	}
 }
 

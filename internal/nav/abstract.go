@@ -154,7 +154,7 @@ func (h *Hierarchy) Route(p *Planner, from, to location.Location, closed func(do
 	if !p.clickable(goal, &s.layers) {
 		return nil, ErrUnclickable
 	}
-	if p.Water.wet(start.X, start.Y, start.Z) || p.Water.wet(goal.X, goal.Y, goal.Z) {
+	if h.static.Water.wet(start.X, start.Y, start.Z) || h.static.Water.wet(goal.X, goal.Y, goal.Z) {
 		return nil, ErrWater
 	}
 	ma, err := h.Locate(start, nil)
