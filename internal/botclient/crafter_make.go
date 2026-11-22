@@ -41,7 +41,7 @@ func (b *Brain) craftNext(now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	if c.made && s.MaxLoad > 0 && int64(s.Load)*100 >= int64(s.MaxLoad)*crafterWeightPercent {
-		if rows := b.craftDepositRows(c.remainingNeeds(b.cfg.Travel.recipes)); len(rows) > 0 {
+		if rows := b.craftDepositRows(c.remainingNeeds(b.cfg.Travel.recipes), now); len(rows) > 0 {
 			c.resume = true
 			b.beginDeposit(rows, now)
 			return Action{}, true
@@ -167,7 +167,7 @@ func (b *Brain) finishCraftCycle(now time.Time) {
 	c := &b.craft
 	c.pending, c.replan = false, false
 	next := craftplan.Build(b.craftInput(nil, b.wh.status.Known, now), b.persona.Crafter.Plan)
-	rows := b.craftDepositRows(ingredientCounts(next.Keep))
+	rows := b.craftDepositRows(ingredientCounts(next.Keep), now)
 	if len(rows) == 0 {
 		b.endCraftCycle(now, true)
 		return

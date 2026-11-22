@@ -384,7 +384,7 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 			rows = append(rows, WarehouseRow{TemplateID: g.ItemID, Count: g.Count})
 		}
 		rows = append(rows, c.crystal.rows()...)
-		deposit := b.craftDepositRows(ingredientCounts(c.plan.Keep))
+		deposit := b.craftDepositRows(ingredientCounts(c.plan.Keep), now)
 		b.noteDelivering(deposit, now)
 		c.begin(craftWithdraw, WarehouseRequest{Withdraw: rows, Deposit: deposit}, now)
 		return
@@ -483,13 +483,33 @@ func (b *Brain) craftStock() map[int32]int64 {
 }
 
 // craftDepositRows are the deposit rows of the crafting stock beyond keep,
-// and of the gear withdrawn to crystallize and left whole
-// (crystalLeftovers), by template.
-func (b *Brain) craftDepositRows(keep map[int32]int64) []WarehouseRow {
+// of the gear withdrawn to crystallize and left whole (crystalLeftovers),
+// and of the bot's crafted orders whose product the stock leaves out as
+// its own supplies (shots, potions, Scrolls of Escape), as many as it
+// carries, by template.
+func (b *Brain) craftDepositRows(keep map[int32]int64, now time.Time) []WarehouseRow {
 	rows := b.crystalLeftovers()
-	for t, n := range b.craftStock() {
+	stock := b.craftStock()
+	for t, n := range stock {
 		if left := n - keep[t]; left > 0 {
 			rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(left, int64(1<<31-1)))})
+		}
+	}
+	ordered := make(map[int32]int64)
+	for _, o := range b.cfg.CraftBoard.Orders(b.world.Clan.ID, now) {
+		if _, inStock := stock[o.Product]; o.State == OrderCrafted && o.Crafter == b.world.Self.ObjectID && !inStock {
+			ordered[o.Product] += o.Count
+		}
+	}
+	for t, n := range ordered {
+		var carried int64
+		for _, it := range b.world.Inventory.Items {
+			if it.TemplateID == t && !it.Equipped {
+				carried += int64(it.Count)
+			}
+		}
+		if n = min(n, carried); n > 0 {
+			rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(n, int64(1<<31-1)))})
 		}
 	}
 	slices.SortFunc(rows, func(a, b WarehouseRow) int { return cmp.Compare(a.TemplateID, b.TemplateID) })

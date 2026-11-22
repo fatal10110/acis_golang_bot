@@ -266,3 +266,25 @@ func sendCz(t *testing.T, b *Brain, now time.Time, object int32) {
 		t.Fatalf("send = %v, %v", ok, err)
 	}
 }
+
+// TestBrainCrafterDepositsOrderedShots checks that the products of a
+// crafted shot order, which the crafting stock leaves out as the bot's own
+// supplies, are deposited as many as the order asks, which delivers it.
+func TestBrainCrafterDepositsOrderedShots(t *testing.T) {
+	b := newCzBrain(t, adenaStack(1000), Item{ObjectID: 700, TemplateID: soulshotD, Count: 200})
+	b.cfg.Travel.shots = map[int32]shotItem{soulshotD: {}}
+	board, clan := b.cfg.CraftBoard, b.world.Clan.ID
+	id, ok := board.PostCommand(clan, OrderByGM, "gm", soulshotD, 156)
+	board.MaterialsIn(clan, id)
+	if !ok || !board.Claim(clan, id, selfID, t0) || !board.Crafted(clan, id, selfID, t0) {
+		t.Fatal("order not crafted on the board")
+	}
+	b.startMake(t0)
+	c := &b.craft
+	if c.phase != craftDeposit || !reflect.DeepEqual(c.req.Deposit, []WarehouseRow{{TemplateID: soulshotD, Count: 156}}) {
+		t.Fatalf("phase %d deposit %+v, want the 156 ordered soulshots", c.phase, c.req.Deposit)
+	}
+	if c.delivering[id] != 156 {
+		t.Fatalf("delivering %v, want the order's 156", c.delivering)
+	}
+}
