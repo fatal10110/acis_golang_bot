@@ -88,7 +88,9 @@ func TestLiveSupplyTrip(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
 	alone(t, &newbieSpots)
-	ctx := scenarioCtx(t, 20*time.Minute)
+	// Farming to the run-out trigger takes about ten minutes, then the
+	// safe wait, the walk home and the restock.
+	ctx := scenarioCtx(t, 30*time.Minute)
 	_, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("su", 1)
@@ -114,12 +116,15 @@ func TestLiveSupplyTrip(t *testing.T) {
 	// the village when no safe moment came within Supply.SafeWait.
 	var read, landed time.Time
 	var last string
+	var lastAt time.Time
+	// note logs the bot's state on every change, and its position and HP
+	// at least every noteEvery, so a bot that stands still shows in the log.
 	note := func() {
 		st := f.bot.Status()
 		if now := fmt.Sprintf("rule %q spot %q walk %q, %d shots, %d potions, %d scrolls, %d adena", st.Rule, st.Spot, st.Walk,
-			f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena)); now != last {
-			last = now
-			t.Logf("%s %s at %v", f.name, now, st.Position)
+			f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena)); now != last || time.Since(lastAt) >= noteEvery {
+			last, lastAt = now, time.Now()
+			t.Logf("%s %s at %v, HP %d/%d, state %v", f.name, now, st.Position, st.HP, st.MaxHP, st.State)
 		}
 	}
 	until(t, ctx, "the trip home", func() string {
@@ -202,6 +207,10 @@ var tiFarEnd = botclient.Point{X: -100231, Y: 252907, Z: -3496}
 // walkedHome is how close to the village centre a walk home has arrived:
 // the walk ends within 600 of the gatekeeper (townArrive), next to it.
 const walkedHome = 2000
+
+// noteEvery is how often the supply trip scenario logs the bot's position
+// while nothing else about it changes.
+const noteEvery = 30 * time.Second
 
 // issueNeverSafe tracks the farmer at a starter spot finding no safe
 // moment to read its scroll: nearly every starter monster has an aggro
