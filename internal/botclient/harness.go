@@ -93,6 +93,10 @@ func EncodeMoveBackwardToLocation(to, origin Point) []byte {
 	return encodeMoveBackwardToLocation(to, origin)
 }
 
+// EncodeValidatePosition reports the character at p facing heading, not on
+// a boat (see encodeValidatePosition).
+func EncodeValidatePosition(p Point, heading int32) []byte { return encodeValidatePosition(p, heading) }
+
 // EncodeWalkRunToggle switches between walking and running (the action
 // bar's toggle, RequestActionUse 1).
 func EncodeWalkRunToggle() []byte { return encodeRequestActionUse(actionWalkRun) }
