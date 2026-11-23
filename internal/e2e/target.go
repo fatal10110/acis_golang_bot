@@ -455,8 +455,8 @@ func (c *Client) follow(ctx context.Context, ev botclient.Event) error {
 
 // Watch reads the connection for d (not past ctx's deadline), handing fn
 // every event, as Await does with a match that never accepts; the time
-// running out is no error. A deadline that cuts a frame in two breaks the
-// connection's framing, so later reads fail.
+// running out is no error. A frame the deadline cuts in two is finished by
+// the next read (wire.FrameReader keeps what it read).
 func (c *Client) Watch(ctx context.Context, d time.Duration, fn func(botclient.Event)) error {
 	_, err := c.Await(ctx, d, func(ev botclient.Event) bool {
 		fn(ev)
