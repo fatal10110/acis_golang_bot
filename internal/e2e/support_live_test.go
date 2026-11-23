@@ -67,7 +67,20 @@ func (c *casts) note(ev botclient.Event) {
 		c.seen = append(c.seen, castSeen{at: time.Now(), ev: e, who: e.AttackerID})
 	case botclient.MoveToPawn:
 		c.seen = append(c.seen, castSeen{at: time.Now(), ev: e, who: e.ObjectID})
+	case botclient.Die:
+		c.seen = append(c.seen, castSeen{at: time.Now(), ev: e, who: e.ObjectID})
+	case botclient.Revive:
+		c.seen = append(c.seen, castSeen{at: time.Now(), ev: e, who: e.ObjectID})
 	}
+}
+
+// death matches a Die or a Revive.
+func death(ev botclient.Event) bool {
+	switch ev.(type) {
+	case botclient.Die, botclient.Revive:
+		return true
+	}
+	return false
 }
 
 // first is the first noted event of caster that match accepts.
@@ -160,7 +173,13 @@ func TestLiveSupport(t *testing.T) {
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 12*time.Minute)
 	gm := enterGM(t, ctx, tg)
-	acc, _ := tg.Account("su", 1)
+	// The leader has an account of its own: e2esu1 is TestLiveSupplyTrip's
+	// farmer (#252), which that run strips, levels to 6, loads and gets
+	// killed. As this leader it swung every 3.8 s for 0 to 2 damage, so
+	// the mystic's 2 or 3 drew the orc, which killed the bot and then the
+	// leader before any heal (#282); and two runs at once would drop each
+	// other's login.
+	acc, _ := tg.Account("su", 3)
 	leader := enter(t, ctx, tg, acc, character(t, acc, &botclient.HumanFighter), nil)
 	account, _ := tg.Account("su", 2)
 	b := runBotWith(t, ctx, tg, account, botSetup{
@@ -181,20 +200,44 @@ func TestLiveSupport(t *testing.T) {
 	// from here on, through the GM (it sees the bot recalled to it).
 	var seen casts
 	start := time.Now()
+	self := leader.Self.ObjectID
+	// The leader's HP and when the orc first took it under 60 %, the orc
+	// and its HP as the leader sees them: the failure digest logs them.
+	var (
+		hp, maxHP       int32
+		hurtAt          time.Time
+		mob             int32
+		mobHP, mobMaxHP int32
+	)
 	defer func() {
 		if !t.Failed() {
 			return
 		}
+		now := time.Now()
 		st := b.Status()
 		t.Logf("bot: state %v level %d HP %d/%d MP %d/%d rule %q leader %q members %v, %.0f from the leader",
 			st.State, st.Level, st.HP, st.MaxHP, st.MP, st.MaxMP, st.Rule, st.Leader, st.Members, dist(st.Position, leader.Pos()))
-		seen.between(t, botID, start, time.Now())
+		seen.between(t, botID, start, now)
+		t.Logf("leader: HP %d/%d, under 60 %% at %v", hp, maxHP, hurtAt.Sub(start))
+		for _, s := range seen.all(self, death) {
+			t.Logf("leader %v: %T", s.at.Sub(start), s.ev)
+		}
+		if mob != 0 {
+			t.Logf("orc %d: HP %d/%d", mob, mobHP, mobMaxHP)
+			seen.between(t, mob, start, now)
+			for _, s := range seen.all(self, hits(mob)) {
+				t.Logf("leader %v: %+v", s.at.Sub(start), s.ev)
+			}
+		}
 	}()
+	// A target command runs on the GM itself when the server cleared its
+	// target, as it may a moment after the recall (#206): each one checks
+	// that the bot is still the GM's target first.
 	if err := gm.Select(ctx, botID); err != nil {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"cancel " + name, "set level 15", "skill set 1011 1", "skill set 1015 1", "skill set 1068 1", "skill set 1040 1"} {
-		if err := gm.Command(ctx, cmd); err != nil {
+		if err := gm.OnTargetWatch(ctx, botID, cmd, seen.note); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -214,25 +257,31 @@ func TestLiveSupport(t *testing.T) {
 
 	// The leader at level 15 too, so the orc it fights takes it under 60 %
 	// HP over a few blows rather than killing it in two.
-	self := leader.Self.ObjectID
 	if err := gm.Select(ctx, self); err != nil {
 		t.Fatal(err)
 	}
 	// Full HP too: a leader that entered dead restarts in the village
 	// with part of it, and the heal phase starts from a full bar.
 	for _, cmd := range []string{"cancel " + leader.Self.Name, "set level 15", "heal " + leader.Self.Name} {
-		if err := gm.Command(ctx, cmd); err != nil {
+		if err := gm.OnTargetWatch(ctx, self, cmd, seen.note); err != nil {
 			t.Fatal(err)
 		}
 	}
-	var hp, maxHP int32
-	var hurtAt time.Time
 	track := func(ev botclient.Event) {
 		seen.note(ev)
 		switch e := ev.(type) {
 		case botclient.UserInfo:
 			hp, maxHP = e.HP, e.MaxHP
 		case botclient.StatusUpdate:
+			if e.ObjectID == mob && mob != 0 {
+				if e.Set&botclient.StatusHP != 0 {
+					mobHP = e.HP
+				}
+				if e.Set&botclient.StatusMaxHP != 0 {
+					mobMaxHP = e.MaxHP
+				}
+				return
+			}
 			if e.ObjectID != self {
 				return
 			}
@@ -270,10 +319,11 @@ func TestLiveSupport(t *testing.T) {
 	}
 
 	// The leader only selects an orc: the bot leaves it be.
-	mob, err := gm.Spawn(ctx, vukuOrc)
+	spawned, err := gm.Spawn(ctx, vukuOrc)
 	if err != nil {
 		t.Fatal(err)
 	}
+	mob = spawned
 	// Registered after the leader's logout, this runs first: a failure
 	// before the Delete below leaves no orc hitting the leader as it logs
 	// out.
@@ -325,8 +375,17 @@ func TestLiveSupport(t *testing.T) {
 	}
 
 	// The orc hits back: once the leader is under 60 % HP the bot heals it.
+	// A death on the way fails at once rather than at the deadline: the
+	// bot's or the leader's leaves no heal to see, and the orc's before the
+	// leader is hurt leaves nothing to hurt it.
 	heal := func(ev botclient.Event) bool { return skill(skillHeal, self)(ev) || skill(skillBattleHeal, self)(ev) }
+	died := func(ev botclient.Event) bool { _, ok := ev.(botclient.Die); return ok }
 	watchUntil(t, ctx, leader, "the leader under 60 % HP and the bot healing it", func() bool {
+		for _, who := range []int32{botID, self, mob} {
+			if at := firstAfter(seen.all(who, died), attackAt); !at.IsZero() && (who != mob || hurtAt.IsZero()) {
+				t.Fatalf("%d died %v after the leader's first swing, before the heal", who, at.Sub(attackAt))
+			}
+		}
 		if hurtAt.IsZero() {
 			return false
 		}
