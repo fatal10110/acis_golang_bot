@@ -54,10 +54,10 @@ func TestLiveClanInvite(t *testing.T) {
 	if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(leaderID)); err != nil {
 		t.Fatalf("GM next to %s: %v", leader.Self.Name, err)
 	}
+	// The leader stays a stranger who never whispered: the bot accepts it
+	// as the commander it sees once its landing shows it, even when the
+	// invitation comes before that (#199).
 	botID := recallBot(t, ctx, tg, gm, name)
-	// A command whispered makes the leader a commander the bot knows by
-	// name in sight or not, and keeps the bot where it was recalled.
-	tell(t, ctx, leader, name, "stay")
 	// Selected once: the server confirms no second click on the GM's
 	// target, and nothing below clears it.
 	if err := gm.Select(ctx, leaderID); err != nil {
