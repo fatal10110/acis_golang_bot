@@ -28,6 +28,9 @@ func TestBrainCrafterReconnect(t *testing.T) {
 	end := at(10 * time.Second)
 	tests := []struct {
 		name string
+		// carry is what the crafter carries past its plan: a breaker
+		// trip deposits it before the cycle ends.
+		carry []Item
 		// last ends the first session's cycle at end.
 		last      func(b *Brain)
 		reconnect bool
@@ -35,13 +38,21 @@ func TestBrainCrafterReconnect(t *testing.T) {
 		held     bool
 		wantLast CraftOutcome
 	}{
-		{"breaker tripped, same session", func(b *Brain) { b.tripCrafter(end) }, false, true, CraftCycleTripped},
-		{"breaker tripped, next session", func(b *Brain) { b.tripCrafter(end) }, true, true, CraftCycleTripped},
-		{"nothing to craft, next session", func(b *Brain) { b.endCraftCycle(end, true) }, true, false, CraftCycleNothing},
+		{"breaker tripped, same session", nil, func(b *Brain) { b.tripCrafter(end) }, false, true, CraftCycleTripped},
+		{"breaker tripped, next session", nil, func(b *Brain) { b.tripCrafter(end) }, true, true, CraftCycleTripped},
+		// The session drops while the trip's deposit is on its way: the
+		// cycle never ended, and the hold still outlives the session.
+		{"breaker tripped, deposit pending, next session", []Item{{ObjectID: 300, TemplateID: steel, Count: 2}}, func(b *Brain) {
+			b.tripCrafter(end)
+			if b.craft.phase != craftDeposit {
+				t.Fatalf("phase after the trip = %v, want the deposit", b.craft.phase)
+			}
+		}, true, true, CraftCycleTripped},
+		{"nothing to craft, next session", nil, func(b *Brain) { b.endCraftCycle(end, true) }, true, false, CraftCycleNothing},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := makingBrain(t)
+			b := makingBrain(t, tt.carry...)
 			board := b.cfg.CraftBoard
 			l := linkBrain(b, standing{})
 			tt.last(b)
