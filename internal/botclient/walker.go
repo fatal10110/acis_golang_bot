@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -195,6 +196,7 @@ func (w *walker) reset(dest Point, arrive int32, purpose walkPurpose) {
 	w.status, w.reason, w.endedAt = walkWalking, "", time.Time{}
 	w.route = nil
 	w.blocked, w.desync, w.watchdog, w.doors = 0, 0, 0, 0
+	w.plan.Avoid.Clear()
 }
 
 // unreachable ends the walk with reason.
@@ -418,6 +420,10 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 	case errors.Is(err, nav.ErrBudget):
 		w.unreachable(reasonBudget)
 		return Action{}, false
+	case errors.Is(err, nav.ErrUnreachable) && w.plan.Avoid.Len() > 0:
+		// The refused segments' columns cut every way left.
+		w.unreachable(reasonBlocked)
+		return Action{}, false
 	case err != nil || len(route) < 2:
 		w.unreachable(reasonNoRoute)
 		return Action{}, false
@@ -586,9 +592,9 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			seg.answered = true
 			switch {
 			case still:
-				b.walkBlocked()
+				b.walkBlocked(e.Dest)
 			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
-				b.walkDesync(seg.door)
+				b.walkDesync(e)
 			default:
 				speed := float64(pace(s.Running, s.RunSpeed, s.WalkSpeed))
 				if speed <= 0 {
@@ -600,7 +606,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			}
 		case !seg.sentAt.IsZero() && still:
 			if horizontal2(e.Dest, seg.to) > walkSlop*walkSlop {
-				b.walkBlocked()
+				b.walkBlocked(e.Dest)
 				return
 			}
 			// Stopped on the segment's end: it arrived.
@@ -633,24 +639,32 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 	}
 }
 
-// walkBlocked takes a blocked stop of the segment in flight: the step chain
-// differed from the walker's check. It replans from the stop point.
-func (b *Brain) walkBlocked() {
+// walkBlocked takes a blocked stop at stop of the segment in flight: the
+// step chain differed from the walker's check. It replans from the stop
+// point, and every plan of this walk keeps out of the columns of the rest of
+// the segment, from the stop point to its end (docs/navigation.md, "Server
+// answers to its own moves").
+func (b *Brain) walkBlocked(stop Point) {
 	w := &b.walk
 	b.metrics.NavBlocked()
+	w.plan.Avoid.AddLine(toLoc(stop), toLoc(w.seg.to))
 	w.seg, w.route = segment{}, nil
 	if w.blocked++; w.blocked >= walkMaxBlocked {
 		w.unreachable(reasonBlocked)
 	}
 }
 
-// walkDesync takes a segment the server answered with another destination:
-// it routed or truncated, so the bot's geodata or door state differs from
-// the server's. The walker replans once the server's move ends.
-func (b *Brain) walkDesync(door bool) {
+// walkDesync takes the server's answer to the segment in flight toward
+// another destination: it routed or truncated, so the bot's geodata or door
+// state differs from the server's. A desync off a door logs the segment and
+// the server's answer, so a run names the leg its check got wrong
+// (docs/navigation.md, "Server answers to its own moves"). The walker
+// replans once the server's move ends.
+func (b *Brain) walkDesync(answer MoveToLocation) {
 	w := &b.walk
+	seg := w.seg
 	w.seg, w.route = segment{}, nil
-	if door {
+	if seg.door {
 		b.metrics.NavDoorReplan()
 		if w.doors++; w.doors >= walkMaxDoor {
 			w.unreachable(reasonDoor)
@@ -658,10 +672,15 @@ func (b *Brain) walkDesync(door bool) {
 		return
 	}
 	b.metrics.NavDesync()
+	b.log.Warn("nav desync", "from", logPoint(seg.from), "to", logPoint(seg.to),
+		"server_origin", logPoint(answer.Origin), "server_dest", logPoint(answer.Dest))
 	if w.desync++; w.desync >= walkMaxDesync {
 		w.unreachable(reasonDesync)
 	}
 }
+
+// logPoint is p as a log value: x,y,z.
+func logPoint(p Point) string { return fmt.Sprintf("%d,%d,%d", p.X, p.Y, p.Z) }
 
 // talking records the talk click about to go out on an NPC standing at
 // npc at now.

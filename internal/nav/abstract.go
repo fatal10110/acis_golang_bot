@@ -205,7 +205,8 @@ type routeBudget struct {
 }
 
 // search is one search of Route under the door state closed: the abstract
-// path, then its legs refined over p's engine and string-pulled, in s.route.
+// path, then its legs refined over p's engine, keeping out of p.Avoid, and
+// string-pulled, in s.route.
 // It replans up to maxReplans times with the failing cell edge avoided, and
 // spends from b.
 func (h *Hierarchy) search(s *scratch, p *Planner, q *routeQuery, closed func(door int) bool, b *routeBudget) ([]location.Location, error) {
@@ -216,7 +217,9 @@ func (h *Hierarchy) search(s *scratch, p *Planner, q *routeQuery, closed func(do
 	}
 	s.waypoints = append(s.waypoints[:0], q.start)
 	for _, n := range s.apath {
-		if c := h.graph.nodeRep(int(n)); c != s.waypoints[len(s.waypoints)-1] {
+		// A representative in an avoided column is left out: the leg
+		// searches around it from the waypoint before to the one after.
+		if c := h.graph.nodeRep(int(n)); c != s.waypoints[len(s.waypoints)-1] && !p.Avoid.has(c) {
 			s.waypoints = append(s.waypoints, c)
 		}
 	}

@@ -53,6 +53,10 @@ type TravelMap struct {
 	// bot's effects with.
 	buffPotions map[int32]buffPotion
 	stacks      map[int32]map[int32]stackEffect
+	// castRanges are the cast ranges of every skill level
+	// (datapack.Skill.CastRange): what the fight sizes a cast's stand
+	// point with (Brain.castReach).
+	castRanges map[datapack.SkillRef]int32
 	// shots are the datapack's player shots (indexShots), weapons what
 	// each weapon template charges (indexWeapons), and spawnedSold the
 	// items spawned merchants sell (spawnedSold).
@@ -108,7 +112,7 @@ type destination struct {
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear and
 // its armor sets, the arrows each bow shoots, the items' reference prices, the healing
-// and buff potions and shots, the items' weights, the aggressive NPCs' aggro
+// and buff potions and shots, the skills' cast ranges, the items' weights, the aggressive NPCs' aggro
 // ranges, the warehouse keepers, the craft recipes, the crystals gear
 // breaks into and the dye symbols.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
@@ -120,6 +124,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.prices = dp.Prices
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
 	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
+	m.castRanges = indexCastRanges(dp.Skills)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.Items, dp.EtcItems)
@@ -373,7 +378,8 @@ const (
 
 // tripKey names a node of the trip search: where the bot stands, a
 // gatekeeper by its index in the travel map, a destination by its point
-// (many gatekeepers share one), a spot by its index in the registry.
+// (many gatekeepers share one), a spot by its index in the registry, a town
+// by its index in the towns searched for (planTown).
 type tripKey struct {
 	kind tripKind
 	i    int
@@ -387,6 +393,7 @@ const (
 	tripGatekeeper
 	tripDestination
 	tripSpot
+	tripTown
 )
 
 // tripLabel is the cheapest way the trip search found to a node so far.
@@ -417,10 +424,17 @@ type tripLabel struct {
 // node while no other there is as cheap, as dear and as short in teleports,
 // so the budget never prunes the only path within it.
 func (b *Brain) planTrip(here navPoint, now time.Time) {
+	b.planPath(here, now, nil)
+}
+
+// planPath is planTrip's search, its goal a fitting spot with room when
+// towns is nil, else a landing in one of towns: a destination within
+// storeTownRadius of it (planTown). It reports whether it planned a trip.
+func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 	m, tr, p, s := b.cfg.Travel, &b.trip, &b.persona.Travel, &b.world.Self
 	onward := tr.onward
 	if m == nil || tr.v.active() || p.MaxPrice <= 0 || (onward == 0 && !tr.endedAt.IsZero() && now.Sub(tr.endedAt) < p.Gap) {
-		return
+		return false
 	}
 	tr.onward = 0
 	maxHops := math.MaxInt
@@ -465,11 +479,11 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 		open = open[:len(open)-1]
 		expanded++
 		switch l.key.kind {
-		case tripSpot:
+		case tripSpot, tripTown:
 			g := &m.gatekeepers[l.gk]
 			tr.v = npcVisit{npcID: g.npcID, at: g.at}
 			tr.step, tr.gk, tr.dest, tr.onward = tripTalk, l.gk, l.dest, l.hops-1
-			return
+			return true
 		case tripGatekeeper:
 			if l.hops >= maxHops {
 				continue
@@ -487,7 +501,14 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 				if gk < 0 {
 					gk, first = l.key.i, d
 				}
-				push(tripLabel{key: tripKey{kind: tripDestination, at: d.at}, p: dp, cost: l.cost + float64(d.price), price: price, hops: l.hops + 1, gk: gk, dest: first})
+				dl := tripLabel{key: tripKey{kind: tripDestination, at: d.at}, p: dp, cost: l.cost + float64(d.price), price: price, hops: l.hops + 1, gk: gk, dest: first}
+				push(dl)
+				for ti, t := range towns {
+					if dist2D(d.at, t) <= storeTownRadius {
+						dl.key = tripKey{kind: tripTown, i: ti}
+						push(dl)
+					}
+				}
 			}
 			continue
 		}
@@ -510,10 +531,11 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 				push(tripLabel{key: tripKey{kind: tripGatekeeper, i: gi}, p: at.p, cost: l.cost + walk(d), price: l.price, hops: l.hops, gk: l.gk, dest: l.dest})
 			}
 		}
-		if l.key.kind == tripDestination {
+		if l.key.kind == tripDestination && towns == nil {
 			b.tripSpots(l, reach, walk, now, push)
 		}
 	}
+	return false
 }
 
 // tripSpots pushes the walks from destination l to the spots within reach

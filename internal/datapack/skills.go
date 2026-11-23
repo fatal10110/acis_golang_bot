@@ -7,12 +7,17 @@ import (
 )
 
 // Skill is the part of one level of a skill template (skills/*.xml) bots
-// weigh potions and buffs with: whether it is a potion's and the effects it
-// lands, with their stack types.
+// weigh potions and buffs with, and cast it from: whether it is a potion's,
+// its cast range and the effects it lands, with their stack types.
 type Skill struct {
 	Name string
 	// Potion is isPotion: the skill of a potion etc item.
 	Potion bool
+	// CastRange is castRange (default 0): how far from its target the
+	// server casts the skill without walking the caster first, before
+	// both collision radii are added (network/magic_skill.go
+	// walkToCastTarget). A negative one takes no approach at all.
+	CastRange int32
 	// Effects are the effects of the skill's <for> blocks at this level,
 	// in file order; nil for none. The effects only an enchanted skill
 	// level lands (<enchant1for>, <enchant2for>) are not read.
@@ -84,7 +89,8 @@ func LoadSkills(dir string) (map[SkillRef]Skill, error) {
 }
 
 // buildSkill reads every regular level of el into skills: id, levels and
-// name are required, isPotion defaults to false; an effect's name is
+// name are required, isPotion defaults to false and castRange to 0
+// (data/xml/skill.go buildSkillDefinitionAttrs); an effect's name is
 // required, its stackType defaults to "none", stackOrder to 0, time and
 // count to 1 (data/xml/effectgrammar.go readEffectTemplate).
 func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
@@ -109,9 +115,13 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	}
 	for level := 1; level <= levels; level++ {
 		res := resolver{tables: tables, row: level}
-		sk := Skill{Name: name, Potion: res.reader(sets, "isPotion").boolDefault("isPotion", false)}
+		r := res.reader(sets, "isPotion", "castRange")
+		sk := Skill{Name: name, Potion: r.boolDefault("isPotion", false), CastRange: r.int32Default("castRange", 0)}
 		if res.err != nil {
 			return fmt.Errorf("skill %d level %d: %w", id, level, res.err)
+		}
+		if r.err != nil {
+			return fmt.Errorf("skill %d level %d: %w", id, level, r.err)
 		}
 		for _, f := range el.For {
 			for _, e := range f.Effects {

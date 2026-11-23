@@ -22,12 +22,16 @@ func TestLoadSkills(t *testing.T) {
 	magicHaste := func(order float64) []Effect {
 		return []Effect{{Name: "Buff", StackType: "casting_time_down", StackOrder: order, Time: 1200, Count: 1}}
 	}
-	// The stack order of 1086 and 2169 differs by level (#stackOrder);
+	// The stack order of 1086 and 2169 and the cast range of 4110 differ
+	// by level (#stackOrder, #castRange);
 	// 1086's enchanted levels are not read; 4327 keeps its last
 	// declaration.
 	want := map[SkillRef]Skill{
-		{1086, 1}: {Name: "Haste", Effects: haste(1)},
-		{1086, 2}: {Name: "Haste", Effects: haste(2)},
+		{1086, 1}: {Name: "Haste", CastRange: 400, Effects: haste(1)},
+		{1086, 2}: {Name: "Haste", CastRange: 400, Effects: haste(2)},
+		{1177, 1}: {Name: "Wind Strike", CastRange: 600},
+		{4110, 1}: {Name: "Breath Attack", CastRange: 500},
+		{4110, 2}: {Name: "Breath Attack", CastRange: 1000},
 		{2002, 1}: {Name: "Healing Drug", Potion: true, Effects: []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: 1.5, Time: 5, Count: 4}}},
 		{2012, 1}: {Name: "Potion of Alacrity", Potion: true, Effects: haste(1)},
 		{2013, 1}: {Name: "Scroll of Escape"},
@@ -59,6 +63,8 @@ func TestLoadSkillsRejects(t *testing.T) {
 		{"undefined table", `<skill id="1" levels="1" name="x"><for><effect name="Buff" stackOrder="#order"/></for></skill>`, "undefined table"},
 		{"short table", `<skill id="1" levels="2" name="x"><table name="#order"> 1 </table><for><effect name="Buff" stackOrder="#order"/></for></skill>`, "no row 2"},
 		{"potion table", `<skill id="1" levels="1" name="x"><set name="isPotion" val="#potion"/></skill>`, "undefined table"},
+		{"cast range", `<skill id="1" levels="1" name="x"><set name="castRange" val="far"/></skill>`, `"castRange"`},
+		{"cast range table", `<skill id="1" levels="2" name="x"><table name="#range"> 400 </table><set name="castRange" val="#range"/></skill>`, "no row 2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

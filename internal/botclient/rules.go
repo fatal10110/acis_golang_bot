@@ -786,10 +786,11 @@ func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 		if a, st := b.goTo(to, walkSlop, walkIdle, now); st == walkWalking {
 			return a, true
 		}
-		// No drift from here (no geodata, or nowhere to go): a turn.
-		return moveAction(offset(from, angle, turnStep), from), true
+		// No drift from here (no geodata, or nowhere to go): a turn, or
+		// nothing when no turn step holds on the geodata.
+		return b.turnAround(angle, now), true
 	case r < 7:
-		return moveAction(offset(from, angle, turnStep), from), true
+		return b.turnAround(angle, now), true
 	case r < 9 && len(p.Emotes) > 0:
 		return emoteAction(p.Emotes[b.rng.IntN(len(p.Emotes))]), true
 	default:

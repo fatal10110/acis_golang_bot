@@ -346,7 +346,7 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 	cfg := b.brain
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
-	cfg.markers, cfg.chat, cfg.link = b.cfg.Markers, b.chat, &b.link
+	cfg.markers, cfg.chat, cfg.link, cfg.log = b.cfg.Markers, b.chat, &b.link, b.log
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })
 	b.setInSession(true)

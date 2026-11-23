@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -22,6 +23,10 @@ const (
 	// logoutRetry is how long a bot whose Logout was refused (in combat)
 	// plays on before it asks again.
 	logoutRetry = 10 * time.Second
+	// landingTimeout bounds the wait for the landing an Appearing asks:
+	// the server answers it on the player's queue at once, so a landing
+	// not shown by then is not coming and the bot decides without it.
+	landingTimeout = 5 * time.Second
 	// restartRetry is how long a dead bot waits for the answer to its
 	// restart request before it asks again: a refused restart answers
 	// nothing, and a siege attacker's request waits out the attacker
@@ -111,6 +116,9 @@ type BrainConfig struct {
 	// link is the Bot's mailbox, standing order and status board; nil
 	// takes no panel command and publishes no status.
 	link *botLink
+	// log takes the brain's diagnostics, the Bot's logger; nil discards
+	// them.
+	log *slog.Logger
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -124,6 +132,7 @@ type Brain struct {
 	rng     *rand.Rand
 	persona Persona
 	cfg     BrainConfig
+	log     *slog.Logger
 
 	pace pacer
 	// nextTick is the next regular decision; reactAt, when set, replaces it
@@ -160,6 +169,12 @@ type Brain struct {
 	// appearedAt is when the last Appearing went out: the server shows the
 	// objects around the landing point only after it.
 	appearedAt time.Time
+	// landingUntil is set from an Appearing sent until the server shows the
+	// landing, zero otherwise: no decision is made before, as the world
+	// holds nothing around the landing point yet (#199). The server shows
+	// the objects there, then sends UserInfo (network/client_ingame.go
+	// handleAppearing); landingUntil bounds the wait for it.
+	landingUntil time.Time
 	// restartedAt is the restart request or resurrection answer not yet
 	// answered by a Revive.
 	restartedAt time.Time
@@ -286,12 +301,15 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	if cfg.chat == nil {
 		cfg.chat = newChatLog()
 	}
+	if cfg.log == nil {
+		cfg.log = slog.New(slog.DiscardHandler)
+	}
 	rng := cfg.Rand
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
 	b := &Brain{
-		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
+		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, log: cfg.log, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAsked: make(map[int32]shotAsk), shotOff: make(map[int32]bool),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
@@ -455,11 +473,23 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				// Somewhere else: walk to the spot again.
 				b.spot.arrived = false
 				if !e.Fast {
+					// A teleport made right after a landing (one the
+					// server held for it) asks its own Appearing at the
+					// reaction to it.
+					b.landingUntil = time.Time{}
+					gk := b.trip.v.active() && b.trip.step == tripGone
 					b.tripTeleported(now)
-					if b.supplyTrip.teleported(now) {
+					if b.supplyTrip.teleported(now, gk, b.trip.onward) {
 						b.townArrival()
 					}
 				}
+			}
+		case UserInfo:
+			if !b.landingUntil.IsZero() {
+				// Landed: the objects around the landing point came
+				// first. The decision the landing held is due now, or
+				// at the reaction to a teleport read with it.
+				b.landingUntil, b.nextTick = time.Time{}, now
 			}
 		case Revive:
 			if e.ObjectID == self {
@@ -589,7 +619,8 @@ func (b *Brain) requestLogout(now time.Time) {
 // wake runs whatever is due at now: the logout steps, a decision, the
 // keepalive. While a Logout waits for its answer the bot makes no decision.
 // After a loading-screen teleport the decision is the reaction to it and
-// Appearing goes out first; until it is out, the bot sends nothing else.
+// Appearing goes out first; until it is out, the bot sends nothing else, and
+// the next decision waits for the landing it asks.
 func (b *Brain) wake(now time.Time) error {
 	l := &b.logout
 	if !l.giveUpAt.IsZero() && !now.Before(l.giveUpAt) {
@@ -639,7 +670,14 @@ func (b *Brain) wake(now time.Time) error {
 				b.reactAt = now.Add(time.Second / frameRate)
 				return nil
 			}
+			// The decision waits for the landing: a prompt answered now
+			// would find nobody in sight.
+			b.reactAt, b.landingUntil = time.Time{}, now.Add(landingTimeout)
+			return nil
 		}
+		// Past here a landing still awaited timed out: the bot decides
+		// on what it has.
+		b.landingUntil = time.Time{}
 		b.reactAt = time.Time{}
 		b.nextTick = now.Add(b.tickDelay())
 		b.tidyPartyClaim(now)
@@ -666,7 +704,8 @@ func (b *Brain) wake(now time.Time) error {
 
 // decisionAt is when the next decision is due: the reaction to an event
 // or the regular tick, or the leader's assist, the follow re-path or a
-// whisper reply when that comes sooner.
+// whisper reply when that comes sooner, and never before a landing awaited
+// times out.
 func (b *Brain) decisionAt() time.Time {
 	t := b.nextTick
 	if !b.reactAt.IsZero() {
@@ -680,6 +719,9 @@ func (b *Brain) decisionAt() time.Time {
 	}
 	if b.chat.wake && b.chat.at.Before(t) {
 		t = b.chat.at
+	}
+	if t.Before(b.landingUntil) {
+		t = b.landingUntil
 	}
 	return t
 }
