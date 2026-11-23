@@ -47,9 +47,9 @@ server code or a focused reproduction, and report what you could not verify.
    with fixed vectors or recorded fixtures, and events plus an injected clock in, packets out, for
    the brain. Flows against the server are e2e scenarios. Tiers and conventions:
    `docs/agents/test-strategy.md`.
-6. **Verify.** The gates in `docs/agents/verification.md`, scoped to what the change can affect;
-   `-race` for anything concurrent. Report every gate you could not run as not run, never as
-   passed.
+6. **Verify.** The gates in `docs/agents/verification.md`, scoped to what the change can affect,
+   without `-race` (only when the owner asks; PR CI runs it). Report every gate you could not run
+   as not run, never as passed.
 7. **Deliver.** Stage only in-scope files, commit, push, and open the PR against `main` with
    "Closes #n" per fully resolved issue ("Part of #n" otherwise), the verification evidence, a
    "Decisions" section for every choice the issue left open, and the gap audit line

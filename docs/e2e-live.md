@@ -90,9 +90,11 @@ owner's own bots). Each concurrent run needs:
   of the GMs another run uses, for example a run of an older harness that takes no lock. A run
   needs as many GMs as GM scenarios it runs at once: with one GM pinned, run its GM scenarios
   one at a time (`-parallel 1`), or a second one fails on the exhausted pool.
-- **Its own lock** when the run goes through `scripts/agent-tools/heavy`: a `HEAVY_LOCK` of its
-  own (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`, with `HEAVY_TIMEOUT=60m`). A live run never takes
-  the default heavy lock, which stays for race tests and lint on the owner's machine.
+- **Its own lock** when the run goes through `scripts/agent-tools/heavy`: `heavy` puts every e2e
+  run (an argument naming `internal/e2e`, an `e2e-live` target or a `TestLive` scenario) on the
+  e2e lock with a 60m timeout, never on the unit-test and lint lock, so live runs queue behind each
+  other only. A run that may go in parallel (its own GMs and prefix) sets a `HEAVY_LOCK` of its
+  own (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`).
 - **Its own scenarios or its own prefix:** two runs of the same scenario at once log in the same
   `e2e` accounts and drop each other; give one of them another `BOT_E2E_PREFIX`.
 - **Headroom:** each scenario keeps its cap of 4 characters online and a test process keeps at

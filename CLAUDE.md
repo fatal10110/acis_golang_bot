@@ -74,6 +74,8 @@ Details: `docs/agents/go-style.md`.
   packets out.
 - Flows against a real server are e2e scenarios on the server stack.
 - Never wall-clock waits in unit tests; never a build tag to hide a test.
+- No `-race` runs on the owner's machine unless the owner explicitly asks for one: run the scoped
+  tests without it. PR CI runs the unit tier with `-race`. Never run e2e scenarios with `-race`.
 
 Tiers, stack and conventions: `docs/agents/test-strategy.md`. Gates: `docs/agents/verification.md`.
 
@@ -93,8 +95,9 @@ server first, `gh` as fallback. Details: `docs/agents/tooling.md`.
 
 **Tool inventory** (`scripts/agent-tools/`):
 
-- `heavy <cmd>`: serializes heavy runs (race tests, e2e, lint) through one lock and kills a hung
-  run with SIGQUIT so Go dumps its goroutines.
+- `heavy <cmd>`: serializes heavy runs through a lock and kills a hung run with SIGQUIT so Go
+  dumps its goroutines. E2e runs (`internal/e2e`, `e2e-live`, `TestLive`) take an e2e lock of their
+  own, so a long live run never blocks scoped unit tests and lint.
 - `look.py <spec>...`: several lookups in one call with capped output: ranges (`FILE:A-B`), Go
   declarations by name (`go:PATH:Type.Method`), bounded rg (`rg:PATH:PATTERN`). Every tool call
   re-sends the whole context, so batch lookups.

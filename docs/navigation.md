@@ -616,7 +616,7 @@ within 8000 units:
 
 | Measure | Result |
 | --- | --- |
-| spot centres on a wet cell | 37 of 4664 (0.8%) |
+| spot centres on a wet cell | 37 of the sample's 1555 (120 of all 4664, #275) |
 | wet STANDARD teleport destinations | 0 of 429 |
 | routes planned without water that pass water | 23 of 488 (4.7%) |
 | of those, with water avoided | 9 detour (most under 1.15× the length), 4 have no dry cell within 300 of an endpoint, 4 no route, 6 exceed a 400000-cell budget |
@@ -672,8 +672,13 @@ world units):
   the bot, a destination outside its SCC or in water, `ErrWater`, `ErrUnreachable` or `ErrBudget`) with water
   within `walkSwimNear` (1000) of the box its two ends span tries the swimming cell planner,
   `walkBudget` cells. Only a follower swims to a destination in water: a bot left standing in
-  water drowns once its breath runs out, so any other walk to a place in water (a farming spot on
-  the sea floor) stays unreachable, as before. A bot in water always swims out.
+  water drowns once its breath runs out, so any other walk to a place in water stays
+  unreachable, as before. A bot in water always swims out.
+- **Spots**: no farmer can hold a spot whose centre snaps to a wet cell (`Planner.WetAt`), so with
+  the navigation loaded the spot registry leaves those out at start (`Nav.DrySpots`, #275) and logs
+  how many (`wet_dropped`): 120 of 4664 on the owner's data, 113 of them region 21_24's sea floor,
+  6 in Innadril, 1 in Aden. Without the navigation the registry keeps them. Farming such a spot
+  from a dry shore is not done.
 - **Walker**: `Planner.Swim` is the swim speed times `swimBreath`, 24 s: half the dwarf's 48 s,
   since the bot sees neither its Breath stat nor, with `AllowWater` off, a countdown. The bot's
   own dead reckoning swims the part of a move in water (`Water.Span`) at the swim speed in 3D,
@@ -700,7 +705,8 @@ The swims take 11 to 79 segments and 25 to 244 ms. Schuttgart's `schttgart08_231
 on the sea floor near (41000..51000, 199000..207000) route where the swim is short, and the five
 deepest (`t21_24_00302` to `t21_24_00802`, floors -4093 to -4580) need a longer swim than 24 s of
 breath. `oren13_1920_052sm1` is over budget either way; water is not why. The walker takes the
-planner's routes to the 9 spots whose centre is in water only to follow a leader there.
+planner's routes to the 9 spots whose centre is in water only to follow a leader there; the spot
+registry drops those spots (#275).
 
 ### 3. `botclient`: door table and walker
 
@@ -987,6 +993,9 @@ geodata is committed here, and CI never sees it.**
 
 N1 to N4 change no behavior. From N5 on, each PR moves one set of consumers over and deletes their
 heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore doors.
+
+Walking efficiency (the stop at every waypoint, short segments, the follower's hold) is planned in
+[`walking.md`](walking.md): #304 to #308.
 
 ## Risks
 

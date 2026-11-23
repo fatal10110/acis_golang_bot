@@ -10,10 +10,11 @@ Choose the smallest command that exercises the changed behavior:
 ```bash
 rtk go -C <worktree> test ./internal/<affected-package>
 rtk go -C <worktree> test ./internal/<affected-package> -run '<FocusedTest>'
-rtk go -C <worktree> test -race ./internal/<affected-concurrent-package>
 ```
 
-Do not rerun the whole module after each small edit.
+Do not rerun the whole module after each small edit. Do not pass `-race` locally unless the owner
+explicitly asks for a race run; PR CI runs the unit tier with `-race`, and e2e scenarios never run
+with it.
 
 Contract-specific checks supplement unit tests:
 
@@ -22,8 +23,8 @@ Contract-specific checks supplement unit tests:
 - crypt: fixed vectors, including the boundary cases (padding, block alignment, key scrambling);
 - brain: table rows with the injected clock for every rule touched, including the "do nothing" rows;
 - pacing and rate limits: a test that drives the sender past the limit and asserts it holds;
-- concurrency: focused `-race` coverage and teardown (the session's goroutines all exit, no send
-  blocks after `done`).
+- concurrency: a test that drives the concurrent callers (PR CI runs it under `-race`) and teardown
+  (the session's goroutines all exit, no send blocks after `done`).
 
 ## Complete gates
 
@@ -34,7 +35,7 @@ lint and scoped tests pass:
 (cd <worktree> && golangci-lint fmt --diff)
 rtk go -C <worktree> vet ./...
 rtk go -C <worktree> build ./...
-rtk go -C <worktree> test -race -count=1 <changed packages> -run '<tests that exercise the change>'
+rtk go -C <worktree> test -count=1 <changed packages> -run '<tests that exercise the change>'
 (cd <worktree> && rtk err golangci-lint run <touched package dirs>)
 ```
 

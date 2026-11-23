@@ -73,15 +73,15 @@ issue requires has a gap, and the gap is a finding.
 - **Lifecycle**: goroutines, channels, timers, connections and files closed on every path;
   unbounded maps and slices (per-object records grow with every visible object).
 - **Tests**: every new branch has a deterministic test; brain logic uses the injected clock, never
-  wall time; concurrency changes have a `-race` test that drives the bad interleaving; a fixture
-  test asserts the decoder consumed the whole payload.
+  wall time; concurrency changes have a test that drives the bad interleaving (PR CI runs it under
+  `-race`); a fixture test asserts the decoder consumed the whole payload.
 - **Reuse and design**: an existing helper for the same job, a one-implementation interface, a
   speculative option or layer: cite the existing `file:line` or the single caller.
 
 Run the checks yourself in the review worktree; they are evidence, not the author's word:
-`go build ./...`, `go vet ./...`, and the scoped `-race` tests of the changed packages (through
-`scripts/agent-tools/heavy` when running inside a wave). Run the related e2e scenarios when the
-stack is reachable. Record exactly what ran, what passed and what you skipped and why.
+`go build ./...`, `go vet ./...`, and the scoped tests of the changed packages without `-race`
+(through `scripts/agent-tools/heavy` when running inside a wave). Run the related e2e scenarios
+when the stack is reachable. Record exactly what ran, what passed and what you skipped and why.
 
 ## 4. Gate every finding before posting
 
