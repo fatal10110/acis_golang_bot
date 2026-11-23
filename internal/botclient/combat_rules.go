@@ -274,14 +274,17 @@ func (b *Brain) landed(id int32, now time.Time) {
 }
 
 // disengage drops the attack in flight with a short step: a move replaces
-// the attack intention on the server.
+// the attack intention on the server. The step goes in a random direction
+// that holds on the geodata (turnAround), else nowhere (orStay).
 func (b *Brain) disengage(now time.Time) Action {
-	from := b.world.Self.Position(now)
-	return moveAction(offset(from, b.rng.Float64()*2*math.Pi, turnStep), from)
+	return b.orStay(b.turnAround(b.rng.Float64()*2*math.Pi, now), now)
 }
 
 // sideStep steps sideStep across the line to id, to either side, when an
-// attack on it is stuck.
+// attack on it is stuck. The side it picks comes first; when that step does
+// not hold on the geodata the other side is tried, else it steps nowhere
+// (orStay): the move still drops the stuck attack, so the next decision
+// attacks again and counts the attempt toward the blacklist.
 func (b *Brain) sideStep(id int32, now time.Time) Action {
 	from := b.world.Self.Position(now)
 	angle := b.rng.Float64() * 2 * math.Pi
@@ -293,5 +296,57 @@ func (b *Brain) sideStep(id int32, now time.Time) Action {
 			}
 		}
 	}
-	return moveAction(offset(from, angle, sideStep), from)
+	return b.orStay(b.checkedStep(sideStep, now, angle, angle+math.Pi), now)
+}
+
+// orStay is step, or a move to where the bot stands when step sends
+// nothing. That move goes nowhere, so it cannot leave the floor, yet it
+// replaces the attack intention like any walk (the server's movement.go
+// startLiveMove replaces the intention before it simulates the walk), so an
+// attack in flight ends either way.
+func (b *Brain) orStay(step Action, now time.Time) Action {
+	if step.kind == actMove {
+		return step
+	}
+	return moveAction(b.standing(now), b.world.Self.Position(now))
+}
+
+// turnHeadings is how many evenly spaced headings a turnStep step tries.
+const turnHeadings = 8
+
+// turnAround is a turnStep step heading angle, else the first of the other
+// turnHeadings headings around it whose step holds; nothing when none does.
+func (b *Brain) turnAround(angle float64, now time.Time) Action {
+	var angles [turnHeadings]float64
+	for i := range angles {
+		angles[i] = angle + float64(i)*2*math.Pi/turnHeadings
+	}
+	return b.checkedStep(turnStep, now, angles[:]...)
+}
+
+// checkedStep is a move of dist from where the bot stands along the first
+// of angles whose step holds on the geodata both ways (D13): the walker's
+// segment check there and back, so the step neither crosses a wall nor
+// drops off a ledge or into a pit the bot cannot climb back out of. It is
+// the zero Action when no angle holds. Without geodata nothing is checked
+// and the first angle goes out, as before.
+func (b *Brain) checkedStep(dist int32, now time.Time, angles ...float64) Action {
+	pos := b.world.Self.Position(now)
+	w := b.walker()
+	if w.nav == nil {
+		return moveAction(offset(pos, angles[0], dist), pos)
+	}
+	from := b.standing(now)
+	for _, angle := range angles {
+		to := offset(from, angle, dist)
+		c, ok := w.plan.Locate(toLoc(to))
+		if !ok {
+			continue
+		}
+		to.Z = int32(c.Z)
+		if w.segmentOK(from, to) && w.segmentOK(to, from) {
+			return moveAction(to, pos)
+		}
+	}
+	return Action{}
 }
