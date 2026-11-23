@@ -21,6 +21,7 @@
 // isolated; results live in a byte-bounded LRU, and walkers pin theirs.
 //
 // Searches are synchronous on the caller's goroutine and start no goroutine.
-// Scratch buffers come from a sync.Pool and grow with the node budget, never
-// with the size of the world. Regions without geodata are no-go.
+// Scratch buffers come from a small free list that survives a GC and grow
+// with the node budget, never with the size of the world. Regions without
+// geodata are no-go.
 package nav

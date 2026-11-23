@@ -54,9 +54,13 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, closed func(door int
 	x := a.SCC()
 	s.anodes = append(s.anodes[:0], anode{id: -1, g: -1, parent: -1})
 	s.open = s.open[:0]
-	clear(s.aindex)
+	s.aindex.reset()
 	relax := func(id int32, ng int32, parent int32) {
-		idx, seen := s.aindex[id]
+		var idx int32
+		var seen bool
+		if id >= 0 {
+			idx, seen = s.aindex.getOrPut(uint64(id), int32(len(s.anodes)))
+		}
 		switch {
 		case id < 0:
 			idx = 0
@@ -65,8 +69,6 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, closed func(door int
 			}
 			s.anodes[0].g, s.anodes[0].parent = ng, parent
 		case !seen:
-			idx = int32(len(s.anodes))
-			s.aindex[id] = idx
 			s.anodes = append(s.anodes, anode{id: id, g: ng, parent: parent})
 		default:
 			if n := &s.anodes[idx]; n.closed || ng >= n.g {

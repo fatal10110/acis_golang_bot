@@ -121,15 +121,21 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		n = 1
 	}
 	s.route = append(s.route[:0], from)
+	s.grid.invalidate()
 	for i := 0; i < n; {
 		next := -1
+		// The corridor test runs before CanMove: on the grid it is the
+		// cheaper check, it stops at its first failing cell, and most
+		// candidates fail it. Both must pass, so the order changes nothing.
 		for j := n; j > i && next < 0; j-- {
-			if p.candidate(s, cells, i, j, n) && len(p.corridorStretches(s, s.points[i], s.points[j])) == 0 {
+			a, b := s.points[i], s.points[j]
+			if p.inReach(s, cells, i, j, n) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
 				next = j
 			}
 		}
 		for j := min(n, i+exactCells); j > i && next < 0; j-- {
-			if p.candidate(s, cells, i, j, n) && p.stepChainOK(s, s.points[i], s.points[j]) {
+			a, b := s.points[i], s.points[j]
+			if p.inReach(s, cells, i, j, n) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.stepChainOK(s, a, b) {
 				next = j
 			}
 		}
@@ -142,15 +148,12 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 	return edgeKey{}, true
 }
 
-// candidate reports whether the segment from waypoint i to cell j is within
-// navSegment, ends on a click target, and passes CanMove.
-func (p *Planner) candidate(s *scratch, cells []Cell, i, j, n int) bool {
+// inReach reports whether the segment from waypoint i to cell j is within
+// navSegment and ends on a click target.
+func (p *Planner) inReach(s *scratch, cells []Cell, i, j, n int) bool {
 	a, b := s.points[i], s.points[j]
 	if hypot(b.X-a.X, b.Y-a.Y) > navSegment {
 		return false
 	}
-	if j < n && !p.clickable(cells[j], &s.layers) {
-		return false
-	}
-	return p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+	return j == n || p.clickable(cells[j], &s.layers)
 }

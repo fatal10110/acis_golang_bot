@@ -79,9 +79,14 @@ func (g *localGraph) load(p *Planner, x0, y0, size int) {
 	for i := range n {
 		c := g.cell(int32(i))
 		g.edge[i] = g.nswe[i] != block.AllDirections
+		wet := p.Water.wet(c.X, c.Y, c.Z)
 		for d, dir := range cardinals {
 			g.next[4*i+d] = -1
-			nc, _, ok := p.cross(c, g.nswe[i], dir)
+			if wet { // no crossing leaves a cell in water
+				g.edge[i] = true
+				continue
+			}
+			nc, _, ok := p.crossDry(c, g.nswe[i], dir)
 			if !ok || nc.Z < c.Z-block.CellIgnoreHeight {
 				g.edge[i] = true // a wall, a climb over 48, no-go ground or a drop
 			}

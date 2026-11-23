@@ -1,13 +1,13 @@
 package nav
 
 import (
-	"sync"
+	"unsafe"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
 
-// scratch is one query's working memory. It comes from scratchPool and goes
+// scratch is one query's working memory. It comes from getScratch and goes
 // back when the query returns, so a steady stream of queries allocates
 // nothing once the buffers have grown. Every buffer grows with what one query
 // touches (bounded by the node budget and the segment length), never with
@@ -16,7 +16,7 @@ type scratch struct {
 	// A* search.
 	nodes []node
 	open  []openItem
-	index map[Cell]int32
+	index indexTable
 	edges []neighbour
 	cells []Cell
 	// Pulling.
@@ -24,11 +24,11 @@ type scratch struct {
 	route  []location.Location
 	// Corridor test.
 	line      []lineCell
-	corridor  map[[2]int]corridorCell
+	grid      corridorGrid
 	stretches []stretch
 	// Exact check.
 	band  []bandPoint
-	seen  map[chainState]struct{}
+	seen  indexTable
 	queue []chainState
 	// Stand points.
 	stands []standCandidate
@@ -39,32 +39,75 @@ type scratch struct {
 	sccGen    uint32
 	sccQueue  []int32
 	anodes    []anode
-	aindex    map[int32]int32
+	aindex    indexTable
 	apath     []int32
 	waypoints []Cell
 	path      []Cell
 }
 
-var scratchPool = sync.Pool{New: func() any {
-	return &scratch{
-		index:    make(map[Cell]int32),
-		corridor: make(map[[2]int]corridorCell),
-		seen:     make(map[chainState]struct{}),
-		aindex:   make(map[int32]int32),
+// Idle scratch kept between queries. Unlike a sync.Pool, which a GC
+// empties, the free list keeps its buffers, so a query does not regrow them
+// after every collection (#209). It keeps at most keptScratch, each holding
+// at most maxKeptScratchBytes; a larger one (a search near its node budget)
+// goes to the GC, so idle scratch never holds more than their product.
+const (
+	keptScratch         = 2
+	maxKeptScratchBytes = 32 << 20
+)
+
+var scratchFree = make(chan *scratch, keptScratch)
+
+func getScratch() *scratch {
+	select {
+	case s := <-scratchFree:
+		return s
+	default:
+		return new(scratch)
 	}
-}}
+}
 
-func getScratch() *scratch { return scratchPool.Get().(*scratch) }
+func putScratch(s *scratch) {
+	if s.bytes() > maxKeptScratchBytes {
+		return
+	}
+	select {
+	case scratchFree <- s:
+	default:
+	}
+}
 
-func putScratch(s *scratch) { scratchPool.Put(s) }
+// bytes is the memory s's buffers hold.
+func (s *scratch) bytes() int {
+	return capBytes(s.nodes) + capBytes(s.open) + s.index.bytes() + capBytes(s.edges) + capBytes(s.cells) +
+		capBytes(s.points) + capBytes(s.route) +
+		capBytes(s.line) + capBytes(s.grid.slots) + capBytes(s.stretches) +
+		capBytes(s.band) + s.seen.bytes() + capBytes(s.queue) +
+		capBytes(s.stands) +
+		capBytes(s.sccSeen) + capBytes(s.sccQueue) + capBytes(s.anodes) + s.aindex.bytes() + capBytes(s.apath) +
+		capBytes(s.waypoints) + capBytes(s.path)
+}
 
-// node is one cell the search reached.
+// capBytes is the memory a slice's backing array holds.
+func capBytes[T any](s []T) int {
+	var zero T
+	return cap(s) * int(unsafe.Sizeof(zero))
+}
+
+// node is one cell the search reached, its coordinates held in 32 bits so
+// a node takes 20 bytes, not a Cell's 24 plus 12.
 type node struct {
-	cell   Cell
+	x, y   int32
+	z      int16
+	closed bool
 	g      int32
 	parent int32
-	closed bool
 }
+
+func newNode(c Cell, g, parent int32) node {
+	return node{x: int32(c.X), y: int32(c.Y), z: c.Z, g: g, parent: parent}
+}
+
+func (n *node) cell() Cell { return Cell{X: int(n.x), Y: int(n.y), Z: n.z} }
 
 // openItem is an open-set entry. Entries are never updated in place: a better
 // path pushes a new one, and a popped entry whose g no longer matches its
@@ -83,10 +126,10 @@ type edgeKey struct{ from, to Cell }
 func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
 	s.nodes = s.nodes[:0]
 	s.open = s.open[:0]
-	clear(s.index)
+	s.index.reset()
 
-	s.index[start] = 0
-	s.nodes = append(s.nodes, node{cell: start, parent: -1})
+	s.index.getOrPut(cellKey(start), 0)
+	s.nodes = append(s.nodes, newNode(start, 0, -1))
 	s.push(openItem{f: heuristic(start, goal), idx: 0})
 
 	expanded := 0
@@ -96,7 +139,8 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 		if n.closed || it.g != n.g {
 			continue
 		}
-		if n.cell == goal {
+		cur, g := n.cell(), n.g
+		if cur == goal {
 			return s.trace(it.idx), expanded, nil
 		}
 		if expanded >= budget {
@@ -104,7 +148,6 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 		}
 		n.closed = true
 		expanded++
-		cur, g := n.cell, n.g
 		s.edges = p.neighbours(s.edges[:0], cur)
 		for _, e := range s.edges {
 			if avoid != nil {
@@ -113,11 +156,9 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 				}
 			}
 			ng := g + e.cost
-			idx, seen := s.index[e.cell]
+			idx, seen := s.index.getOrPut(cellKey(e.cell), int32(len(s.nodes)))
 			if !seen {
-				idx = int32(len(s.nodes))
-				s.index[e.cell] = idx
-				s.nodes = append(s.nodes, node{cell: e.cell, g: ng, parent: it.idx})
+				s.nodes = append(s.nodes, newNode(e.cell, ng, it.idx))
 			} else {
 				m := &s.nodes[idx]
 				if m.closed || ng >= m.g {
@@ -135,7 +176,7 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 func (s *scratch) trace(idx int32) []Cell {
 	s.cells = s.cells[:0]
 	for i := idx; i >= 0; i = s.nodes[i].parent {
-		s.cells = append(s.cells, s.nodes[i].cell)
+		s.cells = append(s.cells, s.nodes[i].cell())
 	}
 	for i, j := 0, len(s.cells)-1; i < j; i, j = i+1, j-1 {
 		s.cells[i], s.cells[j] = s.cells[j], s.cells[i]

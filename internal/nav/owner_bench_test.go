@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
@@ -18,8 +19,9 @@ import (
 // owner's geodata is private and never in CI, so the benchmarks skip
 // unless BOT_NAV_GEODATA (region files dir), BOT_NAV_GEOENGINE,
 // BOT_NAV_GEODATA_CACHE, BOT_NAV_DOORS (doors.xml) and BOT_NAV_CACHE are
-// set.
-func ownerNav(b *testing.B) (*engine.Engine, *Graph) {
+// set. BOT_NAV_WATER (zones/WaterZone.xml) is the water the nav cache was
+// built with; unset is no water.
+func ownerNav(b *testing.B) (*engine.Engine, *Graph, *Water) {
 	b.Helper()
 	env := func(k string) string {
 		v := os.Getenv(k)
@@ -42,21 +44,33 @@ func ownerNav(b *testing.B) (*engine.Engine, *Graph) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	g, err := OpenNavCache(navPath, NavKey{GeoCRC: c.CRC(), DoorsHash: DoorsHash(xml), ClusterCells: DefaultClusterCells})
+	var water *Water
+	if path := os.Getenv("BOT_NAV_WATER"); path != "" {
+		zones, err := datapack.LoadWaterZones(path)
+		if err != nil {
+			b.Fatal(err)
+		}
+		boxes := make([]WaterBox, len(zones))
+		for i, z := range zones {
+			boxes[i] = WaterBox{X1: int(z.X1), Y1: int(z.Y1), X2: int(z.X2), Y2: int(z.Y2), MinZ: int(z.MinZ), MaxZ: int(z.MaxZ)}
+		}
+		water = NewWater(boxes)
+	}
+	g, err := OpenNavCache(navPath, NavKey{GeoCRC: c.CRC(), DoorsHash: DoorsHash(xml), ClusterCells: DefaultClusterCells, WaterHash: water.Hash()})
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.Cleanup(g.Close)
-	return c.Engine, g
+	return c.Engine, g, water
 }
 
 // ownerSample picks n cells of the largest abstract SCC, each in its own
 // random cluster, and for each a partner about dist cells away in the same
 // SCC with a click target on it.
-func ownerSample(b *testing.B, e *engine.Engine, g *Graph, n, dist int) (from, to []Cell) {
+func ownerSample(b *testing.B, e *engine.Engine, g *Graph, w *Water, n, dist int) (from, to []Cell) {
 	b.Helper()
-	h := NewHierarchy(g, e, nil, 1<<30)
-	p := &Planner{Engine: e, CollisionHeight: 23}
+	h := NewHierarchy(g, e, w, 1<<30)
+	p := &Planner{Engine: e, CollisionHeight: 23, Water: w}
 	sizes := map[int32]int{}
 	for i := range g.Nodes() {
 		sizes[g.nodeSCC(i)]++
@@ -106,55 +120,71 @@ func ownerSample(b *testing.B, e *engine.Engine, g *Graph, n, dist int) (from, t
 	return from, to
 }
 
-// report records the p50 and p99 of the timings and the largest heap
-// allocation of one query.
-func report(b *testing.B, times []time.Duration, maxAlloc uint64) {
+// report records the p50 and p99 of the timings and of the heap one query
+// allocates, the cluster results it added to the LRU excluded (they are
+// held, bounded by the LRU, not per-query heap), and the largest such heap.
+func report(b *testing.B, times []time.Duration, heap []uint64) {
 	slices.Sort(times)
-	q := func(f float64) float64 { return float64(times[int(f*float64(len(times)-1))].Microseconds()) / 1000 }
-	b.ReportMetric(q(0.5), "p50-ms")
-	b.ReportMetric(q(0.99), "p99-ms")
-	b.ReportMetric(float64(maxAlloc)/1e6, "max-alloc-MB")
-	b.Logf("%d queries: p50 %.2f ms, p99 %.2f ms, max %.2f ms, largest allocation per query %.2f MB",
-		len(times), q(0.5), q(0.99), q(1), float64(maxAlloc)/1e6)
+	slices.Sort(heap)
+	at := func(f float64) int { return int(f * float64(len(times)-1)) }
+	ms := func(f float64) float64 { return float64(times[at(f)].Microseconds()) / 1000 }
+	mb := func(f float64) float64 { return float64(heap[at(f)]) / 1e6 }
+	b.ReportMetric(ms(0.5), "p50-ms")
+	b.ReportMetric(ms(0.99), "p99-ms")
+	b.ReportMetric(mb(0.99), "p99-heap-MB")
+	b.ReportMetric(mb(1), "max-heap-MB")
+	b.Logf("%d queries: p50 %.2f ms, p99 %.2f ms, max %.2f ms; heap per query p50 %.2f MB, p99 %.2f MB, max %.2f MB",
+		len(times), ms(0.5), ms(0.99), ms(1), mb(0.5), mb(0.99), mb(1))
 }
 
-// measure times fn over every sample and tracks the bytes it allocates.
-func measure(b *testing.B, n int, fn func(i int)) {
+// measure times fn over every sample and tracks the bytes it allocates. fn
+// returns the bytes of cluster results it added to an LRU.
+func measure(b *testing.B, n int, fn func(i int) int64) {
 	times := make([]time.Duration, 0, n)
-	var maxAlloc uint64
+	heap := make([]uint64, 0, n)
 	var m0, m1 runtime.MemStats
 	for i := range n {
 		runtime.ReadMemStats(&m0)
 		t := time.Now()
-		fn(i)
+		cached := fn(i)
 		times = append(times, time.Since(t))
 		runtime.ReadMemStats(&m1)
-		maxAlloc = max(maxAlloc, m1.TotalAlloc-m0.TotalAlloc)
+		alloc := m1.TotalAlloc - m0.TotalAlloc
+		heap = append(heap, alloc-min(alloc, uint64(max(cached, 0))))
 	}
-	report(b, times, maxAlloc)
+	report(b, times, heap)
+}
+
+// coldCache empties h's cluster result LRU, as a fresh one would be, and
+// keeps the rest of h (its idle scratch), as a long-running process does.
+func coldCache(h *Hierarchy) *Hierarchy {
+	h.cache = newMemberCache(DefaultMemberCacheBytes)
+	return h
 }
 
 // BenchmarkOwnerNav measures the hierarchy on the owner's geodata, cold
 // (an empty LRU, first touch of each cluster) and warm. Run it once:
 // go test -run '^$' -bench OwnerNav -benchtime 1x ./internal/nav/
 func BenchmarkOwnerNav(b *testing.B) {
-	e, g := ownerNav(b)
+	e, g, w := ownerNav(b)
 	const samples = 200
-	from, to := ownerSample(b, e, g, samples, 2500) // 40000 units
+	from, to := ownerSample(b, e, g, w, samples, 2500) // 40000 units
 	n := len(from)
 	b.Logf("graph: %d clusters, %d nodes, %d edges, %d SCCs; %d pairs", g.Clusters(), g.Nodes(), g.Edges(), g.SCCs(), n)
-	p := &Planner{Engine: e, Lmax: testLmax, CollisionHeight: 23, Budget: 400000}
+	p := &Planner{Engine: e, Lmax: testLmax, CollisionHeight: 23, Budget: 400000, Water: w}
+	cold := NewHierarchy(g, e, w, DefaultMemberCacheBytes)
 	for b.Loop() {
 		b.Run("LocateCold", func(b *testing.B) {
-			measure(b, n, func(i int) {
-				h := NewHierarchy(g, e, nil, DefaultMemberCacheBytes)
+			measure(b, n, func(i int) int64 {
+				h := coldCache(cold)
 				if _, err := h.Locate(from[i], nil); err != nil {
 					b.Fatal(err)
 				}
+				return h.cache.used
 			})
 		})
 		// Warm: an LRU holding every sampled cluster.
-		h := NewHierarchy(g, e, nil, 4<<30)
+		h := NewHierarchy(g, e, w, 4<<30)
 		for i := range n {
 			if _, err := h.Locate(from[i], nil); err != nil {
 				b.Fatal(err)
@@ -166,35 +196,48 @@ func BenchmarkOwnerNav(b *testing.B) {
 		b.Logf("LRU: %d cluster results, %.1f MB, %.0f KB each on average",
 			len(h.cache.items), float64(h.cache.used)/1e6, float64(h.cache.used)/1e3/float64(max(len(h.cache.items), 1)))
 		b.Run("LocateSameSCCWarm", func(b *testing.B) {
-			measure(b, n, func(i int) {
+			measure(b, n, func(i int) int64 {
 				ma, _ := h.Locate(from[i], nil)
 				mb, _ := h.Locate(to[i], nil)
 				if !h.SameSCC(ma, mb) {
 					b.Fatal("sampled pair not SameSCC")
 				}
+				return 0
 			})
 		})
+		// Warm means the pages resident too: one pass reads the abstract
+		// graph the distances cross.
+		for i := range n {
+			ma, _ := h.Locate(from[i], nil)
+			mb, _ := h.Locate(to[i], nil)
+			if _, err := h.Distance(ma, mb); err != nil {
+				b.Fatal(err)
+			}
+		}
 		b.Run("DistanceWarm", func(b *testing.B) {
-			measure(b, n, func(i int) {
+			measure(b, n, func(i int) int64 {
 				ma, _ := h.Locate(from[i], nil)
 				mb, _ := h.Locate(to[i], nil)
 				if _, err := h.Distance(ma, mb); err != nil {
 					b.Fatal(err)
 				}
+				return 0
 			})
 		})
 		failed := 0
-		route := func(h *Hierarchy) func(i int) {
-			return func(i int) {
-				if _, err := h.Route(p, from[i].World(), to[i].World(), nil); err != nil {
-					failed++
-				}
+		route := func(h *Hierarchy, i int) int64 {
+			used := h.cache.used
+			if _, err := h.Route(p, from[i].World(), to[i].World(), nil); err != nil {
+				failed++
 			}
+			return h.cache.used - used
 		}
 		b.Run("RouteCold", func(b *testing.B) {
-			measure(b, n, func(i int) { route(NewHierarchy(g, e, nil, DefaultMemberCacheBytes))(i) })
+			measure(b, n, func(i int) int64 { return route(coldCache(cold), i) })
 		})
-		b.Run("RouteWarm", func(b *testing.B) { measure(b, n, route(h)) })
+		b.Run("RouteWarm", func(b *testing.B) {
+			measure(b, n, func(i int) int64 { return route(h, i) })
+		})
 		b.Logf("routes failed: %d of %d (both passes)", failed, 2*n)
 	}
 }

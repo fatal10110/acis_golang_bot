@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/fatal10110/acis_golang_bot/internal/geo"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
@@ -52,6 +53,7 @@ type bandPoint struct {
 func (p *Planner) StepChainOK(a, b location.Location) bool {
 	s := getScratch()
 	defer putScratch(s)
+	s.grid.invalidate()
 	return p.stepChainOK(s, a, b)
 }
 
@@ -111,7 +113,7 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 	s.band = appendBand(s.band[:0], a, b, lo-stepSlack, t1+reach)
 	bz := int(p.Engine.Height(b.X, b.Y, b.Z))
 
-	clear(s.seen)
+	s.seen.reset()
 	s.queue = s.queue[:0]
 	if t0 <= 0 {
 		s.addState(chainState{int32(a.X), int32(a.Y), int16(a.Z)})
@@ -165,11 +167,17 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 }
 
 func (s *scratch) addState(st chainState) {
-	if _, ok := s.seen[st]; ok {
+	if _, seen := s.seen.getOrPut(st.key(), 0); seen {
 		return
 	}
-	s.seen[st] = struct{}{}
 	s.queue = append(s.queue, st)
+}
+
+// key packs the state into an indexTable key: world coordinates offset into
+// the world fit in 24 bits each, the Z in 16.
+func (st chainState) key() uint64 {
+	x, y := uint32(int(st.x)-geo.WorldXMin)&0xFFFFFF, uint32(int(st.y)-geo.WorldYMin)&0xFFFFFF
+	return uint64(x)<<40 | uint64(y)<<16 | uint64(uint16(st.z))
 }
 
 // appendBand appends every rounded point within bandRadius of the line from
