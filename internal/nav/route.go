@@ -101,7 +101,8 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 // waypoint it takes the farthest cell ahead, within navSegment, that is a
 // click target and passes CanMove and the corridor test. When none does, it
 // takes the farthest within exactCells that passes CanMove and the full
-// step-chain check. When even the next cell fails, it reports that edge.
+// step-chain check. Neither crosses a column of p.Avoid but the route's
+// endpoints'. When even the next cell fails, it reports that edge.
 func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (edgeKey, bool) {
 	n := len(cells) - 1
 	s.points = s.points[:0]
@@ -129,13 +130,13 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		// candidates fail it. Both must pass, so the order changes nothing.
 		for j := n; j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
-			if p.inReach(s, cells, i, j, n) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
+			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
 				next = j
 			}
 		}
 		for j := min(n, i+exactCells); j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
-			if p.inReach(s, cells, i, j, n) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.stepChainOK(s, a, b) {
+			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.stepChainOK(s, a, b) {
 				next = j
 			}
 		}
