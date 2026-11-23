@@ -1,10 +1,6 @@
 package botclient
 
-import (
-	"time"
-
-	"github.com/fatal10110/acis_golang_bot/internal/datapack"
-)
+import "time"
 
 const (
 	// supplyCheck is how often a farmer at its spot reads the supply trip's
@@ -98,8 +94,8 @@ func (b *Brain) escaping(now time.Time) bool {
 // ruleSupply is the supply trip, a rule 9 errand ahead of following and
 // farming (D16): a farmer at its spot whose triggers hold (supplyDue)
 // releases the spot to the registry and goes home. With a Scroll of Escape
-// it waits for a safe moment, no attacker and nothing aggressive within its
-// aggro range (safeToEscape), stands up and reads it; the escaping hold
+// it waits for a safe moment, no attacker (safeToEscape), stands up and
+// reads it; the escaping hold
 // (ruleEscape) takes over until the teleport, which ends the trip. With no
 // scroll, with no safe moment within Supply.SafeWait, or after a recall
 // that took it nowhere, it walks to the nearest town (walkHome). Back in
@@ -194,24 +190,16 @@ func (b *Brain) walkHome(now time.Time) (Action, bool) {
 }
 
 // safeToEscape reports whether the bot may read its Scroll of Escape at
-// now: nothing attacks it, and no live monster with an aggro range stands
-// within it of the bot (the server's aggressive monsters attack on sight
-// within aggroRange, npc.go).
+// now: nothing attacks it. Only an attacker can spoil the read: the recall
+// (item skill 2013) is not a magic cast, so a hit cannot break it
+// (cast/controller.go InterruptOnDamage), and what aborts it is the bot's
+// death or a stun, sleep or paralysis a fight lands (skill/effect/hooks_cc.go).
+// A monster that would attack on sight within its aggro range but has not
+// does not block it: at a starter spot nearly every monster has one (#251),
+// and one that closes in during the read only deals damage.
 func (b *Brain) safeToEscape(now time.Time) bool {
 	for id := range b.world.Attackers {
 		if b.world.attacking(id, now) {
-			return false
-		}
-	}
-	if b.cfg.Travel == nil {
-		return true
-	}
-	at := b.world.Self.Position(now)
-	for _, o := range b.world.Objects {
-		if o.Kind != KindNPC || o.Dead {
-			continue
-		}
-		if r := b.cfg.Travel.aggro[o.NPCID]; r > 0 && dist2(o.Position(now), at) <= r*r {
 			return false
 		}
 	}
@@ -322,16 +310,4 @@ func (b *Brain) gearPaid() bool {
 	}
 	price := b.price(goal)
 	return price > 0 && int64(b.carried(adenaID))-b.floor(tierGear) >= price
-}
-
-// indexAggro maps each NPC template with an aggro range to it: the
-// aggressive monsters (datapack.NPC.AggroRange).
-func indexAggro(npcs map[int32]datapack.NPC) map[int32]int64 {
-	out := make(map[int32]int64)
-	for id, n := range npcs {
-		if n.AggroRange > 0 {
-			out[id] = int64(n.AggroRange)
-		}
-	}
-	return out
 }

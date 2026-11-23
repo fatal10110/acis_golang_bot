@@ -65,10 +65,6 @@ type TravelMap struct {
 	// the supplies' (SupplyPolicy.BuyLoad) and the junk's a town visit
 	// sheds (SupplyPolicy.ShedMin).
 	weights map[int32]int32
-	// aggro are the aggro ranges of the aggressive NPC templates
-	// (indexAggro): what a supply trip's Scroll of Escape waits out
-	// (safeToEscape).
-	aggro map[int32]int64
 	// recipes are the craft recipes by id (datapack.Datapack.Recipes), and
 	// craftItems every template one of them uses or makes, its scroll
 	// included: what the crafter plans with and deposits (Persona.Crafter).
@@ -127,7 +123,6 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.Items, dp.EtcItems)
-	m.aggro = indexAggro(dp.NPCs)
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
 	m.crystals = indexCrystals(dp.Items)
 	m.hennas = dp.Hennas
