@@ -119,6 +119,18 @@ calls, not their size. The prompts therefore point every agent at:
   run carries `"stop": true`, `look.py` prints `### STOP`, and `heavy` prints it and refuses to
   run from a lane or review worktree of a stopping run.
 
+## Waiting and the prompt cache (built into every prompt)
+
+A workflow agent's prompt cache lives about 5 minutes. An agent that wakes from a longer wait pays
+for its whole context again as a cache write, about 12x a cache read. On w1122, turns after a gap of
+300 s or more were 4% of turns but 19% of input spend (#262). So:
+
+- Implementation and review agents wait at most `SHORT_WAIT` (270 s) per call: mailbox `recv`,
+  `ask`, `answer-wait`, and live e2e runs, which run in the background and are waited on through
+  their log in calls of at most 270 s. They call again until the answer comes.
+- Haiku roles (watchers, coord, brokers' pollers, merge) keep 570 s waits: their context is small,
+  so fewer turns is cheaper there.
+
 ## Test policy (built into every prompt)
 
 - No agent runs the full suite locally. PR CI runs the unit tier on every push. This overrides
