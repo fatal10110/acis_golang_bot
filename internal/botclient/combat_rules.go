@@ -22,6 +22,14 @@ const (
 	// swing is deferred and still answered ActionFailed (magic_skill.go
 	// handleRequestMagicSkillUse), so ActionFailed does not end the wait.
 	castTimeout = 3 * time.Second
+	// castStopsFrom is the shortest hit time in the bot's own MagicSkillUse
+	// that proves the server stopped it before the cast. The server stops a
+	// caster when the skill's template hit time is over 50 ms
+	// (cast/request.go stopForCast); the packet carries it scaled by cast
+	// speed, which may raise a 50 ms one above 50 but floors any template of
+	// 500 ms or more at 500 (cast/controller.go buildPlan). Shorter casts
+	// (potions, toggles, instant buffs) leave the walk alone.
+	castStopsFrom = 500 * time.Millisecond
 	// stuckAfter is how long the bot may stand engaged with no swing, cast
 	// or move of its own before it side steps (plan, shared behavior).
 	stuckAfter = 2500 * time.Millisecond
@@ -354,4 +362,23 @@ func (b *Brain) checkedStep(dist int32, now time.Time, angles ...float64) Action
 		}
 	}
 	return Action{}
+}
+
+// standCaster stands the bot exactly where its own MagicSkillUse casts
+// from, for the cast it asked for when the server stopped it first: the
+// player cast path stops the caster (cast/request.go stopForCast) before
+// it broadcasts the cast with the caster's position then
+// (network/magic_skill.go broadcastCastStart). A dead-reckoned walk's end
+// may miss that spot by a step, since a cast approach's pawn walk ends on
+// its first step in range with no packet, and the walker's next segment
+// goes out from it (#270, as applyAttack for #246). A cast the bot did not
+// ask for (a cubic's, a class change's) may come while the bot walks on,
+// and so does one too short to stop it.
+func (b *Brain) standCaster(e MagicSkillUse) {
+	if b.castAt.IsZero() || e.SkillID != b.castSkill || e.HitTime < castStopsFrom {
+		return
+	}
+	if m := b.world.motionOf(e.CasterID); m != nil {
+		*m = stopAt(e.CasterPos)
+	}
 }
