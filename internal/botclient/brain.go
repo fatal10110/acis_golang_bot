@@ -324,6 +324,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	b.walk = newWalker(cfg.Nav)
 	if cfg.Nav != nil {
 		w.SetGround(cfg.Nav.Engine)
+		w.SetWater(cfg.Nav.Water)
 		if cfg.Nav.Doors != nil {
 			b.doors = NewDoorReporter(cfg.Nav.Doors)
 		}

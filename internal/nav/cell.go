@@ -41,6 +41,13 @@ type Planner struct {
 	// Water is the water zones routes keep out of; nil is none. A planner
 	// for a hierarchy reads the Water its nav cache was built with.
 	Water *Water
+	// Swim is the longest stretch of water a route may swim, in world
+	// units measured in 3D: the walker's swim speed times the breath it
+	// allows one stretch. Zero keeps routes out of water. With a Swim the
+	// cell search, the string pull and the step-chain check take swim moves
+	// by the server's swim rules (docs/navigation.md, "Swimming");
+	// Hierarchy.Route never swims.
+	Swim float64
 	// Avoid is the columns the current route keeps out of; the zero value
 	// is none. The cell search, the string pull and the refinement of
 	// Hierarchy.Route honor it; its owner sets it per route.
@@ -95,16 +102,19 @@ var cardinals = [4]direction{
 // the neighbour d, exactly as CanMove takes it: n must allow d, and the walker
 // lands on the neighbour's layer nearest at or below c's floor plus
 // block.CellIgnoreHeight. So a step goes down any height and up at most 48.
-// A crossing neither leaves nor enters a cell whose floor is in water.
+// Unless the planner swims, a crossing neither leaves nor enters a cell whose
+// floor is in water. A swimmer's leg must pass the same CanMove (the swim
+// branch of resolvePathLocked), so the floor graph is its graph too.
 func (p *Planner) cross(c Cell, n block.NSWE, d direction) (Cell, block.NSWE, bool) {
-	if p.Water.wet(c.X, c.Y, c.Z) {
+	if !p.swims() && p.Water.wet(c.X, c.Y, c.Z) {
 		return Cell{}, 0, false
 	}
 	return p.crossDry(c, n, d)
 }
 
-// crossDry is cross from a cell whose floor is known to be out of water, so
-// a caller crossing from one cell several times tests it once.
+// crossDry is cross from a cell whose floor is known to be out of water, or
+// a swimming planner's, so a caller crossing from one cell several times
+// tests it once.
 func (p *Planner) crossDry(c Cell, n block.NSWE, d direction) (Cell, block.NSWE, bool) {
 	if !n.Allows(d.flag) {
 		return Cell{}, 0, false
@@ -114,7 +124,7 @@ func (p *Planner) crossDry(c Cell, n block.NSWE, d direction) (Cell, block.NSWE,
 		return Cell{}, 0, false
 	}
 	h, nn, ok := p.Engine.NodeBelow(nx, ny, int(c.Z)+block.CellIgnoreHeight)
-	if !ok || p.Water.wet(nx, ny, h) {
+	if !ok || (!p.swims() && p.Water.wet(nx, ny, h)) {
 		return Cell{}, 0, false
 	}
 	return Cell{X: nx, Y: ny, Z: h}, nn, true
@@ -146,8 +156,11 @@ type neighbour struct {
 // open and landing on the same layer, and CanMove along the diagonal itself,
 // as the server's pathfinder does for its corner steps
 // (geo/pathfind/pathfind.go, cornerSteps and addCandidate).
+//
+// A swimming planner's edge into a wet cell costs swimCost times as much.
 func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
-	if p.Water.wet(c.X, c.Y, c.Z) {
+	swims := p.swims()
+	if !swims && p.Water.wet(c.X, c.Y, c.Z) {
 		return dst // no crossing leaves a cell in water
 	}
 	n := p.nswe(c)
@@ -169,9 +182,15 @@ func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 	if edge {
 		extra = costClearance
 	}
+	cost := func(c Cell, base int32) int32 {
+		if swims && p.Water.wet(c.X, c.Y, c.Z) {
+			return base * swimCost
+		}
+		return base
+	}
 	for i := range cardinals {
 		if open[i] {
-			dst = append(dst, neighbour{next[i], costCardinal + extra})
+			dst = append(dst, neighbour{next[i], cost(next[i], costCardinal+extra)})
 		}
 	}
 	// Diagonals: X index (East 0, West 1) then Y index (South 2, North 3).
@@ -189,14 +208,14 @@ func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 			if !p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) {
 				continue
 			}
-			dst = append(dst, neighbour{viaX, costDiagonal + extra})
+			dst = append(dst, neighbour{viaX, cost(viaX, costDiagonal+extra)})
 		}
 	}
 	return dst
 }
 
 // crossFrom is cross for the second leg of an L-shaped detour, from a cell
-// the first leg landed on (so out of water).
+// the first leg landed on (so out of water, or a swimming planner's).
 func (p *Planner) crossFrom(c Cell, n block.NSWE, d direction) (Cell, bool) {
 	next, _, ok := p.crossDry(c, n, d)
 	return next, ok

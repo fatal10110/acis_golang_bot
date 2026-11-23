@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
 // snapDrift is how far, in world units, a position the server reports for
@@ -83,7 +85,11 @@ type SelfState struct {
 	StoreType                        uint8
 	Sitting, InCombat, Dead, Running bool
 	RunSpeed, WalkSpeed, Heading     int32
-	move                             motion
+	// SwimSpeed is UserInfo's: the bot's speed in water.
+	SwimSpeed int32
+	move      motion
+	// water is the water zones the bot's own moves swim in; nil is none.
+	water *nav.Water
 	// castEnd is when the bot's own cast in progress hits, swingEnd when
 	// its own melee swing in progress ends.
 	castEnd, swingEnd time.Time
@@ -102,7 +108,7 @@ type SelfState struct {
 // the move's two heights; the end of a move keeps the server's height.
 func (s *SelfState) Position(now time.Time) Point {
 	p := s.move.at(now)
-	if s.ground != nil && p != s.move.to {
+	if s.ground != nil && p != s.move.to && !s.move.swimming(p) {
 		p.Z = int32(s.ground.Height(int(p.X), int(p.Y), int(p.Z)))
 	}
 	return p
@@ -116,6 +122,22 @@ type groundHeight interface {
 
 // SetGround simulates the bot's own walk on g (see SelfState.Position).
 func (w *World) SetGround(g groundHeight) { w.Self.ground = g }
+
+// SetWater simulates the bot's own moves as swims where they pass water
+// (see motion).
+func (w *World) SetWater(water *nav.Water) { w.Self.water = water }
+
+// swimmer is the bot's own swim: its water and swim speed.
+func (s *SelfState) swimmer() swimmer {
+	return swimmer{water: s.water, speed: s.SwimSpeed}
+}
+
+// legTime is how long the bot's own move from from to to takes at its
+// speeds now, swimming the part in water.
+func (s *SelfState) legTime(from, to Point) time.Duration {
+	m := motion{speed: pace(s.Running, s.RunSpeed, s.WalkSpeed), swim: s.swimmer()}
+	return m.withLine(from, to, time.Time{}).duration()
+}
 
 // Swinging reports whether the bot's own melee swing is in progress at now:
 // the server defers a move asked during it (network/movement.go
@@ -193,18 +215,94 @@ type RestartPrompt struct {
 }
 
 // motion is a straight move from from to to at speed world units per
-// second, begun at start. A stopped object has from == to.
+// second, begun at start. A stopped object has from == to. A motion with a
+// swimmer swims the part of its line in water, wet0 to wet1 as fractions of
+// the line: there the server moves a player at its swim speed and measures
+// the distance in 3D (acis_golang Character.MoveSpeed, model/actor/move
+// creature.go span).
 type motion struct {
-	from, to Point
-	start    time.Time
-	speed    int32
+	from, to   Point
+	start      time.Time
+	speed      int32
+	swim       swimmer
+	wet0, wet1 float64
+}
+
+// swimmer is what a motion swims by: the water zones and the swim speed. The
+// zero value never swims.
+type swimmer struct {
+	water *nav.Water
+	speed int32
+}
+
+// withLine is m moving from from to to, begun at start, at m's speeds.
+func (m motion) withLine(from, to Point, start time.Time) motion {
+	m.from, m.to, m.start = from, to, start
+	m.wet0, m.wet1 = 0, 0
+	if m.swim.speed > 0 && from != to {
+		if t0, t1, ok := m.swim.water.Span(toLoc(from), toLoc(to)); ok {
+			m.wet0, m.wet1 = t0, t1
+		}
+	}
+	return m
+}
+
+// swimming reports whether the point p of the motion lies in water.
+func (m motion) swimming(p Point) bool {
+	return m.wet1 > m.wet0 && m.swim.water.Contains(int(p.X), int(p.Y), int(p.Z))
+}
+
+// pieces are the motion's stretches in order: each as the fraction of the
+// line it covers and the seconds it takes, walked, swum, walked.
+func (m motion) pieces() [3][2]float64 {
+	dx, dy, dz := float64(m.to.X-m.from.X), float64(m.to.Y-m.from.Y), float64(m.to.Z-m.from.Z)
+	flat := math.Hypot(dx, dy)
+	speed := float64(max(m.speed, 1))
+	if m.wet1 <= m.wet0 {
+		return [3][2]float64{{1, flat / speed}}
+	}
+	space := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	return [3][2]float64{
+		{m.wet0, flat * m.wet0 / speed},
+		{m.wet1 - m.wet0, space * (m.wet1 - m.wet0) / float64(m.swim.speed)},
+		{1 - m.wet1, flat * (1 - m.wet1) / speed},
+	}
+}
+
+// progress is the fraction of the line covered elapsed seconds in.
+func (m motion) progress(elapsed float64) float64 {
+	f := 0.0
+	for _, pc := range m.pieces() {
+		if pc[0] <= 0 {
+			continue
+		}
+		if elapsed < pc[1] {
+			return f + pc[0]*elapsed/pc[1]
+		}
+		elapsed -= pc[1]
+		f += pc[0]
+	}
+	return 1
+}
+
+// duration is how long the whole motion takes.
+func (m motion) duration() time.Duration {
+	if m.from == m.to {
+		return 0
+	}
+	total := 0.0
+	for _, pc := range m.pieces() {
+		total += pc[1]
+	}
+	return time.Duration(total * float64(time.Second))
 }
 
 // stopAt is a motion standing still at p.
 func stopAt(p Point) motion { return motion{from: p, to: p} }
 
 // at is the dead-reckoned position at now: along the line from from to to
-// in the horizontal plane, z following in proportion, never past to.
+// in the horizontal plane, z following in proportion, never past to; the
+// part in water at the swim speed, measured in 3D.
 func (m motion) at(now time.Time) Point {
 	if m.from == m.to || m.speed <= 0 {
 		return m.to
@@ -214,12 +312,13 @@ func (m motion) at(now time.Time) Point {
 		return m.from
 	}
 	dx, dy := float64(m.to.X-m.from.X), float64(m.to.Y-m.from.Y)
-	dist := math.Hypot(dx, dy)
-	travel := float64(m.speed) * elapsed
-	if dist == 0 || travel >= dist {
+	if dx == 0 && dy == 0 && m.wet1 <= m.wet0 {
 		return m.to
 	}
-	f := travel / dist
+	f := m.progress(elapsed)
+	if f >= 1 {
+		return m.to
+	}
 	return Point{
 		X: m.from.X + int32(math.Round(dx*f)),
 		Y: m.from.Y + int32(math.Round(dy*f)),
@@ -234,7 +333,9 @@ func (m motion) moving(now time.Time) bool {
 
 // moveTo is a motion from the position at now toward dest at speed.
 func (m motion) moveTo(now time.Time, origin, dest Point, speed int32) motion {
-	return motion{from: m.sample(now, origin), to: dest, start: now, speed: speed}
+	n := m.withLine(m.sample(now, origin), dest, now)
+	n.speed = speed
+	return n
 }
 
 // sample is the position to continue from when the server reports p at
@@ -257,7 +358,7 @@ func (m motion) resample(now time.Time, p Point) motion {
 	if !m.moving(now) {
 		return stopAt(from)
 	}
-	return motion{from: from, to: m.to, start: now, speed: m.speed}
+	return m.withLine(from, m.to, now)
 }
 
 // short is the point dist short of to on the line from from, or from when
@@ -359,6 +460,9 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyNPCInfo(e, now)
 	case MoveToLocation:
 		if m := w.motionOf(e.ObjectID); m != nil {
+			if e.ObjectID == w.Self.ObjectID {
+				m.swim = w.Self.swimmer()
+			}
 			*m = m.moveTo(now, e.Origin, e.Dest, w.speedOf(e.ObjectID))
 		}
 	case MoveToPawn:
@@ -459,6 +563,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.Load, s.MaxLoad = e.Load, e.MaxLoad
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
+	s.SwimSpeed = e.SwimSpeed
 	s.PAtkSpd, s.CollisionHeight = e.PAtkSpd, e.CollisionHeight
 	s.Heading = e.Heading
 	w.applyClanID(e.ClanID)

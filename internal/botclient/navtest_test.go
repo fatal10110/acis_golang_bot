@@ -50,6 +50,11 @@ func testNav(tb testing.TB) *Nav {
 // buildTestNav is the navigation over terrain t, its hierarchy built over
 // the clusters keys.
 func buildTestNav(t *geotest.Terrain, keys []nav.ClusterKey) (*Nav, error) {
+	return buildTestNavWater(t, keys, nil)
+}
+
+// buildTestNavWater is buildTestNav with the water zones water.
+func buildTestNavWater(t *geotest.Terrain, keys []nav.ClusterKey, water *nav.Water) (*Nav, error) {
 	dir, err := os.MkdirTemp("", "botnav")
 	if err != nil {
 		return nil, err
@@ -75,8 +80,8 @@ func buildTestNav(t *geotest.Terrain, keys []nav.ClusterKey) (*Nav, error) {
 	if err := e.SetRegion(geotest.RegionX, geotest.RegionY, region); err != nil {
 		return nil, err
 	}
-	key := nav.NavKey{ClusterCells: navTestCluster}
-	image, _, err := nav.Build(context.Background(), nav.BuildConfig{Engine: e, Clusters: keys, ClusterCells: navTestCluster, Workers: 2, Key: key})
+	key := nav.NavKey{ClusterCells: navTestCluster, WaterHash: water.Hash()}
+	image, _, err := nav.Build(context.Background(), nav.BuildConfig{Engine: e, Water: water, Clusters: keys, ClusterCells: navTestCluster, Workers: 2, Key: key})
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +94,7 @@ func buildTestNav(t *geotest.Terrain, keys []nav.ClusterKey) (*Nav, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Nav{Engine: e, Hier: nav.NewHierarchy(g, e, nil, nav.DefaultMemberCacheBytes)}, nil
+	return &Nav{Engine: e, Hier: nav.NewHierarchy(g, e, water, nav.DefaultMemberCacheBytes), Water: water}, nil
 }
 
 const navTestCluster = nav.DefaultClusterCells
