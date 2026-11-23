@@ -237,10 +237,10 @@ var tiToads = botclient.Point{X: -94872, Y: 246888, Z: -3633}
 // the same character to 15 for its leader, and farming adds or takes
 // more), the farmer in its Squire's gear stood at 14 to 16, where every
 // Talking Island spot that fits it is a pack of 9 to 11 aggressive level
-// 10 to 12 orcs or werewolves that assist each other within 300 and
-// outrun it (runSpd 118.8): it died there again and again and never
-// farmed. Level 6 fits the toad spots only, whose monsters are slower
-// than it.
+// 10 to 12 orcs (runSpd 108.9) or werewolves (118.8, faster than its
+// 115) that assist each other within 300: it died there again and again
+// and never farmed. Level 6 fits the toad spots only, whose monsters are
+// slower than it.
 const supplyLevel = 6
 
 // walkedHome is how close to the village centre a walk home has arrived:
