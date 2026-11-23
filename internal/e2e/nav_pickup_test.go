@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -130,29 +131,105 @@ func TestPickUpClick(t *testing.T) {
 	}
 }
 
-func TestClosedHead(t *testing.T) {
+func TestLootTurns(t *testing.T) {
+	pt := func(x int32) botclient.Point { return botclient.Point{X: x} }
+	action := func(id, x int32) Sent {
+		p := make([]byte, 18)
+		p[0] = opAction
+		for i, v := range []int32{id, x, 0, 0} {
+			binary.LittleEndian.PutUint32(p[1+4*i:], uint32(v))
+		}
+		return Sent{Op: opAction, Target: id, Payload: p}
+	}
+	move := func(from int32) Sent {
+		return Sent{Op: opMoveBackwardToLocation, Payload: botclient.EncodeMoveBackwardToLocation(pt(from+50), pt(from))}
+	}
+	tests := []struct {
+		name string
+		sent []Sent
+		want []lootTurn
+	}{
+		{"straight clicks, each from the drop before", []Sent{action(1, 10), action(2, 20)}, []lootTurn{
+			{target: 1, from: pt(10), click: action(1, 10)},
+			{target: 2, from: pt(20), click: action(2, 20)},
+		}},
+		{"a walk to a stand point turns from its first move", []Sent{action(1, 10), move(20), move(30), action(2, 40)}, []lootTurn{
+			{target: 1, from: pt(10), click: action(1, 10)},
+			{target: 2, from: pt(20), moves: 2, click: action(2, 40)},
+		}},
+		{"a retried click stays in its turn", []Sent{action(1, 10), move(10), action(1, 12), action(2, 20)}, []lootTurn{
+			{target: 1, from: pt(10), click: action(1, 10)},
+			{target: 2, from: pt(20), click: action(2, 20)},
+		}},
+		{"moves with no click yet are left out", []Sent{action(1, 10), move(20)}, []lootTurn{
+			{target: 1, from: pt(10), click: action(1, 10)},
+		}},
+		{"other packets ignored", []Sent{{Op: 0x0a, Target: 1}, action(1, 10)}, []lootTurn{
+			{target: 1, from: pt(10), click: action(1, 10)},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := lootTurns(tt.sent)
+			if len(got) != len(tt.want) {
+				t.Fatalf("lootTurns = %+v, want %+v", got, tt.want)
+			}
+			for i, g := range got {
+				w := tt.want[i]
+				if g.target != w.target || g.from != w.from || g.moves != w.moves || !bytes.Equal(g.click.Payload, w.click.Payload) {
+					t.Fatalf("turn %d = %+v, want %+v", i, g, w)
+				}
+			}
+		})
+	}
+}
+
+func TestClosedTurn(t *testing.T) {
 	const herbTmpl, adena = 8600, 57
 	drop := func(id, tmpl, x int32) botclient.DropItem {
 		return botclient.DropItem{DropperID: 900, Item: botclient.GroundItem{ObjectID: id, TemplateID: tmpl, Pos: botclient.Point{X: x}}}
 	}
-	// Spots at X >= 100 are closed.
-	open := func(q botclient.Point) bool { return q.X < 100 }
+	turn := func(id, from int32) lootTurn { return lootTurn{target: id, from: botclient.Point{X: from}} }
+	// A spot is closed from 100 or more away.
+	closed := func(from, q botclient.Point) bool { return q.X-from.X >= 100 || from.X-q.X >= 100 }
+	drops := []botclient.DropItem{drop(1, adena, 0), drop(2, adena, 100), drop(3, herbTmpl, 300), drop(4, adena, 400)}
 	tests := []struct {
 		name  string
-		drops []botclient.DropItem
+		turns []lootTurn
 		want  int32
 		ok    bool
 	}{
-		{"closed head", []botclient.DropItem{drop(1, adena, 100), drop(2, adena, 0)}, 1, true},
-		{"closed drop behind an open one", []botclient.DropItem{drop(1, adena, 0), drop(2, adena, 100)}, 0, false},
-		{"closed herb head", []botclient.DropItem{drop(1, herbTmpl, 100), drop(2, adena, 100)}, 0, false},
-		{"open head", []botclient.DropItem{drop(1, adena, 0)}, 0, false},
-		{"no drops", nil, 0, false},
+		{"closed from the kill spot", []lootTurn{turn(2, 0)}, 2, true},
+		{"open from the drop before, closed from the kill spot", []lootTurn{turn(1, 0), turn(2, 0+50)}, 0, false},
+		{"closed from the drop before", []lootTurn{turn(1, 0), turn(2, 50), turn(4, 100)}, 4, true},
+		{"closed herb left out", []lootTurn{turn(3, 0)}, 0, false},
+		{"turn onto no drop of the kill", []lootTurn{turn(9, 1000)}, 0, false},
+		{"no turns", nil, 0, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, ok := closedHead(tt.drops, open); ok != tt.ok || got.Item.ObjectID != tt.want {
-				t.Fatalf("closedHead = item %d, %v; want item %d, %v", got.Item.ObjectID, ok, tt.want, tt.ok)
+			if got, _, ok := closedTurn(tt.turns, drops, closed); ok != tt.ok || got.Item.ObjectID != tt.want {
+				t.Fatalf("closedTurn = item %d, %v; want item %d, %v", got.Item.ObjectID, ok, tt.want, tt.ok)
+			}
+		})
+	}
+}
+
+func TestClickedAll(t *testing.T) {
+	drops := []botclient.DropItem{{Item: botclient.GroundItem{ObjectID: 1}}, {Item: botclient.GroundItem{ObjectID: 2}}}
+	tests := []struct {
+		name  string
+		turns []lootTurn
+		want  bool
+	}{
+		{"every drop clicked", []lootTurn{{target: 2}, {target: 9}, {target: 1}}, true},
+		{"one drop left", []lootTurn{{target: 1}}, false},
+		{"none", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := clickedAll(tt.turns, drops); got != tt.want {
+				t.Fatalf("clickedAll = %v, want %v", got, tt.want)
 			}
 		})
 	}

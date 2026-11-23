@@ -231,7 +231,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveBuffPotion` | GM, datapack | #176 a fighter drinks a Potion of Alacrity at its spot; one hasted (Haste given by the GM, of the potion's stack type and order) drinks none |
 | `TestLiveStoreBuy` | GM, datapack | #177 a bot buys the shots it wants from a second client's sell store at the listed price, not a Scroll of Escape listed over its price cap |
 | `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols; skipped while acis_golang#5419's spawn is missing |
-| `TestLiveNavPickUpObstacle` | GM, datapack | #239 a level 5 farmer kills wolves the GM spawns at a measured site until a wolf's first drop, the one the bot loots from its kill spot, lies where the straight walk from that spot fails (no site closes every drop spot: a scatter step blocked at once leaves the item on the corpse); it walks to a `StandPickUp` stand point, picks the item up from there, and the item reaches its inventory |
+| `TestLiveNavPickUpObstacle` | GM, datapack | #239 a level 5 farmer kills wolves the GM spawns at a measured site until it turns to a drop where the straight walk from where it stands fails: its kill spot for the first drop, the drop before for each next one (no site closes every drop spot: a scatter step blocked at once leaves the item on the corpse); it walks to a `StandPickUp` stand point, picks the item up from there, and the item reaches its inventory |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
 

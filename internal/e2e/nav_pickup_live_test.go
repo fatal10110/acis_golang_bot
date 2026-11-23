@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,33 +64,42 @@ func pickUpScatterClosed(e *engine.Engine, m, from botclient.Point) float64 {
 }
 
 // pickUpKills bounds the wolves TestLiveNavPickUpObstacle kills for one
-// drop the bot cannot pick up straight: a wolf drops adena 70% of the time
-// at drop rate 1 (npcs 20120, its CURRENCY category), about half of it on
-// a closed spot, and the CURRENCY category rolls before the DROP and herb
-// ones (killrewards.go CalculateRewards), so adena heads the drops: fifteen
-// kills all miss about once in 600 runs.
+// drop the bot turns to from a spot it cannot pick it up straight from.
+// Every non-herb drop of a kill is a trial (lootTurns), and the live server
+// drops four to six items per wolf, adena always first (the CURRENCY
+// category rolls before the DROP and herb ones, killrewards.go
+// CalculateRewards). Measured over seven live runs: a hit in 7 of the 9
+// kills the bot looted. At half that rate fifteen kills all miss about once
+// in 1600 runs.
 const pickUpKills = 15
 
+// pickUpLootFor is how long TestLiveNavPickUpObstacle waits for the bot to
+// turn to every drop of a kill before it spawns the next wolf.
+const pickUpLootFor = 45 * time.Second
+
 // TestLiveNavPickUpObstacle has a farmer whose one spot is centred at
-// pickUpStand kill wolves the GM spawns one at a time at pickUpMob until
-// one's first drop is an item (not a herb, which never reaches the
-// inventory) where no straight walk reaches it from where the bot stood at
-// the kill, from any point within half a cell of it. Only the first drop
-// counts: the bot loots in drop order (Brain.lootEvent), so it judges a
-// later drop from where it picked up the one before. The bot must not send
-// the pick-up from there: the scenario asserts that it walked (ground moves
-// after the kill) to a point from which the straight walk onto the item's
-// raw Z holds (the origin its pick-up Action carries), that the server
-// handed it the item (GetItem) and that the item reached its inventory. A
-// drop it can pick up straight is picked up straight, and the next wolf
-// spawned; runWatched holds its blocked stops to at most one and its
-// desyncs to none. Like TestLiveFarmFight, all it carries but adena,
+// pickUpStand kill wolves the GM spawns one at a time at pickUpMob until it
+// turns to a drop (not a herb, which never reaches the inventory) where no
+// straight walk reaches it from where the bot stood when it turned, from
+// any point within half a cell of it. The bot loots one drop at a time
+// (Brain.ruleLoot), so it turns to the first from its kill spot and to each
+// next one from where the server walked it onto the one before; the
+// scenario reads that spot from the bot's own packets (lootTurns), so every
+// drop of a kill is a trial. The bot must not send the pick-up from there:
+// the scenario asserts that it walked (ground moves before its Action on
+// the item) to a point from which the straight walk onto the item's raw Z
+// holds (the origin its pick-up Action carries), that the server handed it
+// the item (GetItem) and that the item reached its inventory. A drop it can
+// pick up straight is picked up straight, and the next wolf spawned once
+// the kill is looted; runWatched holds its blocked stops to at most one and
+// its desyncs to none. Like TestLiveFarmFight, all it carries but adena,
 // potions and shots is junk dropped at any load, so loot kept over the runs
 // never puts it over its weight limit.
 func TestLiveNavPickUpObstacle(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 20*time.Minute)
+	// Fifteen kills at about 40 s each and up to pickUpLootFor of loot.
+	ctx := scenarioCtx(t, 30*time.Minute)
 	e := tg.Nav(t).Engine
 	a, m := ground(e, pickUpStand), ground(e, pickUpMob)
 	canMove := func(p, q botclient.Point) bool {
@@ -159,21 +169,38 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 			return fmt.Sprintf("no kill of wolf %d yet: rule %q walk %q at %v", kill, s.Rule, s.Walk, s.Position)
 		})
 		kstop()
+		killed := time.Now()
 		gm.Forget(mob)
 		k, ok := killOf(f.watch.Seen(0), f.id, mob)
 		if !ok {
 			t.Fatalf("%s killed wolf %d without an Attack frame of its own on it", f.name, kill)
 		}
-		at := ground(e, k.from)
-		d, closed := closedHead(k.drops, func(q botclient.Point) bool {
-			for _, j := range [][2]int32{{0, 0}, {8, 0}, {-8, 0}, {0, 8}, {0, -8}} {
-				if canMove(ground(e, botclient.Point{X: at.X + j[0], Y: at.Y + j[1], Z: at.Z}), q) {
-					return true
-				}
+		var (
+			d      botclient.DropItem
+			turn   lootTurn
+			closed bool
+			turns  []lootTurn
+		)
+		lctx, lstop := context.WithTimeout(ctx, 2*time.Minute)
+		until(t, lctx, "a drop behind the obstacle, or the kill looted", func() string {
+			turns = lootTurns(f.watch.Sent()[k.sentAt:])
+			if d, turn, closed = closedTurn(turns, k.drops, func(from, q botclient.Point) bool { return closedFrom(e, from, q) }); closed {
+				return ""
 			}
-			return false
+			// A kill another player finished leaves its drops to that
+			// player: the bot may loot none of them.
+			s := f.bot.Status()
+			if (s.Rule == "goal" || s.Rule == "idle") && (clickedAll(turns, k.drops) || time.Since(killed) > pickUpLootFor) {
+				return ""
+			}
+			return fmt.Sprintf("wolf %d: %d turns for %d drops: rule %q walk %q at %v", kill, len(turns), len(k.drops), s.Rule, s.Walk, s.Position)
 		})
-		t.Logf("wolf %d (%v after the spawn): killed from %v, drops %v, closed %v", kill, time.Since(spawned).Round(time.Second), at, k.drops, closed)
+		lstop()
+		var seen strings.Builder
+		for _, lt := range turns {
+			fmt.Fprintf(&seen, " [item %d from %v, %d moves]", lt.target, lt.from, lt.moves)
+		}
+		t.Logf("wolf %d (%v after the spawn): killed from %v, drops %v, turns%s, closed %v", kill, time.Since(spawned).Round(time.Second), k.from, k.drops, seen.String(), closed)
 		if !closed {
 			continue
 		}
@@ -189,18 +216,9 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 			return fmt.Sprintf("item %d (template %d) at %v not picked up: rule %q walk %q at %v", d.Item.ObjectID, d.Item.TemplateID, d.Item.Pos, s.Rule, s.Walk, s.Position)
 		})
 		got, _ := pickedUp(f.watch.Seen(0), f.id, d)
-		click, origin, ok := pickUpClick(f.watch.Sent()[k.sentAt:], d.Item.ObjectID)
-		if !ok {
-			t.Fatalf("%s got item %d without a pick-up Action on it", f.name, d.Item.ObjectID)
-		}
-		segs := 0
-		for _, s := range f.watch.Sent()[k.sentAt:] {
-			if s.Op == opMoveBackwardToLocation && s.At.Before(click.At) {
-				segs++
-			}
-		}
-		t.Logf("%s killed from %v, %d ground moves, picked item %d at %v up from %v at %v", f.name, at, segs, d.Item.ObjectID, d.Item.Pos, origin, got)
-		if segs == 0 {
+		origin, _ := actionOrigin(turn.click)
+		t.Logf("%s turned to item %d at %v from %v, %d ground moves, picked it up from %v at %v", f.name, d.Item.ObjectID, d.Item.Pos, turn.from, turn.moves, origin, got)
+		if turn.moves == 0 {
 			t.Errorf("%s sent the pick-up of item %d at %v from %v without a ground move round the obstacle", f.name, d.Item.ObjectID, d.Item.Pos, origin)
 		}
 		if !canMove(ground(e, origin), d.Item.Pos) {
@@ -245,18 +263,86 @@ func killOf(seen []Seen, self, mob int32) (wolfKill, bool) {
 	return wolfKill{}, false
 }
 
-// closedHead is the first of drops when it is no herb and lies on a spot
-// open reports no straight walk to. Only the first: the bot loots its
-// drops in arrival order, so it heads for a later one from where it picked
-// up the one before, not from the kill spot open measures from.
-func closedHead(drops []botclient.DropItem, open func(botclient.Point) bool) (botclient.DropItem, bool) {
-	if len(drops) == 0 {
-		return botclient.DropItem{}, false
+// closedFrom reports that no straight walk reaches q from the ground at
+// from, nor from any point half a cell off it on either axis.
+func closedFrom(e *engine.Engine, from, q botclient.Point) bool {
+	at := ground(e, from)
+	for _, j := range [][2]int32{{0, 0}, {8, 0}, {-8, 0}, {0, 8}, {0, -8}} {
+		p := ground(e, botclient.Point{X: at.X + j[0], Y: at.Y + j[1], Z: at.Z})
+		if e.CanMove(int(p.X), int(p.Y), int(p.Z), int(q.X), int(q.Y), int(q.Z)) {
+			return false
+		}
 	}
-	if d := drops[0]; !herb(d.Item.TemplateID) && !open(d.Item.Pos) {
-		return d, true
+	return true
+}
+
+// lootTurn is the bot turning to one target after a kill: where it stood
+// when it turned (the origin of its first ground move or Action), how many
+// ground moves it sent before its first Action on the target, and that
+// Action.
+type lootTurn struct {
+	target int32
+	from   botclient.Point
+	moves  int
+	click  Sent
+}
+
+// lootTurns splits sent, the bot's packets after a kill, into its turns to
+// one target each: ground moves, then Actions on the target. The bot loots
+// one drop at a time and turns to the next only once the server walked it
+// onto the last (Brain.ruleLoot), so each turn starts where the bot stood
+// at the drop before. Moves followed by an Action on the target of the turn
+// before are a retried click of that turn; moves with no Action after them
+// yet are a turn under way and left out.
+func lootTurns(sent []Sent) []lootTurn {
+	var (
+		turns []lootTurn
+		moves []Sent
+	)
+	for _, s := range sent {
+		switch s.Op {
+		case opMoveBackwardToLocation:
+			moves = append(moves, s)
+		case opAction:
+			if n := len(turns); n > 0 && turns[n-1].target == s.Target {
+				moves = nil
+				continue
+			}
+			lt := lootTurn{target: s.Target, moves: len(moves), click: s}
+			lt.from, _ = actionOrigin(s)
+			if len(moves) > 0 {
+				if _, from, ok := groundClick(moves[0].Payload); ok {
+					lt.from = from
+				}
+			}
+			turns = append(turns, lt)
+			moves = nil
+		}
 	}
-	return botclient.DropItem{}, false
+	return turns
+}
+
+// closedTurn is the first of turns onto one of drops, herbs left out, whose
+// item lies where closed reports no straight walk to from the spot the bot
+// turned to it from.
+func closedTurn(turns []lootTurn, drops []botclient.DropItem, closed func(from, q botclient.Point) bool) (botclient.DropItem, lootTurn, bool) {
+	for _, lt := range turns {
+		i := slices.IndexFunc(drops, func(d botclient.DropItem) bool { return d.Item.ObjectID == lt.target })
+		if i >= 0 && !herb(drops[i].Item.TemplateID) && closed(lt.from, drops[i].Item.Pos) {
+			return drops[i], lt, true
+		}
+	}
+	return botclient.DropItem{}, lootTurn{}, false
+}
+
+// clickedAll reports that turns hold a turn onto every one of drops.
+func clickedAll(turns []lootTurn, drops []botclient.DropItem) bool {
+	for _, d := range drops {
+		if !slices.ContainsFunc(turns, func(lt lootTurn) bool { return lt.target == d.Item.ObjectID }) {
+			return false
+		}
+	}
+	return true
 }
 
 // pickedUp reports when self got the ground item of d: its GetItem by self,
@@ -285,9 +371,19 @@ func pickUpClick(sent []Sent, id int32) (Sent, botclient.Point, bool) {
 		if s.Op != opAction || s.Target != id || len(s.Payload) < 17 {
 			continue
 		}
-		p := s.Payload
-		at := func(off int) int32 { return int32(binary.LittleEndian.Uint32(p[off:])) }
-		return s, botclient.Point{X: at(5), Y: at(9), Z: at(13)}, true
+		o, _ := actionOrigin(s)
+		return s, o, true
 	}
 	return Sent{}, botclient.Point{}, false
+}
+
+// actionOrigin is the origin an Action carries (clientpackets Action:
+// object id, origin, shift).
+func actionOrigin(s Sent) (botclient.Point, bool) {
+	p := s.Payload
+	if s.Op != opAction || len(p) < 17 {
+		return botclient.Point{}, false
+	}
+	at := func(off int) int32 { return int32(binary.LittleEndian.Uint32(p[off:])) }
+	return botclient.Point{X: at(5), Y: at(9), Z: at(13)}, true
 }
