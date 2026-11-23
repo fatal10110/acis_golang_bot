@@ -83,7 +83,10 @@ func TestLiveTownPrep(t *testing.T) {
 // #182): at its spot it reads a scroll, lands in the village, restocks its
 // shots and scrolls before it leaves, then farms at a spot again. It
 // carries them from its login, so its use meter never sees it fight
-// without shots, which would leave its shot rate at zero.
+// without shots, which would leave its shot rate at zero. A death at its
+// spot before the trip (a starter spot's packs kill it at times) sends it
+// home by the respawn instead: the scenario then checks the restock after
+// the respawn and the farming after it, and no trip is verified.
 func TestLiveSupplyTrip(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -114,8 +117,10 @@ func TestLiveSupplyTrip(t *testing.T) {
 
 	// Home is the recall's landing after a Scroll of Escape, a walk to the
 	// village when no safe moment came within Supply.SafeWait, or a death
-	// on the way and the respawn in the village (Revive arms the
-	// preparation gate as an arrival does, docs/items.md section 7).
+	// on the way, or at the spot before the trip (a starter spot's packs
+	// kill a level 16 farmer at times), and the respawn in the village:
+	// Revive arms the preparation gate as an arrival does (docs/items.md
+	// section 7), and the restock below is what the scenario checks.
 	var read, landed, tripAt time.Time
 	var how string
 	var last string
@@ -152,10 +157,13 @@ func TestLiveSupplyTrip(t *testing.T) {
 			landed, how = time.Now(), fmt.Sprintf("walked home, no safe moment for its scroll (#%d)", issueNeverSafe)
 			return ""
 		}
-		if !tripAt.IsZero() && dist(st.Position, townTI) < walkedHome {
+		if dist(st.Position, townTI) < walkedHome {
 			for _, s := range f.watch.Seen(0) {
-				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && s.At.After(tripAt) {
+				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && s.At.After(start) {
 					landed, how = s.At, "died on the trip and respawned in the village"
+					if tripAt.IsZero() || s.At.Before(tripAt) {
+						how = "died at its spot before the trip and respawned in the village"
+					}
 				}
 			}
 			if !landed.IsZero() {
@@ -175,7 +183,6 @@ func TestLiveSupplyTrip(t *testing.T) {
 		}
 	}
 	var farmAt time.Time
-	var unstocked bool
 	untilServed(t, ctx, "the restock, then a spot", f.watch, merchantBuyRefused(f.watch), func() string {
 		note()
 		var bought bool
@@ -185,9 +192,11 @@ func TestLiveSupplyTrip(t *testing.T) {
 		st := f.bot.Status()
 		switch {
 		case !bought && st.Spot != "" && dist(st.Position, townTI) > walkedHome:
-			// Out of town again with nothing bought (#253).
-			unstocked = true
-			return ""
+			// Out of town again with nothing bought: fail at once, with
+			// the visits the bot made.
+			t.Log(f.digest())
+			t.Log(f.visits())
+			t.Fatalf("%s left town for spot %q with nothing bought since the landing", f.name, st.Spot)
 		case !bought:
 			return fmt.Sprintf("no RequestBuyItem since the landing (rule %q)", f.bot.Status().Rule)
 		case !rose(f.counts(soulshotNG, from)):
@@ -200,11 +209,6 @@ func TestLiveSupplyTrip(t *testing.T) {
 		farmAt = time.Now()
 		return ""
 	})
-	if unstocked {
-		t.Log(f.digest())
-		t.Log(f.visits())
-		t.Skipf("%s left town for spot %q with nothing bought after the trip home (#%d)", f.name, f.bot.Status().Spot, issueNoRestock)
-	}
 	for _, p := range sentOf(f.watch.Sent(), botclient.OpRequestBuyItem) {
 		if p.At.After(farmAt) {
 			t.Errorf("%s bought at %v, after it farmed again at %v", f.name, p.At, farmAt)
@@ -230,10 +234,6 @@ const noteEvery = 30 * time.Second
 // moment to read its scroll: nearly every starter monster has an aggro
 // range (safeToEscape).
 const issueNeverSafe = 251
-
-// issueNoRestock tracks the farmer back in town on a supply trip leaving
-// for a spot again with no merchant visited.
-const issueNoRestock = 253
 
 // load is f's carried weight and weight limit as its last UserInfo or
 // StatusUpdate showed them.

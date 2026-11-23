@@ -45,6 +45,15 @@ type npcVisit struct {
 	// in sight, standFor where the NPC stood when it was chosen; both zero
 	// before one.
 	stand, standFor Point
+	// noLine is set when the stand point offers no open line to the NPC
+	// (a talk point).
+	noLine bool
+	// failedAt is the walker's endedAt of the last unreachable walk to a
+	// talk point a click was spent on; zero before one.
+	failedAt time.Time
+	// walkAt is where the walk toward the spawn heads (walkTo): at, or the
+	// bot's ground nearest it; zero before the walk.
+	walkAt Point
 }
 
 // active reports whether a visit runs.
@@ -127,7 +136,7 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 		if o := b.world.object(v.obj); o == nil || o.Dead {
 			// Out of sight (a teleport clears the world): look again.
 			v.obj, v.opened, v.waitUntil = 0, false, time.Time{}
-			v.stand, v.standFor = Point{}, Point{}
+			v.stand, v.standFor, v.noLine, v.failedAt = Point{}, Point{}, false, time.Time{}
 		}
 	}
 	if v.obj == 0 {
@@ -161,9 +170,17 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 // walkTo is the next segment of visit v toward its NPC's spawn, through the
 // walker. It reports false once the bot is within visitArrive of the spawn
 // and visitLook passed since the bot appeared (the NPC is not there), or
-// when the walk there is unreachable.
+// when the walk there is unreachable. A spawn off the bot's ground, in a
+// pocket of a stall or counter no walk enters, is walked to by the bot's
+// ground nearest it within talkReach, where a click still talks (#253).
 func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
-	a, st := b.goTo(v.at, visitArrive, walkPlace, now)
+	if v.walkAt == (Point{}) {
+		v.walkAt = v.at
+		if g, ok := b.walker().groundNear(b.world.Self.Position(now), v.at, talkReach); ok && horizontal2(g, v.at) > walkSlop*walkSlop {
+			v.walkAt = g
+		}
+	}
+	a, st := b.goTo(v.walkAt, visitArrive, walkPlace, now)
 	switch st {
 	case walkUnreachable:
 		return Action{}, false
@@ -180,14 +197,23 @@ func (b *Brain) walkTo(v *npcVisit, now time.Time) (Action, bool) {
 // server's interaction distance (network/targeting.go interactionDistance).
 const visitTalkRange = 150
 
+// talkReach is how far from an NPC a stand point with no open line to it
+// may lie: the server's interaction distance less the walk's slop at the
+// stand point and the approach's last position update.
+const talkReach = visitTalkRange - 2*walkSlop
+
 // closeIn is the next segment toward a stand point of visit v's NPC in
 // sight. A click on the NPC walks the bot straight at it, never routed, and
 // a closed line ends that walk blocked (creature.go, MoveToPawn), so the bot
 // clicks only from within arrive with the straight line open, and else walks
 // first, through the walker, to the stand point nearest it within
-// visitTalkRange with an open line (nav StandLine). It reports false once
-// the bot may click, or when no stand point or walk there holds: the clicks
-// are tried then, bounded by visitClicks.
+// visitTalkRange with an open line (nav StandLine), or with none, to its
+// talk point (walker.talkPoint). It reports false once the bot may click, or
+// when no stand point or walk there holds: the clicks are tried then,
+// bounded by visitClicks. A walk to a talk point that ends unreachable is
+// not clicked past, since the straight approach from afar ends blocked: the
+// visit waits out the walker's walkRetry and walks again, each failed walk
+// (each unreachable end, by the walker's endedAt) spending a click.
 func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	from := s.Position(now)
@@ -201,13 +227,28 @@ func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, boo
 		// the old one ended blocked short of the NPC.
 		w.talkFailed = false
 		st, ok := w.standPoint(from, to, visitTalkRange, nav.StandLine, 0)
+		v.noLine = !ok
 		if !ok {
-			return Action{}, false
+			// No open line: a click from within talkReach ends blocked
+			// short of the NPC and still talks; one from further away
+			// ends blocked across the town (#253).
+			if st, ok = w.talkPoint(from, to, talkReach); !ok {
+				return Action{}, false
+			}
 		}
 		v.stand, v.standFor = st, to
 	}
 	a, st := b.goTo(v.stand, walkSlop, walkTalk, now)
-	if st != walkWalking {
+	switch {
+	case st == walkUnreachable && v.noLine:
+		// A retry whose plan fails at once ends within the same goTo, with
+		// no walking in between: its fresh endedAt still spends a click.
+		if ended := b.walk.endedAt; !ended.Equal(v.failedAt) {
+			v.failedAt = ended
+			v.clicks++
+		}
+		return Action{}, v.clicks < visitClicks
+	case st != walkWalking:
 		return Action{}, false
 	}
 	return a, true
