@@ -910,8 +910,9 @@ unreachable (with a reason).
     restart area of acis_golang#5412).
     The server's recall is a five-minute cast; the walker holds every walk while it runs.
     A refused or cut-short recall is asked again `escapeRetry` (30 s) after the ask or the cast's
-    end, at most three times in ten minutes; the server's petition refusal (system message 1043)
-    stops the asks until a teleport (#286).
+    end, at most three times in ten minutes; a recall that lands stops the asks for ten minutes
+    from the landing (the landing may be isolated too); the server's petition refusal (system
+    message 1043) stops the asks until a teleport (#286).
   - Sidesteps and wall detours are deleted.
 - **Pacing**:
   - one `MoveBackwardToLocation` per segment, through the frame pacer (`gateNone`);

@@ -10,8 +10,9 @@ import (
 // TestWalkerEscapeRetry asks /unstuck again on isolated ground when the
 // recall does not land the bot: escapeRetry after the ask when no cast ran,
 // or after the end of a cast cut short; the breaker stops the asks after
-// escapeTries in escapeEvery, and the server's petition refusal stops them
-// until a teleport (#286).
+// escapeTries in escapeEvery or for escapeEvery after a recall landed back
+// on isolated ground, and the server's petition refusal stops them until a
+// teleport (#286).
 func TestWalkerEscapeRetry(t *testing.T) {
 	n := testNav(t)
 	from, dest := scenePoint(geotest.PitInside, 0, 0), scenePoint(geotest.PitOutside, 0, 0)
@@ -45,6 +46,14 @@ func TestWalkerEscapeRetry(t *testing.T) {
 			isolated(3 * escapeRetry),
 			isolated(3*escapeRetry + walkRetry),
 			ask(escapeEvery),
+		}},
+		{"recall landing on isolated ground opens the breaker", []step{
+			ask(0),
+			{at: time.Second, castEnd: 5 * time.Minute, kind: actHold, status: walkWalking},
+			{at: 5 * time.Minute, events: teleport, kind: actHold, status: walkUnreachable},
+			isolated(5*time.Minute + walkRetry),
+			isolated(5*time.Minute + escapeEvery - walkRetry/2),
+			ask(5*time.Minute + escapeEvery + walkRetry/2),
 		}},
 		{"petition refusal gives up until a teleport", []step{
 			ask(0),

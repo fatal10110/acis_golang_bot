@@ -91,8 +91,9 @@ const (
 	walkDropCells = 32
 	// escapeEvery and escapeTries are the breaker of the walker's /unstuck
 	// on isolated ground: at most escapeTries asks in escapeEvery from the
-	// first. Between two asks the walker waits escapeRetry from the ask, or
-	// from the end of the recall cast when one ran.
+	// first, and none for escapeEvery after a recall it asked landed. Between
+	// two asks the walker waits escapeRetry from the ask, or from the end of
+	// the recall cast when one ran.
 	escapeEvery = 10 * time.Minute
 	escapeTries = 3
 	// defaultCollisionHeight is a walker's collision height before its
@@ -702,6 +703,13 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 		w.talkAt = time.Time{}
 	case TeleportToLocation:
 		if e.ObjectID == s.ObjectID {
+			// A recall the walker asked landed: if the landing is isolated
+			// ground too (the restart area of acis_golang#5412), asking again
+			// only repeats the five-minute cast, so the breaker opens for
+			// escapeEvery from the landing.
+			if w.escaping {
+				w.escapeFirst, w.escapes = now, escapeTries
+			}
 			w.seg, w.route, w.escaping = segment{}, nil, false
 			w.escapeRefused = false
 			w.dest = Point{}
