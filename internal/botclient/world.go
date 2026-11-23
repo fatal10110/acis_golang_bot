@@ -685,12 +685,20 @@ func (w *World) Apply(ev Event, now time.Time) {
 		if m := w.motionOf(e.ObjectID); m != nil {
 			from := m.sample(now, e.Origin)
 			dest := from
-			if t := w.motionOf(e.TargetID); t != nil {
+			t := w.motionOf(e.TargetID)
+			if t != nil {
 				dest = short(from, t.at(now), e.Distance)
 			}
 			if e.ObjectID == w.Self.ObjectID {
 				// The bot's own approach keeps its swim and arrival model.
-				w.Self.move = w.Self.moved(now, e.Origin, dest)
+				// Stopping short of a creature, the server's timer runs one
+				// update past the one that ends the walk (creature.go
+				// arrivalDelayLocked, within).
+				mv := w.Self.moved(now, e.Origin, dest)
+				if t != nil && e.Distance > 0 && mv.moving(now) {
+					mv.self.end = mv.self.end.Add(positionTick)
+				}
+				w.Self.move = mv
 			} else {
 				*m = motion{from: from, to: dest, start: now, speed: w.speedOf(e.ObjectID)}
 			}

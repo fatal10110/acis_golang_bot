@@ -82,21 +82,23 @@ func TestSelfArrival(t *testing.T) {
 			want: 5 * time.Second,
 		},
 		{
-			// Within positionTick + A of the end: 460 left, 5 + 44.
+			// Within positionTick + A of the end: 460 left, 5 + 44, and the
+			// update past the stop short of the creature.
 			name: "attack click at the modeled end starts afresh",
 			steps: []step{
 				{0, move(Point{}, Point{X: 500})},
 				{5200 * time.Millisecond, MoveToPawn{ObjectID: selfID, TargetID: npcID, Distance: 40, Origin: Point{X: 500}}},
 			},
-			want: 10100 * time.Millisecond,
+			want: 10200 * time.Millisecond,
 		},
 		{
+			// One update more for the stop short of the creature.
 			name: "talk click before the end retargets",
 			steps: []step{
 				{0, move(Point{}, Point{X: 500})},
 				{4 * time.Second, MoveToPawn{ObjectID: selfID, TargetID: npcID, Distance: 40, Origin: Point{X: 400}}},
 			},
-			want: 9600 * time.Millisecond,
+			want: 9700 * time.Millisecond,
 		},
 		{
 			// From 200 at 2 s, 800 at 20: 2 + 4.
@@ -193,8 +195,35 @@ func TestSelfApproachKeepsSwim(t *testing.T) {
 	if !w.Self.move.wet() {
 		t.Fatal("the approach through water does not swim")
 	}
-	// 500 dry (52.5 updates), 460 swum at 5, one change: 145 + 1.
-	if got := w.Self.arrival().Sub(t0); got != 14600*time.Millisecond {
-		t.Errorf("arrival at %v, want 14.6s", got)
+	// 500 dry (52.5 updates), 460 swum at 5, one change: 145 + 1, and the
+	// update past the one that stops short of the creature: 147.
+	if got := w.Self.arrival().Sub(t0); got != 14700*time.Millisecond {
+		t.Errorf("arrival at %v, want 14.7s", got)
+	}
+}
+
+// TestSelfApproachArrival: the bot's own MoveToPawn ends one update past the
+// leg's travel when it stops short of a creature (creature.go
+// arrivalDelayLocked, within), and not when it walks onto the pawn.
+func TestSelfApproachArrival(t *testing.T) {
+	tests := []struct {
+		name     string
+		distance int32
+		want     time.Duration
+	}{
+		// 960 left to the stop: 5 updates at 5, then 935 at 10: 5 + 94 = 99.
+		{name: "short of the creature", distance: 40, want: 10000 * time.Millisecond},
+		// 1000 to the pawn: 5 updates at 5, then 975 at 10: 5 + 98 = 103.
+		{name: "onto the pawn", distance: 0, want: 10300 * time.Millisecond},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newTestWorld(t)
+			w.Apply(UserInfo{ObjectID: selfID, Name: "bot7", RunSpeed: 100, WalkSpeed: 50, Running: true}, t0)
+			w.Apply(MoveToPawn{ObjectID: selfID, TargetID: npcID, Distance: tt.distance}, t0)
+			if got := w.Self.arrival().Sub(t0); got != tt.want {
+				t.Errorf("arrival at %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
