@@ -154,7 +154,7 @@ Nothing the design needs is missing on the server, so this plan files no server 
 
 ## Behavior per class
 
-This section is the spec that S5 (gear and dyes, columns 1, 2 and 11), S6 (fighter rows), S7
+This section is the spec that S5 (gear and dyes, columns 1, 2 and 11), S6 and S6b (fighter rows), S7
 (mystic rows), S8 (the professions, the branch weapon and the class change between rows), S10
 (spoil and sweep) and S11 (spot margins, column 10) implement, and that the brain tests check row by row (section
 "Testing"). It covers the nine base classes (levels 1-19) and every first profession (20-39) of
@@ -170,17 +170,25 @@ from the stat and kit tables above. `TestBehaviorRowsShipped` (S4) checks the ta
 shipped datapack.
 
 **Notation.** Skills are `id Name`. A weapon gate is in brackets, as the datapack's weapon kinds:
-`[DAGGER]`. Gates: `@24` the level the step starts: the skill's first `minLvl` in the line's merged tree, and in a
-profession row never below 20 (the row starts at 20, so a skill the base class taught earlier is
-`@20`); `(base)` the same, for a skill the profession's own tree lists only later than 20 (it
-knows it from its base class; its own tree only raises the level). `TestBehaviorRowsShipped`
-checks `@N` = max(row start, first merged `minLvl`) and `(base)` = first merged `minLvl` under 20.
-Several `open` steps: the first whose gates pass is the opener, and column 3 restates them. A step
-marked (Support) or (Damage) is in that role's rotation only. A step whose skill's `castRange` is
-shorter than the row's fight range gets that range as its `Within` gate from the datapack, written
-or not (Ice Bolt and Wind Shackle at 600 for a 750 caster). Other gates: `open`
+`[DAGGER]` (`SHIELD` is the left-hand shield, which the server's held-item check counts too).
+Levels, as `TestBehaviorRowsShipped` checks them against the line's merged tree (row start: 1 for
+a base class, 20 for a profession):
+
+- `@24`: the step starts at 24, which is max(row start, the skill's first merged `minLvl`).
+- `(base)` or `(base tree)`: the profession knows the skill from its base class (first merged
+  `minLvl` under 20), whatever level its own tree lists.
+- No level tag: known at the row's start (first merged `minLvl` ≤ row start).
+- `(level 9)`, `(levels 5-6)`: the skill level the row reaches by then, not a gate.
+
+Prefixes: `Dagger:` or `Bow:` gives every step after it, up to the next prefix, a `[DAGGER]` or
+`[BOW]` gate (a branch gate, which must fit the skill's own `weaponsAllowed` when it has one);
+`Damage:` or `Support:`, and a step marked (Damage) or (Support), put the step in that role's
+rotation only; no mark is every role. Several `open` steps: the first whose gates pass is the
+opener, and column 3 restates them. A step with no `≤` gate is cast from where the bot stands,
+and the server walks it into the skill's `castRange` (a 600 opener from a 750 stand point).
+Other gates: `open`
 the opener (first action on a fresh target), `T≥50` target HP at least 50 %, `S<60` own HP under
-60 %, `MP>30` own MP above 30 %, `≤400` target within 400 (`Step.Within`), `A≥2` at least two
+60 %, `MP>30` own MP above 30 %, `≤400` cast only while the target is within 400 (`Step.Within`), so a short skill never pulls the bot into melee, `A≥2` at least two
 attackers, `C≥2` at least two force charges, `C<max` fewer than the skill's own `maxCharges` at
 the level the bot knows (Design section 4, `Step`). Steps are in priority order;
 "melee" means auto-attack between steps. Branch weapons: a base class or a profession whose
@@ -252,14 +260,14 @@ lose 3, 87000 lose 2, 149000 lose 1).
 | PK | 70 Drain Health @20 from 600, a pull; 28 Aggression @24 for the Support role. | 28 Aggression @24 open (Support); 70 Drain Health @20 open; 115 Power Break @32 open; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD] @24; 105 Freezing Strike @36; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 70 Drain Health @20 S<60; 110 Ultimate Defense @20 S<20 | 91 Defense Aura (base), 77 Attack Aura (base; level 2 @28) | HP; plain sit |
 | AS | Dagger: 70 Drain Health @20 from 600, a pull. Bow: 56 Power Shot from 700 (101 Stunning Shot from 900 @36). | Dagger: 70 Drain Health @20 open; 96 Bleed [DAGGER] @24 T≥50; 16 Mortal Blow [DAGGER] @20; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD] @24. Bow: 101 Stunning Shot [BOW] @36; 56 Power Shot [BOW] @20. Melee between. | 70 Drain Health @20 S<60; 111 Ultimate Evasion @28 S<30 | Auras 91, 77 (base); 99 Rapid Shot @32 (bow); 256 Accuracy @24 (in combat, MP>30); 312 Vicious Stance @20 (in combat, MP>30) | HP; plain sit |
 | OR | Walks in. | 100 Stun Attack [BLUNT, BIGBLUNT] @20; 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @20; melee. | 121 Battle Roar @28 S<30 | 94 Rage @24 in combat; 176 Frenzy @32 S<30; 139 Guts @36 S<30; 256 Accuracy @24 (in combat, MP>30); 312 Vicious Stance @20 (in combat, MP>30) | HP; 226 Relax (base tree) |
-| MO | 54 Force Blaster [DUALFIST] @24 C≥1 from 600, a pull; else walks in. | 50 Focused Force [DUALFIST] @24 C<max out of combat (1 charge at 24-31, 2 from 32); 95 Cripple [FIST, DUALFIST] @20 open; 284 Hurricane Assault [DUALFIST] @36 C≥2; 54 Force Blaster [DUALFIST] @24 C≥1; 120 Stunning Fist [DUALFIST] @20; 29 Iron Punch [DUALFIST] @20; melee. | none | 83 Wolf Spirit Totem [DUALFIST] @20, then 76 Bear Spirit Totem [DUALFIST] @28 | HP; 226 Relax (base tree) |
+| MO | 54 Force Blaster [DUALFIST] @24 C≥1 from 600, a pull; else walks in. | 50 Focused Force [DUALFIST] @24 C<max out of combat (1 charge at 24-31, 2 from 32); 54 Force Blaster [DUALFIST] @24 open C≥1; 95 Cripple [FIST, DUALFIST] @20 open; 284 Hurricane Assault [DUALFIST] @36 C≥2; 54 Force Blaster [DUALFIST] @24 C≥1; 120 Stunning Fist [DUALFIST] @20; 29 Iron Punch [DUALFIST] @20; melee. | none | 83 Wolf Spirit Totem [DUALFIST] @20, then 76 Bear Spirit Totem [DUALFIST] @28 | HP; 226 Relax (base tree) |
 | SC | 254 Spoil @20 (levels 2-4), open, at melee range, until spoiled. | 254 Spoil open; 100 Stun Attack [BLUNT, BIGBLUNT] @20; melee. After the kill: 42 Sweeper (section 8). | none | none | HP; plain sit |
 | CL | Support: none, it assists. Alone: 1177 Wind Strike (level 5) from 600. | Heals: 1015 Battle Heal @20 under 35 %, 1011 Heal @20 under 60 %, 1027 Group Heal @20 with two members under 60 %. Then 1177 Wind Strike above MPReserve; melee only alone and out of MP. | Its heals on itself (rule 3 order: leader, self, others) | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk @20, 1085 Acumen @20 (mystic members), 1078 Concentration @20 | MP; plain sit |
 | HW | 1220 Blaze @20 from 750, a pull. | 1220 Blaze @20; 1184 Ice Bolt @20 (levels 5-6); 1274 Energy Bolt @20 ≤400; 1172 Aura Burn @20 ≤150; melee only out of MP. | 1147 Vampiric Touch @20 S<60; 1157 Body To Mind @25 when MP under 30 % and S≥70 | 1078 Concentration @20 | MP; plain sit |
 | EO | Support: none, it assists. Alone: 1177 Wind Strike from 600. | Heals as CL. Then 1201 Dryad Root @25 on a second attacker A≥2; 1177 Wind Strike above MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk @20, 1087 Agility @25, 1043 Holy Weapon @25 | MP; plain sit |
-| EW | 1206 Wind Shackle @20 MP>50 from 600, else 1175 Aqua Swirl from 750. | 1206 Wind Shackle open MP>50; 1264 Solar Spark @25; 1175 Aqua Swirl @20; 1184 Ice Bolt @20; 1274 Energy Bolt @20 ≤400; 1172 Aura Burn @20 ≤150. | 1216 Self Heal (base, level 1) S<40 (no drain) | 1078 Concentration @20 | MP; plain sit |
+| EW | 1206 Wind Shackle MP>50 from 600, else the first ready nuke from 750 (1264 Solar Spark from 25, else 1175 Aqua Swirl). | 1206 Wind Shackle open MP>50; 1264 Solar Spark @25; 1175 Aqua Swirl @20; 1184 Ice Bolt @20; 1274 Energy Bolt @20 ≤400; 1172 Aura Burn @20 ≤150. | 1216 Self Heal (base, level 1) S<40 (no drain) | 1078 Concentration @20 | MP; plain sit |
 | SO | Support: none, it assists; 1206 Wind Shackle @20 on the leader's target once. Alone: Wind Strike. | Heals as CL; 1206 Wind Shackle on the assist target open; 1177 Wind Strike above MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk @20, 1059 Greater Empower @25, 1077 Focus @25, 1268 Vampiric Rage @30 | MP; plain sit |
-| DW | 1168 Curse: Poison @20 MP>60 from 600, else 1178 Twister from 750. | 1168 Curse: Poison open MP>60; 1266 Shadow Spark @25; 1178 Twister @20; 1184 Ice Bolt @20; 1172 Aura Burn @20 ≤150. | 1147 Vampiric Touch @20 S<70; 1157 Body To Mind @25 when MP under 30 % and S≥70 | 1078 Concentration @20 | MP; plain sit |
+| DW | 1168 Curse: Poison MP>60 from 600, else the first ready nuke from 750 (1266 Shadow Spark from 25, else 1178 Twister). | 1168 Curse: Poison open MP>60; 1266 Shadow Spark @25; 1178 Twister @20; 1184 Ice Bolt @20; 1172 Aura Burn @20 ≤150. | 1147 Vampiric Touch @20 S<70; 1157 Body To Mind @25 when MP under 30 % and S≥70 | 1078 Concentration @20 | MP; plain sit |
 | OS | 1107 Frost Flame @20 from 750, a pull. | 1107 Frost Flame @20 open; 1090 Life Drain @20 (levels 3-6); 100 Stun Attack [BLUNT, BIGBLUNT] @20 ≤40, else melee. | 1090 Life Drain S<70; 1229 Chant of Life @20 (party) with a member under 50 % | 1001 Soul Cry (base; combat toggle, on while MP>30); party chants 1007 Chant of Battle (base), 1009 Chant of Shielding @20, 1006 Chant of Fire @20, 1002 Flame Chant @30; 1010 Soul Shield (base) | MP; plain sit |
 
 ### Numbers and summary (columns 8, 10, 12)
@@ -272,7 +280,7 @@ own cost. Where a row has both roles, values are Support / Damage. Spot margin: 
 `TimeToDie ≥ margin × TimeToKill` against its likely pack (Design section 11); tank 1.5, normal
 2.0, glass cannon 3.0.
 
-| Row | MPReserve | Sit HP / MP | Stand HP / MP | Critical | Crowded | Outmatched | 10. Spot | 12. Plays like |
+| Row | 8. MPReserve | Sit HP / MP | Stand HP / MP | Critical | Crowded | Outmatched | 10. Spot | 12. Plays like |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | HF | 0 | 35 / 15 | 90 / 70 | 15 | 60 | 30 | normal 2.0 | A sturdy all-rounder that walks in, trades blows, Power Strikes on cooldown and rests with Relax. |
 | EF | 20 | 45 / 20 | 90 / 80 | 25 | 80 | 50 | normal 2.0 | A light, fast skirmisher that heals itself and outruns what it cannot beat. |
@@ -388,7 +396,8 @@ New readers, each keeping exactly the fields it reads, with fixture tests like t
   `hpTable`/`mpTable`, and its skill tree (`<skill id lvl cost minLvl>`), merged with the
   parents' as the server does.
 - **Skill combat fields** (`skills.go` extended): `skillType`, `operateType`, `target`,
-  `weaponsAllowed`, `reuseDelay`, `hitTime`, `mpConsume` and `power` per level, and the armor-kind
+  `weaponsAllowed`, `castRange`, the charge fields (`numCharges`, `maxCharges` per level, the
+  `Charges` condition), toggle drains (`ManaDamOverTime`), `reuseDelay`, `hitTime`, `mpConsume` and `power` per level, and the armor-kind
   conditions of passive stat functions (`<using kind>` under `<not>` or not) with their stat,
   operation and value.
 - **NPC combat stats** (`npc.go` extended): the template's base HP, P.Atk, P.Def, M.Atk, M.Def,
@@ -447,11 +456,12 @@ type Build struct {
   ```go
   type Step struct {
   	Skill   int32
-  	Weapons []string // the worn weapon's kind must be one; none for any
-  	// The step applies only while the target's HP percent is at least MinTargetHP
-  	// (a finisher sets MaxTargetHP), the bot's HP is under SelfHPBelow (sustain),
-  	// and its MP is above MPAbove.
-  	MinTargetHP, MaxTargetHP, SelfHPBelow, MPAbove int
+  	// Weapons: the worn weapon's kind must be one, or SHIELD for a worn shield (the
+  	// server checks the held items); none for any.
+  	Weapons []string
+  	// The step applies only while the target's HP percent is at least MinTargetHP,
+  	// the bot's HP is under SelfHPBelow (sustain), and its MP is above MPAbove.
+  	MinTargetHP, SelfHPBelow, MPAbove int
   	// Within casts the step only while the target is that close (a skill whose range is
   	// shorter than the kit's fight range, such as Energy Bolt at 400 or Aura Burn at 150);
   	// 0 for any distance. Attackers casts it only with at least that many attackers.
@@ -476,11 +486,18 @@ type Build struct {
   }
   ```
 
-  A zero field is no gate (`SelfHPBelow` 0 casts at any HP, `MaxTargetHP` 0 at any target HP).
-  `Within` defaults to the skill's `castRange` when that is shorter than the kit's fight range.
+  A zero field is no gate (`SelfHPBelow` 0 casts at any HP, `Within` 0 at any distance).
   A target whose HP the bot has not seen yet (no `StatusUpdate` for it) counts as full. Weapons
   come from the worn weapon's datapack kind, known to the gear errand, so a step the server would
   refuse is never sent. "Behavior per class" fills these fields per row.
+- **Buffs and heals** (columns 5 and 6) keep today's `Buff` and `Heal` entries and gain the gates
+  the rows use: `Buff.Weapons` (Rapid Shot with a bow, the Monk's totems with fists),
+  `Buff.InCombat` (cast only in a fight, else out of combat as today), `Buff.Members` (a class
+  filter: Acumen to mystic members); `Heal.Members` (cast only with that many party members under
+  its HP bound: Group Heal at two under 60 %, Chant of Life at one under 50 %). A buff is recast
+  only once its effect is gone from `AbnormalStatusUpdate` (or the party's `PartySpelled`), as
+  today, so an in-combat buff never recasts at its reuse. The kit's `Flee` skill (Dash, Sprint)
+  is cast when the flee rule runs, if ready.
 - **Role:** `Support` plays for a party: mystics take the healer and buffer professions, fighters
   the tank line where their race has one (Knight, Elven Knight, Palus Knight); the orc and dwarven
   fighters, which have none, take Orc Raider and Scavenger. `Damage` farms alone and takes the
@@ -495,9 +512,11 @@ type Build struct {
   `Trainers`, `ClassChange.Builds`, `Heals`, `Buffs`) or a non-zero threshold in it replaces the
   build's after `CompileBuild`. The crafter keeps its Create Item learning and Artisan line that
   way, and every threshold stays a persona setting (D6).
-- **The rules stay.** `playRules` keeps its order; `fight`, `ruleHeal`, `ruleRebuff`, `ruleRest`,
-  `ruleTrain`, `ruleClassChange`, `ruleGear` and `ruleDyes` read the build instead of the
-  persona's tables.
+- **The rules stay,** with three named changes. `playRules` keeps its order, adding one rule:
+  `sweep` after `outnumbered` (section 8). Two rule bodies change: `ruleCritical` tries sustain
+  steps before its potions (section 7), and `ruleRest` turns combat toggles off and casts Relax
+  instead of sitting (section 9). `fight`, `ruleHeal`, `ruleRebuff`, `ruleRest`, `ruleTrain`,
+  `ruleClassChange`, `ruleGear` and `ruleDyes` read the build instead of the persona's tables.
 - Tables stay Go tables in this repository, checked against the shipped datapack by tests
   (`TestBehaviorRowsShipped`, section "Testing"). A file format waits for a panel editor.
 
@@ -566,10 +585,9 @@ until the backlog issue adds theirs.
   Curse: Poison, Entangle, Power Break, Cripple) only while the target is fresh and the bot's MP is above the step's bound.
 - **Sustain:** Self Heal, Elemental Heal, Drain Health, Vampiric Touch and Life Drain as steps
   gated by `SelfHPBelow`. `ruleCritical` runs before `fight` and drinks early when two or more
-  attackers have the bot under `CrowdedHP` (`rules.go`), which is above every row's sustain
+  attackers have the bot under `CrowdedHP` (`rules.go`), which is at or above every row's sustain
   bound; so `ruleCritical` tries the build's ready sustain steps whose gates pass before either
-  of its potions (the crowded one and the critical one), and drinks only when none is ready. This
-  is the one change to a rule's body; the rule order stays.
+  of its potions (the crowded one and the critical one), and drinks only when none is ready.
 - **Finishers and fillers:** Power Strike, Mortal Blow, Iron Punch, Wind Strike, Ice Bolt, Power
   Shot at their reuse, with the weapon gate.
 - **Self-buffs:** Attack Aura and Defense Aura as self buffs out of combat (rule 7).
@@ -586,7 +604,8 @@ A dwarf with the spoil flag casts Spoil as its opener on a fresh target. SystemM
 spoiled) on a monster without the bot's 612 means another player's spoil: the bot stops spoiling that monster and will not sweep it. 139 (resisted) counts only
 while Spoil is the cast in flight (`castSkill`); then the bot tries again at Spoil's reuse while
 the target lives. After a kill of a monster it spoiled it casts Sweeper on the corpse before
-looting, ahead of every other rule but the flee and heal rules: the corpse lasts twice its
+looting, from a new `sweep` rule right after `outnumbered`, so only the critical, heal and flee
+rules go first: the corpse lasts twice its
 template's `corpseTime` (14 s by default). The sweep is dropped on 343 or 683, on the corpse's
 `DeleteObject`, or once the window is over. Swept materials are kept for the clan crafter (M9 keep
 hook) or sold.
@@ -605,7 +624,7 @@ every 5 s, Vicious Stance by level, Relax 2 MP every 2 s (`skills/1000-1099.xml`
   combat, standing, below `SitHP` and with MP for it, the bot casts Relax, which sits it. It stands
   as today at `StandHP`, or the server ends Relax at full HP. A bot without the MP sits plainly.
 
-Toggle tracking ships with the first toggles (S6); S7 adds Soul Cry.
+Toggle tracking, the `ruleRest` change and Relax ship in S6; S7 adds Soul Cry.
 
 ### 10. Presets and roles
 
@@ -648,7 +667,7 @@ Proposed, awaiting the owner:
 ## Testing
 
 - **Codec (unit):** `UserInfo` round trip and the recorded fixture keep the new fields and consume
-  exactly `len(payload)`.
+  exactly `len(payload)`; the same for `EtcStatusUpdate` with its force charges (S6).
 - **Datapack (unit):** fixture class, skill, NPC, trainer and armor set files; readers keep exactly
   their fields and fail on mangled values.
 - **Model (unit, table-driven):** the stat curves against the server's values for the nine
@@ -688,7 +707,8 @@ Proposed, awaiting the owner:
   - CL, EO, SO: the leader under 35 % gets Battle Heal before anything else; Group Heal with two
     members under 60 %; SO shackles the assist target once.
   - HW, EW, DW: HW opens with Blaze from 750; EW and DW open with Wind Shackle or Curse: Poison
-    from 600 above their MP bound, else Aqua Swirl or Twister from 750; Ice Bolt only within 600;
+    from 600 above their MP bound, else their first ready 750 nuke (Solar Spark or Shadow Spark
+    from 25, else Aqua Swirl or Twister);
     Energy Bolt (HW, EW) only within 400 and Aura Burn only within 150.
   - OS: Frost Flame opens from 750; Stun Attack only within 40 with a blunt; Chant of Life with a
     member under 50 %.
@@ -709,23 +729,27 @@ Proposed, awaiting the owner:
 | S1 | `UserInfo`: keep the base and combat stats in `Self` (section 1). | — |
 | S2 | Datapack: class templates and skill trees, skill combat fields and armor-kind conditions, NPC base combat stats, base stats and `corpseTime`, trainers, set skills (section 2). | — |
 | S3 | `internal/charmodel`: stat curves, masteries and penalties, sets, calibration, the NPC stat functions, time to kill and to die (section 3). | S1, S2 |
-| S4 | The build: race profiles, class kits, roles, thresholds, `Overrides`, `CompileBuild`, the `Step` type with every gate; swap every table for it, behavior-neutral; `TestBehaviorRowsShipped` over today's values, which S5-S11 extend to each row part they add (section 4, "Behavior per class" notation). | S2 |
+| S4 | The build: race profiles, class kits, roles, thresholds, `Overrides`, `CompileBuild`, the `Step` type with every gate, the `Buff` and `Heal` gates; the role from the preset as today's tables play it (`support` and `merchant` Support, `crafter` Crafter, `town` none); swap every table for it, behavior-neutral; `TestBehaviorRowsShipped` over today's values, which S5-S11 extend to each row part they add (section 4, "Behavior per class" notation). | S2 |
 | S5 | Gear, sets and dyes through the model; race armor kinds; chest and legs as a pair (section 5; columns 1, 2 and 11 of every row; a base row whose branches wield different weapons keeps today's weapon kinds until S8 sets `Build.Branch`). | S3, S4 |
-| S6 | Fighter rows HF, EF, DF, OF, WF, KN, WA, RO, EK, ES, PK, AS, OR, MO, SC (columns 3-9 and 12; WF and SC without their Spoil and Sweeper steps, which S10 adds): learn tables, weapon-gated rotations with the `Step` gates, sustain, self-buffs, toggle tracking, Relax, force charges from `EtcStatusUpdate` (Monk), thresholds (sections 4, 7, 9). | S4 |
-| S7 | Mystic rows HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS (columns 3-9 and 12): learn tables, damage rotations and openers, heals and party buffs per row, sustain, per-role MP reserve and rest, Soul Cry (sections 4, 7, 9). | S4, S6 (toggle tracking) |
-| S8 | Professions by race and role: the roles of today's presets (`support` Support, `merchant` Damage, `crafter` Crafter), `Build.Branch` and the branch choice (hash, kept line, and a pin read from the brain config), the branch's weapon kind for base rows (column 1), the class change at 20 and 40 moving a bot from its base row to its first-profession row, the announced change (section 6). | S4, S6, S7 |
+| S6 | Fighter mechanics and base rows HF, EF, DF, OF, WF (columns 3-9 and 12; WF without Spoil and Sweeper, which S10 adds): the rotation runner with the `Step` gates, fighter learn tables and trainers, sustain in `ruleCritical`, toggle tracking and the `ruleRest` change, Relax, the `Flee` skill, force charges decoded from `EtcStatusUpdate`, thresholds (sections 4, 7, 9). | S4 |
+| S6b | Fighter first professions KN, WA, RO, EK, ES, PK, AS, OR, MO, SC (columns 3-9 and 12; SC without Spoil and Sweeper): their learn tables, rotations, sustain, buffs and toggles, Monk charges, thresholds. | S6 |
+| S7 | Mystic rows HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS (columns 3-9 and 12): learn tables, damage rotations and openers, heals and party buffs per row, sustain, per-role MP reserve and rest, Soul Cry (sections 4, 7, 9). | S4, S6 (rotation runner, toggle tracking) |
+| S8 | Professions by race and role: `Build.Branch` and the branch choice (hash, kept line, and a pin read from the brain config), the branch's weapon kind for base rows (column 1), the class change at 20 and 40 moving a bot from its base row to its first-profession row, the announced change, `merchant` turning Damage (section 6). | S4, S6b, S7 |
 | S9 | Presets and roles: the `farmer` preset as the default (`-persona`, the panel, `ImportPreset`), the registry `Branch` pin that feeds S8's brain config and its panel API, the panel's build view (section 10, D21, D22). | S8 |
-| S10 | Dwarven spoil and sweep: rows WF and SC's Spoil opener and Sweeper (section 8). | S2, S6 |
+| S10 | Dwarven spoil and sweep: rows WF and SC's Spoil opener, the `sweep` rule and Sweeper (section 8). | S2, S6b |
 | S11 | Spot choice through the model, the spot margin of every row (column 10), absorbing #294 (section 11). | S3, S4 |
-| S12 | e2e live scenarios for S5-S11, at most 4 bots per scenario (the harness cap). | each |
+| S12 | e2e live scenarios for S5-S11 and S6b, at most 4 bots per scenario (the harness cap). | each |
 | — | Backlog: second-profession kits (40+, the backlog sub-table) and servitor lines. | S8 |
 
-Most urgent: S1, S2 and S4 unblock everything; S6 gives half the bots their skills.
+Most urgent: S1, S2 and S4 unblock everything; S6 and S6b give half the bots their skills.
 
 ## Risks
 
 - **Size.** S4 and S5 rewrite the tables most brain tests use. S4 lands behavior-neutral with
-  golden decision tests so the later PRs show their own changes.
+  golden decision tests so the later PRs show their own changes. The fighter rows are split (S6:
+  the shared mechanics and the five base rows; S6b: the ten professions); S7's eleven mystic rows
+  share one rotation shape and the heal and buff tables, and may split the same way if review
+  finds it too large.
 - **Model error.** The model is approximate. It only compares candidates, and calibration against
   the reported stats cancels what it does not know on the bot's side; the monster side rests on
   copied NPC stat functions, tested on fixed templates. Thresholds are build defaults a persona
