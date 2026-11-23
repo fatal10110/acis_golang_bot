@@ -952,7 +952,8 @@ geodata is committed here, and CI never sees it.**
     longer than `Emax` on a segment that fails the open-corridor test, any other fails. The long
     walk is `TestLiveSpotSpread` (the trip of #144), the ledges `TestLiveFollowLedge` and
     `TestLiveFollowAcrossBand`, the grocer `TestLiveTownErrands`; `TestLiveNavStepChain` walks
-    along Gludin's walls (a stair leg is #243), `TestLiveNavMeleeObstacle` walks round an
+    along Gludin's walls, `TestLiveNavStair` (#243) up and down a stair flight in the Dark Elf
+    village, every cell of it multilayer under the cavern roof, `TestLiveNavMeleeObstacle` walks round an
     obstacle before its first click on the monster and asserts the click's origin has a straight
     walk to it, `TestLiveNavPickUpObstacle` (#239) kills wolves at a measured site until the bot turns
     to a drop where the straight walk from where it stands fails, and asserts that the bot walks to a

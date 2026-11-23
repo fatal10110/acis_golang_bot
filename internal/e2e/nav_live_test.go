@@ -18,8 +18,8 @@ import (
 // every blocked stop one WalkSteps predicts or one after a step longer than
 // Emax (the step-chain check). The long walk across a region is
 // TestLiveSpotSpread's trip to a far spot (#144), the ledges
-// TestLiveFollowLedge and TestLiveFollowAcrossBand (#147, #148), the grocer
-// visit TestLiveTownErrands (#122).
+// TestLiveFollowLedge and TestLiveFollowAcrossBand (#147, #148), the stair
+// TestLiveNavStair (#243), the grocer visit TestLiveTownErrands (#122).
 
 // Gludin's clan hall gludin_agit_002 (doors.xml) is a passage between two
 // gates, each a pair of leaves that start closed and never close on a
