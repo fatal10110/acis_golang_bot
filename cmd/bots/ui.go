@@ -299,13 +299,8 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		secret:   secret,
 		datapack: o.datapack,
 	}
-	if o.datapack != "" {
-		sh := &runner.shared
-		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
-			return err
-		}
-		sh.stores = o.store.registry(sh.travel, log)
-	}
+	// The navigation opens before the spots: the registry drops the spots in
+	// water (loadSpots).
 	if o.geo.set() {
 		n, closeNav, err := o.geo.open(o.datapack, log)
 		if err != nil {
@@ -314,6 +309,13 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		// The caches stay mapped until every bot returned.
 		defer closeNav()
 		runner.shared.nav = n
+	}
+	if o.datapack != "" {
+		sh := &runner.shared
+		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+			return err
+		}
+		sh.stores = o.store.registry(sh.travel, log)
 	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
 	if err != nil {

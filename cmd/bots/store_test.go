@@ -59,7 +59,7 @@ func TestStoreRegistry(t *testing.T) {
 		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	_, travel, err := loadSpots(dir, 1, log)
+	_, travel, err := loadSpots(dir, 1, nil, log)
 	if err != nil {
 		t.Fatal(err)
 	}
