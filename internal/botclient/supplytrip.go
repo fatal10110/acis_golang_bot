@@ -51,6 +51,10 @@ type supplyTrip struct {
 	// nowhere), and town is the town it walks to.
 	walk bool
 	town Point
+	// gate is set once the trip takes a gatekeeper instead of the walk
+	// (planTown): the travel errand's trip (Brain.trip) carries it, and its
+	// last teleport ends the trip in town.
+	gate bool
 	// escapeAt is when the Scroll of Escape went out, zero before it: the
 	// escaping hold runs from it (escaping).
 	escapeAt time.Time
@@ -98,12 +102,14 @@ func (b *Brain) escaping(now time.Time) bool {
 // reads it; the escaping hold
 // (ruleEscape) takes over until the teleport, which ends the trip. With no
 // scroll, with no safe moment within Supply.SafeWait, or after a recall
-// that took it nowhere, it walks to the nearest town (walkHome). Back in
-// town the spot rule picks again, as at a level-up.
+// that took it nowhere, it walks to the nearest town (walkHome), or takes a
+// gatekeeper when it cannot walk there (planTown). Back in town the spot
+// rule picks again, as at a level-up.
 //
 // The UseItem has no server gate but the item's own (network/item_use_gate.go):
 // it goes out once, and no other before the recall ends or escapeRetry
-// (escaping). Walks are the walker's (goTo, the frame pacer).
+// (escaping). Walks are the walker's (goTo, the frame pacer); a gatekeeper
+// trip is the travel errand's (ruleTravel: the bypass gate, Travel.Gap).
 func (b *Brain) ruleSupply(now time.Time) (Action, bool) {
 	v, s := &b.supplyTrip, &b.world.Self
 	if !v.active() {
@@ -151,42 +157,126 @@ func (t *supplyTrip) sent(a Action, now time.Time) {
 }
 
 // teleported ends the trip on the bot's own loading-screen teleport: the
-// recall's landing in town, or a teleport of another cause (a restart, a
-// GM) that took it elsewhere. It reports whether that was the recall's
-// landing, an arrival (townArrival): the Scroll of Escape went out
-// (escapeAt). A restart arms the gate through its Revive instead.
-func (t *supplyTrip) teleported(now time.Time) bool {
+// recall's landing in town, the gatekeeper trip's last landing, or a
+// teleport of another cause (a restart, a GM) that took it elsewhere. gk
+// reports that the travel errand's trip was waiting for its teleport, and
+// onward how many its path takes after it: a gatekeeper trip's landing on
+// the way does not end the trip, which plans its next teleport from there.
+// It reports whether the teleport was an arrival (townArrival): the Scroll
+// of Escape went out (escapeAt), or the gatekeeper trip landed in town. A
+// restart arms the gate through its Revive instead.
+func (t *supplyTrip) teleported(now time.Time, gk bool, onward int) bool {
 	if !t.active() {
 		return false
 	}
-	landed := !t.escapeAt.IsZero()
+	if t.gate && gk && onward > 0 {
+		return false
+	}
+	landed := !t.escapeAt.IsZero() || t.gate && gk
 	t.end(now)
 	return landed
 }
 
 // walkHome walks the trip to the town nearest where it started walking (the
 // travel map's towns, by their gatekeeper) and ends it on arrival
-// (townArrival). A town it cannot walk to ends the trip there: the bot
-// farms on and tries again after supplyTripGap.
+// (townArrival). A town out of walking reach (onFoot), or one the walker
+// answers unreachable, sends it to a gatekeeper (planTown, gateHome); with
+// no trip to take either, a town out of reach is walked to all the same
+// (the walker decides), and one it cannot walk to ends the trip there: the
+// bot farms on and tries again after supplyTripGap.
 func (b *Brain) walkHome(now time.Time) (Action, bool) {
 	v := &b.supplyTrip
+	if v.gate {
+		return b.gateHome(now)
+	}
 	if v.town == (Point{}) {
-		t := b.nearestTown(b.world.Self.Position(now))
+		at := b.world.Self.Position(now)
+		t := b.nearestTown(at)
 		if t == nil {
 			v.end(now)
 			return Action{}, false
 		}
 		v.town = *t
+		if !b.onFoot(at, v.town) && b.planTown(now) {
+			return b.gateHome(now)
+		}
 	}
 	a, st := b.goTo(v.town, townArrive, walkPlace, now)
-	if st == walkWalking {
+	switch st {
+	case walkWalking:
 		return a, true
+	case walkUnreachable:
+		if b.planTown(now) {
+			return b.gateHome(now)
+		}
 	}
 	v.end(now)
 	if st == walkArrived {
 		b.townArrival()
 	}
 	return Action{}, false
+}
+
+// onFoot reports whether the bot at at is in walking reach of town: both on
+// the navigation, in one SCC (navDistance) and within Spots.MaxTravel in
+// straight line, as the trip search walks (planTrip). Off the navigation
+// the walker decides.
+func (b *Brain) onFoot(at, town Point) bool {
+	from, ok := b.locate(at)
+	if !ok {
+		return true
+	}
+	to, ok := b.locate(town)
+	if !ok {
+		return true
+	}
+	reach := int64(b.persona.Spots.MaxTravel)
+	if horizontal2(at, town) > reach*reach {
+		return false
+	}
+	_, ok = b.navDistance(from, to)
+	return ok
+}
+
+// planTown plans the supply trip's gatekeeper trip from where the bot
+// stands (planPath): the cheapest path whose last teleport lands in the
+// trip's town, else in any town of the travel map, within Travel.MaxPrice
+// and the adena carried, and after Travel.Gap since the last trip unless a
+// landing on the way plans the next teleport. It reports whether it planned
+// one, and marks the trip a gatekeeper's.
+func (b *Brain) planTown(now time.Time) bool {
+	v, tr := &b.supplyTrip, &b.trip
+	here, ok := b.locate(b.world.Self.Position(now))
+	if !ok {
+		return false
+	}
+	onward := tr.onward
+	if !b.planPath(here, now, []Point{v.town}) {
+		tr.onward = onward
+		if !b.planPath(here, now, b.towns) {
+			return false
+		}
+	}
+	v.gate = true
+	return true
+}
+
+// gateHome runs the supply trip's gatekeeper trip through the travel
+// errand (ruleTravel), and plans the next teleport after a landing on the
+// way. A trip that ends with no teleport (refused, a gatekeeper no route
+// reaches) and no next one to plan ends the supply trip: the bot farms on
+// and tries again after supplyTripGap. In a fight the errand yields.
+func (b *Brain) gateHome(now time.Time) (Action, bool) {
+	v, tr := &b.supplyTrip, &b.trip
+	if !tr.v.active() && !b.planTown(now) {
+		v.end(now)
+		return Action{}, false
+	}
+	a, ok := b.ruleTravel(now)
+	if !ok && !tr.v.active() {
+		v.end(now)
+	}
+	return a, ok
 }
 
 // safeToEscape reports whether the bot may read its Scroll of Escape at

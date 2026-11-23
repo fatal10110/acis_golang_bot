@@ -455,8 +455,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				// Somewhere else: walk to the spot again.
 				b.spot.arrived = false
 				if !e.Fast {
+					gk := b.trip.v.active() && b.trip.step == tripGone
 					b.tripTeleported(now)
-					if b.supplyTrip.teleported(now) {
+					if b.supplyTrip.teleported(now, gk, b.trip.onward) {
 						b.townArrival()
 					}
 				}
