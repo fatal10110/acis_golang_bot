@@ -8,7 +8,8 @@ import (
 // runFresh runs a farmer through run, a runWatched of a character the
 // scenario wants at most at level top, and has the GM set it back to level
 // 1 when the test ends, for the next run. A character an earlier run left
-// above top (its cleanup failed) the GM sets back to 1 at once; but its
+// above top (its cleanup failed, or the farmer gained a level fighting on
+// between the cleanup and its logout) the GM sets back to 1 at once; but its
 // brain claimed a spot for the old level as it entered, and a lower level
 // never outlevels a spot, so it would keep that one (#268). The bot logs
 // out instead, which gives the spot up, and run enters the character
