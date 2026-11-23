@@ -116,8 +116,8 @@ func TestRouteProperty(t *testing.T) {
 
 // TestRouteReusesScratch: once its buffers have grown, a route allocates
 // nothing on the scratch Route takes from the pool (Route adds only its
-// result). The scratch is held here, not pooled: the race detector makes a
-// sync.Pool drop items at random.
+// result). The scratch is held here, not taken from the free list, so no
+// other query shares it.
 func TestRouteReusesScratch(t *testing.T) {
 	p := testPlanner(t)
 	s := getScratch()

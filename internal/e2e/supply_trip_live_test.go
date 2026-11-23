@@ -44,7 +44,7 @@ func TestLiveTownPrep(t *testing.T) {
 	})
 
 	var farmAt time.Time
-	until(t, ctx, "the town preparation, then a spot", func() string {
+	untilServed(t, ctx, "the town preparation, then a spot", f.watch, merchantBuyRefused(f.watch), func() string {
 		sent := sentOf(f.watch.Sent(), botclient.OpRequestBuyItem)
 		switch {
 		case len(sent) == 0:
@@ -83,7 +83,10 @@ func TestLiveTownPrep(t *testing.T) {
 // #182): at its spot it reads a scroll, lands in the village, restocks its
 // shots and scrolls before it leaves, then farms at a spot again. It
 // carries them from its login, so its use meter never sees it fight
-// without shots, which would leave its shot rate at zero.
+// without shots, which would leave its shot rate at zero. A death at its
+// spot before the trip (a starter spot's packs kill it at times) sends it
+// home by the respawn instead: the scenario then checks the restock after
+// the respawn and the farming after it, and no trip is verified.
 func TestLiveSupplyTrip(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -133,7 +136,7 @@ func TestLiveSupplyTrip(t *testing.T) {
 				f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), st.Position, st.HP, st.MaxHP, st.State)
 		}
 	}
-	until(t, ctx, "the trip home", func() string {
+	untilServed(t, ctx, "the trip home", f.watch, escapeRefused(f.watch, objectsOf(f.watch.Seen(0), scrollOfEscape)), func() string {
 		note()
 		st := f.bot.Status()
 		if tripAt.IsZero() && st.Rule == "supply" {
@@ -180,7 +183,7 @@ func TestLiveSupplyTrip(t *testing.T) {
 		}
 	}
 	var farmAt time.Time
-	until(t, ctx, "the restock, then a spot", func() string {
+	untilServed(t, ctx, "the restock, then a spot", f.watch, merchantBuyRefused(f.watch), func() string {
 		note()
 		var bought bool
 		for _, p := range sentOf(f.watch.Sent(), botclient.OpRequestBuyItem) {

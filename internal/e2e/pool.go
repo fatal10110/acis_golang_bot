@@ -19,6 +19,12 @@ var errLocked = errors.New("GM in use")
 // another scenario of the process frees wakes a waiter at once.
 const gmRetry = 2 * time.Second
 
+// gmWait bounds a scenario's wait for a GM, apart from the scenario's own
+// deadline: a run that pins fewer GMs than it runs scenarios at once fails
+// the scenario left without one at once, with the pool named, instead of
+// letting it wait out its whole time budget (#250).
+const gmWait = 2 * time.Minute
+
 // gmPool hands each scenario a GM of its own: two logins of one account
 // drop each other, so a GM serves one scenario at a time over every process
 // of the machine. A scenario holds its GM through a lock on the GM file's
@@ -47,11 +53,12 @@ type gmLease struct {
 func lockFile(gm string) string { return gm + ".lock" }
 
 // take leases the first GM of the pool no one holds, waiting while every
-// one is held until ctx ends.
+// one is held for at most gmWait, or until ctx ends.
 func (p *gmPool) take(ctx context.Context) (*gmLease, error) {
 	if len(p.files) == 0 {
 		return nil, fmt.Errorf("no GM file (%s)", EnvGMFile)
 	}
+	deadline := p.clock.Now().Add(gmWait)
 	for {
 		p.mu.Lock()
 		freed := p.freed
@@ -65,16 +72,31 @@ func (p *gmPool) take(ctx context.Context) (*gmLease, error) {
 				return nil, err
 			}
 		}
-		timer := p.clock.NewTimer(gmRetry)
+		left := deadline.Sub(p.clock.Now())
+		if left <= 0 {
+			return nil, fmt.Errorf("GM pool exhausted: every GM of the pool (%d) was in use for %s; pin as many GMs (%s) as scenarios run at once, or run them one at a time", len(p.files), gmWait, EnvGMFile)
+		}
+		timer := p.clock.NewTimer(min(gmRetry, left))
 		select {
 		case <-freed:
 		case <-timer.C():
 		case <-ctx.Done():
 			timer.Stop()
-			return nil, fmt.Errorf("every GM of the pool (%d) is in use: %w", len(p.files), ctx.Err())
+			return nil, fmt.Errorf("GM pool exhausted: every GM of the pool (%d) is in use: %w", len(p.files), ctx.Err())
 		}
 		timer.Stop()
 	}
+}
+
+// gmShortfall is the warning for a run whose pool holds gms GMs while up to
+// parallel scenarios of it run at once (go test -parallel, capped by
+// MaxScenarios), "" when every one of them can hold a GM.
+func gmShortfall(gms, parallel int) string {
+	at := min(parallel, MaxScenarios)
+	if gms == 0 || gms >= at {
+		return ""
+	}
+	return fmt.Sprintf("%s pins %d GM(s) for up to %d scenarios at once: a scenario that needs a GM while every one is held fails with \"GM pool exhausted\" after %s; pin as many GMs as scenarios run at once, or run them one at a time (-parallel 1)", EnvGMFile, gms, at, gmWait)
 }
 
 // lockGM opens gm's lock file and locks it without waiting.

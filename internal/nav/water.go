@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"slices"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
@@ -33,22 +34,46 @@ type WaterBox struct {
 // may share one. A nil *Water is no water.
 type Water struct {
 	boxes []WaterBox
-	// tiles lists, per geodata region tile, the boxes overlapping it.
-	tiles [tilesX * tilesY][]int32
+	// The boxes overlapping each bucket of waterBucket × waterBucket world
+	// units, as CSR: bucket k's boxes are list[start[k]:start[k+1]]. A
+	// bucket is a sixteenth of a region tile on each axis, so a cell test
+	// scans a handful of boxes, not every box of a watery region (#209).
+	start []int32
+	list  []int32
 	hash  [8]byte
 }
 
 const (
 	tilesX = geo.TileXMax - geo.TileXMin + 1
 	tilesY = geo.TileYMax - geo.TileYMin + 1
+	// waterBucket is a multiple of block.CellSize, so a cell lies in one
+	// bucket.
+	waterBucket = geo.TileSize / 16
+	bucketsX    = tilesX * geo.TileSize / waterBucket
+	bucketsY    = tilesY * geo.TileSize / waterBucket
 )
 
-// NewWater indexes boxes by region tile. A box with its corners or Z band
+// NewWater indexes boxes by world bucket. A box with its corners or Z band
 // swapped is normalized; a box outside the world matches no point.
 func NewWater(boxes []WaterBox) *Water {
-	w := &Water{boxes: make([]WaterBox, len(boxes))}
+	w := &Water{boxes: make([]WaterBox, len(boxes)), start: make([]int32, bucketsX*bucketsY+1)}
 	sum := sha256.New()
 	var buf [6 * 8]byte
+	// buckets calls fn with every bucket box i overlaps; a box outside the
+	// world overlaps none.
+	buckets := func(i int, fn func(k int)) {
+		b := w.boxes[i]
+		if b.X2 < geo.WorldXMin || b.X1 > geo.WorldXMax || b.Y2 < geo.WorldYMin || b.Y1 > geo.WorldYMax {
+			return
+		}
+		bx0, bx1 := bucketIndex(b.X1, geo.WorldXMin, bucketsX), bucketIndex(b.X2, geo.WorldXMin, bucketsX)
+		by0, by1 := bucketIndex(b.Y1, geo.WorldYMin, bucketsY), bucketIndex(b.Y2, geo.WorldYMin, bucketsY)
+		for bx := bx0; bx <= bx1; bx++ {
+			for by := by0; by <= by1; by++ {
+				fn(bx*bucketsY + by)
+			}
+		}
+	}
 	for i, b := range boxes {
 		b.X1, b.X2 = min(b.X1, b.X2), max(b.X1, b.X2)
 		b.Y1, b.Y2 = min(b.Y1, b.Y2), max(b.Y1, b.Y2)
@@ -58,16 +83,18 @@ func NewWater(boxes []WaterBox) *Water {
 			binary.LittleEndian.PutUint64(buf[8*j:], uint64(int64(v)))
 		}
 		sum.Write(buf[:])
-		tx0, tx1 := tileIndex(b.X1, geo.WorldXMin, tilesX), tileIndex(b.X2, geo.WorldXMin, tilesX)
-		ty0, ty1 := tileIndex(b.Y1, geo.WorldYMin, tilesY), tileIndex(b.Y2, geo.WorldYMin, tilesY)
-		if b.X2 < geo.WorldXMin || b.X1 > geo.WorldXMax || b.Y2 < geo.WorldYMin || b.Y1 > geo.WorldYMax {
-			continue
-		}
-		for tx := tx0; tx <= tx1; tx++ {
-			for ty := ty0; ty <= ty1; ty++ {
-				w.tiles[tx*tilesY+ty] = append(w.tiles[tx*tilesY+ty], int32(i))
-			}
-		}
+		buckets(i, func(k int) { w.start[k+1]++ })
+	}
+	for k := range bucketsX * bucketsY {
+		w.start[k+1] += w.start[k]
+	}
+	w.list = make([]int32, w.start[bucketsX*bucketsY])
+	pos := slices.Clone(w.start[:bucketsX*bucketsY])
+	for i := range w.boxes {
+		buckets(i, func(k int) {
+			w.list[pos[k]] = int32(i)
+			pos[k]++
+		})
 	}
 	if len(boxes) > 0 {
 		w.hash = [8]byte(sum.Sum(nil)[:8])
@@ -75,10 +102,16 @@ func NewWater(boxes []WaterBox) *Water {
 	return w
 }
 
-// tileIndex is the region tile holding world coordinate v, clamped to the
-// world.
-func tileIndex(v, worldMin, tiles int) int {
-	return min(max((v-worldMin)/geo.TileSize, 0), tiles-1)
+// bucketIndex is the bucket holding world coordinate v on one axis, clamped
+// to the world.
+func bucketIndex(v, worldMin, buckets int) int {
+	return min(max((v-worldMin)/waterBucket, 0), buckets-1)
+}
+
+// bucket returns the boxes overlapping bucket (bx, by).
+func (w *Water) bucket(bx, by int) []int32 {
+	k := bx*bucketsY + by
+	return w.list[w.start[k]:w.start[k+1]]
 }
 
 // Hash identifies the boxes, in order: the water half of a nav cache key
@@ -97,8 +130,7 @@ func (w *Water) Contains(x, y, z int) bool {
 	if w == nil || x < geo.WorldXMin || x > geo.WorldXMax || y < geo.WorldYMin || y > geo.WorldYMax {
 		return false
 	}
-	t := tileIndex(x, geo.WorldXMin, tilesX)*tilesY + tileIndex(y, geo.WorldYMin, tilesY)
-	for _, i := range w.tiles[t] {
+	for _, i := range w.bucket(bucketIndex(x, geo.WorldXMin, bucketsX), bucketIndex(y, geo.WorldYMin, bucketsY)) {
 		b := &w.boxes[i]
 		if x >= b.X1 && x <= b.X2 && y >= b.Y1 && y <= b.Y2 && z >= b.MinZ && z <= b.MaxZ {
 			return true
@@ -117,8 +149,7 @@ func (w *Water) wet(gx, gy int, z int16) bool {
 	x0 := engine.WorldX(gx) - block.CellSize/2
 	y0 := engine.WorldY(gy) - block.CellSize/2
 	x1, y1 := x0+block.CellSize-1, y0+block.CellSize-1
-	t := (gx*block.CellSize/geo.TileSize)*tilesY + gy*block.CellSize/geo.TileSize
-	for _, i := range w.tiles[t] {
+	for _, i := range w.bucket(gx*block.CellSize/waterBucket, gy*block.CellSize/waterBucket) {
 		b := &w.boxes[i]
 		if x0 <= b.X2 && x1 >= b.X1 && y0 <= b.Y2 && y1 >= b.Y1 && int(z) >= b.MinZ && int(z) <= b.MaxZ {
 			return true

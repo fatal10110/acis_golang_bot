@@ -422,7 +422,11 @@ server's pathfinder.
   - every search takes a node budget, and running out of budget means unreachable for now;
   - searches run synchronously on the brain goroutine, at most one full route per decision. That
     adds no goroutine and keeps tests deterministic;
-  - each query gets its scratch buffers from a `sync.Pool`; the graphs are immutable.
+  - each query takes its scratch buffers from a small free list and gives them back; the graphs
+    are immutable. Unlike a `sync.Pool`, the free list survives a GC, so a query does not regrow
+    its buffers after every collection. It keeps at most 2 idle query scratches of at most 32 MB
+    each (a search near its node budget is dropped to the GC), and each hierarchy keeps at most 2
+    idle cluster computation scratches.
 - **Memory**: the same rule as geodata.
   - Nothing in `nav` is sized to the world's cell count: about 6×10^8 cells, so even one byte per
     cell would be 600 MB.
@@ -487,14 +491,49 @@ benchmarks are `BenchmarkOwnerNav`, local only):
 | nav cache | — | 113.4 MB; `MaxNavCacheBytes` is set to 512 MiB from it |
 | `Locate` cold | p99 ≤ 30 ms | p50 9.5 ms, p99 21-23 ms |
 | `Locate` + `SameSCC` warm | p99 ≤ 1 ms | p99 0.02 ms |
-| abstract distance warm | p99 ≤ 2 ms | p50 0.14 ms, p99 22.9 ms (#209) |
-| 40000-unit route warm | p99 ≤ 10 ms | p50 182 ms, p99 1262 ms (#209) |
-| 40000-unit route cold | p99 ≤ 150 ms | p50 194 ms, p99 1238 ms (#209) |
-| heap per query | ≤ 4 MB | cold `Locate` up to 21.6 MB, route up to 86 MB (#209) |
+| abstract distance warm | p99 ≤ 2 ms | p50 0.14 ms, p99 22.9 ms (#209 below) |
+| 40000-unit route warm | p99 ≤ 10 ms | p50 182 ms, p99 1262 ms (#209 below) |
+| 40000-unit route cold | p99 ≤ 150 ms | p50 194 ms, p99 1238 ms (#209 below) |
+| heap per query | ≤ 4 MB | cold `Locate` up to 21.6 MB, route up to 86 MB (#209 below) |
 
-The cluster-level targets hold. Route time is spent in N2's pull (each candidate gets a full
-corridor test) and in the map-indexed cell and abstract searches. #209 tracks bringing distance,
-route and heap to their targets.
+**Re-measured by #209** on the water-aware nav cache (`nav-water.cache`: 804,918 entrance nodes,
+largest SCC 254,168, 3,570,208 edges; `BOT_NAV_WATER` names `WaterZone.xml`), same 200 pairs
+rule. #209 changes no answer: routes, distances and members are byte for byte those of before
+(checked on these 200 pairs and on the synthetic region). Its changes:
+
+- **Pull**: the corridor test runs on a per-scratch grid that caches what it reads of each cell
+  across one pull's candidates, stops at its first failing cell, and runs before `CanMove` (both
+  must pass, so the order changes nothing). The grid is toroidal and fixed at 256×256 cells
+  (1 MB) for a segment of any length: the corridor fills in line order and each line cell's
+  verdict is taken six line cells later, so no cell is evicted while it is still needed.
+- **Indexes**: the cell search, the abstract search and the exact check index their nodes in an
+  open-addressing table cleared in O(1), instead of Go maps.
+- **Water**: boxes are indexed per 2048-unit bucket, not per region tile, and a crossing tests
+  its own cell once, not once per direction.
+- **Scratch**: query and cluster scratch survive a GC (Cost bounds above).
+
+| Measure | Target | Before #209 | After #209 |
+| --- | --- | --- | --- |
+| `Locate` cold | p99 ≤ 30 ms | p50 15.5 ms, p99 40.2 ms | p50 12.4 ms, p99 25.1 ms |
+| `Locate` + `SameSCC` warm | p99 ≤ 1 ms | p99 0.00 ms | p99 0.00 ms |
+| abstract distance warm | p99 ≤ 2 ms | p50 6.7 ms, p99 413 ms | p50 0.15 ms, p99 11.9 ms (#256) |
+| 40000-unit route warm | p99 ≤ 10 ms | p50 377 ms, p99 1912 ms | p50 108 ms, p99 564 ms (#256) |
+| 40000-unit route cold | p99 ≤ 150 ms | p50 343 ms, p99 15.4 s | p50 133 ms, p99 723 ms (#256) |
+| heap per route query, warm | ≤ 4 MB | up to 130 MB | p99 0.01 MB, max 0.5 MB |
+| heap per route query, cold | ≤ 4 MB | up to 116 MB | p99 27 MB, max 40 MB: scratch growing on first touch (#256) |
+| heap per cold `Locate` | — | up to 34.5 MB | p99 9.1 MB, max 30.4 MB, its cached cluster result excluded |
+
+"Heap per query" is what one query allocates, the cluster results it adds to the LRU excluded:
+those are held, bounded by the LRU's byte limit. The "before" heap column is the older bench's
+largest allocation of one query, cluster results included. Warm (pages resident) includes one pass over the
+distances before they are timed.
+
+The `Locate` targets and the warm route heap target hold. The heap target ("heap per route
+query ≤ 4 MB" under Cost bounds) is not met by a cold route, whose scratch grows on first touch;
+the distance and route time targets need the searches to do less work, which changes answers.
+#256 tracks all three. Over 200 warm routes the cell search expands about
+60,000 cells per route, 27 times the cells on the path (the octile heuristic ignores the
+clearance extra), and 62% of the segments fail the corridor test and take the exact check.
 
 ### Water
 
