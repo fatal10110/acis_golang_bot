@@ -193,15 +193,8 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	}
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
 	sh := shared{claims: botclient.NewPartyClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters}
-	if o.datapack != "" {
-		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, log); err != nil {
-			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
-			return 1
-		}
-		if p.store {
-			sh.stores = o.store.registry(sh.travel, log)
-		}
-	}
+	// The navigation opens before the spots: the registry drops the spots in
+	// water (loadSpots).
 	if o.geo.set() {
 		n, closeNav, err := o.geo.open(o.datapack, log)
 		if err != nil {
@@ -212,6 +205,15 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		// every bot returned.
 		defer closeNav()
 		sh.nav = n
+	}
+	if o.datapack != "" {
+		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			return 1
+		}
+		if p.store {
+			sh.stores = o.store.registry(sh.travel, log)
+		}
 	}
 	if err := walkReady(p, sh.nav); err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
@@ -295,9 +297,10 @@ func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry
 }
 
 // loadSpots reads the datapack whose XML directory is dir and returns the
-// spot registry and the travel map every bot of the process shares. The
-// datapack itself is dropped once they are built.
-func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, error) {
+// spot registry and the travel map every bot of the process shares. With the
+// navigation n the registry leaves out the spots whose centre is in water
+// (Nav.DrySpots, #275). The datapack itself is dropped once they are built.
+func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, error) {
 	dp, err := datapack.Load(dir)
 	if err != nil {
 		return nil, nil, err
@@ -305,8 +308,8 @@ func loadSpots(dir string, multiplier float64, log *slog.Logger) (*botclient.Spo
 	for _, w := range dp.Spawnlist.Warnings {
 		log.Debug("datapack", "warning", w)
 	}
-	spots := dp.Spots()
-	log.Info("farming spots", "spots", len(spots), "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
+	spots, wet := n.DrySpots(dp.Spots())
+	log.Info("farming spots", "spots", len(spots), "wet_dropped", wet, "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
 	travel := botclient.NewTravelMap(dp)
 	log.Info("travel map", "gatekeepers", travel.Gatekeepers())
 	return botclient.NewSpotRegistry(spots, multiplier), travel, nil

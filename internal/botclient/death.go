@@ -141,11 +141,16 @@ type RecoverPolicy struct {
 	// falls back to the nearest town with /unstuck. 0 never falls back.
 	LeaderWait time.Duration
 	Whisper    string
+	// LiftDeathPenalty buys, in the shop errand's supplies tier, a Scroll:
+	// Recovery of the bot's level band per death penalty level and reads
+	// them out of combat (rule "recover"), one level each.
+	LiftDeathPenalty bool
 }
 
 // defaultRecoverPolicy is the support persona's (docs/plan.md, personas):
-// a party member waits two minutes for a resurrection, and a bot whose
-// leader is gone waits five minutes before it gives up on it.
+// a party member waits two minutes for a resurrection, a bot whose leader
+// is gone waits five minutes before it gives up on it, and a death penalty
+// is lifted with Scrolls: Recovery.
 func defaultRecoverPolicy() RecoverPolicy {
 	return RecoverPolicy{
 		AcceptResurrection: true,
@@ -153,6 +158,7 @@ func defaultRecoverPolicy() RecoverPolicy {
 		SitByLeader:        true,
 		LeaderWait:         5 * time.Minute,
 		Whisper:            "where did you go?",
+		LiftDeathPenalty:   true,
 	}
 }
 

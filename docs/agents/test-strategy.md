@@ -18,8 +18,8 @@ Table-driven, no shared fixtures, no network, no wall clock, no build tags.
   advance the clock, assert the packets the bot sends and the state it ends in. One table row per
   rule of the decision list.
 - **Process-wide registries and limiters** (spot registry, store registry, login rate limiter,
-  credential breaker): their contracts under concurrency, with `-race`, driving the concurrent
-  callers directly.
+  credential breaker): their contracts under concurrency, driving the concurrent callers directly
+  (PR CI runs them under `-race`; locally only when the owner asks).
 - **Fuzz targets** for decoders of server frames: a malformed frame must end one session with an
   error, never panic or allocate without bound.
 

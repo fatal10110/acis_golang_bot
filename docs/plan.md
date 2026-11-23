@@ -263,7 +263,9 @@ spawn flags). Up to level 5 the aggressive bound is that of any monster (two lev
 nearly every starter monster has an aggro range, so the strict rule left new characters outside
 Talking Island no spot (#133). A process-wide spot registry (one owner) caps bots per spot at about
 `maximumNpcs`/3; on arrival the bot counts visible players and moves on when crowded, and a bot that
-dies holding a spot avoids it for 30 minutes, a persona default (#258). Each race starts
+dies holding a spot avoids it for 30 minutes, a persona default (#258). With the navigation loaded,
+the registry leaves out at start the spots whose centre snaps to a wet cell, where a bot would
+drown (#275). Each race starts
 in its own newbie zone. Owner decision (#137): the farmers spread so that as many spots as possible
 are covered rather than waiting for one. A bot claims, among the fitting spots in its own SCC (D13)
 within `MaxTravel` (20000) of where it stands in straight line, the nearest by abstract-graph distance

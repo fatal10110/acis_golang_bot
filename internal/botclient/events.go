@@ -210,11 +210,13 @@ type TargetUnselected struct {
 }
 
 // SystemMessage is a system message by id. Text holds its first two text
-// parameters in order, "" past the ones it has; every other parameter is
-// consumed and dropped.
+// parameters in order, "" past the ones it has, and Number its first
+// number parameter, 0 without one; every other parameter is consumed and
+// dropped.
 type SystemMessage struct {
-	ID   int32
-	Text [2]string
+	ID     int32
+	Text   [2]string
+	Number int32
 }
 
 // ActionFailed tells the client its last action request was not carried
