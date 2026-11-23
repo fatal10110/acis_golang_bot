@@ -24,7 +24,7 @@ const windStrike int32 = 1177
 func TestLiveFarmMage(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 20*time.Minute)
+	ctx := scenarioCtx(t, 30*time.Minute) // run 1 passed after 16m45s: few casts on a level 1 mystic's MP
 	dp, err := datapack.Load(tg.Config().Datapack)
 	if err != nil {
 		t.Fatal(err)
@@ -51,14 +51,24 @@ func TestLiveFarmMage(t *testing.T) {
 		gmOn(t, ctx, gm, f, "set level 1")
 	}
 	gmOn(t, ctx, gm, f, "skill set 1177 1")
+	// Out of the farmer's way, in a peace zone out of any monster's reach:
+	// a monster that keeps attacking the GM is engaged by another player,
+	// which the farmer leaves alone.
+	gmTeleport(t, ctx, gm, townTI)
+	start, alive := time.Now(), time.Now()
 
 	const wantApproached = 3
 	var c castCount
 	waitFor(t, ctx, f.name+" casting Wind Strike after its own approaches", func() bool {
+		if time.Since(alive) > gmKeepAlive {
+			gmTeleport(t, ctx, gm, townTI)
+			alive = time.Now()
+		}
 		c = countCasts(f.watch.Seen(0), f.id, windStrike)
 		return c.approached >= wantApproached
 	})
-	t.Logf("%s cast Wind Strike %d times: %d after a move of its own, %d after a server approach (MoveToPawn)", f.name, c.casts, c.approached, c.pawn)
+	t.Logf("%s cast Wind Strike %d times in %s: %d after a move of its own, %d after a server approach (MoveToPawn)",
+		f.name, c.casts, time.Since(start).Round(time.Second), c.approached, c.pawn)
 }
 
 // castCount counts a caster's casts of one skill: all of them, those after
