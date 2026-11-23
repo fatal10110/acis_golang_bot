@@ -812,6 +812,7 @@ unreachable (with a reason).
     abstract SCC it reaches.
   - `/unstuck` is kept for isolated ground only, which reaches no abstract SCC (a closed pit, the
     restart area of acis_golang#5412).
+    The server's recall is a five-minute cast; the walker holds every walk while it runs.
   - Sidesteps and wall detours are deleted.
 - **Pacing**:
   - one `MoveBackwardToLocation` per segment, through the frame pacer (`gateNone`);
@@ -828,7 +829,7 @@ unreachable (with a reason).
 | Follow (`follow.go`) | slot point as drawn, legs, sidesteps, detours | slot snapped into the leader's SCC, one-way drops allowed toward the leader; route; re-plan on the same `Repath` and delay rules; out of sight, route to the last `PartyMemberPosition` |
 | NPC visits and errands (`visit.go`, `town.go`, `shop.go`, `trainer.go`, `newbie.go`) | `Action` on the NPC, with no line check | walk to `StandPoint(npc, talkRange, line)`, then `Action`: the tracking walk's straight line is open |
 | Melee and casting | `Action` or attack, with no line check | send the attack or cast only while the straight line to the target is open and within range, else walk to a stand point first; a moving monster is checked again at each decision, and a blocked stop moves the bot to a new stand point |
-| Pick-up (`loot.go`) | `Action`; the server routes the walk | send it only when `CanMove(self, item at raw Z)` holds and the step chain reaches it; else walk to `StandPoint(item, r, pickup)` first |
+| Pick-up (`loot.go`) | `Action`; the server routes the walk | send it only when `CanMove(self, item at raw Z)` holds and the step chain reaches it, and, out of the server's pick-up range, the item's cell is in the bot's SCC (a straight walk down a ledge must not leave the bot on isolated ground, #278); else walk to `StandPoint(item, r, pickup)` in the bot's SCC first |
 | Bows and spells at range | server chase | `StandPoint` with `CanSee` and the skill's or weapon's range |
 | Flee (`rules.go`), idle drift, death return | straight point | a point in the bot's SCC (death return may take one-way drops), chosen away from the attacker or inside the drift radius, as checked segments |
 
