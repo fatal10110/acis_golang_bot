@@ -96,17 +96,28 @@ func TestLiveRecallRefill(t *testing.T) {
 			t.Fatal(ctx.Err())
 		case <-time.After(3 * time.Second):
 		}
-		if last, gmAfter := traceRecall(t, round, w, from, sentFrom, self, gm.Self.ObjectID); !gmAfter {
-			t.Fatalf("round %d: the bot no longer sees the GM after its own teleport at event %d", round, last)
+		tr := traceRecall(t, round, w, from, sentFrom, self, gm.Self.ObjectID)
+		if tr.teleports != 1 || tr.appearing != 1 {
+			t.Fatalf("round %d: %d own loading-screen teleports and %d Appearing sent, want one each", round, tr.teleports, tr.appearing)
+		}
+		if !tr.gmAfter {
+			t.Fatalf("round %d: the bot no longer sees the GM after its own teleport at event %d", round, tr.last)
 		}
 	}
 }
 
+// recallTrace is what traceRecall read of one recall.
+type recallTrace struct {
+	last      int  // index of the bot's last own loading-screen teleport, -1 if none
+	gmAfter   bool // whether the bot sees the GM since that teleport
+	teleports int  // the bot's own loading-screen teleports
+	appearing int  // Appearing packets the bot sent
+}
+
 // traceRecall logs the frames of one recall, from event from and packet
 // sentFrom on: each own teleport, each Appearing sent and the objects shown
-// and forgotten after the last teleport. It returns the index of the bot's
-// last own loading-screen teleport and whether the bot sees the GM since.
-func traceRecall(t *testing.T, round int, w *Watch, from, sentFrom int, self, gm int32) (int, bool) {
+// and forgotten after the last teleport.
+func traceRecall(t *testing.T, round int, w *Watch, from, sentFrom int, self, gm int32) recallTrace {
 	t.Helper()
 	appear := 0
 	for _, s := range w.Sent()[sentFrom:] {
@@ -115,7 +126,7 @@ func traceRecall(t *testing.T, round int, w *Watch, from, sentFrom int, self, gm
 			t.Logf("round %d: Appearing sent at %s", round, s.At.Format("15:04:05.000"))
 		}
 	}
-	last, gmAfter, shown, deleted, own := -1, false, 0, 0, 0
+	last, gmAfter, shown, deleted, own, slow := -1, false, 0, 0, 0, 0
 	for i, s := range w.Seen(from) {
 		switch e := s.Event.(type) {
 		case botclient.TeleportToLocation:
@@ -125,6 +136,7 @@ func traceRecall(t *testing.T, round int, w *Watch, from, sentFrom int, self, gm
 			own++
 			t.Logf("round %d: own teleport fast=%v at %s after %d sent, %d objects shown before", round, e.Fast, s.At.Format("15:04:05.000"), s.SentBefore, shown)
 			if !e.Fast {
+				slow++
 				last, gmAfter, shown, deleted = from+i, false, 0, 0
 			}
 		case botclient.CharInfo:
@@ -144,5 +156,5 @@ func traceRecall(t *testing.T, round int, w *Watch, from, sentFrom int, self, gm
 		}
 	}
 	t.Logf("round %d: %d own teleports, %d Appearing sent, %d objects shown and %d forgotten after the last", round, own, appear, shown, deleted)
-	return last, gmAfter
+	return recallTrace{last: last, gmAfter: gmAfter, teleports: slow, appearing: appear}
 }

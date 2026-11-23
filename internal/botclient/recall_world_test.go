@@ -66,39 +66,50 @@ func TestBrainLanding(t *testing.T) {
 
 // TestBrainLandingTeleportedAgain checks that a teleport the server held for
 // the landing, made right after it, is answered by its own Appearing at the
-// reaction to it, not after the landing timeout, and that the decision then
-// waits for its landing.
+// reaction to it, not after the landing timeout, whether the landing showed
+// first or not, and that the decision then waits for its landing.
 func TestBrainLandingTeleportedAgain(t *testing.T) {
-	var turns int
-	b, out := newTestBrain(t, countGoal(&turns))
-	b.nextTick = at(3 * time.Second)
-	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID}}, at(100*time.Millisecond)); err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name string
+		read []Event
+	}{
+		{"after the landing", []Event{UserInfo{ObjectID: selfID}, TeleportToLocation{ObjectID: selfID}}},
+		{"before the landing", []Event{TeleportToLocation{ObjectID: selfID}}},
 	}
-	first := b.decisionAt()
-	if err := b.wake(first); err != nil {
-		t.Fatal(err)
-	}
-	again := first.Add(50 * time.Millisecond)
-	if err := b.handle([]Event{UserInfo{ObjectID: selfID}, TeleportToLocation{ObjectID: selfID}}, again); err != nil {
-		t.Fatal(err)
-	}
-	react := b.decisionAt()
-	if d := react.Sub(again); d < defaultReactMin || d > defaultReactMax {
-		t.Fatalf("second Appearing due %v after the teleport, want [%v, %v]", d, defaultReactMin, defaultReactMax)
-	}
-	if err := b.wake(react); err != nil {
-		t.Fatal(err)
-	}
-	if got := opcodes(out); !bytes.Equal(got, []byte{opGameAppearing, opGameAppearing}) || turns != 0 {
-		t.Fatalf("sent % x and %d decisions, want two Appearing and no decision", got, turns)
-	}
-	landed := react.Add(50 * time.Millisecond)
-	if err := b.handle([]Event{UserInfo{ObjectID: selfID}}, landed); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.wake(landed); err != nil || turns != 1 {
-		t.Fatalf("%d decisions once landed (err %v), want 1", turns, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var turns int
+			b, out := newTestBrain(t, countGoal(&turns))
+			b.nextTick = at(3 * time.Second)
+			if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID}}, at(100*time.Millisecond)); err != nil {
+				t.Fatal(err)
+			}
+			first := b.decisionAt()
+			if err := b.wake(first); err != nil {
+				t.Fatal(err)
+			}
+			again := first.Add(50 * time.Millisecond)
+			if err := b.handle(tc.read, again); err != nil {
+				t.Fatal(err)
+			}
+			react := b.decisionAt()
+			if d := react.Sub(again); d < defaultReactMin || d > defaultReactMax {
+				t.Fatalf("second Appearing due %v after the teleport, want [%v, %v]", d, defaultReactMin, defaultReactMax)
+			}
+			if err := b.wake(react); err != nil {
+				t.Fatal(err)
+			}
+			if got := opcodes(out); !bytes.Equal(got, []byte{opGameAppearing, opGameAppearing}) || turns != 0 {
+				t.Fatalf("sent % x and %d decisions, want two Appearing and no decision", got, turns)
+			}
+			landed := react.Add(50 * time.Millisecond)
+			if err := b.handle([]Event{UserInfo{ObjectID: selfID}}, landed); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.wake(landed); err != nil || turns != 1 {
+				t.Fatalf("%d decisions once landed (err %v), want 1", turns, err)
+			}
+		})
 	}
 }
 
