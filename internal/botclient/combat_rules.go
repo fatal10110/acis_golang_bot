@@ -164,18 +164,20 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 			if b.exhausted(id, now) {
 				return Action{}
 			}
-			if a, walk := b.engageWalk(id, true, now); walk {
-				return a
+			if r, approach := b.castReach(skill); approach {
+				if a, walk := b.engageWalk(id, r, now); walk {
+					return a
+				}
 			}
 			return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, forced), object: id, skill: skill}
 		}
 	}
-	ranged := b.bowEquipped()
+	r := b.attackReach()
 	if b.engaged != id {
 		if b.exhausted(id, now) {
 			return Action{}
 		}
-		if a, walk := b.engageWalk(id, ranged, now); walk {
+		if a, walk := b.engageWalk(id, r, now); walk {
 			return a
 		}
 		if forced {
@@ -190,7 +192,7 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	// The target moved where the straight line to it is closed: walk to a
 	// new stand point (the move drops the attack; it goes out again from
 	// there).
-	if a, walk := b.engageWalk(id, ranged, now); walk {
+	if a, walk := b.engageWalk(id, r, now); walk {
 		return a
 	}
 	if now.Sub(b.progressAt) >= stuckAfter {

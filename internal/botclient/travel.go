@@ -53,6 +53,10 @@ type TravelMap struct {
 	// bot's effects with.
 	buffPotions map[int32]buffPotion
 	stacks      map[int32]map[int32]stackEffect
+	// castRanges are the cast ranges of every skill level
+	// (datapack.Skill.CastRange): what the fight sizes a cast's stand
+	// point with (Brain.castReach).
+	castRanges map[datapack.SkillRef]int32
 	// shots are the datapack's player shots (indexShots), weapons what
 	// each weapon template charges (indexWeapons), and spawnedSold the
 	// items spawned merchants sell (spawnedSold).
@@ -108,7 +112,7 @@ type destination struct {
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear and
 // its armor sets, the arrows each bow shoots, the items' reference prices, the healing
-// and buff potions and shots, the items' weights, the aggressive NPCs' aggro
+// and buff potions and shots, the skills' cast ranges, the items' weights, the aggressive NPCs' aggro
 // ranges, the warehouse keepers, the craft recipes, the crystals gear
 // breaks into and the dye symbols.
 func NewTravelMap(dp *datapack.Datapack) *TravelMap {
@@ -120,6 +124,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.prices = dp.Prices
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
 	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
+	m.castRanges = indexCastRanges(dp.Skills)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.Items, dp.EtcItems)
