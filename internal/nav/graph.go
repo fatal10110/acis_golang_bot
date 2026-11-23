@@ -27,7 +27,10 @@ import (
 //	          u32, first edge u32
 //	edges     target node u32, cost with every door open u32, cost crossing
 //	          no door u32 (noCost when none), first door ref u32, door count
-//	          u32
+//	          u32; by target per node. An edge between two SCCs (one way:
+//	          a crossing, or a pair joined inside a cluster) costs its
+//	          straight line; a pair joined inside a cluster has no doors,
+//	          a crossing keeps its door set
 //	doorRefs  door id i32: the doors an edge's all-open path crosses
 //	sccEdges  first condensation edge u32 per SCC, then the edge count
 //	condEdges target SCC u32
@@ -37,7 +40,7 @@ import (
 // side or water is stale and refused, as is a corrupt one.
 const (
 	navMagic       = "ACISNAV\x00"
-	navVersion     = 2
+	navVersion     = 3
 	navHeaderSize  = 64
 	clusterRecSize = 12
 	nodeRecSize    = 28
