@@ -23,6 +23,14 @@ type Spot struct {
 	// MaximumNPCs is the maker's declared cap, before the server's spawn
 	// multiplier.
 	MaximumNPCs int
+	// Area is the territory's area on the X/Y plane.
+	Area float64
+	// Aggressive is the number of aggressive monsters the maker keeps, its
+	// declared totals capped at MaximumNPCs; AggroRange, ClanRange and
+	// RunSpeed are the largest aggro range, clan call range and run speed
+	// among them.
+	Aggressive, AggroRange, ClanRange int
+	RunSpeed                          float64
 }
 
 // Spots lists the makers of d fit for farming, in spawnlist order. It
@@ -50,7 +58,7 @@ func (d *Datapack) spot(m *Maker) (Spot, bool) {
 		return Spot{}, false
 	}
 	t := m.Territories[0]
-	s := Spot{Maker: m.Name, Territory: t, Center: t.inner(), Z: t.MinZ + (t.MaxZ-t.MinZ)/2, MaximumNPCs: m.MaximumNPCs}
+	s := Spot{Maker: m.Name, Territory: t, Center: t.inner(), Z: t.MinZ + (t.MaxZ-t.MinZ)/2, MaximumNPCs: m.MaximumNPCs, Area: t.area()}
 	monsters := 0
 	for _, sp := range m.Spawns {
 		npc, ok := d.NPCs[sp.NPCID]
@@ -73,8 +81,15 @@ func (d *Datapack) spot(m *Maker) (Spot, bool) {
 		s.MaxLevel = max(s.MaxLevel, npc.Level)
 		if npc.AggroRange > 0 {
 			s.AggroLevel = max(s.AggroLevel, npc.Level)
+			s.Aggressive += sp.Total
+			s.AggroRange = max(s.AggroRange, npc.AggroRange)
+			s.ClanRange = max(s.ClanRange, npc.ClanRange)
+			s.RunSpeed = max(s.RunSpeed, npc.RunSpeed)
 		}
 		monsters++
+	}
+	if m.MaximumNPCs > 0 {
+		s.Aggressive = min(s.Aggressive, m.MaximumNPCs)
 	}
 	return s, monsters > 0
 }
@@ -111,6 +126,16 @@ func (t *Territory) Contains(p Point) bool {
 		}
 	}
 	return in
+}
+
+// area is the territory's area on the X/Y plane (shoelace formula).
+func (t *Territory) area() float64 {
+	var a int64
+	n := len(t.Nodes)
+	for i, j := 0, n-1; i < n; j, i = i, i+1 {
+		a += int64(t.Nodes[j].X)*int64(t.Nodes[i].Y) - int64(t.Nodes[i].X)*int64(t.Nodes[j].Y)
+	}
+	return math.Abs(float64(a)) / 2
 }
 
 // innerGrid is the number of grid cells per side inner scans.

@@ -16,7 +16,7 @@ func TestLoadSamples(t *testing.T) {
 	}
 
 	wantNPCs := map[int32]NPC{
-		20001: {ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000},
+		20001: {ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300},
 		20002: {ID: 20002, Name: "Rabbit", Type: "Monster", Level: 3},
 		20101: {ID: 20101, Name: "Set Name", Type: "Folk", Level: 1},
 		25001: {ID: 25001, Name: "Greyclaw Kutus", Type: "RaidBoss", Level: 23, AggroRange: 300},

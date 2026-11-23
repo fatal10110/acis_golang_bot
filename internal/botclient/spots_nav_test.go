@@ -90,7 +90,7 @@ func pickStraight(b *Brain, now time.Time) {
 	var cands []spotCand
 	for i := range b.cfg.Spots.spots {
 		sp := &b.cfg.Spots.spots[i]
-		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !p.fits(sp, int(b.world.Self.Level)) {
+		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !b.spotFits(sp, now) {
 			continue
 		}
 		c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}

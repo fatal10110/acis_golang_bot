@@ -137,6 +137,9 @@ func TestCombatRules(t *testing.T) {
 		},
 		{
 			name: "two attackers and outmatched: flee from the hardest hitter",
+			// The test world's NPC runs at 200 and the player at 100, as
+			// fast as the bot: TestFleeOutrun covers the speeds.
+			persona: func(p *Persona) { p.FleeOutrun = false },
 			setup: func(b *Brain) {
 				fighting(b)
 				flag(b, pcID)

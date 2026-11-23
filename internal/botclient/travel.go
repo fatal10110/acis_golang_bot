@@ -542,11 +542,10 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 // (squared, straight line) of it that fit the bot's level, are not avoided,
 // have room and lie in its SCC.
 func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, now time.Time, push func(tripLabel)) {
-	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
-	level := int(b.world.Self.Level)
+	r, v := b.cfg.Spots, &b.spot
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if now.Before(v.avoid[i]) || !p.fits(sp, level) || !r.hasRoom(i) ||
+		if now.Before(v.avoid[i]) || !b.spotFits(sp, now) || !r.hasRoom(i) ||
 			horizontal2(l.p.at, Point{X: sp.Center.X, Y: sp.Center.Y}) > reach {
 			continue
 		}
