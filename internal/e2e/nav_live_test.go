@@ -195,17 +195,23 @@ var (
 // TestLiveNavMeleeObstacle has a farmer whose one spot is centred at
 // obstacleStand fight a wolf the GM spawned at obstacleMob, behind the
 // obstacle. The spot's leash is cut to 200 so the newbie spot's own
-// monsters are no farm targets, and the wolf is spawned only once the bot
-// stands idle at a point with no straight walk to obstacleMob: the bot
-// must walk round to a stand point with an open line before it attacks
-// the wolf. The scenario asserts that it walked before its first attack
-// (the first click on the wolf once selected), that the attack's origin
-// has a straight walk to where the wolf stood then, and that the kill
-// lands; runWatched holds its blocked stops to at most one and its desyncs
-// to none. The bot picks nothing up: loot kept over the runs would put the
-// character over its weight limit, where the server refuses its every move.
-// A pick-up round an obstacle is TestLiveNavPickUpObstacle.
+// monsters are no farm targets, the bot's idle drift is off so it stays
+// where it landed, and the wolf is spawned only once the bot stands idle at
+// a point with no straight walk to obstacleMob: the bot must walk round to
+// a stand point with an open line before it attacks the wolf. The scenario
+// asserts that its attack click (the first on the wolf once selected) goes
+// out from a point with a straight walk to where the wolf stood then, that
+// a choice of the wolf made behind the obstacle led to a ground move before
+// that click (meleeVerdict), and that the kill lands; runWatched holds its
+// blocked stops to at most one and its desyncs to none. A round where the
+// bot chose the wolf from an open line (another monster's fight carried it
+// there, #273) or the wolf walked round to it cannot test the walk: it is
+// logged and played again, up to meleeRounds rounds. The bot picks nothing
+// up: loot kept over the runs would put the character over its weight
+// limit, where the server refuses its every move. A pick-up round an
+// obstacle is TestLiveNavPickUpObstacle.
 func TestLiveNavMeleeObstacle(t *testing.T) {
+	const meleeRounds = 3
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 15*time.Minute)
@@ -235,73 +241,77 @@ func TestLiveNavMeleeObstacle(t *testing.T) {
 	f = runFarmer(t, ctx, tg, account, spots, func(p *botclient.Persona) {
 		p.Spots.Leash = 200
 		p.Loot.Pickup = false
+		// No drift: a drift segment still under way when the wolf comes
+		// would carry the bot off the point the round starts from.
+		p.IdleChance = 0
 	})
-	recallBot(t, ctx, tg, gm, f.name)
-	botLanded(t, ctx, gm, f.bot, gm.Pos())
 	gmOn(t, ctx, gm, f, "set level 5")
-	// A character over its weight limit has speed 0, and the server
-	// refuses its every move (movement.go moveLivePlayer).
-	if u, ok := lastUserInfo(f.watch.Seen(0)); !ok || u.RunSpeed == 0 || u.MaxLoad == 0 || u.Load >= u.MaxLoad {
-		t.Fatalf("%s cannot walk: run speed %d, load %d/%d", f.name, u.RunSpeed, u.Load, u.MaxLoad)
-	}
-	// Idle at the spot (no farm target, rule "goal" or "idle") where no
-	// straight walk reaches obstacleMob.
-	until(t, ctx, "the farmer idle at its spot behind the obstacle", func() string {
-		s := f.bot.Status()
-		switch {
-		case s.Rule != "goal" && s.Rule != "idle":
-			return fmt.Sprintf("rule %q", s.Rule)
-		case canMove(s.Position, m) || canMove(m, s.Position):
-			return fmt.Sprintf("at %v, a straight walk to %v holds", s.Position, m)
+	for round := 1; ; round++ {
+		// Every round starts from obstacleStand: the bot lands where the
+		// GM stands.
+		gmTeleport(t, ctx, gm, a)
+		recallBot(t, ctx, tg, gm, f.name)
+		botLanded(t, ctx, gm, f.bot, gm.Pos())
+		// A character over its weight limit has speed 0, and the server
+		// refuses its every move (movement.go moveLivePlayer).
+		if u, ok := lastUserInfo(f.watch.Seen(0)); !ok || u.RunSpeed == 0 || u.MaxLoad == 0 || u.Load >= u.MaxLoad {
+			t.Fatalf("%s cannot walk: run speed %d, load %d/%d", f.name, u.RunSpeed, u.Load, u.MaxLoad)
 		}
-		return ""
-	})
-	from := f.bot.Status().Position
-	t.Logf("%s idles at %v", f.name, from)
-
-	spawned := time.Now()
-	gmTeleport(t, ctx, gm, m)
-	mob, err := gm.Spawn(ctx, wolf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
-	gmTeleport(t, ctx, gm, a)
-	kctx, kstop := context.WithTimeout(ctx, 4*time.Minute)
-	defer kstop()
-	until(t, kctx, "the wolf behind the obstacle killed", func() string {
-		if readFight(f, mob).spawnKilled {
+		// Idle at the spot (no farm target, no rule or rule "goal" or
+		// "idle") where no straight walk reaches obstacleMob.
+		until(t, ctx, "the farmer idle at its spot behind the obstacle", func() string {
+			s := f.bot.Status()
+			switch {
+			case s.Rule != "" && s.Rule != "goal" && s.Rule != "idle":
+				return fmt.Sprintf("rule %q", s.Rule)
+			case canMove(s.Position, m) || canMove(m, s.Position):
+				return fmt.Sprintf("at %v, a straight walk to %v holds", s.Position, m)
+			}
 			return ""
+		})
+		from := f.bot.Status().Position
+		t.Logf("round %d: %s idles at %v", round, f.name, from)
+
+		spawned := time.Now()
+		gmTeleport(t, ctx, gm, m)
+		mob, err := gm.Spawn(ctx, wolf)
+		if err != nil {
+			t.Fatal(err)
 		}
-		s := f.bot.Status()
-		return fmt.Sprintf("no kill of the wolf yet: rule %q walk %q at %v", s.Rule, s.Walk, s.Position)
-	})
-	gm.Forget(mob)
-	r := readFight(f, mob)
-	sent, seen := f.watch.Sent(), f.watch.Seen(0)
-	click, origin, ok := attackClick(seen, sent, mob, spawned)
-	if !ok {
-		t.Fatalf("%s killed the wolf without an Action or AttackRequest on it once selected", f.name)
-	}
-	segs := 0
-	for _, s := range sent {
-		if s.Op == opMoveBackwardToLocation && s.At.After(spawned) && s.At.Before(click.At) {
-			segs++
+		t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
+		gmTeleport(t, ctx, gm, a)
+		kctx, kstop := context.WithTimeout(ctx, 4*time.Minute)
+		until(t, kctx, "the wolf behind the obstacle killed", func() string {
+			if readFight(f, mob).spawnKilled {
+				return ""
+			}
+			s := f.bot.Status()
+			return fmt.Sprintf("no kill of the wolf yet: rule %q walk %q at %v", s.Rule, s.Walk, s.Position)
+		})
+		kstop()
+		gm.Forget(mob)
+		r := readFight(f, mob)
+		sent, seen := f.watch.Sent(), f.watch.Seen(0)
+		run, ok := meleeApproach(seen, sent, f.id, mob, spawned)
+		if !ok {
+			t.Fatalf("%s killed the wolf without an Action or AttackRequest on it once selected", f.name)
 		}
-	}
-	there, ok := objectAt(seen, mob, click.At)
-	if !ok {
-		t.Fatalf("%s clicked the wolf before it saw it", f.name)
-	}
-	t.Logf("%s from %v: %d ground moves, then attacked the wolf at %v from %v; %d swings", f.name, from, segs, there, origin, r.swings)
-	if !canMove(origin, there) {
-		t.Errorf("%s attacked the wolf at %v from %v: no straight walk, no stand point", f.name, there, origin)
-	}
-	if segs == 0 {
-		if near2(there, m) > 16*16 {
-			t.Errorf("%s attacked the wolf without a ground move: the wolf had walked from %v to %v, an open line the scenario cannot tell from a stand point", f.name, m, there)
-		} else {
-			t.Errorf("%s attacked the wolf behind the obstacle without a ground move round it", f.name)
+		chosen, ok := objectAt(seen, mob, run.Select)
+		there, ok2 := objectAt(seen, mob, run.Click.At)
+		if !ok || !ok2 {
+			t.Fatalf("%s chose or clicked the wolf before it saw it", f.name)
 		}
+		t.Logf("round %d: %s chose the wolf at %v from %v, %d ground moves, then attacked it at %v from %v; %d swings",
+			round, f.name, chosen, run.Decided, run.Moves, there, run.Origin, r.swings)
+		fault, lost := meleeVerdict(run, chosen, there, canMove)
+		switch {
+		case fault != "":
+			t.Fatalf("%s %s", f.name, fault)
+		case lost == "":
+			return
+		case round == meleeRounds:
+			t.Fatalf("no round of %d tested the walk round the obstacle; the last: %s", meleeRounds, lost)
+		}
+		t.Logf("round %d cannot test the walk round: %s; again", round, lost)
 	}
 }
