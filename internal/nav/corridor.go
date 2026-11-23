@@ -99,12 +99,12 @@ func quadrant(a, b location.Location) block.NSWE {
 
 // CorridorOpen reports whether the segment from a to b passes the open-corridor
 // test (docs/navigation.md, "Step-chain check"): over every cell its line
-// crosses plus a one-cell margin, each cell has geodata and exactly one layer,
+// crosses and every cell next to those within corridorReach of it, each cell
+// has geodata and one floor (exactly one layer, or a stacked top, topsHold),
 // its NSWE allows the segment's quadrant directions, and no two neighbouring
-// cells differ in height by more than block.CellIgnoreHeight. Then every step
-// the server can take between two points of the corridor passes CanMove,
-// whatever the step lengths. It costs O(cells along the segment) and makes no
-// CanMove call.
+// cells differ in height by block.CellIgnoreHeight or more. Then every step
+// the server can take between two points of the corridor passes CanMove. It
+// costs O(cells along the segment) and makes no CanMove call.
 func (p *Planner) CorridorOpen(a, b location.Location) bool {
 	s := getScratch()
 	defer putScratch(s)
@@ -140,17 +140,20 @@ func (p *Planner) addStretch(s *scratch, lc lineCell) {
 }
 
 // corridorClear reports whether the segment from a to b passes the
-// open-corridor test, as len(corridorStretches) == 0 does, stopping at the
-// first cell that fails: every corridor cell lies around some line cell, so
-// the test fails exactly when a corridor cell fails conditions 1 and 2 or
-// climbs to a neighbour, and corridorAdd sees each such failure as it adds
-// the cell.
+// open-corridor test, stopping at the first cell that fails: every corridor
+// cell lies around some line cell, so the test fails exactly when a corridor
+// cell fails conditions 1 and 2 or climbs to a neighbour, and corridorAdd
+// sees each such failure as it adds the cell. Unlike corridorStretches, it
+// takes a stacked cell on its top (topsHold): a corridor that passes whole
+// keeps the chain on the tops, while the exact check that walks a failing
+// stretch starts and ends where every cell holds one layer.
 func (p *Planner) corridorClear(s *scratch, a, b location.Location) bool {
 	return p.corridorFill(s, a, b, true)
 }
 
-// corridorFill puts every cell the line from a to b crosses, with a
-// one-cell margin, into a new corridor of s.grid, the line cells in s.line.
+// corridorFill puts every cell the line from a to b crosses, and every cell
+// next to one of those within corridorReach of the segment, into a new
+// corridor of s.grid, the line cells in s.line.
 // With stop it returns false at the first cell that makes the test fail;
 // else it fills the whole corridor, collects the failing runs of line cells
 // in s.stretches as their verdicts become final (lineCellLag), and reports
@@ -159,12 +162,18 @@ func (p *Planner) corridorFill(s *scratch, a, b location.Location, stop bool) bo
 	s.line = appendLineCells(s.line[:0], a, b)
 	s.stretches = s.stretches[:0]
 	s.grid.begin()
+	s.grid.ends = [2]gridEnd{{engine.GeoX(a.X), engine.GeoY(a.Y), a.Z}, {engine.GeoX(b.X), engine.GeoY(b.Y), b.Z}}
 	req := quadrant(a, b)
+	stacked := stop && p.Lmax > 0
 	open := true
+	seg := newSegment(a, b)
 	for i, lc := range s.line {
 		for dx := -1; dx <= 1; dx++ {
 			for dy := -1; dy <= 1; dy++ {
-				if !p.corridorAdd(s, lc.x+dx, lc.y+dy, req) {
+				if (dx != 0 || dy != 0) && (s.grid.member(lc.x+dx, lc.y+dy) != nil || !seg.nearCell(lc.x+dx, lc.y+dy)) {
+					continue // in the corridor already, or out of reach
+				}
+				if !p.corridorAdd(s, lc.x+dx, lc.y+dy, req, stacked) {
 					if stop {
 						return false
 					}
@@ -181,17 +190,81 @@ func (p *Planner) corridorFill(s *scratch, a, b location.Location, stop bool) bo
 			p.addStretch(s, lc)
 		}
 	}
-	return open
+	return open && (len(s.grid.tops) == 0 || p.topsHold(s))
 }
 
-// lineCellOpen reports whether every cell around lc passed.
+// lineCellOpen reports whether every corridor cell around lc passed.
 func (p *Planner) lineCellOpen(s *scratch, lc lineCell) bool {
 	for dx := -1; dx <= 1; dx++ {
 		for dy := -1; dy <= 1; dy++ {
-			if c := s.grid.member(lc.x+dx, lc.y+dy); c == nil || c.flags&(gridOK|gridClimb) != gridOK {
+			c := s.grid.member(lc.x+dx, lc.y+dy)
+			if c == nil {
+				continue // not within corridorReach of the segment
+			}
+			if c.flags&(gridOK|gridClimb) != gridOK {
 				return false
 			}
 		}
 	}
 	return true
+}
+
+// corridorReach is how far from a segment a cell next to a line cell may
+// lie and still join the corridor: past the 1.5 units the rounded step
+// points stray from the line (bandRadius), CanMove's border walk between two
+// of them strays about 1.5 more, as it picks each crossing from the line's
+// coordinate at the cell's last column, truncated to an integer. 4 keeps a
+// margin over the 3.
+const corridorReach = 4.0
+
+// segment is a segment in world units, for corridor distances.
+type segment struct {
+	ax, ay, dx, dy, len2 float64
+	// nx, ny is the line's unit normal, and half a cell's half extent
+	// along it; zero for a point.
+	nx, ny, half float64
+}
+
+func newSegment(a, b location.Location) segment {
+	dx, dy := float64(b.X-a.X), float64(b.Y-a.Y)
+	sg := segment{ax: float64(a.X), ay: float64(a.Y), dx: dx, dy: dy, len2: dx*dx + dy*dy}
+	if l := math.Sqrt(sg.len2); l > 0 {
+		sg.nx, sg.ny = -dy/l, dx/l
+		sg.half = block.CellSize / 2 * (math.Abs(sg.nx) + math.Abs(sg.ny))
+	}
+	return sg
+}
+
+// nearCell reports whether geodata cell (gx, gy), a closed square, comes
+// within corridorReach of the segment. The cell is one the segment does not
+// cross, so the nearest points are a segment end or a corner of the cell.
+func (sg segment) nearCell(gx, gy int) bool {
+	x0 := float64(gx*block.CellSize + engine.WorldXMin)
+	y0 := float64(gy*block.CellSize + engine.WorldYMin)
+	x1, y1 := x0+block.CellSize, y0+block.CellSize
+	// The line through the segment is no farther from the cell than the
+	// segment: a cell well clear of the line is out of reach.
+	if sg.half > 0 && math.Abs((x0+block.CellSize/2-sg.ax)*sg.nx+(y0+block.CellSize/2-sg.ay)*sg.ny)-sg.half > corridorReach+1e-6 {
+		return false
+	}
+	const r2 = corridorReach * corridorReach
+	for _, e := range [2][2]float64{{sg.ax, sg.ay}, {sg.ax + sg.dx, sg.ay + sg.dy}} {
+		ex := max(x0-e[0], 0, e[0]-x1)
+		ey := max(y0-e[1], 0, e[1]-y1)
+		if ex*ex+ey*ey <= r2 {
+			return true
+		}
+	}
+	for _, c := range [4][2]float64{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
+		px, py := c[0]-sg.ax, c[1]-sg.ay
+		t := 0.0
+		if sg.len2 > 0 {
+			t = min(max((px*sg.dx+py*sg.dy)/sg.len2, 0), 1)
+		}
+		qx, qy := px-t*sg.dx, py-t*sg.dy
+		if qx*qx+qy*qy <= r2 {
+			return true
+		}
+	}
+	return false
 }

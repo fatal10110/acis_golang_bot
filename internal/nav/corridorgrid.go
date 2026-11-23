@@ -1,6 +1,10 @@
 package nav
 
-import "github.com/fatal10110/acis_golang_bot/internal/geo/block"
+import (
+	"math"
+
+	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+)
 
 // corridorGrid is the corridor test's working memory: what the test reads of
 // each cell, cached across the tests one pull runs (from one waypoint they
@@ -19,6 +23,15 @@ type corridorGrid struct {
 	gen   uint32
 	mark  uint32
 	slots []gridSlot
+	// ends are the current test's endpoints, and tops the stacked cells
+	// it took on their tops (corridorAdd).
+	ends [2]gridEnd
+	tops [][2]int
+}
+
+// gridEnd is a segment endpoint: its cell and the Z it stands at.
+type gridEnd struct {
+	gx, gy, z int
 }
 
 // gridSlot is one cell: what corridorCell read of it when gen is the grid's,
@@ -28,15 +41,17 @@ type gridSlot struct {
 	gen   uint32
 	mark  uint32
 	h     int16
+	gap   int16 // a stacked cell's top minus its next layer down
 	nswe  block.NSWE
 	flags uint8
 }
 
-// gridSlot flags. gridOneLayer and gridWet hold for the whole generation;
-// gridOK and gridClimb are the current test's.
+// gridSlot flags. gridOneLayer, gridStacked and gridWet hold for the whole
+// generation; gridOK and gridClimb are the current test's.
 const (
 	gridOneLayer uint8 = 1 << iota // geodata and exactly one layer
-	gridWet                        // that layer's floor is in water
+	gridStacked                    // geodata and several layers: h is the top's
+	gridWet                        // the floor (the one layer, or the top) is in water
 	gridOK                         // conditions 1 and 2 under the test's quadrant
 	gridClimb                      // condition 3 fails toward a neighbour
 )
@@ -66,6 +81,7 @@ func (g *corridorGrid) begin() {
 		g.wrap()
 		g.mark = 1
 	}
+	g.tops = g.tops[:0]
 }
 
 // wrap clears the grid when a counter wraps, so an old slot never passes as
@@ -93,11 +109,13 @@ func (g *corridorGrid) member(gx, gy int) *gridSlot {
 
 // corridorAdd puts cell (gx, gy) into the current test's corridor and
 // reports whether the corridor still passes after it: the cell passes
-// conditions 1 and 2, and differs by at most block.CellIgnoreHeight from
+// conditions 1 and 2, and differs by less than block.CellIgnoreHeight from
 // every neighbour already in the corridor that passes them (condition 3).
-// Each neighbouring pair is checked once, when its second cell joins. A
-// cell already in the corridor changes nothing.
-func (p *Planner) corridorAdd(s *scratch, gx, gy int, req block.NSWE) bool {
+// With stacked, a stacked cell passes condition 1 on its top, unless an
+// endpoint of the segment stands in it below the top, and joins g.tops for
+// topsHold. Each neighbouring pair is checked once, when its second cell
+// joins. A cell already in the corridor changes nothing.
+func (p *Planner) corridorAdd(s *scratch, gx, gy int, req block.NSWE, stacked bool) bool {
 	g := &s.grid
 	c := g.at(gx, gy)
 	k := gridKey(gx, gy)
@@ -109,17 +127,24 @@ func (p *Planner) corridorAdd(s *scratch, gx, gy int, req block.NSWE) bool {
 	}
 	c.mark = g.mark
 	c.flags &^= gridOK | gridClimb
-	if c.flags&(gridOneLayer|gridWet) != gridOneLayer || !c.nswe.Allows(req) {
+	floor := gridOneLayer
+	if stacked {
+		floor |= gridStacked
+	}
+	if c.flags&floor == 0 || c.flags&gridWet != 0 || !c.nswe.Allows(req) || c.flags&gridStacked != 0 && g.below(gx, gy, c.h) {
 		return false
 	}
 	c.flags |= gridOK
+	if c.flags&gridStacked != 0 {
+		g.tops = append(g.tops, [2]int{gx, gy})
+	}
 	open := true
 	for _, d := range [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
 		n := g.member(gx+d[0], gy+d[1])
 		if n == nil || n.flags&gridOK == 0 {
 			continue
 		}
-		if abs(int(c.h)-int(n.h)) > block.CellIgnoreHeight {
+		if abs(int(c.h)-int(n.h)) >= block.CellIgnoreHeight {
 			c.flags |= gridClimb
 			n.flags |= gridClimb
 			open = false
@@ -128,21 +153,72 @@ func (p *Planner) corridorAdd(s *scratch, gx, gy int, req block.NSWE) bool {
 	return open
 }
 
+// below reports whether an endpoint of the current test stands in cell
+// (gx, gy) below its top h.
+func (g *corridorGrid) below(gx, gy int, h int16) bool {
+	for _, e := range g.ends {
+		if e.gx == gx && e.gy == gy && e.z != int(h) {
+			return true
+		}
+	}
+	return false
+}
+
 // readGridCell reads what conditions 1 and 2 need of one cell: geodata,
 // exactly one layer (so belowCell, HeightNearest and Height can only answer
-// that floor), its NSWE, and whether its floor is in water (such a cell
-// fails, so the exact check walks that stretch point by point).
+// that floor) or else its top and the gap below it (gridStacked), the
+// floor's NSWE, and whether that floor is in water (such a cell fails, so
+// the exact check walks that stretch point by point).
 func (p *Planner) readGridCell(s *scratch, gx, gy int) gridSlot {
 	if !p.hasGeo(gx, gy) {
 		return gridSlot{}
 	}
 	layers := p.Engine.AppendLayers(s.layers[:0], gx, gy)
-	if len(layers) != 1 {
-		return gridSlot{}
+	top := 0
+	for i, l := range layers {
+		if l.Height > layers[top].Height {
+			top = i
+		}
 	}
-	c := gridSlot{h: layers[0].Height, nswe: layers[0].NSWE, flags: gridOneLayer}
+	c := gridSlot{h: layers[top].Height, nswe: layers[top].NSWE, flags: gridOneLayer}
+	if len(layers) > 1 {
+		c.flags, c.gap = gridStacked, math.MaxInt16
+		for i, l := range layers {
+			if i != top {
+				c.gap = min(c.gap, c.h-l.Height)
+			}
+		}
+		if c.gap == 0 {
+			return gridSlot{} // two layers at the top: no one floor
+		}
+	}
 	if p.Water.wet(gx, gy, c.h) {
 		c.flags |= gridWet
 	}
 	return c
+}
+
+// topsHold reports whether every stacked cell the corridor took on its top
+// keeps it for a chain on the corridor's floors. A step of at most
+// Lmax + stepSlack from cell C lands within k cells of it and asks
+// Height(N, T_C + 2*CellHeight), T_C the floor of C, for the cell N it lands
+// in; the nearest layer to that is N's top T_N when the top is nearer than
+// the layer below it, at T_N - gap: always when T_N is at or below the
+// query, else when 2*(T_N - T_C - 2*CellHeight) < gap (a tie goes to the
+// lower layer). Every other lookup of the chain stays on the tops whatever
+// the gap (docs/navigation.md, "Step-chain check").
+func (p *Planner) topsHold(s *scratch) bool {
+	k := int((p.Lmax+stepSlack)/block.CellSize) + 1
+	g := &s.grid
+	for _, t := range g.tops {
+		n := g.member(t[0], t[1])
+		for dx := -k; dx <= k; dx++ {
+			for dy := -k; dy <= k; dy++ {
+				if c := g.member(t[0]+dx, t[1]+dy); c != nil && 2*(int(n.h)-int(c.h)-2*block.CellHeight) >= int(n.gap) {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

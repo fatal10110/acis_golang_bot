@@ -417,6 +417,11 @@ server's pathfinder.
     them (`RouteOneWay`);
   - refinement inside each cluster the abstract path crosses, reading cells through the mapped
     geodata;
+  - **middle legs inside their clusters** (#256): a leg between two entrance nodes searches the
+    box of the clusters holding them, where the build found the abstract edge it stands for (a
+    way inside one cluster, or one crossing between two). Only when the box does not join them
+    (an edge avoided after a failed pull, a node left out in an avoided column) does it search
+    anywhere;
   - **seating the ends** (#256): the abstract search joins the start to every entrance node of
     its SCC in the start's cluster by a straight line, and the goal likewise, but a node of the
     same SCC may join the endpoint only by a way out of the cluster and back. The first leg is
@@ -583,6 +588,52 @@ same 200 warm routes the CPU fell from 34.1 s to 32.4 s while 25 more of them ro
 search and the exact step-chain check now take about 45% of route CPU each. The remaining work
 on the time and cold heap targets stays with #256.
 
+**Narrowed corridor and boxed middle legs** (#256, second pass), same cache and 200 pairs, both
+builds measured back to back on an idle machine. A profile of 200 warm routes put 49% of route
+CPU in the exact check (151 million `CanMove` calls from 10,682 segments that took it, 12,400
+per stretch, 99% of them distinct, so no cache helps) and 46% in the cell search (middle legs
+85% of it). Three changes:
+
+- **Corridor reach** (Step-chain check, below): the corridor test takes the cells next to the line
+  only within 4 units of the segment, not the whole one-cell margin, so a wall or ledge one cell
+  aside no longer fails it.
+- **Stacked tops** (same section): for string-pull candidates a cell with several layers counts
+  as its top when the chain cannot drop to a lower layer.
+- **Middle legs inside their clusters** (Routes, above).
+
+Over the 200 warm routes, segments taking the exact check fell from 10,682 to 4,505 and its
+`CanMove` calls from 151 to 61 million; middle-leg cell expansions fell from 14.0 to 11.9
+million, and no middle leg leaves its clusters (97 did). Answers change: distances are
+unchanged; of the 200 owner routes 4 are identical, 189 are another route, 3 go from `ErrBudget`
+to a route (a middle leg no longer floods past its clusters), none from a route to `ErrBudget`,
+and 4 still fail with `ErrBudget`. The other routes are the same way pulled into longer segments:
+17,186 waypoints became 10,333 (−40%) and the routes' total length fell by 1.0% (per route p50
+−0.4%, at worst +6.0%). The synthetic region's route tests pass unchanged; two corridor cases
+flip as intended (a bridge deck's stacked tops, a ledge one cell aside).
+
+| Measure | Target | Before | After |
+| --- | --- | --- | --- |
+| `Locate` cold | p99 ≤ 30 ms | p50 10.8 ms, p99 24.1 ms | p50 11.7 ms, p99 32.3 ms (code unchanged: noise) |
+| abstract distance warm | p99 ≤ 2 ms | p50 0.17 ms, p99 12.7 ms | p50 0.18 ms, p99 12.4 ms |
+| 40000-unit route warm | p99 ≤ 10 ms | p50 112 ms, p99 972 ms | p50 65 ms, p99 674 ms |
+| 40000-unit route cold | p99 ≤ 150 ms | p50 141 ms, p99 892 ms | p50 89 ms, p99 715 ms |
+| heap per route query, warm | ≤ 4 MB | p99 0.01 MB | p99 0.01 MB |
+| heap per route query, cold | ≤ 4 MB | p99 19.4 MB, max 35.6 MB | p99 19.4 MB, max 43.8 MB |
+| routes failed (both passes) | — | 14 of 400 | 8 of 400 |
+
+The route time targets, the cold route heap and the distance tail stay unmet; they wait on owner
+decisions (#256):
+
+- **The cell search is now the larger half** of route CPU. Its expansions are bounded by A*
+  with a heuristic that cannot see the clearance extra. Weighted A* (heuristic × 1.5 on middle
+  legs, cost at most 1.5 times the cheapest) halved the expansions (11.9 to 6.1 million) but
+  added 15% `CanMove` calls in the exact check, as the paths keep less clear of walls, for
+  about 15% less route time. It is not adopted: it trades away the wall margin the clearance
+  cost keeps.
+- **The cold heap** is the scratch growing on its first long search; making the target
+  warm-only is the owner's call.
+- **The distance tail** needs landmarks (ALT) on the abstract graph, a nav cache format change.
+
 ### Water
 
 While a player's position is inside a water zone the server moves it as a swimmer, not a walker
@@ -744,16 +795,32 @@ unreachable (with a reason).
     - Each step re-aims from its rounded point toward the destination (`creature.go:1374-1376`),
       so step points stay within about one unit of the segment's line.
   - **Open-corridor test (cheap, sufficient).** Take every cell the segment's line crosses, plus
-    a margin of one cell on each side. The segment passes when, in all of those cells:
+    each cell next to one of those that lies within 4 units (`corridorReach`) of the segment
+    (#256; before, the whole one-cell margin). Every cell the chain can touch is in it: the rounded
+    step points lie within 1.5 units of the line (`bandRadius`, below), and `CanMove`'s border walk
+    between two of them strays from their own line by at most about 1.5 more (it picks each
+    crossing from the line's Y at the cell's last column, truncated to an integer). The segment
+    passes when, in all of those cells:
     1. the cell has exactly one layer (a flat or complex block, or a multilayer cell holding one
        layer), so `belowCell`, `HeightNearest` and `Height` can only ever answer that floor,
-       whatever Z the chain carries;
+       whatever Z the chain carries. **Stacked tops** (#256, string-pull candidates only): a cell
+       with several layers counts as one floor, its top, when each endpoint of the segment that
+       stands in such a cell stands on its top, and for each such cell N and each corridor cell C
+       within one step of it (Chebyshev distance `⌊(Lmax + 1.5)/16⌋ + 1` cells),
+       `2 × (T_N − T_C − 16) < gap_N`, T the floors and gap_N the top of N minus the layer below.
+       Then a chain on the tops stays on them: `HeightNearest` of a top is that top;
+       `belowCell(z + 48)` scans down from the top and finds it (condition 3); and
+       `Height(N, T_C + 16)` is nearer the top than the layer below, a tie going to the lower
+       layer. The rule is what keeps a step that crosses a low cell of a stair from landing on
+       the layer under the deck. The stretches the exact check walks keep the one-layer rule;
     2. the NSWE flags allow crossing in both directions of the segment's quadrant. No step turns
        back on either axis: a step adds (destination − rounded origin) × a fraction below 1 to a
        float position that rounds half up to the origin, so it never passes the destination's
        integer coordinate (`stepLocked`; N2 found the reversal earlier assumed here does not
        occur, and `TestStepChainAgreesWithWalkSteps` checks it against `WalkSteps`);
-    3. no step up between neighbouring corridor cells is more than 48.
+    3. no two neighbouring corridor cells differ in height by 48 or more: `belowCell(z + 48)`
+       takes a layer strictly below `z + 48`, so a step up of exactly 48 is blocked (#256 fixed
+       the earlier "more than 48").
 
     Under those conditions every per-step `CanMove` between two points in the corridor holds,
     whatever the step lengths and wherever the rounding lands:
@@ -762,7 +829,9 @@ unreachable (with a reason).
     - the final `goz == Height(target)` compares that floor with itself.
 
     The test costs O(cells along the segment): no `CanMove` calls, a few microseconds.
-    String-pull candidates use only this test.
+    String-pull candidates use only this test. `TestNarrowCorridorAgreesWithExact` checks every
+    segment the narrowed test passes and the old one failed against the exact check over its
+    whole length and against random step sequences of the copied step chain.
   - **Exact check (short stretches only).** Where the corridor test fails (a doorway with partial
     NSWE, a bridge end, a stair with mixed layers), the stretch from the last corridor cell before
     the failure to the first after it is checked exactly:

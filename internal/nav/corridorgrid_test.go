@@ -1,67 +1,92 @@
 package nav
 
 import (
+	"math"
 	"math/rand/v2"
 	"slices"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
 
-// refCorridorStretches is the corridor test as N2 wrote it, on a map rebuilt
-// per test: the oracle the grid version must match.
-func refCorridorStretches(p *Planner, a, b location.Location) []stretch {
+// refCorridor is the corridor test written plainly on a map rebuilt per
+// test: the oracle the grid version must match. It returns the stretches
+// corridorStretches must find and whether corridorClear must pass.
+func refCorridor(p *Planner, a, b location.Location) ([]stretch, bool) {
 	type cell struct {
-		h         int16
+		h, gap    int16
+		stacked   bool
 		ok, climb bool
 	}
 	line := appendLineCells(nil, a, b)
-	corridor := map[[2]int]cell{}
 	req := quadrant(a, b)
 	var buf [block.MaxLayers]block.Cell
-	for _, lc := range line {
-		for dx := -1; dx <= 1; dx++ {
-			for dy := -1; dy <= 1; dy++ {
-				k := [2]int{lc.x + dx, lc.y + dy}
-				if _, ok := corridor[k]; ok {
-					continue
-				}
-				var c cell
-				if p.hasGeo(k[0], k[1]) {
-					if layers := p.Engine.AppendLayers(buf[:0], k[0], k[1]); len(layers) == 1 {
-						h := layers[0].Height
-						c = cell{h: h, ok: layers[0].NSWE.Allows(req) && !p.Water.wet(k[0], k[1], h)}
+	// read returns the corridor cells and whether each passes conditions 1
+	// and 2, stacked tops allowed or not.
+	read := func(stacked bool) map[[2]int]cell {
+		corridor := map[[2]int]cell{}
+		for _, lc := range line {
+			for dx := -1; dx <= 1; dx++ {
+				for dy := -1; dy <= 1; dy++ {
+					k := [2]int{lc.x + dx, lc.y + dy}
+					if _, ok := corridor[k]; ok || (dx != 0 || dy != 0) && refDistance(a, b, k) > corridorReach {
+						continue
 					}
+					var c cell
+					if p.hasGeo(k[0], k[1]) {
+						layers := p.Engine.AppendLayers(buf[:0], k[0], k[1])
+						heights := make([]int16, 0, len(layers))
+						for _, l := range layers {
+							heights = append(heights, l.Height)
+						}
+						slices.Sort(heights)
+						top := layers[slices.IndexFunc(layers, func(l block.Cell) bool { return l.Height == heights[len(heights)-1] })]
+						c = cell{h: top.Height, gap: math.MaxInt16, stacked: len(layers) > 1}
+						if c.stacked {
+							c.gap = top.Height - heights[len(heights)-2]
+						}
+						c.ok = (!c.stacked || stacked && c.gap > 0) && top.NSWE.Allows(req) && !p.Water.wet(k[0], k[1], top.Height)
+						for _, e := range []location.Location{a, b} {
+							if c.stacked && engine.GeoX(e.X) == k[0] && engine.GeoY(e.Y) == k[1] && e.Z != int(top.Height) {
+								c.ok = false
+							}
+						}
+					}
+					corridor[k] = c
 				}
-				corridor[k] = c
 			}
 		}
-	}
-	for k, c := range corridor {
-		if !c.ok {
-			continue
-		}
-		for _, d := range [2][2]int{{1, 0}, {0, 1}} {
-			nk := [2]int{k[0] + d[0], k[1] + d[1]}
-			nc, in := corridor[nk]
-			if !in || !nc.ok {
+		for k, c := range corridor {
+			if !c.ok {
 				continue
 			}
-			if abs(int(c.h)-int(nc.h)) > block.CellIgnoreHeight {
-				c.climb, nc.climb = true, true
-				corridor[k], corridor[nk] = c, nc
+			for _, d := range [2][2]int{{1, 0}, {0, 1}} {
+				nk := [2]int{k[0] + d[0], k[1] + d[1]}
+				nc, in := corridor[nk]
+				if !in || !nc.ok {
+					continue
+				}
+				if abs(int(c.h)-int(nc.h)) >= block.CellIgnoreHeight {
+					c.climb, nc.climb = true, true
+					corridor[k], corridor[nk] = c, nc
+				}
 			}
 		}
+		return corridor
 	}
+
+	strict := read(false)
 	var out []stretch
 	for _, lc := range line {
 		open := true
 		for dx := -1; dx <= 1 && open; dx++ {
 			for dy := -1; dy <= 1 && open; dy++ {
-				c := corridor[[2]int{lc.x + dx, lc.y + dy}]
-				open = c.ok && !c.climb
+				if c, in := strict[[2]int{lc.x + dx, lc.y + dy}]; in {
+					open = c.ok && !c.climb
+				}
 			}
 		}
 		if open {
@@ -73,7 +98,46 @@ func refCorridorStretches(p *Planner, a, b location.Location) []stretch {
 		}
 		out = append(out, stretch{lc.t0, lc.t1})
 	}
-	return out
+
+	relaxed := read(p.Lmax > 0)
+	clear := true
+	reach := int((p.Lmax+stepSlack)/block.CellSize) + 1
+	for k, n := range relaxed {
+		clear = clear && n.ok && !n.climb
+		if !n.stacked {
+			continue
+		}
+		for c, in := range relaxed {
+			if in.ok && abs(c[0]-k[0]) <= reach && abs(c[1]-k[1]) <= reach && 2*(int(n.h)-int(in.h)-2*block.CellHeight) >= int(n.gap) {
+				clear = false
+			}
+		}
+	}
+	return out, clear
+}
+
+// refDistance is the distance from the segment a-b to the closed square of
+// cell k, by ternary search over the segment (the distance to a convex set
+// is convex along it).
+func refDistance(a, b location.Location, k [2]int) float64 {
+	x0, y0 := float64(k[0]*block.CellSize+engine.WorldXMin), float64(k[1]*block.CellSize+engine.WorldYMin)
+	at := func(t float64) float64 {
+		x := float64(a.X) + t*float64(b.X-a.X)
+		y := float64(a.Y) + t*float64(b.Y-a.Y)
+		dx := max(x0-x, 0, x-x0-block.CellSize)
+		dy := max(y0-y, 0, y-y0-block.CellSize)
+		return math.Hypot(dx, dy)
+	}
+	lo, hi := 0.0, 1.0
+	for range 100 {
+		m1, m2 := lo+(hi-lo)/3, hi-(hi-lo)/3
+		if at(m1) <= at(m2) {
+			hi = m2
+		} else {
+			lo = m1
+		}
+	}
+	return at((lo+hi)/2) - 1e-9
 }
 
 // TestCorridorGridMatchesMap checks the grid corridor test against the map
@@ -114,7 +178,7 @@ func TestCorridorGridMatchesMap(t *testing.T) {
 				if i%5 == 0 {
 					s.grid.invalidate()
 				}
-				want := refCorridorStretches(tc.p, a, b)
+				want, wantClear := refCorridor(tc.p, a, b)
 				got := slices.Clone(tc.p.corridorStretches(s, a, b))
 				if len(want) == 0 && len(got) == 0 {
 					got, want = nil, nil
@@ -122,10 +186,10 @@ func TestCorridorGridMatchesMap(t *testing.T) {
 				if !slices.Equal(got, want) {
 					t.Fatalf("corridorStretches(%v, %v) = %v, want %v", a, b, got, want)
 				}
-				if clear := tc.p.corridorClear(s, a, b); clear != (len(want) == 0) {
-					t.Fatalf("corridorClear(%v, %v) = %v, want %v", a, b, clear, len(want) == 0)
+				if clear := tc.p.corridorClear(s, a, b); clear != wantClear {
+					t.Fatalf("corridorClear(%v, %v) = %v, want %v", a, b, clear, wantClear)
 				}
-				if len(want) > 0 {
+				if !wantClear {
 					failing++
 				}
 			}
@@ -150,13 +214,13 @@ func TestCorridorGridBoundedOnLongSegment(t *testing.T) {
 		a := floor(p.Engine, at(Open, 0, 0, 0))
 		b := location.Location{X: a.X + d[0], Y: a.Y + d[1], Z: a.Z}
 		s.grid.invalidate()
-		want := refCorridorStretches(p, a, b)
+		want, wantClear := refCorridor(p, a, b)
 		got := slices.Clone(p.corridorStretches(s, a, b))
 		if !slices.Equal(got, want) {
 			t.Fatalf("corridorStretches(%v, %v) = %v, want %v", a, b, got, want)
 		}
-		if clear := p.corridorClear(s, a, b); clear != (len(want) == 0) {
-			t.Fatalf("corridorClear(%v, %v) = %v, want %v", a, b, clear, len(want) == 0)
+		if clear := p.corridorClear(s, a, b); clear != wantClear {
+			t.Fatalf("corridorClear(%v, %v) = %v, want %v", a, b, clear, wantClear)
 		}
 		if got, want := len(s.grid.slots), gridSide*gridSide; got != want || cap(s.grid.slots) != want {
 			t.Fatalf("grid holds %d slots (cap %d), want %d", got, cap(s.grid.slots), want)
