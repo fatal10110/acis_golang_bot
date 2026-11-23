@@ -994,6 +994,9 @@ geodata is committed here, and CI never sees it.**
 N1 to N4 change no behavior. From N5 on, each PR moves one set of consumers over and deletes their
 heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore doors.
 
+Walking efficiency (the stop at every waypoint, short segments, the follower's hold) is planned in
+[`walking.md`](walking.md): #304 to #308.
+
 ## Risks
 
 - **The geodata copy drifts from the server's** (the server's geodata is updated and the local copy
