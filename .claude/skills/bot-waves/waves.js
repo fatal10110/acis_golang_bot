@@ -33,6 +33,12 @@ const WAVES_ROOT = A.wavesRoot || WT + '/.waves'
 const RUNDIR = WAVES_ROOT + '/' + RUN
 // impl/review: null = the session model; a lane's implModel/reviewModel overrides it for that lane.
 const M = Object.assign({ merge: 'haiku', coord: 'haiku', deliver: 'haiku', scout: 'haiku', runner: 'haiku', brief: 'sonnet', researcher: 'sonnet', impl: null, review: null }, A.models || {})
+// SHORT_WAIT: the longest single wait for an agent on the session model (impl, review). A workflow
+// agent's prompt cache lives about 5 minutes, so waking from a longer wait re-writes its whole context
+// (cache write, about 12x a cache read). Measured on w1122: turns after a gap of 300 s or more were 4%
+// of turns but 19% of input spend (#262). Haiku roles (watchers, coord, pollers, merge) keep 570 s:
+// their context is small, so fewer turns is cheaper there.
+const SHORT_WAIT = 270
 // Every tool command carries the paths, so wave_mail.py, look.py and heavy agree with these args.
 const ENVP = `WAVES_GO=${GO} WAVES_ROOT=${WAVES_ROOT} WAVES_GH_REPO=${GH_REPO}${A.requiredChecks ? ' WAVES_REQUIRED_CHECKS=' + A.requiredChecks.join(',') : ''}`
 // Slim agent types (.claude/agents/wave-*.md): each role gets only the tools it uses, so no agent
@@ -113,15 +119,15 @@ const TESTRULE = `TEST SCOPE (HIGHEST PRIORITY — overrides every skill and ref
 - Report in the PR body (and in review "Checks"): the scoped tests you ran; an "E2E scenarios (local)" line naming each one with its result at the pushed head, or "none related", or "not run: <reason>"; and "unit suite: CI".
 `
 const HELPERS = (slug, role) => `
-Cheap helper agents: you cannot spawn subagents, so a broker workflow runs them for you on cheaper models. One Bash call (timeout 600000):
-  ${MB} ask --run ${RUN} --from ${slug}/${role} --type <type> --worktree <your worktree or ''> --question - <<'EOF_ASK'
+Cheap helper agents: you cannot spawn subagents, so a broker workflow runs them for you on cheaper models. One Bash call (timeout 300000):
+  ${MB} ask --run ${RUN} --from ${slug}/${role} --type <type> --worktree <your worktree or ''> --wait ${SHORT_WAIT} --question - <<'EOF_ASK'
   <self-contained question: what you need, the leads you already have (paths, symbols), the answer shape you want>
   EOF_ASK
 Types:
 - go-scout: locate Go code (read-only) in a given worktree or in the server checkout ${SERVER}: one symbol, opcode, constant, caller list or narrow behavior.
 - researcher: one batched multi-file investigation, read-only, in this repo and/or the server checkout (how the server encodes a packet and in what order it sends it, which client packets a handler rejects and how, flood and rate limits, lifecycle of a session). At most ${RESEARCHER_LIMIT} per lane: put the whole question in one request.
 - runner: run the commands you list, in the given worktree, through heavy, and return a compressed result (pass/fail, failing tests, first error lines with file:line). Use it for long test/lint runs whose raw output you do not need.
-The call prints {"answer": ...}, or {"pending": true, "id": ...} (keep waiting with \`${MB} answer-wait --run ${RUN} --id <id> --wait 570\`, or work on and check later with --wait 0), or {"error": ...} (broker down: do it inline), or {"stop": true} (the run is stopping: wrap up as your stop rule says). Add --nowait to fire a request and keep working. Answer inline instead when rg, gopls or a targeted read settles it in a few calls. Verify a helper's evidence paths before relying on them.
+The call prints {"answer": ...}, or {"pending": true, "id": ...} (keep waiting with \`${MB} answer-wait --run ${RUN} --id <id> --wait ${SHORT_WAIT}\`, or work on and check later with --wait 0), or {"error": ...} (broker down: do it inline), or {"stop": true} (the run is stopping: wrap up as your stop rule says). Add --nowait to fire a request and keep working. Answer inline instead when rg, gopls or a targeted read settles it in a few calls. Verify a helper's evidence paths before relying on them.
 `
 const ENV = `
 Environment rules (all agents):
@@ -151,7 +157,8 @@ Environment rules (all agents):
   cd <worktree> && golangci-lint fmt --diff && ${HEAVY} golangci-lint run <touched package dirs>
   A hang is almost always a real deadlock in the code under test: read the goroutine dump.
 - E2E stack: one shared stack per machine (docs/agents/test-strategy.md); if it is down, start it as that guide says; never bring up a second one.
-- Waiting: never use sleep loops; wait only through the ${MB} commands named in your instructions, each in one Bash call with timeout 600000.
+- Waiting: never use sleep loops; wait only through the ${MB} commands named in your instructions, each in one Bash call with timeout 300000, and never with a --wait above ${SHORT_WAIT}: your prompt cache lives about 5 minutes, and waking after a longer wait re-writes your whole context at about 12x the price of reading it (#262). Calling again every ${SHORT_WAIT} s is the cheap way to wait.
+- Long commands: anything you expect to take longer than about 4 minutes (a live e2e scenario, a long run behind the heavy lock) runs in the background (Bash run_in_background) with its output in a log file; wait on the log in calls of at most ${SHORT_WAIT} s, for example \`timeout ${SHORT_WAIT} tail -n +1 -f <log> | grep -m1 -E '^(ok|FAIL)\\s|^\\s*--- (FAIL|PASS|SKIP)'\`, and call again until the run ends. Never wait on one call for longer than ${SHORT_WAIT} s.
 - Follow-up issues in ${GH_REPO} go to the milestone (M0-M5) that owns the work; dedupe with search_issues first and amend a matching issue instead of duplicating.
 - Server gaps (docs/plan.md "Gap handling"): when the bot hits server behavior that is not ported yet, the bot logs the gap and degrades; file or amend the issue in ${SERVER_REPO} (search it first) and link it from the PR. Never special-case the server for bots, and never edit the server from a lane.
 - Where an issue offers several options, choose the one matching docs/plan.md and its owner decisions, else the conservative one, stated in a "Decisions" section of the PR body.
@@ -249,11 +256,11 @@ ${(L.deps || []).length ? `- This lane builds on lane(s) ${L.deps.join(', ')}, a
 - Keep ${D}/worklog.md current: decisions and why, server evidence paths, what each round changed, open questions. A replacement agent resumes from it if you stop.
 - STOP: once the run is stopping, every ${MB} call prints "stop": true, ${LOOK} prints "### STOP", and heavy prints "### STOP" and refuses to run. When you see any of them: update the worklog (where you are, what is left), push nothing, and return status stopped. Never spend a call of its own checking for it.
 
-MAILBOX (each command in its own Bash call, timeout 600000):
+MAILBOX (each command in its own Bash call, timeout 300000):
 - To the review agent: ${MB} send --run ${RUN} --lane ${L.slug} --box review --kind <kind> --data '<json object>' [--set key=value ...]
   * ready {"reason":"initial|review-fix|ci-fix|conflict","pr":<n>,"head":"<pushed sha>","semantic":<bool>} after every push that should move on; add --set stage=review --set pr=<n> --set head=<sha>.
   * no_change {"summary":"..."} with --set status=no_change, or blocked {"reason":"..."} with --set status=blocked (after commenting the blocker on the issue): only before a PR exists; then return at once.
-- Wait for the review agent: ${MB} recv --run ${RUN} --lane ${L.slug} --box impl --wait 570 ; run it again while it prints "timeout": true. Before working on a review, ci or conflict message, run git -C ${WT}/wf-${L.slug} pull --no-rebase origin wf/${L.slug} : the merge agent may have pushed a branch-update merge commit, and your push must stay a fast-forward (not for final: a merged branch is already deleted). Messages:
+- Wait for the review agent: ${MB} recv --run ${RUN} --lane ${L.slug} --box impl --wait ${SHORT_WAIT} ; run it again while it prints "timeout": true. Before working on a review, ci or conflict message, run git -C ${WT}/wf-${L.slug} pull --no-rebase origin wf/${L.slug} : the merge agent may have pushed a branch-update merge commit, and your push must stay a fast-forward (not for final: a merged branch is already deleted). Messages:
   * review {"round":N,"file":"..."}: read the file (and the PR's unresolved threads), then follow ${skillRef('bot-pr-review-comments')}: verify each item against the code, docs/plan.md and the server reference, fix every confirmed in-scope finding with tests, reply on every thread with evidence (fixed-in SHA, or rebuttal with code/server evidence), resolve fixed threads, file follow-ups for valid out-of-scope items, push (never force-push), send ready reason review-fix. You already know the code: re-read only what the findings point at.
   * ci {"file":"...","head":"..."}: CI failed for a real reason; read the file, fix, scoped-verify, push, send ready reason ci-fix.
   * conflict {"notes":"..."}: the branch cannot be updated automatically. git fetch origin; merge origin/main into your branch (never rebase, never force-push); resolve; fmt, build, vet and scoped tests for what the resolution touched; push; send ready reason conflict with "semantic": true when the resolution changed the PR's logic (any change to what the bot sends, when, or how it decodes is semantic), else false.
@@ -307,12 +314,12 @@ ${L.note || ''}
 Review worktree: ${RW}, detached. At the start of every round run ${MB} worktree --run ${RUN} --lane ${L.slug} --review in a Bash call of its own (creates it the first time, then moves it to the current origin/wf/${L.slug}, and prints the head). Remove it when you return: the same command with --remove.
 Cost rules: Read the review skill's SKILL.md ONCE (round 1) with the Read tool and keep its checklist in your notes; never re-read or \`cat\` it again, and never chain it to another command. Review from the diff: \`git -C ${RW} diff --stat <base>..<head>\`, then the hunks of the files you review, then surrounding code in ranges of at most 80 lines; server code through ${LOOK} go:${SERVER}/<pkg>:<Name>. Do not print whole files.
 
-MAILBOX (each command in its own Bash call, timeout 600000):
-- Wait for the implementation agent: ${MB} recv --run ${RUN} --lane ${L.slug} --box review --wait 570 ; run it again while it prints "timeout": true. You get ready {"reason","pr","head","semantic"}, or rarely no_change/blocked (then return that status).
+MAILBOX (each command in its own Bash call, timeout 300000):
+- Wait for the implementation agent: ${MB} recv --run ${RUN} --lane ${L.slug} --box review --wait ${SHORT_WAIT} ; run it again while it prints "timeout": true. You get ready {"reason","pr","head","semantic"}, or rarely no_change/blocked (then return that status).
 - To the implementation agent: ${MB} send --run ${RUN} --lane ${L.slug} --box impl --kind <review|ci|conflict|final> --data '<json object>' [--set key=value ...]
 - Merge requests go to the merge agent (cheap model) through the merger broker:
-  ${MB} ask --run ${RUN} --from ${L.slug}/review --type merge --question '{"pr":<n>,"head":"<sha>"}' --wait 570
-  The merge takes a while (CI): while it prints "pending": true, run ${MB} answer-wait --run ${RUN} --id <id> --wait 570 again, always with the same id (a pending request is still being served; never ask again while one is pending). The answer is a JSON object {"status":"merged|conflict|ci_failed|head_moved|merge_blocked|retry","merge_sha","file","head","notes"}. "stop": true: return status stopped. An "error" (the merge broker is not running): ${MB} pause --secs 300, then ask again; after 6 such errors, send final {"reason":"failed"} --set status=failed and return status failed.
+  ${MB} ask --run ${RUN} --from ${L.slug}/review --type merge --question '{"pr":<n>,"head":"<sha>"}' --wait ${SHORT_WAIT}
+  The merge takes a while (CI): while it prints "pending": true, run ${MB} answer-wait --run ${RUN} --id <id> --wait ${SHORT_WAIT} again, always with the same id (a pending request is still being served; never ask again while one is pending). The answer is a JSON object {"status":"merged|conflict|ci_failed|head_moved|merge_blocked|retry","merge_sha","file","head","notes"}. "stop": true: return status stopped. An "error" (the merge broker is not running): ${MB} pause --secs 300, then ask again; after 6 such errors, send final {"reason":"failed"} --set status=failed and return status failed.
 
 LOOP:
 1. Round 1 (the first ready): load ${skillRef('bot-pr-review')} and follow it end to end: review against the server reference, docs/plan.md (the PR row, owner decisions, architecture rules) and the acceptance criteria of every issue the PR closes or is part of; run the PR's new/changed tests in the review worktree; submit one GitHub review with inline comments; decide the Bottom line. Only [blocker]/[must-fix]/[should-fix]/non-optional [nit] items count as action required.
