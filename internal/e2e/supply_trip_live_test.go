@@ -114,8 +114,10 @@ func TestLiveSupplyTrip(t *testing.T) {
 
 	// Home is the recall's landing after a Scroll of Escape, a walk to the
 	// village when no safe moment came within Supply.SafeWait, or a death
-	// on the way and the respawn in the village (Revive arms the
-	// preparation gate as an arrival does, docs/items.md section 7).
+	// on the way, or at the spot before the trip (a starter spot's packs
+	// kill a level 16 farmer at times), and the respawn in the village:
+	// Revive arms the preparation gate as an arrival does (docs/items.md
+	// section 7), and the restock below is what the scenario checks.
 	var read, landed, tripAt time.Time
 	var how string
 	var last string
@@ -152,10 +154,13 @@ func TestLiveSupplyTrip(t *testing.T) {
 			landed, how = time.Now(), fmt.Sprintf("walked home, no safe moment for its scroll (#%d)", issueNeverSafe)
 			return ""
 		}
-		if !tripAt.IsZero() && dist(st.Position, townTI) < walkedHome {
+		if dist(st.Position, townTI) < walkedHome {
 			for _, s := range f.watch.Seen(0) {
-				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && s.At.After(tripAt) {
+				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && s.At.After(start) {
 					landed, how = s.At, "died on the trip and respawned in the village"
+					if tripAt.IsZero() || s.At.Before(tripAt) {
+						how = "died at its spot before the trip and respawned in the village"
+					}
 				}
 			}
 			if !landed.IsZero() {
