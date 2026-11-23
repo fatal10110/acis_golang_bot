@@ -12,7 +12,8 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
 
-// TestOwnerSwimSample re-measures the #161 route sample with swimming
+// TestOwnerSwimSample counts the spot centres on a wet cell, which the spot
+// registry drops (#275), and re-measures the #161 route sample with swimming
 // (docs/navigation.md, "Swimming"): every third farming spot, routed with
 // the cell planner from the nearest STANDARD teleport destination within
 // 8000 units. For each route that passes water when water is ignored it
@@ -94,6 +95,14 @@ func TestOwnerSwimSample(t *testing.T) {
 		return err.Error()
 	}
 	spots := dp.Spots()
+	centres := 0
+	for _, s := range spots {
+		if avoid.WetAt(location.Location{X: int(s.Center.X), Y: int(s.Center.Y), Z: int(s.Z)}) {
+			centres++
+		}
+	}
+	// The spot registry drops these up front (botclient.Nav.DrySpots, #275).
+	t.Logf("spot centres on a wet cell: %d of %d", centres, len(spots))
 	planned, wet := 0, 0
 	avoided, swum := map[string]int{}, map[string]int{}
 	for i := 0; i < len(spots); i += 3 {

@@ -65,6 +65,14 @@ func (p *Planner) Locate(at location.Location) (Cell, bool) {
 	return Cell{X: gx, Y: gy, Z: p.Engine.HeightNearest(gx, gy, at.Z)}, true
 }
 
+// WetAt reports whether the world point snaps to a wet cell: the cell and
+// layer Locate gives it has its floor in one of the planner's water zones, as
+// a walker standing there would be. A point Locate rejects is not wet.
+func (p *Planner) WetAt(at location.Location) bool {
+	c, ok := p.Locate(at)
+	return ok && p.Water.wet(c.X, c.Y, c.Z)
+}
+
 // hasGeo reports whether the geodata cell belongs to a loaded non-null block.
 // The null block answers open ground at height 0 to every query, so without
 // this check a route would wander into unlisted regions.
