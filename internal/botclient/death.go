@@ -23,6 +23,11 @@ const (
 // userCommandEscape): a five-minute recall cast to the nearest town.
 const userCommandEscape int32 = 52
 
+// msgNoUnstuckPetition is the server's refusal of /unstuck where the bot
+// cannot use it (SystemMessageNoUnstuckPleaseSendPetition): asking again
+// changes nothing.
+const msgNoUnstuckPetition int32 = 1043
+
 // Recovery waits.
 const (
 	// escapeRetry is how long after an /unstuck whose recall cast is not
