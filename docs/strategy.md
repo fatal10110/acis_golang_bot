@@ -169,10 +169,13 @@ from the stat and kit tables above. `TestBehaviorRowsShipped` (S4) checks the ta
 shipped datapack.
 
 **Notation.** Skills are `id Name`. A weapon gate is in brackets, as the datapack's weapon kinds:
-`[DAGGER]`. Gates: `@24` the level the step starts (the skill's first `minLvl` in the tree), `open`
+`[DAGGER]`. Gates: `@24` the level the step starts (the skill's first `minLvl` in the line's merged tree), `(base)` a
+skill the profession already knows from its base class (learned there before 20, so known from the
+profession's first level; its own tree only raises the level), `open`
 the opener (first action on a fresh target), `T≥50` target HP at least 50 %, `S<60` own HP under
 60 %, `MP>30` own MP above 30 %, `≤400` target within 400 (`Step.Within`), `A≥2` at least two
-attackers, `C≥2` / `C<2` force charges (Design section 4, `Step`). Steps are in priority order;
+attackers, `C≥2` at least two force charges, `C<max` fewer than the skill's own `maxCharges` at
+the level the bot knows (Design section 4, `Step`). Steps are in priority order;
 "melee" means auto-attack between steps. Branch weapons: a base class or a profession whose
 branches wield different weapons lists them all; the weapon gates pick the steps for the weapon the
 branch wears (Design section 6), so one kit serves every branch. Sets name the pieces the server
@@ -235,22 +238,22 @@ lose 3, 87000 lose 2, 149000 lose 1).
 | DM | 1168 Curse: Poison @7 MP>60, from 600; before 7 Wind Strike. | Damage: 1168 Curse: Poison @7 open MP>60; 1184 Ice Bolt @7; 1177 Wind Strike @1. Support: as HM. | 1147 Vampiric Touch @14 S<70; 1216 Self Heal @1 S<40 | Support: Might, Shield | MP; plain sit |
 | OM | 1100 Chill Flame @7 from 600, a pull; before 7 walks in. | 1100 Chill Flame @7 open; 1090 Life Drain @7; melee. | 1090 Life Drain @7 S<70 | 1001 Soul Cry @1 (combat toggle, on while MP>30); 1010 Soul Shield @7; 1007 Chant of Battle @14 (party) | MP; plain sit |
 | KN | 28 Aggression @24 from 400, a pull; before 24 70 Drain Health from 600. | 28 Aggression @24 open; 92 Shield Stun [SHIELD] @20; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 70 Drain Health @20 S<60; 45 Divine Heal @28 S<40; 110 Ultimate Defense @20 S<20 | 82 Majesty @20 | HP; 226 Relax (base tree) |
-| WA | Walks in. | 100 Stun Attack [BLUNT, BIGBLUNT] @20; 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @20; 245 Wild Sweep [POLE] @20 A≥2; melee. | 121 Battle Roar @28 S<30 | 78 War Cry @20 at a fight's start; 256 Accuracy @24 (toggle, on); 312 Vicious Stance @20 (toggle, on in combat while MP>30) | HP; 226 Relax (base tree) |
-| RO | Bow: 56 Power Shot from 700, a pull (101 Stunning Shot from 900 @36). Dagger: walks in. | Dagger: 96 Bleed [DAGGER] @24 T≥50; 16 Mortal Blow [DAGGER] @20. Bow: 101 Stunning Shot [BOW] @36; 56 Power Shot [BOW] @20. Melee between. | 111 Ultimate Evasion @28 S<30 | 99 Rapid Shot @32 (bow, in combat); 256 Accuracy @24; 312 Vicious Stance @20 (in combat, MP>30); 4 Dash @20 only to flee | HP; 226 Relax (base tree) |
-| EK | 28 Aggression @24 from 400, a pull; before 24 walks in. | 28 Aggression @24 open; 102 Entangle @36 open; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 58 Elemental Heal @20 S<50; 110 Ultimate Defense @20 S<20 | 91 Defense Aura @20, 77 Attack Aura @28 | HP; plain sit |
-| ES | Bow: 56 Power Shot from 700 (101 Stunning Shot from 900 @36). Dagger: walks in. | 102 Entangle @36 open; dagger: 96 Bleed [DAGGER] @24 T≥50, 16 Mortal Blow [DAGGER] @20; bow: 101 Stunning Shot [BOW] @36, 56 Power Shot [BOW] @20; melee. | 58 Elemental Heal @20 S<50; 111 Ultimate Evasion @28 S<30 | Auras 91 @20, 77 @28; 99 Rapid Shot @32 (bow); 256 Accuracy @24; 312 Vicious Stance @20 (in combat, MP>30); 230 Sprint @32 only to flee | HP; plain sit |
-| PK | 70 Drain Health @20 from 600, a pull; 28 Aggression @24 for the Support role. | 115 Power Break @32 open; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD] @24; 105 Freezing Strike @36; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 70 Drain Health @20 S<60; 110 Ultimate Defense @20 S<20 | 91 Defense Aura @20, 77 Attack Aura @28 | HP; plain sit |
-| AS | Dagger: 70 Drain Health @20 from 600, a pull. Bow: 56 Power Shot from 700 (101 Stunning Shot from 900 @36). | Dagger: 96 Bleed [DAGGER] @24 T≥50; 16 Mortal Blow [DAGGER] @20; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD] @24. Bow: 101 Stunning Shot [BOW] @36; 56 Power Shot [BOW] @20. Melee between. | 70 Drain Health @20 S<60; 111 Ultimate Evasion @28 S<30 | Auras 91 @20, 77 @28; 99 Rapid Shot @32 (bow); 256 Accuracy @24; 312 Vicious Stance @20 (in combat, MP>30) | HP; plain sit |
-| OR | Walks in. | 100 Stun Attack [BLUNT, BIGBLUNT] @20; 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @20; melee. | 121 Battle Roar @28 S<30 | 94 Rage @24 in combat; 176 Frenzy @32 S<30; 139 Guts @36 S<30; 256 Accuracy @24; 312 Vicious Stance @20 (in combat, MP>30) | HP; 226 Relax (base tree) |
-| MO | 54 Force Blaster [DUALFIST] @24 C≥1 from 600, a pull; else walks in. | 50 Focused Force [DUALFIST] @24 C<2 out of combat; 95 Cripple [FIST, DUALFIST] @20 open; 284 Hurricane Assault [DUALFIST] @36 C≥1; 54 Force Blaster [DUALFIST] @24 C≥1; 120 Stunning Fist [DUALFIST] @20; 29 Iron Punch [DUALFIST] @20; melee. | none | 83 Wolf Spirit Totem [DUALFIST] @20, then 76 Bear Spirit Totem [DUALFIST] @28 | HP; 226 Relax (base tree) |
+| WA | Walks in. | 100 Stun Attack [BLUNT, BIGBLUNT] @20; 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @20; 245 Wild Sweep [POLE] @20 A≥2; melee. | 121 Battle Roar @28 S<30 | 78 War Cry @20 at a fight's start; 256 Accuracy @24 and 312 Vicious Stance @20 (combat toggles, on while MP>30) | HP; 226 Relax (base tree) |
+| RO | Bow: 56 Power Shot from 700, a pull (101 Stunning Shot from 900 @36). Dagger: walks in. | Dagger: 96 Bleed [DAGGER] @24 T≥50; 16 Mortal Blow [DAGGER] @20. Bow: 101 Stunning Shot [BOW] @36; 56 Power Shot [BOW] @20. Melee between. | 111 Ultimate Evasion @28 S<30 | 99 Rapid Shot @32 (bow, in combat); 256 Accuracy @24 (in combat, MP>30); 312 Vicious Stance @20 (in combat, MP>30); 4 Dash @20 only to flee | HP; 226 Relax (base tree) |
+| EK | 28 Aggression @24 from 400, a pull; before 24 walks in. | 28 Aggression @24 open; 102 Entangle @36 open; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 58 Elemental Heal @20 S<50; 110 Ultimate Defense @20 S<20 | 91 Defense Aura (base), 77 Attack Aura (base; level 2 @28) | HP; plain sit |
+| ES | Bow: 56 Power Shot from 700 (101 Stunning Shot from 900 @36). Dagger: walks in. | 102 Entangle @36 open; dagger: 96 Bleed [DAGGER] @24 T≥50, 16 Mortal Blow [DAGGER] @20; bow: 101 Stunning Shot [BOW] @36, 56 Power Shot [BOW] @20; melee. | 58 Elemental Heal @20 S<50; 111 Ultimate Evasion @28 S<30 | Auras 91, 77 (base); 99 Rapid Shot @32 (bow); 256 Accuracy @24 (in combat, MP>30); 312 Vicious Stance @20 (in combat, MP>30); 230 Sprint @32 only to flee | HP; plain sit |
+| PK | 70 Drain Health @20 from 600, a pull; 28 Aggression @24 for the Support role. | 115 Power Break @32 open; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD] @24; 105 Freezing Strike @36; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 70 Drain Health @20 S<60; 110 Ultimate Defense @20 S<20 | 91 Defense Aura (base), 77 Attack Aura (base; level 2 @28) | HP; plain sit |
+| AS | Dagger: 70 Drain Health @20 from 600, a pull. Bow: 56 Power Shot from 700 (101 Stunning Shot from 900 @36). | Dagger: 96 Bleed [DAGGER] @24 T≥50; 16 Mortal Blow [DAGGER] @20; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD] @24. Bow: 101 Stunning Shot [BOW] @36; 56 Power Shot [BOW] @20. Melee between. | 70 Drain Health @20 S<60; 111 Ultimate Evasion @28 S<30 | Auras 91, 77 (base); 99 Rapid Shot @32 (bow); 256 Accuracy @24 (in combat, MP>30); 312 Vicious Stance @20 (in combat, MP>30) | HP; plain sit |
+| OR | Walks in. | 100 Stun Attack [BLUNT, BIGBLUNT] @20; 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @20; melee. | 121 Battle Roar @28 S<30 | 94 Rage @24 in combat; 176 Frenzy @32 S<30; 139 Guts @36 S<30; 256 Accuracy @24 (in combat, MP>30); 312 Vicious Stance @20 (in combat, MP>30) | HP; 226 Relax (base tree) |
+| MO | 54 Force Blaster [DUALFIST] @24 C≥1 from 600, a pull; else walks in. | 50 Focused Force [DUALFIST] @24 C<max out of combat (1 charge at 24-31, 2 from 32); 95 Cripple [FIST, DUALFIST] @20 open; 284 Hurricane Assault [DUALFIST] @36 C≥2; 54 Force Blaster [DUALFIST] @24 C≥1; 120 Stunning Fist [DUALFIST] @20; 29 Iron Punch [DUALFIST] @20; melee. | none | 83 Wolf Spirit Totem [DUALFIST] @20, then 76 Bear Spirit Totem [DUALFIST] @28 | HP; 226 Relax (base tree) |
 | SC | 254 Spoil @20 (levels 2-4), open, at melee range, until spoiled. | 254 Spoil open; 100 Stun Attack [BLUNT, BIGBLUNT] @20; melee. After the kill: 42 Sweeper (section 8). | none | none | HP; plain sit |
-| CL | Support: none, it assists. Alone: 1177 Wind Strike (level 5) from 600. | Heals: 1015 Battle Heal @20 under 35 %, 1011 Heal @20 under 60 %, 1027 Group Heal @20 with two members under 60 %. Then 1177 Wind Strike above MPReserve; melee only alone and out of MP. | Its heals on itself (rule 3 order: leader, self, others) | Party: 1068 Might, 1040 Shield @25, 1204 Wind Walk @20, 1085 Acumen @20 (mystic members), 1078 Concentration @20 | MP; plain sit |
+| CL | Support: none, it assists. Alone: 1177 Wind Strike (level 5) from 600. | Heals: 1015 Battle Heal @20 under 35 %, 1011 Heal @20 under 60 %, 1027 Group Heal @20 with two members under 60 %. Then 1177 Wind Strike above MPReserve; melee only alone and out of MP. | Its heals on itself (rule 3 order: leader, self, others) | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk @20, 1085 Acumen @20 (mystic members), 1078 Concentration @20 | MP; plain sit |
 | HW | 1220 Blaze @20 from 750, a pull. | 1220 Blaze @20; 1184 Ice Bolt @20 (levels 5-6); 1274 Energy Bolt @20 ≤400; 1172 Aura Burn @20 ≤150; melee only out of MP. | 1147 Vampiric Touch @20 S<60; 1157 Body To Mind @25 when MP under 30 % and S≥70 | 1078 Concentration @20 | MP; plain sit |
-| EO | Support: none, it assists. Alone: 1177 Wind Strike from 600. | Heals as CL. Then 1201 Dryad Root @25 on a second attacker A≥2; 1177 Wind Strike above MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield @25, 1204 Wind Walk @20, 1087 Agility @25, 1043 Holy Weapon @25 | MP; plain sit |
+| EO | Support: none, it assists. Alone: 1177 Wind Strike from 600. | Heals as CL. Then 1201 Dryad Root @25 on a second attacker A≥2; 1177 Wind Strike above MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk @20, 1087 Agility @25, 1043 Holy Weapon @25 | MP; plain sit |
 | EW | 1206 Wind Shackle @20 MP>50 from 600, else 1175 Aqua Swirl from 750. | 1206 Wind Shackle open MP>50; 1264 Solar Spark @25; 1175 Aqua Swirl @20; 1184 Ice Bolt @20; 1274 Energy Bolt @20 ≤400; 1172 Aura Burn @20 ≤150. | 1216 Self Heal (base, level 1) S<40 (no drain) | 1078 Concentration @20 | MP; plain sit |
-| SO | Support: none, it assists; 1206 Wind Shackle @20 on the leader's target once. Alone: Wind Strike. | Heals as CL; 1206 Wind Shackle on the assist target open; 1177 Wind Strike above MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield @25, 1204 Wind Walk @20, 1059 Greater Empower @25, 1077 Focus @25, 1268 Vampiric Rage @30 | MP; plain sit |
+| SO | Support: none, it assists; 1206 Wind Shackle @20 on the leader's target once. Alone: Wind Strike. | Heals as CL; 1206 Wind Shackle on the assist target open; 1177 Wind Strike above MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk @20, 1059 Greater Empower @25, 1077 Focus @25, 1268 Vampiric Rage @30 | MP; plain sit |
 | DW | 1168 Curse: Poison @20 MP>60 from 600, else 1178 Twister from 750. | 1168 Curse: Poison open MP>60; 1266 Shadow Spark @25; 1178 Twister @20; 1184 Ice Bolt @20; 1172 Aura Burn @20 ≤150. | 1147 Vampiric Touch @20 S<70; 1157 Body To Mind @25 when MP under 30 % and S≥70 | 1078 Concentration @20 | MP; plain sit |
-| OS | 1107 Frost Flame @20 from 750, a pull. | 1107 Frost Flame @20 open; 1090 Life Drain @20 (levels 3-6); 100 Stun Attack [BLUNT, BIGBLUNT] @20 ≤40, else melee. | 1090 Life Drain S<70; 1229 Chant of Life @20 (party) with a member under 50 % | 1001 Soul Cry (levels 3-4 @25, combat toggle, on while MP>30); party chants 1007 Chant of Battle @25, 1009 Chant of Shielding @20, 1006 Chant of Fire @20, 1002 Flame Chant @30; 1010 Soul Shield @25 | MP; plain sit |
+| OS | 1107 Frost Flame @20 from 750, a pull. | 1107 Frost Flame @20 open; 1090 Life Drain @20 (levels 3-6); 100 Stun Attack [BLUNT, BIGBLUNT] @20 ≤40, else melee. | 1090 Life Drain S<70; 1229 Chant of Life @20 (party) with a member under 50 % | 1001 Soul Cry (base; combat toggle, on while MP>30); party chants 1007 Chant of Battle (base), 1009 Chant of Shielding @20, 1006 Chant of Fire @20, 1002 Flame Chant @30; 1010 Soul Shield (base) | MP; plain sit |
 
 ### Numbers and summary (columns 8, 10, 12)
 
@@ -281,13 +284,13 @@ own cost. Where a row has both roles, values are Support / Damage. Spot margin: 
 | PK | 25 | 50 / 25 | 95 / 80 | 25 | 80 | 50 | normal 2.0 | A dark knight that pulls and heals with Drain Health and hits hard with Sting behind a shield. |
 | AS | 20 | 50 / 25 | 95 / 80 | 30 | 85 | 60 | glass cannon 3.0 | The hardest-hitting dagger: Bleed, blows and drains; drops a fight it cannot win fast. |
 | OR | 0 | 30 / 15 | 85 / 70 | 10 | 50 | 25 | tank 1.5 | A berserker that swings a two-hander through packs, with Rage and Frenzy when the fight turns. |
-| MO | 10 | 35 / 20 | 85 / 80 | 15 | 60 | 30 | normal 2.0 | A fist fighter that builds force, blasts from range, then lands a flurry of fist skills. |
+| MO | 10 | 30 / 20 | 85 / 80 | 15 | 50 | 25 | normal 2.0 | A fist fighter that builds force, blasts from range, then lands a flurry of fist skills. |
 | SC | 10 | 35 / 20 | 90 / 80 | 15 | 60 | 30 | tank 1.5 | An armored spoiler: spoil, stun, kill, sweep, and haul twice the loot. |
 | CL | 50 | 50 / 30 | 90 / 90 | 30 | 85 | 60 | glass cannon 3.0 | A party healer: the leader first, Might, Shield and Wind Walk kept up, nukes only with MP to spare. |
 | HW | 10 | 50 / 20 | 90 / 90 | 30 | 85 | 60 | glass cannon 3.0 | A fire nuker: Blaze from the farthest range, Vampiric Touch and Body To Mind to keep going. |
 | EO | 50 | 50 / 30 | 90 / 90 | 30 | 85 | 60 | glass cannon 3.0 | A fast-casting healer: the elven cast speed turns into heals in time. |
 | EW | 10 | 50 / 20 | 90 / 90 | 30 | 85 | 60 | glass cannon 3.0 | A water caster that slows, then out-casts everything; with no drain it sits more. |
-| SO | 50 | 55 / 30 | 95 / 90 | 30 | 85 | 60 | glass cannon 3.0 | A dark healer that heals, buffs and shackles what the party fights. |
+| SO | 50 | 55 / 30 | 95 / 90 | 35 | 90 | 65 | glass cannon 3.0 | A dark healer that heals, buffs and shackles what the party fights. |
 | DW | 10 | 55 / 20 | 95 / 90 | 35 | 90 | 65 | glass cannon 3.0 | The highest-burst nuker: Shadow Spark and Twister kill before contact; drains when touched. |
 | OS | 50 / 30 | 45 / 25 | 90 / 90 | 25 | 80 | 50 | normal 2.0 | A battle shaman in heavy armor: chants the party, burns from range, finishes with a mace. |
 
@@ -298,11 +301,11 @@ For HM, EM, DM and OM the Sit column is HP / MP (Support) / MP (Damage).
 Classes with the same weapon play differently because of their race alone:
 
 - **Outnumbered with a sword or blunt.** An orc (OF, OR: `OutmatchedHP` 25, `CrowdedHP` 50, HP
-  ×1.77) fights on through a pack that has a dark elf (DF, PK: 60 and 85, HP ×1.14) drinking early
+  ×1.77) fights on through a pack that has a dark elf (DF: 60 and 85, HP ×1.14) drinking early
   and leaving, and a human (HF, WA, KN: 30, 60, ×1.58) in between. The rows share their weapon
   gates and steps; only the thresholds and the spot margin differ.
-- **Self-healing.** Only elven fighters (EF, EK, ES) carry a self heal, Elemental Heal from 15:
-  with the same dagger, an elven scout heals itself where a human rogue (RO) drinks a potion and a
+- **Self-healing.** Only elven fighters (EF, EK, ES) heal themselves from 15, with Elemental
+  Heal (the human Knight gets Divine Heal only at 28): with the same dagger, an elven scout heals itself where a human rogue (RO) drinks a potion and a
   dark elven assassin (AS) drains with Drain Health.
 - **Drain from range.** Only dark elven fighters (DF, PK, AS) and the human Knight have Drain
   Health: they open with a pull from 600 that also heals, where the other melee rows walk in.
@@ -314,9 +317,9 @@ Classes with the same weapon play differently because of their race alone:
 - **Mystic armor.** An orc mystic (OM, OS) stands in light or heavy armor with a mace and Stun
   Attack, where human, elven and dark elven mystics stay in robes at range, since out of a robe
   Spellcraft halves their cast speed.
-- **Mystic openers.** At 14 the elven mystic opens with Wind Shackle and the dark mystic with
-  Curse: Poison, the human mystic with Wind Strike: what each race's tree offers first. The dark
-  mystic's lowest HP widens its flee bounds (Critical 35, Outmatched 65).
+- **Mystic openers.** At 14 the elven mystic opens with Wind Shackle, which the human mystic tree
+  does not have; the human mystic, without a slow, opens with a nuke. The dark mystic's lowest HP
+  widens its flee bounds (Critical 35, Outmatched 65) over the other mystics' 30 and 60.
 - **Fleeing.** With effective runs of 144 and 139, elven and dark elven fighters usually outrun
   their attackers and flee; an orc (124) or dwarf (125) seldom can, and `FleeOutrun` keeps them
   fighting.
@@ -345,7 +348,7 @@ C-grade sets would be; their skills are not specified here.
 | Destroyer (46) | OR | BIGSWORD or BIGBLUNT | Heavy; Full Plate |
 | Tyrant (48) | MO | DUALFIST | Light; Plated Leather |
 | Bounty Hunter (55) | SC | BLUNT with a shield | Heavy; Composite (+5795 weight), Full Plate |
-| Bishop (16) | CL | BLUNT/MAGIC or SWORD/MAGIC | Robe; Divine (+171 MP, +1 WIT), Karmian (×1.15 cast) |
+| Bishop (16) | CL | BLUNT/MAGIC or SWORD/MAGIC | Robe; Divine (+171 MP, +1 WIT −1 INT), Karmian (×1.15 cast) |
 | Prophet (17) | CL | BLUNT/MAGIC or SWORD/MAGIC | Robe; Karmian, Divine |
 | Sorcerer (12) | HW | BLUNT/MAGIC or SWORD/MAGIC | Robe; Demon (+4 INT, −270 HP) once its HP covers the loss, else Karmian |
 | Elven Elder (30) | EO | BLUNT/MAGIC or SWORD/MAGIC | Robe; Divine, Karmian |
@@ -444,9 +447,11 @@ type Build struct {
   	// 0 for any distance. Attackers casts it only with at least that many attackers.
   	Within    int32
   	Attackers int
-  	// Charges casts it only with at least that many force charges (EtcStatusUpdate);
-  	// ChargeBelow only with fewer (a charging step).
-  	Charges, ChargeBelow int
+  	// Charges casts it only with at least that many force charges (EtcStatusUpdate),
+  	// the skill's own Charges condition. ChargeToMax casts a charging skill only below
+  	// its maxCharges at the level the bot knows (the server refuses a full charge).
+  	Charges     int
+  	ChargeToMax bool
   	Opener bool // only as the first action on a fresh target
   }
   ```
@@ -519,16 +524,18 @@ scouts and archers, orc CON to two-handed weapons. The branch is chosen as follo
   session of the bot picks the same one, and its base row's weapon follows the branch from level 1.
 - **A bot that already has a profession** keeps its line: its next profession is a child of its
   current class, from the role's table when the table names one there, else from the other role's,
-  drawn by the same hash among the children. Bots that took today's `supportBuilds` line (a
-  support-preset Warrior, Elven Knight to Sword Singer, Palus Knight to Bladedancer) carry on in it;
-  a class change is never undone.
+  drawn by the same hash among the children. A class change is never undone: a bot that took
+  today's `supportBuilds` line keeps its first profession, and at 40 its role's table picks the
+  child (a support-preset Elven Knight goes Temple Knight, not Sword Singer; a support-preset
+  Warrior, which the Support table does not name, goes Gladiator or Warlord by the hash).
 - **A role change** (`SetPreset`) changes only the choices still ahead.
 - **A pin**: the registry keeps an optional `Branch` (the first profession's class id) per bot,
   set from the panel (S9); a pinned branch wins over the hash while the bot is a base class.
 
 Announced change (S8): a base-class fighter of the `support` preset that would take a melee line
-today takes its race's tank line instead; a base-class mystic of the new default `farmer` preset
-takes its race's damage line. The second-profession kits at 40 take the first profession's row
+today takes its race's tank line instead, and a support-preset Elven Knight or Palus Knight takes
+Temple Knight or Shillien Knight at 40; a base-class mystic of a Damage-role preset (`merchant`,
+which today takes the healer line; `farmer` once S9 adds it) takes its race's damage line. The second-profession kits at 40 take the first profession's row
 until the backlog issue adds theirs.
 
 ### 7. Combat behavior per kit
@@ -542,8 +549,9 @@ until the backlog issue adds theirs.
 - **Self-buffs:** Attack Aura and Defense Aura as self buffs out of combat (rule 7).
 - **Range:** casters and archers fight from their cast or bow range (M7 stand points); melee kits
   walk in.
-- **Mystic damage roles** rest on MP, keep a low `MPReserve` (10 %), and melee only when out of
-  MP; support roles keep 50 % for heals.
+- **Mystic damage roles** rest on MP, keep a low `MPReserve` (10 %; 30 % for the orc mystic
+  lines, whose Soul Cry and chants need MP in a fight), and melee only when out of MP; support
+  roles keep 50 % for heals.
 
 ### 8. Dwarven spoil and sweep
 
@@ -561,12 +569,12 @@ hook) or sold.
 
 The world model keeps the active toggles from `AbnormalStatusUpdate` (duration −1). A toggle is
 turned on and off by casting it again, never while seated (the server refuses: SystemMessage 31),
-and most drain MP while on: Soul Cry 3 MP every 3 s at level 1, Vicious Stance by level, Relax 2
-MP every 2 s (`skills/1000-1099.xml` 1001, `skills/0200-0299.xml` 226). So:
+and every one in the rows drains MP while on: Soul Cry 3 MP every 3 s at level 1, Accuracy 4.8 MP
+every 5 s, Vicious Stance by level, Relax 2 MP every 2 s (`skills/1000-1099.xml` 1001,
+`skills/0200-0299.xml` 226, 256, 312). So:
 
-- **Combat toggles** (Soul Cry, Vicious Stance) go on when the bot engages and its MP is above the
+- **Combat toggles** (Soul Cry, Accuracy, Vicious Stance) go on when the bot engages and its MP is above the
   row's bound, and off when MP falls under it, when the fight ends, and always before the bot sits.
-- **Standing toggles** without a drain (Accuracy) stay on.
 - **Relax** replaces the plain sit for the rows that have it (human and orc fighter trees): out of
   combat, standing, below `SitHP` and with MP for it, the bot casts Relax, which sits it. It stands
   as today at `StandHP`, or the server ends Relax at full HP. A bot without the MP sits plainly.
@@ -579,6 +587,9 @@ Toggle tracking ships with the first toggles (S6); S7 adds Soul Cry.
   panel's first preset, so a bot made without a choice farms alone with a damage line (D21).
 - `support` keeps the Support role for bots meant to join players' parties.
 - `merchant` plays Damage.
+- Imported bots (`botregistry.ImportPreset`, today `support`) get `farmer`, so an imported swarm
+  farms alone as a fresh bot does. Bots already in the registry keep their stored preset; the
+  panel's preset change moves them.
 - `crafter` plays the Crafter role (M9).
 - The panel shows a bot's build (role, branch, kit) beside its class.
 
@@ -602,7 +613,7 @@ Proposed, awaiting the owner:
 
 | # | Question | Proposal |
 | --- | --- | --- |
-| D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default; `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: none (no fights). |
+| D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: none (no fights). |
 | D22 | How does a bot pick its profession branch? | Weighted by race fit (section 6), drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). |
 | D23 | Which professions are out of scope? | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone; the Overlord is not picked (a group class). |
 | D24 | May the rewrite change today's behavior? | Yes, per PR: S4 lands behavior-neutral, every later PR states the behavior it changes. |
@@ -637,14 +648,15 @@ Proposed, awaiting the owner:
     light pair from level 7 when it scores higher, a human mystic never does.
   - KN: Aggression opens from 400; Shield Stun only with a shield worn.
   - WA: with a two-handed blunt, Stun Attack then Power Smash; Wild Sweep only with a pole and two
-    attackers; Vicious Stance off once MP falls under 30 %.
+    attackers; Accuracy and Vicious Stance off once MP falls under 30 % and before it sits.
   - RO: dagger branch casts Bleed above 50 % target HP, then Mortal Blow; bow branch never does.
   - EK: Elemental Heal under 50 % HP; Aggression opens.
   - ES: bow branch opens with Power Shot from 700 and casts Rapid Shot in combat (level 32+).
   - PK: Sting with a sword; never with a blunt (gate).
   - AS: with a dagger, Drain Health pulls from 600, then Bleed and Mortal Blow.
   - OR: Frenzy under 30 % HP (level 32+); outnumbered it fights on down to 25 %.
-  - MO: Focused Force charges out of combat below 2 charges; Force Blaster only with a charge.
+  - MO: Focused Force charges out of combat only below its known level's maximum (1 charge at
+    level 24-31); Force Blaster only with a charge, Hurricane Assault only with two.
   - SC: Spoil, Stun Attack with a blunt, then Sweeper.
   - CL, EO, SO: the leader under 35 % gets Battle Heal before anything else; Group Heal with two
     members under 60 %; SO shackles the assist target once.
@@ -652,7 +664,8 @@ Proposed, awaiting the owner:
     Energy Bolt only within 400 and Aura Burn only within 150.
   - OS: Frost Flame opens from 750; Stun Attack only within 40 with a blunt; Chant of Life with a
     member under 50 %.
-- **Brain (other):** a damage mystic and a support one differ only by `MPReserve`; an orc mystic picks
+- **Brain (other):** a damage mystic and a support one of the same base class follow their own
+  row parts (`MPReserve`, Sit MP, rotation, and the orc mystic's armor); an orc mystic picks
   light armor over a robe for the Support role and a human mystic never does; a robe top over light
   legs is never worn; a Demon set loses to Doom Robe for a low-HP dark mystic; a tank row fits the
   #294 spot that a glass-cannon row does not; a bot with a profession keeps its line under a new
@@ -669,11 +682,11 @@ Proposed, awaiting the owner:
 | S2 | Datapack: class templates and skill trees, skill combat fields and armor-kind conditions, NPC base combat stats, base stats and `corpseTime`, trainers, set skills (section 2). | — |
 | S3 | `internal/charmodel`: stat curves, masteries and penalties, sets, calibration, the NPC stat functions, time to kill and to die (section 3). | S1, S2 |
 | S4 | The build: race profiles, class kits, roles, thresholds, `Overrides`, `CompileBuild`; swap every table for it, behavior-neutral; `TestBehaviorRowsShipped` over the rows' data (section 4, "Behavior per class"). | S2 |
-| S5 | Gear, sets and dyes through the model; race armor kinds; chest and legs as a pair (section 5; column 2 and 11 of every row). | S3, S4 |
-| S6 | Fighter rows HF, EF, DF, OF, WF, KN, WA, RO, EK, ES, PK, AS, OR, MO, SC (columns 3-10 and 12; SC and WF without spoil, S10): learn tables, weapon-gated rotations with the `Step` gates, sustain, self-buffs, toggle tracking, Relax, force charges from `EtcStatusUpdate` (Monk), thresholds (sections 4, 7, 9). | S4 |
-| S7 | Mystic rows HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS (columns 3-10 and 12): learn tables, damage rotations and openers, heals and party buffs per row, sustain, per-role MP reserve and rest, Soul Cry (sections 4, 7, 9). | S4, S6 (toggle tracking) |
+| S5 | Gear, sets and dyes through the model; race armor kinds; chest and legs as a pair (section 5; columns 1, 2 and 11 of every row). | S3, S4 |
+| S6 | Fighter rows HF, EF, DF, OF, WF, KN, WA, RO, EK, ES, PK, AS, OR, MO, SC (columns 3-9 and 12; SC and WF without spoil, S10): learn tables, weapon-gated rotations with the `Step` gates, sustain, self-buffs, toggle tracking, Relax, force charges from `EtcStatusUpdate` (Monk), thresholds (sections 4, 7, 9). | S4 |
+| S7 | Mystic rows HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS (columns 3-9 and 12): learn tables, damage rotations and openers, heals and party buffs per row, sustain, per-role MP reserve and rest, Soul Cry (sections 4, 7, 9). | S4, S6 (toggle tracking) |
 | S8 | Professions by race and role: the branch choice (hash, kept line, pin), the class change at 20 and 40 moving a bot from its base row to its first-profession row, the announced change (section 6). | S4, S6, S7 |
-| S9 | Presets and roles: the `farmer` preset as the default, `merchant` as Damage, the registry `Branch` pin and its panel API, the panel's build view (section 10, D21, D22). | S8 |
+| S9 | Presets and roles: the `farmer` preset as the default (`-persona`, the panel, `ImportPreset`), `merchant` as Damage, the registry `Branch` pin and its panel API, the panel's build view (section 10, D21, D22). | S8 |
 | S10 | Dwarven spoil and sweep: rows WF and SC's Spoil opener and Sweeper (section 8). | S2, S6 |
 | S11 | Spot choice through the model, the spot margin of every row (column 10), absorbing #294 (section 11). | S3, S4 |
 | S12 | e2e live scenarios for S5-S11, at most 4 bots per scenario (the harness cap). | each |
