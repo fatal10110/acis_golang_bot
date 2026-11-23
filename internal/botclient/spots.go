@@ -117,7 +117,8 @@ type spotVisit struct {
 // ruleSpot is a rule 9 errand ahead of the persona's goal: with a spot
 // registry, the bot claims a fitting spot it can walk to (pickSpot), walks
 // there through the walker, moves on when it finds the spot crowded, walks
-// back when a fight left it beyond the leash, and picks a new spot once it
+// back when a fight left it beyond the leash (not while it walks around to
+// a farm target, farmWalking), and picks a new spot once it
 // outlevels its own or, sharing one past its cap, every spotRetry. At its
 // spot it leaves the turn to rule "farm". A bot holding none claims none
 // while the town preparation gate holds it (preparing).
@@ -144,7 +145,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	}
 	if v.arrived {
 		leash := int64(b.persona.Spots.Leash)
-		if horizontal2(s.Position(now), v.at) <= leash*leash || s.Moving(now) {
+		if horizontal2(s.Position(now), v.at) <= leash*leash || s.Moving(now) || b.farmWalking(now) {
 			return Action{}, false
 		}
 	}
@@ -169,6 +170,19 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	return Action{}, false
+}
+
+// farmWalking reports whether the bot is under way to the stand point it
+// fights its farm target from: the target lies within the leash, the walk
+// to it need not (around a wall, a rock, a slope). Walked back to the spot
+// from a segment's end beyond the leash, the bot set out again on the same
+// walk at the next decision, back and forth with no attack (#269). The walk
+// ends at the stand point, or unreachable, which blacklists the target
+// (engageWalk); the leash holds again from there.
+func (b *Brain) farmWalking(now time.Time) bool {
+	w, e := &b.walk, &b.engage
+	return e.id != 0 && (w.purpose == walkMelee || w.purpose == walkRanged) && w.status == walkWalking &&
+		horizontal2(w.dest, e.stand) <= walkSameDest*walkSameDest && e.id == b.farmTarget(now)
 }
 
 // navPoint is a point on walkable ground and its place in the hierarchy.
