@@ -1,8 +1,26 @@
 # Race and class strategy: each bot plays its race, class and role
 
 Status: draft for owner review. Proposed decisions D21-D24 are open (see "Owner decisions").
-Milestone M10 ("Race and class strategy"), epic and issues to be filed from the "Delivery"
-table.
+Milestone M10 ("Race and class strategy"), epic and issues filed from the "Delivery" table.
+
+Nine rounds of independent review, every finding checked against the datapack, the server or the
+bot code before it was fixed; the ninth found one wording contradiction (fixed) and two minor
+points (fixed).
+
+- **Round 1:** NPC stats are bases; migration of existing bots; Support role and default preset;
+  toggles drain MP and cannot be cast seated; spoil message semantics; Overlord has no summons.
+- **Round 2:** Hurricane Assault needs two charges; inherited skills' levels; Accuracy drains MP;
+  imported bots' preset; thresholds against the CON rule.
+- **Round 3:** gates the `Step` could not express; openers missing from rotations; sustain against
+  `ruleCritical`'s crowded potion; branch and pin ordering between S5, S8 and S9.
+- **Round 4:** the level and prefix notation as a test reads it; buff and heal gates; named rule
+  changes; roles before S8; S6 split into S6 and S6b; the shield gate.
+- **Round 5:** every rule-body change named; `town` keeps today's role; gated self buffs as steps.
+- **Round 6:** stack partners (Frenzy and Guts, the Monk's totems); group heals first; toggles
+  versus steps; heal tables for the base mystics.
+- **Round 7:** the stack rule for party buffs (`stackOrder`); a `Melee` policy on every caster.
+- **Round 8:** `RebuffBefore` renews only the skill's own effect; enemy sustain keeps the opener.
+- **Round 9:** a weaker effect of another skill is upgraded; per-role melee for the orc mystic.
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang). Datapack paths
@@ -186,8 +204,9 @@ prefix, a `[DAGGER]` or `[BOW]` gate (a branch gate, which must fit the skill's 
 (Support), put the step in that role's rotation only; no mark is every role. `Heals:` lists the row's `Heal`
 table, which `ruleHeal` runs before any rotation, not steps; a `Heal` entry with a member count
 is tried before the single heals with the same HP bound. "Melee ..." at the end of a rotation is
-the kit's `Melee` policy: always (fighters), only under `MPReserve` (casters), or for a
-support only alone and under `MPReserve`.
+the kit's `Melee` policy, compiled per role: always (fighters, and the armored orc mystics: OM
+Support, OS), only under `MPReserve` (other casters), or for a healer only alone and under
+`MPReserve`.
 
 Column 5: a sustain skill cast on the enemy (Drain Health, Vampiric Touch, Life Drain) is a step
 ranked first among the attacks while its `S<` gate passes; it does not use up the opener. A
@@ -269,7 +288,7 @@ lose 3, 87000 lose 2, 149000 lose 1).
 | HM | 1177 Wind Strike from 600 before 7, then 1184 Ice Bolt: a pull. | 1184 Ice Bolt @7; 1177 Wind Strike @1; melee only under MPReserve. Both roles nuke; the Support role's heals and buffs go first (Heals: 1015 Battle Heal @14 under 35 %, 1027 Group Heal @14 with two members under 60 %, 1011 Heal @7 under 60 %), and its 50 % MPReserve stops the nukes sooner. | 1216 Self Heal @1 S<40; 1147 Vampiric Touch @14 S<60 | Support: 1068 Might @7, 1040 Shield @7 on itself and the party | MP; plain sit |
 | EM | Damage: 1206 Wind Shackle @14 MP>50, from 600; otherwise the first ready nuke (1184 Ice Bolt from 7, else 1177 Wind Strike). | 1206 Wind Shackle @14 open MP>50 (Damage); 1184 Ice Bolt @7; 1177 Wind Strike @1; melee only under MPReserve. The Support role's heals (as HM) and buffs go first. | 1216 Self Heal @1 S<50 (no drain) | Support: 1068 Might @7, 1040 Shield @7 | MP; plain sit |
 | DM | Damage: 1168 Curse: Poison @7 MP>60, from 600; otherwise the first ready nuke (1184 Ice Bolt from 7, else 1177 Wind Strike). | 1168 Curse: Poison @7 open MP>60 (Damage); 1184 Ice Bolt @7; 1177 Wind Strike @1; melee only under MPReserve. The Support role as HM. | 1147 Vampiric Touch @14 S<70; 1216 Self Heal @1 S<40 | Support: 1068 Might @7, 1040 Shield @7 | MP; plain sit |
-| OM | 1100 Chill Flame @7 from 600, a pull; before 7 walks in. | 1100 Chill Flame @7 open; 1090 Life Drain @7; melee (always: the orc mystic stands in fights). | 1090 Life Drain @7 S<70 | 1001 Soul Cry @1 (combat toggle, on while MP>30); 1010 Soul Shield @7; 1007 Chant of Battle @14 (party) | MP; plain sit |
+| OM | 1100 Chill Flame @7 from 600, a pull; before 7 walks in. | 1100 Chill Flame @7 open; 1090 Life Drain @7; melee always (Support, in light or heavy armor), only under MPReserve (Damage, in a robe). | 1090 Life Drain @7 S<70 | 1001 Soul Cry @1 (combat toggle, on while MP>30); 1010 Soul Shield @7; 1007 Chant of Battle @14 (party) | MP; plain sit |
 | KN | 28 Aggression @24 from 400, a pull; before 24 70 Drain Health from 600. | 28 Aggression @24 open; 70 Drain Health @20 open (from 24 only while Aggression is on reuse); 92 Shield Stun [SHIELD] @20; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (level 9); melee. | 70 Drain Health @20 S<60; 45 Divine Heal @28 S<40; 110 Ultimate Defense @20 S<20 | 82 Majesty @20 | HP; 226 Relax (base tree) |
 | WA | Walks in. | 100 Stun Attack [BLUNT, BIGBLUNT] @20; 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @20; 245 Wild Sweep [POLE] @20 A≥2; melee. | 121 Battle Roar @28 S<30 | 78 War Cry @20 in combat (self step: 60 s, reuse 180 s, so recast when gone and ready); 256 Accuracy @24 and 312 Vicious Stance @20 (combat toggles, on while MP>30) | HP; 226 Relax (base tree) |
 | RO | Bow: 56 Power Shot from 700, a pull (101 Stunning Shot from 900 @36). Dagger: walks in. | Dagger: 96 Bleed [DAGGER] @24 T≥50; 16 Mortal Blow [DAGGER] @20. Bow: 101 Stunning Shot [BOW] @36; 56 Power Shot [BOW] @20. Melee between. | 111 Ultimate Evasion @28 S<30 | 99 Rapid Shot @32 (bow, in combat); 256 Accuracy @24 and 312 Vicious Stance @20 (combat toggles, MP>30); 4 Dash @20 only to flee | HP; 226 Relax (base tree) |
@@ -519,7 +538,9 @@ type Build struct {
   (S6, for every buff, self, party or member): a buff is cast on a target only while that target
   has no effect of the skill's `stackType` at an equal or higher `stackOrder`; the one exception
   is the same skill's own effect at the same order with less than `RebuffBefore` left, which it
-  renews. A partner's effect (Guts over Frenzy) or a stronger one is never cast over. Sources:
+  renews. An equal-order partner's effect (Guts over Frenzy) or a stronger one is never cast over;
+  a weaker effect of another skill in the stack is upgraded, as the server replaces it (Chant of
+  Shielding level 2, order 2, over Shield level 1, order 1). Sources:
   `AbnormalStatusUpdate` for the bot, `PartySpelled` (skill id, level, seconds left) for members,
   whose levels S6 keeps in `PartyMate.Buffs` (today only ids and end times); S2 reads the
   datapack fields. A party-target buff is cast while some member in range qualifies. So a
@@ -543,7 +564,7 @@ type Build struct {
   way, and every threshold stays a persona setting (D6).
 - **The rules stay,** with these named changes, all in S6 unless noted. `playRules` keeps its
   order and adds one rule, `sweep` after `outnumbered` (S10, section 8). Rule bodies that change:
-  - `ruleCritical` tries the ready sustain steps before its potions (section 7);
+  - `ruleCritical` tries the ready heal and drain steps before its potions (section 7);
   - `flee()`, which `ruleCritical` and `ruleOutnumbered` call, first casts the kit's `Flee` skill
     when ready;
   - `fight` runs the rotation (self-target steps first, under the stack rule, then enemy sustain steps under their HP
@@ -626,7 +647,7 @@ until the backlog issue adds theirs.
   Drain Health, Vampiric Touch and Life Drain. Body To Mind, Ultimate Defense and Ultimate Evasion
   stay in `fight`. `ruleCritical` runs before `fight` and drinks early when two or more
   attackers have the bot under `CrowdedHP` (`rules.go`), which is at or above every row's sustain
-  bound; so `ruleCritical` tries the build's ready sustain steps whose gates pass before either
+  bound; so `ruleCritical` tries the build's ready heal and drain steps whose gates pass before either
   of its potions (the crowded one and the critical one), and drinks only when none is ready.
 - **Finishers and fillers:** Power Strike, Mortal Blow, Iron Punch, Wind Strike, Ice Bolt, Power
   Shot at their reuse, with the weapon gate.
@@ -635,7 +656,8 @@ until the backlog issue adds theirs.
   walk in.
 - **Mystic damage roles** rest on MP, keep a low `MPReserve` (10 %; 30 % for the orc mystic
   lines, whose Soul Cry and chants need MP in a fight), and melee only under `MPReserve`, except
-  the orc mystic lines, which melee whenever no step is ready; support roles keep 50 % for heals.
+  the armored orc mystics (OM Support, OS), which melee whenever no step is ready (the `Melee`
+  policy is compiled per role); support roles keep 50 % for heals.
 
 ### 8. Dwarven spoil and sweep
 
