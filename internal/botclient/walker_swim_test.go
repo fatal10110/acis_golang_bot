@@ -74,7 +74,7 @@ func TestWalkerSwims(t *testing.T) {
 				segs++
 				ans := segAnswer(origin, to)
 				b.handle([]Event{ans}, now)
-				run := b.world.Self.legTime(ans.Origin, ans.Dest)
+				run := b.world.Self.arrival().Sub(now)
 				if t0, t1, ok := n.Water.Span(toLoc(origin), toLoc(to)); ok && t1 > t0 {
 					swum = true
 					if dry := runFor(origin, to) - positionTick; run <= dry {
@@ -133,7 +133,7 @@ func TestMotionSwims(t *testing.T) {
 		{"swims down", Point{X: 600}, Point{X: 600, Z: -150}, 50, 3 * time.Second, time.Second, Point{X: 600, Z: -50}},
 	}
 	for _, tt := range tests {
-		m := motion{speed: 100, swim: &swimLine{water: water, speed: tt.swim}}.withLine(tt.from, tt.to, t0)
+		m := motion{speed: 100, self: &selfMove{swim: swimLine{water: water, speed: tt.swim}}}.withLine(tt.from, tt.to, t0)
 		if got := m.duration(); got != tt.total {
 			t.Errorf("%s: duration %v, want %v", tt.name, got, tt.total)
 		}

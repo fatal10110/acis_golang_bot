@@ -53,7 +53,7 @@ func walkRule(t *testing.T, b *Brain, now time.Time, decide func(time.Time) Acti
 		}
 		b.handle([]Event{segAnswer(origin, to)}, now)
 		ends = append(ends, to)
-		now = now.Add(runFor(origin, to) + time.Millisecond)
+		now = now.Add(segRun(b, now) + time.Millisecond)
 	}
 	t.Fatal("the walk did not end after 80 decisions")
 	return nil, now

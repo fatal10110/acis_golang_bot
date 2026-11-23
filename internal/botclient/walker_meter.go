@@ -9,7 +9,7 @@ import (
 // metrics (docs/walking.md, "Measurement (#304)"). It is part of the walker,
 // owned by the brain goroutine, and changes nothing the walker sends.
 type walkMeter struct {
-	// arrivedAt is the modeled arrival (the answer's eta) of the walk's last
+	// arrivedAt is the modeled arrival (SelfState.arrival) of the walk's last
 	// segment that arrived, until the next segment goes out; zero for none.
 	arrivedAt time.Time
 	// start is when the walk's first segment went out; length the summed

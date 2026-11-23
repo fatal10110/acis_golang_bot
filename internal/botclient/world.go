@@ -93,6 +93,9 @@ type SelfState struct {
 	// SwimSpeed is UserInfo's: the bot's speed in water.
 	SwimSpeed int32
 	move      motion
+	// answerLag is the walker's answer latency over its recent segments
+	// (walker.answered); see lag.
+	answerLag time.Duration
 	// water is the water zones the bot's own moves swim in; nil is none.
 	water *nav.Water
 	// castEnd is when the bot's own cast in progress hits, swingEnd when
@@ -132,20 +135,83 @@ func (w *World) SetGround(g groundHeight) { w.Self.ground = g }
 // (see motion).
 func (w *World) SetWater(water *nav.Water) { w.Self.water = water }
 
-// swimmer is the bot's own swim: its water and swim speed, nil when it has
-// no water or no swim speed.
-func (s *SelfState) swimmer() *swimLine {
+// swimmer is the bot's own swim: its water and swim speed, the zero
+// swimLine when it has no water or no swim speed.
+func (s *SelfState) swimmer() swimLine {
 	if s.water == nil || s.SwimSpeed <= 0 {
-		return nil
+		return swimLine{}
 	}
-	return &swimLine{water: s.water, speed: s.SwimSpeed}
+	return swimLine{water: s.water, speed: s.SwimSpeed}
 }
 
-// legTime is how long the bot's own move from from to to takes at its
-// speeds now, swimming the part in water.
-func (s *SelfState) legTime(from, to Point) time.Duration {
-	m := motion{speed: pace(s.Running, s.RunSpeed, s.WalkSpeed), swim: s.swimmer()}
-	return m.withLine(from, to, time.Time{}).duration()
+// lag is A, the walker's answer latency floored at positionTick: the bot's
+// own move received within positionTick plus A of its modeled end counts as
+// a fresh start (docs/walking.md, "One arrival model").
+func (s *SelfState) lag() time.Duration { return max(s.answerLag, positionTick) }
+
+// arrival is the modeled end of the bot's own move (docs/walking.md, "One
+// arrival model"): when it stopped for a stop, zero before its first move.
+func (s *SelfState) arrival() time.Time { return s.move.end() }
+
+// moved is the bot's own motion once the server's answer moving it from
+// origin toward dest is received at now, timed like the server's arrival
+// timer. An answer whose origin is its destination stands the bot there at
+// now: the server's blocked correction, or a click on the cell it stands in.
+// A move received while the last one is more than positionTick plus A from
+// its modeled end retargets it and keeps its anchor, the server's start-speed
+// update count running (creature.go moveToLocationLocked); any other starts
+// afresh, which errs late. The distance timed is the larger of origin to
+// dest and the sampled position to dest.
+func (s *SelfState) moved(now time.Time, origin, dest Point) motion {
+	old := s.move
+	if origin.X == dest.X && origin.Y == dest.Y {
+		m := stopAt(dest)
+		m.start = now
+		return m
+	}
+	anchor := now
+	if old.moving(now) && now.Before(old.end().Add(-(positionTick + s.lag()))) {
+		anchor = old.anchor()
+	}
+	m := old
+	m.self = &selfMove{swim: s.swimmer()}
+	m = m.withLine(old.sample(now, origin), dest, now)
+	m.speed = pace(s.Running, s.RunSpeed, s.WalkSpeed)
+	return m.timed(anchor, s.WalkSpeed, scale(origin, m.from, dest), time.Time{})
+}
+
+// resample applies the server's position report p at now to the bot's own
+// move: a move carries on toward its destination from the sampled position
+// at the speeds the bot has now, re-timed from now for the distance left with
+// the updates done since its anchor (creature.go retimeLocked), and ending no
+// earlier than before unless its speed changed; a move over stands at the
+// sampled position.
+func (s *SelfState) resample(now time.Time, p Point) {
+	old := s.move
+	from := old.sample(now, p)
+	if !old.moving(now) {
+		m := stopAt(from)
+		m.start = old.end()
+		s.move = m
+		return
+	}
+	m := old.withLine(from, old.to, now)
+	m.speed = pace(s.Running, s.RunSpeed, s.WalkSpeed)
+	var keep time.Time
+	if m.speed == old.speed {
+		keep = old.end()
+	}
+	s.move = m.timed(old.anchor(), s.WalkSpeed, scale(p, from, old.to), keep)
+}
+
+// scale is how much longer the server's line from origin to dest is than the
+// bot's from from: at least 1, so the larger distance is timed.
+func scale(origin, from, dest Point) float64 {
+	d := math.Sqrt(float64(horizontal2(from, dest)))
+	if d == 0 {
+		return 1
+	}
+	return max(math.Sqrt(float64(horizontal2(origin, dest)))/d, 1)
 }
 
 // Swinging reports whether the bot's own melee swing is in progress at now:
@@ -232,10 +298,130 @@ type motion struct {
 	from, to Point
 	start    time.Time
 	speed    int32
-	// swim is the bot's own swim, nil for every other object: a pointer
-	// keeps Object compact (TestObjectRecordCompact). A swimLine is never
-	// changed once a motion holds it, so copies of the motion may share it.
-	swim *swimLine
+	// self is the bot's own move's swim and arrival model, nil for every
+	// other object: a pointer keeps Object compact
+	// (TestObjectRecordCompact). A selfMove is never changed once a motion
+	// holds it, so copies of the motion may share it.
+	self *selfMove
+}
+
+// walkStartUpdates is how many position updates of a player's move from
+// standstill advance at its start speed (acis_golang model/actor/move
+// creature.go walkStartUpdates).
+const walkStartUpdates = 5
+
+// selfMove is the arrival model of the bot's own move, timed like the
+// server's arrival timer (creature.go travelTicksLocked, arrivalDelayLocked,
+// retimeLocked; docs/walking.md, "One arrival model"), and its swim, the zero
+// swimLine for none. anchor is the receipt
+// of the answer that started the move from standstill, from which the
+// server's position updates count; walk is the start speed the first
+// walkStartUpdates updates advance at on land, below the move's speed or
+// none (the server's start speed is the walk speed on land, even running,
+// and the full speed in water: character_attack.go moveStartSpeed); end is
+// the modeled arrival.
+type selfMove struct {
+	swim   swimLine
+	anchor time.Time
+	walk   int32
+	end    time.Time
+}
+
+// timed is m, the bot's own move re-timed at its start: anchored at anchor
+// with start speed walk, its line's length scaled by k timed from the
+// position updates done since the anchor, and ending no earlier than keep.
+// A move at zero speed ends at its start.
+func (m motion) timed(anchor time.Time, walk int32, k float64, keep time.Time) motion {
+	if walk >= m.speed {
+		walk = 0
+	}
+	sm := &selfMove{anchor: anchor, walk: walk, end: m.start}
+	if m.self != nil {
+		sm.swim = m.self.swim
+	}
+	m.self = sm
+	if m.speed > 0 {
+		u := max(int(m.start.Sub(anchor)/positionTick), 0)
+		sm.end = m.start.Add(time.Duration(m.arrivalTicks(u, k)) * positionTick)
+	}
+	if sm.end.Before(keep) {
+		sm.end = keep
+	}
+	return m
+}
+
+// arrivalTicks is how many position updates the server takes to cover the
+// motion's line, its length scaled by k, from u updates done: on land the
+// start-speed updates left first, each stretch at its speed, rounded up to
+// whole updates (creature.go travelTicksLocked), plus one update per change
+// between land and water along the line, where the server re-times the rest
+// (creature.go update, retimeLocked). At least one: a same-cell move ends on
+// the next update.
+func (m motion) arrivalTicks(u int, k float64) int {
+	dx, dy, dz := float64(m.to.X-m.from.X), float64(m.to.Y-m.from.Y), float64(m.to.Z-m.from.Z)
+	flat := math.Hypot(dx, dy) * k
+	step := float64(m.speed) / 10
+	type stretch struct {
+		dist, step float64
+		land       bool
+	}
+	line := []stretch{{flat, step, true}}
+	turns := 0
+	if m.wet() {
+		s := m.swim()
+		space := math.Sqrt(dx*dx+dy*dy+dz*dz) * k
+		line = []stretch{
+			{flat * s.wet0, step, true},
+			{space * (s.wet1 - s.wet0), float64(s.speed) / 10, false},
+			{flat * (1 - s.wet1), step, true},
+		}
+		if s.wet0 > 0 {
+			turns++
+		}
+		if s.wet1 < 1 {
+			turns++
+		}
+	}
+	var walk float64
+	if m.self != nil {
+		walk = float64(m.self.walk) / 10
+	}
+	t := float64(u)
+	for _, st := range line {
+		d := st.dist
+		if d <= 0 {
+			continue
+		}
+		if st.land && walk > 0 && t < walkStartUpdates {
+			left := walkStartUpdates - t
+			if d <= left*walk {
+				t += d / walk
+				continue
+			}
+			t += left
+			d -= left * walk
+		}
+		t += d / st.step
+	}
+	return max(int(math.Ceil(t-float64(u)-1e-9)), 1) + turns
+}
+
+// end is when the motion arrives: the bot's own move's modeled arrival,
+// else its start plus its duration.
+func (m motion) end() time.Time {
+	if m.self != nil {
+		return m.self.end
+	}
+	return m.start.Add(m.duration())
+}
+
+// anchor is where the server's position updates of the motion count from:
+// the bot's own move's anchor, else its start.
+func (m motion) anchor() time.Time {
+	if m.self != nil {
+		return m.self.anchor
+	}
+	return m.start
 }
 
 // swimLine is what a motion swims by: the water zones and the swim speed,
@@ -249,24 +435,33 @@ type swimLine struct {
 // withLine is m moving from from to to, begun at start, at m's speeds.
 func (m motion) withLine(from, to Point, start time.Time) motion {
 	m.from, m.to, m.start = from, to, start
-	if m.swim != nil {
-		s := swimLine{water: m.swim.water, speed: m.swim.speed}
-		if s.speed > 0 && from != to {
+	if m.self != nil {
+		sm := *m.self
+		sm.swim.wet0, sm.swim.wet1 = 0, 0
+		if s := &sm.swim; s.water != nil && s.speed > 0 && from != to {
 			if t0, t1, ok := s.water.Span(toLoc(from), toLoc(to)); ok {
 				s.wet0, s.wet1 = t0, t1
 			}
 		}
-		m.swim = &s
+		m.self = &sm
 	}
 	return m
 }
 
+// swim is what the motion swims by, nil for none.
+func (m motion) swim() *swimLine {
+	if m.self == nil || m.self.swim.water == nil {
+		return nil
+	}
+	return &m.self.swim
+}
+
 // wet reports whether a part of the motion's line is in water.
-func (m motion) wet() bool { return m.swim != nil && m.swim.wet1 > m.swim.wet0 }
+func (m motion) wet() bool { s := m.swim(); return s != nil && s.wet1 > s.wet0 }
 
 // swimming reports whether the point p of the motion lies in water.
 func (m motion) swimming(p Point) bool {
-	return m.wet() && m.swim.water.Contains(int(p.X), int(p.Y), int(p.Z))
+	return m.wet() && m.swim().water.Contains(int(p.X), int(p.Y), int(p.Z))
 }
 
 // pieces are the motion's stretches in order: each as the fraction of the
@@ -279,7 +474,7 @@ func (m motion) pieces() [3][2]float64 {
 		return [3][2]float64{{1, flat / speed}}
 	}
 	space := math.Sqrt(dx*dx + dy*dy + dz*dz)
-	s := m.swim
+	s := m.swim()
 	return [3][2]float64{
 		{s.wet0, flat * s.wet0 / speed},
 		{s.wet1 - s.wet0, space * (s.wet1 - s.wet0) / float64(s.speed)},
@@ -344,8 +539,12 @@ func (m motion) at(now time.Time) Point {
 	}
 }
 
-// moving reports whether the motion has not reached its end at now.
+// moving reports whether the motion has not reached its end at now: for
+// the bot's own move, its modeled arrival.
 func (m motion) moving(now time.Time) bool {
+	if m.self != nil {
+		return now.Before(m.self.end)
+	}
 	return m.at(now) != m.to
 }
 
@@ -477,10 +676,9 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case NPCInfo:
 		w.applyNPCInfo(e, now)
 	case MoveToLocation:
-		if m := w.motionOf(e.ObjectID); m != nil {
-			if e.ObjectID == w.Self.ObjectID {
-				m.swim = w.Self.swimmer()
-			}
+		if e.ObjectID == w.Self.ObjectID {
+			w.Self.move = w.Self.moved(now, e.Origin, e.Dest)
+		} else if m := w.motionOf(e.ObjectID); m != nil {
 			*m = m.moveTo(now, e.Origin, e.Dest, w.speedOf(e.ObjectID))
 		}
 	case MoveToPawn:
@@ -490,12 +688,20 @@ func (w *World) Apply(ev Event, now time.Time) {
 			if t := w.motionOf(e.TargetID); t != nil {
 				dest = short(from, t.at(now), e.Distance)
 			}
-			*m = motion{from: from, to: dest, start: now, speed: w.speedOf(e.ObjectID)}
+			if e.ObjectID == w.Self.ObjectID {
+				// The bot's own approach keeps its swim and arrival model.
+				w.Self.move = w.Self.moved(now, e.Origin, dest)
+			} else {
+				*m = motion{from: from, to: dest, start: now, speed: w.speedOf(e.ObjectID)}
+			}
 		}
 	case StopMove:
-		w.stop(e.ObjectID, e.Pos, e.Heading)
+		w.stop(e.ObjectID, e.Pos, e.Heading, now)
 	case ValidateLocation:
-		if m := w.motionOf(e.ObjectID); m != nil {
+		if e.ObjectID == w.Self.ObjectID {
+			w.Self.resample(now, e.Pos)
+			w.Self.Heading = e.Heading
+		} else if m := w.motionOf(e.ObjectID); m != nil {
 			*m = m.resample(now, e.Pos)
 			w.setHeading(e.ObjectID, e.Heading)
 		}
@@ -590,10 +796,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.PAtkSpd, s.CollisionHeight = e.PAtkSpd, e.CollisionHeight
 	s.Heading = e.Heading
 	w.applyClanID(e.ClanID)
-	s.move = s.move.resample(now, e.Pos)
-	if s.move.speed != 0 {
-		s.move.speed = pace(s.Running, s.RunSpeed, s.WalkSpeed)
-	}
+	s.resample(now, e.Pos)
 	delete(w.Objects, e.ObjectID)
 }
 
@@ -686,10 +889,11 @@ func (w *World) applyNPCInfo(e NPCInfo, now time.Time) {
 	}
 }
 
-// stop ends id's move at the position the server reports.
-func (w *World) stop(id int32, pos Point, heading int32) {
+// stop ends id's move at the position the server reports at now.
+func (w *World) stop(id int32, pos Point, heading int32, now time.Time) {
 	if m := w.motionOf(id); m != nil {
 		*m = stopAt(pos)
+		m.start = now
 		w.setHeading(id, heading)
 	}
 }
