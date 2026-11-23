@@ -163,6 +163,17 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 	return b.fight(id, now), true
 }
 
+// knowsAttackSkill reports whether the character knows one of the
+// persona's AttackSkills as an active skill.
+func (b *Brain) knowsAttackSkill() bool {
+	for _, id := range b.persona.AttackSkills {
+		if s, ok := b.world.Skills[id]; ok && !s.Passive {
+			return true
+		}
+	}
+	return false
+}
+
 // fight attacks id: select it, then cast the persona's first ready attack
 // skill or click it once for melee, side stepping when stuck. Either goes
 // out only while the straight line to id is open, else the bot walks to a

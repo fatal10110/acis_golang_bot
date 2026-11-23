@@ -730,14 +730,20 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 }
 
 // ruleRest is rule 6: out of combat with HP or MP low, sit until both
-// recover, then stand.
+// recover, then stand. A bot that knows one of its AttackSkills also sits
+// under MPReserve: there fight casts nothing, and the next pull would be
+// all melee.
 func (b *Brain) ruleRest(now time.Time) (Action, bool) {
 	s, p := &b.world.Self, &b.persona
 	if s.InCombat {
 		return Action{}, false
 	}
+	sitMP := p.SitMP
+	if b.knowsAttackSkill() {
+		sitMP = max(sitMP, p.MPReserve)
+	}
 	if b.resting {
-		if below(s.HP, s.MaxHP, p.StandHP) || below(s.MP, s.MaxMP, p.StandMP) {
+		if below(s.HP, s.MaxHP, p.StandHP) || below(s.MP, s.MaxMP, max(p.StandMP, sitMP)) {
 			if !s.Sitting && !s.Moving(now) {
 				return b.toggle(now), true
 			}
@@ -749,7 +755,7 @@ func (b *Brain) ruleRest(now time.Time) (Action, bool) {
 		b.resting = false
 		return Action{}, false
 	}
-	if !below(s.HP, s.MaxHP, p.SitHP) && !below(s.MP, s.MaxMP, p.SitMP) {
+	if !below(s.HP, s.MaxHP, p.SitHP) && !below(s.MP, s.MaxMP, sitMP) {
 		return Action{}, false
 	}
 	b.resting = true
