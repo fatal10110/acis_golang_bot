@@ -5,6 +5,7 @@
 		<table name="#ench1time"> 1240 1280 1320 </table>
 		<table name="#pAtkSpd"> 1.15 1.33 </table>
 		<table name="#stackOrder"> 1 2 </table>
+		<set name="castRange" val="400"/>
 		<set name="target" val="TARGET_ONE"/>
 		<for>
 			<effect name="Buff" time="1200" val="0" stackOrder="#stackOrder" stackType="attack_time_down">
@@ -17,6 +18,13 @@
 				<mul stat="pAtkSpd" val="1.33"/>
 			</effect>
 		</enchant1for>
+	</skill>
+	<skill id="1177" levels="1" name="Wind Strike" >
+		<set name="castRange" val="600"/>
+	</skill>
+	<skill id="4110" levels="2" name="Breath Attack" >
+		<table name="#castRange"> 500 1000 </table>
+		<set name="castRange" val="#castRange" />
 	</skill>
 	<!-- Declared once more in a later file: the last declaration wins. -->
 	<skill id="4327" levels="1" name="Old Haste for Beginners" >
