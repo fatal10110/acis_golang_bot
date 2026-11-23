@@ -29,7 +29,8 @@ import (
 //	          no door u32 (noCost when none), first door ref u32, door count
 //	          u32; by target per node. An edge between two SCCs (one way:
 //	          a crossing, or a pair joined inside a cluster) costs its
-//	          straight line and has no doors
+//	          straight line; a pair joined inside a cluster has no doors,
+//	          a crossing keeps its door set
 //	doorRefs  door id i32: the doors an edge's all-open path crosses
 //	sccEdges  first condensation edge u32 per SCC, then the edge count
 //	condEdges target SCC u32

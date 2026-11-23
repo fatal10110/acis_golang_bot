@@ -350,8 +350,8 @@ server's pathfinder.
     reports the node and edge counts;
   - precomputed directed intra-cluster edge costs between entrances;
   - the **one-way edges** between two abstract SCCs (a crossing, or a pair of entrances joined
-    inside a cluster) are stored too, costed by their straight line with no door set, for the
-    one-way routes below (#231). On the owner's water-aware build that is 722,553 edges more
+    inside a cluster) are stored too, costed by their straight line, for the one-way routes
+    below (#231); a pair joined inside a cluster has no doors, a crossing keeps its door set. On the owner's water-aware build that is 722,553 edges more
     (4,292,761 in all): the cache grew from 98.6 to 113.0 MB, built in 6 min 8 s on 2 workers
     with 901 MB of heap from the OS;
   - **strongly connected components (SCCs)** labelled on the directed abstract graph, and its
