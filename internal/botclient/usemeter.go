@@ -62,7 +62,9 @@ type SupplyPolicy struct {
 	// The supply trip home (rule "supply", docs/items.md section 7) starts
 	// when a consumable runs out within ReturnMinutes of fighting (0 never),
 	// or the load passes ReturnLoad percent of the weight limit (0 never)
-	// with a town visit shedding at least ShedMin percent of it. It reads
+	// with a town visit shedding at least ShedMin percent of it. ReturnLoad
+	// sits under the server's half-speed band at 66.6 %
+	// (character_weight_penalty.go), so the walk home is at full speed. It reads
 	// its Scroll of Escape only once nothing attacks it; past SafeWait
 	// without such a moment, it walks.
 	ReturnMinutes int
@@ -85,14 +87,15 @@ type SupplyPolicy struct {
 
 // defaultSupplyPolicy carries an hour of fighting's shots and HP potions,
 // a fifth more, and two Scrolls of Escape, within 45 % of the weight limit.
-// It goes home with ten minutes of fighting left, or past 70 % of the
-// weight limit (well above the 45 %, so a bot that bought to the cap does
-// not turn round at its first loot) with a tenth of it to sell, waiting up
-// to two minutes for a safe moment to read its scroll.
+// It goes home with ten minutes of fighting left, or past 60 % of the
+// weight limit with a tenth of it to sell: well above the 45 %, so a bot
+// that bought to the cap does not turn round at its first loot, and under
+// the server's half-speed band at 66.6 %. It waits up to two minutes for a
+// safe moment to read its scroll.
 func defaultSupplyPolicy() SupplyPolicy {
 	return SupplyPolicy{
 		TripMinutes: 60, Margin: 20, BuyLoad: 45, Refill: 25, PotionsPerHour: 10, Escapes: 2,
-		ReturnMinutes: 10, ReturnLoad: 70, ShedMin: 10, SafeWait: 2 * time.Minute,
+		ReturnMinutes: 10, ReturnLoad: 60, ShedMin: 10, SafeWait: 2 * time.Minute,
 	}
 }
 

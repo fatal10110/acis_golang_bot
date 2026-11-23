@@ -45,15 +45,29 @@ type LootPolicy struct {
 	// LeaveFindersKeepers leaves the loot alone while the bot is a member,
 	// not the leader, of a finders keepers party.
 	LeaveFindersKeepers bool
-	// DropAbove is the weight percent (SelfState.Load of MaxLoad) at or
-	// over which the bot drops one stack of Junk at a time where it
-	// stands; 0 drops nothing. Equipped items are never dropped.
+	// StopAbove is the weight percent (SelfState.Load of MaxLoad) a pickup
+	// never brings the bot to: a queued item that would is given up, so a
+	// bot whose load a town visit cannot shed (SupplyPolicy.ShedMin) stops
+	// looting instead of walking at half speed. An item that weighs nothing
+	// (adena) is always picked up; with no item weights known, nothing is
+	// at or over it. 0 sets no cap: the server's pickup never checks weight
+	// (network/pickup.go), and past 100 % the bot cannot move.
+	StopAbove int
+	// DropAbove is the weight percent at or over which the bot drops one
+	// stack of Junk at a time where it stands; 0 drops nothing. Equipped
+	// items are never dropped.
 	DropAbove int
 	Junk      []int32
 }
 
+// defaultLootPolicy keeps the load under the server's half-speed band at
+// 66.6 % (character_weight_penalty.go): no pickup takes it to 65 %, and
+// Junk is dropped from there.
 func defaultLootPolicy() LootPolicy {
-	return LootPolicy{Pickup: true, Radius: 1000, Timeout: 15 * time.Second, LeaveFindersKeepers: true, DropAbove: 80}
+	return LootPolicy{
+		Pickup: true, Radius: 1000, Timeout: 15 * time.Second, LeaveFindersKeepers: true,
+		StopAbove: 65, DropAbove: 65,
+	}
 }
 
 // GroundItem is an item lying on the ground.
@@ -298,11 +312,42 @@ func (b *Brain) lootable(e DropItem, now time.Time) bool {
 
 // lootQueued reports whether a queued item is still waiting at now.
 func (b *Brain) lootQueued(now time.Time) bool {
-	return b.loot.next(b.world.Ground, b.persona.Loot.Timeout, now) != 0
+	return b.nextLoot(now) != 0
+}
+
+// nextLoot is the queued item to pick up at now, 0 for none: the head of
+// the queue, giving up the ones too heavy to carry (lootFits).
+func (b *Brain) nextLoot(now time.Time) int32 {
+	for {
+		id := b.loot.next(b.world.Ground, b.persona.Loot.Timeout, now)
+		if id == 0 || b.lootFits(b.world.Ground[id]) {
+			return id
+		}
+		b.loot.skip()
+	}
+}
+
+// lootFits reports whether picking up it keeps the load under
+// Loot.StopAbove percent of the weight limit. Its weight is its count
+// times its template's (TravelMap.weights); with no weights known, it
+// counts as nothing and the load alone must be under the cap.
+func (b *Brain) lootFits(it GroundItem) bool {
+	s, pct := &b.world.Self, b.persona.Loot.StopAbove
+	if pct <= 0 || s.MaxLoad <= 0 {
+		return true
+	}
+	var w int64
+	if t := b.cfg.Travel; t != nil && len(t.weights) > 0 {
+		if w = int64(t.weights[it.TemplateID]) * int64(max(it.Count, 1)); w == 0 {
+			return true
+		}
+	}
+	return (int64(s.Load)+w)*100 < int64(s.MaxLoad)*int64(pct)
 }
 
 // ruleLoot is rule 8: with no attacker left, drop a stack of junk when
-// overweight, else pick up the oldest queued item, standing up first. A
+// overweight, else pick up the oldest queued item that fits under
+// Loot.StopAbove, standing up first. A
 // click waits lootRetry, and the walk to the item the server starts, before
 // the next; Timeout after the first, the bot gives the item up.
 //
@@ -315,7 +360,7 @@ func (b *Brain) ruleLoot(now time.Time) (Action, bool) {
 	if a, ok := b.dropJunk(now); ok {
 		return a, true
 	}
-	id := b.loot.next(b.world.Ground, b.persona.Loot.Timeout, now)
+	id := b.nextLoot(now)
 	if id == 0 {
 		return Action{}, false
 	}

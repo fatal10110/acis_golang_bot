@@ -295,7 +295,7 @@ func TestRuleLoot(t *testing.T) {
 			persona: dropper,
 			setup: func(b *Brain) {
 				carry(junk)(b)
-				b.world.Self.Load = 79
+				b.world.Self.Load = 64
 			},
 		},
 		{name: "drop off", persona: func(p *Persona) { dropper(p); p.Loot.DropAbove = 0 }, setup: carry(junk)},
