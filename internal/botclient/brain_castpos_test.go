@@ -13,7 +13,7 @@ import (
 // pawn walk ends on the first step in range), and the walker's next segment
 // goes out from there (#270, as #246 for Attack). A cast the bot did not ask
 // for (a cubic's, a class change's) or one too short to stop it leaves the
-// walk alone; so does another caster's.
+// walk alone. Another caster stands in the world (TestWorldCasterPosition).
 func TestBrainCastPosition(t *testing.T) {
 	const skill = int32(1177)
 	type castStep struct {
@@ -81,7 +81,7 @@ func TestBrainCastPosition(t *testing.T) {
 				{0, MoveToLocation{ObjectID: npcID, Origin: Point{X: 1000}, Dest: Point{X: 2000}}},
 				{time.Second, MagicSkillUse{CasterID: npcID, TargetID: selfID, SkillID: skill, HitTime: 2 * time.Second, CasterPos: Point{X: 1013, Y: 5}}},
 			},
-			id: npcID, check: 3 * time.Second, want: Point{X: 1600}, wantMoving: true,
+			id: npcID, check: 3 * time.Second, want: Point{X: 1013, Y: 5},
 		},
 	}
 	for _, tt := range tests {

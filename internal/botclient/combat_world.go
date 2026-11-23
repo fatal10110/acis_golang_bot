@@ -83,11 +83,26 @@ func (w *World) applyAttack(e Attack, now time.Time) {
 // the bot by a monster, or by a player who is flagged or has karma, counts
 // as a hit: MagicSkillUse does not tell an attack from a buff, and only
 // those casters can attack the bot without a forced attack.
+//
+// Another caster stands where it casts from when the hit time proves the
+// server stopped it first; the bot's own cast is stood by the brain, which
+// knows whether it asked for it (Brain.standCaster).
 func (w *World) applyMagicSkillUse(e MagicSkillUse, now time.Time) {
 	if e.CasterID == w.Self.ObjectID {
 		w.Self.castEnd = now.Add(e.HitTime)
 		w.holdSkill(e.SkillID, now.Add(e.HitTime+e.Reuse))
 		return
+	}
+	// A monster, folk NPC, summon, pet or player stops before a cast whose
+	// template hit time is over 50 ms (ai/attackable.go thinkCast,
+	// npc/folk_cast.go castOn, ai/summon.go thinkCastLocked,
+	// cast/request.go stopForCast), and CasterPos is where it stands when the
+	// broadcast goes out (BroadcastSkillUse reads Position then). castStopsFrom
+	// is the hit time in the packet that proves the template one. Script
+	// casts (cast/ai_call_skill.go CallSkill, CastUnchecked) do not stop and
+	// the packet cannot tell them apart: the caster's next move corrects it.
+	if o := w.object(e.CasterID); o != nil && e.HitTime >= castStopsFrom {
+		o.move = stopAt(e.CasterPos)
 	}
 	if e.TargetID != w.Self.ObjectID {
 		return
