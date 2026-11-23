@@ -121,7 +121,8 @@ type openItem struct {
 type edgeKey struct{ from, to Cell }
 
 // search runs A* from start to goal over the cell graph, expanding at most
-// budget cells and skipping the edges in avoid. It returns the cell path,
+// budget cells and skipping the edges in avoid and the cells in avoided
+// columns but goal's (Planner.Avoid). It returns the cell path,
 // start first, in s.cells, and the cells it expanded.
 func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
 	s.nodes = s.nodes[:0]
@@ -154,6 +155,9 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 				if _, ok := avoid[edgeKey{cur, e.cell}]; ok {
 					continue
 				}
+			}
+			if p.Avoid.skips(e.cell, goal) {
+				continue
 			}
 			ng := g + e.cost
 			idx, seen := s.index.getOrPut(cellKey(e.cell), int32(len(s.nodes)))
