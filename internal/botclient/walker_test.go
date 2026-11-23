@@ -299,7 +299,7 @@ func TestWalkerRecovery(t *testing.T) {
 			t.Errorf("drop to %+v: kind %v err %v, want InSCC ground", to, m.Kind(), err)
 		}
 	})
-	t.Run("isolated asks /unstuck once", func(t *testing.T) {
+	t.Run("isolated asks /unstuck", func(t *testing.T) {
 		b, _, _ := newNavBrain(t, n, Persona{}, scenePoint(geotest.PitInside, 0, 0))
 		dest := scenePoint(geotest.PitOutside, 0, 0)
 		a, _ := walkStep(t, b, dest, t0)
@@ -309,9 +309,6 @@ func TestWalkerRecovery(t *testing.T) {
 		if a, st := b.goTo(dest, 0, walkPlace, t0.Add(time.Second)); a.kind != actHold || st != walkWalking {
 			t.Fatalf("waiting for the recall: kind %v status %v", a.kind, st)
 		}
-		// The recall left the bot where it stood.
-		if _, st := b.goTo(dest, 0, walkPlace, t0.Add(escapeRetry)); st != walkUnreachable || b.walk.reason != reasonIsolated {
-			t.Errorf("status %v reason %q, want unreachable isolated", st, b.walk.reason)
-		}
+		// A recall that leaves the bot where it stood: TestWalkerEscapeRetry.
 	})
 }
