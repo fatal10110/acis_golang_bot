@@ -36,8 +36,10 @@ type scratch struct {
 	// Hierarchy: the condensation walk, the abstract search and the
 	// refined cell path across clusters.
 	sccSeen   []uint32
+	sccWay    []uint32
 	sccGen    uint32
 	sccQueue  []int32
+	sccStack  []condFrame
 	anodes    []anode
 	aindex    indexTable
 	apath     []int32
@@ -83,8 +85,19 @@ func (s *scratch) bytes() int {
 		capBytes(s.line) + capBytes(s.grid.slots) + capBytes(s.stretches) +
 		capBytes(s.band) + s.seen.bytes() + capBytes(s.queue) +
 		capBytes(s.stands) +
-		capBytes(s.sccSeen) + capBytes(s.sccQueue) + capBytes(s.anodes) + s.aindex.bytes() + capBytes(s.apath) +
+		capBytes(s.sccSeen) + capBytes(s.sccWay) + capBytes(s.sccQueue) + capBytes(s.sccStack) + capBytes(s.anodes) + s.aindex.bytes() + capBytes(s.apath) +
 		capBytes(s.waypoints) + capBytes(s.path)
+}
+
+// nextSCCGen starts a condensation walk over n SCCs: a stamp no entry of
+// sccSeen or sccWay holds yet.
+func (s *scratch) nextSCCGen(n int) {
+	s.sccGen++
+	if s.sccGen == 0 || len(s.sccSeen) < n {
+		s.sccSeen = make([]uint32, n)
+		s.sccWay = nil
+		s.sccGen = 1
+	}
 }
 
 // capBytes is the memory a slice's backing array holds.

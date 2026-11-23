@@ -104,8 +104,9 @@ bots geopack -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengi
 Then build the nav cache, the hierarchy walking personas plan on (docs/navigation.md, section 2).
 It reads the geodata cache and `doors.xml`, never the region files, and takes about ten minutes on
 half the cores. The nav cache is keyed by the geodata cache, `doors.xml` and the build parameters:
-build it again after every `geopack` or `doors.xml` update, since walking personas refuse a stale
-or missing one at start and the bots never rebuild it themselves.
+build it again after every `geopack` or `doors.xml` update, and after a bots update that changes
+the cache's format version (#231 did), since walking personas refuse a stale or missing one at
+start and the bots never rebuild it themselves.
 
 ```bash
 bots navbuild -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoengine.properties \
