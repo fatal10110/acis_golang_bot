@@ -90,7 +90,7 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 	var avoid map[edgeKey]struct{}
 	budget := p.Budget
 	for range maxReplans + 1 {
-		cells, used, err := p.search(s, start, goal, budget, avoid)
+		cells, used, err := p.search(s, start, goal, budget, avoid, anywhere)
 		if err != nil {
 			return nil, err
 		}

@@ -55,6 +55,23 @@ func (t *indexTable) getOrPut(key uint64, val int32) (int32, bool) {
 	}
 }
 
+// get returns key's value and whether the table holds key.
+func (t *indexTable) get(key uint64) (int32, bool) {
+	if len(t.slots) == 0 {
+		return 0, false
+	}
+	mask := len(t.slots) - 1
+	for i := t.home(key); ; i = (i + 1) & mask {
+		s := &t.slots[i]
+		if s.gen != t.gen {
+			return 0, false
+		}
+		if s.key == key {
+			return s.val, true
+		}
+	}
+}
+
 // home is key's first slot: Fibonacci hashing, the top bits of the product.
 func (t *indexTable) home(key uint64) int {
 	return int((key * 0x9E3779B97F4A7C15) >> t.shift)
