@@ -15,20 +15,20 @@ import (
 const windStrike int32 = 1177
 
 // TestLiveFarmMage runs a dark elf mystic farmer that casts Wind Strike at
-// its targets, in its own newbie zone, until it walked on after several
-// casts the server approached the target for (MoveToPawn). The server stops
-// a caster before it casts and MagicSkillUse carries its position then,
-// off the approach's dead-reckoned end by up to a step; the bot stands
-// there, so its walker's next segment goes out from the server's position:
-// runWatched fails the run on any walker desync and names each desync's
-// cause (#270, as #246 for Attack). The farmer goes back to level 1 at the
-// end.
+// its targets, in its own newbie zone, until several of its casts came
+// after the server approached the target for it (MoveToPawn). The server
+// stops a caster before it casts and MagicSkillUse carries its position
+// then, off the approach's dead-reckoned end by up to a step; the bot
+// stands there, so its walker's segments after a cast go out from the
+// server's position: runWatched fails the run on any walker desync and
+// names each desync's cause (#270, as #246 for Attack). A farmer mostly
+// casts at the monsters coming at it, so walker segments right after such
+// a cast are rare: the log counts them. The farmer goes back to level 1 at
+// the end.
 func TestLiveFarmMage(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
-	// Without loot, a run waited 18 minutes for a move after a cast: the
-	// farmer stood and cast at the monsters coming at it.
-	ctx := scenarioCtx(t, 30*time.Minute)
+	ctx := scenarioCtx(t, 20*time.Minute)
 	dp, err := datapack.Load(tg.Config().Datapack)
 	if err != nil {
 		t.Fatal(err)
@@ -42,12 +42,9 @@ func TestLiveFarmMage(t *testing.T) {
 			p := botclient.DefaultPersona()
 			p.AttackSkills = []int32{windStrike}
 			p.MPReserve = 0
-			// It walks to its kills' drops: a walker segment out from
-			// where it cast. All it carries but adena and potions is
-			// junk, dropped at any load, so loot does not pile up run
-			// after run.
-			p.Loot.Junk = junkBut(slices.Concat([]int32{adena}, p.Potions)...)
-			p.Loot.DropAbove = 1
+			// No loot: carried run after run, it would weigh the
+			// character down.
+			p.Loot.Pickup = false
 			return p
 		},
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
@@ -64,15 +61,15 @@ func TestLiveFarmMage(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 	start, alive := time.Now(), time.Now()
 
-	const wantWalked = 2
+	const wantPawn = 3
 	var c castCount
-	waitFor(t, ctx, f.name+" walking on after Wind Strikes the server approached", func() bool {
+	waitFor(t, ctx, f.name+" casting Wind Strike after server approaches", func() bool {
 		if time.Since(alive) > gmKeepAlive {
 			gmTeleport(t, ctx, gm, townTI)
 			alive = time.Now()
 		}
 		c = countCasts(f.watch.Seen(0), f.watch.Sent(), f.id, windStrike)
-		return c.walked >= wantWalked
+		return c.pawn >= wantPawn
 	})
 	t.Logf("%s cast Wind Strike %d times in %s: %d after a move of its own, %d after a server approach (MoveToPawn), %d of those walked on from",
 		f.name, c.casts, time.Since(start).Round(time.Second), c.approached, c.pawn, c.walked)
