@@ -131,8 +131,8 @@ func TestLiveSupplyTrip(t *testing.T) {
 		st := f.bot.Status()
 		if now := fmt.Sprintf("rule %q spot %q walk %q", st.Rule, st.Spot, st.Walk); now != last || time.Since(lastAt) >= noteEvery {
 			last, lastAt = now, time.Now()
-			t.Logf("%s %s, %d shots, %d potions, %d scrolls, %d adena at %v, HP %d/%d, state %v", f.name, now,
-				f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), st.Position, st.HP, st.MaxHP, st.State)
+			t.Logf("%s %s, %d shots, %d potions, %d scrolls, %d adena at %v, level %d, HP %d/%d, state %v", f.name, now,
+				f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), st.Position, st.Level, st.HP, st.MaxHP, st.State)
 		}
 	}
 	untilServed(t, ctx, "the trip home", f.watch, escapeRefused(f.watch, objectsOf(f.watch.Seen(0), scrollOfEscape)), func() string {
@@ -233,8 +233,9 @@ func TestLiveSupplyTrip(t *testing.T) {
 var tiToads = botclient.Point{X: -94872, Y: 246888, Z: -3633}
 
 // supplyLevel is the level TestLiveSupplyTrip's farmer starts at, set by
-// the GM each run (#258). Left to the levels it gained run after run, the
-// farmer in its Squire's gear reached 14 to 16, where every Talking Island
+// the GM each run (#258). Left to the level it had (TestLiveSupport sets
+// the same character to 15 for its leader, and farming adds or takes
+// more), the farmer in its Squire's gear stood at 14 to 16, where every Talking Island
 // spot that fits it is a pack of 9 to 11 aggressive level 10 to 12 orcs or
 // werewolves that assist each other within 300 and outrun it (runSpd
 // 118.8): it died there again and again and never farmed. Level 6 fits

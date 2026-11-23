@@ -285,8 +285,8 @@ type stripEnd struct {
 	// character after the strip and before it logs out.
 	carry map[int32]int32
 	// level, when above 0, is the level the GM sets the character to
-	// first: a farmer keeps the levels it gains or loses run after run, and
-	// with them the spots it picks.
+	// first: a character keeps the level a run left it at, and a farmer
+	// picks its spots by it.
 	level int32
 }
 
