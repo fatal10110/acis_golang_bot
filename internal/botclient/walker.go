@@ -195,6 +195,7 @@ func (w *walker) reset(dest Point, arrive int32, purpose walkPurpose) {
 	w.status, w.reason, w.endedAt = walkWalking, "", time.Time{}
 	w.route = nil
 	w.blocked, w.desync, w.watchdog, w.doors = 0, 0, 0, 0
+	w.plan.Avoid.Clear()
 }
 
 // unreachable ends the walk with reason.
@@ -418,6 +419,10 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 	case errors.Is(err, nav.ErrBudget):
 		w.unreachable(reasonBudget)
 		return Action{}, false
+	case errors.Is(err, nav.ErrUnreachable) && w.plan.Avoid.Len() > 0:
+		// The refused segments' columns cut every way left.
+		w.unreachable(reasonBlocked)
+		return Action{}, false
 	case err != nil || len(route) < 2:
 		w.unreachable(reasonNoRoute)
 		return Action{}, false
@@ -586,7 +591,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			seg.answered = true
 			switch {
 			case still:
-				b.walkBlocked()
+				b.walkBlocked(e.Dest)
 			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
 				b.walkDesync(seg.door)
 			default:
@@ -600,7 +605,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			}
 		case !seg.sentAt.IsZero() && still:
 			if horizontal2(e.Dest, seg.to) > walkSlop*walkSlop {
-				b.walkBlocked()
+				b.walkBlocked(e.Dest)
 				return
 			}
 			// Stopped on the segment's end: it arrived.
@@ -633,11 +638,15 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 	}
 }
 
-// walkBlocked takes a blocked stop of the segment in flight: the step chain
-// differed from the walker's check. It replans from the stop point.
-func (b *Brain) walkBlocked() {
+// walkBlocked takes a blocked stop at stop of the segment in flight: the
+// step chain differed from the walker's check. It replans from the stop
+// point, and every plan of this walk keeps out of the columns of the rest of
+// the segment, from the stop point to its end (docs/navigation.md, "Server
+// answers to its own moves").
+func (b *Brain) walkBlocked(stop Point) {
 	w := &b.walk
 	b.metrics.NavBlocked()
+	w.plan.Avoid.AddLine(toLoc(stop), toLoc(w.seg.to))
 	w.seg, w.route = segment{}, nil
 	if w.blocked++; w.blocked >= walkMaxBlocked {
 		w.unreachable(reasonBlocked)

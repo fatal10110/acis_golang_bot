@@ -41,6 +41,10 @@ type Planner struct {
 	// Water is the water zones routes keep out of; nil is none. A planner
 	// for a hierarchy reads the Water its nav cache was built with.
 	Water *Water
+	// Avoid is the columns the current route keeps out of; the zero value
+	// is none. The cell search, the string pull and the refinement of
+	// Hierarchy.Route honor it; its owner sets it per route.
+	Avoid Avoid
 }
 
 // Locate snaps a world point to its cell and the layer nearest its Z, as the
