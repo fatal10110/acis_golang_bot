@@ -493,37 +493,37 @@ type Build struct {
 
   ```go
   type Step struct {
-  	Skill   int32
-  	// Weapons: the worn weapon's kind must be one, or SHIELD for a worn shield (the
-  	// server checks the held items); none for any.
-  	Weapons []string
-  	// The step applies only while the target's HP percent is at least MinTargetHP,
-  	// the bot's HP is under SelfHPBelow (sustain), and its MP is above MPAbove.
-  	MinTargetHP, SelfHPBelow, MPAbove int
-  	// Within casts the step only while the target is that close (a skill whose range is
-  	// shorter than the kit's fight range, such as Energy Bolt at 400 or Aura Burn at 150);
-  	// 0 for any distance. Attackers casts it only with at least that many attackers.
-  	Within    int32
-  	Attackers int
-  	// MPBelow casts it only with MP under that percent (Body To Mind); SelfHPAbove only
-  	// with HP above it.
-  	MPBelow, SelfHPAbove int
-  	// Target is whom the step is cast on: the current target (zero), the bot itself,
-  	// a second attacker (Dryad Root on the attacker the bot is not fighting) or the
-  	// party leader's target (a support's assist).
-  	Target StepTarget
-  	// Idle casts it only out of combat (Focused Force charging between fights).
-  	Idle bool
-  	// Charges casts it only with at least that many force charges (EtcStatusUpdate),
-  	// the skill's own Charges condition. ChargeToMax casts a charging skill only below
-  	// its maxCharges at the level the bot knows (the server refuses a full charge).
-  	Charges     int
-  	ChargeToMax bool
-  	// Opener casts it only as the first attack on a fresh target, once; a self-target,
-  	// Idle or enemy sustain step before it (Rapid Shot, War Cry, Focused Force, a Drain
-  	// Health under its HP gate) does not use the opener up.
-  	Opener bool
-  	Role   Role // zero for every role; else only in that role's rotation
+      Skill   int32
+      // Weapons: the worn weapon's kind must be one, or SHIELD for a worn shield (the
+      // server checks the held items); none for any.
+      Weapons []string
+      // The step applies only while the target's HP percent is at least MinTargetHP,
+      // the bot's HP is under SelfHPBelow (sustain), and its MP is above MPAbove.
+      MinTargetHP, SelfHPBelow, MPAbove int
+      // Within casts the step only while the target is that close (a skill whose range is
+      // shorter than the kit's fight range, such as Energy Bolt at 400 or Aura Burn at 150);
+      // 0 for any distance. Attackers casts it only with at least that many attackers.
+      Within    int32
+      Attackers int
+      // MPBelow casts it only with MP under that percent (Body To Mind); SelfHPAbove only
+      // with HP above it.
+      MPBelow, SelfHPAbove int
+      // Target is whom the step is cast on: the current target (zero), the bot itself,
+      // a second attacker (Dryad Root on the attacker the bot is not fighting) or the
+      // party leader's target (a support's assist).
+      Target StepTarget
+      // Idle casts it only out of combat (Focused Force charging between fights).
+      Idle bool
+      // Charges casts it only with at least that many force charges (EtcStatusUpdate),
+      // the skill's own Charges condition. ChargeToMax casts a charging skill only below
+      // its maxCharges at the level the bot knows (the server refuses a full charge).
+      Charges     int
+      ChargeToMax bool
+      // Opener casts it only as the first attack on a fresh target, once; a self-target,
+      // Idle or enemy sustain step before it (Rapid Shot, War Cry, Focused Force, a Drain
+      // Health under its HP gate) does not use the opener up.
+      Opener bool
+      Role   Role // zero for every role; else only in that role's rotation
   }
   ```
 
