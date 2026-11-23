@@ -119,8 +119,26 @@ func (b *Brain) unfought(now time.Time) int32 {
 	return id
 }
 
+// mayFlee reports whether a run away at now could end the fight: always,
+// but with FleeOutrun while a live creature attacking the bot runs as fast
+// as it or faster (effective run speeds, NPCInfo and CharInfo against
+// UserInfo).
+func (b *Brain) mayFlee(now time.Time) bool {
+	if !b.persona.FleeOutrun {
+		return true
+	}
+	run := b.world.Self.RunSpeed
+	for id := range b.world.Attackers {
+		if o := b.world.object(id); o != nil && !o.Dead && b.world.attacking(id, now) && o.RunSpeed >= run {
+			return false
+		}
+	}
+	return true
+}
+
 // ruleOutnumbered is rule 4: hit by two or more attackers, flee from the
-// hardest hitter with HP under OutmatchedHP, else fight it. A target that
+// hardest hitter with HP under OutmatchedHP while it may (mayFlee), else
+// fight it. A target that
 // is one of the attackers is kept until the hardest hitter has dealt more
 // than switchFactor times its damage.
 func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
@@ -132,7 +150,7 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 	if len(hits) < 2 {
 		return Action{}, false
 	}
-	if below(s.HP, s.MaxHP, b.persona.OutmatchedHP) {
+	if below(s.HP, s.MaxHP, b.persona.OutmatchedHP) && b.mayFlee(now) {
 		return b.flee(hits[0], now), true
 	}
 	if s.Sitting {

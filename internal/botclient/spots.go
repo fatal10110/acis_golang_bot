@@ -61,18 +61,29 @@ type SpotPolicy struct {
 	// Leash is how far from the spot's centre the bot may end a fight
 	// before it walks back.
 	Leash int32
+	// PackShare widens a death's DeathAvoid to the spots like the one the
+	// bot died holding, when that one's aggressive monsters run in a pack
+	// (spotPack above 1): for DeathAvoid it also passes over every spot
+	// whose pack is at least PackShare of that one's and whose aggressive
+	// monsters stand as high above the bot or higher (packBound). Talking
+	// Island's orc and werewolf makers kill a starter-geared fighter of
+	// level 14 at each in turn (#281); the gear its stats come from is not
+	// in the datapack, so a death is what tells it a pack is too much. 0
+	// avoids the one spot alone.
+	PackShare float64
 }
 
 // defaultSpotPolicy is the farmer's spot choice: monsters up to two levels
 // above the bot, aggressive ones not above it (plan, farmer) once it is
 // past level 5, leaving at five levels over; spread over every spot that
 // fits within twice the newbie zone's reach, sharing full ones rather than
-// waiting (#137).
+// waiting (#137); a death at a pack passes over its like (#281).
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
 		MaxTravel: 20000, Wander: 40000, Overflow: true,
 		Crowd: 4, AvoidFor: 10 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
+		PackShare: 0.8,
 	}
 }
 
@@ -83,6 +94,63 @@ func (p *SpotPolicy) fits(s *datapack.Spot, level int) bool {
 		aggro = max(aggro, p.Below)
 	}
 	return s.MaxLevel <= level+p.Below && s.AggroLevel <= level+aggro && s.MaxLevel >= level-p.Above
+}
+
+// spotPack is how many of s's aggressive monsters a fight there likely
+// draws: those of them, spread evenly over its territory, within its aggro
+// range plus its clan call range of the bot, as a monster that sees the bot
+// attacks it (npc hostile_target.go) and calls the members of its clan
+// within ClanRange around it (npc/clan.go).
+func spotPack(s *datapack.Spot) float64 {
+	if s.Aggressive == 0 || s.Area <= 0 {
+		return 0
+	}
+	r := float64(s.AggroRange + s.ClanRange)
+	return float64(s.Aggressive) * min(1, math.Pi*r*r/s.Area)
+}
+
+// spotFits reports whether s fits the bot at now: its level, and no pack
+// a death taught it to pass over.
+func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
+	self := &b.world.Self
+	level := int(self.Level)
+	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now)
+}
+
+// packBound is the pack a death at one taught the bot to pass over
+// (SpotPolicy.PackShare), until a time.
+type packBound struct {
+	// pack is the smallest spotPack covered, above how many levels over
+	// the bot its aggressive monsters stand at least.
+	pack  float64
+	above int
+	// fast covers only the packs the bot cannot outrun: it died at one, so
+	// that a flee might yet save it from a slower one. A death at a pack it
+	// outran covers them all.
+	fast  bool
+	until time.Time
+}
+
+// covers reports whether s is a pack the bound has a bot of level that runs
+// at run pass over at now.
+func (k *packBound) covers(s *datapack.Spot, level int, run int32, now time.Time) bool {
+	return now.Before(k.until) && s.Aggressive > 0 && spotPack(s) >= k.pack && s.AggroLevel-level >= k.above &&
+		(!k.fast || s.RunSpeed >= float64(run))
+}
+
+// learnPack widens the bound to the packs like sp on a death holding it at
+// now, for DeathAvoid; a bound still running keeps covering what it did.
+func (b *Brain) learnPack(sp *datapack.Spot, now time.Time) {
+	p, self, k := &b.persona.Spots, &b.world.Self, &b.spot.pack
+	n := spotPack(sp)
+	if p.PackShare <= 0 || p.DeathAvoid <= 0 || n <= 1 {
+		return
+	}
+	next := packBound{pack: n * p.PackShare, above: sp.AggroLevel - int(self.Level), fast: sp.RunSpeed >= float64(self.RunSpeed), until: now.Add(p.DeathAvoid)}
+	if now.Before(k.until) {
+		next.pack, next.above, next.fast = min(next.pack, k.pack), min(next.above, k.above), next.fast && k.fast
+	}
+	*k = next
 }
 
 const (
@@ -112,6 +180,8 @@ type spotVisit struct {
 	retryAt time.Time
 	// avoid are the spots the bot moved on from, until a time.
 	avoid map[int]time.Time
+	// pack is the pack its deaths taught it to pass over.
+	pack packBound
 }
 
 // ruleSpot is a rule 9 errand ahead of the persona's goal: with a spot
@@ -341,12 +411,11 @@ type spotCand struct {
 // holds.
 func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
-	level := int(b.world.Self.Level)
 	far := max(float64(p.MaxTravel), float64(p.Wander))
 	var cands []spotCand
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !p.fits(sp, level) {
+		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !b.spotFits(sp, now) {
 			continue
 		}
 		line := math.Sqrt(float64(horizontal2(here.at, Point{X: sp.Center.X, Y: sp.Center.Y})))
@@ -429,9 +498,11 @@ func (b *Brain) moveOn(now time.Time, d time.Duration) {
 }
 
 // diedAtSpot gives back the spot the bot holds, if any, on its death,
-// avoiding it for SpotPolicy.DeathAvoid.
+// avoiding it, and the packs like it (learnPack), for
+// SpotPolicy.DeathAvoid.
 func (b *Brain) diedAtSpot(now time.Time) {
 	if d := b.persona.Spots.DeathAvoid; b.spot.held && d > 0 {
+		b.learnPack(&b.cfg.Spots.spots[b.spot.idx], now)
 		b.moveOn(now, d)
 		return
 	}

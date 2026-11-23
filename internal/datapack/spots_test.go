@@ -26,7 +26,7 @@ func TestSpots(t *testing.T) {
 		{
 			name:  "monsters",
 			maker: Maker{Name: "m", Territories: []*Territory{square}, MaximumNPCs: 9, Spawns: []Spawn{{NPCID: 20001}, {NPCID: 20002}}},
-			want:  Spot{Maker: "m", Territory: square, Center: Point{500, 500}, Z: -3250, MinLevel: 3, MaxLevel: 6, AggroLevel: 6, MaximumNPCs: 9},
+			want:  Spot{Maker: "m", Territory: square, Center: Point{500, 500}, Z: -3250, MinLevel: 3, MaxLevel: 6, AggroLevel: 6, MaximumNPCs: 9, Area: 1e6, AggroRange: 300},
 			ok:    true,
 		},
 		{name: "event", maker: Maker{Name: "m", Territories: []*Territory{square}, Event: "christmas", Spawns: []Spawn{{NPCID: 20001}}}},
@@ -44,7 +44,7 @@ func TestSpots(t *testing.T) {
 			maker: Maker{Name: "m", Territories: []*Territory{square}, MaximumNPCs: 3, Spawns: []Spawn{
 				{NPCID: 30001}, {NPCID: 27001}, {NPCID: 20002, Respawn: NoRespawn}, {NPCID: 20003},
 			}},
-			want: Spot{Maker: "m", Territory: square, Center: Point{500, 500}, Z: -3250, MinLevel: 9, MaxLevel: 9, MaximumNPCs: 3},
+			want: Spot{Maker: "m", Territory: square, Center: Point{500, 500}, Z: -3250, MinLevel: 9, MaxLevel: 9, MaximumNPCs: 3, Area: 1e6},
 			ok:   true,
 		},
 	}

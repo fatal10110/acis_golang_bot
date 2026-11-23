@@ -16,6 +16,12 @@ type NPC struct {
 	// AggroRange is the distance at which the NPC attacks on sight; 0 means
 	// it is passive.
 	AggroRange int
+	// RunSpeed is the template's run speed (runSpd), 0 when absent.
+	RunSpeed float64
+	// ClanRange is how far around it an attacked NPC calls the members of
+	// its clan to join the fight (the server's makesClanCalls and
+	// forEachClanMember, npc/clan.go); 0 for an NPC of no clan.
+	ClanRange int
 }
 
 type npcFile struct {
@@ -65,7 +71,8 @@ func addNPCs(npcs map[int32]NPC, els []npcElement) error {
 
 // buildNPC mirrors the server's buildNPCTemplate for the fields bots read:
 // <set> values override same-named attributes, id, name and type are
-// required, level defaults to 1 and aggroRange to 0.
+// required, level defaults to 1, aggroRange to 0 and runSpd to 0, and
+// clanRange is required with a clan and read only then.
 func buildNPC(el npcElement) (NPC, error) {
 	a := foldAttrs(el.Attrs)
 	for _, s := range el.Sets {
@@ -77,6 +84,10 @@ func buildNPC(el npcElement) (NPC, error) {
 		Type:       a.str("type"),
 		Level:      a.intDefault("level", 1),
 		AggroRange: a.intDefault("aggroRange", 0),
+		RunSpeed:   a.floatDefault("runSpd", 0),
+	}
+	if _, clan := a.vals["clan"]; clan {
+		npc.ClanRange = a.int("clanRange")
 	}
 	if a.err != nil {
 		return NPC{}, fmt.Errorf("npc %s: %w", a.strDefault("id", "?"), a.err)

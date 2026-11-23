@@ -26,6 +26,11 @@ type Persona struct {
 	// CriticalHP (rule 3), so it drinks before OutmatchedHP has it flee; it
 	// heals itself and flees only under CriticalHP. 0 never drinks early.
 	CrowdedHP int
+	// FleeOutrun has the bot flee (rules 3 and 4) only while it outruns
+	// every creature attacking it: one that runs as fast as it or faster
+	// keeps hitting a bot that runs away, which hits nothing back, so it
+	// fights on instead, drinking its potions (#281).
+	FleeOutrun bool
 	// Potions are the healing potion template ids rule 3 drinks, best
 	// first; none drinks nothing. DefaultPersona's are a built-in list;
 	// TravelMap.WithItemIndex replaces it with the datapack's.
@@ -204,7 +209,8 @@ func DefaultPersona() Persona {
 		Recover:        defaultRecoverPolicy(),
 		JoinParty:      acceptParty,
 		CriticalHP:     20,
-		CrowdedHP:      60,
+		CrowdedHP:      80,
+		FleeOutrun:     true,
 		FleeDistance:   600,
 		OutmatchedHP:   50,
 		BlacklistAfter: 4,
@@ -579,9 +585,10 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 
 // ruleCritical is rule 3: in combat with HP critical, stand up, then drink
 // a potion whose reuse has run out, else heal itself, else flee away from
-// the target. With two or more attackers on the bot and HP under CrowdedHP
-// it drinks one early, standing, and leaves the turn to the next rules
-// when none is ready.
+// the target unless FleeOutrun holds it in the fight (mayFlee), which
+// leaves the turn to the fight rules. With two or more attackers on the bot
+// and HP under CrowdedHP it drinks one early, standing, and leaves the turn
+// to the next rules when none is ready.
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
@@ -605,6 +612,9 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	}
 	if a, ok := b.heal(s.ObjectID, now); ok {
 		return a, true
+	}
+	if !b.mayFlee(now) {
+		return Action{}, false
 	}
 	return b.flee(b.world.Target, now), true
 }

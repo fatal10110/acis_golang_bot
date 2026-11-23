@@ -6,6 +6,9 @@
 		<set name="level" val="1"/>
 		<set name="radius" val="10.0"/>
 		<set name="aggroRange" val="1000"/>
+		<set name="runSpd" val="108.9"/>
+		<set name="clan" val="gremlin_clan"/>
+		<set name="clanRange" val="300"/>
 		<ai>
 			<set name="type" val="Folk"/>
 			<set name="level" val="99"/>
