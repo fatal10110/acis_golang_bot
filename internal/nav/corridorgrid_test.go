@@ -78,7 +78,7 @@ func refCorridorStretches(p *Planner, a, b location.Location) []stretch {
 
 // TestCorridorGridMatchesMap checks the grid corridor test against the map
 // one on random segments around every scene, short and long (a segment
-// longer than the grid grows it), dry and with a water box, on one scratch
+// longer than the grid wraps around it), dry and with a water box, on one scratch
 // reused across them all as a pull reuses it: corridorStretches returns the
 // same stretches and corridorClear answers whether there are none.
 func TestCorridorGridMatchesMap(t *testing.T) {
@@ -98,7 +98,7 @@ func TestCorridorGridMatchesMap(t *testing.T) {
 	}{
 		{"short", dry, 300},
 		{"navSegment", dry, 1800},
-		{"long grows the grid", dry, 6000},
+		{"long wraps the grid", dry, 6000},
 		{"water", &wet, 600},
 	}
 	rng := rand.New(rand.NewPCG(3, 9))
@@ -129,9 +129,37 @@ func TestCorridorGridMatchesMap(t *testing.T) {
 					failing++
 				}
 			}
+			if got, want := len(s.grid.slots), gridSide*gridSide; got != want {
+				t.Fatalf("grid holds %d slots, want %d", got, want)
+			}
 			if failing == 0 || failing == 600 {
 				t.Fatalf("%d of 600 segments fail the corridor test: the sample does not exercise both sides", failing)
 			}
 		})
+	}
+}
+
+// TestCorridorGridBoundedOnLongSegment checks that a segment far longer than
+// the grid (40000 units, 2500 cells, across the scenes and beyond the
+// geodata) keeps the grid at gridSide² slots and still matches the map test.
+func TestCorridorGridBoundedOnLongSegment(t *testing.T) {
+	p := testPlanner(t)
+	s := getScratch()
+	defer putScratch(s)
+	for _, d := range [][2]int{{40000, 0}, {0, 40000}, {28284, 28284}, {-30000, 20000}} {
+		a := floor(p.Engine, at(Open, 0, 0, 0))
+		b := location.Location{X: a.X + d[0], Y: a.Y + d[1], Z: a.Z}
+		s.grid.invalidate()
+		want := refCorridorStretches(p, a, b)
+		got := slices.Clone(p.corridorStretches(s, a, b))
+		if !slices.Equal(got, want) {
+			t.Fatalf("corridorStretches(%v, %v) = %v, want %v", a, b, got, want)
+		}
+		if clear := p.corridorClear(s, a, b); clear != (len(want) == 0) {
+			t.Fatalf("corridorClear(%v, %v) = %v, want %v", a, b, clear, len(want) == 0)
+		}
+		if got, want := len(s.grid.slots), gridSide*gridSide; got != want || cap(s.grid.slots) != want {
+			t.Fatalf("grid holds %d slots (cap %d), want %d", got, cap(s.grid.slots), want)
+		}
 	}
 }

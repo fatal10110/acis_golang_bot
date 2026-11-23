@@ -503,7 +503,9 @@ rule. #209 changes no answer: routes, distances and members are byte for byte th
 
 - **Pull**: the corridor test runs on a per-scratch grid that caches what it reads of each cell
   across one pull's candidates, stops at its first failing cell, and runs before `CanMove` (both
-  must pass, so the order changes nothing).
+  must pass, so the order changes nothing). The grid is toroidal and fixed at 256×256 cells
+  (1 MB) for a segment of any length: the corridor fills in line order and each line cell's
+  verdict is taken six line cells later, so no cell is evicted while it is still needed.
 - **Indexes**: the cell search, the abstract search and the exact check index their nodes in an
   open-addressing table cleared in O(1), instead of Go maps.
 - **Water**: boxes are indexed per 2048-unit bucket, not per region tile, and a crossing tests
@@ -518,7 +520,7 @@ rule. #209 changes no answer: routes, distances and members are byte for byte th
 | 40000-unit route warm | p99 ≤ 10 ms | p50 377 ms, p99 1912 ms | p50 108 ms, p99 564 ms (#256) |
 | 40000-unit route cold | p99 ≤ 150 ms | p50 343 ms, p99 15.4 s | p50 133 ms, p99 723 ms (#256) |
 | heap per route query, warm | ≤ 4 MB | up to 130 MB | p99 0.01 MB, max 0.5 MB |
-| heap per route query, cold | — | up to 116 MB | p99 27 MB, max 40 MB: scratch growing on first touch |
+| heap per route query, cold | ≤ 4 MB | up to 116 MB | p99 27 MB, max 40 MB: scratch growing on first touch (#256) |
 | heap per cold `Locate` | — | up to 34.5 MB | p99 9.1 MB, max 30.4 MB, its cached cluster result excluded |
 
 "Heap per query" is what one query allocates, the cluster results it adds to the LRU excluded:
@@ -526,8 +528,10 @@ those are held, bounded by the LRU's byte limit. The "before" heap column is the
 largest allocation of one query, cluster results included. Warm (pages resident) includes one pass over the
 distances before they are timed.
 
-The `Locate` and heap targets hold. The distance and route targets need the searches to do less
-work, which changes answers; #256 tracks them. Over 200 warm routes the cell search expands about
+The `Locate` targets and the warm route heap target hold. The heap target ("heap per route
+query ≤ 4 MB" under Cost bounds) is not met by a cold route, whose scratch grows on first touch;
+the distance and route time targets need the searches to do less work, which changes answers.
+#256 tracks all three. Over 200 warm routes the cell search expands about
 60,000 cells per route, 27 times the cells on the path (the octile heuristic ignores the
 clearance extra), and 62% of the segments fail the corridor test and take the exact check.
 

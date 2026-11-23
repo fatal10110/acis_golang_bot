@@ -116,18 +116,27 @@ func (p *Planner) CorridorOpen(a, b location.Location) bool {
 // and returns the runs of line cells that fail it, in s.stretches.
 func (p *Planner) corridorStretches(s *scratch, a, b location.Location) []stretch {
 	p.corridorFill(s, a, b, false)
-	s.stretches = s.stretches[:0]
-	for _, lc := range s.line {
-		if p.lineCellOpen(s, lc) {
-			continue
-		}
-		if n := len(s.stretches); n > 0 && s.stretches[n-1].t1 >= lc.t0 {
-			s.stretches[n-1].t1 = max(s.stretches[n-1].t1, lc.t1)
-			continue
-		}
-		s.stretches = append(s.stretches, stretch{lc.t0, lc.t1})
-	}
 	return s.stretches
+}
+
+// lineCellLag is how many line cells after lc the corridor fill must reach
+// before lc's verdict is final: a flag of a cell around lc changes only when
+// a neighbour of that cell joins, which lies within Chebyshev distance 3 of
+// lc, and the line, monotone on both axes, is farther than that after six
+// cells.
+const lineCellLag = 6
+
+// addStretch appends lc to s.stretches when it fails, merging it into the
+// last stretch when they touch.
+func (p *Planner) addStretch(s *scratch, lc lineCell) {
+	if p.lineCellOpen(s, lc) {
+		return
+	}
+	if n := len(s.stretches); n > 0 && s.stretches[n-1].t1 >= lc.t0 {
+		s.stretches[n-1].t1 = max(s.stretches[n-1].t1, lc.t1)
+		return
+	}
+	s.stretches = append(s.stretches, stretch{lc.t0, lc.t1})
 }
 
 // corridorClear reports whether the segment from a to b passes the
@@ -143,14 +152,16 @@ func (p *Planner) corridorClear(s *scratch, a, b location.Location) bool {
 // corridorFill puts every cell the line from a to b crosses, with a
 // one-cell margin, into a new corridor of s.grid, the line cells in s.line.
 // With stop it returns false at the first cell that makes the test fail;
-// else it fills the whole corridor and reports whether it passed.
+// else it fills the whole corridor, collects the failing runs of line cells
+// in s.stretches as their verdicts become final (lineCellLag), and reports
+// whether it passed.
 func (p *Planner) corridorFill(s *scratch, a, b location.Location, stop bool) bool {
 	s.line = appendLineCells(s.line[:0], a, b)
-	first, last := s.line[0], s.line[len(s.line)-1]
-	s.grid.begin(max(abs(last.x-first.x), abs(last.y-first.y)))
+	s.stretches = s.stretches[:0]
+	s.grid.begin()
 	req := quadrant(a, b)
 	open := true
-	for _, lc := range s.line {
+	for i, lc := range s.line {
 		for dx := -1; dx <= 1; dx++ {
 			for dy := -1; dy <= 1; dy++ {
 				if !p.corridorAdd(s, lc.x+dx, lc.y+dy, req) {
@@ -160,6 +171,14 @@ func (p *Planner) corridorFill(s *scratch, a, b location.Location, stop bool) bo
 					open = false
 				}
 			}
+		}
+		if !stop && i >= lineCellLag {
+			p.addStretch(s, s.line[i-lineCellLag])
+		}
+	}
+	if !stop {
+		for _, lc := range s.line[max(len(s.line)-lineCellLag, 0):] {
+			p.addStretch(s, lc)
 		}
 	}
 	return open

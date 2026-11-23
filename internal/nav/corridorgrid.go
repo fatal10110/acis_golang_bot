@@ -7,13 +7,15 @@ import "github.com/fatal10110/acis_golang_bot/internal/geo/block"
 // share most of their cells), and which cells are in the current test's
 // corridor. It replaces a map rebuilt per test (#209).
 //
-// The grid is toroidal: cell (gx, gy) lives in slot (gx mod side, gy mod
-// side), and the slot keeps the cell's coordinates, so it answers only for
-// its own cell and a cell evicted by another is read again. One test's
-// corridor and its neighbours span fewer than side cells on each axis (begin
-// grows the grid for a longer segment), so they never share a slot.
+// The grid is toroidal and of a fixed size, whatever the segment's length:
+// cell (gx, gy) lives in slot (gx mod gridSide, gy mod gridSide), and the
+// slot keeps the cell's coordinates, so it answers only for its own cell and
+// a cell evicted by another is read again. The corridor is filled in line
+// order and the line is monotone on both axes, so two cells sharing a slot
+// lie at least gridSide-2 line cells apart, while a cell is needed only
+// while line cells at most lineCellLag away are added: no cell is evicted
+// while it is still needed, and the memory stays gridSide² slots.
 type corridorGrid struct {
-	side  int // a power of two
 	gen   uint32
 	mark  uint32
 	slots []gridSlot
@@ -39,10 +41,10 @@ const (
 	gridClimb                      // condition 3 fails toward a neighbour
 )
 
-// minGridSide covers a navSegment corridor and its neighbours (157 cells
-// plus a margin of two on each side) with room for the waypoint's other
-// candidates.
-const minGridSide = 256
+// gridSide is the grid's side, a power of two: a navSegment corridor and its
+// neighbours (157 cells plus a margin of two on each side) fit, so one
+// pull's candidates from a waypoint share their cached cells.
+const gridSide = 256
 
 // invalidate drops every cached cell read: the engine may have changed (a
 // door toggled) since the last pull.
@@ -53,15 +55,10 @@ func (g *corridorGrid) invalidate() {
 	}
 }
 
-// begin starts a test whose line cells span span cells on their longer axis.
-func (g *corridorGrid) begin(span int) {
-	if need := span + 5; g.side < need {
-		side := max(g.side, minGridSide)
-		for side < need {
-			side *= 2
-		}
-		g.side = side
-		g.slots = make([]gridSlot, side*side)
+// begin starts a test.
+func (g *corridorGrid) begin() {
+	if g.slots == nil {
+		g.slots = make([]gridSlot, gridSide*gridSide)
 		g.gen, g.mark = 1, 0
 	}
 	g.mark++
@@ -81,8 +78,8 @@ func (g *corridorGrid) wrap() {
 func gridKey(gx, gy int) uint32 { return uint32(uint16(gx))<<16 | uint32(uint16(gy)) }
 
 func (g *corridorGrid) at(gx, gy int) *gridSlot {
-	m := g.side - 1
-	return &g.slots[(gy&m)*g.side+gx&m]
+	const m = gridSide - 1
+	return &g.slots[(gy&m)*gridSide+gx&m]
 }
 
 // member returns the slot of (gx, gy) when that cell is in the current
