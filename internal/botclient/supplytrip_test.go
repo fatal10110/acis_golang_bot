@@ -12,11 +12,9 @@ const (
 	keptMat int32 = 1865
 	// soeObj is the carried Scroll of Escape stack.
 	soeObj = int32(50)
-	// aggroMob is an aggressive monster template (aggro range 300), and
-	// calmMob a passive one.
-	aggroMob int32 = 20101
-	calmMob  int32 = 20102
-	mobObj         = int32(0x20000031)
+	// mob is a monster template.
+	mob    int32 = 20102
+	mobObj       = int32(0x20000031)
 	// townGK is the town's gatekeeper template.
 	townGK int32 = 30006
 )
@@ -40,7 +38,6 @@ func newTripBrain(t *testing.T, items ...Item) *Brain {
 		gatekeepers: []gatekeeper{{npcID: townGK, at: town}},
 		weights:     map[int32]int32{lesserHealingPotion: 5, scrollOfEscape: 120, junkMat: 10, keptMat: 10},
 		spawnedSold: map[int32]bool{lesserHealingPotion: true},
-		aggro:       map[int32]int64{aggroMob: 300},
 	}
 	b.world.Apply(ItemList{Items: items}, t0)
 	b.world.Self.MaxLoad = 100000
@@ -202,7 +199,7 @@ func TestSupplyTripScroll(t *testing.T) {
 		{
 			name: "attacked", after: 5 * time.Second, rule: "escape",
 			edit: func(b *Brain, now time.Time) {
-				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: aggroMob, Attackable: true, Pos: Point{X: 100}}, now)
+				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: mob, Attackable: true, Pos: Point{X: 100}}, now)
 				b.world.Apply(Attack{AttackerID: mobObj, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}, now)
 				b.world.Self.InCombat = true
 			},
@@ -252,67 +249,49 @@ func TestSupplyTripStandsUp(t *testing.T) {
 	}
 }
 
-// TestSupplyTripSafety checks that the scroll waits for a safe moment: no
-// attacker, no aggressive monster within its aggro range; a passive one
-// or an aggressive one out of range does not stop it, and with no safe
+// TestSupplyTripSafety checks that the scroll waits for a safe moment, no
+// attacker; a monster close by that does not attack, as at a starter spot
+// where nearly every monster would attack on sight (#251), or one whose
+// last hit is past attackerWindow does not stop it, and with no safe
 // moment within SafeWait the bot walks home instead.
 func TestSupplyTripSafety(t *testing.T) {
 	start := at(time.Minute)
 	tests := []struct {
-		name  string
-		setup func(b *Brain)
+		name string
+		// hit is how long before each decide the monster hits the bot, 0
+		// for never.
+		hit   time.Duration
 		after time.Duration
 		want  actionKind
 	}{
 		{name: "safe", want: actUseItem},
-		{
-			name: "attacker", want: actHold,
-			setup: func(b *Brain) {
-				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: calmMob, Attackable: true, Pos: Point{X: 1000}}, start)
-				b.world.Apply(Attack{AttackerID: mobObj, Hits: []AttackHit{{TargetID: selfID, Damage: 1}}}, start)
-			},
-		},
-		{
-			name: "aggressive in range", want: actHold,
-			setup: func(b *Brain) {
-				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: aggroMob, Attackable: true, Pos: Point{X: 300}}, start)
-			},
-		},
-		{
-			name: "aggressive out of range", want: actUseItem,
-			setup: func(b *Brain) {
-				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: aggroMob, Attackable: true, Pos: Point{X: 301}}, start)
-			},
-		},
-		{
-			name: "passive in range", want: actUseItem,
-			setup: func(b *Brain) {
-				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: calmMob, Attackable: true, Pos: Point{X: 100}}, start)
-			},
-		},
-		{
-			name: "aggressive in range past SafeWait: walks", after: 2 * time.Minute, want: actMove,
-			setup: func(b *Brain) {
-				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: aggroMob, Attackable: true, Pos: Point{X: 300}}, start)
-			},
-		},
+		{name: "monster close by, not attacking (#251)", want: actUseItem},
+		{name: "attacker", hit: time.Second, want: actHold},
+		{name: "last hit past attackerWindow", hit: attackerWindow + time.Second, want: actUseItem},
+		{name: "attacker past SafeWait: walks", hit: time.Second, after: 2 * time.Minute, want: actMove},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTripBrain(t, soeStack(1))
 			b.supplyTrip.potions = true
-			if tt.setup != nil {
-				tt.setup(b)
+			if tt.name != "safe" {
+				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: mob, Attackable: true, Pos: Point{X: 100}}, start)
 			}
-			if rule, a := b.decide(start); rule != "supply" {
+			decide := func(now time.Time) (string, Action) {
+				if tt.hit > 0 {
+					b.world.Apply(Attack{AttackerID: mobObj, Hits: []AttackHit{{TargetID: selfID, Damage: 1}}}, now.Add(-tt.hit))
+				}
+				return b.decide(now)
+			}
+			if rule, a := decide(start); rule != "supply" {
 				t.Fatalf("decide = rule %q action %d, want supply", rule, a.kind)
 			}
 			if tt.after > 0 {
-				if rule, a := b.decide(start.Add(tt.after - time.Second)); rule != "supply" || a.kind != actHold {
+				if rule, a := decide(start.Add(tt.after - time.Second)); rule != "supply" || a.kind != actHold {
 					t.Fatalf("before SafeWait: decide = rule %q action %d, want a supply hold", rule, a.kind)
 				}
 			}
-			if rule, a := b.decide(start.Add(tt.after)); rule != "supply" || a.kind != tt.want {
+			if rule, a := decide(start.Add(tt.after)); rule != "supply" || a.kind != tt.want {
 				t.Fatalf("decide = rule %q action %d, want supply %d", rule, a.kind, tt.want)
 			}
 		})

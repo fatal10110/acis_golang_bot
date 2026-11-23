@@ -80,13 +80,13 @@ func TestLiveTownPrep(t *testing.T) {
 // TestLiveSupplyTrip logs a farmer in at the far end of Talking Island,
 // out of every merchant's reach, carrying potions, two Scrolls of Escape,
 // adena and shots that run out within ten minutes of fighting (#175,
-// #182): at its spot it reads a scroll, lands in the village, restocks its
-// shots and scrolls before it leaves, then farms at a spot again. It
-// carries them from its login, so its use meter never sees it fight
-// without shots, which would leave its shot rate at zero. A death at its
-// spot before the trip (a starter spot's packs kill it at times) sends it
-// home by the respawn instead: the scenario then checks the restock after
-// the respawn and the farming after it, and no trip is verified.
+// #182): at its starter spot, where nearly every monster attacks on sight,
+// it reads a scroll (#251), lands in the village, restocks its shots and
+// scrolls before it leaves, then farms at a spot again. It carries them
+// from its login, so its use meter never sees it fight without shots,
+// which would leave its shot rate at zero. Any other way home fails: a
+// walk (no safe moment within Supply.SafeWait), or a death at its spot,
+// before the trip or during the read.
 func TestLiveSupplyTrip(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -115,12 +115,9 @@ func TestLiveSupplyTrip(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 	t.Logf("%s low on shots at %v", f.name, f.bot.Status().Position)
 
-	// Home is the recall's landing after a Scroll of Escape, a walk to the
-	// village when no safe moment came within Supply.SafeWait, or a death
-	// on the way, or at the spot before the trip (a starter spot's packs
-	// kill a level 16 farmer at times), and the respawn in the village:
-	// Revive arms the preparation gate as an arrival does (docs/items.md
-	// section 7), and the restock below is what the scenario checks.
+	// Home is the recall's landing after a Scroll of Escape. A walk to the
+	// village, or a death and the respawn there, fails at once with the way
+	// it took.
 	var read, landed, tripAt time.Time
 	var how string
 	var last string
@@ -143,7 +140,7 @@ func TestLiveSupplyTrip(t *testing.T) {
 			tripAt = time.Now()
 		}
 		// The landing follows the latest read: a read the bot died
-		// before recalls nothing, and the walk home may follow it.
+		// before recalls nothing.
 		if used := f.usedSince(scrollOfEscape, start); len(used) > 0 {
 			read = used[len(used)-1].At
 			for _, s := range f.watch.Seen(0) {
@@ -153,22 +150,18 @@ func TestLiveSupplyTrip(t *testing.T) {
 				}
 			}
 		}
-		if st.Rule == "supply" && dist(st.Position, townTI) < walkedHome {
-			landed, how = time.Now(), fmt.Sprintf("walked home, no safe moment for its scroll (#%d)", issueNeverSafe)
-			return ""
-		}
 		if dist(st.Position, townTI) < walkedHome {
+			way := "walked home, no safe moment for its scroll"
 			for _, s := range f.watch.Seen(0) {
 				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && s.At.After(start) {
-					landed, how = s.At, "died on the trip and respawned in the village"
+					way = "died on the trip and respawned in the village"
 					if tripAt.IsZero() || s.At.Before(tripAt) {
-						how = "died at its spot before the trip and respawned in the village"
+						way = "died at its spot before the trip and respawned in the village"
 					}
 				}
 			}
-			if !landed.IsZero() {
-				return ""
-			}
+			t.Log(f.digest())
+			t.Fatalf("%s home with no recall: %s (scroll read %v, trip seen %v, rule %q)", f.name, way, !read.IsZero(), !tripAt.IsZero(), st.Rule)
 		}
 		return fmt.Sprintf("not home: scroll read %v, trip seen %v, rule %q at %v", !read.IsZero(), !tripAt.IsZero(), st.Rule, st.Position)
 	})
@@ -229,11 +222,6 @@ const walkedHome = 2000
 // noteEvery is how often the supply trip scenario logs the bot's position
 // while nothing else about it changes.
 const noteEvery = 30 * time.Second
-
-// issueNeverSafe tracks the farmer at a starter spot finding no safe
-// moment to read its scroll: nearly every starter monster has an aggro
-// range (safeToEscape).
-const issueNeverSafe = 251
 
 // load is f's carried weight and weight limit as its last UserInfo or
 // StatusUpdate showed them.

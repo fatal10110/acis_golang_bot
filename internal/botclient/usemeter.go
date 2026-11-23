@@ -63,8 +63,8 @@ type SupplyPolicy struct {
 	// when a consumable runs out within ReturnMinutes of fighting (0 never),
 	// or the load passes ReturnLoad percent of the weight limit (0 never)
 	// with a town visit shedding at least ShedMin percent of it. It reads
-	// its Scroll of Escape only once no attacker and no aggressive monster
-	// in its aggro range is about; past SafeWait without one, it walks.
+	// its Scroll of Escape only once nothing attacks it; past SafeWait
+	// without such a moment, it walks.
 	ReturnMinutes int
 	ReturnLoad    int
 	ShedMin       int

@@ -490,9 +490,11 @@ grocer lists).
     nowhere to go do not send it home after every return;
   - the saved adena covers the gear goal.
 
-  It reads SoE only with no attacker and nothing aggressive within its aggro range. If that does
-  not happen within `Supply.SafeWait` (default 2 min), as at a spot that always has an aggressive
-  monster in range, it walks out instead. The triggers are read at the bot's spot every 5 s, and
+  It reads SoE only with no attacker. The recall is not a magic cast, so a hit does not break it
+  (server `cast/controller.go` `InterruptOnDamage`); only death, or a stun, sleep or paralysis a
+  fight lands, does. A monster that would attack on sight but has not does not block the read: at a
+  starter spot nearly every monster would (#251). If no such moment comes within `Supply.SafeWait`
+  (default 2 min), as at a spot where something always attacks, it walks out instead. The triggers are read at the bot's spot every 5 s, and
   not within 10 min of the last trip's end, so a bot back no better off farms a while first.
 - **SoE.** It stands up if sitting, then sends one UseItem of a carried SoE. While the cast runs it
   is in an **escaping hold**: every rule that moves, attacks, loots or clicks returns a hold until
