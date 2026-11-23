@@ -1,7 +1,7 @@
 #!/bin/bash
-# Hang guard and serializer for heavy gates (go test -race, e2e suites, golangci-lint).
+# Hang guard and serializer for heavy gates (scoped go test, e2e suites, golangci-lint).
 # Runs are serialized through a flock, so parallel wave lanes on a small box do not run
-# race suites side by side and OOM the machine.
+# test suites side by side and OOM the machine.
 # Killed after HEAVY_TIMEOUT (default 20m) with SIGQUIT, so a hung Go test dumps its
 # goroutines instead of running forever. Lock wait is not counted.
 # Usage: heavy <command> [args...]

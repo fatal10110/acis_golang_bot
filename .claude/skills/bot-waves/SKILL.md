@@ -113,7 +113,7 @@ calls, not their size. The prompts therefore point every agent at:
   worktrees with absolute paths.
 - `wave_mail.py pr-state --pr N` and `ci-wait --head SHA`: compact PR state (with `behind_by`, so
   the branch is updated only when behind) and an in-process CI wait for the merge agent.
-- `heavy <cmd>`: serializes heavy runs (race tests, e2e, lint) through one lock so parallel lanes
+- `heavy <cmd>`: serializes heavy runs (scoped tests, e2e, lint) through one lock so parallel lanes
   do not OOM a small box, and kills a hung run with SIGQUIT so Go dumps its goroutines.
 - STOP reaches agents through commands they run anyway: every `wave_mail.py` output of a stopping
   run carries `"stop": true`, `look.py` prints `### STOP`, and `heavy` prints it and refuses to
@@ -136,8 +136,8 @@ for its whole context again as a cache write, about 12x a cache read. On w1122, 
 - No agent runs the full suite locally. PR CI runs the unit tier on every push. This overrides
   the full-suite steps in the skills and in `docs/agents/verification.md`.
 - The implementation agent (including on fix rounds) and the review agent run only the tests the
-  change can affect: unit tests of the changed packages with `-race`, selected with `-run` where a
-  package is large. Every run goes through `heavy`.
+  change can affect: unit tests of the changed packages without `-race`, selected with `-run` where a
+  package is large. Every run goes through `heavy`. No agent runs `-race`; PR CI does.
 - **PR CI does not gate the e2e scenarios** (they need the server stack;
   `docs/agents/test-strategy.md`). When a change touches the protocol client, sessions, a codec or
   a behavior a scenario asserts, the agents run the related scenarios locally with
