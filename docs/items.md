@@ -414,7 +414,11 @@ picks one per persona.
   server drops a use still in its 500 ms reuse in silence). The comfort tier buys one per effect
   time of `TripMinutes`, margin included, within the weight the supplies leave under `BuyLoad`.
 - **Death penalty** (#299, `RecoverPolicy.LiftDeathPenalty`, rule `recover` after the buff
-  potion). The level (0-15) comes only in `EtcStatusUpdate` (0xf3, its seventh int32). A death raises
+  potion). The level (0-15) is `EtcStatusUpdate`'s seventh int32 (0xf3). That packet has no object
+  id, and the server also broadcasts another player's to everyone in view when its Charm of Courage
+  starts or ends. So the bot takes the level only from the first one of the session, sent at
+  EnterWorld before the spawn. After that it takes the level from the system messages sent only to
+  the bot with each change: 1916 carries the new level, 1917 means it is lifted. A death raises
   it by one at `DeathPenaltyChance`, and it never decays. Each Scroll: Recovery lifts one level and
   fits one character level band: 8594 under 20, then 8595-8599 from 20, 40, 52, 61 and 76 (item
   skill 2286; a scroll outside its band is refused). The supplies tier buys one scroll of the bot's

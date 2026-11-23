@@ -79,11 +79,13 @@ type SelfState struct {
 	CP, MaxCP          int32
 	// Load and MaxLoad are the carried weight and the weight limit.
 	Load, MaxLoad int32
-	// WeightPenalty is the server's weight penalty band (0-4) and
-	// DeathPenalty the death penalty level (0-15), both EtcStatusUpdate's.
-	WeightPenalty, DeathPenalty int32
-	PvPFlag                     uint8
-	Karma                       int32
+	// DeathPenalty is the death penalty level (0-15); deathPenaltyKnown
+	// is set once the session's first EtcStatusUpdate gave it
+	// (World.applyDeathPenalty).
+	DeathPenalty      int32
+	deathPenaltyKnown bool
+	PvPFlag           uint8
+	Karma             int32
 	// StoreType is the private store mode, 0 for none.
 	StoreType                        uint8
 	Sitting, InCombat, Dead, Running bool
@@ -517,7 +519,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 			o.Dead = false
 		}
 	case EtcStatusUpdate:
-		w.Self.WeightPenalty, w.Self.DeathPenalty = e.WeightPenalty, e.DeathPenalty
+		w.applyDeathPenalty(e)
 	case MyTargetSelected:
 		w.Target = e.ObjectID
 	case TargetUnselected:
@@ -556,7 +558,10 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)
-	case SystemMessage, AskJoinPledge, JoinPledge, PledgeShowMemberListAll, PledgeShowMemberListDeleteAll:
+	case SystemMessage:
+		w.applyDeathPenalty(e)
+		w.applyClan(ev, now)
+	case AskJoinPledge, JoinPledge, PledgeShowMemberListAll, PledgeShowMemberListDeleteAll:
 		w.applyClan(ev, now)
 	case ItemList, InventoryUpdate, ExAutoSoulShot:
 		w.applyItems(ev)

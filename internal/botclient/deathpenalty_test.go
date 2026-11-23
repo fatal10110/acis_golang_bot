@@ -25,7 +25,7 @@ func TestDecodeEtcStatusUpdate(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("decodeEvent = %v, %v", ok, err)
 	}
-	if want := (EtcStatusUpdate{WeightPenalty: 2, DeathPenalty: 3}); !reflect.DeepEqual(ev, want) {
+	if want := (EtcStatusUpdate{DeathPenalty: 3}); !reflect.DeepEqual(ev, want) {
 		t.Fatalf("decoded %+v, want %+v", ev, want)
 	}
 	if _, _, err := decodeEvent(raw[:len(raw)-1]); err == nil {
@@ -34,10 +34,55 @@ func TestDecodeEtcStatusUpdate(t *testing.T) {
 	if _, _, err := decodeEvent(append(bytes.Clone(raw), 0)); err == nil {
 		t.Error("a frame one byte long decoded")
 	}
-	w := newTestWorld(t)
-	w.Apply(ev, t0)
-	if w.Self.WeightPenalty != 2 || w.Self.DeathPenalty != 3 {
-		t.Errorf("world penalties = %d, %d, want 2, 3", w.Self.WeightPenalty, w.Self.DeathPenalty)
+}
+
+// TestDecodeDeathPenaltyMessage pins the level message to the server
+// writer (FrameSystemMessageNumber): one number parameter, the new level.
+func TestDecodeDeathPenaltyMessage(t *testing.T) {
+	ev, ok, err := decodeEvent(packet(opGameSystemMessage, msgDeathPenaltyLevelAdded, 1, sysParamNumber, 4))
+	if err != nil || !ok {
+		t.Fatalf("decodeEvent = %v, %v", ok, err)
+	}
+	if want := (SystemMessage{ID: msgDeathPenaltyLevelAdded, Number: 4}); !reflect.DeepEqual(ev, want) {
+		t.Fatalf("decoded %+v, want %+v", ev, want)
+	}
+	ev, _, err = decodeEvent(packet(opGameSystemMessage, 1, 2, sysParamNumber, 7, sysParamNumber, 8))
+	if want := (SystemMessage{ID: 1, Number: 7}); err != nil || !reflect.DeepEqual(ev, want) {
+		t.Fatalf("decoded %+v, %v, want the first number %+v", ev, err, want)
+	}
+}
+
+// TestDeathPenaltyLevel checks where the world takes the bot's level
+// from: the session's first EtcStatusUpdate, sent ahead of the spawn, then
+// only the self-only level messages, since a later EtcStatusUpdate may be
+// another player's Charm of Courage broadcast.
+func TestDeathPenaltyLevel(t *testing.T) {
+	added := func(n int32) Event { return SystemMessage{ID: msgDeathPenaltyLevelAdded, Number: n} }
+	lifted := SystemMessage{ID: msgDeathPenaltyLifted}
+	tests := []struct {
+		name   string
+		events []Event
+		want   int32
+	}{
+		{"entry status", []Event{EtcStatusUpdate{DeathPenalty: 3}}, 3},
+		{"another player's status", []Event{EtcStatusUpdate{DeathPenalty: 3}, EtcStatusUpdate{}}, 3},
+		{"another player's penalty", []Event{EtcStatusUpdate{}, EtcStatusUpdate{DeathPenalty: 5}}, 0},
+		{"raised: status, then message", []Event{EtcStatusUpdate{DeathPenalty: 1}, EtcStatusUpdate{DeathPenalty: 2}, added(2)}, 2},
+		{"reduced: message, then status", []Event{EtcStatusUpdate{DeathPenalty: 2}, added(1), EtcStatusUpdate{DeathPenalty: 1}}, 1},
+		{"lifted", []Event{EtcStatusUpdate{DeathPenalty: 1}, lifted, EtcStatusUpdate{}}, 0},
+		{"another player's penalty after a lift", []Event{EtcStatusUpdate{DeathPenalty: 1}, lifted, EtcStatusUpdate{DeathPenalty: 4}}, 0},
+		{"another message's number", []Event{EtcStatusUpdate{DeathPenalty: 2}, SystemMessage{ID: 1147, Number: 9}}, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newTestWorld(t)
+			for _, ev := range tt.events {
+				w.Apply(ev, t0)
+			}
+			if w.Self.DeathPenalty != tt.want {
+				t.Errorf("DeathPenalty = %d, want %d", w.Self.DeathPenalty, tt.want)
+			}
+		})
 	}
 }
 
@@ -95,6 +140,7 @@ func TestRuleRecover(t *testing.T) {
 		{name: "in combat", dp: 1, items: []Item{noGrade}, setup: func(b *Brain) { b.world.Self.InCombat = true }},
 		{name: "sitting", dp: 1, items: []Item{noGrade}, setup: func(b *Brain) { b.world.Self.Sitting = true }},
 		{name: "dead", dp: 1, items: []Item{noGrade}, setup: func(b *Brain) { b.world.Self.Dead = true }},
+		{name: "casting", dp: 1, items: []Item{noGrade}, setup: func(b *Brain) { b.world.Self.castEnd = at(11 * time.Second) }},
 		{
 			name: "attacked", dp: 1, items: []Item{noGrade},
 			setup: func(b *Brain) {
@@ -153,11 +199,11 @@ func TestRecoverGate(t *testing.T) {
 		}
 	}
 	read(10*time.Second, true)
-	b.world.Apply(EtcStatusUpdate{DeathPenalty: 2}, at(10*time.Second+100*time.Millisecond))
+	b.world.Apply(SystemMessage{ID: msgDeathPenaltyLevelAdded, Number: 2}, at(10*time.Second+100*time.Millisecond))
 	read(10*time.Second+time.Second, false)
 	read(10*time.Second+recoveryReuse-time.Millisecond, false)
 	read(10*time.Second+recoveryReuse, true)
-	b.world.Apply(EtcStatusUpdate{}, at(10*time.Second+recoveryReuse+100*time.Millisecond))
+	b.world.Apply(SystemMessage{ID: msgDeathPenaltyLifted}, at(10*time.Second+recoveryReuse+100*time.Millisecond))
 	read(10*time.Second+3*recoveryReuse, false)
 }
 

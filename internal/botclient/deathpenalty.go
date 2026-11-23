@@ -6,14 +6,14 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
-// EtcStatusUpdate is the character's miscellaneous status: its weight
-// penalty band (0-4) and its death penalty level (0-15), among flags the
-// bot does not use. It is the only packet that tells the client the death
-// penalty level: the server sends it at entry and at every change
-// (network/live_player_events.go, character_flow.go).
+// EtcStatusUpdate is a character's miscellaneous status: its death
+// penalty level (0-15), among flags the bot does not use. It carries no
+// object id: the server sends the bot's own at entry and at every change,
+// and broadcasts another player's to everyone that sees it when its Charm
+// of Courage starts or ends (event.EtcStatusBroadcast,
+// network/live_player_events.go). World.applyDeathPenalty sorts them out.
 type EtcStatusUpdate struct {
-	WeightPenalty int32
-	DeathPenalty  int32
+	DeathPenalty int32
 }
 
 func (EtcStatusUpdate) event() {}
@@ -22,11 +22,39 @@ func (EtcStatusUpdate) event() {}
 // danger area, grade penalty, charm of courage and death penalty level
 // (serverpackets/etcstatusupdate.go).
 func decodeEtcStatusUpdate(r *wire.Reader) Event {
-	r.Skip(4) // charges
-	e := EtcStatusUpdate{WeightPenalty: r.ReadInt32()}
-	r.Skip(4 * 4) // blocked, danger area, grade penalty, charm of courage
-	e.DeathPenalty = r.ReadInt32()
-	return e
+	r.Skip(6 * 4)
+	return EtcStatusUpdate{DeathPenalty: r.ReadInt32()}
+}
+
+// System messages of the bot's own death penalty level, sent to it alone
+// with every change (applyLiveDeathPenalty, network/live_player_events.go).
+const (
+	msgDeathPenaltyLevelAdded = 1916 // the new level is its number
+	msgDeathPenaltyLifted     = 1917
+)
+
+// applyDeathPenalty keeps the bot's death penalty level. Only the
+// session's first EtcStatusUpdate is surely the bot's own: the server
+// sends it at EnterWorld, ahead of the spawn that lets another player's
+// broadcast reach the bot (network/character_flow.go). A later one may be
+// another player's, so every later level comes from the self-only system
+// messages the server sends with each change: 1916 with the new level,
+// 1917 when it is lifted.
+func (w *World) applyDeathPenalty(ev Event) {
+	s := &w.Self
+	switch e := ev.(type) {
+	case EtcStatusUpdate:
+		if !s.deathPenaltyKnown {
+			s.DeathPenalty, s.deathPenaltyKnown = e.DeathPenalty, true
+		}
+	case SystemMessage:
+		switch e.ID {
+		case msgDeathPenaltyLevelAdded:
+			s.DeathPenalty = e.Number
+		case msgDeathPenaltyLifted:
+			s.DeathPenalty = 0
+		}
+	}
 }
 
 // recoveryScrolls are the Scroll: Recovery templates by character level
