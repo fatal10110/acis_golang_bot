@@ -779,6 +779,12 @@ unreachable (with a reason).
     `nav_blocked_total` measures what is left.
 - **Sending**:
   - Every segment goes out from standstill, from the server-confirmed position.
+  - A pawn walk (an approach to attack or cast) ends on the server's first 100 ms step in range,
+    with no packet, up to a step short of the dead-reckoned end. The server stops the bot before it
+    swings or casts and the packet carries its position then, so the world model adopts it
+    exactly: every `Attack` position, and the position in the bot's own `MagicSkillUse` for a cast
+    it asked for with a hit time of 500 ms or more (shorter casts may go out while walking:
+    `stopForCast` stops only above a 50 ms template hit time, which cast speed can scale up).
   - **No click-ahead.** A click while moving would run the server's catch-up step of any length
     (`creature.go:1418-1426`), which no bound covers. The walker waits for the simulated arrival
     plus one tick, then sends the next segment. With segments of about 2500 units, this is a

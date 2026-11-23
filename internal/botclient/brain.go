@@ -514,6 +514,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.lootEvent(ev, now)
 		case MagicSkillUse:
 			if e.CasterID == self {
+				b.standCaster(e)
 				b.castAt = time.Time{}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 			}
