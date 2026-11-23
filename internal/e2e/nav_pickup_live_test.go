@@ -77,6 +77,10 @@ const pickUpKills = 15
 // turn to every drop of a kill before it spawns the next wolf.
 const pickUpLootFor = 45 * time.Second
 
+// pickUpStandReach is how far from pickUpStand the bot may stand when the
+// next wolf is spawned: on the spot's floor, never down the ledge.
+const pickUpStandReach = 60
+
 // TestLiveNavPickUpObstacle has a farmer whose one spot is centred at
 // pickUpStand kill wolves the GM spawns one at a time at pickUpMob until it
 // turns to a drop (not a herb, which never reaches the inventory) where no
@@ -146,12 +150,25 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 		if kill > pickUpKills {
 			t.Fatalf("%d wolves killed, no first drop on a spot closed from the kill spot", pickUpKills)
 		}
-		until(t, ctx, "the farmer idle at its spot", func() string {
-			if s := f.bot.Status(); s.Rule != "goal" && s.Rule != "idle" {
-				return fmt.Sprintf("rule %q at %v", s.Rule, s.Position)
-			}
-			return ""
-		})
+		idle := func() {
+			until(t, ctx, "the farmer idle at its spot", func() string {
+				if s := f.bot.Status(); s.Rule != "goal" && s.Rule != "idle" {
+					return fmt.Sprintf("rule %q at %v", s.Rule, s.Position)
+				}
+				return ""
+			})
+		}
+		idle()
+		// A pick-up the server walked down the ledge can leave the bot
+		// where its own navigation finds no way out (#278): every next
+		// wolf would be fought from elsewhere than the site measures, or
+		// not at all. The GM stands at a and recalls it there.
+		if at := f.bot.Status().Position; dist(at, a) > pickUpStandReach {
+			t.Logf("%s at %v before wolf %d, off the spot's floor: recalled to %v", f.name, at, kill, a)
+			recallBot(t, ctx, tg, gm, f.name)
+			botLanded(t, ctx, gm, f.bot, gm.Pos())
+			idle()
+		}
 		spawned := time.Now()
 		gmTeleport(t, ctx, gm, m)
 		mob, err := gm.Spawn(ctx, wolf)
@@ -159,6 +176,12 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
+		// A spawned wolf wanders up to the server's MaxDriftRange (200)
+		// from where it stands (hostile_wander.go), off the measured site
+		// and down the ledge; paralysed it stays at m until it dies.
+		if err := gm.OnTarget(ctx, mob, "para"); err != nil {
+			t.Fatal(err)
+		}
 		gmTeleport(t, ctx, gm, a)
 		kctx, kstop := context.WithTimeout(ctx, 3*time.Minute)
 		until(t, kctx, "the wolf killed", func() string {

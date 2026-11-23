@@ -156,6 +156,8 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	                     1 to maxGive (maxAdenaGive for adena), 1 by default
 //	spawn ID             a monster at the GM's target or the GM; it never respawns
 //	delete               the GM's target, a monster the run spawned
+//	para                 toggles the paralysis of the GM's target, a monster
+//	                     the run spawned (admin_para.go)
 //	open|close ID        a door the scenario claimed (Target.OwnDoor)
 //	hide                 toggles the GM's own invisibility
 //	pledge create NAME   founds the clan NAME (2 to 16 letters or digits)
@@ -187,7 +189,7 @@ func (s *Scope) check(cmd string) error {
 		ok = (len(args) == 1 || len(args) == 2 && validGive(args[0], args[1])) && allInts(args[:1]) && s.isCharID(s.target)
 	case "spawn":
 		ok = len(args) == 1 && allInts(args)
-	case "delete":
+	case "delete", "para":
 		ok = len(args) == 0 && s.npcs[s.target]
 	case "open", "close":
 		// Never without an id: the server would toggle the GM's target.
