@@ -296,8 +296,12 @@ func (b *Brain) openBook(now time.Time) (Action, bool) {
 }
 
 // craftCheckDue reports whether a check is due: nextCheck passed, or the
-// board holds an order with its materials in that the bot can make.
+// board holds an order with its materials in that the bot can make. A
+// breaker's hold holds every check, that order's too.
 func (b *Brain) craftCheckDue(now time.Time) bool {
+	if now.Before(b.craft.ended.holdUntil) {
+		return false
+	}
 	if !now.Before(b.craft.nextCheck) {
 		return true
 	}

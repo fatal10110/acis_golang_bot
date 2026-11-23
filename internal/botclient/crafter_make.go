@@ -153,9 +153,17 @@ func (b *Brain) craftFailed(now time.Time) {
 }
 
 // tripCrafter stops the cycle on a breaker: it deposits, the gear left to
-// crystallize among it, then holds the next check for BreakerHold.
+// crystallize among it, then holds the next check for BreakerHold. The
+// Bot keeps the hold from now on: the cycle ends only once the deposit
+// lands, and a session lost before then must not drop the hold (#233);
+// endCraftCycle replaces it with the cycle's final end.
 func (b *Brain) tripCrafter(now time.Time) {
-	b.craft.tripped, b.craft.crystal.stopped = true, true
+	c := &b.craft
+	c.tripped, c.crystal.stopped = true, true
+	if l := b.cfg.link; l != nil {
+		hold := max(b.persona.Crafter.BreakerHold, warehouseOpenGap)
+		l.crafter = craftEnded{last: CraftCycleEnd{At: now, Outcome: CraftCycleTripped}, holdUntil: now.Add(hold)}
+	}
 	b.finishCraftCycle(now)
 }
 
@@ -236,6 +244,9 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 	c.noteCraftEnd(now, now.Add(wait), ok)
 	b.notePoolGear()
 	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended}
+	if l := b.cfg.link; l != nil {
+		l.crafter = c.ended
+	}
 }
 
 // craftLearn takes the first recipe scroll of the plan's to learn that the

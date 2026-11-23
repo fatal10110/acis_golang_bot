@@ -114,12 +114,16 @@ type standing struct {
 }
 
 // botLink is what a Bot lends each session's brain: its mailbox, its
-// standing order and its status board. The brain runs on Run's goroutine,
-// so it writes the order and publishes the status as their one owner.
+// standing order, its status board and the crafter's last cycle end. The
+// brain runs on Run's goroutine, so it writes the order, the cycle end and
+// publishes the status as their one owner.
 type botLink struct {
 	mail  chan mail
 	order standing
 	board statusBoard
+	// crafter is how the crafter's last cycle ended and until when its
+	// breaker holds: the next session's brain resumes from it.
+	crafter craftEnded
 }
 
 // Command hands c to the bot and returns the channel its one answer comes

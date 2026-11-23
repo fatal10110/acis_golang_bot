@@ -114,6 +114,13 @@ func (c *crafterCycle) noteCraftEnd(now, next time.Time, ok bool) {
 	}
 }
 
+// resumeFrom starts a session's cycle from the last cycle end e of an earlier
+// session: a breaker's hold still holds the next check; past a cycle that
+// did not trip, the new session checks at once.
+func (c *crafterCycle) resumeFrom(e craftEnded) {
+	c.ended, c.nextCheck = e, e.holdUntil
+}
+
 // crafterStatus is the crafter's part of the snapshot at now, nil when the
 // brain plays no crafter's cycle. It is fresh on every call.
 func (b *Brain) crafterStatus(now time.Time) *CrafterStatus {
