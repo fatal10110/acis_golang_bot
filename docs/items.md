@@ -504,15 +504,24 @@ grocer lists).
   The hold (rule "escape") sits right after "critical": a potion still goes down, while a heal
   cast or a run away, also queued mid-cast, waits. The hold lasts until the teleport, or
   `escapeRetry` past the cast's end (the walker's `/unstuck` wait).
-- **Without SoE,** it walks to the nearest town (the travel map's town gatekeepers). Taking a
-  gatekeeper when the town is out of walking reach is #234.
+- **Without SoE,** it walks to the nearest town (the travel map's town gatekeepers). When that
+  town is out of walking reach (another SCC, or past `MaxTravel` in straight line) or the walker
+  answers it unreachable (its gatekeepers, where the walk would end the same way, then shunned
+  for the errand's shun time), it takes a gatekeeper through the travel errand (#234): the trip search
+  of the spot rule (Dijkstra, walks priced by time, teleports by adena), its goal a landing within
+  the town radius (3000) of the nearest town, else of any town, within `Travel.MaxPrice` and the
+  adena carried. Pacing is the errand's: the bypass gate and `Travel.Gap` since the last trip. A
+  landing on the way plans the next teleport at once; the last ends the trip, as the SoE landing
+  does. With no such trip a town out of reach is walked to all the same, and one the walker
+  cannot reach ends the trip.
 - **Spot.** The trip releases its hold in the spot registry, so another bot may take the spot; the
   returning bot picks again, as at a level-up.
 - **In town.** Arrival resets `shop.nextAt`, because a miss from the spot would otherwise push the
   first visit up to 5 min out. Then the errands run in the existing order: sell, shop (the budget),
   gear, trainer, Newbie Guide. The persona's "trip in town" hook is called once per arrival (a
-  scroll landing or a walk that reached the gatekeeper; a walk that found no town, or a teleport
-  of another cause during the trip such as a GM's, is none).
+  scroll landing, a gatekeeper trip's last landing, or a walk that reached the gatekeeper; a walk
+  that found no town, a gatekeeper trip refused, or a teleport of another cause during the trip
+  such as a GM's, is none).
 - **Preparation.** No farmer leaves town for a spot until its supplies meet the trip target, the
   budget has spent all it may, or no spawned merchant within reach sells what is missing. A broke
   bot still goes and farms. The same gate applies after a death and respawn in town and at a fresh
