@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -14,10 +15,11 @@ import (
 const windStrike int32 = 1177
 
 // TestLiveFarmMage runs a dark elf mystic farmer that casts Wind Strike at
-// its targets, in its own newbie zone, until several of its casts followed
-// a move of its own (a cast approach). The server stops a caster before it
-// casts and MagicSkillUse carries its position then; the bot stands there,
-// so its walker's segments after a cast go out from the server's position:
+// its targets, in its own newbie zone, until it walked on after several
+// casts the server approached the target for (MoveToPawn). The server stops
+// a caster before it casts and MagicSkillUse carries its position then,
+// off the approach's dead-reckoned end by up to a step; the bot stands
+// there, so its walker's next segment goes out from the server's position:
 // runWatched fails the run on any walker desync and names each desync's
 // cause (#270, as #246 for Attack). The farmer goes back to level 1 at the
 // end.
@@ -57,29 +59,31 @@ func TestLiveFarmMage(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 	start, alive := time.Now(), time.Now()
 
-	const wantApproached = 3
+	const wantWalked = 2
 	var c castCount
-	waitFor(t, ctx, f.name+" casting Wind Strike after its own approaches", func() bool {
+	waitFor(t, ctx, f.name+" walking on after Wind Strikes the server approached", func() bool {
 		if time.Since(alive) > gmKeepAlive {
 			gmTeleport(t, ctx, gm, townTI)
 			alive = time.Now()
 		}
-		c = countCasts(f.watch.Seen(0), f.id, windStrike)
-		return c.approached >= wantApproached
+		c = countCasts(f.watch.Seen(0), f.watch.Sent(), f.id, windStrike)
+		return c.walked >= wantWalked
 	})
-	t.Logf("%s cast Wind Strike %d times in %s: %d after a move of its own, %d after a server approach (MoveToPawn)",
-		f.name, c.casts, time.Since(start).Round(time.Second), c.approached, c.pawn)
+	t.Logf("%s cast Wind Strike %d times in %s: %d after a move of its own, %d after a server approach (MoveToPawn), %d of those walked on from",
+		f.name, c.casts, time.Since(start).Round(time.Second), c.approached, c.pawn, c.walked)
 }
 
 // castCount counts a caster's casts of one skill: all of them, those after
 // a move of the caster's own since its last cast (a walk or a server
-// approach), and those after a server approach (MoveToPawn).
+// approach), those after a server approach (MoveToPawn), and those of the
+// last the caster then clicked a move from (walked).
 type castCount struct {
-	casts, approached, pawn int
+	casts, approached, pawn, walked int
 }
 
-// countCasts counts the casts of skill by caster in seen.
-func countCasts(seen []Seen, caster, skill int32) castCount {
+// countCasts counts the casts of skill by caster in seen, sent being what
+// caster's connection wrote.
+func countCasts(seen []Seen, sent []Sent, caster, skill int32) castCount {
 	var c castCount
 	moved, pawn := false, false
 	for _, s := range seen {
@@ -100,6 +104,9 @@ func countCasts(seen []Seen, caster, skill int32) castCount {
 			}
 			if pawn {
 				c.pawn++
+				if slices.ContainsFunc(sent[min(s.SentBefore, len(sent)):], func(p Sent) bool { return p.Op == opMoveBackward }) {
+					c.walked++
+				}
 			}
 			moved, pawn = false, false
 		}
