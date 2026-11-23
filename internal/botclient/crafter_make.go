@@ -236,6 +236,9 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 	c.noteCraftEnd(now, now.Add(wait), ok)
 	b.notePoolGear()
 	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended}
+	if l := b.cfg.link; l != nil {
+		l.crafter = c.ended
+	}
 }
 
 // craftLearn takes the first recipe scroll of the plan's to learn that the

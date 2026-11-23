@@ -175,7 +175,9 @@ of it as the pool covers.
 Created as a Dwarven Fighter. Its goal rule:
 
 1. **Check**: reopen the warehouse every `CheckEvery` (a few minutes, jittered, never under
-   `MinOpenGap`), sooner when its tick sees a board order with materials in.
+   `MinOpenGap`), sooner when its tick sees a board order with materials in. A tripped breaker
+   holds every check for `BreakerHold`, that order's too; the hold and the last cycle's end are
+   kept on the bot, so a reconnect keeps both (#233).
 2. **Plan** (section 4); take the lease; reopen; **withdraw**; release the lease.
 3. **Craft**: one `RequestRecipeItemMakeSelf`, then wait for 0xd7 with its system messages, or the
    combat refusal, or a timeout, and at least 500 ms plus jitter before the next. MissingS2S1 or

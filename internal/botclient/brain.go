@@ -317,6 +317,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	}
 	if cfg.link != nil {
 		b.mail = cfg.link.mail
+		b.craft.resumeFrom(cfg.link.crafter)
 	}
 	if cfg.Persona.ClanMember {
 		b.wireMember()
