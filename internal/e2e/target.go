@@ -617,8 +617,14 @@ func (g *GMClient) Give(ctx context.Context, objectID, tmpl, count int32) error 
 // its pending frames for giveSettle, and selects objectID again while its
 // target is another or none, up to selectTries times.
 func (g *GMClient) OnTarget(ctx context.Context, objectID int32, cmd string) error {
+	return g.OnTargetWatch(ctx, objectID, cmd, func(botclient.Event) {})
+}
+
+// OnTargetWatch is OnTarget handing fn every event the GM reads while it
+// settles, for a scenario that keeps watching through the GM.
+func (g *GMClient) OnTargetWatch(ctx context.Context, objectID int32, cmd string, fn func(botclient.Event)) error {
 	for range selectTries {
-		if err := g.Watch(ctx, giveSettle, func(botclient.Event) {}); err != nil {
+		if err := g.Watch(ctx, giveSettle, fn); err != nil {
 			return err
 		}
 		if g.Target() == objectID {
