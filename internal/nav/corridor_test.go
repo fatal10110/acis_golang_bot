@@ -18,10 +18,13 @@ func TestCorridorOpen(t *testing.T) {
 		{"open ground", at(Open, 0, 0, 0), at(Open, 640, 330, 0), true},
 		{"open ground, axis aligned", at(Open, 0, 0, 0), at(Open, 0, -700, 0), true},
 		{"along the corridor beside both walls", loc(geotest.CorridorWest), loc(geotest.CorridorEast), true},
-		{"multilayer cells on the bridge", loc(geotest.BridgeWestDeck), loc(geotest.BridgeEastDeck), false},
-		{"multilayer cells under the bridge", loc(geotest.BridgeWestGround), loc(geotest.BridgeEastGround), false},
+		{"stacked tops along the bridge deck", loc(geotest.BridgeWestDeck), loc(geotest.BridgeEastDeck), true},
+		{"ends under the stacked tops of the bridge", loc(geotest.BridgeWestGround), loc(geotest.BridgeEastGround), false},
+		{"stacked tops along the stair deck", cell(203, 1005, 80), cell(214, 1005, 80), true},
+		{"onto the stair deck: a step over its 40 cell lands on the 20 layer", loc(StairLow), loc(StairDeck), false},
 		{"partial NSWE: north-east toward the corridor wall", cell(260, 262, 0), cell(300, 260, 0), false},
-		{"climb over 48 beside the line: along the ledge", cell(800, 270, geotest.Plateau), cell(800, 300, geotest.Plateau), false},
+		{"a drop one cell aside, out of the step chain's reach", cell(800, 270, geotest.Plateau), cell(800, 300, geotest.Plateau), true},
+		{"a drop within corridorReach of the line", at(geotest.Point{CellX: 800, CellY: 270, Z: geotest.Plateau}, -5, 0, 0), at(geotest.Point{CellX: 800, CellY: 300, Z: geotest.Plateau}, -5, 0, 0), false},
 		{"no geodata", cell(5, 100, 0), cell(-5, 100, 0), false},
 	}
 	for _, tt := range tests {
