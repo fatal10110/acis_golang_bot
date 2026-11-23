@@ -151,7 +151,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   gives it Power Strike, 10 Healing Potions, 500 no-grade soulshots and 3 Stems (a gift waits while
   the inventory is full); what it did not use stays with it. Other farmers keep their loot and the
   levels they gained, but `TestLiveNavPickUpObstacle`, whose level 5 farmer drops its junk the
-  same way; `TestLiveSpots` sets its first farmer back to level 1 at the end.
+  same way; `TestLiveSpots` sets its first farmer back to level 1 at the end, and
+  `TestLiveSupplyTrip` sets its farmer to level 6 at the start (#258: past level 14 in its
+  Squire's gear, every Talking Island spot that fit it was an aggressive pack that killed it).
 - `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
   fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),
   which then fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight.
@@ -227,7 +229,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveArrows` | GM, datapack | #85, #102 an archer's table wielding a sword buys a bow and its arrows, wears the bow, and shoots without NotEnoughArrows |
 | `TestLiveShotsByGrade` | GM, datapack | #169 a level 20 fighter with a no-grade Falchion, its shots and a D Saber but no D shots keeps the Falchion, no-grade shots on and spent; given D shots past its minimum it wears the Saber, D shots on and spent, no-grade ones off |
 | `TestLiveTownPrep` | GM, datapack | #170, #182 a farmer logged in next to the grocer with adena buys shots, Lesser Healing Potions and two Scrolls of Escape before it claims a spot, under 45 % load, and keeps the scrolls |
-| `TestLiveSupplyTrip` | GM, datapack | #175, #182, #251 a farmer whose shots run out within ten minutes reads a Scroll of Escape at its starter spot (a walk or a death home fails), lands in the village, restocks its shots and scrolls before it leaves, and farms a spot again |
+| `TestLiveSupplyTrip` | GM, datapack | #175, #182, #251, #258 a level 6 farmer whose shots run out within ten minutes reads a Scroll of Escape at its starter spot (a walk or a death home fails), lands in the village, restocks its shots and scrolls before it leaves, and farms a spot again |
 | `TestLiveBuffPotion` | GM, datapack | #176 a fighter drinks a Potion of Alacrity at its spot; one hasted (Haste given by the GM, of the potion's stack type and order) drinks none |
 | `TestLiveStoreBuy` | GM, datapack | #177 a bot buys the shots it wants from a second client's sell store at the listed price, not a Scroll of Escape listed over its price cap |
 | `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols; skipped while acis_golang#5419's spawn is missing |
