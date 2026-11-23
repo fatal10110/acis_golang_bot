@@ -625,22 +625,25 @@ tops now pass the corridor test up to the edge.
 | heap per route query, cold | ≤ 4 MB | p99 19.4 MB, max 35.6 MB | p99 19.4 MB, max 43.8 MB |
 | routes failed (both passes) | — | 14 of 400 | 8 of 400 |
 
-The route time targets, the cold route heap and the distance tail stay unmet; they wait on owner
-decisions (#256):
+This was the last pass against the N3 route time, cold route heap and distance targets. On
+2026-11-23 the owner reset them from these numbers (#256; the new targets are under "`nav`
+performance" in Testing). A route is planned once per destination, so walking efficiency (#304)
+matters more than route latency at this length. The leads the reset defers are in #315:
 
 - **The cell search is now the larger half** of route CPU. Its expansions are bounded by A*
   with a heuristic that cannot see the clearance extra. Weighted A* (heuristic × 1.5 on middle
   legs, cost at most 1.5 times the cheapest) halved the expansions (11.9 to 6.1 million) but
   added 15% `CanMove` calls in the exact check, as the paths keep less clear of walls, for
-  about 15% less route time. It is not adopted: it trades away the wall margin the clearance
-  cost keeps.
-- **The cold heap** is the scratch growing on its first long search; making the target
-  warm-only is the owner's call. Its max is the first search that runs out of node budget and
-  grows the idle scratch to the budget's size. Before, that was the first sampled route (an
-  `ErrBudget`), and a later `ErrBudget` route grew it further. Now the first route completes, and
-  the later one does the growing: measured route by route, 45.2 + 30.1 MB became
-  29.7 + 46.8 MB. The total is the same, and p99 did not change.
+  about 15% less route time. The owner rejected it: it trades away the wall margin the
+  clearance cost keeps. An admissible heuristic that sees the clearance is deferred (#315).
+- **The cold heap** is the scratch growing on its first long search. The owner made the heap
+  target warm-only. Its max is the first search that runs out of node budget and grows the idle
+  scratch to the budget's size, at most 32 MB per idle query scratch (Cost bounds). Before, that
+  was the first sampled route (an `ErrBudget`), and a later `ErrBudget` route grew it further.
+  Now the first route completes, and the later one does the growing: measured route by route,
+  45.2 + 30.1 MB became 29.7 + 46.8 MB. The total is the same, and p99 did not change.
 - **The distance tail** needs landmarks (ALT) on the abstract graph, a nav cache format change.
+  Deferred (#315).
 
 ### Water
 
@@ -1006,15 +1009,21 @@ geodata is committed here, and CI never sees it.**
   - a property test over random pairs checks the same invariants.
 - **`nav` performance**: benchmarks with recorded thresholds, measured on the owner's geodata
   locally and reported in the N3 PR.
-  - **Warm** (cluster LRU warm, pages resident), as initial targets that N3 confirms or resets
-    from N1's measured cost of one `CanMove` and the measured share of segments needing the exact
-    check:
+  - The route, distance and heap targets below were reset by the owner on 2026-11-23 (#256)
+    from the #314 measurements, about 10% above them. They are now regression ceilings: a change
+    that pushes a measure past its ceiling needs an owner decision. The first targets were
+    abstract distance p99 ≤ 2 ms, a warm route p99 ≤ 10 ms, a cold route p99 ≤ 150 ms and
+    ≤ 4 MB heap per route query, cold included. The leads deferred by the reset are in #315.
+  - **Warm** (cluster LRU warm, pages resident):
     - `Locate` + `SameSCC` p99 ≤ 1 ms;
-    - abstract distance p99 ≤ 2 ms;
-    - a full 40000-unit route p99 ≤ 10 ms, corridor tests and exact checks included.
+    - abstract distance p99 ≤ 15 ms;
+    - a full 40000-unit route p50 ≤ 75 ms and p99 ≤ 750 ms, corridor tests and exact checks
+      included.
   - **Cold** (first touch of the clusters and pages): `Locate` p99 ≤ 30 ms, and a full route
-    p99 ≤ 150 ms. A cold route happens at most once per destination per bot.
-  - Heap per route query ≤ 4 MB.
+    p50 ≤ 100 ms and p99 ≤ 800 ms. A cold route happens at most once per destination per bot.
+  - Heap per warm route query ≤ 4 MB. A cold route's heap has no target: its query scratch grows
+    once on the first long search, bounded by the node budget and the free list's 32 MB per
+    idle scratch (Cost bounds).
   - `navbuild` ≤ 15 minutes with half the cores, peak heap ≤ 1 GB. N3 reports the measured
     entrance and edge counts, then sets the nav cache's size bound from them.
 - **Door table** (CI, `-race`): concurrent reports from many bots are serialized, every toggle
