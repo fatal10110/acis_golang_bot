@@ -277,7 +277,9 @@ The same choice runs at every level-up that outlevels its spot. Level 1 farmers 
 (Talking Island), 36 (elven and dark elven), 13 (orc) and 4 (dwarven) per village and share up to 58,
 118, 46 and 13; a home run's 340 hold 235 spots at once, the rest wait for a holder to level on.
 Owner decision (#138): it is fine for a farmer to steal a kill. A monster another player is fighting
-is a target like any other, which keeps more farmers fighting on shared spots.
+is a target like any other, which keeps more farmers fighting on shared spots. A farm target lies
+within the leash (1500) of the spot's centre, and a bot that ends a fight beyond the leash walks back;
+the walk to a target, around a wall or a rock, may leave the leash on its way (#269).
 
 **town** (PR4): idles, sits, buys potions and shots, sells loot to merchants, uses the gatekeeper,
 visits the Newbie Helper for buffs (levels 8-24).
