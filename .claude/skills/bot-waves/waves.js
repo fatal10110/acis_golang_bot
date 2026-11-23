@@ -114,7 +114,7 @@ const sq = obj => JSON.stringify(obj).replace(/'/g, '\\u0027')
 // ---------------------------------------------------------------------------
 const TESTRULE = `TEST SCOPE (HIGHEST PRIORITY — overrides every skill and reference doc, including the "full suite" steps of bot-issue, bot-pr-review, bot-pr-review-comments and docs/agents/verification.md):
 - NEVER run the full suite locally. Forbidden: \`go test ./...\` with -race over the whole module, \`make test\`, every e2e scenario at once, or any list of many packages. PR CI runs the unit tier on every push; it is the gate for everything except the e2e scenarios below.
-- Run ONLY what the change can affect: the unit tests of the packages you changed (codecs, crypt, brain decisions), selected with \`-run '<TestA|TestB>'\` where a package is large, always through ${HEAVY} and with -race. Flaky-test lanes may also loop the ONE flaky test with -count=N.
+- Run ONLY what the change can affect: the unit tests of the packages you changed (codecs, crypt, brain decisions), selected with \`-run '<TestA|TestB>'\` where a package is large, always through ${HEAVY} and WITHOUT -race (PR CI runs -race; never pass it locally, never on e2e scenarios). Flaky-test lanes may also loop the ONE flaky test with -count=N.
 - E2E SCENARIOS ARE NOT GATED BY PR CI. They need the server stack (docs/agents/test-strategy.md) and skip without it, so a green PR check proves nothing about them. When the change touches the protocol client, login or game session, reconnect, a decoder or encoder, or a behavior an e2e scenario asserts, run the related scenarios locally with BOT_REQUIRE_E2E=1 and -v, scoped with -run, and confirm in the output that they RAN (a SKIP is a failure to verify). No stack reachable: say so; never report it as passed. None related: say so.
 - Report in the PR body (and in review "Checks"): the scoped tests you ran; an "E2E scenarios (local)" line naming each one with its result at the pushed head, or "none related", or "not run: <reason>"; and "unit suite: CI".
 `
@@ -153,7 +153,7 @@ Environment rules (all agents):
 - Issues: issue_read get (and get_comments) once per agent; keep what you need in your notes/worklog. The issue's milestone epic and its docs/plan.md row are the scope.
 - Editing: the Edit tool needs a Read of that file first (a sed/cat/look view does not count): Read the range, then Edit. For several mechanical edits at once a python heredoc in one call is fine.
 - Tests and lint ALWAYS go through ${HEAVY} (it serializes heavy runs on this small box; waiting for its lock is normal). Always -timeout 12m:
-  ${HEAVY} rtk go -C <worktree> test -race -count=1 -timeout 12m <pkgs> -run '<tests>'
+  ${HEAVY} rtk go -C <worktree> test -count=1 -timeout 12m <pkgs> -run '<tests>'
   cd <worktree> && golangci-lint fmt --diff && ${HEAVY} golangci-lint run <touched package dirs>
   A hang is almost always a real deadlock in the code under test: read the goroutine dump.
 - E2E stack: one shared stack per machine (docs/agents/test-strategy.md); if it is down, start it as that guide says; never bring up a second one.
@@ -299,7 +299,7 @@ Steps (batch: several lookups per Bash call):
 4. Server reference (${SERVER}, read-only): for every packet the lane decodes or encodes, the server's encoder or decoder (file:line), opcode constant and field order; for every client action, the handler and its rejection paths and limits (flood gates, distance checks, timeouts) the bot must respect. Paths with line numbers.
 5. Go anchors (worktree-relative, with line numbers): the packages and files to change, the closest existing pattern to copy, existing tests and fixtures to extend, the newest merged PR touching the same area and its file list.
 6. Blockers: a dependency lane or issue not merged, or a server prerequisite still open that the lane cannot work around, goes first, under BLOCKER, with evidence.
-7. Commands: the scoped test commands (${HEAVY} rtk go -C ${WT}/wf-${L.slug} test -race -count=1 -timeout 12m <pkgs> -run '<tests>') and the related e2e scenarios.
+7. Commands: the scoped test commands (${HEAVY} rtk go -C ${WT}/wf-${L.slug} test -count=1 -timeout 12m <pkgs> -run '<tests>') and the related e2e scenarios.
 Write the brief as markdown, at most 250 lines: sections BLOCKER (only if any), Issues (requirements, acceptance, decisions already made in comments), Plan, Server reference, Go anchors, Tests and commands, Open questions. Paths with line numbers; short excerpts (at most 15 lines) only where the exact text matters. Save it with one Bash call: cat > ${D}/brief.md <<'EOF_BRIEF' ... EOF_BRIEF (mkdir -p ${D} first). Your final message is the brief itself, verbatim.
 You have no GitHub MCP tools and no ToolSearch: the gh commands in the steps above override the GitHub rule below.\nSTOP: once the run is stopping (or draining), ${MB} calls print "stop": true and ${LOOK} prints "### STOP". When you see either, do nothing more and make your final message exactly STOP.
 ${ENV}`

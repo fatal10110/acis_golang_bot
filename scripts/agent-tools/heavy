@@ -1,20 +1,32 @@
 #!/bin/bash
-# Hang guard and serializer for heavy gates (go test -race, e2e suites, golangci-lint).
+# Hang guard and serializer for heavy gates (scoped go test, e2e suites, golangci-lint).
 # Runs are serialized through a flock, so parallel wave lanes on a small box do not run
-# race suites side by side and OOM the machine.
-# Killed after HEAVY_TIMEOUT (default 20m) with SIGQUIT, so a hung Go test dumps its
-# goroutines instead of running forever. Lock wait is not counted.
+# test suites side by side and OOM the machine. Two lanes of locks: e2e runs (any argument
+# naming internal/e2e, an e2e-live make target or a TestLive scenario) take the e2e lock,
+# everything else the unit lock, so a long live run never blocks unit tests and lint.
+# Killed after HEAVY_TIMEOUT (default 20m, 60m for e2e) with SIGQUIT, so a hung Go test
+# dumps its goroutines instead of running forever. Lock wait is not counted.
+# HEAVY_LOCK overrides the lock file (a parallel live run with its own GMs, docs/e2e-live.md).
 # Usage: heavy <command> [args...]
-limit=${HEAVY_TIMEOUT:-20m}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # bot-waves: once a run is stopping, refuse runs from its lane and review worktrees, so
 # agents learn about the stop from a command they run anyway (no turn of their own).
 stop=$(python3 "$here/wave_mail.py" stopcheck "$PWD" "$@" 2>/dev/null)
 if [ -n "$stop" ]; then echo "$stop"; echo "$stop" >&2; exit 75; fi
-lock=${HEAVY_LOCK:-${TMPDIR:-/tmp}/acis-bot-heavy.lock}
+kind=unit
+for a in "$@"; do
+	case $a in *internal/e2e* | e2e-live* | *TestLive*) kind=e2e ;; esac
+done
+if [ "$kind" = e2e ]; then
+	default_lock=acis-bot-e2e.lock default_limit=60m
+else
+	default_lock=acis-bot-heavy.lock default_limit=20m
+fi
+limit=${HEAVY_TIMEOUT:-$default_limit}
+lock=${HEAVY_LOCK:-${TMPDIR:-/tmp}/$default_lock}
 mkdir -p "$(dirname "$lock")"
 exec 9>"$lock"
-flock 9
+flock -n 9 || { echo "heavy: waiting for the $kind lock ($lock)" >&2; flock 9; }
 GOMAXPROCS=${GOMAXPROCS:-3} timeout --signal=QUIT --kill-after=60 "$limit" "$@"
 rc=$?
 { [ $rc -eq 124 ] || [ $rc -eq 131 ]; } && echo "heavy: command exceeded $limit and was killed (likely a hang; see goroutine dump above)" >&2
