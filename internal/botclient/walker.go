@@ -191,6 +191,8 @@ type walker struct {
 	// escapeAt is when the last went out.
 	escaping bool
 	escapeAt time.Time
+	// meter measures the walk for the walking-efficiency metrics.
+	meter walkMeter
 }
 
 func newWalker(n *Nav) walker {
@@ -208,6 +210,7 @@ func (w *walker) reset(dest Point, arrive int32, purpose walkPurpose) {
 	w.route = nil
 	w.blocked, w.desync, w.watchdog, w.doors = 0, 0, 0, 0
 	w.plan.Avoid.Clear()
+	w.meter = walkMeter{}
 }
 
 // unreachable ends the walk with reason.
@@ -282,6 +285,7 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 	pos := b.standing(now)
 	if horizontal2(pos, w.dest) <= int64(arrive)*int64(arrive) && !s.Moving(now) {
 		w.status, w.route = walkArrived, nil
+		b.meterArrived(now)
 		return Action{}, walkArrived
 	}
 	w.status = walkWalking
@@ -369,6 +373,7 @@ func (w *walker) segmentDone(now time.Time) bool {
 		return false
 	}
 	w.floor = seg.to
+	w.meter.arrivedAt = seg.eta
 	w.seg = segment{}
 	if len(w.route) > 0 {
 		w.route = w.route[1:]
@@ -610,6 +615,7 @@ func (w *walker) sent(a Action, now time.Time) {
 		// Another rule moved the bot (or clicked, which may walk it): the
 		// route no longer starts where the bot stands.
 		w.seg, w.route = segment{}, nil
+		w.meter = walkMeter{}
 	case a.kind == actUserCommand && w.escaping:
 		w.escapeAt = now
 	}
