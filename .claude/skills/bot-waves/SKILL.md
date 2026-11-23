@@ -113,6 +113,8 @@ calls, not their size. The prompts therefore point every agent at:
   worktrees with absolute paths.
 - `wave_mail.py pr-state --pr N` and `ci-wait --head SHA`: compact PR state (with `behind_by`, so
   the branch is updated only when behind) and an in-process CI wait for the merge agent.
+- `wave_mail.py logwait --file LOG --pattern RE [--pid P]`: waits on a background command's log and
+  returns the moment a line matches or the command exits.
 - `heavy <cmd>`: serializes heavy runs through a lock so parallel lanes do not OOM a small box (e2e
   runs take a separate e2e lock, so a live run never blocks unit tests and lint), and kills a hung run with SIGQUIT so Go dumps its goroutines.
 - STOP reaches agents through commands they run anyway: every `wave_mail.py` output of a stopping
@@ -128,6 +130,9 @@ for its whole context again as a cache write, about 12x a cache read. On w1122, 
 - Implementation and review agents wait at most `SHORT_WAIT` (270 s) per call: mailbox `recv`,
   `ask`, `answer-wait`, and live e2e runs, which run in the background and are waited on through
   their log in calls of at most 270 s. They call again until the answer comes.
+- A log is waited on with `wave_mail.py logwait --file <log> --pid <pid> --pattern <re> --wait 270`.
+  It returns as soon as a line matches or the process exits. `timeout N tail -f <log> | grep -m1`
+  always held the full N seconds, because `tail` only notices the closed pipe on its next write.
 - Haiku roles (watchers, coord, brokers' pollers, merge) keep 570 s waits: their context is small,
   so fewer turns is cheaper there.
 

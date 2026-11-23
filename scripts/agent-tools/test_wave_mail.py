@@ -252,5 +252,48 @@ class WaveMailTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
 
 
+    def test_logwait_returns_when_the_line_lands(self):
+        log = Path(self.tmp.name) / "live.log"
+        log.write_text("=== RUN TestX\nok  \tpk")  # a line still being written does not match yet
+
+        def later():
+            time.sleep(0.3)
+            with open(log, "a") as f:
+                f.write("g\t1.0s\n")
+        t = threading.Thread(target=later)
+        t.start()
+        start = time.time()
+        got = self.run_cli("logwait", "--file", str(log), "--pattern", r"^ok\s+pkg\s", "--wait", "20")
+        t.join()
+        self.assertLess(time.time() - start, 10)
+        self.assertEqual((got["matched"], got["timeout"]), (True, False))
+        self.assertEqual(got["lines"], ["ok  \tpkg\t1.0s"])
+
+    def test_logwait_counts_and_tails(self):
+        log = Path(self.tmp.name) / "live.log"
+        log.write_text("a\n--- PASS: A (1s)\nb\n--- FAIL: B (2s)\nc\n")
+        got = self.run_cli("logwait", "--file", str(log), "--pattern", r"^--- (PASS|FAIL)", "--count", "2", "--tail", "2", "--wait", "0")
+        self.assertTrue(got["matched"])
+        self.assertEqual(got["lines"], ["--- PASS: A (1s)", "--- FAIL: B (2s)"])
+        self.assertEqual(got["tail"], ["--- FAIL: B (2s)", "c"])
+
+    def test_logwait_times_out_and_waits_for_a_missing_file(self):
+        log = Path(self.tmp.name) / "none.log"
+        got = self.run_cli("logwait", "--file", str(log), "--pattern", "ok", "--wait", "0.2")
+        self.assertEqual((got["matched"], got["timeout"], got["exists"]), (False, True, False))
+
+    def test_logwait_returns_when_the_writer_exits(self):
+        log = Path(self.tmp.name) / "live.log"
+        proc = subprocess.Popen([sys.executable, "-c", f"open({str(log)!r}, 'w').write('panic: boom')"])
+        got = self.run_cli("logwait", "--file", str(log), "--pattern", r"^ok\s", "--pid", str(proc.pid), "--tail", "5", "--wait", "20")
+        proc.wait()
+        self.assertEqual((got["matched"], got.get("exited"), got["timeout"]), (False, True, False))
+        self.assertEqual(got["tail"], ["panic: boom"])
+
+    def test_logwait_stops_with_the_run(self):
+        self.run_cli("stop", "--run", "r")
+        got = self.run_cli("logwait", "--run", "r", "--file", str(Path(self.tmp.name) / "x.log"), "--pattern", "ok", "--wait", "20")
+        self.assertTrue(got["stop"])
+
 if __name__ == "__main__":
     unittest.main()

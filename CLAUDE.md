@@ -102,7 +102,7 @@ server first, `gh` as fallback. Details: `docs/agents/tooling.md`.
   declarations by name (`go:PATH:Type.Method`), bounded rg (`rg:PATH:PATTERN`). Every tool call
   re-sends the whole context, so batch lookups.
 - `wave_mail.py`: file mailbox, lane state, merge queue and barrier for `bot-waves` runs; also
-  `worktree`, `pr-state`, `ci-wait`, `validate`.
+  `worktree`, `pr-state`, `ci-wait`, `logwait`, `validate`.
 - `rtk`: compresses noisy output (`rtk go -C <worktree> test|build|vet`); `jq` for JSON fields.
 - `golangci-lint fmt --diff` / `golangci-lint run`: must report nothing.
 
