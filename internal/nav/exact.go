@@ -100,7 +100,9 @@ func (p *Planner) stepChainOK(s *scratch, a, b location.Location) bool {
 // is monotone per axis, see quadrant). The first step can be any length, so
 // a stretch near a starts from a alone; any other starts from every band
 // point within Lmax + stepSlack before it, on its one floor. A state in
-// water fails the stretch: the server would swim the walker from there.
+// water fails the stretch, the server would swim the walker from there,
+// unless the planner swims: then the state goes on as a swimmer
+// (swimStates).
 func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) bool {
 	dx, dy := float64(b.X-a.X), float64(b.Y-a.Y)
 	length := math.Hypot(dx, dy)
@@ -132,10 +134,16 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 		}
 		cur := s.queue[head]
 		cx, cy, cz := int(cur.x), int(cur.y), int(cur.z)
-		if p.Water.Contains(cx, cy, cz) {
-			return false
-		}
 		ct := (float64(cx-a.X)*dx + float64(cy-a.Y)*dy) / length
+		if p.Water.Contains(cx, cy, cz) {
+			if !p.swims() {
+				return false
+			}
+			if ct <= t1 {
+				p.swimStates(s, cur, b, bz, ct, reach)
+			}
+			continue
+		}
 		if ct > t1 {
 			continue // past the stretch: the corridor test holds from here
 		}
@@ -245,4 +253,40 @@ func between(from, v, to int) bool {
 
 func hypot(dx, dy int) float64 {
 	return math.Hypot(float64(dx), float64(dy))
+}
+
+// swimStates adds the states a swimmer at cur reaches on its way to b
+// (floor bz): it moves straight in 3D toward b and nothing under way stops it
+// (acis_golang model/actor/move/creature.go stepLocked, catchUpLocked), so
+// while the line stays in water it needs no check. Where the line leaves
+// water the server walks it again: every band point ahead within a step past
+// the exit is a state, at the height the line has there, from which the
+// chain goes on by the ground rules. A line in water as far as b adds none.
+func (p *Planner) swimStates(s *scratch, cur chainState, b location.Location, bz int, ct, reach float64) {
+	c := location.Location{X: int(cur.x), Y: int(cur.y), Z: int(cur.z)}
+	end := location.Location{X: b.X, Y: b.Y, Z: bz}
+	t := p.Water.exit(c, end)
+	if t >= 1 {
+		return
+	}
+	total := hypot(end.X-c.X, end.Y-c.Y)
+	if total == 0 {
+		return
+	}
+	out := t * total
+	first := sort.Search(len(s.band), func(i int) bool { return s.band[i].t >= ct-stepSlack })
+	for _, bp := range s.band[first:] {
+		if bp.t > ct+out+reach {
+			break
+		}
+		if (bp.x == c.X && bp.y == c.Y) || !between(c.X, bp.x, end.X) || !between(c.Y, bp.y, end.Y) {
+			continue
+		}
+		d := hypot(bp.x-c.X, bp.y-c.Y)
+		if d < out-stepSlack || d > out+reach {
+			continue
+		}
+		z := float64(c.Z) + float64(end.Z-c.Z)*d/total
+		s.addState(chainState{int32(bp.x), int32(bp.y), int16(math.Round(z))})
+	}
 }

@@ -62,6 +62,17 @@ const (
 	// units from the human start point to Talking Island's trainers take
 	// more than 60000.
 	walkBudget = 400000
+	// swimBreath is how long one stretch of a route may swim: half the
+	// shortest base breath, 60 s times the dwarf's 0.8 (acis_golang
+	// network/taskeffects.go breathTime, model/actor/player/race.go
+	// BreathMultiplier). The bot cannot see a Breath stat change, and with
+	// the server's AllowWater off it gets no countdown, so the margin is
+	// wide (docs/navigation.md, "Swimming").
+	swimBreath = 24 * time.Second
+	// walkSwimNear is how close to the box a walk spans a water zone must
+	// lie for a walk the hierarchy cannot route to try the swimming cell
+	// planner: the hierarchy keeps out of water.
+	walkSwimNear = 1000
 	// walkRetry is how long a walk that ended unreachable stays so for the
 	// same destination and purpose: a consumer asking again after it
 	// gives up gets a fresh walk.
@@ -311,6 +322,7 @@ func (b *Brain) walker() *walker {
 	s, w := &b.world.Self, &b.walk
 	w.plan.Lmax = float64(max(s.RunSpeed, s.WalkSpeed)) * navEmax.Seconds()
 	w.plan.CollisionHeight = cmpOr(s.CollisionHeight, defaultCollisionHeight)
+	w.plan.Swim = float64(s.SwimSpeed) * swimBreath.Seconds()
 	return w
 }
 
@@ -386,6 +398,14 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 	var route []location.Location
 	switch cur.Kind() {
 	case nav.Isolated:
+		// The hierarchy keeps out of water, so a bot in water stands on
+		// ground it calls isolated: it swims out.
+		if w.nav.Water.Contains(from.X, from.Y, from.Z) {
+			if route, ok := w.swimRoute(from); ok {
+				w.take(route)
+				return Action{}, true
+			}
+		}
 		// No abstract SCC is reachable from here (a closed pit, the restart
 		// area of acis_golang#5412): only /unstuck leaves it.
 		if !w.escapeAt.IsZero() && now.Sub(w.escapeAt) < escapeEvery {
@@ -410,8 +430,15 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 		case ok:
 			route, err = h.Route(&w.plan, from, to, w.nav.closed())
 		default:
-			w.unreachable(reasonNoRoute)
-			return Action{}, false
+			if route, ok = w.swimRoute(from); !ok {
+				w.unreachable(reasonNoRoute)
+				return Action{}, false
+			}
+		}
+	}
+	if errors.Is(err, nav.ErrWater) || errors.Is(err, nav.ErrUnreachable) || errors.Is(err, nav.ErrBudget) {
+		if r, ok := w.swimRoute(from); ok {
+			route, err = r, nil
 		}
 	}
 	switch {
@@ -429,11 +456,37 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 		w.unreachable(reasonNoRoute)
 		return Action{}, false
 	}
+	w.take(route)
+	return Action{}, true
+}
+
+// take makes route, from the bot's standing point on, the walk's route.
+func (w *walker) take(route []location.Location) {
 	w.route = w.route[:0]
 	for _, l := range route[1:] {
 		w.route = append(w.route, fromLoc(l))
 	}
-	return Action{}, true
+}
+
+// swimRoute is the swimming cell planner's route from from to the walk's
+// destination, for a walk the hierarchy cannot route: the hierarchy keeps
+// out of water, so a destination only water reaches, or a bot in water, has
+// no hierarchy route (docs/navigation.md, "Swimming"). It tries only with a
+// breath to swim on and water near the way, as a failed search spends up
+// to walkBudget cells. Only a follower swims to a destination in water,
+// after a leader who went there: a bot left standing in water drowns once
+// its breath runs out, so any other place in water (a farming spot on the
+// sea floor) stays unreachable.
+func (w *walker) swimRoute(from location.Location) ([]location.Location, bool) {
+	to := toLoc(w.dest)
+	if w.plan.Swim <= 0 || !w.nav.Water.Near(from, to, walkSwimNear) {
+		return nil, false
+	}
+	if c, ok := w.plan.Locate(to); ok && w.purpose != walkFollow && w.nav.Water.Contains(to.X, to.Y, int(c.Z)) {
+		return nil, false
+	}
+	route, err := w.plan.Route(from, to)
+	return route, err == nil && len(route) >= 2
 }
 
 // target is dest on walkable ground in the bot's SCC: dest itself, or the
@@ -597,11 +650,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
 				b.walkDesync(e)
 			default:
-				speed := float64(pace(s.Running, s.RunSpeed, s.WalkSpeed))
-				if speed <= 0 {
-					speed = 1
-				}
-				run := time.Duration(math.Sqrt(float64(horizontal2(e.Origin, e.Dest))) / speed * float64(time.Second))
+				run := s.legTime(e.Origin, e.Dest)
 				seg.eta = now.Add(run)
 				seg.deadline = seg.eta.Add(run/2 + walkSlack)
 			}

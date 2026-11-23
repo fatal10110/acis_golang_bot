@@ -79,9 +79,11 @@ type UserInfo struct {
 	PvPFlag, Karma int32
 	// RunSpeed and WalkSpeed are effective speeds in world units per
 	// second: the base speed the packet carries times its movement
-	// multiplier, as the client computes them.
-	RunSpeed, WalkSpeed int32
-	Running             bool
+	// multiplier, as the client computes them. SwimSpeed is the speed in
+	// water, run or walk alike (userinfo.go writes the base swim speed
+	// twice; the server's Character.MoveSpeed swims at SwimSpeed in water).
+	RunSpeed, WalkSpeed, SwimSpeed int32
+	Running                        bool
 	// PAtkSpd is the attack speed a melee swing lasts by: about
 	// 500000/PAtkSpd ms (the server's formulas.TimeBetweenAttacks).
 	PAtkSpd int32

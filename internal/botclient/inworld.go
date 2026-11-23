@@ -45,10 +45,11 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	u.PAtkSpd = r.ReadInt32()
 	r.Skip(8 * 4) // pDef, evasion, accuracy, crit, mAtk, castSpd, atkSpd, mDef
 	u.PvPFlag, u.Karma = r.ReadInt32(), r.ReadInt32()
-	run, walk := r.ReadInt32(), r.ReadInt32()
-	r.Skip(6 * 4) // swim run, swim walk, 0, 0, fly run, fly walk
+	run, walk, swim := r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
+	r.Skip(5 * 4) // swim walk, 0, 0, fly run, fly walk
 	mult := r.ReadFloat64()
 	u.RunSpeed, u.WalkSpeed = effectiveSpeed(run, mult), effectiveSpeed(walk, mult)
+	u.SwimSpeed = effectiveSpeed(swim, mult)
 	r.Skip(2 * 8) // attack speed multiplier, collision radius
 	u.CollisionHeight = r.ReadFloat64()
 	r.Skip(3 * 4) // hair style, hair color, face
