@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -43,6 +45,9 @@ func Live(t testing.TB, needs ...Need) *Target {
 			}
 		}
 		runTarget, runErr = NewTarget(cfg, panel)
+		if runErr == nil {
+			warnGMShortfall(t, len(cfg.GMFiles))
+		}
 	})
 	if runErr != nil {
 		t.Fatal(runErr)
@@ -53,4 +58,20 @@ func Live(t testing.TB, needs ...Need) *Target {
 	}
 	t.Cleanup(done)
 	return tg
+}
+
+// warnGMShortfall logs, as the run starts, that its GM pool holds fewer GMs
+// than the scenarios the run may keep open at once (#250).
+func warnGMShortfall(t testing.TB, gms int) {
+	f := flag.Lookup("test.parallel")
+	if f == nil {
+		return
+	}
+	parallel, err := strconv.Atoi(f.Value.String())
+	if err != nil {
+		return
+	}
+	if w := gmShortfall(gms, parallel); w != "" {
+		t.Logf("e2e: %s", w)
+	}
 }

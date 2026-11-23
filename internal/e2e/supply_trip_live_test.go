@@ -44,7 +44,7 @@ func TestLiveTownPrep(t *testing.T) {
 	})
 
 	var farmAt time.Time
-	until(t, ctx, "the town preparation, then a spot", func() string {
+	untilServed(t, ctx, "the town preparation, then a spot", f.watch, merchantBuyRefused(f.watch), func() string {
 		sent := sentOf(f.watch.Sent(), botclient.OpRequestBuyItem)
 		switch {
 		case len(sent) == 0:
@@ -131,7 +131,7 @@ func TestLiveSupplyTrip(t *testing.T) {
 				f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), st.Position, st.HP, st.MaxHP, st.State)
 		}
 	}
-	until(t, ctx, "the trip home", func() string {
+	untilServed(t, ctx, "the trip home", f.watch, escapeRefused(f.watch, objectsOf(f.watch.Seen(0), scrollOfEscape)), func() string {
 		note()
 		st := f.bot.Status()
 		if tripAt.IsZero() && st.Rule == "supply" {
@@ -176,7 +176,7 @@ func TestLiveSupplyTrip(t *testing.T) {
 	}
 	var farmAt time.Time
 	var unstocked bool
-	until(t, ctx, "the restock, then a spot", func() string {
+	untilServed(t, ctx, "the restock, then a spot", f.watch, merchantBuyRefused(f.watch), func() string {
 		note()
 		var bought bool
 		for _, p := range sentOf(f.watch.Sent(), botclient.OpRequestBuyItem) {

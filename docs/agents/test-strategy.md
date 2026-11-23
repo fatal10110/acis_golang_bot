@@ -57,6 +57,17 @@ plan's server prerequisites P1-P4, #5) once it exists, both through the same har
   characters, its spawned monsters and packets about them. A refused credential leaves `.e2e/halted`, which fails every later
   run until the owner fixes the secret and deletes it; the wrong-password scenario trips the
   breaker without the marker and runs alone (`make e2e-live-loginfail`).
+- **Live debug loop** (#250). A live run costs minutes; keep the loop short:
+  - Run every scenario still failing in a round in one invocation (`-run '^(TestA|TestB)$'`),
+    not one after another.
+  - Give a parallel run as many GMs (`BOT_E2E_GM_FILE` list) as GM scenarios it runs at once, or
+    run them one at a time (`-parallel 1`): a scenario left without a GM fails with `GM pool
+    exhausted` after the pool's 2-minute bound, and the run warns at start.
+  - Reproduce a live failure from its recorded frames (`BOT_E2E_RECORD`, `botclient.NewRecorder`)
+    in a unit test before rerunning live, and keep the test.
+  - Seed the smallest setup that triggers the behavior (a few shots, not thousands).
+  - Give the step under test a refusal check (`untilServed`, `docs/e2e-live.md` "Refusal
+    checks") so a refused request fails at once instead of at the deadline.
 - One shared stack per machine; never bring up a second one next to it.
 - The nightly run against the server's `main` files a protocol-drift issue on failure.
 

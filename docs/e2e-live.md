@@ -70,8 +70,10 @@ variables and `BOT_REQUIRE_E2E=1`.
 - **GM pool:** each scenario that needs a GM leases one from the pool (`.e2e/gm*`, or the
   `BOT_E2E_GM_FILE` list) through a lock on its lock file, held until the GM logs out, so two
   scenarios of one process, of two processes or of two runs never share a GM. With every GM
-  held, the scenario waits, and the wait counts against its time budget: pin at least as many GMs
-  as `-parallel`, or run a one-GM pin with `-parallel 1`. The kernel drops the lock of a process
+  held, the scenario waits for one at most 2 minutes, on a bound of the pool's own, apart from
+  its deadline, then fails with `GM pool exhausted` (#250). A run whose pool holds fewer GMs than
+  the scenarios it keeps open at once (`-parallel`, at most 2) says so as it starts: pin as many
+  GMs as that, or run a one-GM pin with `-parallel 1`. The kernel drops the lock of a process
   that dies, so a killed run never blocks a later one.
 - **Packages:** `./internal/e2e/` and `./cmd/bots/` are separate test processes, each with its own
   login gate. They run at the same time only with `BOT_E2E_ALLOWLISTED=1`: two spaced gates
@@ -85,7 +87,9 @@ owner's own bots). Each concurrent run needs:
 - **GMs:** the second login of an account drops the first, so two runs never share a GM session.
   Runs of this harness lease GMs from the pool through the per-GM locks, so they may share the
   pool; a run may still pin its own GM files (`BOT_E2E_GM_FILE=.e2e/gm2`, or a list) to keep out
-  of the GMs another run uses, for example a run of an older harness that takes no lock.
+  of the GMs another run uses, for example a run of an older harness that takes no lock. A run
+  needs as many GMs as GM scenarios it runs at once: with one GM pinned, run its GM scenarios
+  one at a time (`-parallel 1`), or a second one fails on the exhausted pool.
 - **Its own lock** when the run goes through `scripts/agent-tools/heavy`: a `HEAVY_LOCK` of its
   own (`HEAVY_LOCK=/tmp/acis-bot-live-gm2.lock`, with `HEAVY_TIMEOUT=60m`). A live run never takes
   the default heavy lock, which stays for race tests and lint on the owner's machine.
@@ -228,6 +232,20 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols; skipped while acis_golang#5419's spawn is missing |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
+
+### Refusal checks
+
+A wait polls a condition until its deadline, and on its own never looks at what the server
+answered. A step that sends one request the server may refuse (a buy, an item use, a learn, a
+teleport) waits with `untilServed` and a `RefusalCheck` over the bot's `Watch` instead of
+`until`: the check names the step's packet (opcode and target) and the answers that refuse it
+(the SystemMessage ids the server's handler refuses it with, and ActionFailed when the handler
+answers a refusal with it), and the scenario fails as soon as such an answer is read within 3 s
+after the packet, with the refusal and the last packets and events around it, instead of waiting
+out its deadline (#248). The check is opt-in per step: count ActionFailed only where the server
+answers no successful step with it and the scenario tolerates no failed try, since a dialog
+click, a move or an interrupted cast also end with one. `TestLiveStoreBuy`, `TestLiveTownPrep`
+and `TestLiveSupplyTrip` check their buys and the scroll read.
 
 No scenario covers #28, a monster another player fights skipped: #138 dropped that rule, and a
 farmer may take such a monster.
