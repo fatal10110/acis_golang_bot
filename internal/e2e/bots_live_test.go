@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,15 @@ type botSetup struct {
 // it.
 func runBotWith(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *botclient.Bot {
 	t.Helper()
+	b, _ := startBot(t, ctx, tg, account, setup)
+	return b
+}
+
+// startBot runs a whole Bot as runBotWith does and returns with it the stop
+// that logs it out, joins it and gives its place back: a scenario may call
+// it before the test ends, which calls it in any case.
+func startBot(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) (*botclient.Bot, func()) {
+	t.Helper()
 	walkOn := tg.Nav(t) // before Hold: a skip there would keep the slot
 	release, err := tg.Hold(ctx)
 	if err != nil {
@@ -62,14 +72,18 @@ func runBotWith(t *testing.T, ctx context.Context, tg *Target, account string, s
 	runCtx, stop := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- b.Run(runCtx) }()
-	t.Cleanup(func() {
-		stop()
-		if err := <-done; err != nil {
-			t.Logf("bot %s stopped: %v", account, err)
-		}
-		release()
-	})
-	return b
+	var once sync.Once
+	stopBot := func() {
+		once.Do(func() {
+			stop()
+			if err := <-done; err != nil {
+				t.Logf("bot %s stopped: %v", account, err)
+			}
+			release()
+		})
+	}
+	t.Cleanup(stopBot)
+	return b, stopBot
 }
 
 // partyPersona is DefaultPersona without the errands that outrank following

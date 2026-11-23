@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestLiveFarmStarters(t *testing.T) {
 	farmers := make([]*farmer, len(classes))
 	for i, class := range classes {
 		account, _ := tg.Account("sr", i+1)
-		f := runWatched(t, ctx, tg, account, botSetup{
+		setup := botSetup{
 			class: class,
 			persona: func() botclient.Persona {
 				p := botclient.DefaultPersona()
@@ -46,13 +47,8 @@ func TestLiveFarmStarters(t *testing.T) {
 				return p
 			},
 			brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
-		})
-		farmers[i] = f
-		t.Cleanup(func() { backToLevel1(t, gm, f) })
-		if lvl := levelOf(t, ctx, f); lvl > 1 {
-			t.Logf("%s is level %d from an earlier run: back to 1", f.name, lvl)
-			gmOn(t, ctx, gm, f, "set level 1")
 		}
+		farmers[i] = runFresh(t, ctx, gm, 1, func() *farmer { return runWatched(t, ctx, tg, account, setup) })
 	}
 	for _, f := range farmers {
 		waitFor(t, ctx, f.name+" holding a spot", func() bool { return f.bot.Status().Spot != "" })
@@ -98,7 +94,10 @@ func killedAtSpot(f *farmer, centre botclient.Point, leash int32) bool {
 	return false
 }
 
-// backToLevel1 has the GM set f's level back to 1, for the next run.
+// backToLevel1 has the GM set f's level back to 1, for the next run, and
+// waits until the bot's status shows it. OnTarget, not a bare Command: the
+// server may clear the GM's target as it lands next to f, and then runs
+// "set level" on the GM itself (#206), which left f at its level (#268).
 func backToLevel1(t *testing.T, gm *GMClient, f *farmer) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -110,9 +109,17 @@ func backToLevel1(t *testing.T, gm *GMClient, f *farmer) {
 		t.Logf("cleanup: level of %s: %v", f.name, err)
 		return
 	}
-	err := gm.Select(ctx, f.id)
+	err := gm.OnTarget(ctx, f.id, "set level 1")
 	if err == nil {
-		err = gm.Command(ctx, "set level 1")
+		tick := time.NewTicker(500 * time.Millisecond)
+		defer tick.Stop()
+		for err == nil && f.bot.Status().Level != 1 {
+			select {
+			case <-ctx.Done():
+				err = fmt.Errorf("still level %d: %w", f.bot.Status().Level, ctx.Err())
+			case <-tick.C:
+			}
+		}
 	}
 	if err != nil {
 		t.Logf("cleanup: level of %s: %v", f.name, err)
