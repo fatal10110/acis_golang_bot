@@ -78,26 +78,49 @@ func TestLiveFarmMage(t *testing.T) {
 // castCount counts a caster's casts of one skill: all of them, those after
 // a move of the caster's own since its last cast (a walk or a server
 // approach), those after a server approach (MoveToPawn), and those of the
-// last the caster then clicked a move from (walked).
+// last the caster then clicked a move from (walked) before its next own
+// event.
 type castCount struct {
 	casts, approached, pawn, walked int
 }
 
 // countCasts counts the casts of skill by caster in seen, sent being what
-// caster's connection wrote.
+// caster's connection wrote. A cast after a server approach counts as
+// walked on from when caster wrote a move between that cast and its next
+// own event (a cast, a MoveToPawn or a MoveToLocation), so a later walk
+// does not count every earlier cast.
 func countCasts(seen []Seen, sent []Sent, caster, skill int32) castCount {
 	var c castCount
 	moved, pawn := false, false
+	open := -1 // sent index the last cast after a server approach was seen at
+	walkedTo := func(end int) {
+		if open < 0 {
+			return
+		}
+		window := sent[min(open, len(sent)):min(max(end, open), len(sent))]
+		if slices.ContainsFunc(window, func(p Sent) bool { return p.Op == opMoveBackward }) {
+			c.walked++
+		}
+		open = -1
+	}
 	for _, s := range seen {
 		switch e := s.Event.(type) {
 		case botclient.MoveToLocation:
-			moved = moved || e.ObjectID == caster
+			if e.ObjectID == caster {
+				walkedTo(s.SentBefore)
+				moved = true
+			}
 		case botclient.MoveToPawn:
 			if e.ObjectID == caster {
+				walkedTo(s.SentBefore)
 				moved, pawn = true, true
 			}
 		case botclient.MagicSkillUse:
-			if e.CasterID != caster || e.SkillID != skill {
+			if e.CasterID != caster {
+				continue
+			}
+			walkedTo(s.SentBefore)
+			if e.SkillID != skill {
 				continue
 			}
 			c.casts++
@@ -106,12 +129,11 @@ func countCasts(seen []Seen, sent []Sent, caster, skill int32) castCount {
 			}
 			if pawn {
 				c.pawn++
-				if slices.ContainsFunc(sent[min(s.SentBefore, len(sent)):], func(p Sent) bool { return p.Op == opMoveBackward }) {
-					c.walked++
-				}
+				open = s.SentBefore
 			}
 			moved, pawn = false, false
 		}
 	}
+	walkedTo(len(sent))
 	return c
 }

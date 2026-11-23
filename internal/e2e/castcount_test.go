@@ -45,6 +45,24 @@ func TestCountCasts(t *testing.T) {
 			sent: []Sent{{Op: opMoveBackward}},
 			want: castCount{casts: 1, approached: 1},
 		},
+		{
+			name: "a walk after a later cast only",
+			seen: []Seen{pawn(self), clicked(cast(self, skill), 0), clicked(cast(self, skill), 0)},
+			sent: []Sent{{Op: opMoveBackward}},
+			want: castCount{casts: 2, approached: 1, pawn: 1},
+		},
+		{
+			name: "a walk after the server's next move only",
+			seen: []Seen{pawn(self), clicked(cast(self, skill), 0), clicked(walk(self), 0)},
+			sent: []Sent{{Op: opMoveBackward}},
+			want: castCount{casts: 1, approached: 1, pawn: 1},
+		},
+		{
+			name: "a walk on echoed by the server",
+			seen: []Seen{pawn(self), clicked(cast(self, skill), 0), clicked(walk(self), 1)},
+			sent: []Sent{{Op: opMoveBackward}},
+			want: castCount{casts: 1, approached: 1, pawn: 1, walked: 1},
+		},
 		{name: "another skill", seen: []Seen{walk(self), cast(self, skill+1), cast(self, skill)}, want: castCount{casts: 1, approached: 1}},
 	}
 	for _, tt := range tests {
