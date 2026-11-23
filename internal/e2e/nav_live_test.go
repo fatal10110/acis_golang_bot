@@ -204,7 +204,7 @@ var (
 // lands; runWatched holds its blocked stops to at most one and its desyncs
 // to none. The bot picks nothing up: loot kept over the runs would put the
 // character over its weight limit, where the server refuses its every move.
-// A pick-up round an obstacle is #239.
+// A pick-up round an obstacle is TestLiveNavPickUpObstacle.
 func TestLiveNavMeleeObstacle(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)

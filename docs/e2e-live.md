@@ -127,7 +127,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **GM commands** (`e2e.Scope`) touch only the scenario's characters and the monsters it spawned:
   `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N`,
   `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
-  character, `hide` (the GM's own invisibility), `spawn ID`, `delete` on a spawned monster. The forms
+  character, `hide` (the GM's own invisibility), `spawn ID`, `delete` and `para` (paralysis) on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. The GM targets only run
   objects, so a command that falls back on its target cannot reach anyone else.
@@ -150,7 +150,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   lies until the server clears it, so the farmer's inventory never fills up across runs. The GM then
   gives it Power Strike, 10 Healing Potions, 500 no-grade soulshots and 3 Stems (a gift waits while
   the inventory is full); what it did not use stays with it. Other farmers keep their loot and the
-  levels they gained; `TestLiveSpots` sets its first farmer back to level 1 at the end.
+  levels they gained, but `TestLiveNavPickUpObstacle`, whose level 5 farmer drops its junk the
+  same way; `TestLiveSpots` sets its first farmer back to level 1 at the end.
 - `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
   fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),
   which then fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight.
@@ -230,6 +231,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveBuffPotion` | GM, datapack | #176 a fighter drinks a Potion of Alacrity at its spot; one hasted (Haste given by the GM, of the potion's stack type and order) drinks none |
 | `TestLiveStoreBuy` | GM, datapack | #177 a bot buys the shots it wants from a second client's sell store at the listed price, not a Scroll of Escape listed over its price cap |
 | `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols; skipped while acis_golang#5419's spawn is missing |
+| `TestLiveNavPickUpObstacle` | GM, datapack | #239 a level 5 farmer kills wolves the GM spawns and paralyses (a spawned monster wanders) at a measured site, recalled to its spot before each one, until it turns to a drop where the straight walk from where it stands fails: its kill spot for the first drop, the drop before for each next one (no site closes every drop spot: a scatter step blocked at once leaves the item on the corpse); it walks to a `StandPickUp` stand point, picks the item up from there, and the item reaches its inventory |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
 
