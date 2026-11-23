@@ -121,8 +121,8 @@ Consequences:
 
 ### One arrival model
 
-Today `observeWalk` computes the eta with `legTime` from `e.Origin`, before `World.Apply` builds
-`Self.move` from `sample(now, e.Origin)`. Neither knows the start speed. The change:
+Before #305, `observeWalk` computed the eta with `legTime` from `e.Origin`, before `World.Apply`
+built `Self.move` from `sample(now, e.Origin)`. Neither knew the start speed. The change (#305):
 
 - **Self-only motion fields**, held behind a pointer like `swimLine` so the `Object` record stays
   compact (`TestObjectRecordCompact`):
@@ -302,8 +302,8 @@ made with #304's numbers.
 Server facts, checked:
 - retargeting a move in flight keeps the start-speed update count;
 - the catch-up step is speed × (time since the last update) (`catchUpLocked`), bounded like every
-  step. The "catch-up step of any length" wording in `docs/navigation.md` is out of date, and #308
-  corrects it either way.
+  step. The old "catch-up step of any length" wording in `docs/navigation.md` was corrected by
+  #305 (part of #308).
 
 Requirements any click-ahead design must meet:
 - Send early only when every line from every possible P (the last stretch of the current segment,
