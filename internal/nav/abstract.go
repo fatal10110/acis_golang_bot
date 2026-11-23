@@ -38,7 +38,7 @@ func (h *Hierarchy) distance(a, b Member, closed func(door int) bool) (int, erro
 	s := getScratch()
 	defer putScratch(s)
 	sp := sameSpan(a)
-	cost, _, err := h.abstractSearch(s, a, b, &sp, closed, abstractBudget)
+	cost, _, err := h.abstractSearch(s, a, b, &sp, closed, abstractBudget, &seating{})
 	return int(cost), err
 }
 
@@ -47,7 +47,7 @@ func (h *Hierarchy) distance(a, b Member, closed func(door int) bool) (int, erro
 // path, first node first, in s.apath. It returns the cost and the nodes it
 // expanded. Cells of one cluster answer their straight-line distance and an
 // empty path.
-func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed func(door int) bool, budget int) (int32, int, error) {
+func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed func(door int) bool, budget int, seat *seating) (int32, int, error) {
 	s.apath = s.apath[:0]
 	if a.res.cluster == b.res.cluster {
 		return heuristic(a.cell, b.cell), 0, nil
@@ -85,7 +85,7 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 	}
 	first, end := g.clusterNodes(int(a.res.cluster))
 	for n := first; n < end; n++ {
-		if sp.start(g.nodeSCC(n)) {
+		if sp.start(g.nodeSCC(n)) && allows(seat.starts, int32(n)) {
 			relax(int32(n), heuristic(a.cell, g.nodeRep(n)), -1)
 		}
 	}
@@ -110,7 +110,7 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 		n.closed = true
 		id, gv := n.id, n.g
 		rep := g.nodeRep(int(id))
-		if g.nodeCluster(int(id)) == b.res.cluster && sp.goal(g.nodeSCC(int(id))) {
+		if g.nodeCluster(int(id)) == b.res.cluster && sp.goal(g.nodeSCC(int(id))) && allows(seat.goals, id) {
 			relax(-1, gv+heuristic(rep, b.cell), it.idx)
 		}
 		lo, hi := g.nodeEdges(int(id))
@@ -200,6 +200,7 @@ func (h *Hierarchy) route(p *Planner, from, to location.Location, closed func(do
 	}
 	open := *p
 	open.Engine = h.static.Engine
+	q.seat = seating{} // seated under the door state closed
 	switch _, err := h.search(s, &open, &q, nil, &b); {
 	case err == nil:
 		return nil, ErrDoor
@@ -217,6 +218,7 @@ type routeQuery struct {
 	start, goal Cell
 	from, to    location.Location
 	span        span
+	seat        seating
 }
 
 // routeBudget is what is left of one Route's budget.
@@ -228,9 +230,23 @@ type routeBudget struct {
 // path, then its legs refined over p's engine, keeping out of p.Avoid, and
 // string-pulled, in s.route.
 // It replans up to maxReplans times with the failing cell edge avoided, and
-// spends from b.
+// spends from b. When the first or last leg finds that its endpoint and
+// entrance node do not join inside their cluster, it seats that end on the
+// nodes that do (seating) and searches again.
 func (h *Hierarchy) search(s *scratch, p *Planner, q *routeQuery, closed func(door int) bool, b *routeBudget) ([]location.Location, error) {
-	_, used, err := h.abstractSearch(s, q.a, q.b, &q.span, closed, b.nodes)
+	for {
+		route, err := h.searchSeated(s, p, q, closed, b)
+		if !errors.Is(err, errReseat) {
+			return route, err
+		}
+	}
+}
+
+// errReseat asks search to run again: an end of q was seated.
+var errReseat = errors.New("nav: route end seated")
+
+func (h *Hierarchy) searchSeated(s *scratch, p *Planner, q *routeQuery, closed func(door int) bool, b *routeBudget) ([]location.Location, error) {
+	_, used, err := h.abstractSearch(s, q.a, q.b, &q.span, closed, b.nodes, &q.seat)
 	b.nodes -= used
 	if err != nil {
 		return nil, err
@@ -249,8 +265,20 @@ func (h *Hierarchy) search(s *scratch, p *Planner, q *routeQuery, closed func(do
 	var avoid map[edgeKey]struct{}
 	for range maxReplans + 1 {
 		s.path = s.path[:0]
-		for i := 0; i+1 < len(s.waypoints); i++ {
-			cells, used, err := p.search(s, s.waypoints[i], s.waypoints[i+1], b.cells, avoid)
+		legs := len(s.waypoints) - 1
+		for i := range legs {
+			a, c := s.waypoints[i], s.waypoints[i+1]
+			var cells []Cell
+			var used int
+			var err error
+			switch {
+			case i == 0 && legs > 1 && !q.seat.startDone && h.clusterBox(a).has(c):
+				cells, used, err = h.firstLeg(s, p, q, a, c, b.cells, avoid)
+			case i == legs-1 && legs > 1 && !q.seat.goalDone && h.clusterBox(c).has(a):
+				cells, used, err = h.lastLeg(s, p, q, a, c, b.cells, avoid)
+			default:
+				cells, used, err = p.search(s, a, c, b.cells, avoid, anywhere)
+			}
 			b.cells -= used
 			if err != nil {
 				return nil, err
@@ -270,4 +298,90 @@ func (h *Hierarchy) search(s *scratch, p *Planner, q *routeQuery, closed func(do
 		avoid[bad] = struct{}{}
 	}
 	return nil, ErrUnreachable
+}
+
+// seating narrows a route's abstract search to the entrance nodes its start
+// reaches, and those reaching its goal, inside their clusters. Without it
+// the search takes every node of the endpoint's SCC in its cluster as joined
+// to the endpoint by a straight line; for a node joined only by a way out
+// of the cluster and back, the leg's cell search floods until the budget
+// runs out (#256).
+type seating struct {
+	// starts and goals are the nodes the search may start and end on,
+	// sorted; nil allows every node.
+	starts, goals []int32
+	// startDone and goalDone record that the first or last leg was checked
+	// inside its cluster.
+	startDone, goalDone bool
+}
+
+// allows reports whether node n is in nodes; nil allows every node.
+func allows(nodes []int32, n int32) bool {
+	if nodes == nil {
+		return true
+	}
+	_, ok := slices.BinarySearch(nodes, n)
+	return ok
+}
+
+// firstLeg refines the leg from the start to the first entrance node inside
+// the start's cluster. When none joins them there, the search has flooded
+// everything the start reaches in the cluster, so the nodes it reached are
+// the ones the start may seat on: it seats the start there and answers
+// errReseat. A start that reaches no node keeps the free search.
+func (h *Hierarchy) firstLeg(s *scratch, p *Planner, q *routeQuery, a, c Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
+	q.seat.startDone = true
+	box := h.clusterBox(a)
+	cells, used, err := p.search(s, a, c, budget, avoid, box)
+	if !errors.Is(err, ErrUnreachable) {
+		return cells, used, err
+	}
+	g := h.graph
+	first, end := g.clusterNodes(int(q.a.res.cluster))
+	var starts []int32
+	for n := first; n < end; n++ {
+		if _, ok := s.index.get(cellKey(g.nodeRep(n))); ok && q.span.start(g.nodeSCC(n)) {
+			starts = append(starts, int32(n))
+		}
+	}
+	if len(starts) == 0 {
+		cells, more, err := p.search(s, a, c, budget-used, avoid, anywhere)
+		return cells, used + more, err
+	}
+	q.seat.starts = starts
+	return nil, used, errReseat
+}
+
+// lastLeg is firstLeg for the leg from the last entrance node to the goal:
+// when they do not join inside the goal's cluster, it walks back from the
+// goal over the cluster to the nodes that reach it and seats the goal there.
+func (h *Hierarchy) lastLeg(s *scratch, p *Planner, q *routeQuery, c, goal Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
+	q.seat.goalDone = true
+	box := h.clusterBox(goal)
+	cells, used, err := p.search(s, c, goal, budget, avoid, box)
+	if !errors.Is(err, ErrUnreachable) {
+		return cells, used, err
+	}
+	used += p.reachers(s, goal, box)
+	g := h.graph
+	first, end := g.clusterNodes(int(q.b.res.cluster))
+	var goals []int32
+	for n := first; n < end; n++ {
+		if _, ok := s.index.get(cellKey(g.nodeRep(n))); ok && q.span.goal(g.nodeSCC(n)) {
+			goals = append(goals, int32(n))
+		}
+	}
+	if len(goals) == 0 {
+		cells, more, err := p.search(s, c, goal, budget-used, avoid, anywhere)
+		return cells, used + more, err
+	}
+	q.seat.goals = goals
+	return nil, used, errReseat
+}
+
+// clusterBox is the box of the cluster holding c.
+func (h *Hierarchy) clusterBox(c Cell) cellBox {
+	size := h.graph.key.ClusterCells
+	x0, y0 := floorDiv(c.X, size)*size, floorDiv(c.Y, size)*size
+	return cellBox{x0, y0, x0 + size, y0 + size}
 }
