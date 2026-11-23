@@ -177,6 +177,57 @@ func TestCombatRules(t *testing.T) {
 			},
 		},
 		{
+			name: "the default persona's mystic casts Wind Strike before melee",
+			setup: func(b *Brain) {
+				fighting(b)
+				hitBy(b, npcID, 10)
+				b.world.Target = npcID
+				b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillHeal, Level: 1}, {ID: skillWindStrike, Level: 1}}}, t0)
+			},
+			wantRule: "attacked", wantKind: actCast, wantOp: opGameRequestMagicSkillUse, wantObject: npcID,
+			check: func(t *testing.T, _ *Brain, a Action) {
+				if a.skill != skillWindStrike {
+					t.Errorf("cast skill %d, want Wind Strike %d", a.skill, skillWindStrike)
+				}
+			},
+		},
+		{
+			name: "the default persona's orc mystic casts Chill Flame before Life Drain",
+			setup: func(b *Brain) {
+				fighting(b)
+				hitBy(b, npcID, 10)
+				b.world.Target = npcID
+				b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillLifeDrain, Level: 1}, {ID: skillChillFlame, Level: 1}}}, t0)
+			},
+			wantRule: "attacked", wantKind: actCast, wantOp: opGameRequestMagicSkillUse, wantObject: npcID,
+			check: func(t *testing.T, _ *Brain, a Action) {
+				if a.skill != skillChillFlame {
+					t.Errorf("cast skill %d, want Chill Flame %d", a.skill, skillChillFlame)
+				}
+			},
+		},
+		{
+			name: "the default persona's mystic under its MP reserve melees",
+			setup: func(b *Brain) {
+				fighting(b)
+				hitBy(b, npcID, 10)
+				b.world.Target = npcID
+				b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillWindStrike, Level: 1}}}, t0)
+				b.world.Self.MP, b.world.Self.MaxMP = 40, 100
+			},
+			wantRule: "attacked", wantKind: actAttack, wantObject: npcID,
+		},
+		{
+			name: "the default persona's fighter, with no attack spell known, melees",
+			setup: func(b *Brain) {
+				fighting(b)
+				hitBy(b, npcID, 10)
+				b.world.Target = npcID
+				b.world.Apply(SkillList{Skills: []KnownSkill{{ID: 3, Level: 1}}}, t0)
+			},
+			wantRule: "attacked", wantKind: actAttack, wantObject: npcID,
+		},
+		{
 			name:    "a skill the bot does not know falls back to melee",
 			persona: func(p *Persona) { p.AttackSkills = []int32{1177} },
 			setup: func(b *Brain) {

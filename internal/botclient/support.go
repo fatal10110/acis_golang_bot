@@ -149,12 +149,15 @@ type Buff struct {
 }
 
 // Support defaults (docs/plan.md, support persona): Battle Heal under
-// 35 %, else Heal under 60 %; the mystics' buffs. A bot casts only the
-// skills it knows, so its class picks its role: human, elven and dark
-// elven mystics heal and buff, orc mystics buff, fighters assist only.
+// 35 %, else Heal under 60 %; the mystics' buffs; their attack spells,
+// cast above the MP reserve before melee. A bot casts only the skills it
+// knows, so its class picks its role: human, elven and dark elven mystics
+// heal, buff and nuke, orc mystics buff and nuke, fighters assist and
+// fight in melee.
 var (
-	defaultHeals = []Heal{{skillBattleHeal, 35}, {skillHeal, 60}}
-	defaultBuffs = []Buff{{Skill: skillMight}, {Skill: skillShield}, {Skill: skillSoulShield}, {Skill: skillChantBattle, Party: true}}
+	defaultHeals        = []Heal{{skillBattleHeal, 35}, {skillHeal, 60}}
+	defaultBuffs        = []Buff{{Skill: skillMight}, {Skill: skillShield}, {Skill: skillSoulShield}, {Skill: skillChantBattle, Party: true}}
+	defaultAttackSkills = []int32{skillWindStrike, skillChillFlame, skillLifeDrain}
 )
 
 // assistPlan is the creature the party leader last attacked: the bot

@@ -229,6 +229,7 @@ func DefaultPersona() Persona {
 		Trainers:       defaultTrainers(),
 		TrainerReach:   8000,
 		Spots:          defaultSpotPolicy(),
+		AttackSkills:   slices.Clone(defaultAttackSkills),
 		MPReserve:      50,
 		Heals:          defaultHeals,
 		Buffs:          defaultBuffs,
