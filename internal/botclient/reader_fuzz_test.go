@@ -23,6 +23,7 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(charInfoPacket(testCharInfo, 120, 80, 1.3, 1))
 	f.Add(npcInfoPacket(testNPCInfo, 130, 40, 1.5))
 	f.Add(packet(opGameStatusUpdate, 7, 2, 9, 300, 18, 333))
+	f.Add(packet(opGameEtcStatusUpdate, 0, 2, 0, 0, 0, 0, 3))
 	f.Add(packet(opGameSystemMessage, 1147, 3, 0, "text", 4, 1216, 2, 7, 1, 2, 3))
 	f.Add(packet(opGameCreatureSay, 7, 1, "bot7", "hello"))
 	f.Add(packet(opGameAskJoinParty, "GM", 1))

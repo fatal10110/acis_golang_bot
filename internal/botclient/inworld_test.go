@@ -264,7 +264,7 @@ func inworldCases() []struct {
 		{
 			"SystemMessage every param type",
 			packet(opGameSystemMessage, 1147, 6, 0, "text", 1, 5, 3, 57, 4, 1216, 2, 6, 100, 7, at.X, at.Y, at.Z),
-			SystemMessage{ID: 1147, Text: [2]string{"text"}},
+			SystemMessage{ID: 1147, Text: [2]string{"text"}, Number: 5},
 		},
 		{"SystemMessage other type is one int32", packet(opGameSystemMessage, 9, 2, 2, 20001, 5, 3), SystemMessage{ID: 9}},
 		{"ActionFailed", packet(opGameActionFailed), ActionFailed{}},

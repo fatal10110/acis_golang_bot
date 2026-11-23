@@ -217,6 +217,7 @@ func decodeTargetUnselected(r *wire.Reader) Event {
 // SystemMessage parameter types (serverpackets/systemmessage.go).
 const (
 	sysParamText      = 0
+	sysParamNumber    = 1
 	sysParamSkillName = 4
 	sysParamZoneName  = 7
 )
@@ -224,17 +225,21 @@ const (
 // decodeSystemMessage: message id, parameter count, then per parameter its
 // type and value (serverpackets/systemmessage.go): text is a string, a
 // skill name its id and level, a zone name a point, every other type one
-// int32. The first two texts are kept. The count comes off the wire, so the
-// loop ends at the first short read.
+// int32. The first two texts and the first number are kept. The count
+// comes off the wire, so the loop ends at the first short read.
 func decodeSystemMessage(r *wire.Reader) Event {
 	m := SystemMessage{ID: r.ReadInt32()}
-	texts := 0
+	texts, numbered := 0, false
 	for n := r.ReadInt32(); n > 0 && r.Err() == nil; n-- {
 		switch r.ReadInt32() {
 		case sysParamText:
 			if s := r.ReadString(); texts < len(m.Text) {
 				m.Text[texts] = s
 				texts++
+			}
+		case sysParamNumber:
+			if v := r.ReadInt32(); !numbered {
+				m.Number, numbered = v, true
 			}
 		case sysParamSkillName:
 			r.Skip(2 * 4)

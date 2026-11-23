@@ -57,7 +57,7 @@ func TestDecodeClanEvents(t *testing.T) {
 		},
 		{
 			"SystemMessage keeps two texts", packet(opGameSystemMessage, 9, 4, 1, 5, 0, "a", 0, "b", 0, "c"),
-			SystemMessage{ID: 9, Text: [2]string{"a", "b"}},
+			SystemMessage{ID: 9, Text: [2]string{"a", "b"}, Number: 5},
 		},
 		{"CreatureSay clan", packet(opGameCreatureSay, pcID, chatClan, "Alden", "hi all"), CreatureSay{ObjectID: pcID, Type: chatClan, Name: "Alden", Text: "hi all"}},
 	}

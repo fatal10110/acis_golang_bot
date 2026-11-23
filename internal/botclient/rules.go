@@ -450,7 +450,9 @@ type rule struct {
 // per shot template carried, ahead of the fight it serves, after the flee
 // rules so it never delays one. "buffpotion" drinks the build's buff potion
 // at the farming spot out of combat, after the rebuff so a support's buff
-// lands first. "supply" is the farmer's trip home to restock (D16), after
+// lands first. "recover" reads a Scroll: Recovery out of combat while the
+// bot has a death penalty level, anywhere, after the buff potion. "supply"
+// is the farmer's trip home to restock (D16), after
 // the errands that already serve it and ahead of following and farming;
 // "escape" holds every rule after it while its Scroll of Escape's recall
 // runs, after "critical" so a potion still goes down.
@@ -469,6 +471,7 @@ var playRules = []rule{
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
 	{"buffpotion", (*Brain).ruleBuffPotion},
+	{"recover", (*Brain).ruleRecover},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
 	{"store", (*Brain).ruleStore},
