@@ -1,7 +1,7 @@
 # Race and class strategy: each bot plays its race, class and role
 
 Status: draft for owner review. Proposed decisions D21-D24 are open (see "Owner decisions").
-Milestone M10 ("Race and class strategy"), epic and issues filed from the "Delivery" table.
+Milestone M10 ("Race and class strategy"): epic #319, issues #320-#333 ("Delivery").
 
 Nine rounds of independent review, every finding checked against the datapack, the server or the
 bot code before it was fixed; the ninth found one wording contradiction (fixed) and two minor
@@ -794,20 +794,20 @@ Proposed, awaiting the owner:
 
 | PR | Scope | Depends on |
 | --- | --- | --- |
-| S1 | `UserInfo`: keep the base and combat stats in `Self` (section 1). | — |
-| S2 | Datapack: class templates and skill trees, skill combat fields and armor-kind conditions, NPC base combat stats, base stats and `corpseTime`, trainers, set skills (section 2). | — |
-| S3 | `internal/charmodel`: stat curves, masteries and penalties, sets, calibration, the NPC stat functions, time to kill and to die (section 3). | S1, S2 |
-| S4 | The build: race profiles, class kits, roles, thresholds, `Overrides`, `CompileBuild`, the `Step` type with every gate, the `Buff` and `Heal` gates; the role from the preset as today's tables play it (`support` and `merchant` Support, `crafter` Crafter, `town` Support); swap every table for it, behavior-neutral; `TestBehaviorRowsShipped` over today's values, which S5-S11 extend to each row part they add (section 4, "Behavior per class" notation). | S2 |
-| S5 | Gear, sets and dyes through the model; race armor kinds; chest and legs as a pair (section 5; columns 1, 2 and 11 of every row; a base row whose branches wield different weapons keeps today's weapon kinds until S8 sets `Build.Branch`). | S3, S4 |
-| S6 | Fighter mechanics and base rows HF, EF, DF, OF, WF (columns 3-9 and 12; WF without Spoil and Sweeper, which S10 adds): the rotation runner with the `Step` gates, fighter learn tables and trainers, sustain in `ruleCritical`, the buff stack rule (self, party and member buffs), toggle tracking and the `ruleRest` change, Relax, the `Flee` skill, force charges decoded from `EtcStatusUpdate`, thresholds (sections 4, 7, 9). | S4 |
-| S6b | Fighter first professions KN, WA, RO, EK, ES, PK, AS, OR, MO, SC (columns 3-9 and 12; SC without Spoil and Sweeper): their learn tables, rotations, sustain, buffs and toggles, Monk charges, thresholds. | S6 |
-| S7 | Mystic rows HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS (columns 3-9 and 12): learn tables, damage rotations and openers, heals and party buffs per row, sustain, per-role MP reserve and rest, Soul Cry (sections 4, 7, 9). | S4, S6 (rotation runner, toggle tracking) |
-| S8 | Professions by race and role: `Build.Branch` and the branch choice (hash, kept line, and a pin read from the brain config), the branch's weapon kind for base rows (column 1), the class change at 20 and 40 moving a bot from its base row to its first-profession row, the announced change, `merchant` turning Damage (section 6). | S4, S6b, S7 |
-| S9 | Presets and roles: the `farmer` preset as the default (`-persona`, the panel, `ImportPreset`), the registry `Branch` pin that feeds S8's brain config and its panel API, the panel's build view (section 10, D21, D22). | S8 |
-| S10 | Dwarven spoil and sweep: rows WF and SC's Spoil opener, the `sweep` rule and Sweeper (section 8). | S2, S6b |
-| S11 | Spot choice through the model, the spot margin of every row (column 10), absorbing #294 (section 11). | S3, S4 |
-| S12 | e2e live scenarios for S5-S11 and S6b, at most 4 bots per scenario (the harness cap). | each |
-| — | Backlog: second-profession kits (40+, the backlog sub-table) and servitor lines. | S8 |
+| S1 (#320) | `UserInfo`: keep the base and combat stats in `Self` (section 1). | — |
+| S2 (#321) | Datapack: class templates and skill trees, skill combat fields and armor-kind conditions, NPC base combat stats, base stats and `corpseTime`, trainers, set skills (section 2). | — |
+| S3 (#322) | `internal/charmodel`: stat curves, masteries and penalties, sets, calibration, the NPC stat functions, time to kill and to die (section 3). | S1, S2 |
+| S4 (#323) | The build: race profiles, class kits, roles, thresholds, `Overrides`, `CompileBuild`, the `Step` type with every gate, the `Buff` and `Heal` gates; the role from the preset as today's tables play it (`support` and `merchant` Support, `crafter` Crafter, `town` Support); swap every table for it, behavior-neutral; `TestBehaviorRowsShipped` over today's values, which S5-S11 extend to each row part they add (section 4, "Behavior per class" notation). | S2 |
+| S5 (#324) | Gear, sets and dyes through the model; race armor kinds; chest and legs as a pair (section 5; columns 1, 2 and 11 of every row; a base row whose branches wield different weapons keeps today's weapon kinds until S8 sets `Build.Branch`). | S3, S4 |
+| S6 (#325) | Fighter mechanics and base rows HF, EF, DF, OF, WF (columns 3-9 and 12; WF without Spoil and Sweeper, which S10 adds): the rotation runner with the `Step` gates, fighter learn tables and trainers, sustain in `ruleCritical`, the buff stack rule (self, party and member buffs), toggle tracking and the `ruleRest` change, Relax, the `Flee` skill, force charges decoded from `EtcStatusUpdate`, thresholds (sections 4, 7, 9). | S4 |
+| S6b (#326) | Fighter first professions KN, WA, RO, EK, ES, PK, AS, OR, MO, SC (columns 3-9 and 12; SC without Spoil and Sweeper): their learn tables, rotations, sustain, buffs and toggles, Monk charges, thresholds. | S6 |
+| S7 (#327) | Mystic rows HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS (columns 3-9 and 12): learn tables, damage rotations and openers, heals and party buffs per row, sustain, per-role MP reserve and rest, Soul Cry (sections 4, 7, 9). | S4, S6 (rotation runner, toggle tracking) |
+| S8 (#328) | Professions by race and role: `Build.Branch` and the branch choice (hash, kept line, and a pin read from the brain config), the branch's weapon kind for base rows (column 1), the class change at 20 and 40 moving a bot from its base row to its first-profession row, the announced change, `merchant` turning Damage (section 6). | S4, S6b, S7 |
+| S9 (#331) | Presets and roles: the `farmer` preset as the default (`-persona`, the panel, `ImportPreset`), the registry `Branch` pin that feeds S8's brain config and its panel API, the panel's build view (section 10, D21, D22). | S8 |
+| S10 (#329) | Dwarven spoil and sweep: rows WF and SC's Spoil opener, the `sweep` rule and Sweeper (section 8). | S2, S6b |
+| S11 (#330) | Spot choice through the model, the spot margin of every row (column 10), absorbing #294 (section 11). | S3, S4 |
+| S12 (#333) | e2e live scenarios for S5-S11 and S6b, at most 4 bots per scenario (the harness cap). | each |
+| Backlog (#332) | Second-profession kits (40+, the backlog sub-table) and servitor lines. | S8 |
 
 Most urgent: S1, S2 and S4 unblock everything; S6 and S6b give half the bots their skills.
 
