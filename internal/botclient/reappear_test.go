@@ -82,7 +82,8 @@ func TestBrainAppearing(t *testing.T) {
 }
 
 // TestBrainAppearingPaced checks that an Appearing the pacer refuses goes
-// out once the frame bucket refills, and that the decision waits for it.
+// out once the frame bucket refills, and that the decision waits for it
+// and for the landing it asks.
 func TestBrainAppearingPaced(t *testing.T) {
 	var turns int
 	b, out := newTestBrain(t, countGoal(&turns))
@@ -105,8 +106,18 @@ func TestBrainAppearingPaced(t *testing.T) {
 	if err := b.wake(retry); err != nil {
 		t.Fatal(err)
 	}
-	if got := opcodes(out); !bytes.Equal(got, []byte{opGameAppearing}) || turns != 1 {
-		t.Fatalf("after the refill: sent % x and %d decisions, want Appearing then 1 decision", got, turns)
+	if got := opcodes(out); !bytes.Equal(got, []byte{opGameAppearing}) || turns != 0 {
+		t.Fatalf("after the refill: sent % x and %d decisions, want Appearing and no decision before the landing", got, turns)
+	}
+	landed := retry.Add(50 * time.Millisecond)
+	if err := b.handle([]Event{UserInfo{ObjectID: selfID}}, landed); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.wake(landed); err != nil {
+		t.Fatal(err)
+	}
+	if turns != 1 {
+		t.Fatalf("landed: %d decisions, want 1", turns)
 	}
 }
 
