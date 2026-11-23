@@ -398,9 +398,11 @@ picks one per persona.
   50 %) and by the budget (section 5).
 - The default list: shots (section 3); the best HP potion a merchant sells (1061 over 1060); 1-2
   Scrolls of Escape; the class's buff potion only when the budget's comfort tier allows it.
-- **HP potions** keep rule 3, with a persona threshold (`CrowdedHP`, default 60 %, above
+- **HP potions** keep rule 3, with a persona threshold (`CrowdedHP`, default 80 %, above
   `OutmatchedHP`) that also allows drinking early when two or more attackers are on the bot; the
-  heal and the flee stay under `CriticalHP`. Pacing: `potionReuse` as today.
+  heal and the flee stay under `CriticalHP`. Rules 3 and 4 do not flee while an attacker runs as
+  fast as the bot or faster (`FleeOutrun`, #281): the bot fights back instead. Pacing:
+  `potionReuse` as today.
 - **Buff potions** (`GearClass.BuffPotion`, rule `buffpotion` after the rebuff) are drunk at the
   claimed spot, standing, out of combat with no attacker, only when no effect of the same stack type
   with an equal or higher order is on the bot. The bot's effects carry skill id and level
