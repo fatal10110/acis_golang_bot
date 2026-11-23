@@ -127,9 +127,13 @@ func (w *World) SetGround(g groundHeight) { w.Self.ground = g }
 // (see motion).
 func (w *World) SetWater(water *nav.Water) { w.Self.water = water }
 
-// swimmer is the bot's own swim: its water and swim speed.
-func (s *SelfState) swimmer() swimmer {
-	return swimmer{water: s.water, speed: s.SwimSpeed}
+// swimmer is the bot's own swim: its water and swim speed, nil when it has
+// no water or no swim speed.
+func (s *SelfState) swimmer() *swimLine {
+	if s.water == nil || s.SwimSpeed <= 0 {
+		return nil
+	}
+	return &swimLine{water: s.water, speed: s.SwimSpeed}
 }
 
 // legTime is how long the bot's own move from from to to takes at its
@@ -216,40 +220,48 @@ type RestartPrompt struct {
 
 // motion is a straight move from from to to at speed world units per
 // second, begun at start. A stopped object has from == to. A motion with a
-// swimmer swims the part of its line in water, wet0 to wet1 as fractions of
-// the line: there the server moves a player at its swim speed and measures
-// the distance in 3D (acis_golang Character.MoveSpeed, model/actor/move
-// creature.go span).
+// swim swims the part of its line in water: there the server moves a player
+// at its swim speed and measures the distance in 3D (acis_golang
+// Character.MoveSpeed, model/actor/move creature.go span).
 type motion struct {
-	from, to   Point
-	start      time.Time
-	speed      int32
-	swim       swimmer
-	wet0, wet1 float64
+	from, to Point
+	start    time.Time
+	speed    int32
+	// swim is the bot's own swim, nil for every other object: a pointer
+	// keeps Object compact (TestObjectRecordCompact). A swimLine is never
+	// changed once a motion holds it, so copies of the motion may share it.
+	swim *swimLine
 }
 
-// swimmer is what a motion swims by: the water zones and the swim speed. The
-// zero value never swims.
-type swimmer struct {
-	water *nav.Water
-	speed int32
+// swimLine is what a motion swims by: the water zones and the swim speed,
+// and the part of the line in water, wet0 to wet1 as fractions of it.
+type swimLine struct {
+	water      *nav.Water
+	speed      int32
+	wet0, wet1 float64
 }
 
 // withLine is m moving from from to to, begun at start, at m's speeds.
 func (m motion) withLine(from, to Point, start time.Time) motion {
 	m.from, m.to, m.start = from, to, start
-	m.wet0, m.wet1 = 0, 0
-	if m.swim.speed > 0 && from != to {
-		if t0, t1, ok := m.swim.water.Span(toLoc(from), toLoc(to)); ok {
-			m.wet0, m.wet1 = t0, t1
+	if m.swim != nil {
+		s := swimLine{water: m.swim.water, speed: m.swim.speed}
+		if s.speed > 0 && from != to {
+			if t0, t1, ok := s.water.Span(toLoc(from), toLoc(to)); ok {
+				s.wet0, s.wet1 = t0, t1
+			}
 		}
+		m.swim = &s
 	}
 	return m
 }
 
+// wet reports whether a part of the motion's line is in water.
+func (m motion) wet() bool { return m.swim != nil && m.swim.wet1 > m.swim.wet0 }
+
 // swimming reports whether the point p of the motion lies in water.
 func (m motion) swimming(p Point) bool {
-	return m.wet1 > m.wet0 && m.swim.water.Contains(int(p.X), int(p.Y), int(p.Z))
+	return m.wet() && m.swim.water.Contains(int(p.X), int(p.Y), int(p.Z))
 }
 
 // pieces are the motion's stretches in order: each as the fraction of the
@@ -258,14 +270,15 @@ func (m motion) pieces() [3][2]float64 {
 	dx, dy, dz := float64(m.to.X-m.from.X), float64(m.to.Y-m.from.Y), float64(m.to.Z-m.from.Z)
 	flat := math.Hypot(dx, dy)
 	speed := float64(max(m.speed, 1))
-	if m.wet1 <= m.wet0 {
+	if !m.wet() {
 		return [3][2]float64{{1, flat / speed}}
 	}
 	space := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	s := m.swim
 	return [3][2]float64{
-		{m.wet0, flat * m.wet0 / speed},
-		{m.wet1 - m.wet0, space * (m.wet1 - m.wet0) / float64(m.swim.speed)},
-		{1 - m.wet1, flat * (1 - m.wet1) / speed},
+		{s.wet0, flat * s.wet0 / speed},
+		{s.wet1 - s.wet0, space * (s.wet1 - s.wet0) / float64(s.speed)},
+		{1 - s.wet1, flat * (1 - s.wet1) / speed},
 	}
 }
 
@@ -312,7 +325,7 @@ func (m motion) at(now time.Time) Point {
 		return m.from
 	}
 	dx, dy := float64(m.to.X-m.from.X), float64(m.to.Y-m.from.Y)
-	if dx == 0 && dy == 0 && m.wet1 <= m.wet0 {
+	if dx == 0 && dy == 0 && !m.wet() {
 		return m.to
 	}
 	f := m.progress(elapsed)

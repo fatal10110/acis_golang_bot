@@ -133,7 +133,7 @@ func TestMotionSwims(t *testing.T) {
 		{"swims down", Point{X: 600}, Point{X: 600, Z: -150}, 50, 3 * time.Second, time.Second, Point{X: 600, Z: -50}},
 	}
 	for _, tt := range tests {
-		m := motion{speed: 100, swim: swimmer{water: water, speed: tt.swim}}.withLine(tt.from, tt.to, t0)
+		m := motion{speed: 100, swim: &swimLine{water: water, speed: tt.swim}}.withLine(tt.from, tt.to, t0)
 		if got := m.duration(); got != tt.total {
 			t.Errorf("%s: duration %v, want %v", tt.name, got, tt.total)
 		}
