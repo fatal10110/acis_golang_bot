@@ -107,7 +107,12 @@ type harness struct {
 	metrics *botmetrics.Registry
 	runs    chan *fakeRun
 	cancel  context.CancelFunc
-	done    chan error
+	// done is closed once Run returned runErr.
+	done   chan struct{}
+	runErr error
+	// abandon is closed by the test's cleanup: every run still under way
+	// then ends at once.
+	abandon chan struct{}
 }
 
 func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline int) *harness {
@@ -118,7 +123,8 @@ func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline in
 		gate:    botclient.NewLoginGate(clock, rand.New(rand.NewPCG(3, 4))),
 		metrics: botmetrics.NewRegistry(),
 		runs:    make(chan *fakeRun),
-		done:    make(chan error, 1),
+		done:    make(chan struct{}),
+		abandon: make(chan struct{}),
 	}
 	sup, err := New(Config{
 		Registry:  reg,
@@ -141,14 +147,34 @@ func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline in
 	h.sup = sup
 	ctx, cancel := context.WithCancel(t.Context())
 	h.cancel = cancel
-	go func() { h.done <- sup.Run(ctx) }()
+	go func() {
+		h.runErr = sup.Run(ctx)
+		close(h.done)
+	}()
+	// Cleanups run last in, first out, so this one joins Run before the
+	// registry's Close: a test that fails early never leaves Run saving
+	// into a registry being closed (#259).
+	t.Cleanup(func() {
+		cancel()
+		close(h.abandon)
+		<-h.done
+	})
 	return h
 }
 
 func (h *harness) run(ctx context.Context, r Run) error {
 	fr := &fakeRun{Run: r, ctx: ctx, end: make(chan error)}
-	h.runs <- fr
-	return <-fr.end
+	select {
+	case h.runs <- fr:
+	case <-h.abandon:
+		return nil
+	}
+	select {
+	case err := <-fr.end:
+		return err
+	case <-h.abandon:
+		return nil
+	}
 }
 
 // next is the next run the supervisor starts.
@@ -157,8 +183,8 @@ func (h *harness) next(t *testing.T) *fakeRun {
 	select {
 	case r := <-h.runs:
 		return r
-	case err := <-h.done:
-		t.Fatalf("supervisor returned %v while a run was awaited", err)
+	case <-h.done:
+		t.Fatalf("supervisor returned %v while a run was awaited", h.runErr)
 	}
 	return nil
 }
@@ -185,8 +211,9 @@ func (h *harness) stop(t *testing.T, live ...*fakeRun) {
 		<-r.ctx.Done()
 		r.end <- nil
 	}
-	if err := <-h.done; err != nil {
-		t.Fatalf("Run = %v", err)
+	<-h.done
+	if h.runErr != nil {
+		t.Fatalf("Run = %v", h.runErr)
 	}
 }
 
@@ -261,8 +288,13 @@ func TestSupervisorCreate(t *testing.T) {
 		t.Fatalf("run %+v", r1.Run)
 	}
 
-	// The learned name is in the file as soon as the run reports it.
+	// The learned name is in the file as soon as the run's report is
+	// handled: the report never waits on the supervisor, so wait for it.
 	r1.Learned("AldenBot", 0)
+	h.await(t, "applied the learned name", func() bool {
+		b, _ := h.reg.Bot("hz1")
+		return b.Name == "AldenBot"
+	})
 	if s := h.list(t)["hz1"]; s.Name != "AldenBot" || *s.Class != 0 {
 		t.Fatalf("after learned: %+v", s.Bot)
 	}
@@ -580,8 +612,9 @@ func TestSupervisorStopJoinsEveryRun(t *testing.T) {
 	h.noRunReturn(t)
 	r2.Learned("LateBot", 0) // a report still under way is handled
 	r2.end <- nil
-	if err := <-h.done; err != nil {
-		t.Fatal(err)
+	<-h.done
+	if h.runErr != nil {
+		t.Fatal(h.runErr)
 	}
 	if _, err := h.sup.List(t.Context()); !errors.Is(err, ErrStopped) {
 		t.Fatalf("List after stop: %v", err)
@@ -600,8 +633,8 @@ func (h *harness) noRunReturn(t *testing.T) {
 	t.Helper()
 	runtime.Gosched()
 	select {
-	case err := <-h.done:
-		t.Fatalf("Run returned %v before every run reported", err)
+	case <-h.done:
+		t.Fatalf("Run returned %v before every run reported", h.runErr)
 	default:
 	}
 }
