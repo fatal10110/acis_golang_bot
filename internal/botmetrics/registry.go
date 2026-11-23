@@ -93,6 +93,12 @@ type Snapshot struct {
 	Rules         map[string]uint64 `json:"rules"`
 	QueueDepth    HistogramSnapshot `json:"queue_depth"`
 	WakeLagMicros HistogramSnapshot `json:"wake_lag_us"`
+	// NavWalkIdleMillis is how long each walker segment went out after the
+	// previous segment's modeled arrival, in milliseconds; NavWalkEfficiency
+	// is each arrived walk's route length over its elapsed time times the
+	// run speed, in per mille (docs/walking.md, "Measurement (#304)").
+	NavWalkIdleMillis HistogramSnapshot `json:"nav_walk_idle_ms"`
+	NavWalkEfficiency HistogramSnapshot `json:"nav_walk_efficiency_permille"`
 }
 
 // Collect sums every Bot as of at, stores the sum as the latest and returns
@@ -117,6 +123,8 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		}
 		s.QueueDepth.add(&b.depth)
 		s.WakeLagMicros.add(&b.wakeLag)
+		s.NavWalkIdleMillis.add(&b.walkIdle)
+		s.NavWalkEfficiency.add(&b.walkEfficiency)
 	}
 	r.mu.Unlock()
 	for i, name := range r.rules {
@@ -159,6 +167,8 @@ type Bot struct {
 	rules                                   []atomic.Uint64 // indexed like reg.rules
 	depth                                   Histogram
 	wakeLag                                 Histogram // microseconds
+	walkIdle                                Histogram // milliseconds
+	walkEfficiency                          Histogram // per mille
 }
 
 // Drained records one wakeup of the brain that drained n queued events.
@@ -223,6 +233,23 @@ func (b *Bot) Abort() {
 func (b *Bot) NavSegment() {
 	if b != nil {
 		b.navSegments.Add(1)
+	}
+}
+
+// NavWalkIdle records how long a walker segment went out after the
+// previous segment of its walk arrived, as the walker modeled the arrival.
+func (b *Bot) NavWalkIdle(d time.Duration) {
+	if b != nil {
+		b.walkIdle.Observe(d.Milliseconds())
+	}
+}
+
+// NavWalkEfficiency records an arrived walk's route length over its elapsed
+// time times the run speed, in per mille: 1000 is a straight run without a
+// stop.
+func (b *Bot) NavWalkEfficiency(permille int64) {
+	if b != nil {
+		b.walkEfficiency.Observe(permille)
 	}
 }
 
