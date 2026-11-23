@@ -921,7 +921,10 @@ geodata is committed here, and CI never sees it.**
     `TestLiveFollowAcrossBand`, the grocer `TestLiveTownErrands`; `TestLiveNavStepChain` walks
     along Gludin's walls (a stair leg is #243), `TestLiveNavMeleeObstacle` walks round an
     obstacle before its first click on the monster and asserts the click's origin has a straight
-    walk to it, and `TestLiveNavDoor` toggles the doors of a Gludin clan hall (the GM's `//open`
+    walk to it, `TestLiveNavPickUpObstacle` (#239) kills wolves at a measured site until the bot turns
+    to a drop where the straight walk from where it stands fails, and asserts that the bot walks to a
+    `StandPickUp` stand point before its pick-up and that the item reaches its inventory, and
+    `TestLiveNavDoor` toggles the doors of a Gludin clan hall (the GM's `//open`
     and `//close`, only on doors a scenario claims). A follower that sees a door change replans
     before it clicks, so door replans by the server's answer are rare: the door scenario asserts
     that a walk shut in by the closed doors ends unreachable for the door, that every walk ending
