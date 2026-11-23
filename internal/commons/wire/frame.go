@@ -118,13 +118,19 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 // FrameReader reads length-prefixed frames from one reader, reusing a
 // single payload buffer across calls so a connection's read loop costs no
 // allocation per frame once the buffer has grown to the connection's usual
-// frame size. Not safe for concurrent use.
+// frame size. A read that fails part way through a frame, such as one cut
+// by a connection's read deadline, keeps what it read: the next ReadFrame
+// resumes that frame rather than taking a header from its middle. Not safe
+// for concurrent use.
 type FrameReader struct {
 	r io.Reader
 	// header is read into a field rather than a local so the read through
 	// the io.Reader interface can't force a per-call heap allocation.
 	header [FrameHeaderSize]byte
 	buf    []byte
+	// got counts the bytes of the current frame read so far, header
+	// included; 0 between frames.
+	got int
 }
 
 // NewFrameReader returns a FrameReader reading frames from r.
@@ -134,14 +140,20 @@ func NewFrameReader(r io.Reader) *FrameReader {
 
 // ReadFrame reads one length-prefixed frame and returns its payload. The
 // payload aliases the reader's internal buffer and is only valid until the
-// next ReadFrame call; a caller that keeps it longer must copy it.
+// next ReadFrame call; a caller that keeps it longer must copy it. On an
+// error the frame read so far is kept, and the next call reads on from it.
 func (fr *FrameReader) ReadFrame() ([]byte, error) {
-	if _, err := io.ReadFull(fr.r, fr.header[:]); err != nil {
-		return nil, err
+	if fr.got < FrameHeaderSize {
+		n, err := io.ReadFull(fr.r, fr.header[fr.got:])
+		fr.got += n
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	length := binary.LittleEndian.Uint16(fr.header[:])
 	if length < FrameHeaderSize {
+		fr.got = 0
 		return nil, fmt.Errorf("%w: %d < %d", ErrFrameTooShort, length, FrameHeaderSize)
 	}
 
@@ -150,9 +162,12 @@ func (fr *FrameReader) ReadFrame() ([]byte, error) {
 		fr.buf = make([]byte, n)
 	}
 	payload := fr.buf[:n]
-	if _, err := io.ReadFull(fr.r, payload); err != nil {
+	read, err := io.ReadFull(fr.r, payload[fr.got-FrameHeaderSize:])
+	fr.got += read
+	if err != nil {
 		return nil, err
 	}
+	fr.got = 0
 	return payload, nil
 }
 
