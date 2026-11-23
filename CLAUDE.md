@@ -95,8 +95,9 @@ server first, `gh` as fallback. Details: `docs/agents/tooling.md`.
 
 **Tool inventory** (`scripts/agent-tools/`):
 
-- `heavy <cmd>`: serializes heavy runs (scoped tests, e2e, lint) through one lock and kills a hung
-  run with SIGQUIT so Go dumps its goroutines.
+- `heavy <cmd>`: serializes heavy runs through a lock and kills a hung run with SIGQUIT so Go
+  dumps its goroutines. E2e runs (`internal/e2e`, `e2e-live`, `TestLive`) take an e2e lock of their
+  own, so a long live run never blocks scoped unit tests and lint.
 - `look.py <spec>...`: several lookups in one call with capped output: ranges (`FILE:A-B`), Go
   declarations by name (`go:PATH:Type.Method`), bounded rg (`rg:PATH:PATTERN`). Every tool call
   re-sends the whole context, so batch lookups.

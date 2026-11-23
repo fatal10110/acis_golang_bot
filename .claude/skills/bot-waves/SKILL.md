@@ -113,8 +113,8 @@ calls, not their size. The prompts therefore point every agent at:
   worktrees with absolute paths.
 - `wave_mail.py pr-state --pr N` and `ci-wait --head SHA`: compact PR state (with `behind_by`, so
   the branch is updated only when behind) and an in-process CI wait for the merge agent.
-- `heavy <cmd>`: serializes heavy runs (scoped tests, e2e, lint) through one lock so parallel lanes
-  do not OOM a small box, and kills a hung run with SIGQUIT so Go dumps its goroutines.
+- `heavy <cmd>`: serializes heavy runs through a lock so parallel lanes do not OOM a small box (e2e
+  runs take a separate e2e lock, so a live run never blocks unit tests and lint), and kills a hung run with SIGQUIT so Go dumps its goroutines.
 - STOP reaches agents through commands they run anyway: every `wave_mail.py` output of a stopping
   run carries `"stop": true`, `look.py` prints `### STOP`, and `heavy` prints it and refuses to
   run from a lane or review worktree of a stopping run.
