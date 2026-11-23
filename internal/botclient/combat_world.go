@@ -59,8 +59,13 @@ func (w *World) hitBy(id int32, damage int32, now time.Time) {
 // applyAttack records every hit on the bot, misses included, against the
 // attacker, and places the attacker where it swings from.
 func (w *World) applyAttack(e Attack, now time.Time) {
+	// The server stops an attacker before it swings (ai/player.go,
+	// ai/attackable.go: move.Stop before DoAttack), and Pos is where it
+	// stands then (attack/controller.go snapshot): exact, unlike a walk's
+	// dead-reckoned end, which a pawn walk ending on its first step in range
+	// misses by up to a step. The walker's next segment goes out from it.
 	if m := w.motionOf(e.AttackerID); m != nil {
-		*m = m.resample(now, e.Pos)
+		*m = stopAt(e.Pos)
 	}
 	if e.AttackerID == w.Self.ObjectID {
 		w.Self.swingEnd = now.Add(swingTime(w.Self.PAtkSpd))
