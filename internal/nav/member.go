@@ -242,11 +242,7 @@ func (h *Hierarchy) Reachable(a, b Member) bool {
 	}
 	s := getScratch()
 	defer putScratch(s)
-	s.sccGen++
-	if s.sccGen == 0 || len(s.sccSeen) < h.graph.counts.sccs {
-		s.sccSeen = make([]uint32, h.graph.counts.sccs)
-		s.sccGen = 1
-	}
+	s.nextSCCGen(h.graph.counts.sccs)
 	queue := s.sccQueue[:0]
 	for _, x := range from {
 		if s.sccSeen[x] != s.sccGen {

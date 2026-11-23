@@ -109,8 +109,9 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	runtime.ReadMemStats(&mem)
 	fmt.Fprintf(stdout, "regions %d, clusters %d, workers %d, built in %s, heap from the OS %.0f MB\n",
 		len(settings.Regions), stats.Clusters, workers, time.Since(began).Round(time.Second), float64(mem.HeapSys)/1e6)
-	fmt.Fprintf(stdout, "entrance nodes %d, edges %d (intra-cluster %d, crossings %d), door refs %d, doors %d (%d skipped)\n",
-		stats.Nodes, stats.IntraEdges+stats.CrossEdges, stats.IntraEdges, stats.CrossEdges, stats.DoorRefs, stats.Doors, stats.SkippedDoors)
+	fmt.Fprintf(stdout, "entrance nodes %d, edges %d (intra-cluster %d, crossings %d, one-way between SCCs %d), door refs %d, doors %d (%d skipped)\n",
+		stats.Nodes, stats.IntraEdges+stats.CrossEdges+stats.OneWayEdges, stats.IntraEdges, stats.CrossEdges, stats.OneWayEdges,
+		stats.DoorRefs, stats.Doors, stats.SkippedDoors)
 	fmt.Fprintf(stdout, "SCCs %d (largest %d nodes), condensation edges %d\n", stats.SCCs, stats.LargestSCC, stats.CondEdges)
 	fmt.Fprintf(stdout, "wrote %s (%.1f MB)\n", out, float64(stats.Bytes)/1e6)
 	return nil

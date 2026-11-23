@@ -37,21 +37,22 @@ func (h *Hierarchy) distance(a, b Member, closed func(door int) bool) (int, erro
 	}
 	s := getScratch()
 	defer putScratch(s)
-	cost, _, err := h.abstractSearch(s, a, b, closed, abstractBudget)
+	sp := sameSpan(a)
+	cost, _, err := h.abstractSearch(s, a, b, &sp, closed, abstractBudget)
 	return int(cost), err
 }
 
-// abstractSearch runs A* over the entrance nodes of a's SCC from a's cell to
-// b's, expanding at most budget nodes, and leaves the node path, first node
-// first, in s.apath. It returns the cost and the nodes it expanded. Cells of
-// one cluster answer their straight-line distance and an empty path.
-func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, closed func(door int) bool, budget int) (int32, int, error) {
+// abstractSearch runs A* over the entrance nodes of the SCCs of span sp
+// from a's cell to b's, expanding at most budget nodes, and leaves the node
+// path, first node first, in s.apath. It returns the cost and the nodes it
+// expanded. Cells of one cluster answer their straight-line distance and an
+// empty path.
+func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed func(door int) bool, budget int) (int32, int, error) {
 	s.apath = s.apath[:0]
 	if a.res.cluster == b.res.cluster {
 		return heuristic(a.cell, b.cell), 0, nil
 	}
 	g := h.graph
-	x := a.SCC()
 	s.anodes = append(s.anodes[:0], anode{id: -1, g: -1, parent: -1})
 	s.open = s.open[:0]
 	s.aindex.reset()
@@ -84,7 +85,7 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, closed func(door int
 	}
 	first, end := g.clusterNodes(int(a.res.cluster))
 	for n := first; n < end; n++ {
-		if g.nodeSCC(n) == x {
+		if sp.start(g.nodeSCC(n)) {
 			relax(int32(n), heuristic(a.cell, g.nodeRep(n)), -1)
 		}
 	}
@@ -109,13 +110,13 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, closed func(door int
 		n.closed = true
 		id, gv := n.id, n.g
 		rep := g.nodeRep(int(id))
-		if g.nodeCluster(int(id)) == b.res.cluster {
+		if g.nodeCluster(int(id)) == b.res.cluster && sp.goal(g.nodeSCC(int(id))) {
 			relax(-1, gv+heuristic(rep, b.cell), it.idx)
 		}
 		lo, hi := g.nodeEdges(int(id))
 		for i := lo; i < hi; i++ {
 			e := g.edge(i)
-			if g.nodeSCC(e.to) != x {
+			if !sp.has(g.nodeSCC(e.to)) {
 				continue
 			}
 			if c, ok := g.edgeCost(e, closed); ok {
@@ -143,6 +144,11 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, closed func(door int
 // hierarchy"). The two share one budget: p.Budget cells and abstractBudget
 // abstract nodes.
 func (h *Hierarchy) Route(p *Planner, from, to location.Location, closed func(door int) bool) ([]location.Location, error) {
+	return h.route(p, from, to, closed, false)
+}
+
+// route is Route, and RouteOneWay when oneWay is set.
+func (h *Hierarchy) route(p *Planner, from, to location.Location, closed func(door int) bool, oneWay bool) ([]location.Location, error) {
 	s := getScratch()
 	defer putScratch(s)
 	start, ok := p.Locate(from)
@@ -167,11 +173,18 @@ func (h *Hierarchy) Route(p *Planner, from, to location.Location, closed func(do
 	if err != nil {
 		return nil, ErrNotWalkable
 	}
-	if !h.SameSCC(ma, mb) {
-		return nil, ErrUnreachable
-	}
 	from.Z, to.Z = int(start.Z), int(goal.Z)
 	q := routeQuery{a: ma, b: mb, start: start, goal: goal, from: from, to: to}
+	switch {
+	case h.SameSCC(ma, mb):
+		q.span = sameSpan(ma)
+	case !oneWay:
+		return nil, ErrUnreachable
+	default:
+		if q.span, ok = h.oneWaySpan(s, ma, mb); !ok {
+			return nil, ErrUnreachable
+		}
+	}
 	b := routeBudget{cells: p.Budget, nodes: abstractBudget}
 	route, err := h.search(s, p, &q, closed, &b)
 	if err == nil {
@@ -192,11 +205,13 @@ func (h *Hierarchy) Route(p *Planner, from, to location.Location, closed func(do
 }
 
 // routeQuery is one Route's endpoints: the members, their cells, and the
-// world points snapped to their floors.
+// world points snapped to their floors; and the SCCs its abstract search
+// may use.
 type routeQuery struct {
 	a, b        Member
 	start, goal Cell
 	from, to    location.Location
+	span        span
 }
 
 // routeBudget is what is left of one Route's budget.
@@ -210,7 +225,7 @@ type routeBudget struct {
 // It replans up to maxReplans times with the failing cell edge avoided, and
 // spends from b.
 func (h *Hierarchy) search(s *scratch, p *Planner, q *routeQuery, closed func(door int) bool, b *routeBudget) ([]location.Location, error) {
-	_, used, err := h.abstractSearch(s, q.a, q.b, closed, b.nodes)
+	_, used, err := h.abstractSearch(s, q.a, q.b, &q.span, closed, b.nodes)
 	b.nodes -= used
 	if err != nil {
 		return nil, err

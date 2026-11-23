@@ -58,6 +58,9 @@ type BuildStats struct {
 	SCCs, LargestSCC, CondEdges                       int
 	Doors, SkippedDoors                               int
 	Bytes                                             int
+	// OneWayEdges join two abstract SCCs: crossings and pairs joined
+	// inside a cluster.
+	OneWayEdges int
 }
 
 // RegionClusters returns the clusters of one geodata region tile.
@@ -781,7 +784,7 @@ type globalEdge struct {
 }
 
 // linked is the abstract graph before costs: node ids, each node's SCC and
-// the condensation, and the crossing edges.
+// the condensation, and the crossing and one-way edges.
 type linked struct {
 	base  []int // first global node of each cluster
 	scc   []int32
@@ -833,13 +836,10 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 			}
 		}
 	}
-	for v := range l.cross {
-		slices.SortFunc(l.cross[v], func(a, c globalEdge) int { return cmp.Compare(a.to, c.to) })
-	}
 	// The crossings and border cells are resolved: free them.
 	for ci := range outs {
 		o := &outs[ci]
-		o.cross, o.crossDoors, o.border, o.reach = nil, nil, nil, nil
+		o.cross, o.crossDoors, o.border = nil, nil, nil
 	}
 
 	var scc sccScratch
@@ -862,6 +862,25 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 		slices.Sort(l.cond[i])
 		l.cond[i] = slices.Compact(l.cond[i])
 		stats.CondEdges += len(l.cond[i])
+	}
+	// A node pair joined inside a cluster across two abstract SCCs is a
+	// one-way edge a route that may take drops follows (RouteOneWay),
+	// costed as a crossing is: its straight line, which the leg refinement
+	// settles. Pairs inside one SCC get their costs from intraEdges.
+	for ci := range outs {
+		o := &outs[ci]
+		for _, r := range o.reach {
+			from, to := l.base[ci]+int(r[0]), l.base[ci]+int(r[1])
+			if l.scc[from] == l.scc[to] {
+				continue
+			}
+			cost := uint32(max(costCardinal, heuristic(o.nodes[r[0]].rep, o.nodes[r[1]].rep)))
+			addEdge(&l.cross[from], globalEdge{to: uint32(to), open: cost, free: cost})
+		}
+		o.reach = nil
+	}
+	for v := range l.cross {
+		slices.SortFunc(l.cross[v], func(a, c globalEdge) int { return cmp.Compare(a.to, c.to) })
 	}
 	stats.Clusters, stats.Nodes, stats.SCCs = len(outs), nNodes, l.nSCC
 	for _, n := range sizes {
@@ -892,8 +911,9 @@ func addEdge(edges *[]globalEdge, e globalEdge) bool {
 }
 
 // eachEdge calls fn for every stored edge, in node order and each node's
-// edges by target: the intra-cluster edges and the crossings between two
-// nodes of one abstract SCC.
+// edges by target: the intra-cluster edges between two nodes of one
+// abstract SCC, the crossings, and the one-way edges joining two SCCs
+// inside a cluster (link).
 func eachEdge(outs []clusterOut, l *linked, fn func(v int, e globalEdge, intra bool)) {
 	for ci := range outs {
 		o := &outs[ci]
@@ -904,9 +924,6 @@ func eachEdge(outs []clusterOut, l *linked, fn func(v int, e globalEdge, intra b
 			cross := l.cross[v]
 			x := 0
 			for {
-				for x < len(cross) && l.scc[cross[x].to] != l.scc[v] {
-					x++
-				}
 				hasIntra := k < len(o.edges) && int(o.edges[k].from) == u
 				switch {
 				case hasIntra && (x >= len(cross) || uint32(base+int(o.edges[k].to)) < cross[x].to):
@@ -932,7 +949,7 @@ func eachEdge(outs []clusterOut, l *linked, fn func(v int, e globalEdge, intra b
 
 // encode writes the nav cache image: every edge between two nodes of one
 // abstract SCC, intra-cluster with its two costs and door set, or a
-// crossing.
+// crossing; and the one-way edges between two SCCs.
 func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildStats) ([]byte, error) {
 	nNodes := l.base[len(outs)]
 	counts := make([]uint32, nNodes)
@@ -941,9 +958,12 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 		counts[v]++
 		nEdges++
 		nDoorRefs += len(e.doors)
-		if intra {
+		switch {
+		case l.scc[v] != l.scc[e.to]:
+			stats.OneWayEdges++
+		case intra:
 			stats.IntraEdges++
-		} else {
+		default:
 			stats.CrossEdges++
 		}
 	})

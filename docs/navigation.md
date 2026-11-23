@@ -349,6 +349,11 @@ server's pathfinder.
     reachable inside both clusters, so one-way terrain along a border keeps its own nodes. N3
     reports the node and edge counts;
   - precomputed directed intra-cluster edge costs between entrances;
+  - the **one-way edges** between two abstract SCCs (a crossing, or a pair of entrances joined
+    inside a cluster) are stored too, costed by their straight line, for the one-way routes
+    below (#231); a pair joined inside a cluster has no doors, a crossing keeps its door set. On the owner's water-aware build that is 722,553 edges more
+    (4,292,761 in all): the cache grew from 98.6 to 113.0 MB, built in 6 min 8 s on 2 workers
+    with 901 MB of heap from the OS;
   - **strongly connected components (SCCs)** labelled on the directed abstract graph, and its
     condensation (the graph of components) stored.
 - **Reachability**: which abstract SCC a cell belongs to, worked out inside its cluster.
@@ -386,6 +391,13 @@ server's pathfinder.
     one way is a search over the condensation, which is small.
   - **Consumers ask for `SameSCC` by default**, so a bot never walks down into a pit it cannot
     climb out of. Only follow and death return accept a one-way drop.
+  - **`RouteOneWay`** is the route for them: it also takes a destination only `Reachable` from
+    the start. Its abstract search runs over the SCCs on a way from the start's to the
+    destination's over the condensation, found by one depth-first walk of it, and crosses from one
+    to the next along the one-way edges; the legs are refined as `Route`'s are, under the same
+    door handling and budget. So a far leader past a drop costs the cell search no more than one
+    in the bot's SCC, where the cell search alone across the whole distance ran out of its budget
+    (#231).
 - **Doors in the hierarchy**:
   - `navbuild` builds every door's footprint from `doors.xml` (the copied `NewDoorObject` over the
     static geodata).
@@ -399,7 +411,9 @@ server's pathfinder.
     result is `unreachable: door`, never plain unreachable. Both searches count against the same
     node budget.
 - **Routes**:
-  - an abstract search over the condensation-restricted graph;
+  - an abstract search over the condensation-restricted graph: the edges inside the start's SCC
+    (`Route`), or inside the SCCs on a way to the destination's and the one-way edges between
+    them (`RouteOneWay`);
   - refinement inside each cluster the abstract path crosses, reading cells through the mapped
     geodata;
   - string pulling with the copied `CanMove`;
