@@ -279,16 +279,17 @@ Table-driven, with an injected clock:
 
 ## Measurement (#304)
 
-- **Metric** `nav_walk_idle_seconds`: for each walker segment, the time from the previous segment's
-  modeled move end to this segment's send. Per walk, efficiency = route length / (elapsed × run
-  speed).
+- **Metric** `nav_walk_idle_ms`: for each walker segment, the time from the previous segment's
+  modeled move end to this segment's send, in milliseconds. Per arrived walk,
+  `nav_walk_efficiency_permille` = route length / (elapsed × run speed), in per mille.
 - **Live e2e scenario** on the server stack: one fixed multi-corner route in a town and one in open
   field. For each, record:
   - elapsed time against straight running time;
   - segment count;
   - the idle histogram;
   - `nav_blocked_total` and `nav_desync_total`, both of which must be 0.
-- Run it on `main` before #305, after #305 and #306, and after #307. Record the numbers here.
+- Run it on `main` before #305, after #305 and #306, and after #307. The scenario is
+  `TestLiveWalkEfficiency`; its numbers are in `docs/navigation.md`, "Walking efficiency".
 
 ## Click-ahead at checked corners (#308, deferred)
 

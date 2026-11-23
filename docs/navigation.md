@@ -1071,6 +1071,44 @@ geodata is committed here, and CI never sees it.**
     that a walk shut in by the closed doors ends unreachable for the door, that every walk ending
     unreachable ends for the door, and that the bot walks through once the door opens.
 
+### Walking efficiency
+
+`TestLiveWalkEfficiency` (`internal/e2e/walk_efficiency_live_test.go`, #304) measures the walker on
+two fixed multi-corner routes in and around Talking Island village. A fresh human fighter (run speed
+126) per route is recalled to the route's start and follows the GM, who stands still at its end, so
+each run is one walk to a fixed point. The follow hold comes before the first segment and is not
+measured.
+
+- **town**: from the armory round the village houses to the master (`tiArmory` to `tiMaster`).
+- **field**: across the open ground north-east of the village (`tiSpots` to `openGround`).
+
+Each route logs one `walk-efficiency` line. Its fields:
+
+- **length**: the summed ground length of the server's answers to the segments.
+- **straight**: the ground distance from the first answer's origin to the last answer's end.
+- **elapsed**: from the first segment's answer to the last segment's end at run speed.
+- **route run / straight run**: length and straight distance at run speed.
+- **efficiency**: length / (elapsed × run speed). **bot** is the bot's own
+  `nav_walk_efficiency_permille`, timed from its first send to its arrival decision.
+- **idle**: `nav_walk_idle_ms`, for each segment after the first, the time from the previous
+  segment's modeled arrival to its send (mean and max; power-of-two buckets in the log line).
+
+The scenario fails unless `nav_blocked_total` and `nav_desync_total` are both 0. Each walking lane
+(#305, #306, #307) reruns it and appends its rows:
+
+```sh
+go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
+```
+
+| Route | Build | Date | Segments | Length | Straight | Elapsed | Route run | Straight run | Efficiency | Bot | Idle mean / max | Blocked | Desync |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| town | main 6199fe3 (before #305) | 2026-11-24 | 11 | 3295 | 3020 | 36.98 s | 26.15 s | 23.97 s | 0.707 | 0.691 | 1076 / 1706 ms | 0 | 0 |
+| field | main 6199fe3 (before #305) | 2026-11-24 | 14 | 6503 | 5668 | 65.06 s | 51.61 s | 44.98 s | 0.793 | 0.788 | 1025 / 1857 ms | 0 | 0 |
+
+On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
+(5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
+segment waits about a second after its arrival, the brain tick of `docs/walking.md`.
+
 ## Delivery (milestone M7, "Own navigation", epic #151)
 
 | PR | Scope | Closes or supersedes |
