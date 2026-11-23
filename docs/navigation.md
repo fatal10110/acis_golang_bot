@@ -68,7 +68,8 @@ talk) and pick-up walks.
 Non-goals:
 
 - server changes (none are needed);
-- flying, boats and swimming: routes keep out of water (see "Water");
+- flying and boats; the hierarchy keeps out of water, and only the cell planner swims, where a walk
+  has no dry route (see "Water" and "Swimming");
 - a navigation mesh in another format: the bot uses the server's geodata cells as they are, so its
   answers match the server's exactly.
 
@@ -555,7 +556,8 @@ While a player's position is inside a water zone the server moves it as a swimme
 (acis_golang `model/actor/move/creature.go`: `waterLocked`, and the swim branch of
 `resolvePathLocked`, which checks `CanMove` and then `HasLayerAtOrBelow` at the target, never
 pathfinds, and measures legs in 3D). Swimming also costs breath (`SwimStateChanged`, drowning
-damage). The planner does not model any of it: **routes keep out of water** (#161).
+damage). A planner without a breath (`Planner.Swim` zero, the hierarchy always) does not model
+any of it: **routes keep out of water** (#161). The swimming cell planner is "Swimming" below.
 
 - **Data**: `datapack.LoadWaterZones` reads `zones/WaterZone.xml` (373 zones in the shipped
   datapack, every one a `Cuboid` of two nodes); `datapack.Load` fills `Datapack.WaterZones`. Any
@@ -587,8 +589,85 @@ within 8000 units:
 | of those, with water avoided | 9 detour (most under 1.15× the length), 4 have no dry cell within 300 of an endpoint, 4 no route, 6 exceed a 400000-cell budget |
 
 The losses are spots reachable only through water, such as Schuttgart's region 23_11 and part
-of region 21_24, where the sea cuboid's band (maxZ -3780) covers low ground. Planning swim
-moves to reach them is #223.
+of region 21_24, where the sea cuboid's band (maxZ -3780) covers low ground. "Swimming" plans
+them (#223).
+
+### Swimming
+
+The server's rules for a player in water (acis_golang `model/actor/move/creature.go`,
+`network/movement.go`, `network/taskeffects.go`):
+
+- A leg's move type is the zone flag at its origin: a player inside a water zone swims
+  (`flagTypeLocked`, set by `SetSwimming` on zone enter and exit). A swimming leg is
+  `CanMove(origin, target)` and then `HasLayerAtOrBelow(target)` (`resolvePathLocked`); it is
+  never routed around anything, and a leg that fails ends at `ValidFlyLocation`, a desync for
+  the walker.
+- A swimmer moves straight in 3D toward the destination's height, measures its legs and steps in
+  3D, is not capped at the surface (`waterLocked`: only a flier or a boat is), and no closed
+  geodata line stops it under way (`catchUpLocked` blocks a ground move only). A walker that
+  wades in mid-leg swims on; a swimmer that leaves the water mid-leg walks on by the ground
+  rules (`stepLocked`).
+- In water a player moves at its swim speed (`Character.MoveSpeed`): UserInfo's base swim speed
+  times the same multiplier as the run speed, run or walk alike. Every shipped class has base 50,
+  against 115 to 130 run.
+- Breath is `breathTime`: 60 s times the race's `BreathMultiplier` (0.8 dwarf to 1.5 elf),
+  changed by the Breath stat; past it the player drowns. With `AllowWater` off there is no
+  countdown and no drowning, but the bot cannot tell.
+- The server sends a player `ChangeMoveType` only when it toggles run and walk, so the bot takes
+  its swim state from its own position in the water zones, as the server's zone flag does.
+
+The planner with a breath (`Planner.Swim`, the longest stretch of water a route may swim, in 3D
+world units):
+
+- **Search**: wet cells are graph nodes; a swimmer's leg must pass the same `CanMove`, so the
+  floor graph is its graph too. A step into a wet cell costs `swimCost` (3) times as much, so a
+  route swims only where the dry way round is over three times as long. A wet endpoint is
+  allowed.
+- **Pull**: from a waypoint in water the pull takes the farthest point the straight 3D line
+  reaches without leaving water (`swimLeg`: `Water.exit`, then `CanMove` and
+  `HasLayerAtOrBelow`), up to `navSegment`. Water zones are boxes, so a line between two points
+  of one box stays in it. Wading in and climbing out go through the exact check.
+- **Exact check**: a step-chain state in water is a swimmer (`swimStates`): nothing on its
+  straight line to the segment's end is checked while it stays in water; where the line leaves
+  water every band point a step past the exit becomes a state at the line's height, and the
+  chain goes on by the ground rules. The open-corridor test still fails a wet cell.
+- **Breath**: the in-water part of each segment (`Water.Span`, in 3D) adds up until a segment
+  ends out of water; a stretch longer than `Swim` is `ErrBreath`. The search weighs water but
+  cannot count breath, so `Route` then plans again keeping out of water.
+- **Hierarchy**: unchanged. The abstract graph and the nav cache hold no wet cell, and
+  `Hierarchy.Route` refines with `Swim` zero. A walk the hierarchy cannot route (no member under
+  the bot, a destination outside its SCC or in water, `ErrWater`, `ErrUnreachable` or `ErrBudget`) with water
+  within `walkSwimNear` (1000) of the box its two ends span tries the swimming cell planner,
+  `walkBudget` cells. Only a follower swims to a destination in water: a bot left standing in
+  water drowns once its breath runs out, so any other walk to a place in water (a farming spot on
+  the sea floor) stays unreachable, as before. A bot in water always swims out.
+- **Walker**: `Planner.Swim` is the swim speed times `swimBreath`, 24 s: half the dwarf's 48 s,
+  since the bot sees neither its Breath stat nor, with `AllowWater` off, a countdown. The bot's
+  own dead reckoning swims the part of a move in water (`Water.Span`) at the swim speed in 3D,
+  its height on the swim line rather than the floor, and a segment's simulated arrival uses the
+  same timing.
+
+**Measured for #223** with `TestOwnerSwimSample` (`internal/nav/swim_owner_test.go`, local only:
+`BOT_NAV_GEODATA`, `BOT_NAV_GEOENGINE`, `BOT_NAV_GEODATA_CACHE`, `BOT_NAV_DATAPACK`) on the owner's
+139 regions and the shipped datapack: #161's sample rebuilt (every third farming spot, from the
+nearest STANDARD teleport destination within 8000, cell planner, 400000 cells, breath 1200 = base
+swim speed 50 × 24 s). The rebuilt sample plans 558 routes when water is ignored and 14 of them
+pass water (the #161 count of 23 of 488 came from a sampling script that was never committed;
+this one tests each segment's straight line against the zones):
+
+| Of the 14 | Keeping out of water | Swimming |
+| --- | --- | --- |
+| route | 3 (one a 21,468 detour for a 7,522 way) | 8 |
+| endpoint in water | 9 | 0 |
+| longer swim than the breath | - | 5 |
+| over the cell budget | 2 | 1 |
+
+The swims take 11 to 79 segments and 25 to 244 ms. Schuttgart's `schttgart08_2311_05m1` (region
+23_11), over budget dry, routes in 5,345 with a swim of about 600; region 21_24's spots that lie
+on the sea floor near (41000..51000, 199000..207000) route where the swim is short, and the five
+deepest (`t21_24_00302` to `t21_24_00802`, floors -4093 to -4580) need a longer swim than 24 s of
+breath. `oren13_1920_052sm1` is over budget either way; water is not why. The walker takes the
+planner's routes to the 9 spots whose centre is in water only to follow a leader there.
 
 ### 3. `botclient`: door table and walker
 

@@ -44,8 +44,9 @@ const (
 
 // Route plans a ground route from from (a standstill position) to to. It
 // returns the waypoints, from first (on its floor) and to last (snapped to
-// the floor as the server snaps a destination). An endpoint whose cell is in
-// water is ErrWater. Each consecutive pair is one
+// the floor as the server snaps a destination). Unless the planner swims, an
+// endpoint whose cell is in water is ErrWater; a swimming planner's route
+// that swims a stretch longer than p.Swim is ErrBreath. Each consecutive pair is one
 // segment of at most navSegment units that passes CanMove and StepChainOK;
 // the planner takes a segment only after both checks pass, and every
 // intermediate waypoint is a click target on its layer.
@@ -53,6 +54,15 @@ func (p *Planner) Route(from, to location.Location) ([]location.Location, error)
 	s := getScratch()
 	defer putScratch(s)
 	route, err := p.route(s, from, to)
+	if errors.Is(err, ErrBreath) {
+		// The search weighs water but cannot count breath: the cheapest way
+		// swam too far, so look for a dry one.
+		dry := *p
+		dry.Swim = 0
+		if route, err = dry.route(s, from, to); errors.Is(err, ErrWater) {
+			err = ErrBreath
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +82,7 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 	if !p.clickable(goal, &s.layers) {
 		return nil, ErrUnclickable
 	}
-	if p.Water.wet(start.X, start.Y, start.Z) || p.Water.wet(goal.X, goal.Y, goal.Z) {
+	if !p.swims() && (p.Water.wet(start.X, start.Y, start.Z) || p.Water.wet(goal.X, goal.Y, goal.Z)) {
 		return nil, ErrWater
 	}
 	from.Z, to.Z = int(start.Z), int(goal.Z)
@@ -87,6 +97,9 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 		budget -= used
 		bad, ok := p.pull(s, cells, from, to)
 		if ok {
+			if p.swims() && !p.breathOK(s.route) {
+				return nil, ErrBreath
+			}
 			return s.route, nil
 		}
 		if avoid == nil {
@@ -99,9 +112,10 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 
 // pull string-pulls the cell path into segments, in s.route. From each
 // waypoint it takes the farthest cell ahead, within navSegment, that is a
-// click target and passes CanMove and the corridor test. When none does, it
-// takes the farthest within exactCells that passes CanMove and the full
-// step-chain check. Neither crosses a column of p.Avoid but the route's
+// click target and passes CanMove and the corridor test. When none does, a
+// swimming planner at a waypoint in water takes the farthest its swim line
+// reaches (swimLeg); else it takes the farthest within exactCells that
+// passes CanMove and the full step-chain check. Neither crosses a column of p.Avoid but the route's
 // endpoints'. When even the next cell fails, it reports that edge.
 func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (edgeKey, bool) {
 	n := len(cells) - 1
@@ -132,6 +146,16 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 			a, b := s.points[i], s.points[j]
 			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
 				next = j
+			}
+		}
+		// A swimmer takes the farthest point its straight line reaches in
+		// water: no step of a swim is ever blocked.
+		if next < 0 && p.swims() && p.inWater(s.points[i]) {
+			for j := n; j > i && next < 0; j-- {
+				a, b := s.points[i], s.points[j]
+				if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.swimLeg(a, b) {
+					next = j
+				}
 			}
 		}
 		for j := min(n, i+exactCells); j > i && next < 0; j-- {
