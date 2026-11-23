@@ -780,17 +780,38 @@ func (w *walker) sightOpen(from, to Point, height float64) bool {
 // pickUpOpen reports whether a pick-up of the item at item may go out from
 // from: the server routes the walk to an item out of range
 // (network/targeting.go), so the bot sends it only when CanMove onto the
-// item's raw Z and the step chain hold from where it stands. Without
-// geodata it is true.
+// item's raw Z and the step chain hold from where it stands. Out of
+// pickupStand the server walks the bot onto the item, so the item's cell
+// must also lie in the bot's SCC: a straight walk down a ledge or into a
+// pit would leave it on ground its walks never climb back from (#278). An
+// item whose membership the hierarchy cannot tell is left to the straight
+// check. Without geodata it is true.
 func (w *walker) pickUpOpen(from, item Point) bool {
 	if w.nav == nil {
 		return true
 	}
 	a := toLoc(from)
-	if c, ok := w.plan.Locate(a); ok {
-		a.Z = int(c.Z)
+	fc, located := w.plan.Locate(a)
+	if located {
+		a.Z = int(fc.Z)
 	}
-	return w.segmentOK(fromLoc(a), item)
+	if !w.segmentOK(fromLoc(a), item) {
+		return false
+	}
+	if !located || within3(fromLoc(a), item, pickupStand) {
+		return true
+	}
+	ic, ok := w.plan.Locate(toLoc(item))
+	if !ok {
+		return true
+	}
+	h := w.nav.Hier
+	cur, err := h.Locate(fc, &w.pins)
+	if err != nil {
+		return true
+	}
+	m, err := h.Locate(ic, &w.pins)
+	return err != nil || h.SameSCC(cur, m)
 }
 
 // standPoint is a point within rng of target at offering mode toward it,
