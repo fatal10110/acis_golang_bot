@@ -66,37 +66,20 @@ type blockedStop struct {
 // another click of the bot's own; a standstill farther than a cell from the
 // clicked point is a blocked stop.
 func blockedStops(seen []Seen, sent []Sent, self int32, speed float64) []blockedStop {
-	type frame struct {
-		at   time.Time
-		ev   botclient.Event
-		sent *Sent
-	}
-	frames := make([]frame, 0, len(seen)+len(sent))
-	for _, s := range seen {
-		frames = append(frames, frame{at: s.At, ev: s.Event})
-	}
-	for i := range sent {
-		frames = append(frames, frame{at: sent[i].At, sent: &sent[i]})
-	}
-	slices.SortStableFunc(frames, func(a, b frame) int { return a.at.Compare(b.at) })
-
 	var (
 		out                []blockedStop
 		active, answered   bool
 		from, to           botclient.Point
 		sentAt, answeredAt time.Time
 	)
-	for _, f := range frames {
+	for _, f := range watchFrames(seen, sent) {
 		if f.sent != nil {
 			switch f.sent.Op {
 			case opMoveBackwardToLocation:
-				if len(f.sent.Payload) < 25 {
+				var ok bool
+				if to, from, ok = groundClick(f.sent.Payload); !ok {
 					continue
 				}
-				p := f.sent.Payload
-				at := func(off int) int32 { return int32(binary.LittleEndian.Uint32(p[off:])) }
-				to = botclient.Point{X: at(1), Y: at(5), Z: at(9)}
-				from = botclient.Point{X: at(13), Y: at(17), Z: at(21)}
 				active, answered, sentAt = true, false, f.at
 			case opAction, opAttackRequest, opMagicSkillUse:
 				active = false
@@ -135,6 +118,38 @@ func blockedStops(seen []Seen, sent []Sent, self int32, speed float64) []blocked
 		}
 	}
 	return out
+}
+
+// watchFrame is one frame of a Watch: a packet the bot read (ev) or one it
+// wrote (sent).
+type watchFrame struct {
+	at   time.Time
+	ev   botclient.Event
+	sent *Sent
+}
+
+// watchFrames merges a Watch's read and written frames in time order.
+func watchFrames(seen []Seen, sent []Sent) []watchFrame {
+	frames := make([]watchFrame, 0, len(seen)+len(sent))
+	for _, s := range seen {
+		frames = append(frames, watchFrame{at: s.At, ev: s.Event})
+	}
+	for i := range sent {
+		frames = append(frames, watchFrame{at: sent[i].At, sent: &sent[i]})
+	}
+	slices.SortStableFunc(frames, func(a, b watchFrame) int { return a.at.Compare(b.at) })
+	return frames
+}
+
+// groundClick decodes a MoveBackwardToLocation payload (opcode first): the
+// clicked point and the origin the client sent. A payload too short for
+// both is no click.
+func groundClick(p []byte) (to, from botclient.Point, ok bool) {
+	if len(p) < 25 {
+		return botclient.Point{}, botclient.Point{}, false
+	}
+	at := func(off int) int32 { return int32(binary.LittleEndian.Uint32(p[off:])) }
+	return botclient.Point{X: at(1), Y: at(5), Z: at(9)}, botclient.Point{X: at(13), Y: at(17), Z: at(21)}, true
 }
 
 // toLocation is p as a geodata location.

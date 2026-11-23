@@ -98,7 +98,7 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 	w := NewWatch(botclient.SystemClock{})
 	setup.tap = w
 	n := tg.Nav(t)
-	var self int32
+	var self, collision int32
 	var speed float64
 	if setup.metrics == nil {
 		reg := botmetrics.NewRegistry()
@@ -127,6 +127,18 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 		for _, e := range bad {
 			t.Errorf("bot %s step chain: %s", account, e)
 		}
+		// Every desync names its segment and where the bot's geodata puts
+		// its cause (#246); navVerdict fails the run on a walker's one.
+		canMove := func(a, b botclient.Point) bool {
+			return n.Engine.CanMove(int(a.X), int(a.Y), int(a.Z), int(b.X), int(b.Y), int(b.Z))
+		}
+		var door func(a, b botclient.Point) bool
+		if n.Doors != nil {
+			door = n.Doors.Crosses
+		}
+		for _, d := range desyncs(w.Seen(0), w.Sent(), self) {
+			t.Logf("bot %s %s", account, desyncCause(d, collision, door, canMove))
+		}
 	})
 	b := runBotWith(t, ctx, tg, account, setup)
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
@@ -141,6 +153,9 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 	// A character runs unless it toggled walking (a follower matching a
 	// walking leader); the run speed is the strict reading of a stop.
 	self, speed = ui.ObjectID, float64(max(ui.RunSpeed, 1))
+	// The server adds the collision height to a click's floor Z, truncated
+	// (network/movement.go).
+	collision = int32(ui.CollisionHeight)
 	f := &farmer{bot: b, watch: w, id: ui.ObjectID, name: ui.Name}
 	t.Cleanup(func() {
 		if t.Failed() {
