@@ -417,6 +417,14 @@ server's pathfinder.
     them (`RouteOneWay`);
   - refinement inside each cluster the abstract path crosses, reading cells through the mapped
     geodata;
+  - **seating the ends** (#256): the abstract search joins the start to every entrance node of
+    its SCC in the start's cluster by a straight line, and the goal likewise, but a node of the
+    same SCC may join the endpoint only by a way out of the cluster and back. The first leg is
+    therefore searched inside the start's cluster first; when it finds no way there, that search
+    has flooded everything the start reaches in the cluster, and the abstract search runs again
+    from the nodes it reached. The last leg does the same, walking back from the goal over the
+    cluster's cardinal crossings to the nodes that reach it. Without this the leg's cell search
+    flooded the world until the cell budget ran out;
   - string pulling with the copied `CanMove`;
   - splitting into segments of at most `navSegment` (about 2500 units, roughly a click on screen,
     far under 9900 in 3D);
@@ -546,9 +554,34 @@ distances before they are timed.
 The `Locate` targets and the warm route heap target hold. The heap target ("heap per route
 query ≤ 4 MB" under Cost bounds) is not met by a cold route, whose scratch grows on first touch;
 the distance and route time targets need the searches to do less work, which changes answers.
-#256 tracks all three. Over 200 warm routes the cell search expands about
+#256 tracks all three (re-measured below). Over 200 warm routes the cell search expands about
 60,000 cells per route, 27 times the cells on the path (the octile heuristic ignores the
 clearance extra), and 62% of the segments fail the corridor test and take the exact check.
+
+**Re-measured by #256** on the one-way nav cache (format 3, `nav-water-oneway.cache`: 804,918
+entrance nodes, 4,292,761 edges), same 200 pairs rule. On that cache 32 of the 200 SameSCC routes
+failed with `ErrBudget`: in each, a leg from the start or to the goal ran between an endpoint and
+an entrance node of its SCC in its cluster that join only through other clusters, and the cell
+search flooded 400,000 cells. Seating the ends (Routes, above) routes 26 of them; 6 still exhaust
+the budget in a middle leg. This changes answers: distances and the synthetic region's results
+are unchanged, but 55 of the 200 owner routes differ: 26 from `ErrBudget` to a route, 28 to
+another route (a different first or last entrance node, or a tie broken another way), and 1
+from a route to `ErrBudget` (its seated search spends the budget in a middle leg).
+
+| Measure | Target | Before (format 3 cache) | After seating |
+| --- | --- | --- | --- |
+| `Locate` cold | p99 ≤ 30 ms | p50 10.7 ms, p99 22.1 ms | p50 11.1 ms, p99 29.3 ms |
+| abstract distance warm | p99 ≤ 2 ms | p50 0.15 ms, p99 11.0 ms | p50 0.16 ms, p99 12.5 ms |
+| 40000-unit route warm | p99 ≤ 10 ms | p50 106 ms, p99 565 ms | p50 112 ms, p99 850 ms |
+| 40000-unit route cold | p99 ≤ 150 ms | p50 129 ms, p99 715 ms | p50 133 ms, p99 877 ms |
+| heap per route query, warm | ≤ 4 MB | p99 0.01 MB | p99 0.01 MB |
+| heap per route query, cold | ≤ 4 MB | p99 15.2 MB, max 27.1 MB | p99 19.4 MB, max 35.6 MB |
+| routes failed (both passes) | — | 64 of 400 | 14 of 400 |
+
+The p99 rose because the routes that failed now finish, and they are the long ones: over the
+same 200 warm routes the CPU fell from 34.1 s to 32.4 s while 25 more of them route. The cell
+search and the exact step-chain check now take about 45% of route CPU each. The remaining work
+on the time and cold heap targets stays with #256.
 
 ### Water
 

@@ -1,6 +1,7 @@
 package nav
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
@@ -133,11 +134,22 @@ type openItem struct {
 // edgeKey is one directed cell-graph edge.
 type edgeKey struct{ from, to Cell }
 
+// cellBox is a half-open rectangle of cells, [x0, x1) × [y0, y1), that a
+// search keeps inside.
+type cellBox struct{ x0, y0, x1, y1 int }
+
+// anywhere is the box holding every cell.
+var anywhere = cellBox{math.MinInt, math.MinInt, math.MaxInt, math.MaxInt}
+
+func (b cellBox) has(c Cell) bool {
+	return c.X >= b.x0 && c.X < b.x1 && c.Y >= b.y0 && c.Y < b.y1
+}
+
 // search runs A* from start to goal over the cell graph, expanding at most
-// budget cells and skipping the edges in avoid and the cells in avoided
-// columns but goal's (Planner.Avoid). It returns the cell path,
-// start first, in s.cells, and the cells it expanded.
-func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
+// budget cells and skipping the edges in avoid, the cells outside box and
+// the cells in avoided columns but goal's (Planner.Avoid). It returns the
+// cell path, start first, in s.cells, and the cells it expanded.
+func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edgeKey]struct{}, box cellBox) ([]Cell, int, error) {
 	s.nodes = s.nodes[:0]
 	s.open = s.open[:0]
 	s.index.reset()
@@ -169,7 +181,7 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 					continue
 				}
 			}
-			if p.Avoid.skips(e.cell, goal) {
+			if !box.has(e.cell) || p.Avoid.skips(e.cell, goal) {
 				continue
 			}
 			ng := g + e.cost
@@ -187,6 +199,35 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 		}
 	}
 	return nil, expanded, ErrUnreachable
+}
+
+// reachers walks back from goal over the cardinal crossings inside box and
+// leaves every cell that reaches goal in s.index, goal included. It returns
+// the cells it walked. Diagonals add no reach: a diagonal needs both
+// L-shaped detours open.
+func (p *Planner) reachers(s *scratch, goal Cell, box cellBox) int {
+	s.index.reset()
+	s.index.getOrPut(cellKey(goal), 0)
+	s.cells = append(s.cells[:0], goal)
+	for k := 0; k < len(s.cells); k++ {
+		c := s.cells[k]
+		for _, d := range cardinals {
+			x, y := c.X-d.dx, c.Y-d.dy
+			if !box.has(Cell{X: x, Y: y}) || !p.hasGeo(x, y) {
+				continue
+			}
+			for _, l := range p.Engine.AppendLayers(s.layers[:0], x, y) {
+				from := Cell{X: x, Y: y, Z: l.Height}
+				if to, _, ok := p.cross(from, p.nswe(from), d); !ok || to != c {
+					continue
+				}
+				if _, seen := s.index.getOrPut(cellKey(from), 0); !seen {
+					s.cells = append(s.cells, from)
+				}
+			}
+		}
+	}
+	return len(s.cells)
 }
 
 // trace returns the path ending at node idx, start first, in s.cells.
