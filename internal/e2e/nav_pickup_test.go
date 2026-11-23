@@ -129,3 +129,31 @@ func TestPickUpClick(t *testing.T) {
 		})
 	}
 }
+
+func TestClosedHead(t *testing.T) {
+	const herbTmpl, adena = 8600, 57
+	drop := func(id, tmpl, x int32) botclient.DropItem {
+		return botclient.DropItem{DropperID: 900, Item: botclient.GroundItem{ObjectID: id, TemplateID: tmpl, Pos: botclient.Point{X: x}}}
+	}
+	// Spots at X >= 100 are closed.
+	open := func(q botclient.Point) bool { return q.X < 100 }
+	tests := []struct {
+		name  string
+		drops []botclient.DropItem
+		want  int32
+		ok    bool
+	}{
+		{"closed head", []botclient.DropItem{drop(1, adena, 100), drop(2, adena, 0)}, 1, true},
+		{"closed drop behind an open one", []botclient.DropItem{drop(1, adena, 0), drop(2, adena, 100)}, 0, false},
+		{"closed herb head", []botclient.DropItem{drop(1, herbTmpl, 100), drop(2, adena, 100)}, 0, false},
+		{"open head", []botclient.DropItem{drop(1, adena, 0)}, 0, false},
+		{"no drops", nil, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, ok := closedHead(tt.drops, open); ok != tt.ok || got.Item.ObjectID != tt.want {
+				t.Fatalf("closedHead = item %d, %v; want item %d, %v", got.Item.ObjectID, ok, tt.want, tt.ok)
+			}
+		})
+	}
+}

@@ -65,23 +65,27 @@ func pickUpScatterClosed(e *engine.Engine, m, from botclient.Point) float64 {
 // pickUpKills bounds the wolves TestLiveNavPickUpObstacle kills for one
 // drop the bot cannot pick up straight: a wolf drops adena 70% of the time
 // at drop rate 1 (npcs 20120, its CURRENCY category), about half of it on
-// a closed spot, so fifteen kills all miss about once in 600 runs.
+// a closed spot, and the CURRENCY category rolls before the DROP and herb
+// ones (killrewards.go CalculateRewards), so adena heads the drops: fifteen
+// kills all miss about once in 600 runs.
 const pickUpKills = 15
 
 // TestLiveNavPickUpObstacle has a farmer whose one spot is centred at
 // pickUpStand kill wolves the GM spawns one at a time at pickUpMob until
-// one drops an item (not a herb, which never reaches the inventory) where
-// no straight walk reaches it from where the bot stood at the kill, from
-// any point within half a cell of it. The bot must not send the pick-up
-// from there: the scenario asserts that it walked (ground moves after the
-// kill) to a point from which the straight walk onto the item's raw Z
-// holds (the origin its pick-up Action carries), that the server handed
-// it the item (GetItem) and that the item reached its inventory. A drop
-// it can pick up straight is picked up straight, and the next wolf
+// one's first drop is an item (not a herb, which never reaches the
+// inventory) where no straight walk reaches it from where the bot stood at
+// the kill, from any point within half a cell of it. Only the first drop
+// counts: the bot loots in drop order (Brain.lootEvent), so it judges a
+// later drop from where it picked up the one before. The bot must not send
+// the pick-up from there: the scenario asserts that it walked (ground moves
+// after the kill) to a point from which the straight walk onto the item's
+// raw Z holds (the origin its pick-up Action carries), that the server
+// handed it the item (GetItem) and that the item reached its inventory. A
+// drop it can pick up straight is picked up straight, and the next wolf
 // spawned; runWatched holds its blocked stops to at most one and its
 // desyncs to none. Like TestLiveFarmFight, all it carries but adena,
-// potions and shots is junk dropped at any load, so loot kept over the
-// runs never puts it over its weight limit.
+// potions and shots is junk dropped at any load, so loot kept over the runs
+// never puts it over its weight limit.
 func TestLiveNavPickUpObstacle(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -130,7 +134,7 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 	}
 	for kill := 1; ; kill++ {
 		if kill > pickUpKills {
-			t.Fatalf("%d wolves killed, no drop on a spot closed from the kill spot", pickUpKills)
+			t.Fatalf("%d wolves killed, no first drop on a spot closed from the kill spot", pickUpKills)
 		}
 		until(t, ctx, "the farmer idle at its spot", func() string {
 			if s := f.bot.Status(); s.Rule != "goal" && s.Rule != "idle" {
@@ -161,7 +165,7 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 			t.Fatalf("%s killed wolf %d without an Attack frame of its own on it", f.name, kill)
 		}
 		at := ground(e, k.from)
-		d, closed := closedDrop(k.drops, func(q botclient.Point) bool {
+		d, closed := closedHead(k.drops, func(q botclient.Point) bool {
 			for _, j := range [][2]int32{{0, 0}, {8, 0}, {-8, 0}, {0, 8}, {0, -8}} {
 				if canMove(ground(e, botclient.Point{X: at.X + j[0], Y: at.Y + j[1], Z: at.Z}), q) {
 					return true
@@ -241,13 +245,16 @@ func killOf(seen []Seen, self, mob int32) (wolfKill, bool) {
 	return wolfKill{}, false
 }
 
-// closedDrop is the first of drops, herbs left out, on a spot open reports
-// no straight walk to.
-func closedDrop(drops []botclient.DropItem, open func(botclient.Point) bool) (botclient.DropItem, bool) {
-	for _, d := range drops {
-		if !herb(d.Item.TemplateID) && !open(d.Item.Pos) {
-			return d, true
-		}
+// closedHead is the first of drops when it is no herb and lies on a spot
+// open reports no straight walk to. Only the first: the bot loots its
+// drops in arrival order, so it heads for a later one from where it picked
+// up the one before, not from the kill spot open measures from.
+func closedHead(drops []botclient.DropItem, open func(botclient.Point) bool) (botclient.DropItem, bool) {
+	if len(drops) == 0 {
+		return botclient.DropItem{}, false
+	}
+	if d := drops[0]; !herb(d.Item.TemplateID) && !open(d.Item.Pos) {
+		return d, true
 	}
 	return botclient.DropItem{}, false
 }
