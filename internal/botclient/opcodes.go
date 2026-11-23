@@ -105,6 +105,7 @@ const (
 const (
 	opGameAbnormalStatusUpdate = 0x7f // status_effects.go
 	opGamePartySpelled         = 0xee // status_effects.go
+	opGameEtcStatusUpdate      = 0xf3 // etcstatusupdate.go
 )
 
 // Client to game server, combat (internal/gameserver/network/clientpackets).

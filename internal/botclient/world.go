@@ -79,8 +79,11 @@ type SelfState struct {
 	CP, MaxCP          int32
 	// Load and MaxLoad are the carried weight and the weight limit.
 	Load, MaxLoad int32
-	PvPFlag       uint8
-	Karma         int32
+	// WeightPenalty is the server's weight penalty band (0-4) and
+	// DeathPenalty the death penalty level (0-15), both EtcStatusUpdate's.
+	WeightPenalty, DeathPenalty int32
+	PvPFlag                     uint8
+	Karma                       int32
 	// StoreType is the private store mode, 0 for none.
 	StoreType                        uint8
 	Sitting, InCombat, Dead, Running bool
@@ -513,6 +516,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 		} else if o := w.object(e.ObjectID); o != nil {
 			o.Dead = false
 		}
+	case EtcStatusUpdate:
+		w.Self.WeightPenalty, w.Self.DeathPenalty = e.WeightPenalty, e.DeathPenalty
 	case MyTargetSelected:
 		w.Target = e.ObjectID
 	case TargetUnselected:

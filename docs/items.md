@@ -413,6 +413,16 @@ picks one per persona.
   shows in the abnormals (its own stack then stops the next) or 5 s pass (`buffPotionWait`; the
   server drops a use still in its 500 ms reuse in silence). The comfort tier buys one per effect
   time of `TripMinutes`, margin included, within the weight the supplies leave under `BuyLoad`.
+- **Death penalty** (#299, `RecoverPolicy.LiftDeathPenalty`, rule `recover` after the buff
+  potion). The level (0-15) comes only in `EtcStatusUpdate` (0xf3, its seventh int32). A death raises
+  it by one at `DeathPenaltyChance`, and it never decays. Each Scroll: Recovery lifts one level and
+  fits one character level band: 8594 under 20, then 8595-8599 from 20, 40, 52, 61 and 76 (item
+  skill 2286; a scroll outside its band is refused). The supplies tier buys one scroll of the bot's
+  band per level, less those carried, and the band's scroll is in the keep set. The bot reads one
+  anywhere, standing, out of combat with no attacker. Pacing: one UseItem per 11 s
+  (`recoveryReuse`), past the scroll's 10 s reuse, which the server enforces in silence. Black
+  Judge (npc 30981, `Quest BlackJudge remove_dp`) does the same for adena, but has only three
+  spawns, so the bot does not use it.
 
 ### 5. One budget
 
@@ -431,8 +441,8 @@ floor.
 The junk rule (`keeps`) learns everything the loadout buys. Today it keeps only `Potions`, `Shots`,
 `Restock`, `Keep`, books and arrows, so a sell visit would sell the SoE, buff potions and dyes the
 bot just bought. It now keeps every template with a trip target (section 4), plus a **keep set**
-that later PRs add to: the build's buff potion (I9) and the planned dyes until they are drawn
-(I12), each tested there.
+that later PRs add to: the build's buff potion (I9), the planned dyes until they are drawn
+(I12), and the Scroll: Recovery of the bot's level band (#299), each tested there.
 
 A persona **keep hook** lets the clan crafter plan (M9) keep more, with no clan logic in M8:
 
