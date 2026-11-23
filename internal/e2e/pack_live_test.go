@@ -56,33 +56,40 @@ func TestLivePackSpot(t *testing.T) {
 	died := map[string]bool{}
 	var deaths int
 	var held, last string
-	var lastAt time.Time
+	var lastAt, diedAt time.Time
 	seen := 0
 	for time.Since(start) < packWatch {
 		if err := ctx.Err(); err != nil {
 			t.Fatalf("%s: %v after %d deaths", f.name, err, deaths)
 		}
 		st := f.bot.Status()
+		// A watch over a bot that is not online proves nothing.
+		if st.State != botclient.StateOnline && !st.At.IsZero() && time.Since(st.At) > noteEvery {
+			t.Log(f.digest())
+			t.Fatalf("%s %v since %v after %d deaths", f.name, st.State, st.At.Format(time.TimeOnly), deaths)
+		}
 		if now := fmt.Sprintf("rule %q spot %q", st.Rule, st.Spot); now != last || time.Since(lastAt) >= noteEvery {
 			last, lastAt = now, time.Now()
 			t.Logf("%s %s, %d potions at %v, level %d, HP %d/%d", f.name, now, f.carries(lesserHealingPotion), st.Position, st.Level, st.HP, st.MaxHP)
 		}
-		if st.Spot != "" {
+		// The status board lags the bot by up to statusEvery: one from
+		// before its last death still shows the spot it died holding.
+		if st.Spot != "" && st.At.After(diedAt) {
 			if died[st.Spot] {
 				t.Log(f.digest())
 				t.Fatalf("%s holds %s again, a spot it died holding", f.name, st.Spot)
 			}
 			held = st.Spot
 		}
-		events := f.watch.Seen(0)
-		for _, s := range events[seen:] {
+		events := f.watch.Seen(seen)
+		for _, s := range events {
 			if d, ok := s.Event.(botclient.Die); ok && d.ObjectID == f.id && s.At.After(start) {
 				deaths++
-				died[held] = true
+				died[held], diedAt = true, s.At
 				t.Logf("%s died holding %q at %v (death %d)", f.name, held, s.At.Format(time.TimeOnly), deaths)
 			}
 		}
-		seen = len(events)
+		seen += len(events)
 		if deaths > 2 {
 			t.Log(f.digest())
 			t.Fatalf("%s died %d times in %v", f.name, deaths, time.Since(start).Round(time.Second))
