@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -163,5 +164,72 @@ func TestTownPrepBoothWalkFails(t *testing.T) {
 	})
 	if v := &b.shop.v; v.clicks != 1 || !b.preparing() {
 		t.Errorf("clicks %d, gate armed %v, want one click spent and the gate held", v.clicks, b.prep.armed)
+	}
+}
+
+// failBoothWalk ends the walk to the talk point unreachable, as the walker's
+// watchdog does.
+func failBoothWalk(b *Brain) {
+	b.walk.seg = segment{}
+	b.walk.unreachable(reasonWatchdog)
+}
+
+// TestTownPrepBoothWalksRunOut checks the bound on failed walks to a talk
+// point (#253): each unreachable end spends a click, and once visitClicks
+// are spent the visit ends with no click from afar, the shop round counted
+// and the preparation gate open.
+func TestTownPrepBoothWalksRunOut(t *testing.T) {
+	b := walkBooth(t, newPrepBrain(t, boothNPC, adenaStack(10000), potionStack(5)), Point{X: 3800, Y: boothNPC.Y})
+	b.townArrival()
+	rounds := b.shop.rounds
+	steps := []trainerStep{{
+		name: "grocer in sight from afar: walk to a talk point", at: time.Second,
+		events:   []Event{NPCInfo{ObjectID: merchantObj, NPCID: 30004, Pos: boothNPC}},
+		wantRule: "shop", wantKind: actMove, wantTo: boothNPC, wantWithin: talkReach,
+	}}
+	end := time.Second
+	for i := 1; i < visitClicks; i++ {
+		end += 40 * time.Second
+		steps = append(steps,
+			trainerStep{name: fmt.Sprintf("walk %d ends unreachable: no click", i), at: end, setup: failBoothWalk, wantRule: "shop"},
+			trainerStep{name: fmt.Sprintf("walk %d: walk again", i+1), at: end + walkRetry + time.Second, wantRule: "shop", wantKind: actMove, wantTo: boothNPC, wantWithin: talkReach},
+		)
+		end += walkRetry + time.Second
+	}
+	runTrainerSteps(t, b, steps)
+
+	now := at(end + 40*time.Second)
+	failBoothWalk(b)
+	if rule, a := b.decide(now); rule == "shop" || a.kind == actSelect || a.kind == actTalk {
+		t.Fatalf("last walk ends unreachable: decide = rule %q action %d, want the visit over with no click", rule, a.kind)
+	}
+	if b.shop.v.active() || b.shop.rounds != rounds+1 || b.preparing() {
+		t.Errorf("visit active %v, rounds %d (armed at %d), gate armed %v, want the visit over, its round counted and the gate open",
+			b.shop.v.active(), b.shop.rounds, rounds, b.prep.armed)
+	}
+}
+
+// TestTownPrepBoothRetryFailsAtOnce checks a retry after walkRetry whose plan
+// fails within the same goTo call (here: the bot stands off the navigation,
+// #253 review): it never walks, yet its fresh unreachable end spends a click.
+func TestTownPrepBoothRetryFailsAtOnce(t *testing.T) {
+	b := walkBooth(t, newPrepBrain(t, boothNPC, adenaStack(10000), potionStack(5)), Point{X: 3800, Y: boothNPC.Y})
+	b.townArrival()
+	failed := 41 * time.Second
+	runTrainerSteps(t, b, []trainerStep{
+		{
+			name: "grocer in sight from afar: walk to a talk point", at: time.Second,
+			events:   []Event{NPCInfo{ObjectID: merchantObj, NPCID: 30004, Pos: boothNPC}},
+			wantRule: "shop", wantKind: actMove, wantTo: boothNPC, wantWithin: talkReach,
+		},
+		{name: "the walk ends unreachable", at: failed, setup: failBoothWalk, wantRule: "shop"},
+		{
+			name: "walkRetry later: the retry fails at once", at: failed + walkRetry + time.Second,
+			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 3800, Y: int32(geotest.CellWorldY(-40))}) },
+			wantRule: "shop",
+		},
+	})
+	if v := &b.shop.v; v.clicks != 2 {
+		t.Errorf("clicks %d, want 2: one per unreachable end", v.clicks)
 	}
 }

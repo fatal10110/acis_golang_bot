@@ -46,8 +46,11 @@ type npcVisit struct {
 	// before one.
 	stand, standFor Point
 	// noLine is set when the stand point offers no open line to the NPC
-	// (a talk point), walkFailed while the walk there is unreachable.
-	noLine, walkFailed bool
+	// (a talk point).
+	noLine bool
+	// failedAt is the walker's endedAt of the last unreachable walk to a
+	// talk point a click was spent on; zero before one.
+	failedAt time.Time
 	// walkAt is where the walk toward the spawn heads (walkTo): at, or the
 	// bot's ground nearest it; zero before the walk.
 	walkAt Point
@@ -133,7 +136,7 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 		if o := b.world.object(v.obj); o == nil || o.Dead {
 			// Out of sight (a teleport clears the world): look again.
 			v.obj, v.opened, v.waitUntil = 0, false, time.Time{}
-			v.stand, v.standFor, v.noLine, v.walkFailed = Point{}, Point{}, false, false
+			v.stand, v.standFor, v.noLine, v.failedAt = Point{}, Point{}, false, time.Time{}
 		}
 	}
 	if v.obj == 0 {
@@ -210,7 +213,7 @@ const talkReach = visitTalkRange - 2*walkSlop
 // bounded by visitClicks. A walk to a talk point that ends unreachable is
 // not clicked past, since the straight approach from afar ends blocked: the
 // visit waits out the walker's walkRetry and walks again, each failed walk
-// spending a click.
+// (each unreachable end, by the walker's endedAt) spending a click.
 func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	from := s.Position(now)
@@ -238,15 +241,16 @@ func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, boo
 	a, st := b.goTo(v.stand, walkSlop, walkTalk, now)
 	switch {
 	case st == walkUnreachable && v.noLine:
-		if !v.walkFailed {
-			v.walkFailed = true
+		// A retry whose plan fails at once ends within the same goTo, with
+		// no walking in between: its fresh endedAt still spends a click.
+		if ended := b.walk.endedAt; !ended.Equal(v.failedAt) {
+			v.failedAt = ended
 			v.clicks++
 		}
 		return Action{}, v.clicks < visitClicks
 	case st != walkWalking:
 		return Action{}, false
 	}
-	v.walkFailed = false
 	return a, true
 }
 
