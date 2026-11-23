@@ -258,6 +258,8 @@ func TestSupplyTripSafety(t *testing.T) {
 	start := at(time.Minute)
 	tests := []struct {
 		name string
+		// mob puts an attackable monster close by.
+		mob bool
 		// hit is how long before each decide the monster hits the bot, 0
 		// for never.
 		hit   time.Duration
@@ -265,16 +267,16 @@ func TestSupplyTripSafety(t *testing.T) {
 		want  actionKind
 	}{
 		{name: "safe", want: actUseItem},
-		{name: "monster close by, not attacking (#251)", want: actUseItem},
-		{name: "attacker", hit: time.Second, want: actHold},
-		{name: "last hit past attackerWindow", hit: attackerWindow + time.Second, want: actUseItem},
-		{name: "attacker past SafeWait: walks", hit: time.Second, after: 2 * time.Minute, want: actMove},
+		{name: "monster close by, not attacking (#251)", mob: true, want: actUseItem},
+		{name: "attacker", mob: true, hit: time.Second, want: actHold},
+		{name: "last hit past attackerWindow", mob: true, hit: attackerWindow + time.Second, want: actUseItem},
+		{name: "attacker past SafeWait: walks", mob: true, hit: time.Second, after: 2 * time.Minute, want: actMove},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTripBrain(t, soeStack(1))
 			b.supplyTrip.potions = true
-			if tt.name != "safe" {
+			if tt.mob {
 				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: mob, Attackable: true, Pos: Point{X: 100}}, start)
 			}
 			decide := func(now time.Time) (string, Action) {

@@ -139,12 +139,25 @@ func TestLiveSupplyTrip(t *testing.T) {
 		if tripAt.IsZero() && st.Rule == "supply" {
 			tripAt = time.Now()
 		}
-		// The landing follows the latest read: a read the bot died
-		// before recalls nothing.
+		// The landing is the first teleport after the latest read. The
+		// server's respawn is a teleport too (Revive, then the teleport to
+		// the restart point), so a Revive of the bot between the read and
+		// that teleport is a death during the read, not the recall.
 		if used := f.usedSince(scrollOfEscape, start); len(used) > 0 {
 			read = used[len(used)-1].At
+			var revived time.Time
 			for _, s := range f.watch.Seen(0) {
-				if tp, ok := s.Event.(botclient.TeleportToLocation); ok && tp.ObjectID == f.id && s.At.After(read) {
+				if !s.At.After(read) {
+					continue
+				}
+				if r, ok := s.Event.(botclient.Revive); ok && r.ObjectID == f.id && revived.IsZero() {
+					revived = s.At
+				}
+				if tp, ok := s.Event.(botclient.TeleportToLocation); ok && tp.ObjectID == f.id {
+					if !revived.IsZero() {
+						t.Log(f.digest())
+						t.Fatalf("%s home with no recall: died during the read (scroll read at %v, revived at %v)", f.name, read.Format(time.TimeOnly), revived.Format(time.TimeOnly))
+					}
 					landed, how = s.At, fmt.Sprintf("read its scroll at %v", read.Format(time.TimeOnly))
 					return ""
 				}
