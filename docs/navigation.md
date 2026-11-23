@@ -417,6 +417,11 @@ server's pathfinder.
     them (`RouteOneWay`);
   - refinement inside each cluster the abstract path crosses, reading cells through the mapped
     geodata;
+  - **middle legs inside their clusters** (#256): a leg between two entrance nodes searches the
+    box of the clusters holding them, where the build found the abstract edge it stands for (a
+    way inside one cluster, or one crossing between two). Only when the box does not join them
+    (an edge avoided after a failed pull, a node left out in an avoided column) does it search
+    anywhere;
   - **seating the ends** (#256): the abstract search joins the start to every entrance node of
     its SCC in the start's cluster by a straight line, and the goal likewise, but a node of the
     same SCC may join the endpoint only by a way out of the cluster and back. The first leg is
@@ -583,6 +588,63 @@ same 200 warm routes the CPU fell from 34.1 s to 32.4 s while 25 more of them ro
 search and the exact step-chain check now take about 45% of route CPU each. The remaining work
 on the time and cold heap targets stays with #256.
 
+**Narrowed corridor and boxed middle legs** (#256, second pass), same cache and 200 pairs, both
+builds measured back to back on an idle machine. A profile of 200 warm routes put 49% of route
+CPU in the exact check (151 million `CanMove` calls from 10,682 segments that took it, 12,400
+per stretch, 99% of them distinct, so no cache helps) and 46% in the cell search (middle legs
+85% of it). Three changes:
+
+- **Corridor reach** (Step-chain check, below): the corridor test takes the cells next to the line
+  only within 4 units of the segment, not the whole one-cell margin, so a wall or ledge one cell
+  aside no longer fails it.
+- **Stacked tops** (same section): for string-pull candidates a cell with several layers counts
+  as its top when the chain cannot drop to a lower layer.
+- **Middle legs inside their clusters** (Routes, above).
+
+Over the 200 warm routes, segments taking the exact check fell from 10,682 to 4,505 and its
+`CanMove` calls from 151 to 61 million; middle-leg cell expansions fell from 14.0 to 11.9
+million, and no middle leg leaves its clusters (97 did). Answers change: distances are
+unchanged; of the 200 owner routes 4 are identical, 189 are another route, 3 go from `ErrBudget`
+to a route (a middle leg no longer floods past its clusters), none from a route to `ErrBudget`,
+and 4 still fail with `ErrBudget`. The other routes are the same way pulled into longer segments:
+17,186 waypoints became 10,333 (−40%) and the routes' total length fell by 1.0% (per route p50
+−0.4%, at worst +6.0%). The synthetic region's route tests pass unchanged; two corridor cases
+flip as intended (a bridge deck's stacked tops, a ledge one cell aside). One walker answer
+changes: the drop off the synthetic bridge deck (`TestWalkerRecovery`) was one exact segment to
+the ground beside it and is now two, to the deck's edge on its stacked tops, then down. The pull
+takes the farthest candidate that passes the corridor test before it tries any exact one, and the
+tops now pass the corridor test up to the edge.
+
+| Measure | Target | Before | After |
+| --- | --- | --- | --- |
+| `Locate` cold | p99 ≤ 30 ms | p50 10.8 ms, p99 24.1 ms | p50 11.7 ms, p99 32.3 ms (code unchanged: noise) |
+| abstract distance warm | p99 ≤ 2 ms | p50 0.17 ms, p99 12.7 ms | p50 0.18 ms, p99 12.4 ms |
+| 40000-unit route warm | p99 ≤ 10 ms | p50 112 ms, p99 972 ms | p50 65 ms, p99 674 ms |
+| 40000-unit route cold | p99 ≤ 150 ms | p50 141 ms, p99 892 ms | p50 89 ms, p99 715 ms |
+| heap per route query, warm | ≤ 4 MB | p99 0.01 MB | p99 0.01 MB |
+| heap per route query, cold | ≤ 4 MB | p99 19.4 MB, max 35.6 MB | p99 19.4 MB, max 43.8 MB |
+| routes failed (both passes) | — | 14 of 400 | 8 of 400 |
+
+This was the last pass against the N3 route time, cold route heap and distance targets. On
+2026-11-23 the owner reset them from these numbers (#256; the new targets are under "`nav`
+performance" in Testing). A route is planned once per destination, so walking efficiency (#304)
+matters more than route latency at this length. The leads the reset defers are in #315:
+
+- **The cell search is now the larger half** of route CPU. Its expansions are bounded by A*
+  with a heuristic that cannot see the clearance extra. Weighted A* (heuristic × 1.5 on middle
+  legs, cost at most 1.5 times the cheapest) halved the expansions (11.9 to 6.1 million) but
+  added 15% `CanMove` calls in the exact check, as the paths keep less clear of walls, for
+  about 15% less route time. The owner rejected it: it trades away the wall margin the
+  clearance cost keeps. An admissible heuristic that sees the clearance is deferred (#315).
+- **The cold heap** is the scratch growing on its first long search. The owner made the heap
+  target warm-only. Its max is the first search that runs out of node budget and grows the idle
+  scratch to the budget's size, at most 32 MB per idle query scratch (Cost bounds). Before, that
+  was the first sampled route (an `ErrBudget`), and a later `ErrBudget` route grew it further.
+  Now the first route completes, and the later one does the growing: measured route by route,
+  45.2 + 30.1 MB became 29.7 + 46.8 MB. The total is the same, and p99 did not change.
+- **The distance tail** needs landmarks (ALT) on the abstract graph, a nav cache format change.
+  Deferred (#315).
+
 ### Water
 
 While a player's position is inside a water zone the server moves it as a swimmer, not a walker
@@ -744,25 +806,45 @@ unreachable (with a reason).
     - Each step re-aims from its rounded point toward the destination (`creature.go:1374-1376`),
       so step points stay within about one unit of the segment's line.
   - **Open-corridor test (cheap, sufficient).** Take every cell the segment's line crosses, plus
-    a margin of one cell on each side. The segment passes when, in all of those cells:
+    each cell next to one of those that lies within 4 units (`corridorReach`) of the segment
+    (#256; before, the whole one-cell margin). Every cell the chain can touch is in it: the rounded
+    step points lie within 1.5 units of the line (`bandRadius`, below), and `CanMove`'s border walk
+    between two of them strays from their own line by at most about 1.5 more (it picks each
+    crossing from the line's Y at the cell's last column, truncated to an integer). The segment
+    passes when, in all of those cells:
     1. the cell has exactly one layer (a flat or complex block, or a multilayer cell holding one
        layer), so `belowCell`, `HeightNearest` and `Height` can only ever answer that floor,
-       whatever Z the chain carries;
+       whatever Z the chain carries. **Stacked tops** (#256, string-pull candidates only): a cell
+       with several layers counts as one floor, its top, when each endpoint of the segment that
+       stands in such a cell stands on its top, and for each such cell N and each corridor cell C
+       within one step of it (Chebyshev distance `⌊(Lmax + 1.5)/16⌋ + 1` cells),
+       `2 × (T_N − T_C − 16) < gap_N`, T the floors and gap_N the top of N minus the layer below.
+       Then a chain on the tops stays on them: `HeightNearest` of a top is that top;
+       `belowCell(z + 48)` scans down from the top and finds it (condition 3); and
+       `Height(N, T_C + 16)` is nearer the top than the layer below, a tie going to the lower
+       layer. The rule is what keeps a step that crosses a low cell of a stair from landing on
+       the layer under the deck. The stretches the exact check walks keep the one-layer rule;
     2. the NSWE flags allow crossing in both directions of the segment's quadrant. No step turns
        back on either axis: a step adds (destination − rounded origin) × a fraction below 1 to a
        float position that rounds half up to the origin, so it never passes the destination's
        integer coordinate (`stepLocked`; N2 found the reversal earlier assumed here does not
        occur, and `TestStepChainAgreesWithWalkSteps` checks it against `WalkSteps`);
-    3. no step up between neighbouring corridor cells is more than 48.
+    3. no two neighbouring corridor cells differ in height by 48 or more: `belowCell(z + 48)`
+       takes a layer strictly below `z + 48`, so a step up of exactly 48 is blocked (#256 fixed
+       the earlier "more than 48").
 
     Under those conditions every per-step `CanMove` between two points in the corridor holds,
-    whatever the step lengths and wherever the rounding lands:
+    wherever the rounding lands, and on a corridor of one-layer cells whatever the step lengths;
+    on a corridor with stacked tops only for steps of at most `Lmax + 1.5`, the bound `topsHold`
+    checks, as for the exact check:
     - every border crossing is allowed;
     - `belowCell(z + 48)` finds the one floor;
     - the final `goz == Height(target)` compares that floor with itself.
 
     The test costs O(cells along the segment): no `CanMove` calls, a few microseconds.
-    String-pull candidates use only this test.
+    String-pull candidates use only this test. `TestNarrowCorridorAgreesWithExact` checks every
+    segment the narrowed test passes and the old one failed against the exact check over its
+    whole length and against random step sequences of the copied step chain.
   - **Exact check (short stretches only).** Where the corridor test fails (a doorway with partial
     NSWE, a bridge end, a stair with mixed layers), the stretch from the last corridor cell before
     the failure to the first after it is checked exactly:
@@ -781,7 +863,9 @@ unreachable (with a reason).
     - A segment whose exact check fails is split at the stretch, and the planner tries another
       way past it.
   - **What it does not cover**: a server tick that stalls past `Emax` (a GC pause, for example)
-    inside a stretch that needed the exact check. Open corridors are immune to it.
+    inside a stretch that needed the exact check, or on a corridor that passed on stacked tops,
+    where a longer step can land on the layer below. Open corridors of one-layer cells are immune
+    to it.
     `nav_blocked_total` measures what is left.
 - **Sending**:
   - Every segment goes out from standstill, from the server-confirmed position.
@@ -925,15 +1009,21 @@ geodata is committed here, and CI never sees it.**
   - a property test over random pairs checks the same invariants.
 - **`nav` performance**: benchmarks with recorded thresholds, measured on the owner's geodata
   locally and reported in the N3 PR.
-  - **Warm** (cluster LRU warm, pages resident), as initial targets that N3 confirms or resets
-    from N1's measured cost of one `CanMove` and the measured share of segments needing the exact
-    check:
+  - The route, distance and heap targets below were reset by the owner on 2026-11-23 (#256)
+    from the #314 measurements, about 10% above them. They are now regression ceilings: a change
+    that pushes a measure past its ceiling needs an owner decision. The first targets were
+    abstract distance p99 ≤ 2 ms, a warm route p99 ≤ 10 ms, a cold route p99 ≤ 150 ms and
+    ≤ 4 MB heap per route query, cold included. The leads deferred by the reset are in #315.
+  - **Warm** (cluster LRU warm, pages resident):
     - `Locate` + `SameSCC` p99 ≤ 1 ms;
-    - abstract distance p99 ≤ 2 ms;
-    - a full 40000-unit route p99 ≤ 10 ms, corridor tests and exact checks included.
+    - abstract distance p99 ≤ 15 ms;
+    - a full 40000-unit route p50 ≤ 75 ms and p99 ≤ 750 ms, corridor tests and exact checks
+      included.
   - **Cold** (first touch of the clusters and pages): `Locate` p99 ≤ 30 ms, and a full route
-    p99 ≤ 150 ms. A cold route happens at most once per destination per bot.
-  - Heap per route query ≤ 4 MB.
+    p50 ≤ 100 ms and p99 ≤ 800 ms. A cold route happens at most once per destination per bot.
+  - Heap per warm route query ≤ 4 MB. A cold route's heap has no target: its query scratch grows
+    once on the first long search, bounded by the node budget and the free list's 32 MB per
+    idle scratch (Cost bounds).
   - `navbuild` ≤ 15 minutes with half the cores, peak heap ≤ 1 GB. N3 reports the measured
     entrance and edge counts, then sets the nav cache's size bound from them.
 - **Door table** (CI, `-race`): concurrent reports from many bots are serialized, every toggle
@@ -1003,10 +1093,11 @@ Walking efficiency (the stop at every waypoint, short segments, the follower's h
   is not). The cache key rejects a changed local copy, and the desync counter catches a changed
   server copy at the first segment. `docs/home.md` keeps the geodata in the same rsync step as the
   datapack.
-- **Tick jitter in the step chain.** Open corridors are immune to it. The exact check covers
+- **Tick jitter in the step chain.** Open corridors of one-layer cells are immune to it; one on
+  stacked tops, like the exact check, holds for steps up to `Lmax + 1.5`. The exact check covers
   every step length in `(0, Lmax]` on the short stretches that need it; the clearance cost keeps
   routes off such stretches where it can; a blocked stop is a replan. What is left, ticks past
-  `Emax` inside exact stretches, is measured by `nav_blocked_total` against its e2e threshold.
+  `Emax` inside exact stretches or on stacked tops, is measured by `nav_blocked_total` against its e2e threshold.
 - **Stale or misordered door state** (a door no bot sees, changed by a script or timer, or events
   from lagging sessions): it shows up as door replans, never as plain unreachable.
 - **Multilayer Z** (bridges, buildings): settled in N0 (the floor Z goes out; a layer less than

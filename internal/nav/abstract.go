@@ -276,6 +276,8 @@ func (h *Hierarchy) searchSeated(s *scratch, p *Planner, q *routeQuery, closed f
 				cells, used, err = h.firstLeg(s, p, q, a, c, b.cells, avoid)
 			case i == legs-1 && legs > 1 && !q.seat.goalDone && h.clusterBox(c).has(a):
 				cells, used, err = h.lastLeg(s, p, q, a, c, b.cells, avoid)
+			case i > 0 && i < legs-1:
+				cells, used, err = h.middleLeg(s, p, a, c, b.cells, avoid)
 			default:
 				cells, used, err = p.search(s, a, c, b.cells, avoid, anywhere)
 			}
@@ -377,6 +379,23 @@ func (h *Hierarchy) lastLeg(s *scratch, p *Planner, q *routeQuery, c, goal Cell,
 	}
 	q.seat.goals = goals
 	return nil, used, errReseat
+}
+
+// middleLeg refines a leg between two entrance nodes inside the clusters
+// holding them, where the build costed the abstract edge it stands for
+// (HPA* refinement): an edge inside a cluster is the cheapest path inside
+// it, and an edge between two clusters is one crossing. Only when the box
+// does not join them (an edge avoided after a failed pull, or a waypoint
+// left out in an avoided column) does it search anywhere.
+func (h *Hierarchy) middleLeg(s *scratch, p *Planner, a, c Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
+	ba, bc := h.clusterBox(a), h.clusterBox(c)
+	box := cellBox{min(ba.x0, bc.x0), min(ba.y0, bc.y0), max(ba.x1, bc.x1), max(ba.y1, bc.y1)}
+	cells, used, err := p.search(s, a, c, budget, avoid, box)
+	if !errors.Is(err, ErrUnreachable) {
+		return cells, used, err
+	}
+	cells, more, err := p.search(s, a, c, budget-used, avoid, anywhere)
+	return cells, used + more, err
 }
 
 // clusterBox is the box of the cluster holding c.
