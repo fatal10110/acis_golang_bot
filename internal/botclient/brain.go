@@ -527,10 +527,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.engaged {
 				b.engaged = 0
 			}
-			// A dead bot frees its spot for another; it picks again once
-			// back on its feet.
+			// A dead bot frees its spot for another and avoids it for a
+			// while; it picks again once back on its feet.
 			if e.ObjectID == self {
-				b.leaveSpot()
+				b.diedAtSpot(now)
 				if b.store.active() {
 					b.closeStore(now)
 				}

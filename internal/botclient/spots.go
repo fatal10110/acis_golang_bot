@@ -53,6 +53,11 @@ type SpotPolicy struct {
 	// never finds one crowded.
 	Crowd    int
 	AvoidFor time.Duration
+	// DeathAvoid is how long a bot that died holding a spot, at it or on
+	// its way there, avoids that spot: one whose packs killed it once
+	// likely kill it again, and it would walk straight back after the
+	// respawn (#258). 0 never avoids one.
+	DeathAvoid time.Duration
 	// Leash is how far from the spot's centre the bot may end a fight
 	// before it walks back.
 	Leash int32
@@ -67,7 +72,7 @@ func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
 		MaxTravel: 20000, Wander: 40000, Overflow: true,
-		Crowd: 4, AvoidFor: 10 * time.Minute, Leash: 1500,
+		Crowd: 4, AvoidFor: 10 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
 	}
 }
 
@@ -406,6 +411,16 @@ func (b *Brain) moveOn(now time.Time, d time.Duration) {
 		}
 	}
 	v.avoid[v.idx] = now.Add(d)
+	b.leaveSpot()
+}
+
+// diedAtSpot gives back the spot the bot holds, if any, on its death,
+// avoiding it for SpotPolicy.DeathAvoid.
+func (b *Brain) diedAtSpot(now time.Time) {
+	if d := b.persona.Spots.DeathAvoid; b.spot.held && d > 0 {
+		b.moveOn(now, d)
+		return
+	}
 	b.leaveSpot()
 }
 

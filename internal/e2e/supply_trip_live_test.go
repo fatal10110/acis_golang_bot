@@ -77,10 +77,11 @@ func TestLiveTownPrep(t *testing.T) {
 	}
 }
 
-// TestLiveSupplyTrip logs a farmer in at the far end of Talking Island,
-// out of every merchant's reach, carrying potions, two Scrolls of Escape,
-// adena and shots that run out within ten minutes of fighting (#175,
-// #182): at its starter spot, where nearly every monster attacks on sight,
+// TestLiveSupplyTrip logs a level supplyLevel farmer in at the west of
+// Talking Island, out of every merchant's reach, carrying potions, two
+// Scrolls of Escape, adena and shots that run out within ten minutes of
+// fighting (#175, #182): at its starter spot, where nearly every monster
+// attacks on sight,
 // it reads a scroll (#251), lands in the village, restocks its shots and
 // scrolls before it leaves, then farms at a spot again. It carries them
 // from its login, so its use meter never sees it fight without shots,
@@ -99,7 +100,8 @@ func TestLiveSupplyTrip(t *testing.T) {
 	account, _ := tg.Account("su", 1)
 	start := time.Now()
 	strip(t, ctx, tg, gm, with(items, consumables...), account, &botclient.HumanFighter, stripEnd{
-		at:    tiFarEnd,
+		at:    tiToads,
+		level: supplyLevel,
 		adena: tripAdena,
 		carry: map[int32]int32{lesserHealingPotion: tripPotions, scrollOfEscape: escapes, soulshotNG: lowShots},
 	}, squiresSword, squiresShirt, squiresPants)
@@ -223,10 +225,21 @@ func TestLiveSupplyTrip(t *testing.T) {
 	t.Logf("%s farms again with %d shots (%v), %d scrolls", f.name, f.carries(soulshotNG), f.counts(soulshotNG, from), f.carries(scrollOfEscape))
 }
 
-// tiFarEnd is open ground at Talking Island's southwest end, past the
-// Shop.Reach (8000) of every village merchant, next to the newbie spots
-// there (a farmer stood there live).
-var tiFarEnd = botclient.Point{X: -100231, Y: 252907, Z: -3496}
+// tiToads is open ground in the west of Talking Island, past the
+// Shop.Reach (8000) of every village merchant, about 1000 from the centre
+// of gludio32_1725_28m1 (a farmer walked through it live): four Giant
+// Toads (20121, level 5, aggressive), one of the toad spots a level
+// supplyLevel farmer fits.
+var tiToads = botclient.Point{X: -94872, Y: 246888, Z: -3633}
+
+// supplyLevel is the level TestLiveSupplyTrip's farmer starts at, set by
+// the GM each run (#258). Left to the levels it gained run after run, the
+// farmer in its Squire's gear reached 14 to 16, where every Talking Island
+// spot that fits it is a pack of 9 to 11 aggressive level 10 to 12 orcs or
+// werewolves that assist each other within 300 and outrun it (runSpd
+// 118.8): it died there again and again and never farmed. Level 6 fits
+// the toad spots only, whose monsters are slower than it.
+const supplyLevel = 6
 
 // walkedHome is how close to the village centre a walk home has arrived:
 // the walk ends within 600 of the gatekeeper (townArrive), next to it.

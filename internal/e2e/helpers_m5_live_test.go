@@ -284,6 +284,10 @@ type stripEnd struct {
 	// carry are templates, and how many of each, the GM gives the
 	// character after the strip and before it logs out.
 	carry map[int32]int32
+	// level, when above 0, is the level the GM sets the character to
+	// first: a farmer keeps the levels it gains or loses run after run, and
+	// with them the spots it picks.
+	level int32
 }
 
 // destroyRefusals are the SystemMessages refusing a RequestDestroyItem
@@ -329,6 +333,31 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 	applyInventory(inv, list)
 	if userInfo(t, c).HP == 0 {
 		revive(t, ctx, c)
+	}
+	gmNext := func() {
+		t.Helper()
+		if err := gm.Command(ctx, "teleportto "+c.Self.Name); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(c.Self.ObjectID)); err != nil {
+			t.Fatalf("GM next to %s: %v", c.Self.Name, err)
+		}
+		if err := gm.Select(ctx, c.Self.ObjectID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if want := end.level; want > 0 && userInfo(t, c).Level != want {
+		gmNext()
+		if err := gm.OnTarget(ctx, c.Self.ObjectID, fmt.Sprintf("set level %d", want)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
+			applyInventory(inv, ev)
+			u, ok := ev.(botclient.UserInfo)
+			return ok && u.Level == want
+		}); err != nil {
+			t.Fatalf("strip %s: level %d: %v", c.Self.Name, want, err)
+		}
 	}
 
 	kept := make(map[int32]int32) // template -> object
@@ -380,18 +409,6 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		}
 	}
 
-	gmNext := func() {
-		t.Helper()
-		if err := gm.Command(ctx, "teleportto "+c.Self.Name); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(c.Self.ObjectID)); err != nil {
-			t.Fatalf("GM next to %s: %v", c.Self.Name, err)
-		}
-		if err := gm.Select(ctx, c.Self.ObjectID); err != nil {
-			t.Fatal(err)
-		}
-	}
 	for _, tmpl := range keep {
 		if kept[tmpl] != 0 {
 			continue
