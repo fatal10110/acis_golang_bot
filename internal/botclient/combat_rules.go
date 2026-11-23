@@ -275,14 +275,16 @@ func (b *Brain) landed(id int32, now time.Time) {
 
 // disengage drops the attack in flight with a short step: a move replaces
 // the attack intention on the server. The step goes in a random direction
-// that holds on the geodata (turnAround), or not at all.
+// that holds on the geodata (turnAround), else nowhere (orStay).
 func (b *Brain) disengage(now time.Time) Action {
-	return b.turnAround(b.rng.Float64()*2*math.Pi, now)
+	return b.orStay(b.turnAround(b.rng.Float64()*2*math.Pi, now), now)
 }
 
 // sideStep steps sideStep across the line to id, to either side, when an
 // attack on it is stuck. The side it picks comes first; when that step does
-// not hold on the geodata the other side is tried, else it sends nothing.
+// not hold on the geodata the other side is tried, else it steps nowhere
+// (orStay): the move still drops the stuck attack, so the next decision
+// attacks again and counts the attempt toward the blacklist.
 func (b *Brain) sideStep(id int32, now time.Time) Action {
 	from := b.world.Self.Position(now)
 	angle := b.rng.Float64() * 2 * math.Pi
@@ -294,7 +296,19 @@ func (b *Brain) sideStep(id int32, now time.Time) Action {
 			}
 		}
 	}
-	return b.checkedStep(sideStep, now, angle, angle+math.Pi)
+	return b.orStay(b.checkedStep(sideStep, now, angle, angle+math.Pi), now)
+}
+
+// orStay is step, or a move to where the bot stands when step sends
+// nothing. That move goes nowhere, so it cannot leave the floor, yet it
+// replaces the attack intention like any walk (the server's movement.go
+// startLiveMove replaces the intention before it simulates the walk), so an
+// attack in flight ends either way.
+func (b *Brain) orStay(step Action, now time.Time) Action {
+	if step.kind == actMove {
+		return step
+	}
+	return moveAction(b.standing(now), b.world.Self.Position(now))
 }
 
 // turnHeadings is how many evenly spaced headings a turnStep step tries.
