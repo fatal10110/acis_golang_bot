@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -115,6 +116,9 @@ type BrainConfig struct {
 	// link is the Bot's mailbox, standing order and status board; nil
 	// takes no panel command and publishes no status.
 	link *botLink
+	// log takes the brain's diagnostics, the Bot's logger; nil discards
+	// them.
+	log *slog.Logger
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -128,6 +132,7 @@ type Brain struct {
 	rng     *rand.Rand
 	persona Persona
 	cfg     BrainConfig
+	log     *slog.Logger
 
 	pace pacer
 	// nextTick is the next regular decision; reactAt, when set, replaces it
@@ -296,12 +301,15 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	if cfg.chat == nil {
 		cfg.chat = newChatLog()
 	}
+	if cfg.log == nil {
+		cfg.log = slog.New(slog.DiscardHandler)
+	}
 	rng := cfg.Rand
 	if rng == nil {
 		rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	}
 	b := &Brain{
-		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, metrics: cfg.Metrics,
+		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, log: cfg.log, metrics: cfg.Metrics,
 		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
 		usedAt: make(map[int32]time.Time), shotAsked: make(map[int32]shotAsk), shotOff: make(map[int32]bool),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),

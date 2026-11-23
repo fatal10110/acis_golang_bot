@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -593,7 +594,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			case still:
 				b.walkBlocked(e.Dest)
 			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
-				b.walkDesync(seg.door)
+				b.walkDesync(e)
 			default:
 				speed := float64(pace(s.Running, s.RunSpeed, s.WalkSpeed))
 				if speed <= 0 {
@@ -653,13 +654,17 @@ func (b *Brain) walkBlocked(stop Point) {
 	}
 }
 
-// walkDesync takes a segment the server answered with another destination:
-// it routed or truncated, so the bot's geodata or door state differs from
-// the server's. The walker replans once the server's move ends.
-func (b *Brain) walkDesync(door bool) {
+// walkDesync takes the server's answer to the segment in flight toward
+// another destination: it routed or truncated, so the bot's geodata or door
+// state differs from the server's. A desync off a door logs the segment and
+// the server's answer, so a run names the leg its check got wrong
+// (docs/navigation.md, "Server answers to its own moves"). The walker
+// replans once the server's move ends.
+func (b *Brain) walkDesync(answer MoveToLocation) {
 	w := &b.walk
+	seg := w.seg
 	w.seg, w.route = segment{}, nil
-	if door {
+	if seg.door {
 		b.metrics.NavDoorReplan()
 		if w.doors++; w.doors >= walkMaxDoor {
 			w.unreachable(reasonDoor)
@@ -667,10 +672,15 @@ func (b *Brain) walkDesync(door bool) {
 		return
 	}
 	b.metrics.NavDesync()
+	b.log.Warn("nav desync", "from", logPoint(seg.from), "to", logPoint(seg.to),
+		"server_origin", logPoint(answer.Origin), "server_dest", logPoint(answer.Dest))
 	if w.desync++; w.desync >= walkMaxDesync {
 		w.unreachable(reasonDesync)
 	}
 }
+
+// logPoint is p as a log value: x,y,z.
+func logPoint(p Point) string { return fmt.Sprintf("%d,%d,%d", p.X, p.Y, p.Z) }
 
 // talking records the talk click about to go out on an NPC standing at
 // npc at now.

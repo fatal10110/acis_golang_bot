@@ -670,9 +670,10 @@ unreachable (with a reason).
     unreachable as blocked.
   - A `MoveToLocation` answering the bot's click with another destination is a **desync**. The
     server routed or truncated, so the bot's geodata or door state differs from the server's. The
-    walker counts `nav_desync_total` and replans from the server's origin. If the segment crosses
-    a door cell, it counts `nav_door_replan_total` instead, which does not count toward
-    unreachable.
+    walker counts `nav_desync_total`, logs the segment (from, to) with the server's origin and
+    destination at warn level (`nav desync`), so a run names the leg its check got wrong, and
+    replans from the server's origin. If the segment crosses a door cell, it counts
+    `nav_door_replan_total` instead, which does not count toward unreachable.
   - After repeated blocked stops or desyncs on one route, the walker ends with status
     `unreachable: blocked` or `unreachable: desync` and shows it in the status snapshot, instead
     of looping.
