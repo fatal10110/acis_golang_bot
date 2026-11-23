@@ -93,7 +93,16 @@ var cardinals = [4]direction{
 // block.CellIgnoreHeight. So a step goes down any height and up at most 48.
 // A crossing neither leaves nor enters a cell whose floor is in water.
 func (p *Planner) cross(c Cell, n block.NSWE, d direction) (Cell, block.NSWE, bool) {
-	if !n.Allows(d.flag) || p.Water.wet(c.X, c.Y, c.Z) {
+	if p.Water.wet(c.X, c.Y, c.Z) {
+		return Cell{}, 0, false
+	}
+	return p.crossDry(c, n, d)
+}
+
+// crossDry is cross from a cell whose floor is known to be out of water, so
+// a caller crossing from one cell several times tests it once.
+func (p *Planner) crossDry(c Cell, n block.NSWE, d direction) (Cell, block.NSWE, bool) {
+	if !n.Allows(d.flag) {
 		return Cell{}, 0, false
 	}
 	nx, ny := c.X+d.dx, c.Y+d.dy
@@ -134,13 +143,16 @@ type neighbour struct {
 // as the server's pathfinder does for its corner steps
 // (geo/pathfind/pathfind.go, cornerSteps and addCandidate).
 func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
+	if p.Water.wet(c.X, c.Y, c.Z) {
+		return dst // no crossing leaves a cell in water
+	}
 	n := p.nswe(c)
 	var next [4]Cell
 	var nextNSWE [4]block.NSWE
 	var open [4]bool
 	edge := n != block.AllDirections
 	for i, d := range cardinals {
-		next[i], nextNSWE[i], open[i] = p.cross(c, n, d)
+		next[i], nextNSWE[i], open[i] = p.crossDry(c, n, d)
 		if !open[i] {
 			edge = true // a wall, a climb over 48 or no-go ground
 			continue
@@ -179,8 +191,9 @@ func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 	return dst
 }
 
-// crossFrom is cross for the second leg of an L-shaped detour.
+// crossFrom is cross for the second leg of an L-shaped detour, from a cell
+// the first leg landed on (so out of water).
 func (p *Planner) crossFrom(c Cell, n block.NSWE, d direction) (Cell, bool) {
-	next, _, ok := p.cross(c, n, d)
+	next, _, ok := p.crossDry(c, n, d)
 	return next, ok
 }

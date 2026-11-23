@@ -53,7 +53,15 @@ type Hierarchy struct {
 	graph  *Graph
 	static Planner
 	cache  *memberCache
+	// spare holds idle cluster computation scratch. Unlike a sync.Pool it
+	// survives a GC, so the largest clusters' buffers (about 10 MB) are not
+	// regrown after every collection; it keeps at most keptMemberScratch.
+	spare chan *memberScratch
 }
+
+// keptMemberScratch bounds the idle scratch a Hierarchy keeps: cold Locates
+// run on the walkers' goroutines and rarely more than two at once.
+const keptMemberScratch = 2
 
 // NewHierarchy returns the hierarchy over g, reading e's static regions and
 // the water w (nil: none) g was built with, with a cluster result LRU bounded
@@ -61,7 +69,12 @@ type Hierarchy struct {
 // in clusters the graph does not know; OpenNavCache refuses such a pair when
 // the key is built from w.
 func NewHierarchy(g *Graph, e *engine.Engine, w *Water, cacheBytes int64) *Hierarchy {
-	return &Hierarchy{graph: g, static: Planner{Engine: e.Static(), Water: w}, cache: newMemberCache(cacheBytes)}
+	return &Hierarchy{
+		graph:  g,
+		static: Planner{Engine: e.Static(), Water: w},
+		cache:  newMemberCache(cacheBytes),
+		spare:  make(chan *memberScratch, keptMemberScratch),
+	}
 }
 
 // Graph returns the abstract graph.
@@ -271,14 +284,31 @@ type memberScratch struct {
 	nodeOf []int32
 }
 
-var memberPool = sync.Pool{New: func() any { return &memberScratch{} }}
+// getMemberScratch takes an idle scratch, or a new one.
+func (h *Hierarchy) getMemberScratch() *memberScratch {
+	select {
+	case s := <-h.spare:
+		return s
+	default:
+		return new(memberScratch)
+	}
+}
+
+// putMemberScratch keeps s for the next computation, or drops it to the GC
+// when keptMemberScratch are idle already.
+func (h *Hierarchy) putMemberScratch(s *memberScratch) {
+	select {
+	case h.spare <- s:
+	default:
+	}
+}
 
 // compute builds cluster ci's result: Tarjan on its static cell graph, then
 // for each local SCC the abstract SCCs whose entrances it reaches and those
 // reaching it, inside the cluster.
 func (h *Hierarchy) compute(ci int) (*clusterResult, error) {
-	s := memberPool.Get().(*memberScratch)
-	defer memberPool.Put(s)
+	s := h.getMemberScratch()
+	defer h.putMemberScratch(s)
 	g := &s.g
 	size := h.graph.key.ClusterCells
 	x0, y0 := h.graph.clusterOrigin(ci)
