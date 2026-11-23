@@ -506,7 +506,8 @@ grocer lists).
   `escapeRetry` past the cast's end (the walker's `/unstuck` wait).
 - **Without SoE,** it walks to the nearest town (the travel map's town gatekeepers). When that
   town is out of walking reach (another SCC, or past `MaxTravel` in straight line) or the walker
-  answers it unreachable, it takes a gatekeeper through the travel errand (#234): the trip search
+  answers it unreachable (its gatekeepers, where the walk would end the same way, then shunned
+  for the errand's shun time), it takes a gatekeeper through the travel errand (#234): the trip search
   of the spot rule (Dijkstra, walks priced by time, teleports by adena), its goal a landing within
   the town radius (3000) of the nearest town, else of any town, within `Travel.MaxPrice` and the
   adena carried. Pacing is the errand's: the bypass gate and `Travel.Gap` since the last trip. A

@@ -186,3 +186,165 @@ func TestSupplyTripTeleported(t *testing.T) {
 		})
 	}
 }
+
+// gateDialog is a gatekeeper visit's steps from the gatekeeper in sight to
+// its destination link, from start on one second apart: the bot, standing
+// at stand, selects gatekeeper obj (template npcID at npcAt), talks, opens
+// the list and sends destination index.
+func gateDialog(start time.Duration, obj, npcID int32, npcAt, stand Point, index int) []trainerStep {
+	s := func(i int) time.Duration { return start + time.Duration(i)*time.Second }
+	return []trainerStep{
+		{
+			name: "gatekeeper in sight: select", at: s(0),
+			setup:    func(b *Brain) { b.world.Self.move = stopAt(stand) },
+			events:   []Event{NPCInfo{ObjectID: obj, NPCID: npcID, Pos: npcAt}},
+			wantRule: "supply", wantKind: actSelect, wantPayload: encodeAction(obj, stand),
+		},
+		{name: "talk", at: s(1), events: []Event{MyTargetSelected{ObjectID: obj}}, wantRule: "supply", wantKind: actTalk},
+		{name: "wait for the page", at: s(2), wantRule: "supply"},
+		{
+			name: "list link", at: s(3), events: []Event{NpcHtmlMessage{ObjectID: obj, HTML: gkPage(obj)}},
+			wantRule: "supply", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(obj) + "_teleport_request"),
+		},
+		{name: "wait for the list", at: s(4), wantRule: "supply"},
+		{
+			name: "destination link", at: s(5), events: []Event{NpcHtmlMessage{ObjectID: obj, HTML: gkList(obj, index)}},
+			wantRule: "supply", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(obj) + "_teleport " + itoa(int32(index))),
+		},
+	}
+}
+
+// TestSupplyTripGatekeeperUnreachable checks the supply trip whose town is
+// in walking reach (one SCC, within MaxTravel) but the walker answers it
+// unreachable: it shuns the town's own gatekeeper, which the walk would not
+// reach either, and takes a gatekeeper trip from another, its first leg
+// under the supply rule; with no trip to take it ends at once, with no
+// arrival, and the bot farms on.
+func TestSupplyTripGatekeeperUnreachable(t *testing.T) {
+	tests := []struct {
+		name     string
+		adena    int32
+		wantTrip bool
+	}{
+		{name: "gatekeeper trip", adena: 5000, wantTrip: true},
+		{name: "no gatekeeper trip: ends", adena: 999},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newGateTripBrain(t, tt.adena)
+			// Gatekeeper C, in walking reach west of the wall, a town of its
+			// own further from the farmer than (2000, 0); its destination
+			// lands in eastTown.
+			b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers,
+				gatekeeper{npcID: 30070, at: Point{X: 7500, Y: 5000}, dests: []destination{{index: 2, at: Point{X: travelDest}, price: 1000}}})
+			arrivals := 0
+			b.persona.Supply.InTown = func(*World) { arrivals++ }
+			now := at(time.Minute)
+			// The town (2000, 0) is in walking reach of (4500, 0), and the
+			// walker's last walk there ended unreachable (a door, the watchdog).
+			from, home := Point{X: 4500}, Point{X: 2000}
+			b.world.Self.move = stopAt(from)
+			if !b.onFoot(from, home) {
+				t.Fatalf("onFoot(%v, %v) = false, want the town in walking reach", from, home)
+			}
+			b.walk.reset(home, townArrive, walkPlace)
+			b.walk.status, b.walk.endedAt = walkUnreachable, now
+			rule, a := b.decide(now)
+			if tt.wantTrip {
+				if rule != "supply" || a.kind != actMove || !b.supplyTrip.gate || !b.supplyTrip.active() || !b.trip.v.active() || b.trip.gk != 3 || b.trip.dest.index != 2 {
+					t.Fatalf("decide = rule %q action %d, gatekeeper trip %v, supply trip %v, travel trip %v from %d to %d: want a supply leg to gatekeeper 3, destination 2",
+						rule, a.kind, b.supplyTrip.gate, b.supplyTrip.active(), b.trip.v.active(), b.trip.gk, b.trip.dest.index)
+				}
+				if !now.Before(b.trip.shunned[0]) {
+					t.Fatalf("the town's gatekeeper shunned until %v, want past %v", b.trip.shunned[0], now)
+				}
+				return
+			}
+			if rule == "supply" || b.supplyTrip.active() || b.supplyTrip.endedAt != now || b.supplyTrip.gate || b.trip.v.active() || arrivals != 0 {
+				t.Fatalf("decide = rule %q, supply trip active %v ended %v gate %v, travel trip %v, in town hook calls %d: want the trip ended at %v, no arrival",
+					rule, b.supplyTrip.active(), b.supplyTrip.endedAt, b.supplyTrip.gate, b.trip.v.active(), arrivals, now)
+			}
+		})
+	}
+}
+
+// TestSupplyTripGatekeeperTwoHops checks a gatekeeper trip of two
+// teleports: gatekeeper A's destination lands by gatekeeper B, whose
+// destination lands in the trip's town. The landing on the way keeps the
+// supply trip going, its next leg to B within the travel gap; the last
+// landing is the arrival, once.
+func TestSupplyTripGatekeeperTwoHops(t *testing.T) {
+	const objB = gkObj + 1
+	mid, gkB := Point{X: 15000, Y: 2000}, Point{X: 15500, Y: 2000}
+	b := newGateTripBrain(t, 5000)
+	b.cfg.Travel.gatekeepers[0].dests = []destination{{index: 1, at: mid, price: 1000}}
+	b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers,
+		gatekeeper{npcID: 30070, at: gkB, dests: []destination{{index: 0, at: Point{X: travelDest}, price: 1000}}})
+	arrivals := 0
+	b.persona.Supply.InTown = func(*World) { arrivals++ }
+	steps := append([]trainerStep{{name: "leg to gatekeeper A", at: time.Minute, wantRule: "supply", wantKind: actMove}},
+		gateDialog(time.Minute+time.Second, gkObj, townGK, Point{X: 2000}, Point{X: 2100}, 1)...)
+	runTrainerSteps(t, b, steps)
+	if b.trip.onward != 1 || b.trip.gk != 0 {
+		t.Fatalf("travel trip from gatekeeper %d, %d onward: want from gatekeeper 0, one onward", b.trip.gk, b.trip.onward)
+	}
+
+	land := at(time.Minute + 7*time.Second)
+	b.world.Objects = map[int32]*Object{}
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: mid}}, land); err != nil {
+		t.Fatal(err)
+	}
+	if !b.supplyTrip.active() || !b.supplyTrip.gate || arrivals != 0 {
+		t.Fatalf("after the landing on the way: supply trip active %v gate %v, in town hook calls %d: want it going, no arrival",
+			b.supplyTrip.active(), b.supplyTrip.gate, arrivals)
+	}
+	if next := 2 * time.Second; next >= b.persona.Travel.Gap {
+		t.Fatalf("travel gap %v: the next leg at +%v would not show it waived", b.persona.Travel.Gap, next)
+	}
+	runTrainerSteps(t, b, append([]trainerStep{{
+		name: "leg to gatekeeper B", at: time.Minute + 9*time.Second,
+		setup: func(b *Brain) {
+			if sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, land); err != nil || !sent {
+				t.Fatalf("Appearing: send = %v, %v", sent, err)
+			}
+		},
+		wantRule: "supply", wantKind: actMove, wantTo: gkB, wantWithin: talkReach,
+	}}, gateDialog(time.Minute+10*time.Second, objB, 30070, gkB, Point{X: 15400, Y: 2000}, 0)...))
+	if b.trip.gk != 3 || b.trip.onward != 0 {
+		t.Fatalf("travel trip from gatekeeper %d, %d onward: want from gatekeeper 3, none onward", b.trip.gk, b.trip.onward)
+	}
+
+	last := at(time.Minute + 16*time.Second)
+	b.world.Objects = map[int32]*Object{}
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: travelDest}}}, last); err != nil {
+		t.Fatal(err)
+	}
+	if b.supplyTrip.active() || b.supplyTrip.endedAt != last || b.trip.v.active() || arrivals != 1 {
+		t.Fatalf("after the last landing: supply trip active %v ended %v, travel trip %v, in town hook calls %d: want both over at %v, one arrival",
+			b.supplyTrip.active(), b.supplyTrip.endedAt, b.trip.v.active(), arrivals, last)
+	}
+}
+
+// TestSupplyTripGatekeeperRefused checks a gatekeeper trip the server
+// refuses: no teleport by tripDepartTimeout after the destination link ends
+// the supply trip at that tick, with no arrival, and shuns the gatekeeper.
+func TestSupplyTripGatekeeperRefused(t *testing.T) {
+	b := newGateTripBrain(t, 5000)
+	arrivals := 0
+	b.persona.Supply.InTown = func(*World) { arrivals++ }
+	link := time.Minute + 6*time.Second
+	steps := append([]trainerStep{{name: "leg to the gatekeeper", at: time.Minute, wantRule: "supply", wantKind: actMove}},
+		gateDialog(time.Minute+time.Second, gkObj, townGK, Point{X: 2000}, Point{X: 2100}, 2)...)
+	runTrainerSteps(t, b, append(steps, trainerStep{name: "wait for the teleport", at: link + tripDepartTimeout - time.Millisecond, wantRule: "supply"}))
+	now := at(link + tripDepartTimeout)
+	if rule, _ := b.decide(now); rule == "supply" {
+		t.Fatalf("decide at the timeout = rule %q, want the supply trip over", rule)
+	}
+	if b.supplyTrip.active() || b.supplyTrip.endedAt != now || b.trip.v.active() || arrivals != 0 {
+		t.Fatalf("after the timeout: supply trip active %v ended %v, travel trip %v, in town hook calls %d: want both over at %v, no arrival",
+			b.supplyTrip.active(), b.supplyTrip.endedAt, b.trip.v.active(), arrivals, now)
+	}
+	if !now.Before(b.trip.shunned[0]) {
+		t.Fatalf("gatekeeper 0 shunned until %v, want past %v", b.trip.shunned[0], now)
+	}
+}

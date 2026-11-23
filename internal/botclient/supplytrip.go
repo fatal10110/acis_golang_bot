@@ -180,7 +180,8 @@ func (t *supplyTrip) teleported(now time.Time, gk bool, onward int) bool {
 // walkHome walks the trip to the town nearest where it started walking (the
 // travel map's towns, by their gatekeeper) and ends it on arrival
 // (townArrival). A town out of walking reach (onFoot), or one the walker
-// answers unreachable, sends it to a gatekeeper (planTown, gateHome); with
+// answers unreachable (its own gatekeepers then shunned, shunTown), sends
+// it to a gatekeeper (planTown, gateHome); with
 // no trip to take either, a town out of reach is walked to all the same
 // (the walker decides), and one it cannot walk to ends the trip there: the
 // bot farms on and tries again after supplyTripGap.
@@ -206,6 +207,7 @@ func (b *Brain) walkHome(now time.Time) (Action, bool) {
 	case walkWalking:
 		return a, true
 	case walkUnreachable:
+		b.shunTown(now)
 		if b.planTown(now) {
 			return b.gateHome(now)
 		}
@@ -215,6 +217,24 @@ func (b *Brain) walkHome(now time.Time) (Action, bool) {
 		b.townArrival()
 	}
 	return Action{}, false
+}
+
+// shunTown shuns, for visitShunFor, the travel map's gatekeepers within
+// townArrive of the supply trip's town, which the walker answered
+// unreachable: the town is a gatekeeper's spawn (TravelMap.Towns), so a
+// walk to one of them ends where the walk home did, and a gatekeeper trip
+// planned from it would fail at its first leg.
+func (b *Brain) shunTown(now time.Time) {
+	tr, town := &b.trip, b.supplyTrip.town
+	for gi := range b.cfg.Travel.gatekeepers {
+		if horizontal2(b.cfg.Travel.gatekeepers[gi].at, town) > townArrive*townArrive {
+			continue
+		}
+		if tr.shunned == nil {
+			tr.shunned = make(map[int]time.Time)
+		}
+		tr.shunned[gi] = now.Add(visitShunFor)
+	}
 }
 
 // onFoot reports whether the bot at at is in walking reach of town: both on
