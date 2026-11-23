@@ -144,7 +144,8 @@ Today `observeWalk` computes the eta with `legTime` from `e.Origin`, before `Wor
     (anchor reset, start-speed ticks again), since the server may already have stopped and restarted
     its count.
   - A is the walker's own answer latency, from `seg.sentAt` to the answer's receipt: the maximum
-    over recent segments, floored at positionTick. The bot measures no other round trip.
+    over its last 8 segments (`walkLags`), floored at positionTick. The bot measures no other
+    round trip.
   - Counting a fresh start where the server only retargeted makes the end later: conservative.
 - **The distance timed** is the larger of |e.Origin → dest| and |sample estimate → dest|. `sample`
   keeps the estimate within `snapDrift` (200).
