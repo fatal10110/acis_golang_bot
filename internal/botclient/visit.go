@@ -45,6 +45,9 @@ type npcVisit struct {
 	// in sight, standFor where the NPC stood when it was chosen; both zero
 	// before one.
 	stand, standFor Point
+	// noLine is set when the stand point offers no open line to the NPC
+	// (a talk point), walkFailed while the walk there is unreachable.
+	noLine, walkFailed bool
 	// walkAt is where the walk toward the spawn heads (walkTo): at, or the
 	// bot's ground nearest it; zero before the walk.
 	walkAt Point
@@ -130,7 +133,7 @@ func (b *Brain) approach(v *npcVisit, now time.Time) (Action, bool) {
 		if o := b.world.object(v.obj); o == nil || o.Dead {
 			// Out of sight (a teleport clears the world): look again.
 			v.obj, v.opened, v.waitUntil = 0, false, time.Time{}
-			v.stand, v.standFor = Point{}, Point{}
+			v.stand, v.standFor, v.noLine, v.walkFailed = Point{}, Point{}, false, false
 		}
 	}
 	if v.obj == 0 {
@@ -201,9 +204,13 @@ const talkReach = visitTalkRange - 2*walkSlop
 // a closed line ends that walk blocked (creature.go, MoveToPawn), so the bot
 // clicks only from within arrive with the straight line open, and else walks
 // first, through the walker, to the stand point nearest it within
-// visitTalkRange with an open line (nav StandLine). It reports false once
-// the bot may click, or when no stand point or walk there holds: the clicks
-// are tried then, bounded by visitClicks.
+// visitTalkRange with an open line (nav StandLine), or with none, to its
+// talk point (walker.talkPoint). It reports false once the bot may click, or
+// when no stand point or walk there holds: the clicks are tried then,
+// bounded by visitClicks. A walk to a talk point that ends unreachable is
+// not clicked past, since the straight approach from afar ends blocked: the
+// visit waits out the walker's walkRetry and walks again, each failed walk
+// spending a click.
 func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, bool) {
 	s := &b.world.Self
 	from := s.Position(now)
@@ -217,6 +224,7 @@ func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, boo
 		// the old one ended blocked short of the NPC.
 		w.talkFailed = false
 		st, ok := w.standPoint(from, to, visitTalkRange, nav.StandLine, 0)
+		v.noLine = !ok
 		if !ok {
 			// No open line: a click from within talkReach ends blocked
 			// short of the NPC and still talks; one from further away
@@ -228,9 +236,17 @@ func (b *Brain) closeIn(v *npcVisit, arrive float64, now time.Time) (Action, boo
 		v.stand, v.standFor = st, to
 	}
 	a, st := b.goTo(v.stand, walkSlop, walkTalk, now)
-	if st != walkWalking {
+	switch {
+	case st == walkUnreachable && v.noLine:
+		if !v.walkFailed {
+			v.walkFailed = true
+			v.clicks++
+		}
+		return Action{}, v.clicks < visitClicks
+	case st != walkWalking:
 		return Action{}, false
 	}
+	v.walkFailed = false
 	return a, true
 }
 

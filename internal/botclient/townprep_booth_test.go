@@ -135,3 +135,33 @@ func TestTownPrepBoothShop(t *testing.T) {
 		t.Errorf("gate armed %v, rounds %d (armed at %d), want the gate held until the visit ends", b.prep.armed, b.shop.rounds, rounds)
 	}
 }
+
+// TestTownPrepBoothWalkFails checks a walk to a talk point that ends
+// unreachable (the walker's watchdog, #253): the grocer behind its closed
+// line is not clicked from afar, where the straight approach ends blocked;
+// the visit spends a click, waits out walkRetry and walks again.
+func TestTownPrepBoothWalkFails(t *testing.T) {
+	b := walkBooth(t, newPrepBrain(t, boothNPC, adenaStack(10000), potionStack(5)), Point{X: 3800, Y: boothNPC.Y})
+	b.townArrival()
+	failed := 41 * time.Second
+	runTrainerSteps(t, b, []trainerStep{
+		{
+			name: "grocer in sight from afar: walk to a talk point", at: time.Second,
+			events:   []Event{NPCInfo{ObjectID: merchantObj, NPCID: 30004, Pos: boothNPC}},
+			wantRule: "shop", wantKind: actMove, wantTo: boothNPC, wantWithin: talkReach,
+		},
+		{
+			name: "the walk ends unreachable: no click from afar", at: failed,
+			setup: func(b *Brain) {
+				b.walk.seg = segment{}
+				b.walk.unreachable(reasonWatchdog)
+			},
+			wantRule: "shop",
+		},
+		{name: "still unreachable: no click", at: failed + 30*time.Second, wantRule: "shop"},
+		{name: "walkRetry later: walk again", at: failed + walkRetry + time.Second, wantRule: "shop", wantKind: actMove, wantTo: boothNPC, wantWithin: talkReach},
+	})
+	if v := &b.shop.v; v.clicks != 1 || !b.preparing() {
+		t.Errorf("clicks %d, gate armed %v, want one click spent and the gate held", v.clicks, b.prep.armed)
+	}
+}
