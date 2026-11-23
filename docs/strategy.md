@@ -761,8 +761,8 @@ Proposed, awaiting the owner:
   legs is never worn; a Demon set loses to Doom Robe for a low-HP dark mystic; a tank row fits the
   #294 spot that a glass-cannon row does not; a bot with a profession keeps its line under a new
   role; a pinned branch wins over the hash; the stack rule: at 36 an OR with Frenzy on never casts
-  Guts, an OS never casts Chant of Shielding on itself over its Soul Shield level 2 but does for a
-  member without a `pd_up` effect, and a buff is renewed under `RebuffBefore` only over its own
+  Guts, an OS holding Soul Shield level 2 casts no Chant of Shielding while no member qualifies,
+  and casts it once a member in range has no `pd_up` effect, and a buff is renewed under `RebuffBefore` only over its own
   effect.
 - **e2e (live harness), at most 4 bots a scenario:** three scenarios of three starting classes each
   farm for a set time with their kits; a level-20 class change takes the branch the account hash
