@@ -630,6 +630,88 @@ def cmd_ci_wait(a):
         time.sleep(poll)
 
 
+LOG_LINE_MAX = 400
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:  # an exited child its parent has not reaped yet is a zombie: not alive
+        stat = Path(f"/proc/{pid}/stat").read_text()
+        return stat[stat.rindex(")") + 2:][:1] != "Z"
+    except (OSError, ValueError):
+        return True
+
+
+def cmd_logwait(a):
+    """Wait (up to --wait seconds) until --count lines of a log match --pattern; return at once.
+
+    Replaces `timeout N tail -f LOG | grep -m1 PAT`, which holds the full N seconds: tail only
+    notices the closed pipe on its next write, and a finished test writes nothing more.
+    """
+    try:
+        pat = re.compile(a.pattern)
+    except re.error as e:
+        out({"error": f"bad pattern: {e}"})
+        return
+    if a.count < 1 or a.tail < 0:
+        out({"error": "--count must be at least 1 and --tail at least 0"})
+        return
+    path = Path(a.file)
+    deadline = now() + wait_secs(a.wait)
+    offset, partial, hits, tail = 0, b"", [], []
+
+    def line_text(raw):
+        t = raw.decode("utf-8", "replace").rstrip("\r")
+        return t if len(t) <= LOG_LINE_MAX else t[:LOG_LINE_MAX] + "..."
+
+    def scan(final=False):
+        nonlocal offset, partial
+        try:
+            with open(path, "rb") as f:
+                f.seek(offset)
+                chunk = f.read()
+        except FileNotFoundError:
+            return
+        offset += len(chunk)
+        lines = (partial + chunk).split(b"\n")
+        partial = lines.pop()
+        if final and partial:
+            lines.append(partial)
+            partial = b""
+        for raw in lines:
+            t = line_text(raw)
+            if a.tail:
+                tail.append(t)
+                del tail[:-a.tail]
+            if len(hits) < a.count and pat.search(t):
+                hits.append(t)
+
+    def result(**kw):
+        res = {"matched": len(hits) >= a.count, "lines": hits, "file": str(path), "exists": path.exists()}
+        if a.tail:
+            res["tail"] = tail
+        res.update(kw)
+        out(res)
+
+    while True:
+        scan()
+        if len(hits) >= a.count:
+            return result(timeout=False)
+        if a.pid and not pid_alive(a.pid):
+            scan(final=True)
+            return result(timeout=False, exited=True)
+        if a.run and stop_requested(a.run):
+            return result(timeout=False, stop=True)
+        if now() >= deadline:
+            return result(timeout=True)
+        time.sleep(POLL)
+
+
 def cmd_stopcheck(a):
     banner = stop_banner(a.paths or [os.getcwd()])
     if banner:
@@ -826,6 +908,15 @@ def main(argv=None):
     s.add_argument("--head", required=True)
     s.add_argument("--wait", type=float, default=MAX_WAIT)
     s.add_argument("--broker", choices=sorted(BROKER_TYPES), help="refresh that broker's alive marker while waiting")
+
+    s = add("logwait", cmd_logwait, run=False)
+    s.add_argument("--file", required=True, help="the log a background command writes")
+    s.add_argument("--pattern", required=True, help="Python regex, searched in each line")
+    s.add_argument("--count", type=int, default=1, help="matching lines to wait for")
+    s.add_argument("--pid", type=int, help="also return when this process has exited")
+    s.add_argument("--tail", type=int, default=0, help="also print the log's last N lines")
+    s.add_argument("--run", help="return at once when this run is stopping")
+    s.add_argument("--wait", type=float, default=270)
 
     s = add("stopcheck", cmd_stopcheck, run=False)
     s.add_argument("paths", nargs="*")

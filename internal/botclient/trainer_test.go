@@ -421,17 +421,18 @@ func TestRuleTrainStarts(t *testing.T) {
 }
 
 // TestDefaultPersonaSkills checks the support skills against the classes
-// the plan names: healers learn Heal, Battle Heal, Might and Shield; orc
-// mystics only buffs; every listed class has trainers.
+// the plan names: healers learn Heal, Battle Heal, Might and Shield, then
+// Wind Strike; orc mystics their buffs, then Life Drain and Chill Flame,
+// and no heal; every listed class has trainers.
 func TestDefaultPersonaSkills(t *testing.T) {
 	p := DefaultPersona()
 	for _, c := range []int32{classHumanMystic, classElvenMystic, classDarkMystic} {
-		if got := p.LearnSkills[c]; !slices.Equal(got, []int32{skillHeal, skillBattleHeal, skillMight, skillShield}) {
+		if got := p.LearnSkills[c]; !slices.Equal(got, []int32{skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike}) {
 			t.Errorf("class %d skills = %v", c, got)
 		}
 	}
-	if got := p.LearnSkills[classOrcMystic]; slices.Contains(got, skillHeal) || len(got) == 0 {
-		t.Errorf("orc mystic skills = %v, want buffs only", got)
+	if got := p.LearnSkills[classOrcMystic]; !slices.Equal(got, []int32{skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame}) {
+		t.Errorf("orc mystic skills = %v, want buffs then attack spells", got)
 	}
 	for c := range p.LearnSkills {
 		if len(p.Trainers[c]) == 0 {
