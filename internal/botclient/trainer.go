@@ -49,6 +49,11 @@ const (
 	skillBattleHeal  int32 = 1015
 	skillShield      int32 = 1040
 	skillMight       int32 = 1068
+	// The mystics' attack spells: Wind Strike for the human, elven and
+	// dark elven lines, Life Drain and Chill Flame for the orc line.
+	skillLifeDrain  int32 = 1090
+	skillChillFlame int32 = 1100
+	skillWindStrike int32 = 1177
 )
 
 // Class ids of the healer and buffer professions of the support build
@@ -70,21 +75,24 @@ const (
 // profession's trainer offers the next level of every skill of its tree
 // merged with its parents' (Cleric: Heal, Battle Heal, Might and Shield up
 // to 35; Shillien and Elven Elder: Might and Shield at 40-44; Orc Shaman:
-// Soul Shield and Chant of Battle at 25-35, Warcryer at 44). Ids and levels
-// are the datapack's class skill trees (data/xml/classes).
+// Soul Shield and Chant of Battle at 25-35, Warcryer at 44). Their attack
+// spells come after them, so the SP goes to the support skills first: Wind
+// Strike (level 1 granted at creation, 2-5 at 7-14), Life Drain and Chill
+// Flame. Ids and levels are the datapack's class skill trees
+// (data/xml/classes).
 var mysticSkills = map[int32][]int32{
-	classHumanMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classElvenMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classDarkMystic:     {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classOrcMystic:      {skillSoulShield, skillChantBattle},
-	classCleric:         {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classBishop:         {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classElvenOracle:    {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classElvenElder:     {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classShillienOracle: {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classShillienElder:  {skillHeal, skillBattleHeal, skillMight, skillShield},
-	classOrcShaman:      {skillSoulShield, skillChantBattle},
-	classWarcryer:       {skillSoulShield, skillChantBattle},
+	classHumanMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classElvenMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classDarkMystic:     {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classOrcMystic:      {skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame},
+	classCleric:         {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classBishop:         {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classElvenOracle:    {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classElvenElder:     {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classShillienOracle: {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classShillienElder:  {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
+	classOrcShaman:      {skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame},
+	classWarcryer:       {skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame},
 }
 
 // mysticTrainers are the NPC template ids of the trainers that teach each
