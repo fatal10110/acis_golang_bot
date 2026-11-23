@@ -391,19 +391,21 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 	}
 	cur, err := h.Locate(cell, &w.pins)
 	if err != nil {
-		// Ground the hierarchy does not hold: water, if anything.
-		route, ok := w.swimRoute(from)
-		if !ok {
-			w.unreachable(reasonNoNav)
-			return Action{}, false
-		}
-		w.take(route)
-		return Action{}, true
+		w.unreachable(reasonNoNav)
+		return Action{}, false
 	}
 	w.pins.Current = cur
 	var route []location.Location
 	switch cur.Kind() {
 	case nav.Isolated:
+		// The hierarchy keeps out of water, so a bot in water stands on
+		// ground it calls isolated: it swims out.
+		if w.nav.Water.Contains(from.X, from.Y, from.Z) {
+			if route, ok := w.swimRoute(from); ok {
+				w.take(route)
+				return Action{}, true
+			}
+		}
 		// No abstract SCC is reachable from here (a closed pit, the restart
 		// area of acis_golang#5412): only /unstuck leaves it.
 		if !w.escapeAt.IsZero() && now.Sub(w.escapeAt) < escapeEvery {

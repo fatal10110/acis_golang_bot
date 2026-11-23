@@ -327,8 +327,8 @@ func (b *Brain) turnAround(angle float64, now time.Time) Action {
 // checkedStep is a move of dist from where the bot stands along the first
 // of angles whose step holds on the geodata both ways (D13): the walker's
 // segment check there and back, so the step neither crosses a wall nor
-// drops off a ledge or into a pit the bot cannot climb back out of. It is
-// the zero Action when no angle holds. Without geodata nothing is checked
+// drops off a ledge or into a pit the bot cannot climb back out of, and
+// whose end is not in water. It is the zero Action when no angle holds. Without geodata nothing is checked
 // and the first angle goes out, as before.
 func (b *Brain) checkedStep(dist int32, now time.Time, angles ...float64) Action {
 	pos := b.world.Self.Position(now)
@@ -344,6 +344,11 @@ func (b *Brain) checkedStep(dist int32, now time.Time, angles ...float64) Action
 			continue
 		}
 		to.Z = int32(c.Z)
+		// A swimmer's segments may cross water, but a step never ends in
+		// it: a bot left standing in water drowns.
+		if w.nav.Water.Contains(int(to.X), int(to.Y), int(c.Z)) {
+			continue
+		}
 		if w.segmentOK(from, to) && w.segmentOK(to, from) {
 			return moveAction(to, pos)
 		}

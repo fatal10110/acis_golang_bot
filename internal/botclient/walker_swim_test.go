@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -13,28 +14,41 @@ import (
 // it has no abstract node.
 var swimLake = nav.WaterBox{X1: 5000, Y1: -100, X2: 6000, Y2: 5000, MinZ: -50, MaxZ: 50}
 
-// TestWalkerSwims walks across the lake, and into it after a leader: the
-// hierarchy keeps out of water, so the walker takes the swimming cell
-// planner's route, each segment passing its checks, the wet ones timed at
-// the swim speed, with no desync and no blocked stop. Without a swim speed
-// the far shore is unreachable, and so is a place in the lake for any walk
-// but a follower's.
+// TestWalkerSwims walks across the lake, into it after a leader, and out of
+// it: the hierarchy keeps out of water and holds no ground in it, so the
+// walker takes the swimming cell planner's route, each segment passing its
+// checks, the wet ones timed at the swim speed, with no desync and no
+// blocked stop. Without a swim speed the far shore is unreachable, and so
+// is a place in the lake for any walk but a follower's: no move is sent.
 func TestWalkerSwims(t *testing.T) {
 	n, err := buildTestNavWater(geotest.Scenes(), navWindow(0, 0, 1, 0), nav.NewWater([]nav.WaterBox{swimLake}))
 	if err != nil {
 		t.Fatal(err)
 	}
+	shore, lake, far := Point{X: 3500, Y: 500}, Point{X: 5500, Y: 500}, Point{X: 6500, Y: 500}
 	for _, tc := range []struct {
-		name    string
-		dest    Point
-		purpose walkPurpose
+		name        string
+		start, dest Point
+		purpose     walkPurpose
+		swim        int32
+		arrive      bool
 	}{
-		{"across the lake", Point{X: 6500, Y: 500}, walkPlace},
-		{"into the lake after a leader", Point{X: 5500, Y: 500}, walkFollow},
+		{"across the lake", shore, far, walkPlace, 50, true},
+		{"into the lake after a leader", shore, lake, walkFollow, 50, true},
+		{"out of the lake", lake, shore, walkPlace, 50, true},
+		{"across without a swim speed", shore, far, walkPlace, 0, false},
+		{"a place in the lake", shore, lake, walkPlace, 50, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			b, _, reg := newNavBrain(t, n, Persona{}, Point{X: 3500, Y: 500})
-			b.world.Self.SwimSpeed = 50
+			b, _, reg := newNavBrain(t, n, Persona{}, tc.start)
+			b.world.Self.SwimSpeed = tc.swim
+			if !tc.arrive {
+				// The bot would drown in the lake, or cannot swim at all.
+				if a, st := b.goTo(tc.dest, 0, tc.purpose, t0); st != walkUnreachable || a.kind == actMove {
+					t.Fatalf("status %v kind %v (%s), want unreachable and no move", st, a.kind, b.walk.reason)
+				}
+				return
+			}
 			now, prev, swum := t0, Point{}, false
 			var segs int
 			for i := 0; ; i++ {
@@ -61,7 +75,7 @@ func TestWalkerSwims(t *testing.T) {
 				ans := segAnswer(origin, to)
 				b.handle([]Event{ans}, now)
 				run := b.world.Self.legTime(ans.Origin, ans.Dest)
-				if _, _, ok := n.Water.Span(toLoc(origin), toLoc(to)); ok {
+				if t0, t1, ok := n.Water.Span(toLoc(origin), toLoc(to)); ok && t1 > t0 {
 					swum = true
 					if dry := runFor(origin, to) - positionTick; run <= dry {
 						t.Errorf("segment %d in water takes %v, want longer than the %v it runs dry", segs, run, dry)
@@ -80,15 +94,24 @@ func TestWalkerSwims(t *testing.T) {
 			}
 		})
 	}
+}
 
-	b, _, _ := newNavBrain(t, n, Persona{}, Point{X: 3500, Y: 500})
-	if _, st := walkStep(t, b, Point{X: 6500, Y: 500}, t0); st != walkUnreachable {
-		t.Errorf("without a swim speed: status %v, want unreachable", st)
+// TestCheckedStepKeepsDry checks that a flee or kite step never ends in
+// water, though a bot with a swim speed may swim on a walk: a bot left
+// standing in water drowns. From the shore, the step into the lake is
+// skipped and the step back onto dry ground taken.
+func TestCheckedStepKeepsDry(t *testing.T) {
+	n, err := buildTestNavWater(geotest.Scenes(), navWindow(0, 0, 1, 0), nav.NewWater([]nav.WaterBox{swimLake}))
+	if err != nil {
+		t.Fatal(err)
 	}
-	b, _, _ = newNavBrain(t, n, Persona{}, Point{X: 3500, Y: 500})
+	b, _, _ := newNavBrain(t, n, Persona{}, Point{X: 4900, Y: 500})
 	b.world.Self.SwimSpeed = 50
-	if _, st := walkStep(t, b, Point{X: 5500, Y: 500}, t0); st != walkUnreachable {
-		t.Errorf("a place in the lake: status %v, want unreachable (the bot would drown there)", st)
+	if a := b.checkedStep(300, t0, 0); a.kind != 0 {
+		t.Errorf("step into the lake: kind %v to %+v, want none", a.kind, moveTarget(a.payload))
+	}
+	if a := b.checkedStep(300, t0, 0, math.Pi); a.kind != actMove || moveTarget(a.payload).X >= 4900 {
+		t.Errorf("step away from the lake: kind %v, want a move west", a.kind)
 	}
 }
 
