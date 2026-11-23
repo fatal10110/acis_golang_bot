@@ -59,7 +59,7 @@ func TestLiveSpotSpread(t *testing.T) {
 	spots := botclient.NewSpotRegistry(kept, 1)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("sp", 1)
-	f := runWatched(t, ctx, tg, account, botSetup{
+	setup := botSetup{
 		class: &botclient.DarkFighter,
 		persona: func() botclient.Persona {
 			p := botclient.DefaultPersona()
@@ -69,12 +69,8 @@ func TestLiveSpotSpread(t *testing.T) {
 			return p
 		},
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
-	})
-	t.Cleanup(func() { backToLevel1(t, gm, f) })
-	if lvl := levelOf(t, ctx, f); lvl > 1 {
-		t.Logf("%s is level %d from an earlier run: back to 1", f.name, lvl)
-		gmOn(t, ctx, gm, f, "set level 1")
 	}
+	f := runFresh(t, ctx, gm, 1, func() *farmer { return runWatched(t, ctx, tg, account, setup) })
 	gmTeleport(t, ctx, gm, darkElvenStart)
 	if err := gm.Command(ctx, "recall "+f.name); err != nil {
 		t.Fatal(err)

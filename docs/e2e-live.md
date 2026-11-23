@@ -137,7 +137,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 ## What a run creates and leaves behind
 
 - Accounts `<prefix><group><n>` (`e2ea1`, `e2ec1`-`e2ec6`, `e2er1`, `e2ew1`-`e2ew2`, `e2es1`,
-  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2ewl1`-`e2ewl2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu2`,
+  `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2ewl1`-`e2ewl2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu3`,
   `e2erv1`-`e2erv3`, `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`,
   `e2est1`-`e2est3`, `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`,
   `e2epn1`) and
@@ -151,8 +151,10 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   gives it Power Strike, 10 Healing Potions, 500 no-grade soulshots and 3 Stems (a gift waits while
   the inventory is full); what it did not use stays with it. Other farmers keep their loot and the
   levels they gained, but `TestLiveNavPickUpObstacle`, whose level 5 farmer drops its junk the
-  same way; `TestLiveSpots` sets its first farmer back to level 1 at the end, and
-  `TestLiveSupplyTrip` sets its farmer to level 6 at the start (#258: past level 14 in its
+  same way; `TestLiveSpots` sets its first farmer back to level 1 at the end, as
+  `TestLiveFarmStarters` and `TestLiveSpotSpread` do theirs (`runFresh`: a character a failed
+  cleanup left above the scenario's level is set back to 1, then logs out and enters again, so its
+  new brain claims a spot for level 1, #268), and `TestLiveSupplyTrip` sets its farmer to level 6 at the start (#258: past level 14 in its
   Squire's gear, every Talking Island spot that fit it was an aggressive pack that killed it).
 - `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
   fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),

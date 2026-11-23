@@ -65,6 +65,8 @@ type farmer struct {
 	watch *Watch
 	id    int32
 	name  string
+	// stop logs the bot out and joins it before the test ends (startBot).
+	stop func()
 }
 
 // runFarmer runs a human fighter of account with the persona tune adjusts
@@ -140,7 +142,7 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 			t.Logf("bot %s %s", account, desyncCause(d, collision, door, canMove))
 		}
 	})
-	b := runBotWith(t, ctx, tg, account, setup)
+	b, stop := startBot(t, ctx, tg, account, setup)
 	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
 		return ok
@@ -156,7 +158,7 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 	// The server adds the collision height to a click's floor Z, truncated
 	// (network/movement.go).
 	collision = int32(ui.CollisionHeight)
-	f := &farmer{bot: b, watch: w, id: ui.ObjectID, name: ui.Name}
+	f := &farmer{bot: b, watch: w, id: ui.ObjectID, name: ui.Name, stop: stop}
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Log(f.digest())

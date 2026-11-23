@@ -26,30 +26,7 @@ func TestLiveSpots(t *testing.T) {
 	a1, _ := tg.Account("n", 1)
 	a2, _ := tg.Account("n", 2)
 
-	f1 := runFarmer(t, ctx, tg, a1, spots, nil)
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		if err := gm.Command(ctx, "teleportto "+f1.name); err != nil {
-			t.Logf("cleanup: level of %s: %v", f1.name, err)
-			return
-		}
-		if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(f1.id)); err != nil {
-			t.Logf("cleanup: level of %s: %v", f1.name, err)
-			return
-		}
-		err := gm.Select(ctx, f1.id)
-		if err == nil {
-			err = gm.Command(ctx, "set level 1")
-		}
-		if err != nil {
-			t.Logf("cleanup: level of %s: %v", f1.name, err)
-		}
-	})
-	if lvl := levelOf(t, ctx, f1); lvl > 5 {
-		t.Logf("%s is level %d from an earlier run: back to 1", f1.name, lvl)
-		gmOn(t, ctx, gm, f1, "set level 1")
-	}
+	f1 := runFresh(t, ctx, gm, 5, func() *farmer { return runFarmer(t, ctx, tg, a1, spots, nil) })
 	waitFor(t, ctx, "the first farmer's spot", func() bool { return f1.bot.Status().Spot != "" })
 
 	f2 := runFarmer(t, ctx, tg, a2, spots, nil)
