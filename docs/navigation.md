@@ -424,7 +424,7 @@ server's pathfinder.
     has flooded everything the start reaches in the cluster, and the abstract search runs again
     from the nodes it reached. The last leg does the same, walking back from the goal over the
     cluster's cardinal crossings to the nodes that reach it. Without this the leg's cell search
-    flooded the world until the node budget ran out;
+    flooded the world until the cell budget ran out;
   - string pulling with the copied `CanMove`;
   - splitting into segments of at most `navSegment` (about 2500 units, roughly a click on screen,
     far under 9900 in 3D);
