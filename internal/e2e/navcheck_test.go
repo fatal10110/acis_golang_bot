@@ -196,38 +196,6 @@ func stepVerdict(stops []blockedStop, predicted, corridorOpen func(blockedStop) 
 	return explained, bad
 }
 
-// attackClick is the bot's first attack on object id at or after since: the
-// first Action or AttackRequest on id it sent once the server answered
-// MyTargetSelected for id, and the origin the click carries (the bot's
-// position as it clicked, clientpackets Action and AttackRequest: object
-// id, origin, shift). An Action on an object that is not yet the target
-// only selects it and moves nobody, so a click before the selection is no
-// attack.
-func attackClick(seen []Seen, sent []Sent, id int32, since time.Time) (Sent, botclient.Point, bool) {
-	var selected time.Time
-	for _, s := range seen {
-		if e, ok := s.Event.(botclient.MyTargetSelected); ok && e.ObjectID == id && !s.At.Before(since) {
-			selected = s.At
-			break
-		}
-	}
-	if selected.IsZero() {
-		return Sent{}, botclient.Point{}, false
-	}
-	for _, s := range sent {
-		if (s.Op != opAction && s.Op != opAttackRequest) || !s.At.After(selected) || len(s.Payload) < 17 {
-			continue
-		}
-		p := s.Payload
-		at := func(off int) int32 { return int32(binary.LittleEndian.Uint32(p[off:])) }
-		if at(1) != id {
-			continue
-		}
-		return s, botclient.Point{X: at(5), Y: at(9), Z: at(13)}, true
-	}
-	return Sent{}, botclient.Point{}, false
-}
-
 // lastUserInfo is the last UserInfo among the frames seen.
 func lastUserInfo(seen []Seen) (botclient.UserInfo, bool) {
 	for i := len(seen) - 1; i >= 0; i-- {
@@ -417,44 +385,6 @@ func TestStepVerdict(t *testing.T) {
 				func(blockedStop) bool { return tt.open })
 			if (len(explained) == 1) != tt.explained || (len(bad) == 1) != tt.isBad {
 				t.Errorf("explained %q, bad %q; want explained %v, bad %v", explained, bad, tt.explained, tt.isBad)
-			}
-		})
-	}
-}
-
-func TestAttackClick(t *testing.T) {
-	const wolf, other = 900, 901
-	t0 := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
-	at := func(ms int) time.Time { return t0.Add(time.Duration(ms) * time.Millisecond) }
-	origin := botclient.Point{X: -83111, Y: 249956, Z: -3648}
-	act := func(ms int, op byte, id int32) Sent {
-		p := botclient.EncodeAction(id, origin)
-		if op == opAttackRequest {
-			p = botclient.EncodeAttackRequest(id, origin)
-		}
-		return Sent{At: at(ms), Op: op, Payload: p}
-	}
-	selected := func(ms int, id int32) Seen { return Seen{At: at(ms), Event: botclient.MyTargetSelected{ObjectID: id}} }
-	tests := []struct {
-		name   string
-		seen   []Seen
-		sent   []Sent
-		wantAt time.Time
-		ok     bool
-	}{
-		{name: "never selected", sent: []Sent{act(200, opAction, wolf), act(500, opAction, wolf)}},
-		{name: "only the selecting click", seen: []Seen{selected(250, wolf)}, sent: []Sent{act(200, opAction, wolf)}},
-		{name: "selected before since", seen: []Seen{selected(50, wolf)}, sent: []Sent{act(300, opAction, wolf)}},
-		{name: "another object selected", seen: []Seen{selected(250, other)}, sent: []Sent{act(200, opAction, other), act(300, opAction, other)}},
-		{name: "an action after the selection", seen: []Seen{selected(250, wolf)}, sent: []Sent{act(200, opAction, wolf), act(300, opAction, other), act(400, opAction, wolf)}, wantAt: at(400), ok: true},
-		{name: "an attack after the selection", seen: []Seen{selected(250, wolf)}, sent: []Sent{act(200, opAction, wolf), act(350, opAttackRequest, wolf)}, wantAt: at(350), ok: true},
-		{name: "a short payload", seen: []Seen{selected(250, wolf)}, sent: []Sent{{At: at(300), Op: opAction, Payload: act(0, opAction, wolf).Payload[:16]}}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, o, ok := attackClick(tt.seen, tt.sent, wolf, at(100))
-			if ok != tt.ok || ok && (!s.At.Equal(tt.wantAt) || o != origin) {
-				t.Errorf("attackClick = %v %v %v, want at %v origin %v ok %v", s.At, o, ok, tt.wantAt, origin, tt.ok)
 			}
 		})
 	}
