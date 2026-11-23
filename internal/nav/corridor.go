@@ -103,7 +103,8 @@ func quadrant(a, b location.Location) block.NSWE {
 // has geodata and one floor (exactly one layer, or a stacked top, topsHold),
 // its NSWE allows the segment's quadrant directions, and no two neighbouring
 // cells differ in height by block.CellIgnoreHeight or more. Then every step
-// the server can take between two points of the corridor passes CanMove. It
+// the server can take between two points of the corridor passes CanMove;
+// on stacked tops, every step of at most Lmax + stepSlack (topsHold). It
 // costs O(cells along the segment) and makes no CanMove call.
 func (p *Planner) CorridorOpen(a, b location.Location) bool {
 	s := getScratch()

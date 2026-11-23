@@ -609,7 +609,11 @@ to a route (a middle leg no longer floods past its clusters), none from a route 
 and 4 still fail with `ErrBudget`. The other routes are the same way pulled into longer segments:
 17,186 waypoints became 10,333 (−40%) and the routes' total length fell by 1.0% (per route p50
 −0.4%, at worst +6.0%). The synthetic region's route tests pass unchanged; two corridor cases
-flip as intended (a bridge deck's stacked tops, a ledge one cell aside).
+flip as intended (a bridge deck's stacked tops, a ledge one cell aside). One walker answer
+changes: the drop off the synthetic bridge deck (`TestWalkerRecovery`) was one exact segment to
+the ground beside it and is now two, to the deck's edge on its stacked tops, then down. The pull
+takes the farthest candidate that passes the corridor test before it tries any exact one, and the
+tops now pass the corridor test up to the edge.
 
 | Measure | Target | Before | After |
 | --- | --- | --- | --- |
@@ -631,7 +635,11 @@ decisions (#256):
   about 15% less route time. It is not adopted: it trades away the wall margin the clearance
   cost keeps.
 - **The cold heap** is the scratch growing on its first long search; making the target
-  warm-only is the owner's call.
+  warm-only is the owner's call. Its max is the first search that runs out of node budget and
+  grows the idle scratch to the budget's size. Before, that was the first sampled route (an
+  `ErrBudget`), and a later `ErrBudget` route grew it further. Now the first route completes, and
+  the later one does the growing: measured route by route, 45.2 + 30.1 MB became
+  29.7 + 46.8 MB. The total is the same, and p99 did not change.
 - **The distance tail** needs landmarks (ALT) on the abstract graph, a nav cache format change.
 
 ### Water
@@ -823,7 +831,9 @@ unreachable (with a reason).
        the earlier "more than 48").
 
     Under those conditions every per-step `CanMove` between two points in the corridor holds,
-    whatever the step lengths and wherever the rounding lands:
+    wherever the rounding lands, and on a corridor of one-layer cells whatever the step lengths;
+    on a corridor with stacked tops only for steps of at most `Lmax + 1.5`, the bound `topsHold`
+    checks, as for the exact check:
     - every border crossing is allowed;
     - `belowCell(z + 48)` finds the one floor;
     - the final `goz == Height(target)` compares that floor with itself.
@@ -850,7 +860,9 @@ unreachable (with a reason).
     - A segment whose exact check fails is split at the stretch, and the planner tries another
       way past it.
   - **What it does not cover**: a server tick that stalls past `Emax` (a GC pause, for example)
-    inside a stretch that needed the exact check. Open corridors are immune to it.
+    inside a stretch that needed the exact check, or on a corridor that passed on stacked tops,
+    where a longer step can land on the layer below. Open corridors of one-layer cells are immune
+    to it.
     `nav_blocked_total` measures what is left.
 - **Sending**:
   - Every segment goes out from standstill, from the server-confirmed position.
@@ -1072,10 +1084,11 @@ Walking efficiency (the stop at every waypoint, short segments, the follower's h
   is not). The cache key rejects a changed local copy, and the desync counter catches a changed
   server copy at the first segment. `docs/home.md` keeps the geodata in the same rsync step as the
   datapack.
-- **Tick jitter in the step chain.** Open corridors are immune to it. The exact check covers
+- **Tick jitter in the step chain.** Open corridors of one-layer cells are immune to it; one on
+  stacked tops, like the exact check, holds for steps up to `Lmax + 1.5`. The exact check covers
   every step length in `(0, Lmax]` on the short stretches that need it; the clearance cost keeps
   routes off such stretches where it can; a blocked stop is a replan. What is left, ticks past
-  `Emax` inside exact stretches, is measured by `nav_blocked_total` against its e2e threshold.
+  `Emax` inside exact stretches or on stacked tops, is measured by `nav_blocked_total` against its e2e threshold.
 - **Stale or misordered door state** (a door no bot sees, changed by a script or timer, or events
   from lagging sessions): it shows up as door replans, never as plain unreachable.
 - **Multilayer Z** (bridges, buildings): settled in N0 (the floor Z goes out; a layer less than
