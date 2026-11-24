@@ -222,7 +222,7 @@ func (t *Target) Enter(ctx context.Context, account, password string, ch botclie
 		return nil, fmt.Errorf("account %s: %w", account, err)
 	}
 	t.Own(self.Name, self.ObjectID)
-	return &Client{Account: account, Self: self, conn: conn, pacer: botclient.NewPacer(t.clock), release: release, pos: botclient.Point{X: self.X, Y: self.Y, Z: self.Z}}, nil
+	return &Client{Account: account, Self: self, conn: conn, clock: t.clock, pacer: botclient.NewPacer(t.clock), release: release, pos: botclient.Point{X: self.X, Y: self.Y, Z: self.Z}}, nil
 }
 
 // accountInUse is the login server's LoginFail reason for an account a game
@@ -242,8 +242,14 @@ const inUseRetry = 3 * time.Second
 // EnterWhenFree is Enter with the account's derived password, tried again
 // while the account is in use (InUse) until ctx ends.
 func (t *Target) EnterWhenFree(ctx context.Context, account string, ch botclient.Character, rec *botclient.Recorder) (*Client, error) {
+	return t.enterWhenFree(ctx, account, t.Password(account), ch, rec)
+}
+
+// enterWhenFree is Enter tried again while the account is in use (InUse)
+// until ctx ends: the login server kicks the session still holding it.
+func (t *Target) enterWhenFree(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*Client, error) {
 	for {
-		c, err := t.Enter(ctx, account, t.Password(account), ch, rec)
+		c, err := t.Enter(ctx, account, password, ch, rec)
 		if !InUse(err) {
 			return c, err
 		}
@@ -359,6 +365,7 @@ type Client struct {
 	Account string
 	Self    botclient.Self
 	conn    *botclient.GameConn
+	clock   botclient.Clock
 	pacer   *botclient.Pacer
 	release func()
 	once    sync.Once
@@ -522,6 +529,77 @@ func (c *Client) Logout(ctx context.Context) error {
 	return err
 }
 
+// leaveLinger outlasts the server's attack stance, which refuses a logout,
+// and the lost-connection linger of a character in attack stance (15 s,
+// gameserver network/disconnect_delay.go disconnectCombatDelay).
+const leaveLinger = 16 * time.Second
+
+// Leave ends c's session so that its character is out of the world before
+// c's place, and a pooled GM's lease, is given back: the next holder of the
+// account must not enter while the character is still there (the game
+// server refuses that selection silently and closes the session still
+// holding it, gameserver network/character_select.go). A closed c is left
+// alone.
+func (c *Client) Leave(ctx context.Context) error {
+	if c.Closed() {
+		return nil
+	}
+	err := leave(ctx, c)
+	c.Close()
+	return err
+}
+
+// leaver is a session leave ends: the Client, or a test's fake.
+type leaver interface {
+	logout(ctx context.Context) error
+	drop()
+	wait(ctx context.Context, d time.Duration) error
+}
+
+// leave logs s out, once more after the attack stance when the server
+// refuses the logout. When the logout still fails the connection is dropped
+// and leave waits out the lost-connection linger, which keeps the character
+// in the world up to 15 s.
+func leave(ctx context.Context, s leaver) error {
+	err := s.logout(ctx)
+	if errors.Is(err, botclient.ErrLogoutRefused) {
+		if werr := s.wait(ctx, leaveLinger); werr != nil {
+			s.drop()
+			return errors.Join(err, werr)
+		}
+		err = s.logout(ctx)
+	}
+	if err == nil {
+		return nil
+	}
+	s.drop()
+	return errors.Join(err, s.wait(ctx, leaveLinger))
+}
+
+// logout sends Logout, paced; the server closes the connection when it
+// accepts it.
+func (c *Client) logout(ctx context.Context) error {
+	if err := c.pacer.Frame(ctx); err != nil {
+		return err
+	}
+	return c.conn.Logout(ctx)
+}
+
+// drop closes the connection without giving the place back.
+func (c *Client) drop() { _ = c.conn.Close() }
+
+// wait waits d on c's clock, or until ctx ends.
+func (c *Client) wait(ctx context.Context, d time.Duration) error {
+	timer := c.clock.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C():
+		return nil
+	}
+}
+
 // Close drops the connection with no Logout and gives the place back; the
 // server keeps the character in the world a moment longer. Later calls do
 // nothing.
@@ -555,7 +633,10 @@ func (t *Target) EnterGM(ctx context.Context) (*GMClient, error) {
 		lease.release()
 		return nil, err
 	}
-	c, err := t.Enter(ctx, gm.Account, gm.Password(), botclient.Character{Name: gm.Character}, nil)
+	// A session of the GM's account that has not left yet (a run killed
+	// before its cleanup) holds the account: the login server kicks it and
+	// refuses this login with AccountInUse until it is gone.
+	c, err := t.enterWhenFree(ctx, gm.Account, gm.Password(), botclient.Character{Name: gm.Character}, nil)
 	if err != nil {
 		lease.release()
 		return nil, err

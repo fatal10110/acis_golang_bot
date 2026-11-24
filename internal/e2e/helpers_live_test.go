@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"errors"
 	"hash/fnv"
 	"math/rand/v2"
 	"path/filepath"
@@ -57,29 +56,20 @@ func enter(t *testing.T, ctx context.Context, tg *Target, account string, ch bot
 	return c
 }
 
-// logoutAtEnd logs c out once the test ends, after its combat stance (15 s)
-// when the first logout is refused.
+// logoutAtEnd has c leave the world once the test ends (Client.Leave).
 func logoutAtEnd(t *testing.T, c *Client) {
 	t.Cleanup(func() {
-		if c.Closed() {
-			return
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		err := c.Logout(ctx)
-		if errors.Is(err, botclient.ErrLogoutRefused) {
-			time.Sleep(16 * time.Second)
-			err = c.Logout(ctx)
-		}
-		if err != nil {
+		if err := c.Leave(ctx); err != nil {
 			t.Logf("cleanup: logout %s: %v", c.Account, err)
 		}
-		c.Close()
 	})
 }
 
 // enterGM logs the GM in; when the test ends it deletes every monster the
-// run spawned and still owns, then logs out.
+// run spawned and still owns, then leaves the world before the GM goes
+// back to the pool (Client.Leave).
 func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
 	t.Helper()
 	gm, err := tg.EnterGM(ctx)
@@ -88,17 +78,16 @@ func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
 	}
 	t.Logf("GM of the pool: %s", filepath.Base(gm.file))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		for _, id := range gm.Spawned() {
 			if err := gm.Delete(ctx, id); err != nil {
 				t.Logf("cleanup: delete monster %d: %v", id, err)
 			}
 		}
-		if err := gm.Logout(ctx); err != nil {
+		if err := gm.Leave(ctx); err != nil {
 			t.Logf("cleanup: GM logout: %v", err)
 		}
-		gm.Close()
 	})
 	if userInfo(t, gm.Client).HP == 0 {
 		revive(t, ctx, gm.Client)
