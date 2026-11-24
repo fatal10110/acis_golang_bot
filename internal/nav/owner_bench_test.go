@@ -225,19 +225,44 @@ func BenchmarkOwnerNav(b *testing.B) {
 			})
 		})
 		failed := 0
+		var segments []float64
 		route := func(h *Hierarchy, i int) int64 {
 			used := h.cache.used
-			if _, err := h.Route(p, from[i].World(), to[i].World(), nil); err != nil {
+			r, err := h.Route(p, from[i].World(), to[i].World(), nil)
+			if err != nil {
 				failed++
+			}
+			for k := 1; k < len(r); k++ {
+				segments = append(segments, hypot(r[k].X-r[k-1].X, r[k].Y-r[k-1].Y))
 			}
 			return h.cache.used - used
 		}
 		b.Run("RouteCold", func(b *testing.B) {
 			measure(b, n, func(i int) int64 { return route(coldCache(cold), i) })
 		})
+		segments = segments[:0]
 		b.Run("RouteWarm", func(b *testing.B) {
 			measure(b, n, func(i int) int64 { return route(h, i) })
 		})
+		reportSegments(b, segments)
 		b.Logf("routes failed: %d of %d (both passes)", failed, 2*n)
 	}
+}
+
+// reportSegments logs the length of the warm routes' segments: the median,
+// the quartile and the share under 300 units (#307).
+func reportSegments(b *testing.B, lengths []float64) {
+	if len(lengths) == 0 {
+		return
+	}
+	slices.Sort(lengths)
+	at := func(f float64) float64 { return lengths[int(f*float64(len(lengths)-1))] }
+	short := 0
+	for _, l := range lengths {
+		if l < 300 {
+			short++
+		}
+	}
+	b.Logf("segments: %d, length p25 %.0f, median %.0f, p75 %.0f; under 300: %.1f%%",
+		len(lengths), at(0.25), at(0.5), at(0.75), 100*float64(short)/float64(len(lengths)))
 }

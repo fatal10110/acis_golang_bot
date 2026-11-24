@@ -32,8 +32,9 @@ type scratch struct {
 	seen  indexTable
 	queue []chainState
 	// work counts the corridor cells filled and the CanMove calls of exact
-	// checks, for the pull's budget of farther candidates.
-	work int
+	// checks and farther candidates; farEnd is where the route's farWork
+	// ends (pull).
+	work, farEnd int
 	// Stand points.
 	stands []standCandidate
 	layers [block.MaxLayers]block.Cell

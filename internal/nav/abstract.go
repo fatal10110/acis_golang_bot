@@ -263,6 +263,7 @@ func (h *Hierarchy) searchSeated(s *scratch, p *Planner, q *routeQuery, closed f
 		s.waypoints = append(s.waypoints, q.goal)
 	}
 	var avoid map[edgeKey]struct{}
+	s.farEnd = s.work + farWork
 	for range maxReplans + 1 {
 		s.path = s.path[:0]
 		legs := len(s.waypoints) - 1
