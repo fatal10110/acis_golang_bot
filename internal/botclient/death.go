@@ -181,9 +181,13 @@ type leaderWatch struct {
 	teleported bool
 	seen       bool
 	// told is set once the whisper went out; escapeAt is the last /unstuck
-	// sent; home is set once the bot landed in town.
+	// the rule sent; refused is set by the server's petition refusal of it,
+	// which asking again does not change, until the bot is teleported or the
+	// loss ends (the bot holds where it was refused meanwhile); home is set
+	// once the bot landed in town.
 	told     bool
 	escapeAt time.Time
+	refused  bool
 	home     bool
 	// sat is set while the bot sits by its dead leader.
 	sat bool
@@ -224,15 +228,19 @@ const msgExpelledFromParty = 202
 
 // leaderEvent notes the followed party leader's own teleport, a loading
 // screen jump that takes it out of the bot's sight, and its coming back in
-// sight; the bot's expulsion from the party; and the bot's own landing in
-// town once its leader is lost.
+// sight; the bot's expulsion from the party; the bot's own landing in town
+// once its leader is lost; and the server's refusal of the rule's /unstuck.
 func (b *Brain) leaderEvent(ev Event, now time.Time) {
 	v, self := &b.lead, b.world.Self.ObjectID
 	switch e := ev.(type) {
 	case TeleportToLocation:
 		switch {
 		case e.ObjectID == self && !e.Fast && !v.lost.IsZero():
-			v.home = true
+			if !v.escapeAt.IsZero() && !v.refused {
+				// The recall the rule asked landed (#335).
+				b.escape.landed(now)
+			}
+			v.home, v.refused = true, false
 		case e.ObjectID == v.id && v.id != 0 && !e.Fast && v.lost.IsZero():
 			v.lost, v.teleported, v.seen = now, true, false
 		}
@@ -246,6 +254,14 @@ func (b *Brain) leaderEvent(ev Event, now time.Time) {
 		// leader is not lost.
 		if e.ID == msgExpelledFromParty {
 			*v = leaderWatch{}
+		}
+		// The server refuses /unstuck in the olympiad, observer mode, the
+		// festival, jail and boss zones (network/usercommand.go
+		// userCommandEscape). The refusal of the walker's ask is the
+		// walker's (observeWalk).
+		if e.ID == msgNoUnstuckPetition && !b.escape.walker && !v.escapeAt.IsZero() && !v.lost.IsZero() && !v.refused {
+			v.refused = true
+			b.log.Warn("unstuck refused: the bot holds by its lost leader's last place until a teleport")
 		}
 	case PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowDelete, PartySmallWindowDeleteAll:
 		b.watchLeader(now)
@@ -262,9 +278,12 @@ func (b *Brain) leaderEvent(ev Event, now time.Time) {
 // new leader ends it. While told to follow a commander, only the body
 // matters.
 //
-// The whisper passes the chat gate (gateChat); /unstuck (RequestUserCommand)
-// has no server gate: escapeRetry spaces a repeat while no recall cast
-// runs.
+// The whisper passes the chat gate (gateChat). /unstuck (RequestUserCommand)
+// has no server gate: escapeRetry spaces a repeat while no recall cast runs,
+// the brain's escapeBreaker (shared with the walker) allows at most
+// escapeTries in escapeEvery (3 in 10 min) and none for escapeEvery after a
+// recall the bot asked landed, and the server's petition refusal stops the
+// rule's asks until a teleport or the loss ends (#335).
 func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 	b.watchLeader(now)
 	if a, ok := b.byLeaderBody(now); ok {
@@ -287,6 +306,8 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 	case v.home:
 		// In town: wait there for a leader still the party's.
 		return Action{}, b.followed() == v.id
+	case v.refused || b.escape.open(now):
+		return Action{}, true
 	case s.Casting(now) || !v.escapeAt.IsZero() && now.Sub(v.escapeAt) < escapeRetry:
 		return Action{}, true
 	case s.Sitting:

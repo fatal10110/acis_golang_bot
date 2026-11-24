@@ -181,6 +181,9 @@ type Brain struct {
 	// lead is the party leader the bot follows and its loss (rule
 	// "leader").
 	lead leaderWatch
+	// escape is the breaker of every /unstuck the bot sends (the walker's
+	// and rule "leader"'s).
+	escape escapeBreaker
 	// train is the trainer visit (rule 9 errand).
 	train trainerVisit
 	// spot is the farming spot (rule 9 errand).
@@ -794,7 +797,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.world.Prompts.Resurrect = ResurrectOffer{}
 		b.restartedAt = now
 	case actUserCommand:
-		b.lead.escapeAt = now
+		b.escape.asked(now, a.walk)
+		if !a.walk {
+			b.lead.escapeAt = now
+		}
 	case actLeaveParty:
 		// A party the bot left on its own loses it no leader.
 		b.lead = leaderWatch{}
