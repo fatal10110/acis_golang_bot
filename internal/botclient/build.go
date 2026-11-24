@@ -141,7 +141,8 @@ type stepState struct {
 	// dist is the distance to the target.
 	dist int32
 	// attackers are the attackers the bot may fight; charges its force
-	// charges and maxCharges the most its charging skill holds.
+	// charges and maxCharges the most its charging skill (the first
+	// ChargeToMax step's) holds at the level the bot knows, 0 unknown.
 	attackers           int
 	charges, maxCharges int
 	inCombat            bool
@@ -233,6 +234,11 @@ type ClassKit struct {
 	// Gear is the class's gear table entry, Dyes its dye symbols.
 	Gear GearClass
 	Dyes []int32
+	// Base are the skills a profession row tags "(base)" or "(base
+	// tree)": the profession knows them from its base class (first merged
+	// minLvl under 20), which TestBehaviorRowsShipped checks; the brain does
+	// not read it.
+	Base []int32
 }
 
 // RaceProfile is what a race's lines share (docs/strategy.md, Design section
@@ -256,7 +262,8 @@ type Build struct {
 }
 
 // lineKits are the combat parts of the kits by base class, the same for a
-// line's every profession until its own rows land (S6b, S7): the fighters
+// line's every profession without its own row (professionKits; the mystic
+// professions until S7): the fighters
 // play their base rows (fighterKits, S6); the mystics keep the support
 // persona's values from before builds (D24): the human, elven and dark elven mystics heal with
 // Battle Heal under 35 % and Heal under 60 %, buff Might and Shield and nuke
@@ -286,8 +293,10 @@ var casterKit = ClassKit{
 }
 
 // CompileBuild is the build of a bot of race playing class at level in role
-// (docs/strategy.md, Design section 4): its line's kit (lineKits), with the
-// steps and toggles the role plays from the level reached, its class's
+// (docs/strategy.md, Design section 4): its profession's kit
+// (professionKits), else its line's (lineKits), with the steps, toggles and
+// buffs the role plays from the level reached (a buff another one of the
+// level Replaces left out), its class's
 // skills, gear and dyes, its race's professions and the row's thresholds
 // (defaultThresholds for a row without its own). The trainers come from the
 // datapack (Brain.build). RoleNone compiles the zero Build. The tables are
@@ -305,15 +314,15 @@ func CompileBuild(race, class, level int32, role Role) Build {
 	}
 	k := &bd.Kit
 	k.Gear, k.Dyes = gearClassOf(defaultGearClasses(), class), defaultDyeTable()[class]
-	var line ClassKit
-	if base, ok := datapack.BaseClass(class); ok {
+	line, ok := professionKits[class]
+	if base, isBase := datapack.BaseClass(class); !ok && isBase {
 		line = lineKits[base]
 	}
 	k.Skills = mysticSkills[class]
 	if line.Skills != nil {
 		k.Skills = line.Skills
 	}
-	k.Buffs, k.Heals, k.Flee, k.Melee, k.Relax = line.Buffs, line.Heals, line.Flee, line.Melee, line.Relax
+	k.Heals, k.Flee, k.Melee, k.Relax, k.Base = line.Heals, line.Flee, line.Melee, line.Relax, line.Base
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
@@ -325,6 +334,11 @@ func CompileBuild(race, class, level int32, role Role) Build {
 	for _, tg := range line.Toggles {
 		if tg.From <= level {
 			k.Toggles = append(k.Toggles, tg)
+		}
+	}
+	for _, bf := range line.Buffs {
+		if bf.From <= level && !slices.ContainsFunc(line.Buffs, func(x Buff) bool { return x.Replaces == bf.Skill && x.From <= level }) {
+			k.Buffs = append(k.Buffs, bf)
 		}
 	}
 	return bd
@@ -415,6 +429,10 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 		hp: s.HP, maxHP: s.MaxHP, mp: s.MP, maxMP: s.MaxMP, targetHP: 1, targetMaxHP: 1,
 		attackers: len(b.attackers(now)), inCombat: s.InCombat, fresh: b.opened != id && b.engaged != id,
 		charges: int(s.Charges),
+	}
+	if i := slices.IndexFunc(steps, func(x Step) bool { return x.ChargeToMax }); i >= 0 {
+		sk := steps[i].Skill
+		st.maxCharges = b.cfg.Travel.maxChargesOf(sk, b.world.Skills[sk].Level)
 	}
 	if o := b.world.Objects[id]; o != nil {
 		if o.MaxHP > 0 {

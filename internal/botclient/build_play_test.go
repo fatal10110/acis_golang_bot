@@ -5,10 +5,6 @@ import (
 	"time"
 )
 
-// skillSprint is a flee skill for the kit tests (230 Sprint, docs/strategy.md
-// ES row).
-const skillSprint = int32(230)
-
 // withKit makes k the bot's compiled kit for its class, level and role, as
 // build would have compiled it, with the support thresholds.
 func withKit(b *Brain, k ClassKit) {

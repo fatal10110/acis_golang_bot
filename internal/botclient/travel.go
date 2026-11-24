@@ -64,6 +64,10 @@ type TravelMap struct {
 	// (indexSkillStacks), by skill id then level: what the stack rule weighs
 	// a buff against the effects on its target with (Brain.stackAllows).
 	skillStacks map[int32]map[int32]stackEffect
+	// maxCharges are the maxCharges of every charging skill level
+	// (indexMaxCharges): what a ChargeToMax step stops at
+	// (Brain.stepState).
+	maxCharges map[datapack.SkillRef]int
 	// trainers are the trainers of each class (indexTrainers): what the
 	// build learns at (Brain.build).
 	trainers map[int32][]int32
@@ -137,6 +141,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
 	m.castRanges = indexCastRanges(dp.Skills)
 	m.skillStacks = indexSkillStacks(dp.Skills)
+	m.maxCharges = indexMaxCharges(dp.Skills)
 	m.trainers = indexTrainers(dp.NPCs)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)

@@ -153,11 +153,17 @@ type Heal struct {
 // and lands on the members around it; any other is cast on each member.
 // Weapons casts it only while the bot wields one of those datapack weapon
 // kinds; Members casts a member buff only on a member of those classes.
+// From is the level the buff starts at, as Step.From; Replaces is the
+// buff it replaces from that level (a row's "replaced by"): CompileBuild
+// leaves that one out.
 type Buff struct {
 	Skill   int32
 	Party   bool
 	Weapons []string
 	Members []int32
+	From    int32
+	// Replaces is a skill id; 0 for none.
+	Replaces int32
 }
 
 // assistPlan is the creature the party leader last attacked: the bot
