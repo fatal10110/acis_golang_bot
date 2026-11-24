@@ -937,6 +937,10 @@ unreachable (with a reason).
     end, at most three times in ten minutes; a recall that lands stops the asks for ten minutes
     from the landing (the landing may be isolated too); the server's petition refusal (system
     message 1043) stops the asks until a teleport (#286).
+    The breaker (`escapeBreaker`, `escape.go`) is shared with rule "leader"'s `/unstuck` for a lost
+    leader, so the two together send at most three in ten minutes, and a recall either asked
+    blocks both. The petition refusal stays with the rule whose ask it answers: a refusal of the
+    leader rule's ask in a boss zone does not stop the walker once the bot is out of it (#335).
   - Sidesteps and wall detours are deleted.
 - **Pacing**:
   - one `MoveBackwardToLocation` per segment, through the frame pacer (`gateNone`);

@@ -268,7 +268,8 @@ type Action struct {
 	item int32
 	// skill is the skill a cast casts.
 	skill int32
-	// walk marks a move that is one of the walker's segments (goTo).
+	// walk marks a move that is one of the walker's segments (goTo), or
+	// the walker's own /unstuck.
 	walk bool
 }
 

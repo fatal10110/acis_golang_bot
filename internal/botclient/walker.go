@@ -97,13 +97,6 @@ const (
 	// walkDropCells is how far around one-way-out ground, in cells, the
 	// walker looks for the abstract SCC it drops into.
 	walkDropCells = 32
-	// escapeEvery and escapeTries are the breaker of the walker's /unstuck
-	// on isolated ground: at most escapeTries asks in escapeEvery from the
-	// first, and none for escapeEvery after a recall it asked landed. Between
-	// two asks the walker waits escapeRetry from the ask, or from the end of
-	// the recall cast when one ran.
-	escapeEvery = 10 * time.Minute
-	escapeTries = 3
 	// defaultCollisionHeight is a walker's collision height before its
 	// UserInfo reports one.
 	defaultCollisionHeight = 23
@@ -219,13 +212,11 @@ type walker struct {
 	talkFailed bool
 	// escaping is set from the /unstuck the walker asked until its landing
 	// or the wait for its recall cast runs out; escapeAt is when the last
-	// went out, escapes how many went out since escapeFirst (the breaker's
-	// window). escapeRefused is set by the server's petition refusal, which
-	// asking again does not change, until the bot is teleported.
+	// went out (the brain's escapeBreaker counts them). escapeRefused is set
+	// by the server's petition refusal of the walker's ask, which asking
+	// again does not change, until the bot is teleported.
 	escaping      bool
 	escapeAt      time.Time
-	escapeFirst   time.Time
-	escapes       int
 	escapeRefused bool
 	// meter measures the walk for the walking-efficiency metrics.
 	meter walkMeter
@@ -467,13 +458,17 @@ func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
 		}
 		// No abstract SCC is reachable from here (a closed pit, the restart
 		// area of acis_golang#5412): only /unstuck leaves it, unless the
-		// server refused it for good or the breaker is open.
-		if w.escapeRefused || w.escapes >= escapeTries && now.Sub(w.escapeFirst) < escapeEvery {
+		// server refused it for good or the breaker is open. Between two
+		// asks the walker waits escapeRetry from the ask, or from the end of
+		// the recall cast when one ran.
+		if w.escapeRefused || b.escape.open(now) {
 			w.unreachable(reasonIsolated)
 			return Action{}, false
 		}
 		w.escaping = true
-		return escapeAction(), false
+		a := escapeAction()
+		a.walk = true
+		return a, false
 	default:
 		to, same, ok := w.target(w.dest)
 		switch {
@@ -671,12 +666,8 @@ func (w *walker) sent(a Action, now time.Time) {
 		// route no longer starts where the bot stands.
 		w.seg, w.route = segment{}, nil
 		w.meter = walkMeter{}
-	case a.kind == actUserCommand && w.escaping:
+	case a.kind == actUserCommand && a.walk:
 		w.escapeAt = now
-		if w.escapeFirst.IsZero() || now.Sub(w.escapeFirst) >= escapeEvery {
-			w.escapeFirst, w.escapes = now, 0
-		}
-		w.escapes++
 	}
 }
 
@@ -755,7 +746,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			// only repeats the five-minute cast, so the breaker opens for
 			// escapeEvery from the landing.
 			if w.escaping {
-				w.escapeFirst, w.escapes = now, escapeTries
+				b.escape.landed(now)
 			}
 			w.seg, w.route, w.escaping = segment{}, nil, false
 			w.escapeRefused = false
@@ -764,8 +755,9 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 	case SystemMessage:
 		// The server refuses /unstuck in the olympiad, observer mode, the
 		// festival, jail and boss zones (network/usercommand.go
-		// userCommandEscape): the walker stops asking until a teleport.
-		if e.ID == msgNoUnstuckPetition && !w.escapeRefused {
+		// userCommandEscape): the walker stops asking until a teleport. A
+		// refusal of rule "leader"'s ask is that rule's own (#335).
+		if e.ID == msgNoUnstuckPetition && b.escape.walker && !w.escapeRefused {
 			w.escaping, w.escapeRefused = false, true
 			b.log.Warn("unstuck refused: walks off isolated ground given up until a teleport")
 		}
