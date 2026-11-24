@@ -66,6 +66,9 @@ const (
 	OpRequestPrivateStoreBuy byte = opGameRequestPrivateStoreBuy
 	OpRequestHennaEquip      byte = opGameRequestHennaEquip
 	OpRequestHennaUnequip    byte = opGameRequestHennaUnequip
+	// OpRequestEnchantItem's first field is the item it enchants
+	// (encodeRequestEnchantItem).
+	OpRequestEnchantItem byte = opGameRequestEnchantItem
 	// OpMoveBackwardToLocation's first fields are the X and Y it goes to
 	// (encodeMoveBackwardToLocation).
 	OpMoveBackwardToLocation byte = opGameMoveBackwardToLocation

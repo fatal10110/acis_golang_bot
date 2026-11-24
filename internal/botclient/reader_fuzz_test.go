@@ -54,6 +54,8 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(packet(opGamePrivateStoreMsgSell, selfID, "Loot for sale"))
 	f.Add(packet(opGameHennaEquipList, int32(50000), int32(2), int32(1), int32(1), int32(4445), int32(10), int32(37000), int32(1)))
 	f.Add(packet(opGameHennaInfo, byte(0), byte(1), byte(0), byte(0), byte(0), byte(0), int32(2), int32(1), int32(1), int32(1)))
+	f.Add(packet(opGameChooseInventoryItem, int32(955)))
+	f.Add(packet(opGameEnchantResult, int32(0)))
 	f.Add([]byte{0xfe, 0x2e, 0x00})
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		if len(raw) == 0 {

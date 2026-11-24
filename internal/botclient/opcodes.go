@@ -197,6 +197,17 @@ const (
 	opGameRequestHennaUnequip = 0xbf
 )
 
+// Enchanting, both directions: ChooseInventoryItem and EnchantResult
+// (serverpackets/enchant.go), and RequestEnchantItem
+// (clientpackets/wiresafe.go, item_ops.go). The scroll itself goes out as a
+// UseItem.
+const (
+	opGameChooseInventoryItem = 0x6f
+	opGameEnchantResult       = 0x81
+
+	opGameRequestEnchantItem = 0x58
+)
+
 // Questions and slash commands, both directions: ConfirmDlg
 // (serverpackets/confirmdlg.go), DlgAnswer (clientpackets/wiresafe.go,
 // dlganswer.go) and RequestUserCommand (clientpackets/usercommand.go).
