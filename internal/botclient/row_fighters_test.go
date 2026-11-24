@@ -177,6 +177,14 @@ func TestRowDF(t *testing.T) {
 		t.Error("the sustain Drain Health uses the opener up")
 	}
 
+	// Seated when HP goes critical in combat: the sustain Drain Health
+	// waits for the stand, as the server refuses a seated cast.
+	b = rowBrain(t, DarkFighter.ID, 15, "", skillDrainHealth)
+	b.world.Self.Sitting, b.world.Self.HP = true, 20
+	if a, ok := b.sustain(now); !ok || a.kind != actSitStand {
+		t.Errorf("seated sustain = %v kind %d skill %d, want a stand", ok, a.kind, a.skill)
+	}
+
 	for _, tt := range []struct {
 		name  string
 		class int32

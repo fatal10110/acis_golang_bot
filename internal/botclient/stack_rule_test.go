@@ -246,6 +246,18 @@ func TestFightOpener(t *testing.T) {
 			}
 		})
 	}
+	// The server gives a dead NPC's object id to its respawn: the opener
+	// goes out again on it once the id died or left.
+	for _, ev := range []Event{Die{ObjectID: npcID}, DeleteObject{ObjectID: npcID}} {
+		b := kitBrain(t, ClassKit{}, 80)
+		b.opened = npcID
+		if err := b.handle([]Event{ev}, now); err != nil {
+			t.Fatal(err)
+		}
+		if b.opened != 0 {
+			t.Errorf("after %T the target is still opened", ev)
+		}
+	}
 }
 
 // TestStepCharges checks a Charges step passes only with the force charges

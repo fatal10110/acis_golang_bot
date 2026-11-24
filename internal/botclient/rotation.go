@@ -109,6 +109,11 @@ func (b *Brain) sustain(now time.Time) (Action, bool) {
 			if id == 0 || id == s.ObjectID || !b.mayFight(id, now) {
 				continue
 			}
+			// The server refuses a seated cast (magic_skill.go, ErrSitting):
+			// stand up first, as castOn does.
+			if s.Sitting {
+				return b.toggle(now), true
+			}
 			return b.castStep(id, step.Skill, false, now), true
 		}
 	}

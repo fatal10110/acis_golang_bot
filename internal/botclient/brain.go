@@ -545,6 +545,11 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.engaged {
 				b.engaged = 0
 			}
+			// The server gives a dead NPC's object id to its respawn
+			// (data/manager/npcs_respawn.go): that one is opened afresh.
+			if e.ObjectID == b.opened {
+				b.opened = 0
+			}
 			// A dead bot frees its spot for another and avoids it for a
 			// while; it picks again once back on its feet.
 			if e.ObjectID == self {
@@ -555,6 +560,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
+			if e.ObjectID == b.opened {
+				b.opened = 0
+			}
 		case NpcHtmlMessage:
 			b.trainEvent(ev, now)
 			b.tripPage(e, now)
