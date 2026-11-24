@@ -134,13 +134,13 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 // click target and passes CanMove and the corridor test. When none does, a
 // swimming planner at a waypoint in water takes the farthest its swim line
 // reaches (swimLeg). With nothing, or a segment shorter than farShort, it
-// tries the cells farther along the path while the route's farWork lasts,
-// farthest first: one passing CanMove whose stretches failing the corridor
+// tries the cells past exactCells along the path while the route's farWork
+// lasts, farthest first: one passing CanMove whose stretches failing the corridor
 // test total at most farStretch and that passes the exact check over them is
 // taken; a candidate passing within farMiss of where an earlier one's exact
 // check failed is skipped. With nothing yet, it
-// takes the farthest not yet tried within exactCells that passes CanMove
-// and the full step-chain check. None crosses a column of p.Avoid but the
+// takes the farthest within exactCells that passes CanMove and the full
+// step-chain check. None crosses a column of p.Avoid but the
 // route's endpoints'. When even the next cell fails, it reports that edge.
 func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (edgeKey, bool) {
 	n := len(cells) - 1
@@ -183,12 +183,10 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 				}
 			}
 		}
-		tried := i + exactCells + 1 // the nearest farther candidate tried
 		if p.Lmax > 0 && !(p.swims() && p.inWater(s.points[i])) && (next < 0 || segLen(s.points[i], s.points[next]) < farShort) {
 			far := -1
 			s.misses = s.misses[:0]
-			for j := n; j > max(next, i) && far < 0 && s.work < s.farEnd; j-- {
-				tried = j
+			for j := n; j > max(next, i+exactCells) && far < 0 && s.work < s.farEnd; j-- {
 				a, b := s.points[i], s.points[j]
 				if !p.inReach(s, cells, i, j, n) || p.avoided(s, a, b, from, to) || s.missed(a, b) {
 					continue
@@ -210,7 +208,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 			}
 			next = max(next, far)
 		}
-		for j := min(n, i+exactCells, tried-1); j > i && next < 0; j-- {
+		for j := min(n, i+exactCells); j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
 			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.stepChainOK(s, a, b) {
 				next = j
