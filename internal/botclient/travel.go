@@ -60,6 +60,13 @@ type TravelMap struct {
 	// (datapack.Skill.CastRange): what the fight sizes a cast's stand
 	// point with (Brain.castReach).
 	castRanges map[datapack.SkillRef]int32
+	// skillStacks are the stack effect of every skill level with one
+	// (indexSkillStacks), by skill id then level: what the stack rule weighs
+	// a buff against the effects on its target with (Brain.stackAllows).
+	skillStacks map[int32]map[int32]stackEffect
+	// trainers are the trainers of each class (indexTrainers): what the
+	// build learns at (Brain.build).
+	trainers map[int32][]int32
 	// shots are the datapack's player shots (indexShots), weapons what
 	// each weapon template charges (indexWeapons), and spawnedSold the
 	// items spawned merchants sell (spawnedSold).
@@ -129,6 +136,8 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.heals = indexPotionHeals(dp.EtcItems, dp.Skills)
 	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
 	m.castRanges = indexCastRanges(dp.Skills)
+	m.skillStacks = indexSkillStacks(dp.Skills)
+	m.trainers = indexTrainers(dp.NPCs)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.Items, dp.EtcItems)

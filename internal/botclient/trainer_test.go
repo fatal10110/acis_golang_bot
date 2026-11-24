@@ -191,8 +191,12 @@ func newTrainerBrain(t *testing.T, sp int32) *Brain {
 	s := &b.world.Self
 	s.ClassID, s.Level, s.SP = classHumanMystic, 15, sp
 	b.world.Apply(NPCInfo{ObjectID: trainerObj, NPCID: 30022, Pos: Point{X: 300}}, t0)
+	b.cfg.Travel = &TravelMap{trainers: testTrainers}
 	return b
 }
+
+// testTrainers are the trainers of the tests' mystics (indexTrainers).
+var testTrainers = map[int32][]int32{classHumanMystic: {30022, 30030}, classCleric: {30022, 30030}}
 
 // trainerStep is one step of a visit: events in, then a decision.
 type trainerStep struct {
@@ -423,8 +427,8 @@ func TestRuleTrainStarts(t *testing.T) {
 // TestDefaultPersonaSkills checks the support skills of the default
 // persona's builds against the classes the plan names: healers learn Heal,
 // Battle Heal, Might and Shield, then Wind Strike; orc mystics their buffs,
-// then Life Drain and Chill Flame, and no heal; every listed class has
-// trainers. The persona overrides none of them.
+// then Life Drain and Chill Flame, and no heal. The persona overrides none
+// of them; the trainers come from the datapack (TestTrainersShipped).
 func TestDefaultPersonaSkills(t *testing.T) {
 	p := DefaultPersona()
 	if p.LearnSkills != nil || p.Trainers != nil {
@@ -438,13 +442,5 @@ func TestDefaultPersonaSkills(t *testing.T) {
 	}
 	if got := kit(classOrcMystic).Skills; !slices.Equal(got, []int32{skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame}) {
 		t.Errorf("orc mystic skills = %v, want buffs then attack spells", got)
-	}
-	for c := range mysticSkills {
-		if len(kit(c).Trainers) == 0 {
-			t.Errorf("class %d has no trainers", c)
-		}
-	}
-	if slices.Contains(kit(classHumanMystic).Trainers, 32098) {
-		t.Error("human mystic trainers list 32098, whose page has no skill list link")
 	}
 }

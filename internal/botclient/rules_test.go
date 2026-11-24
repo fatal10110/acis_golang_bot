@@ -18,14 +18,29 @@ func (r *recordSender) Send(p []byte) error {
 
 // newTestBrain is a started brain at t0 over newTestWorld with full HP and
 // MP, playing p with no idle drift unless p asks for it.
+// newTestBrain is a brain of persona p over a test world, its character a
+// level-1 Human Fighter at full HP and MP. A persona with a role plays
+// supportKit, the rules' fixture kit, until its class or level changes and
+// the build compiles the real row.
 func newTestBrain(t *testing.T, p Persona) (*Brain, *recordSender) {
 	t.Helper()
 	w := newTestWorld(t)
 	w.Self.HP, w.Self.MaxHP, w.Self.MP, w.Self.MaxMP = 100, 100, 100, 100
 	out := &recordSender{}
 	b := NewBrain(w, NewEvents(64), out, newFakeClock(t0), BrainConfig{Persona: p, Rand: rand.New(rand.NewPCG(1, 2))})
+	if p.Role != RoleNone {
+		withKit(b, supportKit)
+	}
 	b.start(t0)
 	return b, out
+}
+
+// supportKit is the support persona's whole table from before builds
+// (docs/plan.md, support persona): the rules' fixture kit (newTestBrain).
+var supportKit = ClassKit{
+	Rotation: []Step{{Skill: skillWindStrike}, {Skill: skillChillFlame}, {Skill: skillLifeDrain}},
+	Heals:    []Heal{{Skill: skillBattleHeal, HP: 35}, {Skill: skillHeal, HP: 60}},
+	Buffs:    []Buff{{Skill: skillMight}, {Skill: skillShield}, {Skill: skillSoulShield}, {Skill: skillChantBattle, Party: true}},
 }
 
 // moveTarget is the destination of a MoveBackwardToLocation payload.

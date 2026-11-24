@@ -174,10 +174,11 @@ func (b *Brain) knowsAttackSkill() bool {
 	return false
 }
 
-// fight attacks id: select it, then cast the first ready step of the
-// build's rotation whose gates pass, with MP at MPReserve or more, or click
-// it once for melee as the kit's Melee policy allows, side stepping when
-// stuck. Either goes
+// fight attacks id: select it, switch a combat toggle that is due
+// (toggleCast), then cast the first ready step of the build's rotation
+// whose gates pass (rotationCast: self-target steps, sustain, then attacks
+// with MP at MPReserve or more), or click it once for melee as the kit's
+// Melee policy allows, side stepping when stuck. Either goes
 // out only while the straight line to id is open, else the bot walks to a
 // stand point first (engageWalk). A target out of attempts is blacklisted
 // instead.
@@ -195,24 +196,12 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	}
 	forced := b.forced(id)
 	bd := b.build()
+	if a, ok := b.toggleCast(bd.Kit.Toggles, true, now); ok {
+		return a
+	}
 	underReserve := below(s.MP, s.MaxMP, bd.Thresholds.MPReserve)
-	if rot := bd.Kit.Rotation; !underReserve && len(rot) > 0 {
-		st := b.stepState(id, rot, now)
-		for _, step := range rot {
-			skill := step.Skill
-			if step.Target != TargetEnemy || !step.passes(st) || !b.world.SkillReady(skill, now) {
-				continue
-			}
-			if b.exhausted(id, now) {
-				return Action{}
-			}
-			if r, approach := b.castReach(skill); approach {
-				if a, walk := b.engageWalk(id, r, now); walk {
-					return a
-				}
-			}
-			return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, forced), object: id, skill: skill}
-		}
+	if a, ok := b.rotationCast(id, bd.Kit.Rotation, underReserve, now); ok {
+		return a
 	}
 	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) {
 		return Action{}

@@ -25,32 +25,37 @@ func stepSkills(steps []Step) []int32 {
 }
 
 // TestCompileBuild compiles every starting class and one profession for
-// every role over the values from before builds (D24): each line keeps the
-// part of the support table it can know, the orc mystic's spells from level
-// 7, a fighter the whole table; the class's skills, trainers, gear entry and
-// dyes; its race's professions only; the support thresholds. RoleNone
-// compiles nothing.
+// every role: a mystic line keeps the part of the support table it can
+// know (D24), the orc mystic's spells from level 7, with the support
+// thresholds; a fighter line its base row's steps from the level reached,
+// buffs, Relax, skills and thresholds (S6); every class its gear entry and
+// dyes and its race's professions only, and no trainers (they come from the
+// travel map). RoleNone compiles nothing.
 func TestCompileBuild(t *testing.T) {
 	if bd := CompileBuild(RaceHuman, classHumanMystic, 20, RoleNone); !reflect.DeepEqual(bd, Build{}) {
 		t.Errorf("RoleNone build = %+v, want the zero Build", bd)
 	}
 	caster := []int32{skillWindStrike}
-	support := []int32{skillWindStrike, skillChillFlame, skillLifeDrain}
+	attacks := []int32{skillPowerShot, skillMortalBlow, skillPowerStrike}
 	tests := []struct {
 		class, level int32
 		rotation     []int32
 		heals, buffs int
+		kit          ClassKit
 	}{
-		{class: HumanFighter.ID, level: 1, rotation: support, heals: 2, buffs: 4},
+		{class: HumanFighter.ID, level: 1, kit: humanFighterKit},
+		{class: HumanFighter.ID, level: 5, rotation: attacks, kit: humanFighterKit},
 		{class: HumanMystic.ID, level: 1, rotation: caster, heals: 2, buffs: 2},
-		{class: ElvenFighter.ID, level: 10, rotation: support, heals: 2, buffs: 4},
+		{class: ElvenFighter.ID, level: 10, rotation: attacks, buffs: 2, kit: elvenFighterKit},
+		{class: ElvenFighter.ID, level: 15, rotation: append([]int32{skillElementalHeal}, attacks...), buffs: 2, kit: elvenFighterKit},
 		{class: ElvenMystic.ID, level: 10, rotation: caster, heals: 2, buffs: 2},
-		{class: DarkFighter.ID, level: 10, rotation: support, heals: 2, buffs: 4},
+		{class: DarkFighter.ID, level: 10, rotation: attacks, buffs: 2, kit: darkFighterKit},
+		{class: DarkFighter.ID, level: 15, rotation: append([]int32{skillDrainHealth, skillDrainHealth}, attacks...), buffs: 2, kit: darkFighterKit},
 		{class: DarkMystic.ID, level: 10, rotation: caster, heals: 2, buffs: 2},
-		{class: OrcFighter.ID, level: 10, rotation: support, heals: 2, buffs: 4},
+		{class: OrcFighter.ID, level: 10, rotation: []int32{skillIronPunch, skillPowerStrike}, kit: orcFighterKit},
 		{class: OrcMystic.ID, level: 6, rotation: nil, heals: 0, buffs: 2},
 		{class: OrcMystic.ID, level: 7, rotation: []int32{skillChillFlame, skillLifeDrain}, heals: 0, buffs: 2},
-		{class: DwarvenFighter.ID, level: 10, rotation: support, heals: 2, buffs: 4},
+		{class: DwarvenFighter.ID, level: 10, kit: dwarvenFighterKit},
 		{class: classShillienOracle, level: 25, rotation: caster, heals: 2, buffs: 2},
 		{class: classWarcryer, level: 45, rotation: []int32{skillChillFlame, skillLifeDrain}, heals: 0, buffs: 2},
 	}
@@ -59,13 +64,17 @@ func TestCompileBuild(t *testing.T) {
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
 			bd := CompileBuild(race, tt.class, tt.level, role)
 			k := bd.Kit
-			if bd.Role != role || bd.Branch != 0 || bd.Thresholds != defaultThresholds {
+			wantTh, wantSkills := defaultThresholds, mysticSkills[tt.class]
+			if tt.kit.Thresholds != (Thresholds{}) {
+				wantTh, wantSkills = tt.kit.Thresholds, tt.kit.Skills
+			}
+			if bd.Role != role || bd.Branch != 0 || bd.Thresholds != wantTh || k.Relax != tt.kit.Relax {
 				t.Errorf("class %d %v: role %v branch %d thresholds %+v", tt.class, role, bd.Role, bd.Branch, bd.Thresholds)
 			}
 			if got := stepSkills(k.Rotation); !slices.Equal(got, tt.rotation) || len(k.Heals) != tt.heals || len(k.Buffs) != tt.buffs {
 				t.Errorf("class %d level %d %v: rotation %v heals %d buffs %d, want %v %d %d", tt.class, tt.level, role, got, len(k.Heals), len(k.Buffs), tt.rotation, tt.heals, tt.buffs)
 			}
-			if !slices.Equal(k.Skills, mysticSkills[tt.class]) || !slices.Equal(k.Trainers, mysticTrainers[tt.class]) ||
+			if !slices.Equal(k.Skills, wantSkills) || k.Trainers != nil ||
 				!reflect.DeepEqual(k.Gear, gearClassOf(defaultGearClasses(), tt.class)) || !slices.Equal(k.Dyes, defaultDyeTable()[tt.class]) ||
 				k.Flee != 0 || k.Melee != MeleeAlways {
 				t.Errorf("class %d %v: kit %+v, want the class's tables", tt.class, role, k)
@@ -107,6 +116,7 @@ func TestCompileBuildStepRole(t *testing.T) {
 // on a UserInfo that changed its class or level.
 func TestBuildRecompiles(t *testing.T) {
 	b, _ := newTestBrain(t, DefaultPersona())
+	b.builtOK = false // the entry compile, not newTestBrain's fixture kit
 	if got := b.build(); got.Role != RoleSupport || got.Race.Professions[HumanFighter.ID] != supportBuilds[HumanFighter.ID] {
 		t.Fatalf("entry build = %+v, want the human fighter's support build", got)
 	}

@@ -154,6 +154,13 @@ type Brain struct {
 	// is its skill.
 	castAt    time.Time
 	castSkill int32
+	// opened is the last target an attack of the bot went out on: a melee
+	// click or an attack step's cast (Action.opens). An Opener step casts
+	// only on another (stepState.fresh).
+	opened int32
+	// skillToggledAt is when a cast of each toggle skill last went out
+	// (toggleSettling).
+	skillToggledAt map[int32]time.Time
 	// progressAt is the last sign an attack is getting somewhere: an
 	// attempt sent, a swing or cast of the bot's own, a move toward the
 	// target. Engaged and still past stuckAfter, the bot side steps.
@@ -538,6 +545,11 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.engaged {
 				b.engaged = 0
 			}
+			// The server gives a dead NPC's object id to its respawn
+			// (data/manager/npcs_respawn.go): that one is opened afresh.
+			if e.ObjectID == b.opened {
+				b.opened = 0
+			}
 			// A dead bot frees its spot for another and avoids it for a
 			// while; it picks again once back on its feet.
 			if e.ObjectID == self {
@@ -548,6 +560,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
+			if e.ObjectID == b.opened {
+				b.opened = 0
+			}
 		case NpcHtmlMessage:
 			b.trainEvent(ev, now)
 			b.tripPage(e, now)
@@ -784,10 +799,19 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.metrics.Sent()
 	switch a.kind {
 	case actAttack:
-		b.engaged = a.object
+		b.engaged, b.opened = a.object, a.object
 		b.attempt(a.object, now)
 	case actCast:
 		b.castAt, b.castSkill = now, a.skill
+		if a.opens {
+			b.opened = a.object
+		}
+		if b.isToggle(a.skill) {
+			if b.skillToggledAt == nil {
+				b.skillToggledAt = make(map[int32]time.Time)
+			}
+			b.skillToggledAt[a.skill] = now
+		}
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
 		b.buffSent(a, now)

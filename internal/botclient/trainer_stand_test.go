@@ -42,7 +42,7 @@ func TestTrainerClosesIn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTrainerWalkBrain(t)
-			b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {tt.at}}}
+			b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {tt.at}}, trainers: testTrainers}
 			b.world.Apply(NPCInfo{ObjectID: trainerObj, NPCID: 30022, Pos: tt.at}, t0)
 			runTrainerSteps(t, b, tt.steps)
 		})
@@ -56,7 +56,7 @@ func TestTrainerClosesIn(t *testing.T) {
 func TestTrainerOutOfSightWalksOn(t *testing.T) {
 	trainer := Point{X: 5000}
 	b := newTrainerWalkBrain(t)
-	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {trainer}}}
+	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {trainer}}, trainers: testTrainers}
 	b.world.Apply(NPCInfo{ObjectID: trainerObj, NPCID: 30022, Pos: trainer}, t0)
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "segment to the stand point", at: time.Second, wantRule: "train", wantKind: actMove, wantTo: trainer, wantWithin: visitTalkRange},
