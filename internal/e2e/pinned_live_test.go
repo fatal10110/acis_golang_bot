@@ -14,19 +14,13 @@ import (
 // System messages about the character's own death penalty and its Scroll:
 // Recovery (serverpackets/systemmessage.go): a level added, with the new
 // level as its number, and sent too when a scroll lowers it to a level
-// above 0; the penalty lifted; and an item skill whose condition fails,
-// such as a scroll out of the character's level band.
+// above 0; and the penalty lifted. A scroll whose item skill condition
+// fails, such as one out of the character's level band, answers
+// msgS1CannotBeUsed.
 const (
 	msgDeathPenaltyLevel  = 1916
 	msgDeathPenaltyLifted = 1917
-	msgCannotBeUsed       = 113
 )
-
-// recoveryReuse is how long strip waits between two Scrolls: Recovery:
-// the scroll's reuse_delay is 10 s (data/xml/items/8500-8599.xml), and the
-// server drops a use still cooling in silence (network/inventory.go,
-// ItemDisabled). One read per reuse is also all strip sends meanwhile.
-const recoveryReuse = 10*time.Second + 500*time.Millisecond
 
 // entryDeathPenalty is the death penalty level of the EtcStatusUpdate in
 // burst, c.Self.Burst: the server sends the character's own ahead of its
@@ -103,7 +97,7 @@ func liftDeathPenalty(t *testing.T, ctx context.Context, c *Client, gm *GMClient
 				penalty = m.Number
 			case m.ID == msgDeathPenaltyLifted:
 				penalty = 0
-			case m.ID == msgCannotBeUsed:
+			case m.ID == msgS1CannotBeUsed:
 				refused = true
 			default:
 				return false
@@ -121,7 +115,10 @@ func liftDeathPenalty(t *testing.T, ctx context.Context, c *Client, gm *GMClient
 		if penalty == 0 {
 			break
 		}
-		if err := c.Watch(ctx, time.Until(read.Add(recoveryReuse)), func(ev botclient.Event) { applyInventory(inv, ev) }); err != nil {
+		// The server drops a read still cooling in silence (network/
+		// inventory.go, ItemDisabled), so strip waits out the scroll's reuse,
+		// as the bot does; one read per reuse is all it sends meanwhile.
+		if err := c.Watch(ctx, time.Until(read.Add(botclient.RecoveryReuse)), func(ev botclient.Event) { applyInventory(inv, ev) }); err != nil {
 			t.Fatalf("strip %s: death penalty level %d: the scroll's reuse: %v", c.Self.Name, penalty, err)
 		}
 	}
@@ -138,5 +135,5 @@ func gmTopUp(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl, w
 	if have < want {
 		gmGive(t, ctx, gm, f, tmpl, want-have)
 	}
-	t.Logf("%s carried %d of %d, topped up to %d", f.name, have, tmpl, max(have, want))
+	t.Logf("%s carried %d of template %d, topped up to %d", f.name, have, tmpl, max(have, want))
 }

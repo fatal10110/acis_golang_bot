@@ -79,6 +79,10 @@ func EncodeUseItem(objectID int32) []byte { return encodeUseItem(objectID) }
 // reads to lift a death penalty level (see recoveryScroll).
 func RecoveryScroll(level int32) int32 { return recoveryScroll(level) }
 
+// RecoveryReuse is how long a reader waits between two Scrolls: Recovery
+// (see recoveryReuse).
+const RecoveryReuse = recoveryReuse
+
 // opGameRequestDestroyItem destroys an item (clientpackets/wiresafe.go).
 // Only the harness sends it: a bot never destroys what it carries.
 const opGameRequestDestroyItem = 0x59
