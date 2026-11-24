@@ -17,13 +17,14 @@ func TestParsePersonaFlag(t *testing.T) {
 		want    string
 		wantErr string
 	}{
-		{"default", base, "support", ""},
+		{"default", base, "farmer", ""},
+		{"farmer", append(base, "-persona", "farmer"), "farmer", ""},
 		{"town", append(base, "-persona", "town", "-datapack", "dp"), "town", ""},
 		{"town without datapack", append(base, "-persona", "town"), "", "-datapack"},
 		{"merchant", append(base, "-persona", "merchant", "-datapack", "dp"), "merchant", ""},
 		{"merchant without datapack", append(base, "-persona", "merchant"), "", "-datapack"},
 		{"support", append(base, "-persona", "support"), "support", ""},
-		{"unknown", append(base, "-persona", "farmer"), "", "want one of support, town, merchant"},
+		{"unknown", append(base, "-persona", "bogus"), "", "want one of farmer, support, town, merchant"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,6 +62,7 @@ func TestPresetBrain(t *testing.T) {
 		wantSpots  bool
 		wantBudget int64
 	}{
+		{"farmer", false, true, 0},
 		{"support", false, true, 0},
 		{"town", true, false, 0},
 		{"merchant", false, true, 70000},

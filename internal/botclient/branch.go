@@ -168,6 +168,32 @@ func chooseLine(class int32, role Role, c BranchChoice) (line, bool) {
 	return line{first: parent, second: class}, true
 }
 
+// BranchPins are the first professions of base class the branch tables
+// name, every role's, ascending: the branches a bot of base may be pinned to
+// (BrainConfig.Branch, D22); none for a class that is not a base class.
+func BranchPins(base int32) []int32 {
+	var pins []int32
+	for _, r := range tableOrder {
+		for _, l := range branchTables[r][base] {
+			if !slices.Contains(pins, l.first) {
+				pins = append(pins, l.first)
+			}
+		}
+	}
+	slices.Sort(pins)
+	return pins
+}
+
+// BranchBase is the base class pin is a branch of (BranchPins); ok is false
+// for a class the tables name as no base class's first profession.
+func BranchBase(pin int32) (base int32, ok bool) {
+	parent, ok := datapack.ParentClass(pin)
+	if !ok || parent < 0 || !slices.Contains(BranchPins(parent), pin) {
+		return 0, false
+	}
+	return parent, true
+}
+
 // isChildOf reports whether class upgrades from parent.
 func isChildOf(class, parent int32) bool {
 	p, ok := datapack.ParentClass(class)

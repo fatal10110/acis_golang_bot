@@ -237,7 +237,9 @@ its race, its class and its persona's role: its class's skills gated by its weap
 kinds and sets that pay off for its race, a profession fitting its race and role, and thresholds
 and spots from a character model fed by its own `UserInfo` stats. It replaces the support
 persona's role by class (below) and the M8 build table (`docs/items.md` section 2); its spec is
-`docs/strategy.md` "Behavior per class". A new `farmer` preset becomes the default (D21).
+`docs/strategy.md` "Behavior per class". The `farmer` preset (Damage, farms alone) is the default
+`-persona`, the panel's first preset and the imported bots' preset (D21, S9 #331); the panel pins a
+bot's branch (D22, `POST /api/bots/{account}/branch`) and shows its build beside its class.
 
 **Walking, every persona** (D13, M7, `docs/navigation.md`): a bot finds its own routes on its copy
 of the server's geodata and sends only segments it checked with the copied `CanMove` and step
@@ -445,7 +447,8 @@ crash never blocks a restart) on its data directory (`-data-dir`) for its whole 
 never share a registry. Running a swarm on a prefix the panel's registry holds is the owner's call
 to avoid: both would log in the same accounts and kick each other.
 
-- Personas are presets in one catalog: `support`, `town`, and `merchant` (the `damage` role with a
+- Personas are presets in one catalog: `farmer` (the default, D21: the `damage` role, farms the
+  datapack's spots alone), `support`, `town`, and `merchant` (the `damage` role with a
   store budget, D21: it farms the datapack's spots for loot and sells it in a town store; a `town` bot loots
   nothing, so it has nothing to sell), extended as personas land. A preset is a persona plus its
   options. Presets that need the datapack (`town`, `merchant`, farming spots) are offered only when
@@ -516,8 +519,8 @@ to avoid: both would log in the same accounts and kick each other.
   default marker), which the registry records. Passwords are derived from the secret file, so the
   home run imports with the secret file that swarm used (the Hetzner host's `/etc/acis-bots/secret`,
   copied to the owner's machine with mode 0600); another secret would make every imported login a
-  refused credential. Imported bots have no known name, the "never create" flag and the `support`
-  preset (what that swarm ran); the first login adopts the character with a derived name and records
+  refused credential. Imported bots have no known name, the "never create" flag and the `farmer`
+  preset (`ImportPreset`, D21; `support` before M10, which bots already imported keep); the first login adopts the character with a derived name and records
   its name and its class, read from `CharSelectInfo` (today the class id there is read and
   discarded). The import moves prefix P's counter past N, also when P is the panel's own prefix, and
   a new bot never takes an account the registry already holds.

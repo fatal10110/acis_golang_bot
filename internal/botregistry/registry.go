@@ -64,6 +64,10 @@ type Bot struct {
 	// one of its derived names, never creates one.
 	NeverCreate bool   `json:"never_create,omitempty"`
 	Preset      string `json:"preset"`
+	// Branch is the pinned branch, a first profession's class id
+	// (botclient.BranchPins), 0 for none: while its character is a base
+	// class the bot heads for it instead of its account's draw (D22).
+	Branch int32 `json:"branch,omitempty"`
 	// Online is whether the bot should be in the world: a panel start
 	// restores the bots marked online.
 	Online bool `json:"online"`
