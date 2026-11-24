@@ -7,6 +7,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
 const (
@@ -16,7 +17,13 @@ const (
 	movingLeg = 300
 	// movingNear is how near the route's end the bot ends the measure: the
 	// GM stops pacing and the bot settles in its slot.
-	movingNear = 800
+	movingNear = 400
+	// movingSight is how far from the route's end the bot starts: within
+	// one world region (2048, acis_golang world/grid.go regionSize) the
+	// two are in neighbouring regions and see each other, so the bot
+	// notices each of the GM's legs rather than its PartyMemberPosition
+	// every 12 s.
+	movingSight = 1900
 	// movingDelay is the bot's follow delay in the scenario: long, so a
 	// re-path is pending for most of each leg and a hold through it shows.
 	movingDelay = 1500 * time.Millisecond
@@ -28,9 +35,10 @@ const (
 
 // TestLiveFollowMovingLeader measures a follower walking a long route to a
 // leader that keeps moving (#306, docs/walking.md "Follower and moving
-// destinations"): TestLiveWalkEfficiency's town route, with the GM pacing
-// movingLeg back and forth around the route's end while the bot is farther
-// than movingNear from it, so a re-path is pending for most of the walk. It
+// destinations"): the last movingSight of TestLiveWalkEfficiency's field
+// route, the bot in sight of the GM pacing movingLeg back and forth around
+// the route's end while the bot is farther than movingNear from it, so a
+// re-path is pending for most of the walk. It
 // logs one parseable "follow-moving" line: the GM's legs, the bot's
 // segments, the gaps between its moves on the way as the server answered
 // them (a move's start less the end of the one before at run speed), and
@@ -43,7 +51,8 @@ func TestLiveFollowMovingLeader(t *testing.T) {
 	tg.Nav(t)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("wm", 1)
-	r := walkRoutes[0]
+	r := walkRoutes[1]
+	r.from = movingStart(t, tg, r)
 
 	gmTeleport(t, ctx, gm, r.from)
 	reg := botmetrics.NewRegistry()
@@ -136,4 +145,25 @@ func moveGaps(seen []Seen, id int32, run float64, until time.Time) []time.Durati
 		end = s.At.Add(seconds(dist(e.Origin, e.Dest) / run))
 	}
 	return gaps
+}
+
+// movingStart is the first waypoint of the bot's own route along r within
+// movingSight of its end, on the ground the walk takes.
+func movingStart(t *testing.T, tg *Target, r walkRoute) botclient.Point {
+	t.Helper()
+	n := tg.Nav(t)
+	// A human fighter's run speed (126) times the 141 ms Emax, and its
+	// collision height.
+	p := nav.Planner{Engine: n.Engine, Water: n.Water, Budget: 400000, Lmax: 18, CollisionHeight: 23}
+	route, err := n.Hier.Route(&p, toLocation(r.from), toLocation(r.to), nil)
+	if err != nil {
+		t.Fatalf("route %s: %v", r.name, err)
+	}
+	for _, l := range route {
+		if at := (botclient.Point{X: int32(l.X), Y: int32(l.Y), Z: int32(l.Z)}); dist(at, r.to) <= movingSight {
+			return at
+		}
+	}
+	t.Fatalf("route %s: no waypoint within %d of its end", r.name, movingSight)
+	return botclient.Point{}
 }
