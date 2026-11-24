@@ -716,7 +716,8 @@ carried potions are shared over, since the pack is fought one monster after anot
 monster of the pack hitting at once no margin of at least 1.5 would keep a level 6 squire at the
 toads it farms live. The known limit is the simultaneous case: a bot that pulls more monsters than
 it kills one at a time can still die at a spot the bound keeps (`TestLivePackSpot` died once at
-the werewolves after pulling a third wolf); a death there still teaches the bot to pass over that pack (`learnPack`).
+the werewolves after pulling a third wolf); a death there still teaches the bot to pass over that
+pack (`learnPack`).
 With no stats yet, no monster with stats, or a cast on the target it has no travel map to price,
 only the level bounds the spot.
 
