@@ -300,6 +300,8 @@ var destroyRefusals = []int32{98, 163, 1845, 557, 1065}
 // destroys every weapon, armor and jewelry piece and every arrow it
 // carries, worn or not, but one item of each template of keep, has the GM
 // give it those of keep it lacks, wears them, and logs out where end says.
+// It also lifts the death penalty earlier runs left it (liftDeathPenalty),
+// so the scenario judges the same character every run.
 // Adena and the rest stay. (A drop would leave litter in the village, and
 // the server refuses to drop the starting weapons.)
 func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items map[int32]datapack.Item, account string, class *botclient.StartingClass, end stripEnd, keep ...int32) {
@@ -346,7 +348,8 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 			t.Fatal(err)
 		}
 	}
-	if want := end.level; want > 0 && userInfo(t, c).Level != want {
+	level := userInfo(t, c).Level
+	if want := end.level; want > 0 && level != want {
 		gmNext()
 		if err := gm.OnTarget(ctx, c.Self.ObjectID, fmt.Sprintf("set level %d", want)); err != nil {
 			t.Fatal(err)
@@ -358,7 +361,9 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		}); err != nil {
 			t.Fatalf("strip %s: level %d: %v", c.Self.Name, want, err)
 		}
+		level = want
 	}
+	liftDeathPenalty(t, ctx, c, gm, inv, level, gmNext)
 
 	kept := make(map[int32]int32) // template -> object
 	var gone []int32

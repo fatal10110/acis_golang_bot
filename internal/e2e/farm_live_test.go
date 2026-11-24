@@ -38,9 +38,10 @@ func TestLiveFarmFight(t *testing.T) {
 		// adena, potions and shots is junk, dropped at any load.
 		p.Loot.Junk = junkBut(slices.Concat([]int32{adena, soulshotNG}, p.Potions)...)
 		p.Loot.DropAbove = 1
-		// The shots the GM gives every run pile up (4 each): the pinned
-		// character carries over the default pickup cap of 65 %, and the
-		// scenario checks the pickup, not the cap.
+		// The GM tops the shots up (gmTopUp), but earlier runs gave 500
+		// every run (4 weight each, #339): the pinned character still
+		// carries over the default pickup cap of 65 %, and the scenario
+		// checks the pickup, not the cap.
 		p.Loot.StopAbove = 0
 	})
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
@@ -64,7 +65,7 @@ func TestLiveFarmFight(t *testing.T) {
 	// hit.
 	gmOn(t, ctx, gm, f, "set level 5", "skill set 3 1")
 	gmGive(t, ctx, gm, f, healingPotion, 10)
-	gmGive(t, ctx, gm, f, soulshotNG, 500)
+	gmTopUp(t, ctx, gm, f, soulshotNG, 500)
 	t.Logf("%s seeded at level 5", f.name)
 
 	// The farmer may have moved on: the pack spawns at it.
