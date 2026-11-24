@@ -17,7 +17,8 @@ import (
 // the arrows of the bow's grade, at two merchants, and wears the bow only
 // once it carries the arrows (checked over its inventory events in
 // order). Then, out of town, told to assist the GM, it shoots the monster
-// the GM hits until it dies, and never reads NotEnoughArrows.
+// the GM hits until it dies, plain shots or its rotation's skills, and
+// never reads NotEnoughArrows.
 func TestLiveArrows(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -157,6 +158,11 @@ func TestLiveArrows(t *testing.T) {
 		switch e := s.Event.(type) {
 		case botclient.Attack:
 			if e.AttackerID == f.id && len(e.Hits) > 0 && e.Hits[0].TargetID == mob {
+				shots++
+			}
+		case botclient.MagicSkillUse:
+			// A skill of its rotation (S6) shot with the bow counts.
+			if e.CasterID == f.id && e.TargetID == mob {
 				shots++
 			}
 		case botclient.SystemMessage:
