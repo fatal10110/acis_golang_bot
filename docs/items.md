@@ -44,13 +44,14 @@ wrong.
 
 | Area | Today | Where |
 | --- | --- | --- |
-| Gear | Wears and buys the best piece per slot by **reference price**, of the class's weapon and armor type (`defaultGearClasses`), up to the Expertise grade. Purchases keep 10000 adena (`KeepAdena`). Enchanted pieces are never replaced. Bows wait for their arrows. | `gear.go` |
+| Gear | Wears and buys the best piece per slot by **reference price**, of the class's weapon and armor type (`defaultGearClasses`), up to the Expertise grade. Purchases keep 10000 adena (`KeepAdena`). An enchanted piece is replaced only by a piece of a higher score, its enchant counted (section 6). Bows wait for their arrows. | `gear.go` |
 | Shots | Turns on auto-use for **every** shot template it carries (`shotTemplates`, all grades). Restocks only **no-grade** soulshots (fighters, 100-500) or no-grade spiritshots (mystics, 50-200). | `items.go` `ruleShots`, `shop.go` `defaultShopPolicy` |
 | Potions | Drinks the best of 1539, 1061, 1060 below 20 % HP in combat. Restocks only Lesser Healing Potion (5-20). | `items.go` `drinkPotion`, `rules.go` `ruleCritical` |
 | Arrows | Grade-matched arrows for the worn bow and for the next bow, 200-1000. This is done right. | `arrows.go` |
 | Restocking | Only when a merchant is in sight or its spawn is within `Shop.Reach` (8000), at most every 5 min. A miss pushes the next try 5 min out. | `shop.go` `startShop` |
-| Selling | Everything not kept is junk and goes to an NPC merchant, enchant scrolls included. Merchants sell loot in their store. | `shop.go` `junk`, `store.go` |
-| Enchant, dyes, class change, crafting, buying from player stores | None. | — |
+| Selling | Everything not kept is junk and goes to an NPC merchant. Enchant scrolls of a grade and kind the bot wears are kept (section 10). Merchants sell loot in their store. | `shop.go` `junk`, `store.go` |
+| Enchant | Enchants the worn gear to the safe level in town (section 10). | `enchant.go` |
+| Dyes, class change, crafting, buying from player stores | None. | — |
 
 ### Findings
 
@@ -658,13 +659,34 @@ stores.
      nukers 44 three times, healers 46 three times (87000 each). Each row is checked against the
      shipped `hennas.xml` class lists and prices (`TestDefaultDyeTableShipped`).
 
-### 10. Enchant to the safe level (backlog)
+### 10. Enchant to the safe level (#181)
 
-Given finding 8, this is backlog, not M8 core. Enchant scrolls of a grade the bot wears would be
-kept. Out of combat, in town, the bot uses them on its best worn piece of that grade while its
-level is below +3 (+4 for full-body armor), where success is certain, so the last safe use ends at
-+3 (+4). It never goes past that unless `Enchant.Risk` is set (D6). One enchant at a
-time, the next only after `EnchantResult`. It depends on section 6's enchant-aware score.
+Shipped as rule "enchant" (`enchant.go`), after the errands that wear, buy and draw and ahead of
+every rule that walks the bot out of town.
+
+- **Scrolls.** The bot's table of the scrolls the server takes is copied from
+  `enchant/service.go:56-87` (D5): plain, crystal and blessed, weapon and armor, grades D to S.
+  The item files set no crystal grade on scrolls; `TestEnchantScrollsShipped` checks the table
+  against their names. A scroll of a grade and kind the bot wears (its weapon for a weapon
+  scroll, any worn armor piece, shield or jewelry for an armor scroll) is kept, not junk
+  (`keepsScroll`).
+- **When.** In town (within `storeTownRadius` of a travel map town, the gatekeepers' spawns), out
+  of combat, standing, with no attacker, no private store, no trade open and no gear UseItem
+  awaiting its answer.
+- **What.** The weapon first, then the armor piece whose next level adds the most score (section
+  6), the body piece first on a tie; plain and crystal scrolls before blessed ones. A piece is
+  enchanted only below +3 (+4 for full-body armor), where the server's chance is 1
+  (`enchant/service.go:556-559`, its default `SafeMax` 3 and `SafeMaxFull` 4), so the last
+  use ends at +3 (+4). `Enchant.Risk` (default off, D6) lifts that cap: past it a failure breaks
+  the piece (a blessed scroll's sets it to +0).
+- **Flow and pacing.** UseItem of the scroll, then `ChooseInventoryItem` (0x6f, the scroll's
+  template id); `RequestEnchantItem` (0x58, the target's object id), then `EnchantResult`
+  (0x81); after a success, the InventoryUpdate showing the new level (the server's 333 ms
+  ticker may send it before or after the result). One packet per answer, each waited for 5 s;
+  a silence or a result other than a success ends the exchange for `Enchant.RetryAfter` (5
+  min). Neither packet has a server flood protector; the frame pacer bounds the frames. The
+  server refuses a logout while a scroll is selected, so the request always follows the
+  window unless the target changed.
 
 ## Owner decisions
 

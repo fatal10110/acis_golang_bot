@@ -117,6 +117,8 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameRecipeItemMakeInfo:        decodeRecipeItemMakeInfo,
 	opGameHennaEquipList:            decodeHennaEquipList,
 	opGameHennaInfo:                 decodeHennaInfo,
+	opGameChooseInventoryItem:       decodeChooseInventoryItem,
+	opGameEnchantResult:             decodeEnchantResult,
 
 	opGamePrivateStoreManageListSell: decodePrivateStoreManageListSell,
 	opGamePrivateStoreListSell:       decodePrivateStoreListSell,

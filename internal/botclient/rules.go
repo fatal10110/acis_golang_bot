@@ -135,6 +135,9 @@ type Persona struct {
 	// Dyes is which dye symbols the bot wears and where it draws them
 	// (rule 9 errand "dyes").
 	Dyes DyePolicy
+	// Enchant is how the bot enchants the gear it wears with the scrolls
+	// it carries (rule "enchant").
+	Enchant EnchantPolicy
 	// Travel is how the bot travels by gatekeeper to a spot out of walking
 	// reach when the brain has a travel map (BrainConfig.Travel, rule 9
 	// errand "travel").
@@ -240,6 +243,7 @@ func DefaultPersona() Persona {
 		Newbie:         defaultNewbiePolicy(),
 		ClassChange:    defaultClassChangePolicy(),
 		Dyes:           defaultDyePolicy(),
+		Enchant:        defaultEnchantPolicy(),
 		Travel:         defaultTravelPolicy(),
 		Shop:           defaultShopPolicy(),
 		Market:         defaultMarketPolicy(),
@@ -330,6 +334,8 @@ const (
 	// (dyes.go).
 	actHennaEquip
 	actHennaUnequip
+	// actEnchant enchants an item with the selected scroll (enchant.go).
+	actEnchant
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -364,7 +370,10 @@ const (
 // page it waits for (recipeReplyTimeout). RequestHennaEquip and
 // RequestHennaUnequip have none either (network/henna.go): the dye errand
 // sends one per answer it waits for (dyeReplyTimeout), and a refused or
-// unanswered one ends the visit for DyePolicy.RetryAfter.
+// unanswered one ends the visit for DyePolicy.RetryAfter. RequestEnchantItem
+// and an enchant scroll's UseItem have none either (network/client_dispatch.go):
+// the enchant rule sends one per answer it waits for (enchantReplyTimeout),
+// and an unfinished exchange waits EnchantPolicy.RetryAfter.
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:
@@ -457,7 +466,9 @@ type rule struct {
 // is the farmer's trip home to restock (D16), after
 // the errands that already serve it and ahead of following and farming;
 // "escape" holds every rule after it while its Scroll of Escape's recall
-// runs, after "critical" so a potion still goes down.
+// runs, after "critical" so a potion still goes down. "enchant" uses the
+// enchant scrolls on the worn gear in town, after the errands that wear,
+// buy and draw and ahead of every rule that would walk the bot out of town.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -485,6 +496,7 @@ var playRules = []rule{
 	{"shop", (*Brain).ruleShop},
 	{"dyes", (*Brain).ruleDyes},
 	{"warehouse", (*Brain).ruleWarehouse},
+	{"enchant", (*Brain).ruleEnchant},
 	{"member", (*Brain).ruleMember},
 	{"recipe", (*Brain).ruleRecipe},
 	{"craft", (*Brain).ruleCraft},
