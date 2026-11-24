@@ -7,10 +7,11 @@
   channel a bot can use reaches the whole server, despite the owner's "global message": Trade and
   Shout reach only the speaker's restart region (`network/chat.go:108-122`), Hero Voice drops a
   non-hero's line (`network/chat.go:123-128`); an ad in Giran is not heard in Aden. D30.
-- **Wording:** `WTS <name> <price>[, <name> <price>]..., pm me`. The datapack reader keeps every name
-  (`datapack/items.go:238` weapons and armor, `:354` etc items), but the travel map's `itemNames`
-  holds only recipe products (`travel.go:88-91,138`, `indexProductNames`, `craftorder.go:260-277`,
-  read by the craft order's label, `craftorder.go:212`); V2b extends it to every scored template.
+- **Wording:** `WTS <name> <price>[, <name> <price>]..., pm me`. The datapack reader names only the
+  templates it keeps (`datapack/items.go:238,354`; `buildEtcItem` drops the 939 `RECIPE` scrolls,
+  `:327-352`), and the travel map's `itemNames` only recipe products (`travel.go:88-91,138`,
+  `craftorder.go:260-277`, read by the craft order's label, `:212`). V1 reads `Names` beside
+  `Prices` for every priced template; V2b fills `itemNames` from it.
   **Labels:** `2x <name> <price>` for several units (price each), `+5 <name>` enchanted,
   `<name> (C)` graded; prices as players write them, `173k`, `1.2kk`, rounded up to the shown unit,
   never below the ask. At most 100 UTF-16 units a line; labels that do not fit go to the round's next
@@ -46,9 +47,9 @@ process said fewer than `ProcessPerHour` (30) in the last hour.
 
 - `TestRestartRegion` (V2a): the copied formula against the server's at fixed points (Talking Island
   town, a point in no region).
-- `TestItemLabel` (V2b): names (every scored template in `itemNames`, not only recipe products),
-  enchant, grade, two units as `2x <name>`, `k` and `kk` rounded up to the shown unit, never below the
-  ask.
+- `TestItemLabel` (V2b): names (every scored template in `itemNames`, not only recipe products,
+  `Recipe: Halberd(60%)` among them), enchant, grade, two units as `2x <name>`, `k` and `kk` rounded
+  up to the shown unit, never below the ask.
 - `TestAdText` (V4): a line of several labels; the 100-unit clip, the rest on the next line by score.
 - `TestAdPacing` (V4; rounds by `openRound`, lines out of `decide` through rule "valuables"): two
   brains on one `AdBoard` in one region say one line per 60 s between them, also deciding at the same

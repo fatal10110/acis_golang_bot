@@ -1,6 +1,7 @@
 # The organizer
 
-`internal/botparty`, new and pure; wired in `internal/botregistry`. Ships in P5. Who is grouped
+`internal/botparty`, new and pure, ships in P5a; P5b wires it in `internal/botregistry` (supervisor
+wiring, `Sent` polling, the registry fields and pin rows, `TestSupervisorPartyTick`). Who is grouped
 with whom: [composition](composition.md). The orders it sends: [orders](orders.md).
 
 ## Plan
@@ -116,8 +117,9 @@ the supervisor's memory and form again after a panel restart.
 
 Registry (`botregistry.Bot`): `PartyMode` (`""` auto, `"off"`), and for a pin `PartyGroup` (a name)
 and `PartyLead`, written atomically like the other fields. A pin forms from its group whatever band
-and composition say, and no break above applies: a pinned bot only gone keeps its place and gets its
-slot again with a live run. While the pinned leader is offline its members get no `join`, first or
+and composition say, and of the breaks above only `DissolveParty` and a bot leaving the pin (below)
+apply: a pinned bot only gone
+keeps its place and gets its slot again with a live run. While the pinned leader is offline its members get no `join`, first or
 resent (one holding its slot stands in the join hold at most `JoinWait`, then plays its persona);
 once it is online, `join`, then `lead`. Pin orders replace an earlier standing order; a whispered
 member answers `ErrWhispered` and is ordered again once `Whispered` clears.
@@ -127,8 +129,8 @@ A bot leaves the pin, not ordered back, when its delivered slot reads empty with
 or out of `farmer` and `support`. `Plan` drops it as an auto member, dissolving the pin (an
 `unparty` to each, leader first) when it was the leader or no bot member is left; the supervisor
 rewrites the pin rows from the returned records (clearing that bot's `PartyGroup` and `PartyLead`,
-every bot's for a dissolved pin), so no pass or restart re-forms it. `PartyLeft` `timeout` gets
-`join` again once the leader is online; an auto party treats both values alike.
+every bot's for a dissolved pin, `DissolveParty` included), so no pass or restart re-forms it.
+`PartyLeft` `timeout` gets `join` again once the leader is online; an auto party treats both values alike.
 
 ## Tests
 

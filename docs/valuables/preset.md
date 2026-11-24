@@ -57,10 +57,9 @@ Live harness, at most 4 characters each, never with `-race`.
   non-magic sword (`items/0100-0199.xml:300-302`, pAtk 24, no grade); Tears of Eva is `weapon_type`
   ETC (`items/0300-0399.xml:224-227`), which `indexGear` skips for every class (`gear.go:350`). Each
   scenario checks that it wears neither after the gift.
-- **Keepers.** Talking Island (`townTI`, `internal/e2e/farm_live_test.go:114`, beside Roxxy; `toTown`,
-  `helpers_m4_live_test.go:53-57`): the first look follows the freightman Rant's (30054, 2317 from
-  Roxxy) `Chat 1`, marks him and goes on to Rolfe (30055, 2508; `spawnlist/17_25.xml:197-200`), where
-  every deposit and withdrawal happens.
+- **Keepers.** Talking Island (`townTI`, `internal/e2e/farm_live_test.go:114`; `toTown`,
+  `helpers_m4_live_test.go:53-57`): the first look marks the freightman Rant and goes on to Rolfe
+  ([keepers by town](round.md#keepers-by-town)), where every deposit and withdrawal happens.
 
 Scenarios:
 

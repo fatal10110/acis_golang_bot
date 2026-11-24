@@ -44,11 +44,11 @@ Nothing the design needs is missing on the server, so this plan files no server 
 
 | Sender | Bound |
 | --- | --- |
-| `RequestJoinParty` (leader) | One in flight per leader, listed bots and `join` players alike, with its end and retry waits per [leader](leader.md#invitations); the frame bucket (5 frames/s, burst 10: at most 15 in any second and 35 in any 5 s, `pacing.go:11-16`), well inside the server's flood limits of 160 a second and 400 in 5 s. No server gate beyond that (`network/client_dispatch.go:147`). |
+| `RequestJoinParty` (leader) | One in flight per leader ([leader](leader.md#invitations)); the frame bucket (5 frames/s, burst 10: at most 15 in any second and 35 in any 5 s, `pacing.go:11-16`), well inside the server's flood limits of 160 a second and 400 in 5 s. No server gate beyond that (`network/client_dispatch.go:147`). |
 | `RequestAnswerJoinParty` (member) | Once per invitation, as today. |
-| `RequestWithdrawParty` | Once per handover, `unparty` (only from the bot party), panel `leave`, standing order or whispered command that takes the bot out, through the `withdraw` step ([orders](orders.md#withdrawal-and-reply-in-order)), which never outlives the party it was set in; frame bucket (`network/client_dispatch.go:151`). |
+| `RequestWithdrawParty` | Once per [handover](leader.md#handover) or clear inside the bot party, through the `withdraw` step ([orders](orders.md#withdrawal-and-reply-in-order)); frame bucket (`network/client_dispatch.go:151`). |
 | `RequestOustPartyMember` (leader) | One per dropped member, one per decision; frame bucket (`network/client_dispatch.go:152`). |
-| `RequestChangePartyLeader` (a member made leader) | Per handover with a player in the party: one request, then one per `HandoverWait` (5 s) while no new leader window arrives, at most `HandoverFor` (2.5 minutes, 30 requests) before the bot withdraws ([leader](leader.md#handover)); frame bucket. No server gate beyond the leader check (`network/party.go:140-143`, `network/client_dispatch.go:324`). |
+| `RequestChangePartyLeader` (a member made leader) | One per `HandoverWait`, for at most `HandoverFor` ([leader](leader.md#handover)); frame bucket. No server gate beyond the leader check (`network/party.go:140-143`, `network/client_dispatch.go:324`). |
 | `RequestMagicSkillUse` Resurrection | The cast path as every cast: one at a time, its `MagicSkillUse` or `castTimeout`, then its reuse. |
 | Whispers (`join` replies, "invite me") | Command replies through the reply slot and `ruleCommand`: the chat gate (`chatGap`, 3 s, `pacing.go:25`; `command.go:252-258`), not `ChatPolicy.PerSender`; the `join` reply caps per [players](players.md#join); a player's "invite me" once per bot party the bot leaves. Whispers have no server gate (`command.go:15` `chatTell`, `command.go:104-106`). |
 | Supervisor orders | No packet of their own: mailbox commands every 30 s at most per bot, each causing at most the packets above. |

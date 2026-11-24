@@ -97,7 +97,7 @@ keeper `town` (`storeregistry.go:49-56`) finds no town, so the next round, `star
 `startStore` opens wherever the bot stands (`store.go:329-353`), and the store stays until sold out, a
 teleport or a `follow` (`store.go:310-314`), declining trades (`trade.go:348-351`). So a round is
 **pending** when all start conditions hold but the **short waits** (board, open, errand checks, look
-not done). A **release withdrawal** (V7b) is pending when the look is done, released stored
+not done). A **release withdrawal** (V7c) is pending when the look is done, released stored
 valuables are held, the budget is not spent and a registry town has a private keeper in reach (short
 waits: open, errands); common after a session whose budget ran out, since after the look the next
 open is 60 s away (`openDue` from `openedAt`, `warehouse.go:302-311`; `endTransaction` exempts only a
@@ -138,12 +138,13 @@ only a longer wait (a backoff) lets the store open first, the stored ones waitin
   `_WithdrawP` takes both and whose first line names all three (in a variant the gear errand wears
   the staff next and it leaves the ledger); after a reconnect no round or deposit before the look,
   and a new valuable is deposited after its round and counts stored; a round open at a session's end
-  is ended by the next as a cut-off, nothing carried over. Cap cases are V7b's.
-- `TestValuablesStoreHold` (V7a): pending on another bot's board line: no
+  is ended by the next as a cut-off, nothing carried over. Cap cases are V7c's.
+- `TestValuablesStoreHold` (V7b): pending on another bot's board line: no
   `RequestPrivateStoreManageSell`, no move; freed within `StoreHold`: the round starts, no store until
   it ends; held past it: the store with the loot only; the same for a backoff; a running market visit
   steps to its end, no opening; within `RoundGap` of the last start: the store at once; leaving and
   returning restarts the count; a running look does not count; no loot and the board held past
   `StoreHold`: the hold stops, a due supply trip starts; a 30 min backoff holds the turn `StoreHold`
   only; look not done and board held: the look starts once the open is due, its wait counting; in
-  Dion the look's visit does not reset the count.
+  Dion the look's visit does not reset the count; the opening waits for the bot's unanswered
+  `TradeRequest` up to 15 s.

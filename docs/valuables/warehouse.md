@@ -32,12 +32,12 @@ A private request goes to the nearest keeper in sight, not marked `noPrivate`, w
 `WarehouseUnreachable`, which `roundReady`'s keeper check makes rare. The errand does not read the
 round: V3a adds `Anchor` and `Reach` to a private `WarehouseRequest` (today `Withdraw`, `Deposit`,
 `Look`, `warehouse.go:176-179`), and the keeper rule reads them; rule "valuables" (V3b for the look,
-V7a for rounds and errands) fills them from the anchor and `RoundReach` (a `ValuablePolicy` default
-from V2b), so V3a stands alone. The anchor, not `storeTownRadius` (3000, `storeregistry.go:12`) of
-the town point, since in four towns no private keeper is within 3000 of it ([keepers by
-town](round.md#keepers-by-town)). A clan request keeps today's rule: nearest in sight anywhere, else
-the nearest spawn within `Reach` (8000) of the bot (`warehouse.go:585-637`, `Reach` at
-`warehouse.go:244`). The walk, `warehouseChats` and the end at the keeper are today's; rule
+V7a-V7c for rounds and errands) fills them from the anchor and `RoundReach` (a `ValuablePolicy`
+default from V2b), so V3a stands alone. The anchor, not `storeTownRadius` (3000,
+`storeregistry.go:12`) of the town point, since in four towns no private keeper is within 3000 of it
+([keepers by town](round.md#keepers-by-town)). A clan request keeps today's rule: nearest in sight
+anywhere, else the nearest spawn within `Reach` (8000) of the bot (`warehouse.go:585-637`, `Reach`
+at `warehouse.go:244`). The walk, `warehouseChats` and the end at the keeper are today's; rule
 "valuables" [walks back](round.md#back-to-the-anchor). The private link is looked for on the first
 page, then on `Chat` pages (19 first pages, e.g. Wilford 30005; 11 second pages, e.g.
 `30083-1.htm`).
@@ -100,7 +100,7 @@ The status is the brain's, unknown until the session's [look](ledger.md#every-se
   of a due clan `Want`; an empty slot and no `Want` start nothing; `stepWarehouse` steps a request
   without rule "warehouse".
 - **Links:** exact `_DepositP` and `_WithdrawP`; a type 2 list refused; 282 `WarehouseEmpty`, 279
-  `WarehouseShort`; links on a first page and on `Chat 1`; `noClan` neither set nor read. A 142 to
+  `WarehouseRefused` as today (`WarehouseShort` only from the fee check before the open); links on a first page and on `Chat 1`; `noClan` neither set nor read. A 142 to
   the `Chat 1` bypass: `WarehouseRefused`, `retryAt` 60 s on, neither `noPrivate` nor (clan)
   `noClan`; a later request there follows `Chat 1` again.
 - **Cancel:** `cancelPrivate` on the walk, at the talk, with the open link sent, and with the list
@@ -112,9 +112,9 @@ The status is the brain's, unknown until the session's [look](ledger.md#every-se
   dwarf); its row keeps `ObjectID` and `Enchant`, so a withdrawal naming that object takes it, not
   another enchant of the template.
 - **Keeper:** nearest within the request's `Reach` (6000) of its `Anchor`; a nearer keeper in sight
-  farther from the anchor is not taken; none within is `WarehouseUnreachable`. Dion: from Trisha's
-  spawn (`spawnlist/20_22.xml:620`) 30058 (`:551`, 5348 away). Freight-only: with Rant (30054)
-  nearest and Rolfe (30055) a little farther, Rant's pages showing only `Chat 1`, then only
+  farther from the anchor is not taken; none within is `WarehouseUnreachable`. Dion ([keepers by
+  town](round.md#keepers-by-town)): from Trisha's spawn 30058. Freight-only: with Rant nearest and
+  Rolfe a little farther, Rant's pages showing only `Chat 1`, then only
   `_DepositF`/`_WithdrawF`, a look follows `Chat 1`, marks Rant, ends `WarehouseUnreachable` with no
   `retryAt` and no open, and the next decision's request goes to Rolfe; a marked keeper in sight is
   not taken; a clan request neither sets nor reads `noPrivate`. Hagos (31381) with a link-less page

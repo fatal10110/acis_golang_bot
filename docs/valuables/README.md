@@ -1,7 +1,7 @@
 # Merchant valuables (M12)
 
 Status: draft for owner review; proposed decisions D30-D34 open. The M12 epic and issues V1-V9 (V2,
-V3 and V7 as a and b) are filed once the owner approves.
+V3 as a and b, V7 as a to c) are filed once the owner approves.
 
 ## Problem and goal
 
@@ -46,15 +46,14 @@ Proposed, awaiting the owner.
   "Chat only when answering a whisper" gains the ads, the only unprompted lines. Alternative: Trade
   and Shout under the same caps.
 - **D31, what is valuable.** The [score](score.md): price × 2^R, R from the supply ceiling (Seven
-  Signs catacomb and `_none` seal makers at half, seasonal makers not at all), 0 for non-gear
-  spawned multisell products, halved for craftables, raised by enchant past safe; valuable at score
-  100000 and price 10000. Refines "multisell items are never rare" (upgrade rows do not count) and
-  "items sold in buylists are never rare" (only NPC id above 0, `cheapest`; the 212 `npcId="-1"`
-  lists hold all four valuable rows, which read literally would be none). A valuable precedes the
-  clan member's hold, so a member merchant sells a valuable recipe or graded gear instead of
-  depositing it for the crafter. Alternative: the hold first, losing Conjuror's Staff, Elven Tunic
-  (D grade) and Recipe: Halberd (Sword of Watershadow and Tears of Eva, with no grade, are in no
-  hold either way).
+  Signs catacomb and `_none` seal makers at half, seasonal makers not at all), 0 from a spawned
+  NPC's multisell row with no weapon or armor ingredient, halved for craftables, raised by enchant
+  past safe; valuable at score 100000 and price 10000. Refines "multisell items are never rare"
+  (upgrade rows do not count) and "items sold in buylists are never rare" (only NPC id above 0,
+  `cheapest`; the 212 `npcId="-1"` lists hold all four valuable rows, which read literally would be
+  none). A valuable precedes the clan member's hold, so a member merchant sells a valuable recipe or
+  graded gear instead of depositing it for the crafter. Alternative: the hold first, losing
+  Conjuror's Staff and Elven Tunic (D grade) ([score](score.md#valuable-test)).
 - **D32, pricing and selling.** Ask 100-150 % of reference by rarity plus the enchant scrolls, 10
   points lower per unsold round; floor the worth (reference plus scrolls) or the store price,
   whichever is higher; two counters per buyer and item a round; nothing below the floor. The bot may
@@ -67,8 +66,8 @@ Proposed, awaiting the owner.
   the canned ones, never to a marked name.
 - **D33, hold, warehouse, cap.** A 5 min round of ads, then the private warehouse (30 adena a row);
   a new valuable brings the stored out for another round; after a round, all go to the store once
-  they take more than 6 rows or the asks of those asking at most 2000000 pass 2000000, and one
-  unsold through 3 rounds (or asking over 2000000 alone, after its 3 rounds) goes alone; the cap
+  they take more than 6 rows, those each asking at most 2000000 once their asks together pass
+  2000000, and one unsold through 3 rounds alone (the only way for one asking more); the cap
   runs before the deposit. Released valuables list at their [floor](whispers.md#prices) (at least
   reference, twice the buy-back): amends the `docs/plan.md` merchant default "price between 1.2 and
   1.5 times the NPC buy-back price" (line 321).
@@ -80,24 +79,25 @@ Proposed, awaiting the owner.
 
 Milestone M12. Each PR is behavior-neutral for every preset until V8 enables `merchant`, except
 V3a's [142 refusal](warehouse.md#refused-links), which changes today's clan errand too. The round is
-split (V7a round, V7b cap and store) and so are V2 (read-only supply vs brain policy) and V3 (errand
-vs the look that drives it), each one reviewable diff. No unit test waits on the wall clock; no e2e
-scenario runs with `-race`.
+split (V7a round and deposit, V7b store hold and off-round deposit, V7c cap and store), and so are
+V2 (read-only supply vs brain policy) and V3 (errand vs the look that drives it), each one
+reviewable diff. No unit test waits on the wall clock; no e2e scenario runs with `-race`.
 
 | PR | Scope | Reads | Depends on |
 | --- | --- | --- | --- |
-| V1 | Datapack: NPC drops; template and spawnlist `<private>` rows (id, respawn; `spawnlist.go:92` skips them); each maker's `<ai type>`, `<set>` params (`EventName`, `IsNight`, `on_start_spawn`, `maker_name1`-`maker_name3`, `maker_cnt`) and `spawnTime` (`spawnlist.go:85-89` skips them); multisell rows; restart point tiles; normal enchant scroll ids by grade and kind (names need no work, `datapack/items.go:238,354`); fixture and shipped tests | [score](score.md), [ads](ads.md#region), [server](server.md) | M10 S2 (#321), which also extends `datapack/npc.go` |
-| V2a | `TravelMap.supply` (`S`, marks) with maker shares by event, start and type, `NewTravelMap`'s `SupplyConfig` (`-spawn-events`, defaults); score-only `ValuablePolicy` fields (`PriceFloor`, `ValueMin`, `CommonSupply`, `RMax`, `CraftDivisor`, `EnchantRare`; disabled), `R`, enchant terms, `V`, called from tests only; the restart region; `TestValueScore`, `TestValuablesShipped`, `TestRestartRegion` | [score](score.md), [ads](ads.md#region), [preset](preset.md#process-settings) | V1 |
-| V2b | The rest of `ValuablePolicy` (`Enabled`, `RoundReach`, defaults; disabled); classification and precedence in `junk`, `storeLoot`, `tradeGoods`, before the member's hold (`wireMember`, `memberKeep`); the `valuables` value (entries, derived units, rows, lifecycle, round state with anchor, `openRound`, `endRound`, the `noPrivate` set); rule "valuables" as a stepper only, the walk back (`anchorArrive`); `itemNames` for every scored template; labels and price shorthand; `TestValuableClassification`, `TestValuablesLedger`, `TestItemLabel` | [score](score.md#valuable-test) and [its tests](score.md#tests), [ledger](ledger.md), [ads](ads.md#lines), [round](round.md#back-to-the-anchor) | V2a |
-| V3a | Private requests in the errand: `Private`, links on any page, list type, `privateWant` and `startWarehouse`'s guard and order, no clan, `noPrivate` (by template, `WarehouseUnreachable` with no `retryAt`, skipped by the keeper choice, a handed-in set), a 142 at the talk step failing with no mark (private and clan), look, priority; the private status (list, 282, results, `trackContents` with `ObjectID` and `Enchant`, `depositRows`, slots); `Anchor` and `Reach` and the keeper rule; `stepWarehouse`; `cancelPrivate`; `TestPrivateWarehouseErrand` | [warehouse](warehouse.md), [round-end](round-end.md#cut-off) | none |
-| V3b | The session's look: its conditions (`storeReady`'s state checks, town, keeper, open and errand checks with the enchant exchange idle, member settled), request with anchor and `RoundReach`, walk back (after the next keeper's request on a new mark), the stored-units accessor wired, entries from rows (row test), the `noPrivate` set handed over; a called-away look cancelled, no walk back; `TestValuablesLedgerLook`. No round yet | [ledger](ledger.md), [round](round.md#back-to-the-anchor) | V2b, V3a |
-| V4 | `AdBoard` (`Free`, atomic `Claim`), the ad composer over V2b's labels (entries not released), per-bot pacing, the ad step; `TestAdText`, `TestAdPacing` | [ads](ads.md) | V2b |
-| V5 | The responder: intent and price parsing, the naming outcomes, asks, floors, counters, delay, per-partner queue sent by rule "chat", caps apart from `chatLog`, precedence over the canned reply, after-round replies (`in my store` with V7b); `TestValuablesWhisperHaggle` | [whispers](whispers.md) | V2b |
-| V6 | Valuables in `acceptTrade`, `tradeGoods` (never released), `tradePrice`, `tradePaid`; the invite step (walk within `RoundReach` of the anchor, `TradeRequest`, refusals, none within 15 s of the end, walk back); trade sales in the valuables budget and its offer rule; `TestValuablesTradeInvite`, `TestValuablesTradeConfirm` | [trades](trades.md), [release](release.md#valuables-budget-d34) | V2b, V4, V5 |
-| V7a | `roundReady` (V3b's look conditions plus region and board) opening rounds at the bot's position; the start condition; the pending round and `StoreHold`; no round before the look; requests with anchor and `RoundReach`; walks back; the left-over round; withdraw, end, `FirstLineWait`, `Grace`; `called()` with `cancelPrivate` or the `whSent` wait; the round step; the deposit (skipped when not due, held for a pending request); the store held for the bot's request; the off-round deposit; `valuableFees`; `TestValuablesRoundStart`, `TestValuablesStoreHold`, `TestValuablesFirstLineWait`, `TestValuablesHoldsTurn`, `TestValuablesRoundDeposit`, `TestValuablesGrace`, `TestValuablesReadvertise`. Releases nothing | [round](round.md), [round-end](round-end.md), [ledger](ledger.md#every-session-looks-first), [warehouse](warehouse.md#fees-and-slots) | V3b, V4, V6 |
-| V7b | The cap (before the deposit; after a cut-off past the first line), the release withdrawal off-round and in the round's withdrawal (budget allowing) and its pending hold, `storeReady`/`storeSells`, released rows first in `storeRows` by the listing rule, the store sales split, released-entry replies; `TestValuablesRelease`, `TestValuablesStoreSplit` | [release](release.md), [round](round.md#the-store-waits-for-a-pending-round), [whispers](whispers.md#after-a-round) | V7a |
-| V8 | `merchant` enables the policy, shared ad board, `-valuables-budget`, ad board flags, metrics, panel | [preset](preset.md) | V7a, V7b, M10 S9 (#331), which also edits the preset catalog |
-| V9 | `TestLiveValuablesTradeSale`, `TestLiveValuablesWarehouse`, `TestLiveValuablesRelease`; the unmarked buyer and its helper, the Human Mystic merchant; `EncodeAnswerTradeRequest`; `docs/e2e-live.md` rows | [preset](preset.md#live-scenarios-v9) | V8 |
+| V1 | Datapack readers and fixtures of the [score tests](score.md#tests) (V1 bullet), with `Names` beside `Prices` ([ads](ads.md#lines)); shipped tests | [score](score.md), [ads](ads.md#region), [server](server.md) | M10 S2 (#321), which also extends `datapack/npc.go` |
+| V2a | `TravelMap.supply` and its `SupplyConfig` ([preset](preset.md#process-settings)); the score-only `ValuablePolicy` fields (`PriceFloor`, `ValueMin`, `CommonSupply`, `RMax`, `CraftDivisor`, `EnchantRare`; disabled), called from tests only; the restart region; `TestValueScore`, `TestValuablesShipped`, `TestRestartRegion` | [score](score.md), [ads](ads.md#region), [preset](preset.md#process-settings) | V1 |
+| V2b | The rest of `ValuablePolicy` (disabled); the [valuable test](score.md#valuable-test) and its precedence; the [`valuables` value](ledger.md#the-valuables-value) with rule "valuables" as a stepper and the walk back; `itemNames` and labels; `TestValuableClassification`, `TestValuablesLedger`, `TestItemLabel` | [score](score.md#valuable-test) and [its tests](score.md#tests), [ledger](ledger.md), [ads](ads.md#lines), [whispers](whispers.md#prices), [round](round.md#back-to-the-anchor) | V2a |
+| V3a | All of [warehouse](warehouse.md); `stepWarehouse` ([round](round.md#the-rule)); `cancelPrivate` for the [cut-off](round-end.md#cut-off); `TestPrivateWarehouseErrand` | [warehouse](warehouse.md), [round-end](round-end.md#cut-off) | none |
+| V3b | The session's [look](ledger.md#every-session-looks-first) (conditions, request, walk back, cancel), entries from rows, the stored-units accessor and `noPrivate` set wired; `TestValuablesLedgerLook`. No round yet | [ledger](ledger.md), [whispers](whispers.md#prices), [round](round.md#start) (the conditions) and [its walk back](round.md#back-to-the-anchor) | V2b, V3a |
+| V4 | [ads](ads.md): `AdBoard`, the composer over V2b's labels, pacing, the ad step; `TestAdText`, `TestAdPacing` | [ads](ads.md) | V2b |
+| V5 | [whispers](whispers.md) (after-round `in my store` with V7c); `TestValuablesWhisperHaggle` | [whispers](whispers.md) | V2b |
+| V6 | [trades](trades.md); trade sales in the valuables budget and its offer rule; `TestValuablesTradeInvite`, `TestValuablesTradeConfirm` | [trades](trades.md), [release](release.md#valuables-budget-d34) | V2b, V4, V5 |
+| V7a | The [start](round.md#start) and [round-end](round-end.md) steps 1-5 with the [cut-off](round-end.md#cut-off), without store hold, off-round errands, cap or release; `valuableFees`; `TestValuablesRoundStart`, `TestValuablesFirstLineWait`, `TestValuablesHoldsTurn`, `TestValuablesRoundDeposit`, `TestValuablesGrace`, `TestValuablesReadvertise` | [round](round.md) but its [store hold](round.md#the-store-waits-for-a-pending-round), [round-end](round-end.md) but its [off-round errands](round-end.md#off-round-errands), [ledger](ledger.md#every-session-looks-first), [warehouse](warehouse.md#fees-and-slots), [whispers](whispers.md#prices) | V3b, V4, V6 |
+| V7b | The [pending round and `StoreHold`](round.md#the-store-waits-for-a-pending-round), step 6's wait for the bot's request, the budget-spent [off-round deposit](round-end.md#off-round-errands); `TestValuablesStoreHold`, `TestValuablesOffRound` | [round](round.md#the-store-waits-for-a-pending-round), [round-end](round-end.md#off-round-errands) | V7a |
+| V7c | All of [release](release.md): the cap, the release withdrawal (step 1 and off-round) with its pending hold, the store changes; released-entry replies; `TestValuablesRelease`, `TestValuablesStoreSplit` | [release](release.md), [round](round.md#the-store-waits-for-a-pending-round), [round-end](round-end.md) (step 1, [off-round errands](round-end.md#off-round-errands)), [whispers](whispers.md#after-a-round) | V7b |
+| V8 | [Wiring](preset.md#wiring): `merchant` enables the policy, shared ad board, `-valuables-budget`, ad board flags | [preset](preset.md) | V7a, V7b, V7c, M10 S9 (#331), which also edits the preset catalog |
+| V9 | The [live scenarios](preset.md#live-scenarios-v9), their buyer and merchant | [preset](preset.md#live-scenarios-v9) | V8 |
 
 ## Risks
 

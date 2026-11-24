@@ -18,7 +18,7 @@ Each decoder and encoder has a recorded or server-built fixture and an exact `le
 - `CharInfo` keeps hand template ids, collision radius, clan and ally ids, abnormal mask, max CP
   and CP, duel team; `NPCInfo` its collision radius and title (a summon's owner); `UserInfo` the
   bot's collision radius, ally id, PK and PvP kills. Dropped today: `UserInfo` at `inworld.go:56`,
-  `:62`, `:66`; `CharInfo` at `:130`, `:137`, `:140`, `:148`, `:150-151`; `NPCInfo` at `:171`,
+  `:62`, `:66`; `CharInfo` at `:127`, `:137`, `:140`, `:148`, `:150-151`; `NPCInfo` at `:171`,
   `:183`, its title read at `:178` but not kept by `applyNPCInfo` (`world.go:888-900`).
 - SystemMessages: 35, 36 (damage dealt, taken), 139 (resisted), 283, 284 (arena in, out), 84, 85
   (peace refusals), 692 (frozen duel opponent), 153 (busy), the duel set 1926-2028.
@@ -77,9 +77,9 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   decoded at `inworld.go:131`) sets `FlagBlinkAt` too.
 - **Support gate.** `MaySupport` (`combat_rules.go:71-73`) becomes
   `SupportFlagged || (o.PvPFlag == 0 && o.Karma == 0)` (supporting a karma player flags the caster
-  too, `character_pvpflag.go:88-93`, `skillTargetFlagsPvP`); false in the bot's own duel and never
-  for its duel opponent ([duel support](guards.md#duel-support)); in a PvP zone nothing flags the
-  bot, so it passes everyone.
+  too, `character_pvpflag.go:88-93`, `skillTargetFlagsPvP`); in the bot's own duel `SupportFlagged`
+  counts as off and the duel opponent is never supported ([duel support](guards.md#duel-support));
+  in a PvP zone nothing flags the bot, so it passes everyone.
 - **Summons and pets.** A summon (`KindNPC`, `NPCInfo` with `Summon`, `world.go:888-900`) is taken
   by `o.Attackable` (`combat_rules.go:60-68`, `combat_world.go:115-120`), a snapshot of
   `AttackableWithoutForceBy` (`network/visibility.go:441`; `summon/target_actor.go:151-164`) that

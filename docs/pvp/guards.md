@@ -1,7 +1,8 @@
 # No accidental karma
 
-Ships in X4. Decision D39. A karma-free opponent whose flag ended, or who left an arena, dies to
-the bot's direct hit as a PK (its hits never refresh that flag); a player's DOT never kills.
+Ships in X4b ([duel support](#duel-support) in X4). Decision D39. A karma-free opponent whose flag
+ended, or who left an arena, dies to the bot's direct hit as a PK (its hits never refresh that
+flag); a player's DOT never kills.
 
 **Damage steps**: direct damage (`IsDamage`: PDAM, MDAM, BLOW, DRAIN, CHARGEDAM, ...), any
 `nextActionAttack` skill, swings. Pure DOTs and non-damage control (Poison 129, Curse: Poison 1168,
@@ -62,17 +63,16 @@ which the flag guard then covers. Against a karma-free arena opponent:
   `ArenaStay`, `ArenaDeaths`) it stops, waits one attack interval after the move, then walks out;
 - **cost.** Opponents run 121-144 and no point of Dion, Gludin or Giran is more than about 490
   from an edge, so a step starts only under about 2.9-3.5 s at the middle (490 / speed − 0.5). With
-  a spiritshot the 4000 ms nukes and drains take 2.4 s (Elven Mystic), 2.8 s (Human), 3.0 s (Dark),
-  3.6 s (Orc): the Human Mystic starts them from 400-475 from the edge (121-144 × 3.3), the Elven
-  from 350-420 (× 2.9), the Dark only at the middle and not against the fastest (needs 420-500), the
-  Orc never (495-590). Ice Bolt (about 2.2 s, Human Mystic with a spiritshot) starts too; Solar and
-  Shadow Spark (3.0-4.5 s) only for the fastest casters at the very middle. Shot-less 4-5 s steps
-  (3.4-6.4 s), Drain Health (fighter rows charge soulshots) and Power Shot and Stunning Shot
-  (3.4-3.6 s, no shot factor) almost never start unless rooted first. So bow rows and the Orc Mystic
-  fight square arenas with roots (CL, EO, SO, OS), DOTs, non-damage control, short steps (Energy
-  Bolt 2 s, Aura Burn 1.5 s), plain shots and melee; the RO, ES and AS Stunning Shot `Hold` and
-  `Int` steps wait with Power Shot. The Colosseum (up to about 1370 from an edge, about 9 s) lets
-  every step start near its middle.
+  a spiritshot ([long hit times](server.md#server-behavior)) the Human Mystic starts the 4000 ms
+  nukes and drains from 400-475 from the edge (121-144 × 3.3), the Elven from 350-420 (× 2.9), the
+  Dark only at the middle and not against the fastest (needs 420-500), the Orc never (495-590). Ice
+  Bolt (about 2.2 s, Human Mystic with a spiritshot) starts too; Solar and Shadow Spark only for
+  the fastest casters at the very middle. Shot-less 4-5 s steps (3.4-6.4 s), Drain Health (fighter
+  rows charge soulshots), Power Shot and Stunning Shot almost never start unless rooted first. So
+  bow rows and the Orc Mystic fight square arenas with roots (CL, EO, SO, OS), DOTs, non-damage
+  control, short steps (Energy Bolt 2 s, Aura Burn 1.5 s), plain shots and melee; the RO, ES and AS
+  Stunning Shot `Hold` and `Int` steps wait with Power Shot. The Colosseum (up to about 1370 from
+  an edge, about 9 s) lets every step start near its middle.
 
 Left over: a Dash, Sprint or root cure taking the opponent out in a cast's last 200 ms. Under
 [Ultimate Defense](layer.md#ultimate-defense) stop moves still go; only walks wait.
@@ -134,7 +134,7 @@ refuses it, and a party skill waits while it is a member in the radius.
 
 ## Tests
 
-- `TestPvPNoKarmaFlagEnding` (X4): Wind Strike (hit 4000) at a flagged karma-free opponent whose
+- `TestPvPNoKarmaFlagEnding` (X4b): Wind Strike (hit 4000) at a flagged karma-free opponent whose
   `RelationChanged` turns to 2 → `RequestTargetCancel` (`unselect` 0), then no damage cast,
   `AttackRequest` or `Action`, a move; a DOT or root allowed; back to 1 → attacks; gone → none; the
   same blink on a karma opponent, in a duel or an arena → fight goes on; first seen in a `CharInfo`
@@ -143,7 +143,7 @@ refuses it, and a party skill waits while it is a member in the radius.
   next send; one past it → no cancel, a move first once its hit time passed; a pure DOT → cast, no
   move. Late Esc (`ActionFailed`, `TargetUnselected`) → the move, one selecting `Action` before the
   next DOT, never a second.
-- `TestPvPArenaAttackable` (X4): both in the Gludin polygon, stale `RelationChanged` → plain
+- `TestPvPArenaAttackable` (X4b): both in the Gludin polygon, stale `RelationChanged` → plain
   attack; the player walks out → disengage; opponent 100 from the edge, speed 120 → no Wind
   Strike, a DOT cast; a Human Mystic (cast 333) without spiritshot auto-use, opponent at the middle
   (about 490), speed 124 → no Wind Strike (124 × 4.5 = 558 > 490), a test-built 2000 ms damage step
@@ -156,7 +156,7 @@ refuses it, and a party skill waits while it is a member in the radius.
   a karma opponent at the edge → fight goes on; a clan mate or ally in the arena → attack; a party
   member → never; an unflagged player healing or buffing the bot → not in the attackers table,
   casting Wind Strike → in it.
-- `TestPvPAreaBystander` (X4 on a test-built area step and pole; the WA case in X7). Radii 9 (male
+- `TestPvPAreaBystander` (X4b on a test-built area step and pole; the WA case in X7). Radii 9 (male
   Human Fighters) unless named. A WA with a pole vs a flagged karma-free opponent, a second flagged
   karma-free player 40 from the bot in the cone → no Wild Sweep, swing or `nextActionAttack` step
   (an ungated test PDAM carrying it not cast): a move, a walk to a stand point with the bystander

@@ -29,7 +29,7 @@ released) when it passes the **warehouse row test**. A `WarehouseItem` (`warehou
 not a quest item (`SubCategory` 3, `subCategoryQuest`, `trade.go:31`), not augmented (`Augmentation`
 0), not a shadow item (the template's `Duration`, as `indexCrystals`, `crystallize.go:66`). The carry
 checks are left out (`keeps`, `shop.go:610`; the persona's keep hook, which takes a carried `Item`,
-`hold`/`keepsItem`, `shop.go:625-631`, `clanmember.go:53-61`; worn next; set piece): they decide what
+`hold`/`keepsItem`, `shop.go:625-631`, `clanmember.go:53-61`; equipped, worn next, fallen back to; set piece): they decide what
 the bot wants to carry, and once withdrawn the carried test decides (a unit the gear errand now
 wants leaves its entry). After a process start every stored valuable comes in so. A
 row that fails (`ValueMin` raised since) gets no entry, is never withdrawn or capped, and stays
@@ -90,7 +90,7 @@ stored and the status known until V3b wires it to V3a's private status.
 
 A round open when its session ends is ended by the next session's first decision as a
 [cut-off](round-end.md#cut-off): after its first line rounds step and asks drop at once, the cap
-(V7b) running once that session's look is done; before it nothing changes. Its reply queue, partners
+(V7c) running once that session's look is done; before it nothing changes. Its reply queue, partners
 and trade request are dropped; nothing is deposited.
 
 ## Tests
@@ -112,11 +112,9 @@ and trade request are dropped; nothing is deposited.
   Conjuror's Staff, an augmented valuable template, a quest item and a template under `ValueMin`:
   the sword and staff get entries (rounds 0, the first ask, the staff's with five scrolls, not
   released, one stored unit), the others none. After a reconnect an entry with a stored unit is kept
-  unchanged while the status is unknown, and the look finds the unit. Talking Island (Roxxy 30006,
-  Rant 30054, Rolfe 30055; Rant's fixtures `30054.htm` with only `Chat 1`, `30054-1.htm` with only
-  `_DepositF`/`_WithdrawF`): the look follows Rant's `Chat 1`, marks Rant, ends with no `retryAt`,
-  and next decision, with no walk back between, takes Rolfe's type 1 list, then walks back; the next
-  session goes straight to Rolfe. Teranu Mardui (Hagos 31381 with a link-less page, as
-  `31381-no.htm`): Hagos marked, the walk back, no look that session or the next. A `follow` on the
-  walk to the keeper ends the look (no `_WithdrawP`, no walk back, the next legs rule "follow"'s);
-  it runs on the next town visit.
+  unchanged while the status is unknown, and the look finds the unit. With [V3a's keeper
+  fixtures](warehouse.md#tests): at Talking Island the look marks Rant and, next decision with no
+  walk back between, takes Rolfe's type 1 list, then walks back; the next session goes straight to
+  Rolfe. At Teranu Mardui Hagos is marked, the bot walks back, and no look runs that session or the
+  next. A `follow` on the walk to the keeper ends the look (no `_WithdrawP`, no walk back, the next
+  legs rule "follow"'s); it runs on the next town visit.

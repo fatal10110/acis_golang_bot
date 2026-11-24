@@ -4,7 +4,7 @@
 
 1. **Withdraw** (stored entries not released, or released ones while the budget is not spent): one
    private request ([warehouse](warehouse.md)) takes every stored valuable not released and, budget
-   allowing, the released stored ones (V7b), which skip ads, replies, trades and the deposit and are
+   allowing, the released stored ones (V7c), which skip ads, replies, trades and the deposit and are
    listed at step 6 with no second open. Then the [walk back](round.md#back-to-the-anchor). A failed
    withdrawal (no keeper, no answer) leaves them stored; the round advertises what it carries.
 2. **Advertise:** the first [ad line](ads.md) at the anchor after the walk back, then one per
@@ -20,32 +20,30 @@
 5. **Count, cap, deposit**, in order: each unsold entry not released gets rounds + 1 and its ask
    lowered by `RoundStep` ([prices](whispers.md#prices)); the [cap](release.md#the-cap) runs; the
    deposit takes the carried valuables the cap did not release. A
-   released carried one stays for the store, not paying 30 a row (`warehouse.go:556`, server
+   released carried one stays for the store, not paying 30 a row (`warehouse.go:557`, server
    `network/warehouse.go:21`) for a second open 60 s later (`warehouse.go:22`); all released, no
    deposit. The deposit is queued only when an open is due (`openDue`, `retryAt`); else (an
    unanswered open doubled the gap) the round ends with them carried.
-   - **Pending requests.** The server's request gate ([server](server.md#server), "Warehouse request
-     gate") answers the deposit with 142 during any pending request, sent or received; the bot
+   - **Pending requests.** The [request gate](server.md#server) refuses the deposit; the bot
      checks only an open window today (`depositRows`, `warehouse.go:535`). So the deposit waits
      until the bot's own `TradeRequest` is answered (`TradeStart` or a refusal) or 15 s old
      (`RequestTimeout`, server `trade/book.go:13`) and no player's request awaits an answer. The bot
      sends no other request (`encodeRequestJoinParty`, `encodeRequestJoinPledge`: harness only,
-     `harness.go:124,130`) and sees three it receives (`Prompts`, `world.go:269-284`): party and
+     `harness.go:124,130`) and sees three it receives (`Prompts`, `world.go:271-286`): party and
      clan invitations, answered at once by rule "prompt" (rule 2, `rulePrompt`, `rules.go:584-603`;
      clan ones do not count on the server anyway), and trade requests (`ruleTrade`, checked by
      `storeReady`). A friend, duel, party room or command channel request it cannot decode, received
      in the 15 s before the link or request, fails the deposit like any failure, the keeper
      unmarked. Invites stop 15 s before the end, so its own wait is rare and at most 15 s.
-   - **142.** A 142 to the open link or the request ends the transaction refused
-     (`warehouseRefusals`, `warehouse.go:68-71`; `endTransaction`, `warehouse.go:329-341`, no
-     `retryAt`); the next open waits 60 s from `openedAt`, set when the open link went out
-     (`warehouse.go:302-311,373-374`). A 142 to a `Chat` link is a [refusal with no
-     mark](warehouse.md#refused-links) from V3a on. The deposit is lost this round.
+   - **142** to the open link or the request: refused as today (`warehouseRefusals`,
+     `warehouse.go:68-71`, no `retryAt`; the next open 60 s from `openedAt`,
+     `warehouse.go:302-311,373-374`); to a `Chat` link, [no mark](warehouse.md#refused-links). The
+     deposit is lost this round.
 6. **Store:** the walk back, then the rule lets go and the store opens as today at the anchor with
-   the loot and released valuables. The server refuses a set-up during a pending request
-   (`ProcessingRequest`, `network/privatestore.go:88`), so `storeReady` also waits while the bot's
-   own `TradeRequest` is unanswered and under 15 s old (rule "prompt" answers a party invitation
-   first); a request the bot cannot see refuses it as today.
+   the loot and released valuables. A pending request refuses the set-up
+   ([server](server.md#server)), so `storeReady` also waits while the bot's own `TradeRequest` is
+   unanswered and under 15 s old (rule "prompt" answers a party invitation first); a request the bot
+   cannot see refuses it as today.
 
 A failed deposit (no keeper, no answer, fee short) keeps them carried, out of the NPC sale and the
 store, for the next round `RoundGap` later; one that keeps failing still gets advertised rounds, so
@@ -90,10 +88,12 @@ state checks refuse a trade prompt or window; a request it cannot see fails one 
   is not spent (else they stay stored and marked); waiting for its open it is a [pending release
   withdrawal](round.md#the-store-waits-for-a-pending-round).
 - **Budget-spent deposit** of every carried valuable, released or not; released ones keep the mark.
+  At most once per new find: after it runs, sent or failed (a fee short), it waits for a valuable
+  picked up since.
 
 ## Tests
 
-All V7a.
+V7a unless named.
 
 - `TestValuablesFirstLineWait`: the board holding the first line past `FirstLineWait`: no Trade
   line, a deposit, rounds and asks unchanged.
@@ -104,22 +104,23 @@ All V7a.
   request ends that decision, no `_DepositP` or `RequestWarehouseDeposit`, no walk back, the next
   legs rule "follow"'s, carried, no `retryAt`. At `whListed`: no deposit request. At `whSent`: no
   legs until the `InventoryUpdate` (units counted stored) or the 5 s timeout, then it follows.
-  During the withdrawal: ended likewise, stored. The cut-off's cap is V7b's.
+  During the withdrawal: ended likewise, stored. The cut-off's cap is V7c's.
 - `TestValuablesRoundDeposit`: at `RoundWait` after the first line the bot walks to the keeper,
   follows its pages to the private link (on `Chat 1`, and on Wilford's first page), sends
   `npc_<obj>_DepositP`, takes the type 1 list, deposits with 30 a row counted; on the
   `InventoryUpdate` they count stored, the bot walks back within `anchorArrive`, then the store
   opens with the loot only at the anchor; within `AnswerAfter` a whisper naming the stored valuable
   gets `<name> not now, wts again soon`. An open timeout in the round: it ends on time, carried, no
-  deposit or wait. With the budget spent the off-round errand deposits the carried ones with no Trade
-  line.
+  deposit or wait.
 - `TestValuablesGrace`: an open trade at `RoundWait` holds the deposit up to `Grace`; no
   `TradeRequest` within 15 s of the extended end. The bot's unanswered request holds the deposit
   until `TradeStart`, a refusal or 15 s, then `_DepositP` (no 142); a player's unanswered request
-  likewise; a party invitation at the end is answered by rule "prompt" first; the store opening
-  waits the same way. A 142 from an unseen request (a friend invitation): at a `Chat 1` keeper the
-  deposit fails `WarehouseRefused` with no mark and the next round (or off-round deposit) uses that
-  keeper; at Wilford's fixture the 142 to `_DepositP` ends it refused and the next open waits 60 s
-  from that open. Either way they stay carried.
+  likewise; a party invitation at the end is answered by rule "prompt" first. A 142 from an unseen
+  request (a friend invitation): at a `Chat 1` keeper the deposit fails `WarehouseRefused` with no
+  mark and the next round uses that keeper; at Wilford's fixture the 142 to `_DepositP` ends it
+  refused and the next open waits 60 s from that open. Either way they stay carried.
 - `TestValuablesReadvertise`: a new valuable with two stored: `_WithdrawP` first, then one Trade
   line naming all three; the stored ones' asks `RoundStep` lower.
+- `TestValuablesOffRound` (V7b): with the budget spent the carried ones are deposited with no Trade
+  line; a deposit failing on the fee is not retried at `retryAt` or after the backoff, only once a
+  new valuable is picked up.

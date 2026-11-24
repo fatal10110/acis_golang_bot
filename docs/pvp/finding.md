@@ -1,8 +1,8 @@
 # How the bot finds fights
 
-Ships in X5 (sources, holds, clearance) and X4 (duel ground). Decisions D36, D38. Values are persona
-defaults. The PvP reaction delay is 200-600 ms (other events keep the plan's 300-1200 ms), so an
-interrupt can land in time.
+Ships in X5 (sources, holds, clearance) and X4b (duel ground). Decisions D36, D38. Values are
+persona defaults. The PvP reaction delay is 200-600 ms (other events keep the plan's 300-1200 ms),
+so an interrupt can land in time.
 
 ## Sources
 
@@ -11,7 +11,7 @@ interrupt can land in time.
 | A player attacks it | Fights back (today). | — |
 | A duel challenge (`ExDuelAskStart`) | Accepts after the reaction delay when it can duel (out of combat, HP and MP at least half, no flag, karma or store, not a party duel, on [allowed ground](#where-a-duel-is-allowed), [clear of monsters](#clear-of-monsters)); else declines at once. Clan mates, allies and party members are taken like anyone ([rule 1](targets.md#mayfight)); a bot-marked challenger is declined at once (D38); party duels are declined. | one answer per challenge |
 | A whispered `duel` | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did (M11's proposed `join`, D28, would too). Dropped within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered. Never held by `DeclineHold`; its decline (1931) or refusal (153, 1926, 2017-2028) starts `DeclineHold` for the bot's own challenges of that player only. | one per `ChallengeEvery` (3 min) per bot, shared; once per player per `ChallengeSameEvery` (30 min) |
-| Its own challenge | Out of combat, clear of monsters, at its spot or on the road: at most one non-bot player in sight within 2000, out of combat, unflagged, no karma or store, of its tier, both on allowed ground, when the [engage estimate](model.md#engage-estimate) passes against its row. A decline or refusal of any challenge to that player holds it. Holds are per bot. | one per `ChallengeEvery`, shared with whispers; once per player per `ChallengeSameEvery`; `DeclineHold` (2 h) |
+| Its own challenge | Out of combat, clear of monsters, at its spot or on the road: challenges one non-bot player in sight within 2000, out of combat, unflagged, no karma or store, of its tier, both on allowed ground, when the [engage estimate](model.md#engage-estimate) passes against its row. A decline or refusal of any challenge to that player holds it. Holds are per bot. | one per `ChallengeEvery`, shared with whispers; once per player per `ChallengeSameEvery`; `DeclineHold` (2 h) |
 | Flagged and karma players in sight | [Hunting](targets.md#hunting). | the fight rules |
 | Arenas | Every `ArenaEvery` (90 min ± jitter) to the nearest arena reachable in its SCC or by gatekeeper (M7 trips); stays while another player is inside, attacking [arena targets](targets.md#arena-targets); leaves after `ArenaAlone` (5 min) alone or `ArenaStay` (20 min) by the [arena-edge](guards.md#arena-edge) leave. Its spot is released as for a supply trip (D16). | one trip per `ArenaEvery` |
 
@@ -84,24 +84,24 @@ position.
   1940 in combat stance (`AutoAttackStart` without `AutoAttackStop`) → no hold, accepted once it
   ends; a whispered `duel` from a player in a town → no challenge; a clan mate's or party member's
   one-on-one → accepted; a bot-marked challenger → declined at once.
-- `TestPvPDuelFight` (X4): in the countdown (1945 each second) no `Action`, `AttackRequest` or cast
-  on anyone; the opponent's countdown `Attack` or Wind Strike → not answered, then 1952 and
-  `ExDuelEnd` → the unflagged player not fought; `ExDuelStart` alone → no attack; the first
-  `ExDuelUpdateUserInfo` plus the delay → plain `Action` and casts, never forced; its
-  `MagicSkillUse` at the bot enters the attackers table; a clan mate or party member opponent → the
-  same; 692 or `ExDuelEnd` stops it; no surrender; 1950 with its own name then `ExDuelEnd` → won,
-  the opponent's → lost, 1955 then 1950 with its own → won, 1952 → tie; a refused attacker → kind
-  `unfought`. A monster in sight never targeted; one that attacks fought only after 1952 and
-  `ExDuelEnd`; a test-built area step and a pole with a monster in reach → unused. Duel ground:
-  repositioning a pole around a third player, nearest points inside or within 100 of a town polygon
-  → skipped, the first point 100 outside; every point near a town, arena or foreign siege polygon or
-  beyond 1800 from the opponent → no walk, the disengage move to the first passing heading or
-  `orStay`, then the hold; the opponent 30 past a peace polygon's edge, the segment within 100 →
-  only in-range steps; back 200 out → `Action`; already attacking a walking out-of-reach opponent,
-  the segment coming within 100 of a town polygon → the disengage move at once, `Action` again once
-  clear; its own `MoveToLocation` leg ending 60 from an arena polygon → the disengage move; its own
-  position within 100 of a peace polygon while attacking → the disengage move along the first
-  heading leading out.
+- `TestPvPDuelFight` (X4; the area, pole and duel ground cases in X4b): in the countdown (1945 each
+  second) no `Action`, `AttackRequest` or cast on anyone; the opponent's countdown `Attack` or Wind
+  Strike → not answered, then 1952 and `ExDuelEnd` → the unflagged player not fought; `ExDuelStart`
+  alone → no attack; the first `ExDuelUpdateUserInfo` plus the delay → plain `Action` and casts,
+  never forced; its `MagicSkillUse` at the bot enters the attackers table; a clan mate or party
+  member opponent → the same; 692 or `ExDuelEnd` stops it; no surrender; 1950 with its own name then
+  `ExDuelEnd` → won, the opponent's → lost, 1955 then 1950 with its own → won, 1952 → tie; a refused
+  attacker → kind `unfought`. A monster in sight never targeted; one that attacks fought only after
+  1952 and `ExDuelEnd`; a test-built area step and a pole with a monster in reach → unused. Duel
+  ground: repositioning a pole around a third player, nearest points inside or within 100 of a town
+  polygon → skipped, the first point 100 outside; every point near a town, arena or foreign siege
+  polygon or beyond 1800 from the opponent → no walk, the disengage move to the first passing
+  heading or `orStay`, then the hold; the opponent 30 past a peace polygon's edge, the segment
+  within 100 → only in-range steps; back 200 out → `Action`; already attacking a walking
+  out-of-reach opponent, the segment coming within 100 of a town polygon → the disengage move at
+  once, `Action` again once clear; its own `MoveToLocation` leg ending 60 from an arena polygon →
+  the disengage move; its own position within 100 of a peace polygon while attacking → the disengage
+  move along the first heading leading out.
 - `TestPvPChallengeWhisper` (X5): a whispered `duel` → `RequestDuelStart` with its name; again
   within 30 minutes → nothing; a bot-marked name or a flagged target → nothing; another player's
   whisper within 3 minutes of the last challenge, own or whispered → nothing, after 3 → challenge; a

@@ -1,8 +1,8 @@
 # The PvP layer over the M10 rotation
 
-Ships in X6. Against a player the bot runs its M10 row (same `Step` list, gates, `Melee` policy)
-with its [PvP row](rows.md) on top. Land rates, archetypes and the engage estimate:
-[model](model.md).
+Ships in X6 (the hit-time predictor in [Interrupts](#interrupts) in X4b, for the arena edge).
+Against a player the bot runs its M10 row (same `Step` list, gates, `Melee` policy) with its
+[PvP row](rows.md) on top. Land rates, archetypes and the engage estimate: [model](model.md).
 
 ## Step fields
 
@@ -53,12 +53,13 @@ An opponent's `MagicSkillUse` is **interrupt-worthy** when its type is HEAL, HOT
 RESURRECT, SLEEP, ROOT, FEAR or MUTE, or MDAM with template hit time 3000 or more, aimed at the
 opponent, its ally, the bot or the bot's party; it lands at arrival + `HitTime`. The bot answers
 with its `Interrupt` step when that step's scaled hit time plus the reaction delay and the walk to
-range end first. Its own time as the server computes it ([server](server.md), Cast time): template
-time × 333 / cast speed (magic) or attack speed (`UserInfo`), truncated; × 0.70 for an `isMagic`
-step while a spiritshot is expected charged (auto-use reported on, `Inventory.AutoShots` from
-`ExAutoSoulShot`, `items.go:178-181`, `:224-227`, and a stack carried); floored at 500 ms for a
-template time of 500 or more. A short prediction costs one late interrupt; the arena-edge rule
-re-checks against its own `MagicSkillUse`.
+range end before the landing (a stun or sleep), or at least 200 ms before it on an `isMagic` cast (a
+damage step: damage breaks only a magic cast inside its interrupt window). Its own time as the
+server computes it ([server](server.md), Cast time): template time × 333 / cast speed (magic) or
+attack speed (`UserInfo`), truncated; × 0.70 for an `isMagic` step while a spiritshot is expected
+charged (auto-use reported on, `Inventory.AutoShots` from `ExAutoSoulShot`, `items.go:178-181`,
+`:224-227`, and a stack carried); floored at 500 ms for a template time of 500 or more. A short
+prediction costs one late interrupt; the arena-edge rule re-checks against its own `MagicSkillUse`.
 
 - A landed stun (Shield Stun, Stun Attack, Stunning Fist, Stunning Shot) or sleep aborts the cast.
 - A damage step rolls `15 + sqrt(13 × damage) − MEN offset` on the expected damage, used only at
@@ -71,16 +72,17 @@ re-checks against its own `MagicSkillUse`.
 
 - **CP.** CP potion (5592, then 5591) under `CPPotion` (50 %) CP in a PvP fight other than a duel,
   under the 500 ms reuse; HP potions, heals and drains follow M10's `ruleCritical`. CP potions are
-  kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (its end
-  restores CP, HP, MP, `network/duel.go:553-564`, `restoreDuelCondition`; none are bought).
-- **Cures.** In a PvP fight, duels too (the end restores effects, `network/duel.go:565-569`, but
-  cures are cheap and a DOT decides a 2-minute duel): its own `AbnormalStatusUpdate` shows a poison
-  or bleed (stack type `poison`, `bleeding`, or effect type POISON, BLEED) with half its ticks left
-  → the cure. Its level is the lower set level (`hooks_buff.go:221-233`, `negateLevelAllows`):
-  `effectAbnormalLvl` (only with an `effectType`; Sting 223 sets only this) or `abnormalLvl`
-  (Poison, Curse: Poison, Venom, Bleed); neither set → no cure. Up to 3: Antidote 1831 or Bandage
-  1833; 4-7: Greater Antidote 1832 or Emergency Dressing 1834 (plain first when both work); 8: none.
-  One `UseItem` per effect seen, 500 ms reuse. None against monsters.
+  kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (none are
+  bought, and a duel that ends uncancelled restores CP, HP, MP, `network/duel.go:553-564`,
+  `restoreDuelCondition`; a cancelled one restores nothing, `:445`).
+- **Cures.** In a PvP fight, duels too (cures are cheap, a DOT decides a 2-minute duel, and only an
+  uncancelled end restores effects, `network/duel.go:565-569`): its own `AbnormalStatusUpdate` shows
+  a poison or bleed (stack type `poison`, `bleeding`, or effect type POISON, BLEED) with half its
+  ticks left → the cure. Its level is the lower set level (`hooks_buff.go:221-233`,
+  `negateLevelAllows`): `effectAbnormalLvl` (only with an `effectType`; Sting 223 sets only this) or
+  `abnormalLvl` (Poison, Curse: Poison, Venom, Bleed); neither set → no cure. Up to 3: Antidote 1831
+  or Bandage 1833; 4-7: Greater Antidote 1832 or Emergency Dressing 1834 (plain first when both
+  work); 8: none. One `UseItem` per effect seen, 500 ms reuse. None against monsters.
 - **Pool estimate.** HP and max HP read once at selection (continuously from
   `ExDuelUpdateUserInfo`), CP and max CP from the latest `CharInfo` or the duel window; each 35 on
   the target comes off CP, then HP. It drives finishers and the break-off, never a re-selection.
@@ -115,9 +117,10 @@ and junk-rule cases in X10.
   a Cleric casting 1011 Heal (hit 5000) on itself → Shield Stun before it lands; not at reuse
   against the Cleric, at reuse against a Warrior.
 - `TestPvPInterruptTooLate` (X6): a cast landing before its own hit time plus delay → none; a damage
-  interrupt under `MinBreak` → none; a test-built magic sleep (hit 4000) at cast speed 260 against a
-  cast landing 4.5 s after its `MagicSkillUse`: no auto-use → none (5.1 s); auto-use and a stack →
-  the interrupt (3.6 s plus at most 0.6 s); auto-use, no stack → none.
+  interrupt under `MinBreak`, landing in the cast's last 200 ms, or on a non-magic cast → none; a
+  test-built magic sleep (hit 4000) at cast speed 260 against a cast landing 4.5 s after its
+  `MagicSkillUse`: no auto-use → none (5.1 s); auto-use and a stack → the interrupt (3.6 s plus at
+  most 0.6 s); auto-use, no stack → none.
 - `TestPvPLongCastRule` (X6; EF in X7): EF under 50 % HP, a melee opponent in reach → no Elemental
   Heal; the opponent's mask shows a stun → Elemental Heal.
 - `TestPvPControlLandRate` (X6; Stun Attack in X7, Dryad Root in X8): Stun Attack vs an Orc Fighter
@@ -129,10 +132,11 @@ and junk-rule cases in X10.
   cast in place; a kiting caster whose duel opponent is 1900 away → `Action` (the chase), no kite.
 - `TestPvPCPPotion` (X6; the junk set in X10): CP under 50 % in a PvP fight with 5592 → `UseItem`;
   PvE → none; a duel → none, but a Poison 129 in it → the cure; CP potions not junk.
-- `TestPvPCure` (X6; the supply list in X10): Poison 129 level 3, most ticks left → 1831; Bleed
-  level 5 → 1834; level 8 → none; Sting 223 at skill level 1 (`effectAbnormalLvl` 3) → 1833, 20
-  (level 5) → 1834, 45 (level 8) → none; a test poison with neither level → none; vs a monster →
-  none; the `pvp` supply list holds 1831 and 1833, from level 20 also 1832 and 1834.
+- `TestPvPCure` (X6; the supply list in X10): Poison 129 at skill level 1 (`abnormalLvl` 3), most
+  ticks left → 1831, at skill level 3 (6) → 1832; Bleed `abnormalLvl` 5 → 1834, 8 → none; Sting 223
+  at skill level 1 (`effectAbnormalLvl` 3) → 1833, 20 (level 5) → 1834, 45 (level 8) → none; a test
+  poison with neither level → none; vs a monster → none; the `pvp` supply list holds 1831 and 1833,
+  from level 20 also 1832 and 1834.
 - `TestPvPBreakOff` (X6; OM in X8, Ultimate Defense in X7): open world, CP gone, HP under the bound,
   losing, faster → the `Break` step, then flee; duel or arena → fights on; an OM whose melee
   opponent would break Dreaming Spirit more often than not → no `Break`, flees at once; a test sleep

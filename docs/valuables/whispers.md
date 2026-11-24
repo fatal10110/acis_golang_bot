@@ -57,7 +57,7 @@ A whisper in a round (no bot marker, not a command) goes to the responder, not t
 upper-case walker command, which the server drops (case-sensitive prefix,
 `handler/chat/chat.go:78-84,114-121`); one that would gets a lowercase `wts`/`ok` lead. It is at
 most 100 UTF-16 units (`MaxTextLength`, `handler/chat/chat.go:63-64`; `Admit` drops longer lines,
-`:101-103`; `chatMaxText`, `craftorder.go:23`), since a dropped reply still counts in the caps: a
+`:99-101`; `chatMaxText`, `craftorder.go:23`), since a dropped reply still counts in the caps: a
 listing reply (`which?`, `WTS <names>, trade me`, `WTS <names> again soon`) takes whole labels in
 score order as they fit (six entries with names such as `Recipe: Halberd(60%)` or `Conjuror's Staff
 (D)` do not), and a one-item label too long alone is cut on a rune by `clipChat`
@@ -85,9 +85,9 @@ responder, with its delay, queue and the ended round's caps, instead of a random
 or `hi` (`defaultChatPolicy`, `chat.go:32-40`; `chatHeard`, `chat.go:121-136`):
 
 - an entry not released: `<name> not now, wts again soon`;
-- a released entry listed in the open store: `<name> in my store <price>` (V7b);
+- a released entry listed in the open store: `<name> in my store <price>` (V7c);
 - a released entry not listed (stored for the release withdrawal, carried before the opening or in a
-  full town, or left out by the budget): `<name> not now, wts again soon` (V7b);
+  full town, or left out by the budget): `<name> not now, wts again soon` (V7c);
 - a price question naming nothing: `WTS <names> again soon`.
 
 No offer or trade outside a round: the bot may be in its store, where the server refuses trades
@@ -111,8 +111,8 @@ canned reply with today's caps.
   scrolls "scroll 50k" points at both, takes no offer, gets both asks; with one scroll and the sword
   it offers on the scroll, and "watershadow scroll" names the sword.
 - **Prices:** "how much for +5 conjuror's staff?" gets the ask, no counter used; "2x tears 150k"
-  offers 150000 a unit; "recipe: halberd(60%) 300k" offers 300000; "tears 500" and "tears 150k 140k"
-  no offer; under half the floor: the current price, both counters left.
+  offers 150000 a unit; with a fixture entry `Recipe: Halberd(60%)`, "recipe: halberd(60%) 300k"
+  offers 300000; "tears 500" and "tears 150k 140k" no offer; under half the floor: the current price, both counters left.
 - **Length:** with seven long-named entries, a question pointing at several, a line naming none and
   an after-round question each get at most 100 UTF-16 units of whole top-scored labels; each reply
   counts once.

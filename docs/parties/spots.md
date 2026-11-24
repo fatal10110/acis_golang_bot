@@ -48,8 +48,9 @@ claim (`command.go:238-242`), whose order clears the slot first. A size change (
 leading) is one `reweigh(i, beside, old, new)` under the registry's lock; down, or beside, needs no
 check. A held re-weigh up may pass the cap, and `ruleSpot` re-picks (`overCap`): room for `n`
 (within `MaxTravel` first, `spots.go:497-512`) moves the party; with none the leader keeps its spot,
-re-picking every `spotRetry`, never travelling. `claimOverN` serves only a claimless leader, and
-`farmBesideN` only one `claimOverN` found no room for.
+re-picking every `spotRetry`, never travelling. `claimOverN` serves a claimless leader and an
+`outleveled` or `misfit` holder (`spots.go:524-529`), and `farmBesideN` only a claimless one
+`claimOverN` found no room for.
 
 ## Crowd check
 

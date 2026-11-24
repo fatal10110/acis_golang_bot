@@ -31,7 +31,7 @@ A released valuable carried at the round's end is not deposited; one stored is w
 allowing, by the next round's withdrawal or the [off-round release
 withdrawal](round-end.md#off-round-errands); with the budget spent it stays stored. It needs no
 round, and the opening lists it ahead of the loot at its [floor](whispers.md#prices). Three store
-changes, all V7b:
+changes, all V7c:
 
 - `storeReady`'s store budget gate (`store.go:358`) holds back only loot: an opening also starts for
   a released valuable the valuables budget allows; `storeSells` accepts one.
@@ -63,13 +63,13 @@ deposit](round-end.md#off-round-errands), and no released stored one is withdraw
 
 **Counting.** A trade counts its price on `SendTradeDone` with success. The store counts one total
 today (`countSold` adds the adena gained since the list to `store.sold` at the close,
-`store.go:547-556`). V7b keeps each listed valuable row's object, count and price; at the close the
+`store.go:547-556`). V7c keeps each listed valuable row's object, count and price; at the close the
 units a row lost (listed less still carried) times its price go to the valuables budget, the rest to
 the store's. Sold units leave the inventory, hence the entry, with no ledger step.
 
 ## Tests
 
-- `TestValuablesRelease` (V7b): at a round's end a seventh valuable, asks past `HoldValue`, or a
+- `TestValuablesRelease` (V7c): at a round's end a seventh valuable, asks past `HoldValue`, or a
   third unsold round release them: the stored ones withdrawn and listed first in
   `SetPrivateStoreListSell` at their floor, no Trade line; a released carried one is in no
   `DepositP` row and pays no fee, and all released means no deposit; a +5 lists at reference plus
@@ -89,7 +89,7 @@ the store's. Sold units leave the inventory, hence the entry, with no ledger ste
   `RequestPrivateStoreManageSell` and no move for the 60 s until the open, then the off-round
   `_WithdrawP`, the walk back, and the opening lists it first, then the loot; with a backoff past
   `StoreHold`, the store opens at `StoreHold` with the loot only.
-- `TestValuablesStoreSplit` (V7b): a store with one valuable and two loot rows closing with the
+- `TestValuablesStoreSplit` (V7c): a store with one valuable and two loot rows closing with the
   valuable and one loot row sold: the valuable's price in the valuables budget, the rest in the
   store budget; the sold entry leaves the ledger and cap. With the store open, a whisper within
   `AnswerAfter` naming a released listed valuable gets `<name> in my store <price>`; naming a

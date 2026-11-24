@@ -1,6 +1,6 @@
 # Modes, the `pvp` preset, panel and metrics
 
-Modes and preset ship in X4, panel and metrics in X12. Decision D35.
+Modes and preset ship in X4b, panel and metrics in X12. Decision D35.
 
 ## Modes
 

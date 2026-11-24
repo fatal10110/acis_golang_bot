@@ -32,7 +32,7 @@ new run starts with no slot.
 
 ## Status fields
 
-On `botclient.Status`, shipped in P1a (read by P5, shown by P7):
+On `botclient.Status`, shipped in P1a (read by P5b, shown by P7):
 
 - `Party`: the slot (`lead ...` or `join <leader> ...`, empty for none), beside `Order`.
 - `Whispered`: true while a GM's whispered `follow`, `assist`, `stay` or `go` holds this session.
@@ -40,7 +40,7 @@ On `botclient.Status`, shipped in P1a (read by P5, shown by P7):
   at `JoinWait` (P1c's [join hold](members.md#join-hold)), empty while a slot is set or after the
   organizer's `unparty`.
 
-`Heals` ships in P5 ([composition](composition.md#healer)).
+`Heals` ships in P5b ([composition](composition.md#healer)).
 
 ## unparty
 
@@ -80,8 +80,8 @@ One reply slot, `orders.reply`, sent by `ruleCommand`, is replaced by a later re
 (`command.go:122-125,252-258`); a clearing command that answers needs the withdrawal first (a GM's
 `invite me`, a failing `go <spot>`), so `orders` gains a `withdraw` flag:
 
-- set by the clearing step only while the bot is in a party; the panel `leave` sets it instead of
-  the reply;
+- set only while the bot is in a party, by `unparty` (P1a, which ships the flag) and the clearing
+  step (P1b); the panel `leave` sets it instead of the reply;
 - `ruleCommand` sends `RequestWithdrawParty` (`actLeaveParty`) while it is set and the bot is in a
   party, then the reply; the send clears it and resets the leader watch (`brain.go:815-817`). No
   chat gate for it; the whisper follows within the gate;

@@ -1,7 +1,7 @@
 # Whom the bot may fight
 
-Ships in X4 (`MayFight`, summons), X5 (hunting, arena targets). Decisions D38, D39. What keeps a
-fight from giving karma: [guards](guards.md).
+Ships in X4 (`MayFight`, summons; rule 3 in X4b), X5 (hunting, arena targets). Decisions D38, D39.
+What keeps a fight from giving karma: [guards](guards.md).
 
 ## MayFight
 
@@ -88,12 +88,13 @@ A refused summon is held off: neither `attackers` nor `unfought` returns it
   pick the player at 250 hits it → it fights that one back; a tier player just walked in, 300
   inside, idle, the only candidate → picked. `ArenaStay` reached with its damage cast in flight →
   cancel, a move inside, one attack interval, then the walk out, never the walk first.
-- `TestPvPSummon` (X4): a summon (`Summon`, `Attackable`, flag 1, karma 0, owner out of sight) hits
-  the bot → fought with plain `Action` and casts only; its flag turns to 2 → no damage or
-  `nextActionAttack` step, its cast in flight cancelled, a move; flag 0 and karma 0 with
-  `Attackable` still true → held (today's `unfought`); karma above 0 → fought; the flagged owner in
-  sight → the owner fought, not the summon; a party member's flagged summon → never; any summon
-  hitting it in its duel → not fought; in an arena, the owner inside by more than 150 → fought,
-  outside → not; a summon's Wind Strike at the bot → in the attackers table, a Heal → not.
+- `TestPvPSummon` (X4; the flag-2 and arena cases in X4b): a summon (`Summon`, `Attackable`, flag 1,
+  karma 0, owner out of sight) hits the bot → fought with plain `Action` and casts only; its flag
+  turns to 2 → no damage or `nextActionAttack` step, its cast in flight cancelled, a move; flag 0
+  and karma 0 with `Attackable` still true → held (today's `unfought`); karma above 0 → fought; the
+  flagged owner in sight → the owner fought, not the summon; a party member's flagged summon →
+  never; any summon hitting it in its duel → not fought; in an arena, the owner inside by more than
+  150 → fought, outside → not; a summon's Wind Strike at the bot → in the attackers table, a Heal →
+  not.
 - e2e `TestLivePvPFightBack` (X13): a client force-attacks a `pvp` bot; it fights back; the client
   stops and unflags and the bot drops it (GM, client, bot).

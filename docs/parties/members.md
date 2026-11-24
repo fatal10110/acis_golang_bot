@@ -55,8 +55,9 @@ partyless bot (`ruleFollow` passes with `followed()` 0, `follow.go:97-103`, `com
 then `newbie`, `travel`, `spot`, `farm`, `rules.go:506-511`; positions are reset with `Party`,
 `party.go:259-260`), adds the **join hold** in `ruleLeader` after `byLeaderBody`: while the bot
 holds a `join` slot in no party (or, from P1d, runs a [handover](leader.md#handover)) it returns
-`Action{}, true`, standing and claiming nothing; the rules before `leader` (`rules.go:474-505`:
-`attacked`, `heal`, `rest`, `rebuff`) still run. It covers a member between invitations too. It ends
+`Action{}, true`, claiming nothing; the rules before `leader` (`rules.go:475-505`: `attacked`,
+`heal`, `rest`, `rebuff`, the errands) still run, so a due errand walks it within its reach as in
+its party. It covers a member between invitations too. It ends
 with the organizer's `unparty`, or `JoinWait` (6 minutes: `LeaderGone` plus two `PartyTick`s, a
 persona default) after the bot found itself partyless with the slot set: the brain clears its slot
 (`PartyLeft` `timeout`). Its one real case is a pin whose leader is gone
@@ -84,8 +85,8 @@ lost-leader branch for the named leader, and a clear inside the party ends with 
 - `TestPartyJoinReleasesSpot` (P1c): a member holding a spot joins: held drops; one beside: its
   beside count drops.
 - `TestPartyMemberLeaderLost` (P1c, on P1a's `unparty` and P1b's clears): a dispersed `join`
-  member, no spot, a fitting spot free, a monster in sight: no whisper, `/unstuck`, claim, move or
-  attack, rule `leader`; attacked, it fights back; it accepts the returning leader and follows; at
+  member, no spot, no errand due, a fitting spot free, a monster in sight: no whisper, `/unstuck`,
+  claim, move or attack, rule `leader`; attacked, it fights back; it accepts the returning leader and follows; at
   `JoinWait` it clears (`timeout`) and plays its persona, no whisper or `/unstuck` then or 10
   minutes after; likewise after `unparty`, a panel `leave` (nil) or `follow` and a GM's `leave` in
   the hold, each at least `LeaderWait` after the dispersal; a bot with no slot behaves as today.

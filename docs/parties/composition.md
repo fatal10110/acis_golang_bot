@@ -1,6 +1,6 @@
 # Composition and level band
 
-Who the [organizer](organizer.md) groups. Ships in P5.
+Who the [organizer](organizer.md) groups. Ships in P5a.
 
 | Slot | Who | Why |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ The heals are bought ([server](server.md#server-behavior), "Heals learned"), so 
 `Status.Heals`: true while the run's skill list (`World.Skills`, from `SkillList`,
 `world.go:29-32`) holds its row's heal: 1011, 1015 or 1027 for a mystic, Cleric, Elven Oracle or
 Shillien Oracle, 1229 for an Orc Shaman. `Status` has no skills today (`status.go:55-98`); the field
-ships in P5, and a bot that trains later counts from the next pass (inside a bot party, through
+ships in P5b, and a bot that trains later counts from the next pass (inside a bot party, through
 [errands](members.md#errands-in-a-bot-party)).
 
 ## Size, band, location
@@ -53,8 +53,8 @@ step 2's order.
 
 ## Tests (planner unit, table-driven)
 
-- `TestPlanLeaderIsDamage`: two farmers and two supports of one town form one party, the higher
-  farmer leading.
+- `TestPlanLeaderIsDamage`: two farmers, one healer and one other support of one town form one
+  party, the higher farmer leading.
 - `TestPlanNeedsHealer`: a farmer with an orc-mystic support forms nothing, nor with a level-6
   human mystic; a level-7 one with `Heals` forms a party, as does a level-20 Orc Shaman with
   `Heals`; either with `Heals` unset forms nothing, and a party whose only healer reads it unset

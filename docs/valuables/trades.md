@@ -26,12 +26,10 @@ gets only the whisper (`trade me`); its own request is still accepted.
 - It waits for `TradeStart` up to 15 s (the expiry); on any refusal (119, 153, 144, 340 or 1065, 940
   or 619, 794, 1987; [server](server.md#server), "Trade request") or silence it asks that partner no
   more this round.
-- At most one request open (the server refuses a second with 142); none while the store is open or
-  opening, during the round's private warehouse request, or within 15 s
-  (`RequestTimeout`) of the round's end as it stands (`RoundWait` after the first line, or the
-  extended `Grace` end), since an unexpired request refuses the keeper's links, the deposit and a
-  store opening; both still wait for one left unanswered ([round-end](round-end.md#steps), steps 5,
-  6).
+- At most one request open; none while the store is open or opening, during the round's private
+  warehouse request, or within 15 s (`RequestTimeout`) of the round's end as it stands (`RoundWait`
+  after the first line, or the extended `Grace` end): an unexpired request refuses the keeper and
+  the store with 142 ([round-end](round-end.md#steps), steps 5, 6).
 
 ## Tests
 
@@ -48,4 +46,4 @@ gets only the whisper (`trade me`); its own request is still accepted.
   the valuables budget, not the store's; a valuable priced above the budget left is offered while
   sales are under `Budget`, none once they reach it. After the success and the `InventoryUpdate`
   taking the sword away, its entry is gone and the next ad line (V4's step) names only those still
-  carried. The cap is V7b's ([`TestValuablesRelease`](release.md#tests)).
+  carried. The cap is V7c's ([`TestValuablesRelease`](release.md#tests)).

@@ -42,15 +42,12 @@ only a grouping key. The code: a pure planner on the supervisor goroutine, three
   online bots of the same town within walking reach and a level band; no in-game discovery. On by
   default in `bots ui`, with a panel switch; no organizer in `bots swarm`.
 - **D26, composition.** A Damage-role bot (`farmer`) leads; Support-role bots (`support`) join, at
-  least one healer (its kit heals another member at its level and it learned the heal: human,
-  elven and dark mystics from 7; Cleric, Elven Oracle, Shillien Oracle, Orc Shaman from 20 with its
-  party heal; not an orc mystic); a third is any other Support bot, else a second Damage bot with
-  no healer to lead with. Size 3, at most 4 (persona defaults). `merchant`, `crafter` and `town`
+  least one healer ([composition](composition.md#healer)); a third is any other Support bot, else a
+  second Damage bot with no healer to lead with. Size 3, at most 4 (persona defaults). `merchant`, `crafter` and `town`
   never take part; party mode `off` keeps a bot out; the panel may pin a party by hand.
 - **D27, loot and band.** Loot by turn (rule 3): items rotate, the server splits adena in range, a
   spoil stays with its sweeper. A party forms with its bot members within 3 levels of each other
-  and breaks past 5, the widest spread one spot fits under today's spot policy and the server's
-  5-level exp threshold; the 2 between are hysteresis. Players are not counted.
+  and breaks past 5 ([why](composition.md#size-band-location)). Players are not counted.
 - **D28, players.** Any player may whisper `join` to a bot party's leader to be invited, and
   `invite me` to a Support member to take it out (extends D3 as D20 did, for these two whispers to
   bots of bot parties only). `invite me` still passes the authority check (with none configured
@@ -72,26 +69,30 @@ only a grouping key. The code: a pure planner on the supervisor goroutine, three
 | the `lead`, `join` and `unparty` commands (`lead` and `join` kept by the `Bot` like `stay` and `go`, `unparty` one-off like `leave`) | 8, operator commands and standing orders (`docs/plan.md:541-554`) and the mailbox's Commands bullet (`:577`) | P1a |
 | a GM's `invite me` and `leave` taking the bot out of a bot party and clearing its slot first | 6, commands | P1b |
 | "`invite me` (the bot invites nobody ...)" becomes "a bot invites only the bots the organizer or the panel assigned to its party; it never invites unasked" | 6, commands | P1d |
-| the organizer and the party mode per bot | 8, presets | P5 |
+| the organizer and the party mode per bot | 8, presets | P5b |
 | the bot also invites "players who whisper `join`", and `invite me` "from a player takes a Support member of a bot party out, under the claim table, and is ignored by any other bot" | 6, commands | P6 |
 
 ## Delivery (milestone M11)
 
-| PR | Scope | Depends on | Reads |
-| --- | --- | --- | --- |
-| P1a | Party orders and the slot: `lead`, `join`, `unparty` and their `Command.valid` forms, the slot and known bot leaders, `Status.Party` (published before the order is answered), `Whispered`, `PartyLeft`, `ErrWhispered`, replacing a standing order, the raw route refusing the kinds, `unparty` from the bot party only, resetting the leader watch; members accepting their leader outside the claim table and declining known bot leaders by name, never by marker (existing marked-player e2e scenarios stay green); plan rules. Unit tests only. | — | [orders](orders.md), [members](members.md#joining) |
-| P1b | Slot clearing: the `withdraw` step; panel `leave`, panel standing orders, whispered orders, a GM's `leave` and `invite me` clearing the slot; the player-led-party rule with its exception; `PartyLeft` `left`; leader-watch reset on clears from no party; plan rule. Unit tests only. | P1a | [orders](orders.md), [members](members.md#clearing-from-no-party), [leader](leader.md#handover) |
-| P1c | The member's hold: skipping the lost-leader hold, whisper and `/unstuck`; the join hold with `JoinWait`, `PartyLeft` `timeout` and the watch reset; releasing the spot on joining. Unit tests only. | P1a, P1b (its test's clears from no party) | [members](members.md) |
-| P1d | The leader: the `party` rule (refusals, declines, `InviteWait`, 164, rejoin wait), five loot rules, the oust and change-leader encoders, the handover with `HandoverWait`, `HandoverFor`, the join hold and `unparty`; plan rule. | P1a, P1b (the handover's exception), P1c (members hold between invitations) | [leader](leader.md), [members](members.md#join-hold), [orders](orders.md#unparty), [server](server.md#pacing) |
-| P2 | Party play: weighted claim, beside and release, `reweigh`, the crowd check, band fit, `misfit`, the gated trip's give-back, weight back to 1, errand walks, the gather gate, no gatekeeper trips while leading, the member's answer to its leader's teleport and its own supply causes (the whisper skip ships in P1c). | P1d | [spots](spots.md), [members](members.md#events) and [errands](members.md#errands-in-a-bot-party) |
-| P3 | Resurrection: 1016 in the Cleric, Elven Oracle and Shillien Oracle learn tables and the `raise` rule. | P1a, S7 (#327) | [members](members.md#events) |
-| P4 | Party danger through the model: party `TimeToKill` and `TimeToDie` with heals; the spot fit for a party. | P2, S3 (#322), S11 (#330) | [model](model.md), [spots](spots.md#fit-by-level) |
-| P5 | The organizer: planner, supervisor tick and orders, party mode and pins, roles, healer flag and `Status.Heals`, `NewRun`, `State` and its timers, drops, `Sent` and slot re-send, `join` before `lead`, breaks (`NoSpotFor` among them) and cool-downs, pins kept through every timer and held back while their leader is offline, leaving a pin by `PartyLeft`, pin rows written back; plan rule. | P1a-P1d, S4 (#323), S7 (#327, the healer flag), S9 (#331, the `farmer` preset) | [organizer](organizer.md), [composition](composition.md) |
-| P6 | Players and GMs: the `join` whisper and queue, the `JoinReplies` cap, a player's `invite me` (refused verdict and no-authority routes, claim lookup, pending claim), the handover to a player as a new step; plan rules. "Support member" is S4's role. | P1d, S4 (#323, roles) | [players](players.md), [leader](leader.md#invitations) and [handover](leader.md#handover) |
-| P7 | Panel: `FormParty`, `DissolveParty`, `SetPartyMode`, the auto switch (off dissolves every auto party), the API, the Parties page, the slot on the Bots table and Bot detail, metrics. | P5 | [panel](panel.md) |
-| P8 | e2e live scenarios for P1a-P7, at most 4 bots each; the harness keeps its marked player names. | each; the raise scenario also P2 (the errand gate) and S8 (#328) | [e2e](e2e.md) |
+Each scope links the sections its PR builds, which are also its reading list; plan rules land as
+the table above says.
 
-Most urgent: P1a-P1d and P5 give parties at all; P2 makes them play as a group.
+| PR | Scope | Depends on |
+| --- | --- | --- |
+| P1a | [commands](orders.md#commands), [status fields](orders.md#status-fields) but `Heals`, [unparty](orders.md#unparty) with the `withdraw` flag it sets ([withdrawal](orders.md#withdrawal-and-reply-in-order)), [joining](members.md#joining) but the spot release, the watch reset of [clearing](members.md#clearing-from-no-party) for `unparty`; the marked-player scenarios of [e2e](e2e.md) stay green. Unit tests only. | — |
+| P1b | [slot clearing](orders.md#slot-clearing) and its step setting `withdraw`, [clearing from no party](members.md#clearing-from-no-party), the slot kept for a [handover](leader.md#handover). Unit tests only. | P1a |
+| P1c | [join hold](members.md#join-hold), the spot release of [joining](members.md#joining). Unit tests only. | P1a, P1b (its test's clears from no party) |
+| P1d | [leader](leader.md), its part of the [join hold](members.md#join-hold), [pacing](server.md#pacing). | P1a, P1b, P1c |
+| P2 | [spots](spots.md), the trip causes of [events](members.md#events), [errands](members.md#errands-in-a-bot-party). | P1d |
+| P3 | the `raise` rule of [events](members.md#events), 1016 in the Cleric, Elven Oracle and Shillien Oracle learn tables. | P1a, S7 (#327) |
+| P4 | [model](model.md), [fit by level](spots.md#fit-by-level). | P2, S3 (#322), S11 (#330) |
+| P5a | the planner: [organizer](organizer.md) but its P5b parts, [composition](composition.md). | P1a, S4 (#323), S7 (#327, the healer flag) |
+| P5b | [supervisor wiring](organizer.md#supervisor-wiring), [`Sent`](organizer.md#which-orders-arrived) polling, registry fields and pin rows ([pins](organizer.md#pinned-parties)), `Status.Heals` ([healer](composition.md#healer)). | P5a, P1b-P1d, S9 (#331, the `farmer` preset) |
+| P6 | [players](players.md), on [invitations](leader.md#invitations), [handover](leader.md#handover) and [withdrawal](orders.md#withdrawal-and-reply-in-order). | P1d, S4 (#323, roles) |
+| P7 | [panel](panel.md), on [pins](organizer.md#pinned-parties) and the [`Sent` rule](organizer.md#which-orders-arrived). | P5b |
+| P8 | [e2e](e2e.md). | each; the raise scenario also P2 (the errand gate) and S8 (#328) |
+
+Most urgent: P1a-P1d and P5a-P5b give parties at all; P2 makes them play as a group.
 
 ## Risks and gaps
 
@@ -106,7 +107,7 @@ Most urgent: P1a-P1d and P5 give parties at all; P2 makes them play as a group.
 
 To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep today's party behavior); a party travelling by
 gatekeeper or recalling together (P2 covers only the teleport answer; until then a party with no
-spot in reach, a given-back outgrown spot included, is broken at `NoSpotFor`, P5); party matching
+spot in reach, a given-back outgrown spot included, is broken at `NoSpotFor`, P5a); party matching
 rooms (`network/partymatch.go`) listing bot parties: backlog; command channels: out of scope;
 measuring a bot party's exp per hour against a solo farmer of the same level on the home run once P4 lands.
 
