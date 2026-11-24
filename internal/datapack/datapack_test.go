@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+// combatDefaults are the combat stats of a template that sets none, the
+// server's defaults (data/xml/npc.go buildNPCTemplate).
+var combatDefaults = Combat{AtkSpd: 300, Crit: 4, STR: 40, CON: 21, DEX: 30}
+
 func TestLoadSamples(t *testing.T) {
 	dp, err := Load(filepath.Join("testdata", "xml"))
 	if err != nil {
@@ -16,10 +20,13 @@ func TestLoadSamples(t *testing.T) {
 	}
 
 	wantNPCs := map[int32]NPC{
-		20001: {ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300},
-		20002: {ID: 20002, Name: "Rabbit", Type: "Monster", Level: 3},
-		20101: {ID: 20101, Name: "Set Name", Type: "Folk", Level: 1},
-		25001: {ID: 25001, Name: "Greyclaw Kutus", Type: "RaidBoss", Level: 23, AggroRange: 300},
+		20001: {
+			ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300,
+			Combat: Combat{HP: 39, PAtk: 7.56, PDef: 39, AtkSpd: 247.42, Crit: 4, STR: 40, CON: 43, DEX: 30},
+		},
+		20002: {ID: 20002, Name: "Rabbit", Type: "Monster", Level: 3, Combat: combatDefaults},
+		20101: {ID: 20101, Name: "Set Name", Type: "Folk", Level: 1, Combat: combatDefaults},
+		25001: {ID: 25001, Name: "Greyclaw Kutus", Type: "RaidBoss", Level: 23, AggroRange: 300, Combat: combatDefaults},
 	}
 	if !reflect.DeepEqual(dp.NPCs, wantNPCs) {
 		t.Errorf("NPCs = %+v, want %+v", dp.NPCs, wantNPCs)
@@ -162,7 +169,7 @@ func TestLoadNPCsLastDeclarationWins(t *testing.T) {
 			files: map[string]string{
 				"a.xml": `<list><npc id="1" name="first" type="Monster"/><npc id="1" name="second" type="Folk"/></list>`,
 			},
-			want: map[int32]NPC{1: {ID: 1, Name: "second", Type: "Folk", Level: 1}},
+			want: map[int32]NPC{1: {ID: 1, Name: "second", Type: "Folk", Level: 1, Combat: combatDefaults}},
 		},
 		{
 			name: "across files",
@@ -171,8 +178,8 @@ func TestLoadNPCsLastDeclarationWins(t *testing.T) {
 				"a.xml": `<list><npc id="1" name="earlier" type="Monster"/></list>`,
 			},
 			want: map[int32]NPC{
-				1: {ID: 1, Name: "later", Type: "Folk", Level: 1},
-				2: {ID: 2, Name: "other", Type: "Monster", Level: 1},
+				1: {ID: 1, Name: "later", Type: "Folk", Level: 1, Combat: combatDefaults},
+				2: {ID: 2, Name: "other", Type: "Monster", Level: 1, Combat: combatDefaults},
 			},
 		},
 	}

@@ -71,13 +71,33 @@ type SpotPolicy struct {
 	// in the datapack, so a death is what tells it a pack is too much. 0
 	// avoids the one spot alone.
 	PackShare float64
+	// PackRisk passes over a spot whose pack deals the bot more than
+	// PackRisk times what it can take while it kills one of them: its max
+	// HP plus what the healing potions it carries restore in that time
+	// (packRisk, from the bot's own stats against the monsters'). It judges
+	// a pack before a death there (#294): to a level 14 fighter in Squire's
+	// gear with Lesser Healing Potions, Talking Island's werewolf pack that
+	// killed it (TestLivePackSpot) is about 3.3, its orc packs about 2.3
+	// while three potions last and 4 after; to a level 6 one without a
+	// potion its toad spots are 1.9 to 2.9. Regeneration, shots, the
+	// fight's lulls and a pack drawn in turn are left out, so it is a ratio
+	// against the worst case rather than a death line. Holding a spot over
+	// it, the bot moves to one that fits (overRisk). A mystic's spells are
+	// left out too, so a mystic is not judged. 3 is the value the cases
+	// above are judged at; 0, the default, never passes one over: a
+	// character weakened by its death penalty fits nothing on the worst
+	// case (TestLiveSupplyTrip's level 6 one, with P.Atk 2, is over 12 at
+	// the toads with 12 potions), so it would stand idle where it farms
+	// today. The per-build margins of #330 replace it.
+	PackRisk float64
 }
 
 // defaultSpotPolicy is the farmer's spot choice: monsters up to two levels
 // above the bot, aggressive ones not above it (plan, farmer) once it is
 // past level 5, leaving at five levels over; spread over every spot that
 // fits within twice the newbie zone's reach, sharing full ones rather than
-// waiting (#137); a death at a pack passes over its like (#281).
+// waiting (#137); a death at a pack passes over its like (#281). PackRisk
+// is off: see its doc.
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
@@ -109,12 +129,19 @@ func spotPack(s *datapack.Spot) float64 {
 	return float64(s.Aggressive) * min(1, math.Pi*r*r/s.Area)
 }
 
-// spotFits reports whether s fits the bot at now: its level, and no pack
-// a death taught it to pass over.
+// spotFits reports whether s fits the bot at now: its level, no pack a
+// death taught it to pass over, and no pack too much for its stats
+// (SpotPolicy.PackRisk).
 func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
 	self := &b.world.Self
 	level := int(self.Level)
-	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now)
+	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s)
+}
+
+// packFits reports whether s's pack is within SpotPolicy.PackRisk.
+func (b *Brain) packFits(s *datapack.Spot) bool {
+	p := &b.persona.Spots
+	return p.PackRisk <= 0 || b.packRisk(s) <= p.PackRisk
 }
 
 // packBound is the pack a death at one taught the bot to pass over
@@ -207,7 +234,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || b.overRisk() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.held {
@@ -377,6 +404,15 @@ func (b *Brain) crowded(at Point, now time.Time) bool {
 func (b *Brain) outleveled() bool {
 	v := &b.spot
 	return v.held && int(b.world.Self.Level) > b.cfg.Spots.spots[v.idx].MaxLevel+b.persona.Spots.Outlevel
+}
+
+// overRisk reports whether the pack of the spot the bot holds is over
+// SpotPolicy.PackRisk, as when it took the spot before its stats came in
+// or its potions ran out: it looks for one that fits, and keeps the one it
+// holds with none.
+func (b *Brain) overRisk() bool {
+	v := &b.spot
+	return v.held && !b.packFits(&b.cfg.Spots.spots[v.idx])
 }
 
 // pickSpot claims a spot that fits the bot's level, is not avoided and that

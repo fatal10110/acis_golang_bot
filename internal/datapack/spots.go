@@ -31,6 +31,16 @@ type Spot struct {
 	// among them.
 	Aggressive, AggroRange, ClanRange int
 	RunSpeed                          float64
+	// Mobs are its aggressive monsters, one per spawn: what a bot weighs a
+	// fight there with.
+	Mobs []Mob
+}
+
+// Mob is one kind of aggressive monster a spot spawns: its level, its
+// combat stats and how many of it the spawn declares.
+type Mob struct {
+	Level, Count int
+	Combat       Combat
 }
 
 // Spots lists the makers of d fit for farming, in spawnlist order. It
@@ -85,6 +95,9 @@ func (d *Datapack) spot(m *Maker) (Spot, bool) {
 			s.AggroRange = max(s.AggroRange, npc.AggroRange)
 			s.ClanRange = max(s.ClanRange, npc.ClanRange)
 			s.RunSpeed = max(s.RunSpeed, npc.RunSpeed)
+			if sp.Total > 0 {
+				s.Mobs = append(s.Mobs, Mob{Level: npc.Level, Count: sp.Total, Combat: npc.Combat})
+			}
 		}
 		monsters++
 	}

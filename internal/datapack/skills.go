@@ -37,6 +37,8 @@ type Effect struct {
 	// lasts Time seconds; an over-time effect ticks Count times, Time
 	// seconds apart.
 	Time, Count int
+	// Value is the effect's val: what an over-time heal restores a tick.
+	Value float64
 }
 
 type skillFile struct {
@@ -126,13 +128,14 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 		for _, f := range el.For {
 			for _, e := range f.Effects {
 				vals := foldAttrs(e.Attrs).vals
-				r := res.reader(vals, "stackOrder", "time", "count")
+				r := res.reader(vals, "stackOrder", "time", "count", "val")
 				eff := Effect{
 					Name:       r.str("name"),
 					StackType:  r.strDefault("stackType", "none"),
 					StackOrder: r.floatDefault("stackOrder", 0),
 					Time:       int(r.literalDefault("time", 1)),
 					Count:      int(r.literalDefault("count", 1)),
+					Value:      r.floatDefault("val", 0),
 				}
 				if eff.Name == "" {
 					r.fail("name", errMissing)

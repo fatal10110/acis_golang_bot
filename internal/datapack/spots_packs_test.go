@@ -2,18 +2,21 @@ package datapack
 
 import (
 	"encoding/xml"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 // TestSpotPackFacts checks the pack facts of a spot: the aggressive
 // monsters' totals capped at MaximumNPCs, their largest aggro range, clan
-// call range and run speed, and the territory's area.
+// call range and run speed, the aggressive monsters' kinds, and the
+// territory's area.
 func TestSpotPackFacts(t *testing.T) {
 	// A 4000 x 3000 rectangle.
 	rect := &Territory{Name: "r", MinZ: -3500, MaxZ: -3000, Nodes: []Point{{0, 0}, {4000, 0}, {4000, 3000}, {0, 3000}}}
+	orc := Combat{HP: 163, PAtk: 18.48, PDef: 61, AtkSpd: 247.42, Crit: 4, STR: 40, CON: 43, DEX: 30}
 	npcs := map[int32]NPC{
-		20093: {ID: 20093, Type: "Monster", Level: 10, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300},
+		20093: {ID: 20093, Type: "Monster", Level: 10, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300, Combat: orc},
 		20342: {ID: 20342, Type: "Monster", Level: 12, AggroRange: 800, RunSpeed: 118.8, ClanRange: 200},
 		20001: {ID: 20001, Type: "Monster", Level: 13, RunSpeed: 200},
 	}
@@ -22,18 +25,21 @@ func TestSpotPackFacts(t *testing.T) {
 		max   int
 		spawn []Spawn
 		want  Spot
+		mobs  []Mob
 	}{
 		{
 			name:  "aggressive totals, largest ranges and speed",
 			max:   20,
 			spawn: []Spawn{{NPCID: 20093, Total: 4}, {NPCID: 20342, Total: 3}, {NPCID: 20001, Total: 5}},
 			want:  Spot{Aggressive: 7, AggroRange: 1000, ClanRange: 300, RunSpeed: 118.8},
+			mobs:  []Mob{{Level: 10, Count: 4, Combat: orc}, {Level: 12, Count: 3}},
 		},
 		{
 			name:  "capped at the maker's maximum",
 			max:   5,
 			spawn: []Spawn{{NPCID: 20093, Total: 4}, {NPCID: 20342, Total: 3}},
 			want:  Spot{Aggressive: 5, AggroRange: 1000, ClanRange: 300, RunSpeed: 118.8},
+			mobs:  []Mob{{Level: 10, Count: 4, Combat: orc}, {Level: 12, Count: 3}},
 		},
 		{
 			name:  "a passive monster counts toward none",
@@ -57,6 +63,9 @@ func TestSpotPackFacts(t *testing.T) {
 			if s.Aggressive != tt.want.Aggressive || s.AggroRange != tt.want.AggroRange || s.ClanRange != tt.want.ClanRange || s.RunSpeed != tt.want.RunSpeed {
 				t.Errorf("pack facts = %d %d %d %v, want %d %d %d %v", s.Aggressive, s.AggroRange, s.ClanRange, s.RunSpeed,
 					tt.want.Aggressive, tt.want.AggroRange, tt.want.ClanRange, tt.want.RunSpeed)
+			}
+			if !reflect.DeepEqual(s.Mobs, tt.mobs) {
+				t.Errorf("Mobs = %+v, want %+v", s.Mobs, tt.mobs)
 			}
 		})
 	}

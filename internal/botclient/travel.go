@@ -47,6 +47,9 @@ type TravelMap struct {
 	// potions are the datapack's healing potions, best first
 	// (indexPotions): what WithItemIndex puts in a persona.
 	potions []int32
+	// heals are what each of them restores (indexPotionHeals): what the
+	// bot weighs a pack with (Brain.packRisk).
+	heals map[int32]potionHeal
 	// buffPotions are the datapack's buff potions (indexBuffPotions), and
 	// stacks the stack effect of every skill level that shares a stack type
 	// with one of them, by skill id then level: what stackOf reads the
@@ -123,6 +126,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.arrows = indexArrows(dp.Items)
 	m.prices = dp.Prices
 	m.potions = indexPotions(dp.EtcItems, dp.Skills)
+	m.heals = indexPotionHeals(dp.EtcItems, dp.Skills)
 	m.buffPotions, m.stacks = indexBuffPotions(dp.EtcItems, dp.Skills)
 	m.castRanges = indexCastRanges(dp.Skills)
 	m.shots = indexShots(dp.EtcItems)

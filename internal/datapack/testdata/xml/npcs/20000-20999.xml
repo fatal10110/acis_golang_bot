@@ -9,6 +9,12 @@
 		<set name="runSpd" val="108.9"/>
 		<set name="clan" val="gremlin_clan"/>
 		<set name="clanRange" val="300"/>
+		<set name="hp" val="39.0"/>
+		<set name="pAtk" val="7.56"/>
+		<set name="pDef" val="39.0"/>
+		<set name="atkSpd" val="247.42"/>
+		<set name="str" val="40"/>
+		<set name="con" val="43"/>
 		<ai>
 			<set name="type" val="Folk"/>
 			<set name="level" val="99"/>

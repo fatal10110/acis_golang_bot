@@ -19,8 +19,12 @@ const packWatch = 20 * time.Minute
 // werewolves (run 118.8, faster than its 115) that call each other within
 // 300 (#281). The default persona has it fight back rather than flee from
 // the faster pack, drink as it fights, and pass over the packs like the one
-// a death taught it to: it survives the spot, or it avoids it. It fails at
-// a third death, or at a spot it died holding held again, within packWatch.
+// a death taught it to and, at SpotPolicy.PackRisk 3, the packs its own
+// stats say are too much (#294): it survives the spot, or it avoids it. It
+// fails at a third death, at a spot it died holding held again, or at the
+// werewolf spot held, within packWatch. Off (PackRisk 0, the default) the
+// farmer, worn down by the death penalty of earlier runs, died at the
+// werewolves, then the orcs, then gludio31_1624_01m1 in 9 minutes.
 func TestLivePackSpot(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -48,7 +52,9 @@ func TestLivePackSpot(t *testing.T) {
 	}, squiresSword, squiresShirt, squiresPants)
 	f := runFieldFarmer(t, ctx, tg, account, func(p *botclient.Persona) {
 		p.Potions = []int32{lesserHealingPotion}
+		p.Spots.PackRisk = 3
 	})
+	logStats(t, f)
 	gmTeleport(t, ctx, gm, townTI)
 	t.Logf("%s at %v", f.name, f.bot.Status().Position)
 
@@ -74,6 +80,10 @@ func TestLivePackSpot(t *testing.T) {
 		}
 		// The status board lags the bot by up to statusEvery: one from
 		// before its last death still shows the spot it died holding.
+		if st.Spot == pack.Maker {
+			t.Log(f.digest())
+			t.Fatalf("%s holds %s, a pack its stats pass over", f.name, st.Spot)
+		}
 		if st.Spot != "" && st.At.After(diedAt) {
 			if died[st.Spot] {
 				t.Log(f.digest())
@@ -100,4 +110,24 @@ func TestLivePackSpot(t *testing.T) {
 		}
 	}
 	t.Logf("%s: %d deaths in %v, last spot %q, %d potions left", f.name, deaths, packWatch, held, f.carries(lesserHealingPotion))
+}
+
+// logStats logs, at the end of the test, the combat stats of every UserInfo
+// of f that changed them: the ones its spot fit weighs packs with
+// (SpotPolicy.PackRisk; TestPackRisk's squires).
+func logStats(t *testing.T, f *farmer) {
+	t.Helper()
+	t.Cleanup(func() {
+		var last botclient.UserInfo
+		for _, s := range f.watch.Seen(0) {
+			u, ok := s.Event.(botclient.UserInfo)
+			if !ok || u.ObjectID != f.id || (u.Level == last.Level && u.PAtk == last.PAtk && u.PDef == last.PDef &&
+				u.Evasion == last.Evasion && u.Accuracy == last.Accuracy && u.PAtkSpd == last.PAtkSpd && u.MaxHP == last.MaxHP) {
+				continue
+			}
+			last = u
+			t.Logf("%s at %v level %d: pAtk %d, pDef %d, evasion %d, accuracy %d, attack speed %d, max HP %d",
+				f.name, s.At.Format(time.TimeOnly), u.Level, u.PAtk, u.PDef, u.Evasion, u.Accuracy, u.PAtkSpd, u.MaxHP)
+		}
+	})
 }

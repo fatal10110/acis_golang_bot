@@ -16,8 +16,8 @@ func TestLoadSkills(t *testing.T) {
 	haste := func(order float64) []Effect {
 		return []Effect{{Name: "Buff", StackType: "attack_time_down", StackOrder: order, Time: 1200, Count: 1}}
 	}
-	hot := func(order float64) []Effect {
-		return []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: order, Time: 2, Count: 7}}
+	hot := func(order, val float64) []Effect {
+		return []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: order, Time: 2, Count: 7, Value: val}}
 	}
 	magicHaste := func(order float64) []Effect {
 		return []Effect{{Name: "Buff", StackType: "casting_time_down", StackOrder: order, Time: 1200, Count: 1}}
@@ -32,12 +32,12 @@ func TestLoadSkills(t *testing.T) {
 		{1177, 1}: {Name: "Wind Strike", CastRange: 600},
 		{4110, 1}: {Name: "Breath Attack", CastRange: 500},
 		{4110, 2}: {Name: "Breath Attack", CastRange: 1000},
-		{2002, 1}: {Name: "Healing Drug", Potion: true, Effects: []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: 1.5, Time: 5, Count: 4}}},
+		{2002, 1}: {Name: "Healing Drug", Potion: true, Effects: []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: 1.5, Time: 5, Count: 4, Value: 1.5}}},
 		{2012, 1}: {Name: "Potion of Alacrity", Potion: true, Effects: haste(1)},
 		{2013, 1}: {Name: "Scroll of Escape"},
-		{2031, 1}: {Name: "Lesser Healing Potion", Potion: true, Effects: hot(1)},
-		{2032, 1}: {Name: "Healing potion", Potion: true, Effects: hot(2)},
-		{2037, 1}: {Name: "Greater Healing Potion", Potion: true, Effects: hot(3)},
+		{2031, 1}: {Name: "Lesser Healing Potion", Potion: true, Effects: hot(1, 16)},
+		{2032, 1}: {Name: "Healing potion", Potion: true, Effects: hot(2, 48)},
+		{2037, 1}: {Name: "Greater Healing Potion", Potion: true, Effects: hot(3, 100)},
 		{2169, 1}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(2)},
 		{2169, 2}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(3)},
 		{4327, 1}: {Name: "Haste for Beginners", Effects: []Effect{{Name: "Buff", StackType: "attack_time_down", StackOrder: 2, Time: 3600, Count: 1}}},
