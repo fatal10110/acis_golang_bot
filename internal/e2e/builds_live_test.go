@@ -71,11 +71,12 @@ func TestLiveBuildMixed(t *testing.T) {
 }
 
 // farmKits runs one kit farm of classes, the accounts of group, each a
-// farmerPersona; they go back to level 1 at the end (runFresh).
+// farmerPersona with the spots and the travel map; they go back to level 1
+// at the end (runFresh).
 func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 25*time.Minute)
-	spots := spotRegistry(t, tg)
+	spots, travel := spotRegistry(t, tg), travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	type kitFarmer struct {
 		f    *farmer
@@ -88,7 +89,10 @@ func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 		setup := botSetup{
 			class:   class,
 			persona: farmerPersona,
-			brain:   func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
+			// The travel map as cmd/bots' farmers have it: the brain
+			// tells the worn weapon's kind from its items (wornKind), and
+			// a weapon-gated step never passes without it.
+			brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },
 		}
 		f := runFresh(t, ctx, gm, kitLevel, func() *farmer { return runWatched(t, ctx, tg, account, setup) })
 		kit := kitOf(t, class.ID, kitLevel, account)

@@ -37,13 +37,15 @@ func TestLiveSpoilSweep(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 25*time.Minute)
-	spots := spotRegistry(t, tg)
+	spots, travel := spotRegistry(t, tg), travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
 		class:   &botclient.DwarvenFighter,
 		persona: farmerPersona,
-		brain:   func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
+		// The travel map as cmd/bots' farmers have it: the corpse times
+		// of its NPC templates bound the sweep window (TravelMap.corpseTime).
+		brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },
 	}
 	f := runFresh(t, ctx, gm, int(spoilLevel), func() *farmer { return runWatched(t, ctx, tg, account, setup) })
 	t.Cleanup(func() {
@@ -68,24 +70,24 @@ func TestLiveSpoilSweep(t *testing.T) {
 		}
 		r = spoilRunOf(f.watch.Seen(from), f.id)
 		if len(r.refused) > 0 {
-			t.Fatalf("%s: the server refused %v (spoils %d, sweeps %d)", f.name, r.refused, r.spoiled, r.sweeps)
+			t.Fatalf("%s: the server refused %v (%s)", f.name, r.refused, r)
 		}
 		return r.short()
 	})
 	if all := spoilRunOf(f.watch.Seen(0), f.id); len(all.refused) > 0 {
 		t.Errorf("%s: the server refused %v", f.name, all.refused)
 	}
-	t.Logf("%s farmed %s: %d Spoil casts, %d took; %d Sweeper casts, %d earned items (%v)",
-		f.name, time.Since(start).Round(time.Second), r.spoils, r.spoiled, r.sweeps, r.paid, r.earned)
+	t.Logf("%s farmed %s: %s (%v)", f.name, time.Since(start).Round(time.Second), r, r.earned)
 }
 
-// spoilRun is what a spoiler did: its Spoil casts and those that took, its
-// Sweeper casts and those that earned items, the system messages of what
-// it earned, and those of its refused skills and sweeps.
+// spoilRun is what a spoiler did: its Spoil casts and those that took, the
+// monsters it spoiled that died and those of them whose Die said sweepable,
+// its Sweeper casts and those that earned items, the system messages of
+// what it earned, and those of its refused skills and sweeps.
 type spoilRun struct {
-	spoils, spoiled, sweeps, paid int
-	earned                        []botclient.SystemMessage
-	refused                       []int32
+	spoils, spoiled, died, sweepable, sweeps, paid int
+	earned                                         []botclient.SystemMessage
+	refused                                        []int32
 }
 
 // refusedSpoil are the system messages a spoiler never reads.
@@ -93,11 +95,13 @@ var refusedSpoil = []int32{msgS1CannotBeUsed, msgSweepNotSpoiled, msgSweepNotAll
 
 // spoilRunOf is the spoilRun of the bot self in seen. A sweep earned items
 // when an earned item message (53, 54) follows its Sweeper cast before the
-// bot's next cast. A spoil took on each 612: the server sends it only to the
-// caster.
+// bot's next cast. A spoil took on each 612, which the server sends only to
+// the caster, on the target of the bot's last Spoil cast.
 func spoilRunOf(seen []Seen, self int32) spoilRun {
 	var r spoilRun
 	sweeping, paid := false, false
+	var target int32
+	spoiled := make(map[int32]bool)
 	for _, s := range seen {
 		switch e := s.Event.(type) {
 		case botclient.MagicSkillUse:
@@ -108,6 +112,7 @@ func spoilRunOf(seen []Seen, self int32) spoilRun {
 			switch e.SkillID {
 			case skillSpoil:
 				r.spoils++
+				target = e.TargetID
 			case skillSweeper:
 				r.sweeps++
 			}
@@ -115,6 +120,7 @@ func spoilRunOf(seen []Seen, self int32) spoilRun {
 			switch {
 			case e.ID == msgSpoilSuccess:
 				r.spoiled++
+				spoiled[target] = true
 			case slices.Contains(refusedSpoil, e.ID):
 				r.refused = append(r.refused, e.ID)
 			case (e.ID == msgEarnedItems || e.ID == msgEarnedItem) && sweeping:
@@ -122,6 +128,14 @@ func spoilRunOf(seen []Seen, self int32) spoilRun {
 				if !paid {
 					paid = true
 					r.paid++
+				}
+			}
+		case botclient.Die:
+			if spoiled[e.ObjectID] {
+				delete(spoiled, e.ObjectID)
+				r.died++
+				if e.Sweepable {
+					r.sweepable++
 				}
 			}
 		}
@@ -135,5 +149,11 @@ func (r spoilRun) short() string {
 	if r.spoiled > 0 && r.paid > 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d Spoil casts, %d took; %d Sweeper casts, %d earned items", r.spoils, r.spoiled, r.sweeps, r.paid)
+	return r.String()
+}
+
+// String is r in a line.
+func (r spoilRun) String() string {
+	return fmt.Sprintf("%d Spoil casts, %d took; %d spoiled monsters died, %d sweepable; %d Sweeper casts, %d earned items",
+		r.spoils, r.spoiled, r.died, r.sweepable, r.sweeps, r.paid)
 }

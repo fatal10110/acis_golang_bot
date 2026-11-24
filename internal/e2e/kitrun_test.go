@@ -117,23 +117,26 @@ func TestSpoilRunOf(t *testing.T) {
 		return Seen{Event: botclient.MagicSkillUse{CasterID: caster, SkillID: skill, TargetID: mob}}
 	}
 	msg := func(id int32) Seen { return Seen{Event: botclient.SystemMessage{ID: id}} }
+	die := func(id int32, sweepable bool) Seen {
+		return Seen{Event: botclient.Die{ObjectID: id, Sweepable: sweepable}}
+	}
 	tests := []struct {
-		name                          string
-		seen                          []Seen
-		spoils, spoiled, sweeps, paid int
-		refused                       []int32
-		done                          bool
+		name                                           string
+		seen                                           []Seen
+		spoils, spoiled, died, sweepable, sweeps, paid int
+		refused                                        []int32
+		done                                           bool
 	}{
 		{name: "none"},
 		{
 			name:   "a spoil, a kill and a sweep that pays twice",
-			seen:   []Seen{cast(self, skillSpoil), msg(msgSpoilSuccess), cast(self, skillSweeper), msg(msgEarnedItems), msg(msgEarnedItem)},
-			spoils: 1, spoiled: 1, sweeps: 1, paid: 1, done: true,
+			seen:   []Seen{cast(self, skillSpoil), msg(msgSpoilSuccess), die(mob, true), die(mob, true), cast(self, skillSweeper), msg(msgEarnedItems), msg(msgEarnedItem)},
+			spoils: 1, spoiled: 1, died: 1, sweepable: 1, sweeps: 1, paid: 1, done: true,
 		},
 		{
 			name:   "earned items after another cast are no sweep's",
-			seen:   []Seen{cast(self, skillSpoil), msg(msgSpoilSuccess), cast(self, skillSweeper), cast(self, 3), msg(msgEarnedItem)},
-			spoils: 1, spoiled: 1, sweeps: 1,
+			seen:   []Seen{cast(self, skillSpoil), msg(msgSpoilSuccess), die(other, true), die(mob, false), cast(self, skillSweeper), cast(self, 3), msg(msgEarnedItem)},
+			spoils: 1, spoiled: 1, died: 1, sweeps: 1,
 		},
 		{
 			name:   "another's casts do not end a sweep",
@@ -149,8 +152,9 @@ func TestSpoilRunOf(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := spoilRunOf(tt.seen, self)
-			if r.spoils != tt.spoils || r.spoiled != tt.spoiled || r.sweeps != tt.sweeps || r.paid != tt.paid || !slices.Equal(r.refused, tt.refused) {
-				t.Errorf("spoilRunOf = %+v, want spoils %d spoiled %d sweeps %d paid %d refused %v", r, tt.spoils, tt.spoiled, tt.sweeps, tt.paid, tt.refused)
+			got := [6]int{r.spoils, r.spoiled, r.died, r.sweepable, r.sweeps, r.paid}
+			if want := [6]int{tt.spoils, tt.spoiled, tt.died, tt.sweepable, tt.sweeps, tt.paid}; got != want || !slices.Equal(r.refused, tt.refused) {
+				t.Errorf("spoilRunOf = %v refused %v, want %v refused %v", got, r.refused, want, tt.refused)
 			}
 			if (r.short() == "") != tt.done {
 				t.Errorf("short = %q, want done %v", r.short(), tt.done)
