@@ -22,7 +22,7 @@ and never edit the server's config: a scenario the server cannot satisfy is reco
   - `minted-<prefix>` (`minted-e2e`): written by the harness, the accounts it minted for the
     prefix, one name a line, never a password; refused like the others when readable by others.
     Its lock file (`minted-e2e.lock`) is the mint lock, and each minted GM has a lock file of its
-    own (`e2egm1.lock`, ...).
+    own (`e2emint1.lock`, ...).
 - **Allowlist:** set `BOT_E2E_ALLOWLISTED=1` only when the source address is on
   `AcceptFilterAllowlist` of both servers; otherwise logins are paced by the bot's login gate.
 
@@ -79,11 +79,11 @@ variables and `BOT_REQUIRE_E2E=1`.
   blocks a later one.
   - **Minting** (no `BOT_E2E_GM_FILE`, #367): the pool is the GMs minted for the prefix
     (`.e2e/minted-<prefix>`). With every one held, the scenario mints the next instead of
-    waiting: account `<prefix>gm<N>` (`e2egm1`, `e2egm2`, ...; no scenario may use the account
-    group `gm`), its password derived from the secret like every `e2e` account's, logs in once
-    (the login server creates the account) and creates its character `<prefix>gm<N>Bot`, which
+    waiting: account `<prefix>mint<N>` (`e2emint1`, `e2emint2`, ...; no scenario may use the
+    account group `mint`, and a root GM file's account is never minted), its password derived from the secret like every `e2e` account's, logs in once
+    (the login server creates the account) and creates its character `<prefix>mint<N>Bot`, which
     then logs out; a root GM (a free one of `.e2e/gm*`, leased like a pool GM for the few
-    seconds it takes) sends `//set access <prefix>gm<N>Bot 7`, which the server stores for the
+    seconds it takes) sends `//set access <prefix>mint<N>Bot 7`, which the server stores for the
     character out of the world ahead of its next login (`admin_access.go`,
     `admin_offline.go`), so the GM's next login is a GM's and needs no relog. Then the name is
     recorded and the scenario plays the new GM. One mint runs at a time over every process (the
@@ -138,8 +138,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   first account through the run's gate. The first refused credential halts every later login of
   the process and leaves the marker `halted` next to the secret file (account and reason, never a
   password). While the marker exists every scenario fails before it logs in, checked when the
-  process opens the run and again before each scenario, so a test process running beside the one
-  that tripped stops at its next scenario: the login server
+  process opens the run, again before each scenario and before each harness login, so a test
+  process running beside the one that tripped stops at its next login: the login server
   counts failed logins per address over all accounts for at least an hour, only a good login of
   the same account takes one back, and 3 ban the address (`LoginTryBeforeBan`). After a refusal,
   fix the secret file, then delete `.e2e/halted`. The wrong password is sent at most once a run,
@@ -155,7 +155,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. `set access` is refused to
   every scenario GM; a root GM promoting a minted one may send only `set access NAME 7`, NAME a
-  character of the minted namespace (`<prefix>gm<N>Bot`), never another level (a ban is one
+  character of the minted namespace (`<prefix>mint<N>Bot`), never another level (a ban is one
   below 0) and nothing else. The GM targets only run
   objects, so a command that falls back on its target cannot reach anyone else.
 - **Pacing:** every frame a scenario sends passes the bot's pacer (`botclient.Pacer`); GM
@@ -170,7 +170,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   `e2epn1`, `e2ewm1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
-- The minted GMs `<prefix>gm<N>` (`e2egm1`, ...), each with one character `<prefix>gm<N>Bot` of
+- The minted GMs `<prefix>mint<N>` (`e2emint1`, ...), each with one character `<prefix>mint<N>Bot` of
   access level 7, recorded in `.e2e/minted-<prefix>`; later runs lease them again. They stay
   until the owner retires them (`//set access <name> 0` from a GM, then delete the record's
   line).

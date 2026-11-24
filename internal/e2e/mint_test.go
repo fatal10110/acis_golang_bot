@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
 // recordMints is a minter that records the accounts it mints.
@@ -31,7 +33,7 @@ func TestMintPoolMintsWhenExhaustedAndReuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"e2egm1", "e2egm2"}; !slices.Equal(minted, want) || first.minted != want[0] || second.minted != want[1] {
+	if want := []string{"e2emint1", "e2emint2"}; !slices.Equal(minted, want) || first.minted != want[0] || second.minted != want[1] {
 		t.Fatalf("minted %q, leased %s and %s, want %q", minted, first.minted, second.minted, want)
 	}
 	names, err := p.mint.names()
@@ -46,8 +48,8 @@ func TestMintPoolMintsWhenExhaustedAndReuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gm.Account != "e2egm2" || gm.Character != "e2egm2Bot" || gm.Password() != testSecret(t).Password("e2egm2") {
-		t.Fatalf("minted GM = %v, want e2egm2/e2egm2Bot with its derived password", gm)
+	if gm.Account != "e2emint2" || gm.Character != "e2emint2Bot" || gm.Password() != testSecret(t).Password("e2emint2") {
+		t.Fatalf("minted GM = %v, want e2emint2/e2emint2Bot with its derived password", gm)
 	}
 	first.release()
 	second.release()
@@ -60,8 +62,8 @@ func TestMintPoolMintsWhenExhaustedAndReuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reused.release()
-	if reused.minted != "e2egm1" || len(minted) != 0 {
-		t.Fatalf("next run leased %s after minting %q, want e2egm1 with no mint", reused.minted, minted)
+	if reused.minted != "e2emint1" || len(minted) != 0 {
+		t.Fatalf("next run leased %s after minting %q, want e2emint1 with no mint", reused.minted, minted)
 	}
 	other, err := next.take(t.Context(), recordMints(&minted))
 	if err != nil {
@@ -73,8 +75,8 @@ func TestMintPoolMintsWhenExhaustedAndReuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer third.release()
-	if other.minted != "e2egm2" || third.minted != "e2egm3" || !slices.Equal(minted, []string{"e2egm3"}) {
-		t.Fatalf("next run leased %s and %s after minting %q, want e2egm2, then e2egm3 minted", other.minted, third.minted, minted)
+	if other.minted != "e2emint2" || third.minted != "e2emint3" || !slices.Equal(minted, []string{"e2emint3"}) {
+		t.Fatalf("next run leased %s and %s after minting %q, want e2emint2, then e2emint3 minted", other.minted, third.minted, minted)
 	}
 }
 
@@ -104,8 +106,8 @@ func TestMintPoolOneMintAtATime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.release()
-	if held.minted != "e2egm1" || l.minted != "e2egm2" || !slices.Equal(otherMinted, []string{"e2egm2"}) {
-		t.Fatalf("minted %s, then %s (%q), want e2egm1, then e2egm2", held.minted, l.minted, otherMinted)
+	if held.minted != "e2emint1" || l.minted != "e2emint2" || !slices.Equal(otherMinted, []string{"e2emint2"}) {
+		t.Fatalf("minted %s, then %s (%q), want e2emint1, then e2emint2", held.minted, l.minted, otherMinted)
 	}
 }
 
@@ -126,8 +128,8 @@ func TestMintPoolFailedMint(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.release()
-	if l.minted != "e2egm1" {
-		t.Fatalf("leased %s after a failed mint, want e2egm1 minted again", l.minted)
+	if l.minted != "e2emint1" {
+		t.Fatalf("leased %s after a failed mint, want e2emint1 minted again", l.minted)
 	}
 }
 
@@ -140,11 +142,11 @@ func TestMintRecord(t *testing.T) {
 		next    string
 		err     bool
 	}{
-		{name: "names and comments", content: "# minted\ne2egm1\n\ne2egm3\n", mode: 0o600, want: []string{"e2egm1", "e2egm3"}, next: "e2egm4"},
-		{name: "shared", content: "e2egm1\n", mode: 0o644, err: true},
-		{name: "another prefix", content: "e2xgm1\n", mode: 0o600, err: true},
-		{name: "leading zero", content: "e2egm01\n", mode: 0o600, err: true},
-		{name: "no n", content: "e2egm\n", mode: 0o600, err: true},
+		{name: "names and comments", content: "# minted\ne2emint1\n\ne2emint3\n", mode: 0o600, want: []string{"e2emint1", "e2emint3"}, next: "e2emint4"},
+		{name: "shared", content: "e2emint1\n", mode: 0o644, err: true},
+		{name: "another prefix", content: "e2xmint1\n", mode: 0o600, err: true},
+		{name: "leading zero", content: "e2emint01\n", mode: 0o600, err: true},
+		{name: "no n", content: "e2emint\n", mode: 0o600, err: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -178,33 +180,33 @@ func TestMintRecord(t *testing.T) {
 
 func TestScopeCheckRootGM(t *testing.T) {
 	root := newScope()
-	root.mint = "e2egm"
+	root.mint = "e2emint"
 	root.addChar("e2eBot", 101)
 	root.target = 101
 	scenario := newScope()
-	scenario.addChar("e2egm1Bot", 101)
+	scenario.addChar("e2emint1Bot", 101)
 	scenario.target = 101
 	tests := []struct {
 		scope *Scope
 		cmd   string
 		ok    bool
 	}{
-		{root, "set access e2egm1Bot 7", true},
-		{root, "set access e2egm12Bot 7", true},
-		{root, "set access e2egm1Bot 8", false},
-		{root, "set access e2egm1Bot -1", false},
-		{root, "set access e2egm1Bot 0", false},
-		{root, "set access e2egm1 7", false},
-		{root, "set access e2egm01Bot 7", false},
-		{root, "set access e2egmBot 7", false},
-		{root, "set access e2exgm1Bot 7", false},
+		{root, "set access e2emint1Bot 7", true},
+		{root, "set access e2emint12Bot 7", true},
+		{root, "set access e2emint1Bot 8", false},
+		{root, "set access e2emint1Bot -1", false},
+		{root, "set access e2emint1Bot 0", false},
+		{root, "set access e2emint1 7", false},
+		{root, "set access e2emint01Bot 7", false},
+		{root, "set access e2emintBot 7", false},
+		{root, "set access e2exmint1Bot 7", false},
 		{root, "set access e2eBot 7", false},
 		{root, "set access 7", false},
-		{root, "set access e2egm1Bot 7 x", false},
+		{root, "set access e2emint1Bot 7 x", false},
 		{root, "set level 5", false},
 		{root, "teleport 1 2 3", false},
 		{root, "kick e2eBot", false},
-		{scenario, "set access e2egm1Bot 7", false},
+		{scenario, "set access e2emint1Bot 7", false},
 		{scenario, "set access 7", false},
 	}
 	for _, tt := range tests {
@@ -233,4 +235,40 @@ func TestEnterGMMintThatFailsKeepsNothing(t *testing.T) {
 		t.Fatalf("root kept by a failed mint: %v", err)
 	}
 	root.release()
+}
+
+// TestEnterHaltedByAnotherProcess: the marker another process's refusal
+// leaves halts the next login of a scenario already open, a mint's
+// included, before anything is sent.
+func TestEnterHaltedByAnotherProcess(t *testing.T) {
+	secret := filepath.Join(t.TempDir(), "secret")
+	n := &fakeNet{}
+	tg, _ := fakeTarget(t, Config{Allowlisted: true, SecretFile: secret}, n)
+	if err := os.WriteFile(filepath.Join(filepath.Dir(secret), HaltFileName), []byte("e2emint1: refused\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tg.EnterWhenFree(t.Context(), "e2ea1", botclient.Character{Name: "e2eBot"}, nil); !errors.Is(err, botclient.ErrLoginsHalted) {
+		t.Fatalf("Enter with the marker = %v, want %v", err, botclient.ErrLoginsHalted)
+	}
+	if len(n.sent) != 0 {
+		t.Fatalf("logins sent with the marker: %d", len(n.sent))
+	}
+}
+
+// TestMintRefusesARootAccount: a minted name that is a root GM's account
+// is never logged in with a derived password.
+func TestMintRefusesARootAccount(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "gm")
+	if err := os.WriteFile(root, []byte("account=e2emint1\npassword=pw\ncharacter=Owner\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n := &fakeNet{}
+	tg, _ := fakeTarget(t, Config{Allowlisted: true, Prefix: "e2e", GMFiles: []string{root}, GMMint: dir}, n)
+	if _, err := tg.EnterGM(t.Context()); err == nil || !strings.Contains(err.Error(), "root GM file") {
+		t.Fatalf("EnterGM minting a root's account = %v, want it refused", err)
+	}
+	if len(n.sent) != 0 {
+		t.Fatalf("logins sent: %d", len(n.sent))
+	}
 }

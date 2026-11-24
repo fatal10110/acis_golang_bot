@@ -272,6 +272,12 @@ func (t *Target) enterWhenFree(ctx context.Context, account, password string, ch
 
 // enter takes a turn of the gate for the two dials of an entry.
 func (t *Target) enter(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*botclient.GameConn, botclient.Self, error) {
+	// The marker of a refusal in another process halts this one's next
+	// login, not only its next scenario: a mint retried after another
+	// process's refused one would be refused again.
+	if err := checkHalt(t.cfg.HaltFile()); err != nil {
+		return nil, botclient.Self{}, err
+	}
 	turn, err := t.gate.Take(ctx)
 	if err != nil {
 		return nil, botclient.Self{}, err

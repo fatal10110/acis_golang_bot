@@ -23,7 +23,7 @@ import (
 // scenarios lease (#367): the owner's GM files are its roots, and a root
 // promotes each minted GM once, with //set access, while the minted
 // character is out of the world. A minted GM is an account of the run's
-// prefix, <prefix>gm<N>, whose password derives from the secret like every
+// prefix, <prefix>mint<N>, whose password derives from the secret like every
 // e2e account's, and whose one character is the account's name with the bot
 // marker. The record of a prefix's minted accounts (names, never passwords)
 // is a file next to the GM files, written under the mint lock, so two runs
@@ -49,8 +49,10 @@ type mintRecord struct {
 	dir, prefix string
 }
 
-// namespace is what every minted account name starts with.
-func (r mintRecord) namespace() string { return r.prefix + "gm" }
+// namespace is what every minted account name starts with: the prefix and
+// "mint", a group no scenario uses and no owner account bears (the owner's
+// GMs may be <prefix>gm<N>).
+func (r mintRecord) namespace() string { return r.prefix + "mint" }
 
 // file is the record: "minted-<prefix>", which gmFiles never takes for a GM
 // file. Its lock file (lockFile) is the mint lock.
@@ -188,6 +190,9 @@ func minted(account string, secret botaccounts.Secret) GM {
 // follows. Its logins pass the run's gate and breaker; its one command
 // passes the root's scope and the pacer.
 func (t *Target) mintGM(ctx context.Context, account string) error {
+	if err := t.checkNotRoot(account); err != nil {
+		return err
+	}
 	ch, err := botclient.NewCharacter(botnames.DefaultMarker, account, rand.New(rand.NewPCG(1, 1)))
 	if err != nil {
 		return err
@@ -206,6 +211,23 @@ func (t *Target) mintGM(ctx context.Context, account string) error {
 		return fmt.Errorf("create %s: leave: %w", name, err)
 	}
 	return t.promote(ctx, name)
+}
+
+// checkNotRoot refuses account when it is the account of a root GM file:
+// its password is the owner's, not one the secret derives, so the mint's
+// login would be refused and trip the breaker (#367: the owner's GMs were
+// named <prefix>gm<N>).
+func (t *Target) checkNotRoot(account string) error {
+	for _, f := range t.roots.files {
+		gm, err := LoadGM(f)
+		if err != nil {
+			return err
+		}
+		if strings.EqualFold(gm.Account, account) {
+			return fmt.Errorf("mint GM %s: the account of root GM file %s", account, f)
+		}
+	}
+	return nil
 }
 
 // promote has a root GM set the access level of name, a character of the
