@@ -75,8 +75,10 @@ type leaderView struct {
 // it takes the slot when it joins, and again only once the leader moved
 // Repath away from where it stood then (or the bot drifted farther than
 // MaxDist+Repath from it, after a fight), DelayMin to DelayMax after
-// noticing. It matches the leader's walk or run, and stands up before it
-// moves. A leader out of sight is followed to its last PartyMemberPosition
+// noticing. A bot still walking to its last slot when the leader moves on
+// keeps walking there through the delay, and turns to the new slot once it
+// ends (the segment in flight runs out first). It matches the leader's walk
+// or run, and stands up before it moves. A leader out of sight is followed to its last PartyMemberPosition
 // (sent every 12 s); a bot that died and came back in town walks back to it
 // the same way. While following, the rule holds the turn: no farming spot,
 // goal or idle drift pulls the bot away. Server-side follow (a second Action
@@ -122,10 +124,10 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	if (moved || drifted) && v.dueAt.IsZero() {
 		v.dueAt, v.wake = now.Add(b.followDelay()), true
 	}
-	if !v.dueAt.IsZero() {
-		if now.Before(v.dueAt) {
-			return Action{}, true
-		}
+	// A re-path pending while the bot travels keeps it walking to the old
+	// slot, so its next segment goes out; the new slot resets the walk once
+	// the delay ends. Only a bot standing still waits the delay out.
+	if !v.dueAt.IsZero() && !now.Before(v.dueAt) {
 		if s.Sitting {
 			return b.toggle(now), true
 		}

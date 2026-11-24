@@ -81,6 +81,13 @@ const (
 	// talkWait bounds how long a talk click's answer is waited for: the
 	// straight approach of a click from within visitArrive.
 	talkWait = 10 * time.Second
+	// movingSegment caps a segment of a walk toward a destination that
+	// moves (walkPurpose.segmentCap): a segment in flight cannot be cut
+	// short, so a follower, a melee approach or a flight commits to at most
+	// this much toward a point gone stale (docs/walking.md, "Follower and
+	// moving destinations"). A constant, not a persona knob: a persona's
+	// Repath must not shrink melee or flee walks.
+	movingSegment = 500
 	// walkSameDest is how far a consumer's destination may move without
 	// a new route: the server rounds, a stand point snaps.
 	walkSameDest = 32
@@ -144,6 +151,18 @@ const (
 // destination: only following the leader does (docs/navigation.md,
 // "Queries"), and never down to isolated ground only /unstuck leaves.
 func (p walkPurpose) drops() bool { return p == walkFollow }
+
+// segmentCap is the longest segment a walk for p plans: movingSegment
+// toward a destination that moves (the leader's slot, a monster closed in
+// on, away from an attacker), zero (the planner's navSegment) toward a
+// fixed one.
+func (p walkPurpose) segmentCap() float64 {
+	switch p {
+	case walkFollow, walkMelee, walkFlee:
+		return movingSegment
+	}
+	return 0
+}
 
 // segment is one move the walker sent: from the server-confirmed standstill
 // from to to, both on their floor.
@@ -352,12 +371,14 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 // walker is the bot's walker with its checks sized for the bot as it is
 // now: the longest later step is the bot's speed times Emax, and the
 // collision height its own. Every check of a segment or a straight line
-// goes through it.
+// goes through it. Its routes take segments up to the current walk's cap
+// (walkPurpose.segmentCap).
 func (b *Brain) walker() *walker {
 	s, w := &b.world.Self, &b.walk
 	w.plan.Lmax = float64(max(s.RunSpeed, s.WalkSpeed)) * navEmax.Seconds()
 	w.plan.CollisionHeight = cmpOr(s.CollisionHeight, defaultCollisionHeight)
 	w.plan.Swim = float64(s.SwimSpeed) * swimBreath.Seconds()
+	w.plan.MaxSegment = w.purpose.segmentCap()
 	return w
 }
 

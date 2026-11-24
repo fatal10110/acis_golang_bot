@@ -48,6 +48,12 @@ type Planner struct {
 	// by the server's swim rules (docs/navigation.md, "Swimming");
 	// Hierarchy.Route never swims.
 	Swim float64
+	// MaxSegment caps a segment's length in world units, below navSegment;
+	// zero is navSegment. A walker toward a destination that moves keeps its
+	// segments short: a segment in flight cannot be cut short (docs/walking.md,
+	// "Follower and moving destinations"). Every route honors it: Route, the
+	// swimming cell search, Hierarchy.Route and RouteOneWay.
+	MaxSegment float64
 	// Avoid is the columns the current route keeps out of; the zero value
 	// is none. The cell search, the string pull and the refinement of
 	// Hierarchy.Route honor it; its owner sets it per route.
