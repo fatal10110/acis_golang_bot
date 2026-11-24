@@ -36,6 +36,7 @@ func (p *Panel) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/bots/{account}/despawn", p.act(p.cfg.Supervisor.Despawn))
 	mux.HandleFunc("POST /api/bots/{account}/respawn", p.act(p.cfg.Supervisor.Respawn))
 	mux.HandleFunc("POST /api/bots/{account}/preset", p.setPreset)
+	mux.HandleFunc("POST /api/bots/{account}/branch", p.setBranch)
 	mux.HandleFunc("POST /api/bots/{account}/command", p.command)
 	mux.HandleFunc("POST /api/import", p.importBots)
 	mux.HandleFunc("GET /api/dashboard", p.dashboard)
@@ -76,6 +77,45 @@ type live struct {
 	// Crafter is the crafter's cycle (botclient.CrafterStatus), absent for
 	// a bot that plays none.
 	Crafter *crafterLive `json:"crafter,omitempty"`
+	// Build is the build the bot plays (botclient.BuildStatus), absent for
+	// a persona with no role.
+	Build *buildLive `json:"build,omitempty"`
+}
+
+// buildLive is a bot's build (botclient.BuildStatus): its role, its branch
+// by id and name (0 and "" for none) and its kit's skill ids.
+type buildLive struct {
+	Role       string  `json:"role"`
+	Branch     int32   `json:"branch"`
+	BranchName string  `json:"branch_name,omitempty"`
+	Skills     []int32 `json:"skills"`
+	Rotation   []int32 `json:"rotation"`
+	Buffs      []int32 `json:"buffs"`
+	Heals      []int32 `json:"heals"`
+	Toggles    []int32 `json:"toggles"`
+}
+
+func buildOf(b *botclient.BuildStatus) *buildLive {
+	if b == nil {
+		return nil
+	}
+	v := &buildLive{
+		Role: b.Role.String(), Branch: b.Branch,
+		Skills: orEmpty(b.Skills), Rotation: orEmpty(b.Rotation), Buffs: orEmpty(b.Buffs), Heals: orEmpty(b.Heals), Toggles: orEmpty(b.Toggles),
+	}
+	if b.Branch != 0 { // 0 is no branch, not the Human Fighter
+		v.BranchName = classNames[b.Branch]
+	}
+	return v
+}
+
+// orEmpty is ids, an empty list for none: the API writes [] rather than
+// null.
+func orEmpty(ids []int32) []int32 {
+	if ids == nil {
+		return []int32{}
+	}
+	return ids
 }
 
 // crafterLive is a crafter's status (botclient.CrafterStatus).
@@ -124,6 +164,7 @@ func viewOf(s botregistry.Status) botView {
 			HP: st.HP, MaxHP: st.MaxHP, MP: st.MP, MaxMP: st.MaxMP, CP: st.CP, MaxCP: st.MaxCP,
 			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Leader: st.Leader, Members: st.Members,
 			Order: st.Order.String(), Reconnects: st.Reconnects, Crafter: crafterOf(st.Crafter),
+			Build: buildOf(st.Build),
 		}
 		if st.Town != nil {
 			t := point(*st.Town)
@@ -281,6 +322,23 @@ func (p *Panel) setPreset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.cfg.Supervisor.SetPreset(r.Context(), r.PathValue("account"), req.Preset); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, okAnswer)
+}
+
+// setBranch pins the bot's branch, a first profession's class id, or clears
+// the pin with 0 or no branch (botregistry.Supervisor.SetBranch).
+func (p *Panel) setBranch(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Branch int32 `json:"branch"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := p.cfg.Supervisor.SetBranch(r.Context(), r.PathValue("account"), req.Branch); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -457,7 +515,7 @@ func readJSON(r *http.Request, v any) error {
 func statusOf(err error) int {
 	var re requestError
 	switch {
-	case errors.As(err, &re), errors.Is(err, botclient.ErrBadCommand):
+	case errors.As(err, &re), errors.Is(err, botclient.ErrBadCommand), errors.Is(err, botregistry.ErrBranch):
 		return http.StatusBadRequest
 	case errors.Is(err, botregistry.ErrNoBot):
 		return http.StatusNotFound

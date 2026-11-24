@@ -49,7 +49,7 @@ func (s BotState) String() string {
 }
 
 // Status is a snapshot of a Bot (Bot.Status). It is immutable once
-// published: Members and Crafter are shared by every copy and must not be
+// published: Members, Crafter and Build are shared by every copy and must not be
 // changed.
 // Between sessions it keeps what the last session saw of the character.
 type Status struct {
@@ -88,6 +88,9 @@ type Status struct {
 	// Crafter is the crafter's cycle while online, nil for a bot that
 	// plays none (BrainConfig.CraftBoard, Persona.Crafter) and offline.
 	Crafter *CrafterStatus
+	// Build is the build the bot plays (BuildStatus), nil for a persona
+	// with no role and before the first session's entry.
+	Build *BuildStatus
 	// Order is the standing order of the panel, the zero Command for none.
 	Order Command
 	// Reconnects counts the bot's attempts after its first.
@@ -95,6 +98,37 @@ type Status struct {
 	// Err is why the latest attempt ended, or why the bot stopped; nil
 	// while none ended.
 	Err error
+}
+
+// BuildStatus is the build a bot plays (Brain.build, docs/strategy.md
+// section 10): its role, the first profession its line heads for or plays
+// (Build.Branch, 0 for none) and its kit's skill ids in their kit order.
+type BuildStatus struct {
+	Role   Role
+	Branch int32
+	// Skills are the skills the kit learns at a trainer; Rotation, Buffs,
+	// Heals and Toggles the skills it casts.
+	Skills, Rotation, Buffs, Heals, Toggles []int32
+}
+
+// buildStatus is bd's BuildStatus; its slices are its own, since a
+// published Status is shared.
+func buildStatus(bd Build) *BuildStatus {
+	k := &bd.Kit
+	v := &BuildStatus{Role: bd.Role, Branch: bd.Branch, Skills: slices.Clone(k.Skills)}
+	for _, s := range k.Rotation {
+		v.Rotation = append(v.Rotation, s.Skill)
+	}
+	for _, s := range k.Buffs {
+		v.Buffs = append(v.Buffs, s.Skill)
+	}
+	for _, s := range k.Heals {
+		v.Heals = append(v.Heals, s.Skill)
+	}
+	for _, s := range k.Toggles {
+		v.Toggles = append(v.Toggles, s.Skill)
+	}
+	return v
 }
 
 // statusBoard is a Bot's published snapshot. Run's goroutine is its one
@@ -145,6 +179,10 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st.Town = b.nearestTown(st.Position)
 	st.ClanID, st.ClanLeader = w.Clan.ID, w.Clan.Leader
 	st.Crafter = b.crafterStatus(now)
+	st.Build = nil
+	if b.persona.Role != RoleNone {
+		st.Build = buildStatus(b.build())
+	}
 	st.Leader, st.Members = "", nil
 	if p := &w.Party; p.In() {
 		if p.LeaderID == s.ObjectID {

@@ -39,21 +39,23 @@ type preset struct {
 	member bool
 }
 
-// presets is the persona catalog, the -persona names in order.
+// presets is the persona catalog, the -persona names in order; the first
+// is the default -persona and the panel's first preset (D21).
 var presets = []preset{
+	{name: "farmer", help: "damage dealer that farms the datapack's spots alone", persona: damagePersona, farms: true, walks: true, member: true},
 	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true, member: true},
 	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
-	{name: "merchant", help: "damage dealer that farms the datapack's spots alone for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: merchantPersona, farms: true, store: true, walks: true, member: true},
+	{name: "merchant", help: "damage dealer that farms the datapack's spots alone for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: damagePersona, farms: true, store: true, walks: true, member: true},
 	{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
 		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
 	},
 }
 
-// merchantPersona is the merchant preset's persona: the default one in the
-// Damage role, which farms alone and takes its race's damage lines
-// (docs/strategy.md, Design section 6).
-func merchantPersona() botclient.Persona {
+// damagePersona is the farmer and merchant presets' persona: the default
+// one in the Damage role, which farms alone and takes its race's damage
+// lines (docs/strategy.md, Design sections 6 and 10, D21).
+func damagePersona() botclient.Persona {
 	p := botclient.DefaultPersona()
 	p.Role = botclient.RoleDamage
 	return p
@@ -122,7 +124,7 @@ type shared struct {
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
 // presets get the spot registry, only merchants the store registry; every
-// preset gets the craft board, and the support and merchant presets the
+// preset gets the craft board, and the farmer, support and merchant presets the
 // clan member option that orders from it (preset.member). With
 // the travel map the persona drinks and shoots the datapack's healing
 // potions and shots.

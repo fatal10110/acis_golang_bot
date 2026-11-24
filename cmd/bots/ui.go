@@ -73,7 +73,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	fs.StringVar(&o.marker.Text, "name-marker", botnames.DefaultMarker.Text, "text that marks the panel's new bots' character names (with -prefix, when the registry is created)")
 	placement := fs.String("name-marker-at", "suffix", "where the marker goes in a name: suffix or prefix")
 	fs.IntVar(&o.maxOnline, "max-online", 10, "most bots online at once, on spawn and on restore; raise the server's MaximumOnlineUsers by as many")
-	fs.StringVar(&o.importPrefix, "import-prefix", "", "import an earlier swarm's accounts of this prefix (with -import N) as never-create support bots")
+	fs.StringVar(&o.importPrefix, "import-prefix", "", "import an earlier swarm's accounts of this prefix (with -import N) as never-create bots of the "+botregistry.ImportPreset+" preset")
 	fs.IntVar(&o.importCount, "import", 0, "import accounts 1 to N of -import-prefix")
 	fs.StringVar(&o.importMarker.Text, "import-marker", botnames.DefaultMarker.Text, "the name marker the imported swarm ran with")
 	importPlacement := fs.String("import-marker-at", "suffix", "where the imported swarm's marker goes in a name: suffix or prefix")
@@ -207,8 +207,7 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 	}
 	cfg := u.cfg
 	cfg.Markers = r.Markers
-	brain := p.brain(u.shared)
-	brain.Metrics = r.Metrics
+	brain := u.brain(p, r)
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	ch := r.Character
 	if p.class != nil {
@@ -223,6 +222,14 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 		r.Live(b)
 	}
 	return b.Run(ctx)
+}
+
+// brain is the BrainConfig of r's bot of preset p: the preset's, with the
+// run's metrics slot and the bot's pinned branch (D22).
+func (u uiRunner) brain(p preset, r botregistry.Run) botclient.BrainConfig {
+	cfg := p.brain(u.shared)
+	cfg.Metrics, cfg.Branch = r.Metrics, r.Branch
+	return cfg
 }
 
 // runUI is `bots ui`: it locks the data directory, opens its bot registry,

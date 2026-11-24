@@ -634,7 +634,7 @@ scouts and archers, orc CON to two-handed weapons. The branch is chosen as follo
 Announced change (S8): a base-class fighter of the `support` preset that would take a melee line
 today takes its race's tank line instead, and a support-preset Elven Knight or Palus Knight takes
 Temple Knight or Shillien Knight at 40; a base-class mystic of a Damage-role preset (`merchant`,
-which today takes the healer line; `farmer` once S9 adds it) takes its race's damage line. The second-profession kits at 40 take the first profession's row
+which today takes the healer line, and `farmer`, S9) takes its race's damage line. The second-profession kits at 40 take the first profession's row
 until the backlog issue adds theirs.
 
 ### 7. Combat behavior per kit
@@ -694,14 +694,19 @@ Toggle tracking, the `ruleRest` change and Relax ship in S6; S7 adds Soul Cry.
   panel's first preset, so a bot made without a choice farms alone with a damage line (D21).
 - `support` keeps the Support role for bots meant to join players' parties.
 - `merchant` plays Damage.
-- Imported bots (`botregistry.ImportPreset`, today `support`) get `farmer`, so an imported swarm
+- Imported bots (`botregistry.ImportPreset`, `support` before S9) get `farmer`, so an imported swarm
   farms alone as a fresh bot does. Bots already in the registry keep their stored preset; the
   panel's preset change moves them.
 - `crafter` plays the Crafter role (M9).
 - `town` keeps the Support role it plays today (`TownPersona` is `DefaultPersona` with idle
   settings): it farms nowhere, but learns, changes class, heals, buffs and fights back when
   attacked with that kit.
-- The panel shows a bot's build (role, branch, kit) beside its class.
+- The panel shows a bot's build (role, branch, kit) beside its class: `live.build` of
+  `GET /api/bots` (role, branch and its name, the kit's skill ids), from the brain's published
+  status. `POST /api/bots/{account}/branch` with `{"branch": <class id>}` pins a branch (the
+  registry's `branch`), `0` or no branch clears it; `GET /api/classes` lists each base class's
+  pinnable `branches`. A pin of another base class than the bot's is refused; an online bot whose
+  pin changed logs in again with it.
 
 ### 11. Spot choice through the model
 

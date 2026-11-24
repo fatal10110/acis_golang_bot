@@ -13,6 +13,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 const (
@@ -20,9 +21,9 @@ const (
 	// (botclient.ErrRepeatedAborts) waits before it restarts by itself: a
 	// run of home line drops can end every bot at once.
 	CoolDown = 10 * time.Minute
-	// ImportPreset is the preset of an imported bot: what the swarms
-	// before the panel ran.
-	ImportPreset = "support"
+	// ImportPreset is the preset of an imported bot: the default one, so
+	// an imported swarm farms alone as a fresh bot does (D21).
+	ImportPreset = "farmer"
 )
 
 // Stop reasons the supervisor records for ends it caused.
@@ -48,6 +49,9 @@ var (
 	// ErrNoRun refuses a command to a bot with no run playing: offline,
 	// stopped, halted, cooling down, or logging out for a respawn.
 	ErrNoRun = errors.New("bot is not running")
+	// ErrBranch refuses a branch pin that is not a first profession of the
+	// bot's base class (botclient.BranchPins).
+	ErrBranch = errors.New("not a branch of the bot's class")
 )
 
 // Run is one run of a registry bot: what a RunFunc plays.
@@ -57,6 +61,9 @@ type Run struct {
 	// or its derived names with its class or the never-create flag.
 	Character botclient.Character
 	Preset    string
+	// Branch is the bot's pinned branch (Bot.Branch), 0 for none: the
+	// brain config's (botclient.BrainConfig.Branch).
+	Branch int32
 	// Markers are the markers of every prefix of the registry, for the bot
 	// filter, as of the run's start.
 	Markers botnames.Markers
@@ -394,6 +401,7 @@ func (s *Supervisor) start(account string) {
 		Account:   account,
 		Character: ch,
 		Preset:    b.Preset,
+		Branch:    b.Branch,
 		Markers:   s.cfg.Registry.Markers(),
 		Metrics:   slot,
 		Learned: func(name string, classID int32) {
@@ -777,6 +785,52 @@ func (s *Supervisor) SetPreset(ctx context.Context, account, preset string) erro
 		}
 		return s.respawn(account)
 	})
+}
+
+// SetBranch pins a bot's branch, a first profession of its base class
+// (botclient.BranchPins), or clears the pin with 0 (D22). An online bot
+// whose pin changed respawns with it. A bot whose class is not known yet
+// (an imported one) takes any table's branch; its brain ignores one of
+// another base class.
+func (s *Supervisor) SetBranch(ctx context.Context, account string, branch int32) error {
+	return s.request(ctx, func() error {
+		b, ok := s.cfg.Registry.Bot(account)
+		if !ok {
+			return ErrNoBot
+		}
+		if err := checkBranch(b, branch); err != nil {
+			return err
+		}
+		if branch == b.Branch {
+			return nil
+		}
+		if err := s.cfg.Registry.Update(account, func(b *Bot) { b.Branch = branch }); err != nil {
+			return err
+		}
+		if !b.Online {
+			return nil
+		}
+		return s.respawn(account)
+	})
+}
+
+// checkBranch refuses a pin for b that is not 0 nor a first profession of
+// b's base class, or of any base class while b's class is not known.
+func checkBranch(b Bot, branch int32) error {
+	if branch == 0 {
+		return nil
+	}
+	base, ok := botclient.BranchBase(branch)
+	if !ok {
+		return fmt.Errorf("%w: class %d", ErrBranch, branch)
+	}
+	if b.Class == nil {
+		return nil
+	}
+	if own, ok := datapack.BaseClass(*b.Class); ok && own != base {
+		return fmt.Errorf("%w: class %d is a branch of class %d, the bot's base class is %d", ErrBranch, branch, base, own)
+	}
+	return nil
 }
 
 // Delete drops an offline bot and keeps a tombstone of its account: no new

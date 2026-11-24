@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -150,8 +151,8 @@ func TestPanelClasses(t *testing.T) {
 	if !slices.Equal(starting, want) {
 		t.Fatalf("starting classes %v, want %v", starting, want)
 	}
-	for _, c := range []classView{{ID: 0, Name: "Human Fighter", Starting: true}, {ID: 57, Name: "Warsmith"}, {ID: 118, Name: "Maestro"}} {
-		if !slices.Contains(got, c) {
+	for _, c := range []classView{{ID: 0, Name: "Human Fighter", Starting: true, Branches: []int32{1, 4, 7}}, {ID: 57, Name: "Warsmith"}, {ID: 118, Name: "Maestro"}} {
+		if !slices.ContainsFunc(got, func(g classView) bool { return reflect.DeepEqual(g, c) }) {
 			t.Fatalf("classes lack %+v", c)
 		}
 	}

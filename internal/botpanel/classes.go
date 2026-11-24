@@ -38,11 +38,14 @@ var classNames = map[int32]string{
 }
 
 // classView is a class in the API; Starting marks the nine a new bot may be
-// created with.
+// created with, and Branches are the first professions a bot of a base
+// class may be pinned to (botclient.BranchPins, POST
+// /api/bots/{account}/branch).
 type classView struct {
-	ID       int32  `json:"id"`
-	Name     string `json:"name"`
-	Starting bool   `json:"starting"`
+	ID       int32   `json:"id"`
+	Name     string  `json:"name"`
+	Starting bool    `json:"starting"`
+	Branches []int32 `json:"branches,omitempty"`
 }
 
 // classList returns every class by id.
@@ -51,7 +54,7 @@ func classList() []classView {
 	out := make([]classView, 0, len(classNames))
 	for id, name := range classNames {
 		isStart := slices.ContainsFunc(starting, func(c botclient.StartingClass) bool { return c.ID == id })
-		out = append(out, classView{ID: id, Name: name, Starting: isStart})
+		out = append(out, classView{ID: id, Name: name, Starting: isStart, Branches: botclient.BranchPins(id)})
 	}
 	slices.SortFunc(out, func(a, b classView) int { return cmp.Compare(a.ID, b.ID) })
 	return out
