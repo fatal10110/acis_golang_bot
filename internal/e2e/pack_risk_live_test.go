@@ -12,11 +12,13 @@ import (
 const riskWatch = 4 * time.Minute
 
 // TestLivePackRisk logs a level 14 human fighter in Squire's Sword, Shirt
-// and Pants, carrying 13 Lesser Healing Potions, in at Talking Island's
-// village with SpotPolicy.PackRisk 3 (#294): its own stats pass over
-// gludio31_1625_10m1, the werewolf pack that killed it in
-// TestLivePackSpot, before any death there. It fails at the werewolf spot
-// held, or at a death, within riskWatch.
+// and Pants, carrying 3 Lesser Healing Potions, in at Talking Island's
+// village (#294, #330): by the model its own stats, three potions spread
+// over the pack's fights, last it about 60 s against
+// gludio31_1625_10m1's werewolves, short of the two kills' 76 s its row's
+// margin asks for (TestPackFit), so it passes over the werewolf pack that
+// killed it in TestLivePackSpot before any death there. It fails at the
+// werewolf spot held, at a death, or at no spot claimed within riskWatch.
 func TestLivePackRisk(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -28,11 +30,10 @@ func TestLivePackRisk(t *testing.T) {
 	strip(t, ctx, tg, gm, with(items, consumables...), account, &botclient.HumanFighter, stripEnd{
 		at:    townTI,
 		level: 14,
-		carry: map[int32]int32{lesserHealingPotion: 13},
+		carry: map[int32]int32{lesserHealingPotion: 3},
 	}, squiresSword, squiresShirt, squiresPants)
 	f := runFieldFarmer(t, ctx, tg, account, func(p *botclient.Persona) {
 		p.Potions = []int32{lesserHealingPotion}
-		p.Spots.PackRisk = 3
 	})
 	logStats(t, f)
 

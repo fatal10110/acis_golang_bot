@@ -107,6 +107,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30, MPReserve: 20,
 			SitHP: 35, SitMP: 20, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginTank,
 	},
 	// WA: War Cry in combat, Battle Roar under 30 % HP from 28; Stun Attack
 	// with a blunt, Power Smash, Wild Sweep with a pole and two attackers;
@@ -127,6 +128,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30,
 			SitHP: 35, SitMP: 15, StandHP: 90, StandMP: 70,
 		},
+		SpotMargin: marginNormal,
 	},
 	// RO: Ultimate Evasion under 30 % HP from 28, Rapid Shot with a bow
 	// from 32; the dagger and bow steps; the stance toggles; Dash to flee;
@@ -145,6 +147,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 20, CrowdedHP: 70, OutmatchedHP: 40, MPReserve: 10,
 			SitHP: 40, SitMP: 20, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	},
 	// EK: Elemental Heal under 50 % HP, Ultimate Defense under 20 %;
 	// Aggression opens from 24, Entangle from 36, Power Strike; the auras.
@@ -163,6 +166,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 20, CrowdedHP: 75, OutmatchedHP: 45, MPReserve: 25,
 			SitHP: 45, SitMP: 25, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	},
 	// ES: Elemental Heal under 50 % HP, Ultimate Evasion under 30 % from 28,
 	// Rapid Shot with a bow from 32; Entangle opens from 36 for both
@@ -184,6 +188,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 25, CrowdedHP: 80, OutmatchedHP: 50, MPReserve: 20,
 			SitHP: 45, SitMP: 25, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	},
 	// PK: Ultimate Defense under 20 % HP, Drain Health under 60 %;
 	// Aggression opens from 24 in the Support role, Drain Health opens,
@@ -207,6 +212,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 25, CrowdedHP: 80, OutmatchedHP: 50, MPReserve: 25,
 			SitHP: 50, SitMP: 25, StandHP: 95, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	},
 	// AS: Ultimate Evasion under 30 % HP from 28, Rapid Shot with a bow from
 	// 32, Drain Health under 60 %; with a dagger Drain Health opens, then
@@ -229,6 +235,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 20,
 			SitHP: 50, SitMP: 25, StandHP: 95, StandMP: 80,
 		},
+		SpotMargin: marginGlassCannon,
 	},
 	// OR: Battle Roar under 30 % HP from 28, Frenzy under 30 % from 32,
 	// else Guts from 36 (one pinch stack: the stack rule keeps Guts off while
@@ -251,6 +258,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 10, CrowdedHP: 50, OutmatchedHP: 25,
 			SitHP: 30, SitMP: 15, StandHP: 85, StandMP: 70,
 		},
+		SpotMargin: marginTank,
 	},
 	// MO: Focused Force out of combat below its maxCharges from 24; Force
 	// Blaster opens with a charge, Cripple opens; Hurricane Assault with two
@@ -278,6 +286,7 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 15, CrowdedHP: 50, OutmatchedHP: 25, MPReserve: 10,
 			SitHP: 30, SitMP: 20, StandHP: 85, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	},
 	// SC: Spoil opens on a fresh target, then Stun Attack with a blunt;
 	// Sweeper on the spoiled corpse (ruleSweep).
@@ -292,5 +301,6 @@ var professionKits = map[int32]ClassKit{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30, MPReserve: 10,
 			SitHP: 35, SitMP: 20, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginTank,
 	},
 }

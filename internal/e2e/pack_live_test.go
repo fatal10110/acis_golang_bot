@@ -18,13 +18,14 @@ const packWatch = 20 * time.Minute
 // gludio31_1625_10m1, Talking Island's pack of ten aggressive level 10-12
 // werewolves (run 118.8, faster than its 115) that call each other within
 // 300 (#281). The default persona has it fight back rather than flee from
-// the faster pack, drink as it fights, and pass over the packs like the one
-// a death taught it to and, at SpotPolicy.PackRisk 3, the packs its own
-// stats say are too much (#294): it survives the spot, or it avoids it. It
-// fails at a third death, at a spot it died holding held again, or at the
-// werewolf spot held, within packWatch. Off (PackRisk 0, the default) the
-// farmer, worn down by the death penalty of earlier runs, died at the
-// werewolves, then the orcs, then gludio31_1624_01m1 in 9 minutes.
+// the faster pack, drink as it fights, pass over the packs like the one a
+// death taught it to, and judge each pack by the model with its row's
+// margin (#330): its death penalty lifted (strip), the model has it last
+// about 84 s against the two kills' 76 s its margin of 2 asks for
+// (TestPackFit), so it farms the werewolves. The watch is the fit's check
+// (#294): it fails at a third death, or at a spot it died holding held
+// again, within packWatch. With its death penalty on, the farmer died at
+// the werewolves, then the orcs, then gludio31_1624_01m1 in 9 minutes.
 func TestLivePackSpot(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -52,7 +53,6 @@ func TestLivePackSpot(t *testing.T) {
 	}, squiresSword, squiresShirt, squiresPants)
 	f := runFieldFarmer(t, ctx, tg, account, func(p *botclient.Persona) {
 		p.Potions = []int32{lesserHealingPotion}
-		p.Spots.PackRisk = 3
 	})
 	logStats(t, f)
 	gmTeleport(t, ctx, gm, townTI)
@@ -80,10 +80,6 @@ func TestLivePackSpot(t *testing.T) {
 		}
 		// The status board lags the bot by up to statusEvery: one from
 		// before its last death still shows the spot it died holding.
-		if st.Spot == pack.Maker {
-			t.Log(f.digest())
-			t.Fatalf("%s holds %s, a pack its stats pass over", f.name, st.Spot)
-		}
 		if st.Spot != "" && st.At.After(diedAt) {
 			if died[st.Spot] {
 				t.Log(f.digest())
@@ -114,7 +110,7 @@ func TestLivePackSpot(t *testing.T) {
 
 // logStats logs, at the end of the test, the combat stats of every UserInfo
 // of f that changed them: the ones its spot fit weighs packs with
-// (SpotPolicy.PackRisk; TestPackRisk's squires).
+// (packFits; TestPackFit's squires).
 func logStats(t *testing.T, f *farmer) {
 	t.Helper()
 	t.Cleanup(func() {

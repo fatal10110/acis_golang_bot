@@ -186,6 +186,9 @@ func TestBehaviorRowsShipped(t *testing.T) {
 		for _, e := range checkRow(r, classes, skills) {
 			t.Error(e)
 		}
+		if r.kit.SpotMargin != rowSpotMargins[r.class] {
+			t.Errorf("%s: spot margin %v, want %v (column 10)", r.name, r.kit.SpotMargin, rowSpotMargins[r.class])
+		}
 		if len(r.kit.Skills) > 0 && len(trainers[r.class]) == 0 {
 			t.Errorf("%s learns %v at no trainer", r.name, r.kit.Skills)
 		}
