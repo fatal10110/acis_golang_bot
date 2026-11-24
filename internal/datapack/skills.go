@@ -4,13 +4,39 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Skill is the part of one level of a skill template (skills/*.xml) bots
-// weigh potions and buffs with, and cast it from: whether it is a potion's,
-// its cast range and the effects it lands, with their stack types.
+// weigh potions, buffs and builds with, and cast it from: whether it is a
+// potion's, how and on what it is cast, what it costs, the charges it needs,
+// the effects it lands, with their stack types, and the stat functions it
+// applies.
 type Skill struct {
 	Name string
+	// Type is skillType (BUFF, CHARGEDAM, CONT, ...), OperateType is
+	// operateType (ACTIVE, PASSIVE, TOGGLE, ...) and Target is target
+	// (TARGET_ONE, TARGET_SELF, ...), each as written; "" when absent,
+	// which the server refuses of a shipped skill.
+	Type, OperateType, Target string
+	// WeaponsAllowed are the weapon kinds of weaponsAllowed (DUALFIST,
+	// SWORD, ...), split on "," and trimmed as the server's mask reads them;
+	// nil when the skill casts with any weapon.
+	WeaponsAllowed []string
+	// HitTime and ReuseDelay are hitTime and reuseDelay (default 0): how
+	// long the cast takes and how long until the skill may be cast again.
+	HitTime, ReuseDelay time.Duration
+	// MPConsume is mpConsume (default 0), the MP a cast costs.
+	MPConsume int
+	// Power is power (default 0), the skill's base damage or heal.
+	Power float64
+	// NumCharges is numCharges, the charges a cast spends (or a charging
+	// skill adds), and MaxCharges maxCharges, the most a charging skill
+	// holds; both default to 0.
+	NumCharges, MaxCharges int
+	// Charges is the skill's <cond><player Charges/></cond>, the zero value
+	// for none.
+	Charges ChargeCond
 	// Potion is isPotion: the skill of a potion etc item.
 	Potion bool
 	// CastRange is castRange (default 0): how far from its target the
@@ -22,6 +48,40 @@ type Skill struct {
 	// in file order; nil for none. The effects only an enchanted skill
 	// level lands (<enchant1for>, <enchant2for>) are not read.
 	Effects []Effect
+	// Funcs are the stat functions directly in the skill's <for> blocks at
+	// this level (a passive's, a set skill's), in file order; nil for none.
+	// The functions an effect applies are not read.
+	Funcs []StatFunc
+}
+
+// ChargeCond is a skill's Charges condition: <player Charges="Min"/> lets
+// the cast through with at least Min charges (skill/conditions Charges);
+// under <not> (Not) it refuses the cast from Min charges up, as a charging
+// skill at its maximum. Min 0 means the skill has no such condition.
+type ChargeCond struct {
+	Min int
+	Not bool
+}
+
+// StatFunc is one stat function (<add>, <mul>, ...) of a skill level: Op
+// applies Value to Stat.
+type StatFunc struct {
+	// Op is the element name, spelled as the server's funcOpTags (add,
+	// addMul, sub, subDiv, mul, basemul, div, set, enchant, baseadd).
+	Op    string
+	Stat  string
+	Value float64
+	// Using are the item kinds (SWORD, LIGHT, MAGIC, ...) of the function's
+	// <using kind> condition: it applies only while an equipped item is of
+	// one of them, or with NotUsing (<not><using/></not>) only while none
+	// is. nil for no such condition.
+	Using    []string
+	NotUsing bool
+	// OtherCond is set when the function's condition is anything but a
+	// plain or negated <using kind> (a <player hp>, a <game night>, an
+	// <and>): the reader keeps no detail of it, so the function applies
+	// only some of the time.
+	OtherCond bool
 }
 
 // Effect is one <effect> of a skill level.
@@ -46,21 +106,32 @@ type skillFile struct {
 }
 
 // skillElement is one <skill>: its attributes, its value tables, its direct
-// <set> children and its <for> blocks. <enchant1>, <enchant2>,
-// <enchant1for>, <enchant2for> and <cond> are not read.
+// <set> children, its <cond> children and its <for> blocks. <enchant1>,
+// <enchant2>, <enchant1for> and <enchant2for> are not read.
 type skillElement struct {
 	Attrs  []xml.Attr `xml:",any,attr"`
 	Tables []struct {
 		Name string `xml:"name,attr"`
 		Text string `xml:",chardata"`
 	} `xml:"table"`
-	Sets []setElement `xml:"set"`
-	For  []struct {
-		Effects []struct {
-			Attrs []xml.Attr `xml:",any,attr"`
-		} `xml:"effect"`
+	Sets  []setElement `xml:"set"`
+	Conds []xmlNode    `xml:"cond"`
+	For   []struct {
+		Nodes []xmlNode `xml:",any"`
 	} `xml:"for"`
 }
+
+// xmlNode is any element with its attributes and child elements.
+type xmlNode struct {
+	XMLName  xml.Name
+	Attrs    []xml.Attr `xml:",any,attr"`
+	Children []xmlNode  `xml:",any"`
+}
+
+// statFuncOps are the stat function element names, spelled as the
+// server's funcOpTags (model/skill/template.go); the server matches them
+// case-insensitively and skips any other element of a <for> block.
+var statFuncOps = []string{"add", "addMul", "sub", "subDiv", "mul", "basemul", "div", "set", "enchant", "baseadd"}
 
 // LoadSkills reads every *.xml skill template file directly under dir, in
 // sorted file order, into one Skill per regular level (1 to levels; the
@@ -91,10 +162,14 @@ func LoadSkills(dir string) (map[SkillRef]Skill, error) {
 }
 
 // buildSkill reads every regular level of el into skills: id, levels and
-// name are required, isPotion defaults to false and castRange to 0
-// (data/xml/skill.go buildSkillDefinitionAttrs); an effect's name is
-// required, its stackType defaults to "none", stackOrder to 0, time and
-// count to 1 (data/xml/effectgrammar.go readEffectTemplate).
+// name are required, isPotion defaults to false, castRange, hitTime,
+// reuseDelay, mpConsume, power, numCharges and maxCharges to 0 and
+// weaponsAllowed to none (data/xml/skill.go buildSkillDefinitionAttrs);
+// skillType, operateType and target, which the server requires, read as ""
+// when absent; an effect's name is required, its stackType defaults to
+// "none", stackOrder to 0, time and count to 1 (data/xml/effectgrammar.go
+// readEffectTemplate); a stat function's stat and val are required
+// (data/xml/skill.go funcTemplate).
 func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	a := foldAttrs(el.Attrs)
 	id, levels, name := a.int32("id"), a.int("levels"), a.str("name")
@@ -117,8 +192,18 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	}
 	for level := 1; level <= levels; level++ {
 		res := resolver{tables: tables, row: level}
-		r := res.reader(sets, "isPotion", "castRange")
-		sk := Skill{Name: name, Potion: r.boolDefault("isPotion", false), CastRange: r.int32Default("castRange", 0)}
+		r := res.reader(sets, "isPotion", "castRange", "skillType", "operateType", "target", "weaponsAllowed",
+			"hitTime", "reuseDelay", "mpConsume", "power", "numCharges", "maxCharges")
+		sk := Skill{
+			Name: name, Potion: r.boolDefault("isPotion", false), CastRange: r.int32Default("castRange", 0),
+			Type: r.strDefault("skillType", ""), OperateType: r.strDefault("operateType", ""), Target: r.strDefault("target", ""),
+			WeaponsAllowed: splitKinds(r.strDefault("weaponsAllowed", "")),
+			HitTime:        time.Duration(r.intDefault("hitTime", 0)) * time.Millisecond,
+			ReuseDelay:     time.Duration(r.intDefault("reuseDelay", 0)) * time.Millisecond,
+			MPConsume:      r.intDefault("mpConsume", 0), Power: r.floatDefault("power", 0),
+			NumCharges: r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
+			Charges: chargeCond(el.Conds, &res),
+		}
 		if res.err != nil {
 			return fmt.Errorf("skill %d level %d: %w", id, level, res.err)
 		}
@@ -126,8 +211,18 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			return fmt.Errorf("skill %d level %d: %w", id, level, r.err)
 		}
 		for _, f := range el.For {
-			for _, e := range f.Effects {
-				vals := foldAttrs(e.Attrs).vals
+			for _, n := range f.Nodes {
+				if !strings.EqualFold(n.XMLName.Local, "effect") {
+					fn, ok := statFunc(n, &res)
+					if res.err != nil {
+						return fmt.Errorf("skill %d level %d: %s: %w", id, level, n.XMLName.Local, res.err)
+					}
+					if ok {
+						sk.Funcs = append(sk.Funcs, fn)
+					}
+					continue
+				}
+				vals := foldAttrs(n.Attrs).vals
 				r := res.reader(vals, "stackOrder", "time", "count", "val")
 				eff := Effect{
 					Name:       r.str("name"),
@@ -152,6 +247,83 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 		skills[SkillRef{ID: id, Level: int32(level)}] = sk
 	}
 	return nil
+}
+
+// chargeCond reads the Charges condition of a skill level's <cond>
+// elements: the first whose predicate is <player Charges>, or <not> of
+// one. Charges may name a table, resolved against res's row.
+func chargeCond(conds []xmlNode, res *resolver) ChargeCond {
+	for _, c := range conds {
+		if len(c.Children) == 0 {
+			continue
+		}
+		pred, not := c.Children[0], false
+		if strings.EqualFold(pred.XMLName.Local, "not") && len(pred.Children) > 0 {
+			pred, not = pred.Children[0], true
+		}
+		if !strings.EqualFold(pred.XMLName.Local, "player") {
+			continue
+		}
+		vals := foldAttrs(pred.Attrs).vals
+		if _, ok := vals["Charges"]; !ok {
+			continue
+		}
+		r := res.reader(vals, "Charges")
+		n := r.int("Charges")
+		if r.err != nil {
+			res.fail(fmt.Errorf("cond: %w", r.err))
+		}
+		return ChargeCond{Min: n, Not: not}
+	}
+	return ChargeCond{}
+}
+
+// statFunc reads n as a stat function of a <for> block, its val resolved
+// against res's row; ok is false for an element that is not one, which
+// the server skips. Its first child is its condition (data/xml/skill.go
+// funcTemplate).
+func statFunc(n xmlNode, res *resolver) (fn StatFunc, ok bool) {
+	for _, op := range statFuncOps {
+		if strings.EqualFold(n.XMLName.Local, op) {
+			fn.Op, ok = op, true
+		}
+	}
+	if !ok {
+		return StatFunc{}, false
+	}
+	r := res.reader(foldAttrs(n.Attrs).vals, "val")
+	fn.Stat, fn.Value = r.str("stat"), r.float("val")
+	if r.err != nil {
+		res.fail(r.err)
+		return StatFunc{}, false
+	}
+	if len(n.Children) == 0 {
+		return fn, true
+	}
+	cond := n.Children[0]
+	if strings.EqualFold(cond.XMLName.Local, "not") && len(cond.Children) == 1 {
+		cond, fn.NotUsing = cond.Children[0], true
+	}
+	kind, hasKind := foldAttrs(cond.Attrs).vals["kind"]
+	if !strings.EqualFold(cond.XMLName.Local, "using") || !hasKind || len(cond.Attrs) != 1 || len(cond.Children) != 0 {
+		fn.NotUsing, fn.OtherCond = false, true
+		return fn, true
+	}
+	fn.Using = splitKinds(kind)
+	return fn, true
+}
+
+// splitKinds splits a "," separated item kind list, trimming each kind
+// as the server's ParseWornKindMask does; nil for "".
+func splitKinds(s string) []string {
+	if s == "" {
+		return nil
+	}
+	kinds := strings.Split(s, ",")
+	for i, k := range kinds {
+		kinds[i] = strings.TrimSpace(k)
+	}
+	return kinds
 }
 
 // isTableSpace reports whether c separates two values of a <table>: a

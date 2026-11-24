@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<list>
+	<!-- A trainer: <teachTo> lists the classes it teaches; its own stats are set. -->
+	<npc id="30010" name="Auron" title="Master" alias="auron">
+		<set name="type" val="Trainer"/>
+		<set name="level" val="70"/>
+		<set name="int" val="21"/>
+		<set name="wit" val="20"/>
+		<set name="men" val="10"/>
+		<set name="mAtk" val="430.0"/>
+		<set name="mDef" val="350.0"/>
+		<set name="corpseTime" val="10"/>
+		<skills>
+			<skill id="4045" level="1" type="PASSIVE"/>
+		</skills>
+		<teachTo classes="0;1;2;3;4;5;6;7;8;9"/>
+	</npc>
+</list>
