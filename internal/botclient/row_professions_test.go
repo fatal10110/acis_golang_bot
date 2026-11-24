@@ -409,11 +409,14 @@ func TestRowMO(t *testing.T) {
 	}
 }
 
-// TestRowSC checks the scavenger: Stun Attack with a blunt, melee with a
-// sword (Spoil and Sweeper are S10's, #329), and its row's thresholds.
+// TestRowSC checks the scavenger: Spoil opens on a fresh target, then Stun
+// Attack with a blunt (spoil and sweep: row_spoil_test.go), melee with a
+// sword, and its row's thresholds.
 func TestRowSC(t *testing.T) {
 	now := at(time.Second)
-	b := rowBrain(t, classScavenger, 20, "BLUNT", skillStunAttack)
+	b := rowBrain(t, classScavenger, 20, "BLUNT", skillSpoil, skillStunAttack)
+	fightCast(t, b, now, skillSpoil, npcID)
+	b.opened = npcID
 	fightCast(t, b, now, skillStunAttack, npcID)
 	if th := b.build().Thresholds; th != professionKits[classScavenger].Thresholds {
 		t.Errorf("thresholds %+v, want the row's %+v", th, professionKits[classScavenger].Thresholds)

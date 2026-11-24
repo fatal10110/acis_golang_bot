@@ -87,9 +87,12 @@ var (
 			SitHP: 30, SitMP: 15, StandHP: 85, StandMP: 70,
 		},
 	}
-	// dwarvenFighterKit (WF): melee only until Spoil and Sweeper (S10,
-	// #329).
+	// dwarvenFighterKit (WF): Spoil opens on a fresh target from 10, then
+	// melee; Sweeper on the spoiled corpse (ruleSweep).
 	dwarvenFighterKit = ClassKit{
+		Skills:   []int32{skillSpoil, skillSweeper},
+		Rotation: []Step{{Skill: skillSpoil, From: 10, Spoil: true}},
+		Sweep:    skillSweeper,
 		Thresholds: Thresholds{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30,
 			SitHP: 35, SitMP: 20, StandHP: 90, StandMP: 80,

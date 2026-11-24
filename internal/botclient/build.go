@@ -121,8 +121,10 @@ type Step struct {
 	// its maxCharges at the level the bot knows.
 	Charges     int
 	ChargeToMax bool
-	// Opener casts only as the first attack on a fresh target.
-	Opener bool
+	// Opener casts only as the first attack on a fresh target. Spoil casts
+	// only on a target nobody spoiled as far as the bot knows: a fresh one,
+	// or one its last Spoil was resisted on (Brain.spoils).
+	Opener, Spoil bool
 	// Role puts the step in that role's rotation only; RoleNone in every
 	// role's. CompileBuild leaves the other roles' steps out.
 	Role Role
@@ -147,8 +149,9 @@ type stepState struct {
 	charges, maxCharges int
 	inCombat            bool
 	// fresh is whether no attack of the bot has gone out on the target
-	// (Brain.opened).
-	fresh bool
+	// (Brain.opened); spoilable whether a Spoil step may cast on it
+	// (Brain.spoilable).
+	fresh, spoilable bool
 }
 
 // passes reports whether every gate of the step holds in st. Target is not
@@ -170,7 +173,8 @@ func (s Step) passes(st stepState) bool {
 		s.Charges > 0 && st.charges < s.Charges,
 		s.ChargeToMax && st.charges >= st.maxCharges,
 		s.Idle && st.inCombat,
-		s.Opener && !st.fresh:
+		s.Opener && !st.fresh,
+		s.Spoil && !st.spoilable:
 		return false
 	}
 	return true
@@ -228,6 +232,10 @@ type ClassKit struct {
 	// with instead of a plain sit (226 Relax), 0 for none.
 	Toggles []Toggle
 	Relax   int32
+	// Sweep is the dwarven spoil flag (docs/strategy.md, Design section 8):
+	// the skill ruleSweep casts on the corpse of a monster the bot spoiled
+	// (42 Sweeper), 0 for a kit that does not sweep.
+	Sweep int32
 	// Thresholds are the row's (docs/strategy.md, "Numbers and summary");
 	// the zero value compiles defaultThresholds.
 	Thresholds Thresholds
@@ -414,6 +422,7 @@ func CompileBuild(race, class, level int32, role Role) Build {
 		k.Skills = line.Skills
 	}
 	k.Heals, k.Flee, k.Melee, k.Relax, k.Base = line.Heals, line.Flee, line.Melee, line.Relax, line.Base
+	k.Sweep = line.Sweep
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
@@ -521,6 +530,7 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 		attackers: len(b.attackers(now)), inCombat: s.InCombat, fresh: b.opened != id && b.engaged != id,
 		charges: int(s.Charges),
 	}
+	st.spoilable = b.spoilable(id, st.fresh)
 	if i := slices.IndexFunc(steps, func(x Step) bool { return x.ChargeToMax }); i >= 0 {
 		sk := steps[i].Skill
 		st.maxCharges = b.cfg.Travel.maxChargesOf(sk, b.world.Skills[sk].Level)
