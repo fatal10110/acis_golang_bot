@@ -22,30 +22,31 @@ const (
 	rankAttack
 )
 
-// rank is the step's pass in fight; ok is false for a target fight does not
-// cast on yet (another attacker, the leader's target: the mystic rows, S7).
-func (s Step) rank() (r int, ok bool) {
+// rank is the step's pass in fight: a step on another attacker or on the
+// leader's target is an attack.
+func (s Step) rank() int {
 	switch {
 	case s.Target == TargetSelf:
-		return rankSelf, true
-	case s.Target != TargetEnemy:
-		return 0, false
-	case s.SelfHPBelow > 0:
-		return rankSustain, true
+		return rankSelf
+	case s.Target == TargetEnemy && s.SelfHPBelow > 0:
+		return rankSustain
 	}
-	return rankAttack, true
+	return rankAttack
 }
 
 // critSustain are the heals and drains ruleCritical tries before its
 // potions (docs/strategy.md, Design section 7): Self Heal, Elemental Heal,
 // Divine Heal, Battle Roar, Drain Health, Vampiric Touch and Life Drain.
-var critSustain = []int32{1216, skillElementalHeal, 45, 121, skillDrainHealth, 1147, skillLifeDrain}
+var critSustain = []int32{skillSelfHeal, skillElementalHeal, skillDivineHeal, skillBattleRoar, skillDrainHealth, skillVampiricTouch, skillLifeDrain}
 
 // rotationCast is the cast of the first step of rot, fighting id at now,
 // whose gates pass and whose skill is ready, in rank order: a self-target
 // step only under the stack rule (buffDue), an attack only with MP at the
-// reserve or more (underReserve false). Idle steps are ruleRebuff's. ok is
-// false when none is; a hold (Action{}, true) when id ran out of attempts.
+// reserve or more (underReserve false), a step on the leader's target only
+// on that target in a party (leaderTarget), a step on another attacker on
+// one the bot is not fighting (otherCast). Idle steps are ruleRebuff's. ok
+// is false when none is; a hold (Action{}, true) when id ran out of
+// attempts.
 func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.Time) (Action, bool) {
 	if len(rot) == 0 {
 		return Action{}, false
@@ -54,21 +55,93 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 	st := b.stepState(id, rot, now)
 	for pass := rankSelf; pass <= rankAttack; pass++ {
 		for _, step := range rot {
-			r, ok := step.rank()
-			if !ok || r != pass || step.Idle || r == rankAttack && underReserve ||
+			r := step.rank()
+			if r != pass || step.Idle || r == rankAttack && underReserve ||
 				!step.passes(st) || !b.world.SkillReady(step.Skill, now) {
 				continue
 			}
-			if r == rankSelf {
+			switch step.Target {
+			case TargetSelf:
 				if !b.buffDue(self, step.Skill, now) {
 					continue
 				}
 				return b.castOn(self, step.Skill, false, now), true
+			case TargetLeaderTarget:
+				if !b.leaderTarget(id) {
+					continue
+				}
+			case TargetOtherAttacker:
+				if a, ok := b.otherCast(id, step.Skill, now); ok {
+					return a, true
+				}
+				continue
 			}
 			return b.castStep(id, step.Skill, r == rankAttack, now), true
 		}
 	}
 	return Action{}, false
+}
+
+// leaderTarget reports whether id is the target of a TargetLeaderTarget
+// step: the creature the leader last attacked while the bot assists one
+// (assistPlan), any target while it assists no one.
+func (b *Brain) leaderTarget(id int32) bool {
+	return b.assisted() == 0 || id == b.assist.target
+}
+
+// sideCast is a step's skill due on another attacker than the one the bot
+// fights, once that attacker is selected.
+type sideCast struct{ target, skill int32 }
+
+// otherCast is the first step of a TargetOtherAttacker step with skill,
+// fighting id at now: select the first attacker by object id that is
+// neither id nor the last one a side cast went to (Brain.sided), and cast
+// skill on it once it is the target (sideCasting). ok is false with no
+// such attacker.
+func (b *Brain) otherCast(id, skill int32, now time.Time) (Action, bool) {
+	others := slices.Sorted(slices.Values(b.attackers(now)))
+	i := slices.IndexFunc(others, func(o int32) bool { return o != id && o != b.sided })
+	if i < 0 {
+		return Action{}, false
+	}
+	o := others[i]
+	b.side, b.sided = sideCast{target: o, skill: skill}, o
+	if b.world.Target == o {
+		return b.sideCasting(o, now)
+	}
+	return selectAction(o, b.world.Self.Position(now)), true
+}
+
+// forgetSide drops the side cast due on id and forgets that the last one
+// went to id, which died or left: the server gives a dead NPC's object id
+// to its respawn (data/manager/npcs_respawn.go), a fresh attacker.
+func (b *Brain) forgetSide(id int32) {
+	if b.side.target == id {
+		b.side = sideCast{}
+	}
+	if b.sided == id {
+		b.sided = 0
+	}
+}
+
+// sideCasting is the side cast due on target t, the bot's target, at now,
+// which fight sends before it selects its own target again: a hold while a
+// cast is in flight. ok is false when none is due on t, or its skill is
+// not ready or t may no longer be fought.
+func (b *Brain) sideCasting(t int32, now time.Time) (Action, bool) {
+	sc := b.side
+	if sc.target == 0 || sc.target != t {
+		return Action{}, false
+	}
+	s := &b.world.Self
+	if s.Casting(now) || b.castPending(now) {
+		return Action{}, true
+	}
+	b.side = sideCast{}
+	if !b.world.SkillReady(sc.skill, now) || !b.mayFight(t, now) {
+		return Action{}, false
+	}
+	return b.castStep(t, sc.skill, false, now), true
 }
 
 // castStep casts skill on enemy id at now, walking to a stand point first
