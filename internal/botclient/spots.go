@@ -83,7 +83,12 @@ type SpotPolicy struct {
 	// fight's lulls and a pack drawn in turn are left out, so it is a ratio
 	// against the worst case rather than a death line. Holding a spot over
 	// it, the bot moves to one that fits (overRisk). A mystic's spells are
-	// left out too, so a mystic is not judged. 0 never passes one over.
+	// left out too, so a mystic is not judged. 0, the default, never passes
+	// one over: on the worst case, a healthy level 6 squire with no potion
+	// is over 3 at the toads too (3.5 to 4.3), and a character weakened by
+	// its death penalty fits nothing (TestLiveSupplyTrip's, at level 6 with
+	// P.Atk 2, is over 12 at the toads with 12 potions); 3 is the value the
+	// cases above are judged at. The per-build margins of #330 replace it.
 	PackRisk float64
 }
 
@@ -91,14 +96,14 @@ type SpotPolicy struct {
 // above the bot, aggressive ones not above it (plan, farmer) once it is
 // past level 5, leaving at five levels over; spread over every spot that
 // fits within twice the newbie zone's reach, sharing full ones rather than
-// waiting (#137); a death at a pack passes over its like (#281), and a
-// pack too much for the bot's stats is passed over before one (#294).
+// waiting (#137); a death at a pack passes over its like (#281). PackRisk
+// is off: see its doc.
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
 		MaxTravel: 20000, Wander: 40000, Overflow: true,
 		Crowd: 4, AvoidFor: 10 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
-		PackShare: 0.8, PackRisk: 3,
+		PackShare: 0.8,
 	}
 }
 

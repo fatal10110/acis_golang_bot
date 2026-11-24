@@ -19,10 +19,8 @@ const packWatch = 20 * time.Minute
 // werewolves (run 118.8, faster than its 115) that call each other within
 // 300 (#281). The default persona has it fight back rather than flee from
 // the faster pack, drink as it fights, and pass over the packs like the one
-// a death taught it to, and the packs its stats tell it are too much
-// (SpotPolicy.PackRisk, #294): it never holds the werewolf spot. It fails
-// at a third death, at a spot it died holding held again, or at the
-// werewolf spot held, within packWatch.
+// a death taught it to: it survives the spot, or it avoids it. It fails at
+// a third death, or at a spot it died holding held again, within packWatch.
 func TestLivePackSpot(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -77,10 +75,6 @@ func TestLivePackSpot(t *testing.T) {
 		}
 		// The status board lags the bot by up to statusEvery: one from
 		// before its last death still shows the spot it died holding.
-		if st.Spot == pack.Maker {
-			t.Log(f.digest())
-			t.Fatalf("%s holds %s, a pack its stats pass over", f.name, st.Spot)
-		}
 		if st.Spot != "" && st.At.After(diedAt) {
 			if died[st.Spot] {
 				t.Log(f.digest())

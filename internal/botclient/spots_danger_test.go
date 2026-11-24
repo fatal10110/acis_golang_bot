@@ -47,7 +47,9 @@ var (
 
 // squire is a human fighter (class 0) of level in Squire's Sword, Shirt
 // and Pants, as its UserInfo carries it: squire14 is the one
-// TestLivePackSpot logs, squire6 the one TestLiveSupplyTrip logs.
+// TestLivePackSpot logs, unbuffed; squire6 the same at level 6 (P.Atk and
+// P.Def by the level factors 0.95 over 1.03, evasion and accuracy 8 lower,
+// max HP the class's level 6 HP by CON 43).
 type squire struct {
 	level, pAtk, pDef, evasion, accuracy, atkSpd, maxHP int32
 }
@@ -65,6 +67,7 @@ func newSquireBrain(t *testing.T, s squire, potions int32) *Brain {
 	p := DefaultPersona()
 	p.IdleChance = 0
 	p.Potions = []int32{lesserHealingPotion}
+	p.Spots.PackRisk = 3
 	b, _ := newTestBrain(t, p)
 	setSquire(b, s, potions)
 	return b
@@ -115,8 +118,7 @@ func TestPackRisk(t *testing.T) {
 		self    squire
 		potions int32
 		spot    datapack.Spot
-		// risk is the spot's packRisk, fit whether it fits at
-		// defaultSpotPolicy's PackRisk.
+		// risk is the spot's packRisk, fit whether it fits at PackRisk 3.
 		risk float64
 		fit  bool
 	}{
@@ -300,6 +302,7 @@ func TestPackRiskRepick(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newSpotBrain(t, 14, tt.spots...)
 			b.persona.Potions = []int32{lesserHealingPotion}
+			b.persona.Spots.PackRisk = 3
 			for i, s := range tt.steps {
 				if s.self.level > 0 {
 					setSquire(b, s.self, s.potions)
