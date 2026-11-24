@@ -74,8 +74,10 @@ func TestBlockedEnd(t *testing.T) {
 	}{
 		{"open ground: a step and a cell", open, openEnd, at(Open, 100, 0, 0), at(Open, 100+testLmax+block.CellSize, 0, 0)},
 		{"open ground near the end: the end", open, openEnd, at(Open, 620, 0, 0), openEnd},
-		{"before the stair: on through its stretch", stair, deck, at(StairLow, -20*block.CellSize, 0, 0),
-			location.Location{X: stairX(st.t1 + stretchPad), Y: stair.Y, Z: deck.Z}},
+		{
+			"before the stair: on through its stretch", stair, deck, at(StairLow, -20*block.CellSize, 0, 0),
+			location.Location{X: stairX(st.t1 + stretchPad), Y: stair.Y, Z: deck.Z},
+		},
 		{"inside the stair's stretch: the rest", stair, deck, location.Location{X: stairX(st.t0), Y: stair.Y, Z: 0}, deck},
 	}
 	for _, tt := range tests {
