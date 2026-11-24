@@ -40,7 +40,7 @@ func TestLiveFarmMage(t *testing.T) {
 		class: &botclient.DarkMystic,
 		persona: func() botclient.Persona {
 			p := botclient.DefaultPersona()
-			p.MPReserve = 0
+			p.MPReserve = -1 // off over the build's
 			// No loot: carried run after run, it would weigh the
 			// character down.
 			p.Loot.Pickup = false

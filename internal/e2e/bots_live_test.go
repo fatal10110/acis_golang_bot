@@ -92,8 +92,8 @@ func startBot(t *testing.T, ctx context.Context, tg *Target, account string, set
 // Every one of them is a persona default (D6), not a safety limit.
 func partyPersona() botclient.Persona {
 	p := botclient.DefaultPersona()
-	p.LearnSkills, p.Trainers = nil, nil
-	p.Shop, p.Gear, p.Newbie = botclient.ShopPolicy{}, botclient.GearPolicy{}, botclient.NewbiePolicy{}
+	p.LearnSkills, p.Trainers = map[int32][]int32{}, map[int32][]int32{}
+	p.Shop, p.Gear, p.Newbie = botclient.ShopPolicy{}, botclient.GearPolicy{Classes: []botclient.GearClass{}}, botclient.NewbiePolicy{}
 	p.IdleChance = 0
 	return p
 }

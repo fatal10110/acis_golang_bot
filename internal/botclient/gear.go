@@ -51,7 +51,7 @@ type GearPolicy struct {
 	// Classes are what each class wears where no worn piece gives a type
 	// to match: the first entry for the bot's class applies, and a class
 	// with none wears nothing new in an empty weapon, body and legs slot,
-	// and no shield.
+	// and no shield. nil plays the build's entry (Persona, overrides).
 	Classes []GearClass
 	// Buy adds, per slot, every such piece a merchant sells and the
 	// adena past KeepAdena buys to the shop errand's gear tier, best first:
@@ -112,7 +112,7 @@ type GearPolicy struct {
 // only when its score gain is at least the share of the jump goal's price
 // it costs (docs/items.md section 6).
 func defaultGearPolicy() GearPolicy {
-	return GearPolicy{Equip: true, Jewelry: true, Classes: defaultGearClasses(), Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, SaveBefore: 2, SaveWorth: 1, ShotFactor: 2, SetBonus: 0.15}
+	return GearPolicy{Equip: true, Jewelry: true, Buy: true, MaxGrade: 5, KeepAdena: 10000, SaveFrom: 50, SaveBefore: 2, SaveWorth: 1, ShotFactor: 2, SetBonus: 0.15}
 }
 
 // GearClass is a build: what classes wear where no worn piece gives a type
@@ -203,7 +203,7 @@ func (w StatWeights) score(it *datapack.Item, enchant int) float64 {
 		w.MDef*stat("mDef", it.Stats.MDef) + w.SDef*stat("sDef", it.Stats.SDef)
 }
 
-// defaultGearClasses is the class table of the default persona: mystics
+// defaultGearClasses is the class table builds compile (CompileBuild): mystics
 // wield magical one-handed weapons and staves in robes; dagger users
 // daggers and archers bows (the shop errand restocks their arrows,
 // ShopPolicy.ArrowsMin) in light armor; monks fists in light armor; gladiators and bladedancers
@@ -228,16 +228,9 @@ func defaultGearClasses() []GearClass {
 	}
 }
 
-// gearClass is the bot's GearPolicy.Classes entry; the zero GearClass
-// when none is.
-func (b *Brain) gearClass() GearClass {
-	for _, c := range b.persona.Gear.Classes {
-		if len(c.Classes) == 0 || slices.Contains(c.Classes, b.world.Self.ClassID) {
-			return c
-		}
-	}
-	return GearClass{}
-}
+// gearClass is the build's gear table entry; the zero GearClass when the
+// table has none for the bot's class.
+func (b *Brain) gearClass() GearClass { return b.build().Kit.Gear }
 
 // gearWeights are the stat weights of the bot's class entry
 // (GearClass.weights).

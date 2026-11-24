@@ -99,8 +99,8 @@ func TestRuleTable(t *testing.T) {
 			wantRule: "critical",
 		},
 		{
-			name:     "critical threshold 0 never flees",
-			persona:  func(p *Persona) { p.CriticalHP = 0 },
+			name:     "critical threshold off never flees",
+			persona:  func(p *Persona) { p.CriticalHP = -1 },
 			setup:    func(b *Brain) { b.world.Self.InCombat, b.world.Self.HP = true, 1 },
 			wantRule: "attacked",
 		},

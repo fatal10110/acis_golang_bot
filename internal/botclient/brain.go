@@ -134,6 +134,11 @@ type Brain struct {
 	cfg     BrainConfig
 	log     *slog.Logger
 
+	// built is the build last compiled, for builtFor once builtOK (build).
+	built    Build
+	builtFor buildKey
+	builtOK  bool
+
 	pace pacer
 	// nextTick is the next regular decision; reactAt, when set, replaces it
 	// with the reaction to an event.

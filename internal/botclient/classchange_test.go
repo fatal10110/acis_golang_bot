@@ -120,7 +120,7 @@ func TestClassChangeDue(t *testing.T) {
 		{name: "class without a build entry", class: classBishop, level: 76, setup: masterInSight},
 		{name: "build entry removed", class: classHumanMystic, level: 20, setup: func(b *Brain) {
 			masterInSight(b)
-			delete(b.persona.ClassChange.Builds, classHumanMystic)
+			b.persona.ClassChange.Builds = map[int32]int32{classCleric: classBishop}
 		}},
 		{name: "backing off", class: classHumanMystic, level: 20, setup: func(b *Brain) {
 			masterInSight(b)
@@ -258,17 +258,17 @@ func TestTransferTier(t *testing.T) {
 func TestBuildTables(t *testing.T) {
 	support := DefaultPersona()
 	for _, c := range StartingClasses() {
-		first := support.ClassChange.Builds[c.ID]
+		first := compileFor(support, c.ID, 20).Race.Professions[c.ID]
 		if !slices.Contains(firstProfessions, first) {
 			t.Errorf("starting class %d builds %d, want a first profession", c.ID, first)
 		}
-		second := support.ClassChange.Builds[first]
+		second := compileFor(support, first, 40).Race.Professions[first]
 		if second == 0 || slices.Contains(firstProfessions, second) {
 			t.Errorf("first profession %d builds %d, want a second profession", first, second)
 		}
 		for _, cl := range []int32{c.ID, first, second} {
-			if c.Mystic && (len(support.LearnSkills[cl]) == 0 || len(support.Trainers[cl]) == 0) {
-				t.Errorf("mystic class %d: learn %v trainers %v, want both", cl, support.LearnSkills[cl], support.Trainers[cl])
+			if k := compileFor(support, cl, 40).Kit; c.Mystic && (len(k.Skills) == 0 || len(k.Trainers) == 0) {
+				t.Errorf("mystic class %d: learn %v trainers %v, want both", cl, k.Skills, k.Trainers)
 			}
 		}
 	}
@@ -303,7 +303,7 @@ func TestBuildTables(t *testing.T) {
 			}
 		}
 	}
-	if support.ClassChange.Builds[DwarvenFighter.ID] != 54 {
-		t.Errorf("support dwarf builds %d, want 54: the crafter's table is its own", support.ClassChange.Builds[DwarvenFighter.ID])
+	if got := compileFor(support, DwarvenFighter.ID, 20).Race.Professions[DwarvenFighter.ID]; got != 54 {
+		t.Errorf("support dwarf builds %d, want 54: the crafter's table is its own", got)
 	}
 }

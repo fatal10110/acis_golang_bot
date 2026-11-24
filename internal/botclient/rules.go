@@ -6,11 +6,23 @@ import (
 	"time"
 )
 
-// Persona is the rule set a brain plays: the thresholds of the shared rules
-// and hooks for the persona's own choices. Every value is a configurable
-// default, not a safety boundary (D6); the operational limits are in
-// pacing.go. A nil hook does nothing.
+// Persona is the rule set a brain plays: its role, the thresholds of the
+// shared rules and hooks for the persona's own choices. Every value is a
+// configurable default, not a safety boundary (D6); the operational limits
+// are in pacing.go. A nil hook does nothing.
+//
+// Overrides: the brain plays the build CompileBuild compiles for the
+// persona's Role and the bot's class and level (Brain.build). The persona's
+// tables and thresholds the build replaced (CriticalHP, CrowdedHP,
+// OutmatchedHP, MPReserve, SitHP, SitMP, StandHP, StandMP, AttackSkills,
+// Heals, Buffs, LearnSkills, Trainers, ClassChange.Builds, Dyes.Symbols and
+// Gear.Classes) are its overrides: a non-nil table or a non-zero threshold
+// replaces the build's, a negative threshold turns it off. Without a Role
+// they are all the persona plays.
 type Persona struct {
+	// Role is the part the bot plays, which its build is compiled for;
+	// RoleNone compiles none.
+	Role Role
 	// Store is how a merchant sells its loot in a private sell store (rule
 	// "store"); while it opens one or keeps one open the bot is in store
 	// mode, which replaces rules 3-10.
@@ -205,37 +217,27 @@ type Hold struct {
 // learns the support skills of a mystic
 // at its trainer, heals and buffs its party with them, assists its party
 // leader, follows the leader of a party it joined and otherwise drifts
-// around where it stands.
+// around where it stands. It plays the Support role: its skills, trainers,
+// heals, buffs, attack spells, professions, gear and dye tables and its
+// thresholds are its build's (CompileBuild), which it overrides none of.
 func DefaultPersona() Persona {
 	return Persona{
+		Role:           RoleSupport,
 		Death:          restartToVillage,
 		Recover:        defaultRecoverPolicy(),
 		JoinParty:      acceptParty,
-		CriticalHP:     20,
-		CrowdedHP:      80,
 		FleeOutrun:     true,
 		FleeDistance:   600,
-		OutmatchedHP:   50,
 		BlacklistAfter: 4,
 		BlacklistFor:   3 * time.Minute,
 		PvP:            PvPPolicy{FightFlagged: true},
 		Potions:        healingPotions,
 		AutoShots:      true,
-		SitHP:          40,
-		SitMP:          30,
-		StandHP:        90,
-		StandMP:        90,
 		IdleChance:     0.1,
 		IdleRadius:     250,
 		Emotes:         []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
-		LearnSkills:    defaultLearnSkills(),
-		Trainers:       defaultTrainers(),
 		TrainerReach:   8000,
 		Spots:          defaultSpotPolicy(),
-		AttackSkills:   slices.Clone(defaultAttackSkills),
-		MPReserve:      50,
-		Heals:          defaultHeals,
-		Buffs:          defaultBuffs,
 		RebuffBefore:   time.Minute,
 		AssistMin:      500 * time.Millisecond,
 		AssistMax:      1500 * time.Millisecond,
@@ -611,8 +613,9 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	if !s.InCombat {
 		return Action{}, false
 	}
-	if !below(s.HP, s.MaxHP, b.persona.CriticalHP) {
-		if s.Sitting || !below(s.HP, s.MaxHP, b.persona.CrowdedHP) || len(b.attackers(now)) < 2 {
+	th := b.build().Thresholds
+	if !below(s.HP, s.MaxHP, th.CriticalHP) {
+		if s.Sitting || !below(s.HP, s.MaxHP, th.CrowdedHP) || len(b.attackers(now)) < 2 {
 			return Action{}, false
 		}
 		return b.drinkPotion(now)
@@ -654,7 +657,8 @@ const fleeKeep = 5 * time.Second
 var fleeTurns = [...]float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi / 2, 3 * math.Pi / 4, -3 * math.Pi / 4, math.Pi}
 
 // flee runs FleeDistance away from object id, or in a random direction
-// when id is not in sight, standing up first. The point is on ground of the
+// when id is not in sight, standing up first and casting the kit's Flee
+// skill first when it is ready. The point is on ground of the
 // bot's SCC (walker.inSCC), walked through the walker as checked segments
 // (D13), each from standstill; a run that arrived or ended unreachable
 // picks a fresh point at once.
@@ -662,6 +666,9 @@ func (b *Brain) flee(id int32, now time.Time) Action {
 	s, v := &b.world.Self, &b.fleeing
 	if s.Sitting {
 		return b.toggle(now)
+	}
+	if f := b.build().Kit.Flee; f != 0 && b.world.SkillReady(f, now) {
+		return b.castOn(s.ObjectID, f, false, now)
 	}
 	if s.Moving(now) {
 		return Action{}
@@ -746,11 +753,11 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 }
 
 // ruleRest is rule 6: out of combat with HP or MP low, sit until both
-// recover, then stand. A bot that knows one of its AttackSkills also sits
-// under MPReserve: there fight casts nothing, and the next pull would be
-// all melee.
+// recover, then stand, by the build's thresholds. A bot that knows one of
+// its rotation's skills also sits under MPReserve: there fight casts
+// nothing, and the next pull would be all melee.
 func (b *Brain) ruleRest(now time.Time) (Action, bool) {
-	s, p := &b.world.Self, &b.persona
+	s, p := &b.world.Self, b.build().Thresholds
 	if s.InCombat {
 		return Action{}, false
 	}

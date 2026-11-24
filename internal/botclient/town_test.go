@@ -35,7 +35,7 @@ func newTownBrain(t *testing.T, adena int32) *Brain {
 	p := TownPersona()
 	p.IdleChance = 0
 	p.Newbie.MaxLevel = 0
-	p.LearnSkills = nil
+	p.LearnSkills = map[int32][]int32{}
 	p.Town.HopMin, p.Town.HopMax = time.Minute, time.Minute
 	b, _ := newTestBrain(t, p)
 	b.cfg.Travel = townTravelMap()
