@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"cmp"
 	"slices"
 	"strconv"
 	"time"
@@ -225,14 +226,34 @@ func (b *Brain) startDyes(now time.Time) bool {
 
 // dyePlan is what the bot does with its symbols: remove, the worn symbols
 // its class cannot use (HennaInfo active id 0) that the datapack holds,
-// in slot order; draw, the symbols of its table (DyePolicy.Symbols) it
-// does not wear, as many as the slots free after the removals hold. Both
+// in slot order; draw, as many symbols as the slots free after the
+// removals hold. With the model (valuer) and no persona table, draw are
+// the symbols of the highest value gain (dyeDraws); else the symbols of the
+// table (DyePolicy.Symbols, else the build's) the bot does not wear. Both
 // are empty without a travel map and before the first HennaInfo; draw is
 // empty for a class with no slot.
 func (b *Brain) dyePlan() (remove, draw []datapack.Henna) {
 	m, sy := b.cfg.Travel, &b.world.Symbols
 	if m == nil || !sy.Known {
 		return nil, nil
+	}
+	var kept []int32
+	free := sy.MaxSlots
+	for _, w := range sy.Worn {
+		if h, ok := m.hennas[w.SymbolID]; ok && w.Active == 0 {
+			remove = append(remove, h)
+			continue
+		}
+		free--
+		kept = append(kept, w.SymbolID)
+	}
+	if free <= 0 {
+		return remove, nil
+	}
+	if b.persona.Dyes.Symbols == nil {
+		if v := b.valuer(); v != nil {
+			return remove, b.dyeDraws(v, int(free), remove)
+		}
 	}
 	class := b.world.Self.ClassID
 	var want []datapack.Henna
@@ -241,21 +262,96 @@ func (b *Brain) dyePlan() (remove, draw []datapack.Henna) {
 			want = append(want, h)
 		}
 	}
-	free := sy.MaxSlots
-	for _, w := range sy.Worn {
-		if h, ok := m.hennas[w.SymbolID]; ok && w.Active == 0 {
-			remove = append(remove, h)
-			continue
-		}
-		free--
-		if i := slices.IndexFunc(want, func(h datapack.Henna) bool { return h.SymbolID == w.SymbolID }); i >= 0 {
+	for _, id := range kept {
+		if i := slices.IndexFunc(want, func(h datapack.Henna) bool { return h.SymbolID == id }); i >= 0 {
 			want = slices.Delete(want, i, i+1)
 		}
 	}
-	if free > 0 {
-		draw = want[:min(int(free), len(want))]
+	return remove, want[:min(int(free), len(want))]
+}
+
+// dyeDraws are the symbols to draw into free slots by the model v
+// (docs/strategy.md, Design section 5): slot by slot, of the symbols
+// hennas.xml lets the bot's class draw that raise one of its kit's dye
+// stats (ClassKit.DyeStats; any symbol with none), the one whose stat
+// changes, added to the active symbols' and those drawn before it, add the
+// most value (the model holds each stat's dye bonus to +5, as the server
+// does), ties to the cheaper then the lower symbol id; only a symbol whose
+// draw price and the dyes it lacks, at a merchant's base price, the adena
+// past the gear tier's floor still pays after the removals' fees and the
+// symbols before it. The kit's dye stats are the row's direction, drawn
+// whatever the model makes of the stat they pay with; with none, a symbol
+// is drawn only while it adds value.
+func (b *Brain) dyeDraws(v *gearModel, free int, remove []datapack.Henna) []datapack.Henna {
+	m, class := b.cfg.Travel, b.world.Self.ClassID
+	stats := b.build().Kit.DyeStats
+	var cands []datapack.Henna
+	for _, h := range m.hennas {
+		if slices.Contains(h.Classes, class) && (len(stats) == 0 || slices.ContainsFunc(stats, func(s string) bool { return dyeStat(h, s) > 0 })) {
+			cands = append(cands, h)
+		}
 	}
-	return remove, draw
+	slices.SortFunc(cands, func(x, y datapack.Henna) int { return cmp.Compare(x.SymbolID, y.SymbolID) })
+	left := int64(b.carried(adenaID)) - b.floor(tierGear)
+	for _, h := range remove {
+		left -= int64(h.Price / hennaRemoveFraction)
+	}
+	cur := v.build.Dyes
+	w := b.rawWorn()
+	need := make(map[int32]int32)
+	var draw []datapack.Henna
+	for range free {
+		base := v.value(m, &w, true, cur)
+		var best datapack.Henna
+		var bestGain float64
+		var bestCost int64
+		for _, h := range cands {
+			price, ok := m.cheapest[h.DyeID]
+			if !ok {
+				continue
+			}
+			have := b.carried(h.DyeID)
+			buy := max(need[h.DyeID]+hennaDrawDyes-have, 0) - max(need[h.DyeID]-have, 0)
+			cost := int64(buy)*int64(price) + int64(h.Price)
+			if cost > left {
+				continue
+			}
+			gain := v.value(m, &w, true, addDye(cur, h)) - base
+			if gain <= 0 && len(stats) == 0 {
+				continue
+			}
+			if best.SymbolID == 0 || cmp.Or(cmp.Compare(gain, bestGain), cmp.Compare(best.Price, h.Price)) > 0 {
+				best, bestGain, bestCost = h, gain, cost
+			}
+		}
+		if best.SymbolID == 0 {
+			break
+		}
+		draw = append(draw, best)
+		cur, left = addDye(cur, best), left-bestCost
+		need[best.DyeID] += hennaDrawDyes
+	}
+	return draw
+}
+
+// dyeStat is how much symbol h changes the base stat named stat (STR,
+// CON, DEX, INT, WIT or MEN).
+func dyeStat(h datapack.Henna, stat string) int {
+	switch stat {
+	case "STR":
+		return h.STR
+	case "CON":
+		return h.CON
+	case "DEX":
+		return h.DEX
+	case "INT":
+		return h.INT
+	case "WIT":
+		return h.WIT
+	case "MEN":
+		return h.MEN
+	}
+	return 0
 }
 
 // dyeAdena is the adena the bot may spend at a Symbol Maker: its adena

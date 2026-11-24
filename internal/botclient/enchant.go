@@ -309,10 +309,11 @@ func enchantable(id int32) bool {
 // piece it goes on, of the scroll's grade and kind (scroll.valid), below
 // its cap (enchantCap). The weapon goes first, then the armor piece
 // (shield and jewelry included) whose next level adds the most score
-// (StatWeights.score), the body piece first on a tie. Plain and crystal
+// (pieceScore: the model's value gain of the enchant gain, else
+// StatWeights), the body piece first on a tie. Plain and crystal
 // scrolls go before blessed ones, each by template id.
 func (b *Brain) enchantPlan() (scroll, target Item, ok bool) {
-	wt := b.gearWeights()
+	w := b.worn()
 	type cand struct {
 		it     Item
 		weapon bool
@@ -332,7 +333,7 @@ func (b *Brain) enchantPlan() (scroll, target Item, ok bool) {
 		next := it
 		next.Enchant++
 		s := slotOf(it.BodySlot)
-		targets = append(targets, cand{it: it, weapon: s == slotWeapon, grade: g.grade, gain: g.score(wt, next) - g.score(wt, it), slot: s})
+		targets = append(targets, cand{it: it, weapon: s == slotWeapon, grade: g.grade, gain: b.pieceScore(&w, &g, next) - b.pieceScore(&w, &g, it), slot: s})
 	}
 	slices.SortFunc(targets, func(x, y cand) int {
 		return cmp.Or(-cmpBool(x.weapon, y.weapon), -cmp.Compare(x.gain, y.gain), cmp.Compare(x.slot, y.slot), cmp.Compare(x.it.ObjectID, y.it.ObjectID))

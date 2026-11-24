@@ -231,9 +231,16 @@ type ClassKit struct {
 	// Thresholds are the row's (docs/strategy.md, "Numbers and summary");
 	// the zero value compiles defaultThresholds.
 	Thresholds Thresholds
-	// Gear is the class's gear table entry, Dyes its dye symbols.
+	// Gear is the class's gear table entry, Dyes its dye symbols: the
+	// table the dye errand draws where the model cannot value dyes
+	// (dyePlan).
 	Gear GearClass
 	Dyes []int32
+	// DyeStats are the base stats (STR, CON, DEX, INT, WIT, MEN) the
+	// class's dyes raise (docs/strategy.md column 11): the dye errand draws
+	// the symbols raising one of them with the highest value gain
+	// (dyePlan); none lets every symbol the class may draw compete.
+	DyeStats []string
 	// Base are the skills a profession row tags "(base)" or "(base
 	// tree)": the profession knows them from its base class (first merged
 	// minLvl under 20), which TestBehaviorRowsShipped checks; the brain does
@@ -242,12 +249,68 @@ type ClassKit struct {
 }
 
 // RaceProfile is what a race's lines share (docs/strategy.md, Design section
-// 4): the profession each class of its lines takes next.
+// 4): the profession each class of its lines takes next, and the armor
+// kinds its mystic line may wear besides its robes.
 type RaceProfile struct {
 	Race int32
 	// Professions maps a class id to the profession the bot takes next.
 	Professions map[int32]int32
+	// MysticArmor are the armor kinds a mystic of the race may wear besides
+	// the class's (GearClass.Armor), compiled for the build's level and
+	// role.
+	MysticArmor []ArmorGrant
 }
+
+// ArmorGrant is an armor kind a mystic line may wear in Role from level
+// From, the level its class tree grants Mastery at; the gear errand weighs
+// it only once the bot knows the mastery (Brain.armorKinds).
+type ArmorGrant struct {
+	Kind    string
+	Mastery int32
+	From    int32
+	Role    Role
+}
+
+// The armor masteries of the orc mystic line (data/xml/classes/orcMystic.xml,
+// skills/0200-0299.xml): Light Armor Mastery casts ×1.9 and attacks ×1.25 in
+// light armor, Heavy Armor Mastery ×1.71 and ×1.25 in heavy armor, both
+// with P. Def.
+const (
+	skillLightArmorMastery int32 = 252
+	skillHeavyArmorMastery int32 = 253
+)
+
+// raceMysticArmor are the armor kinds by race a mystic line may wear
+// besides robes (docs/strategy.md, "Armor kinds by race", rows OM and OS):
+// the orc mystic's Support role wears light armor from 7 and heavy armor
+// from 14 when they score higher; its Damage role, and every other race's
+// mystic, stays in robes, where Spellcraft ranks every other kind far
+// below.
+var raceMysticArmor = map[int32][]ArmorGrant{
+	3: {
+		{Kind: "LIGHT", Mastery: skillLightArmorMastery, From: 7, Role: RoleSupport},
+		{Kind: "HEAVY", Mastery: skillHeavyArmorMastery, From: 14, Role: RoleSupport},
+	},
+}
+
+// dyeStats are the base stats each profession's dyes raise, by the
+// first-profession rows of docs/strategy.md column 11; a second profession
+// keeps its first profession's (second-profession kits are #332).
+var dyeStats = func() map[int32][]string {
+	t := make(map[int32][]string)
+	set := func(stats []string, classes ...int32) {
+		for _, c := range classes {
+			t[c] = stats
+		}
+	}
+	set([]string{"STR"}, 1, 2, 3, 22, 23, 24, 35, 36, 37, 45, 46, 47, 48, 54, 55, 56, 57)
+	set([]string{"CON"}, 4, 5, 6, 19, 20, 21, 32, 33, 34)
+	set([]string{"DEX", "STR"}, 7, 8, 9)
+	set([]string{"INT"}, 11, 12, 13, 14, 26, 27, 28, 39, 40, 41)
+	set([]string{"WIT"}, 15, 16, 17, 29, 30)
+	set([]string{"MEN"}, 42, 43, 50, 51, 52)
+	return t
+}()
 
 // Build is what the bot plays: its race profile, its class kit and its role,
 // compiled for its class and level, and the thresholds its rules act on.
@@ -333,10 +396,18 @@ func CompileBuild(race, class, level int32, role Role) Build {
 		}
 	}
 	k := &bd.Kit
-	k.Gear, k.Dyes = gearClassOf(defaultGearClasses(), class), defaultDyeTable()[class]
+	k.Gear, k.Dyes, k.DyeStats = gearClassOf(defaultGearClasses(), class), defaultDyeTable()[class], dyeStats[class]
 	line, ok := professionKit(class)
-	if base, isBase := datapack.BaseClass(class); !ok && isBase {
+	base, isBase := datapack.BaseClass(class)
+	if !ok && isBase {
 		line = lineKits[base]
+	}
+	if isBase && slices.Contains(mysticClasses, base) {
+		for _, g := range raceMysticArmor[race] {
+			if g.From <= level && g.Role == role {
+				bd.Race.MysticArmor = append(bd.Race.MysticArmor, g)
+			}
+		}
 	}
 	k.Skills = mysticSkills[class]
 	if line.Skills != nil {

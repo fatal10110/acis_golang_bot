@@ -70,7 +70,6 @@ func (b *Brain) nextBowArrows() int32 {
 // none.
 func (b *Brain) nextWeapon() Item {
 	w := b.worn()
-	wt := b.gearWeights()
 	var best Item
 	var bestG gearItem
 	for _, it := range b.world.Inventory.Items {
@@ -78,7 +77,7 @@ func (b *Brain) nextWeapon() Item {
 		if !ok || slotOf(g.part) != slotWeapon || !b.upgrade(it, &w) {
 			continue
 		}
-		if best.ObjectID == 0 || cmp.Or(cmp.Compare(bestG.score(wt, best), g.score(wt, it)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
+		if best.ObjectID == 0 || cmp.Or(cmp.Compare(b.pieceScore(&w, &bestG, best), b.pieceScore(&w, &g, it)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
 			best, bestG = it, g
 		}
 	}

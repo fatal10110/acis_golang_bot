@@ -484,6 +484,30 @@ grocer lists).
   fraction of its pieces' score (default 15 %), because the set skill's stats are not read. An
   upgrade that breaks a worn set must beat the set including its bonus. Purchases plan the whole set
   when the budget covers it, and otherwise save for it.
+- **Through the model (M10 S5, #324; `docs/strategy.md` Design section 5).** Where the travel map
+  holds the bot's class template (every datapack-built map), a piece's score is the character
+  model's value gain of wearing it (`gear_model.go` `pieceScore`): the value of the arrangement with
+  the piece over the arrangement with its slot empty, as a fraction of the value of what the bot
+  wears now, against the reference monster of its level (the median-HP monster template,
+  `indexRefMobs`), calibrated by the stats `UserInfo` reports. The value is the build role's
+  (`charmodel.Value`): kills a minute of the first damaging rotation skill the bot knows, else its
+  melee; a Support build's heal per MP bar while it survives; a Support build without a heal is a
+  tank and values how long it lasts. A fight the bot loses still ranks gear by how close it comes
+  (time to kill over time to die). The `StatWeights` score is kept as the tie-break
+  (×10⁻⁶: jewelry's M. Def against a melee monster, anything a heal's value does not see) and as the
+  whole score without the model. Weapon kinds still come from the kit; the shot factor and the
+  enchant gain stay (the enchant gain raises the template's stats the model reads).
+  - A set's bonus is the value its set skill adds (and its shield skill with the shield worn), so a
+    Demon set (−270 max HP) is worth less than a Doom Robe set to a low-HP dark mystic;
+    `Gear.SetBonus` only adds its fraction of the stat score as a tie-break.
+  - Armor kinds come from the class (`GearClass.Armor`) and the race profile
+    (`RaceProfile.MysticArmor`): an orc mystic's Support build may wear light armor once it knows
+    Light Armor Mastery (from 7) and heavy armor once it knows Heavy Armor Mastery (from 14), when
+    they score higher; every other mystic stays in robes.
+  - Chest and legs are a pair: a single piece of another kind than the other worn one is never
+    worn or bought (the server counts a chest's kind only with legs of the same kind). The bot
+    changes kinds only by a whole pair, or a set covering both, planned and bought like a set
+    (`pairPlans`).
 - **Grade jump.** Within `Gear.SaveBefore` levels (default 2) of the next Expertise level, the bot
   skips same-grade purchases worth less than a persona fraction of their price in score, and saves
   for the next grade's core pieces (weapon, then chest and legs).
@@ -658,6 +682,11 @@ stores.
      and 6, nukers 8 twice, healers 10 twice (37000 each); second-profession fighters 37, 42, 37,
      nukers 44 three times, healers 46 three times (87000 each). Each row is checked against the
      shipped `hennas.xml` class lists and prices (`TestDefaultDyeTableShipped`).
+     Through the model (M10 S5, #324), with no persona table the bot draws, slot by slot, the
+     symbol with the highest value gain among the symbols its class may draw that raise its row's
+     stat (`ClassKit.DyeStats`, `docs/strategy.md` column 11; a second profession keeps its first
+     profession's), whose fee and missing dyes the adena past the gear floor pays (`dyeDraws`). The
+     table above is what a bot draws without the model.
 
 ### 10. Enchant to the safe level (#181)
 

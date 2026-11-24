@@ -246,6 +246,9 @@ type Brain struct {
 	store storeState
 	// gear is the gear errand (rule 9 errand "gear").
 	gear gearState
+	// gearVal is the character model the gear and dye errands last valued
+	// gear with (Brain.valuer), nil before the first.
+	gearVal *gearModel
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAsked is the last auto-use request of each shot template.

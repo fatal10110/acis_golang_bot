@@ -40,7 +40,7 @@ const (
 	// build table (supportBuilds): Warrior, then Gladiator.
 	classWarrior   int32 = 1
 	classGladiator int32 = 2
-	// The default dye table's symbols for a Warrior (1 STR+1 CON-3, 6
+	// The dye table the dye scenario pins for a Warrior (1 STR+1 CON-3, 6
 	// DEX+1 CON-3, fee 37000) and a Gladiator (37 and 42, the same at
 	// 87000), and their dyes, 10 a draw (hennas.xml, henna.go).
 	symbolStr1, symbolDex1 int32 = 1, 6

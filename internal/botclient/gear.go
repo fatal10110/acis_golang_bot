@@ -232,13 +232,6 @@ func defaultGearClasses() []GearClass {
 // table has none for the bot's class.
 func (b *Brain) gearClass() GearClass { return b.build().Kit.Gear }
 
-// gearWeights are the stat weights of the bot's class entry
-// (GearClass.weights).
-func (b *Brain) gearWeights() StatWeights {
-	c := b.gearClass()
-	return c.weights()
-}
-
 // gearSlot is a paperdoll slot the bot keeps gear in. Accessories (hair,
 // face, cloak, underwear) are left alone.
 type gearSlot uint8
@@ -328,7 +321,7 @@ type gearItem struct {
 	kind  string
 	grade int32
 	// tmpl is the template, whose stats and enchant gain score it
-	// (StatWeights.score).
+	// (Brain.pieceScore).
 	tmpl datapack.Item
 }
 
@@ -418,8 +411,9 @@ func (b *Brain) gearItem(id int32) (gearItem, bool) {
 
 // worn is what the bot wears now.
 func (b *Brain) worn() worn {
-	wt := b.gearWeights()
 	var w, first worn
+	var raw worn
+	rawOK := false
 	for _, it := range b.world.Inventory.Items {
 		if !it.Equipped {
 			continue
@@ -430,7 +424,10 @@ func (b *Brain) worn() worn {
 			if first[s].ObjectID == 0 {
 				first[s] = it
 			} else {
-				w[s] = b.paired(first[s], it, wt)
+				if !rawOK {
+					raw, rawOK = b.rawWorn(), true
+				}
+				w[s] = b.paired(first[s], it, &raw)
 			}
 		default:
 			w[s] = it
@@ -441,11 +438,15 @@ func (b *Brain) worn() worn {
 
 // paired is the piece of the worn pair x, y a new one replaces: the
 // lower scoring of the ones the gear errand may replace (known), enchant
-// counted.
-func (b *Brain) paired(x, y Item, wt StatWeights) Item {
+// counted, each scored worn in ctx.
+func (b *Brain) paired(x, y Item, ctx *worn) Item {
 	gx, okx := b.gearItem(x.TemplateID)
 	gy, oky := b.gearItem(y.TemplateID)
-	if c := cmp.Or(-cmpBool(okx, oky), cmp.Compare(gx.score(wt, x), gy.score(wt, y)), cmp.Compare(x.ObjectID, y.ObjectID)); c > 0 {
+	var sx, sy float64
+	if okx && oky {
+		sx, sy = b.pieceScore(ctx, &gx, x), b.pieceScore(ctx, &gy, y)
+	}
+	if c := cmp.Or(-cmpBool(okx, oky), cmp.Compare(sx, sy), cmp.Compare(x.ObjectID, y.ObjectID)); c > 0 {
 		return y
 	}
 	return x
@@ -462,12 +463,6 @@ func cmpBool(a, b bool) int {
 	return -1
 }
 
-// score is the score of g worn as item it, its enchant counted; 0 for an
-// unknown template (the zero g).
-func (g *gearItem) score(wt StatWeights, it Item) float64 {
-	return wt.score(&g.tmpl, int(it.Enchant))
-}
-
 // gearGrade is the highest grade the bot wears: its Expertise level,
 // capped by GearPolicy.MaxGrade; one more while jumpGoal plans ahead.
 func (b *Brain) gearGrade() int32 {
@@ -481,8 +476,9 @@ func (b *Brain) gearGrade() int32 {
 // beats reports whether wearing template id beats what the bot wears, w
 // (GearPolicy.Equip): an empty weapon slot, or empty body and legs slots,
 // give no type to match and take what the bot's class wears
-// (GearPolicy.Classes). Pieces compare by score (StatWeights), the worn
-// ones' enchant counted, a weapon's with the shot factor (shotValues).
+// (GearPolicy.Classes). Pieces compare by score (pieceScore: the model's
+// value gain, else StatWeights), the worn ones' enchant counted, a
+// weapon's with the shot factor (shotValues).
 func (b *Brain) beats(id int32, w *worn) bool {
 	return b.beatsBy(Item{TemplateID: id}, w, true)
 }
@@ -556,8 +552,7 @@ func (b *Brain) beatsPiece(it Item, w *worn, carried bool) bool {
 	if s == slotWeapon && len(class.Weapons) > 0 && !slices.Contains(class.Weapons, c.kind) {
 		return b.leavesUnlisted(g, w, &class)
 	}
-	wt := class.weights()
-	gs, cs := g.score(wt, it), c.score(wt, cur)
+	gs, cs := b.pieceScore(w, &g, it), b.pieceScore(w, &c, cur)
 	gain, value := gs, cs
 	switch {
 	case s == slotWeapon && c.part != g.part:
@@ -575,14 +570,14 @@ func (b *Brain) beatsPiece(it Item, w *worn, carried bool) bool {
 				if !ok {
 					return false
 				}
-				shield = worn.score(wt, sh)
+				shield = b.pieceScore(w, &worn, sh)
 			}
 			if class.Shield {
-				shield = max(shield, b.carriedShield(wt))
+				shield = max(shield, b.carriedShield(w))
 			}
 			value += shield
 		} else if class.Shield {
-			gain += b.carriedShield(wt)
+			gain += b.carriedShield(w)
 		}
 	case c.kind != g.kind:
 		return false
@@ -592,14 +587,14 @@ func (b *Brain) beatsPiece(it Item, w *worn, carried bool) bool {
 		if !ok {
 			return false
 		}
-		value += legs.score(wt, w[slotLegs])
+		value += b.pieceScore(w, &legs, w[slotLegs])
 	}
 	if s == slotWeapon {
 		gain, value = b.shotValues(id, cur.TemplateID, gs, cs, gain, value, carried)
 	} else if s >= slotShield && s <= slotFeet {
 		next := wearing(w, it, &g)
-		gain += b.setBonus(&next, wt)
-		value += b.setBonus(w, wt)
+		gain += b.setBonus(&next)
+		value += b.setBonus(w)
 	}
 	return gain > value
 }
@@ -625,14 +620,14 @@ func (c *GearClass) swaps(a, b string) bool {
 		slices.Contains(c.Weapons, a) && slices.Contains(c.Weapons, b)
 }
 
-// carriedShield is the score by wt of the best shield the bot carries and
-// would wear with a one-handed weapon; 0 for none.
-func (b *Brain) carriedShield(wt StatWeights) float64 {
+// carriedShield is the score worn in w of the best shield the bot carries
+// and would wear with a one-handed weapon; 0 for none.
+func (b *Brain) carriedShield(w *worn) float64 {
 	var best float64
 	for _, it := range b.world.Inventory.Items {
 		g, ok := b.gearItem(it.TemplateID)
 		if ok && g.part == partLHand && !it.Equipped && it.Augmentation == 0 && !b.gear.refused[it.TemplateID] && g.grade <= b.gearGrade() {
-			best = max(best, g.score(wt, it))
+			best = max(best, b.pieceScore(w, &g, it))
 		}
 	}
 	return best
@@ -691,7 +686,6 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 		}
 	}
 	w := b.worn()
-	wt := b.gearWeights()
 	var best Item
 	var bestG gearItem
 	for _, it := range b.world.Inventory.Items {
@@ -699,7 +693,7 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 			continue
 		}
 		gi, _ := b.gearItem(it.TemplateID)
-		if best.ObjectID == 0 || cmp.Or(cmp.Compare(slotOf(gi.part), slotOf(bestG.part)), cmp.Compare(bestG.score(wt, best), gi.score(wt, it)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
+		if best.ObjectID == 0 || cmp.Or(cmp.Compare(slotOf(gi.part), slotOf(bestG.part)), cmp.Compare(b.pieceScore(&w, &bestG, best), b.pieceScore(&w, &gi, it)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
 			best, bestG = it, gi
 		}
 	}
@@ -814,10 +808,9 @@ func (b *Brain) planGear(jump int64) (ids, set []int32) {
 		}
 		ids = append(ids, id)
 	}
-	wt := b.gearWeights()
 	slices.SortStableFunc(ids, func(x, y int32) int {
 		gx, gy := b.cfg.Travel.gear[x], b.cfg.Travel.gear[y]
-		return cmp.Or(cmp.Compare(slotOf(gx.part), slotOf(gy.part)), cmp.Compare(gy.score(wt, Item{}), gx.score(wt, Item{})))
+		return cmp.Or(cmp.Compare(slotOf(gx.part), slotOf(gy.part)), cmp.Compare(b.pieceScore(&w, &gy, Item{}), b.pieceScore(&w, &gx, Item{})))
 	})
 	return ids, set
 }
@@ -907,12 +900,11 @@ func (b *Brain) worthBefore(ids []int32, w *worn, jump int64) bool {
 	if jump <= 0 || f <= 0 || len(ids) == 0 {
 		return true
 	}
-	wt := b.gearWeights()
 	var slots [slotCount]bool
 	var gain, value float64
 	for _, id := range ids {
 		g := b.cfg.Travel.gear[id]
-		gain += g.score(wt, Item{})
+		gain += b.pieceScore(w, &g, Item{})
 		slots[slotOf(g.part)] = true
 		if g.part == partFullArmor {
 			slots[slotLegs] = true
@@ -920,7 +912,7 @@ func (b *Brain) worthBefore(ids []int32, w *worn, jump int64) bool {
 	}
 	for s, on := range slots {
 		if c, ok := b.gearItem(w[s].TemplateID); on && ok {
-			value += c.score(wt, w[s])
+			value += b.pieceScore(w, &c, w[s])
 		}
 	}
 	if value <= 0 {

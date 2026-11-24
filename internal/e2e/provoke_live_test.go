@@ -17,7 +17,10 @@ import (
 // back: the teleport aside idles it (instant_teleport.go goIdle) and the
 // monster follows the GM it hates. An attack the GM does not start within
 // provokeRetry is asked again; a GM that never swings fails with what it
-// read (provokeLog).
+// read (provokeLog). A monster that dies before it fights back returns a
+// zero Attack: a bot assisting the GM may have killed it, so the caller
+// asserts on the bot's own attacks (TestLiveArrows: the archer's bow kills
+// a wolf in a few shots).
 func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) (_ botclient.Attack, tries int) {
 	t.Helper()
 	if err := gm.Select(ctx, mob); err != nil {
@@ -58,7 +61,9 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) (_ bo
 		t.Fatalf("the GM hits the monster: %v; %s", err, pl)
 	}
 	if _, ok := ev.(botclient.Die); ok {
-		t.Fatal("the GM killed the monster before it fought back")
+		// Dead before it fought back: a bot assisting the GM may have
+		// killed it, which the caller checks (its own attacks).
+		return botclient.Attack{}, pl.tries
 	}
 	p := gm.Pos()
 	gmTeleport(t, ctx, gm, botclient.Point{X: p.X + 150, Y: p.Y, Z: p.Z})
@@ -75,7 +80,7 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) (_ bo
 		t.Fatalf("the monster fights back: %v; %s", err, pl)
 	}
 	if _, ok := ev.(botclient.Die); ok {
-		t.Fatal("the GM killed the monster before it fought back")
+		return botclient.Attack{}, pl.tries
 	}
 	return ev.(botclient.Attack), pl.tries
 }

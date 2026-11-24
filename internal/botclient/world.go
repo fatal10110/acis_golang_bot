@@ -19,6 +19,11 @@ const snapDrift = 200
 // reckoned from the last movement report, so readers pass the current time.
 type World struct {
 	Self SelfState
+	// gen counts the events applied but the moves and the status and looks
+	// of other objects, which change nothing of the bot's own: what a
+	// cache of values derived from the bot's character is valid for
+	// (Brain.valuer).
+	gen uint64
 	// Objects are the objects in sight by object id, the bot's own
 	// character excluded.
 	Objects map[int32]*Object
@@ -673,10 +678,25 @@ func pace(running bool, run, walk int32) int32 {
 	return walk
 }
 
+// count advances gen for ev unless it is a move, or another object's
+// status or looks.
+func (w *World) count(ev Event) {
+	switch e := ev.(type) {
+	case MoveToLocation, MoveToPawn, CharInfo, NPCInfo:
+		return
+	case StatusUpdate:
+		if e.ObjectID != w.Self.ObjectID {
+			return
+		}
+	}
+	w.gen++
+}
+
 // Apply updates the model with one event received at now. Events the
 // model does not track (chat, system messages, ActionFailed, lifecycle) are
 // left to the brain and change nothing here.
 func (w *World) Apply(ev Event, now time.Time) {
+	w.count(ev)
 	switch e := ev.(type) {
 	case UserInfo:
 		w.applyUserInfo(e, now)

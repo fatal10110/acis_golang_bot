@@ -50,6 +50,12 @@ func TestLiveClassChangeDyes(t *testing.T) {
 			errandsOff(&p)
 			p.ClassChange = botclient.DefaultPersona().ClassChange
 			p.Dyes = botclient.DefaultPersona().Dyes
+			// The flow under test, not the model's choice of symbols
+			// (dyeDraws): the persona table pins them.
+			p.Dyes.Symbols = map[int32][]int32{
+				classWarrior:   {symbolStr1, symbolDex1},
+				classGladiator: {symbolStr3, symbolDex3, symbolStr3},
+			}
 			return p
 		},
 		brain: withTravel(travel),
@@ -132,7 +138,9 @@ func becomes(t *testing.T, ctx context.Context, f *farmer, class int32) {
 // symbols in order at a Symbol Maker: a draw window, removed ones each a
 // RequestHennaUnequip and a SymbolDeleted, drawn ones each a
 // RequestHennaEquip and a SymbolAdded, and its last HennaInfo shows
-// symbols worn, every one active.
+// symbols worn, every one active; and the InventoryUpdate of the last
+// draw's dye is in, which the server batches on a 333 ms tick
+// (task/inventoryupdates.go), so it can trail HennaInfo and SymbolAdded.
 func draws(t *testing.T, ctx context.Context, f *farmer, from int, symbols []int32, removals int) {
 	t.Helper()
 	until(t, ctx, fmt.Sprintf("%s draws %v", f.name, symbols), func() string {
@@ -171,6 +179,9 @@ func draws(t *testing.T, ctx context.Context, f *farmer, from int, symbols []int
 			return fmt.Sprintf("%d of %d drawn, wears %v", added, len(symbols), wornIDs)
 		case !slices.Equal(wornIDs, symbols) || !active:
 			return fmt.Sprintf("wears %v (all active %v)", wornIDs, active)
+		}
+		if r := drawReplies(f.watch.Seen(from), f.watch.Sent(), symbolDyes); len(r) > 0 && !r[len(r)-1].dye {
+			return fmt.Sprintf("no InventoryUpdate of the dye of the last draw (symbol %d) yet", r[len(r)-1].symbol)
 		}
 		return ""
 	})
