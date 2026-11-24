@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 )
 
 // Dwarven spoil and sweep (docs/strategy.md, Design section 8; rows WF and
@@ -253,5 +254,110 @@ func TestIndexCorpseTimes(t *testing.T) {
 	}
 	if got := (*TravelMap)(nil).corpseTime(1); got != defaultCorpseTime {
 		t.Errorf("nil map corpseTime = %v, want %v", got, defaultCorpseTime)
+	}
+}
+
+// sweepReady is a bot of row WF that spoiled npcID, which just died with
+// spoil items to sweep, at the returned time.
+func sweepReady(t *testing.T) (*Brain, time.Time) {
+	t.Helper()
+	b := rowBrain(t, DwarvenFighter.ID, 10, "BLUNT", skillSpoil, skillSweeper)
+	b.markSpoil(npcID, spoilMine)
+	dead := spoilReadyAt
+	mustHandle(t, b, dead, Die{ObjectID: npcID, Sweepable: true})
+	return b, dead
+}
+
+// TestSweepRuleSteps checks what the sweep rule does on a corpse the bot
+// spoiled before it casts: it stands a seated bot up, selects the corpse
+// when it is not the target, holds the turn while Sweeper cools from its
+// own reuse, and yields while the skill is disabled.
+func TestSweepRuleSteps(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		setup    func(b *Brain, now time.Time)
+		wantOK   bool
+		wantKind actionKind
+		object   int32
+	}{
+		{name: "ready: casts", setup: func(*Brain, time.Time) {}, wantOK: true, wantKind: actCast, object: npcID},
+		{name: "seated: stands up", setup: func(b *Brain, _ time.Time) { b.world.Self.Sitting = true }, wantOK: true, wantKind: actSitStand},
+		{name: "corpse not the target: selects it", setup: func(b *Brain, _ time.Time) { b.world.Target = 0 }, wantOK: true, wantKind: actSelect, object: npcID},
+		{name: "own reuse: holds", setup: func(b *Brain, now time.Time) { b.world.holdSkill(skillSweeper, now.Add(500*time.Millisecond)) }, wantOK: true},
+		{name: "disabled: yields", setup: func(b *Brain, _ time.Time) {
+			k := b.world.Skills[skillSweeper]
+			k.Disabled = true
+			b.world.Skills[skillSweeper] = k
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			b, dead := sweepReady(t)
+			tt.setup(b, dead)
+			a, ok := b.ruleSweep(dead)
+			if ok != tt.wantOK || a.kind != tt.wantKind || a.object != tt.object {
+				t.Errorf("ruleSweep = kind %d object %#x ok %v, want kind %d object %#x ok %v", a.kind, a.object, ok, tt.wantKind, tt.object, tt.wantOK)
+			}
+		})
+	}
+}
+
+// TestSweepRefused checks a cost or target refusal of the Sweeper cast in
+// flight: the sweep rule yields for castRefusedHold, even to a seated bot
+// resting, and casts again after it while the corpse's window lasts; the
+// same message with no Sweeper cast in flight holds nothing.
+func TestSweepRefused(t *testing.T) {
+	for _, msg := range []int32{msgNotEnoughHP, msgNotEnoughMP, msgInvalidTarget, msgCannotBeUsed, msgCantSeeTarget} {
+		for _, pending := range []bool{true, false} {
+			b, dead := sweepReady(t)
+			_, a := b.decide(dead)
+			wantCast(t, a, skillSweeper, npcID)
+			mustSend(t, b, a, dead)
+			refused := dead.Add(100 * time.Millisecond)
+			if !pending {
+				refused = dead.Add(castTimeout + time.Millisecond)
+			}
+			mustHandle(t, b, refused, SystemMessage{ID: msg})
+			b.world.Self.Sitting = true
+			if _, ok := b.ruleSweep(refused.Add(time.Second)); ok == pending {
+				t.Errorf("message %d, cast in flight %v: sweep rule took the turn %v, want %v", msg, pending, ok, !pending)
+			}
+			b.world.Self.Sitting = false
+			if !pending {
+				continue
+			}
+			if _, ok := b.ruleSweep(refused.Add(castRefusedHold - time.Millisecond)); ok {
+				t.Errorf("message %d: sweep rule took the turn inside the hold", msg)
+			}
+			a, ok := b.ruleSweep(refused.Add(castRefusedHold))
+			if !ok {
+				t.Fatalf("message %d: no sweep after the hold", msg)
+			}
+			wantCast(t, a, skillSweeper, npcID)
+		}
+	}
+}
+
+// TestSweepWalksIn checks Sweeper's 20 cast range on the synthetic nav: a
+// corpse behind the U's base, its straight line closed, is walked to and
+// no cast goes out.
+func TestSweepWalksIn(t *testing.T) {
+	self, corpse := scenePoint(geotest.UInside, 0, 0), scenePoint(geotest.UBehind, 0, 0)
+	b, _, _ := newNavBrain(t, testNav(t), DefaultPersona(), self)
+	s := &b.world.Self
+	s.ClassID, s.Level, s.RunSpeed = DwarvenFighter.ID, 10, 200
+	b.builtOK = false
+	b.cfg.Travel = &TravelMap{castRanges: map[datapack.SkillRef]int32{{ID: skillSweeper, Level: 1}: 20}}
+	b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillSpoil, Level: 1}, {ID: skillSweeper, Level: 1}}}, t0)
+	b.world.Apply(NPCInfo{ObjectID: npcID, NPCID: 20001, Attackable: true, Pos: corpse}, t0)
+	b.world.Target = npcID
+	b.markSpoil(npcID, spoilMine)
+	dead := t0.Add(time.Second)
+	mustHandle(t, b, dead, Die{ObjectID: npcID, Sweepable: true})
+	a, ok := b.ruleSweep(dead)
+	if !ok || a.kind != actMove || !a.walk {
+		t.Fatalf("ruleSweep = kind %d walk %v ok %v (%s), want a walk", a.kind, a.walk, ok, b.walk.reason)
+	}
+	if d := distance3(b.engage.stand, corpse); d > meleeStand {
+		t.Errorf("stand point %+v %.0f from the corpse, want within %d", b.engage.stand, d, meleeStand)
 	}
 }

@@ -77,8 +77,10 @@ func (b *Brain) markSpoil(id int32, state spoilState) {
 }
 
 // spoilEvent keeps Brain.spoils: a Spoil verdict marks the monster of the
-// Spoil cast in flight (spoilTarget, castSkill), a Sweeper refusal or the
-// bot's own Sweeper cast ends the corpse's sweep, and a death opens the
+// Spoil cast in flight (spoilTarget, castSkill), Sweeper's own refusals
+// (343, 683) or the bot's own Sweeper cast end the corpse's sweep, a cost
+// or target refusal of the Sweeper cast in flight holds the sweep rule
+// (sweepHeld), and a death opens the
 // sweep window of a corpse the bot spoiled with spoil items to sweep
 // (Die.Sweepable) and forgets any other. A DeleteObject forgets the
 // monster where the brain reads it.
@@ -108,9 +110,16 @@ func (b *Brain) spoilEvent(ev Event, now time.Time) {
 			}
 			b.spoilTarget = 0
 		case skillSweeper:
-			if e.ID == msgSweepNotSpoiled || e.ID == msgSweepNotAllowed {
+			switch e.ID {
+			case msgSweepNotSpoiled, msgSweepNotAllowed:
 				delete(b.spoils, id)
 				b.castAt, b.spoilTarget = time.Time{}, 0
+			case msgNotEnoughHP, msgNotEnoughMP, msgInvalidTarget, msgCannotBeUsed, msgCantSeeTarget:
+				// castRefused holds Sweeper for castRefusedHold; the
+				// corpse stays while its window lasts.
+				if b.castPending(now) {
+					b.sweepHeld, b.spoilTarget = now.Add(castRefusedHold), 0
+				}
 			}
 		}
 	case MagicSkillUse:
@@ -159,7 +168,9 @@ func (b *Brain) sweepTarget(now time.Time) int32 {
 // the bot spoiled, while its sweep window lasts and before ruleLoot picks
 // anything up. It stands up, waits out a cast in flight and the skill's
 // reuse, selects the corpse, walks into cast range where the straight line
-// is closed (engageWalk), then casts.
+// is closed (engageWalk), then casts. It yields while the skill is disabled
+// or a refusal of its last cast holds it (sweepHeld), so the bot rests or
+// fights meanwhile instead of idling.
 //
 // It sends Action and RequestMagicSkillUse through the frame bucket, one
 // cast at a time: each waits for its MagicSkillUse or castTimeout, then the
@@ -169,7 +180,7 @@ func (b *Brain) ruleSweep(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	skill := b.build().Kit.Sweep
-	if _, known := b.world.Skills[skill]; skill == 0 || !known {
+	if k, known := b.world.Skills[skill]; skill == 0 || !known || k.Disabled || now.Before(b.sweepHeld) {
 		return Action{}, false
 	}
 	id := b.sweepTarget(now)

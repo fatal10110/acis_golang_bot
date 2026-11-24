@@ -161,6 +161,10 @@ type Brain struct {
 	// Spoil on, until the monster dies, its sweep ends or it leaves sight.
 	spoilTarget int32
 	spoils      map[int32]spoilMark
+	// sweepHeld is when the server's refusal of the last Sweeper cast
+	// (castRefused) stops holding the sweep: until then ruleSweep yields
+	// so the bot rests or fights.
+	sweepHeld time.Time
 	// opened is the last target an attack of the bot went out on: a melee
 	// click or an attack step's cast (Action.opens). An Opener step casts
 	// only on another (stepState.fresh).
@@ -463,8 +467,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				}
 			}
 		case SystemMessage:
-			b.castRefused(e.ID, now)
+			// Before castRefused: a refusal of Sweeper counts only while
+			// its cast is in flight (spoilEvent).
 			b.spoilEvent(ev, now)
+			b.castRefused(e.ID, now)
 			b.warehouseEvent(ev, now)
 			b.recipeEvent(ev, now)
 			b.craftEvent(ev, now)
