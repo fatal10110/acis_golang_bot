@@ -79,7 +79,7 @@ func TestNarrowCorridorAgreesWithExact(t *testing.T) {
 		if !p.corridorClear(s, a, b) {
 			continue
 		}
-		if len(s.grid.tops) > 0 {
+		if len(s.grid.layered) > 0 {
 			stacked++
 		} else {
 			narrow++

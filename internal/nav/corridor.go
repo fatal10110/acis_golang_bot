@@ -100,12 +100,15 @@ func quadrant(a, b location.Location) block.NSWE {
 // CorridorOpen reports whether the segment from a to b passes the open-corridor
 // test (docs/navigation.md, "Step-chain check"): over every cell its line
 // crosses and every cell next to those within corridorReach of it, each cell
-// has geodata and one floor (exactly one layer, or a stacked top, topsHold),
-// its NSWE allows the segment's quadrant directions, and no two neighbouring
-// cells differ in height by block.CellIgnoreHeight or more. Then every step
-// the server can take between two points of the corridor passes CanMove;
-// on stacked tops, every step of at most Lmax + stepSlack (topsHold). It
-// costs O(cells along the segment) and makes no CanMove call.
+// has geodata and a walking layer carried from the segment's start floor
+// (corridorAdd), the floor is dry and its NSWE allows the segment's
+// quadrant directions, neighbouring floors differ in height by less than
+// block.CellIgnoreHeight and CanMove crosses between them onto them, and a
+// step of at most Lmax + 2*stepSlack into a cell of several layers lands on
+// its walking layer. Then every step the server can take between two points
+// of the corridor passes CanMove: on cells of one layer whatever its length,
+// on cells of several for steps within that bound. It costs O(cells along
+// the segment) and makes no CanMove call.
 func (p *Planner) CorridorOpen(a, b location.Location) bool {
 	s := getScratch()
 	defer putScratch(s)
@@ -114,18 +117,12 @@ func (p *Planner) CorridorOpen(a, b location.Location) bool {
 }
 
 // corridorStretches runs the open-corridor test on the segment from a to b
-// and returns the runs of line cells that fail it, in s.stretches.
+// and returns the runs of line cells that fail it, in s.stretches. The
+// corridor's walking layers stay in s.grid for the exact check.
 func (p *Planner) corridorStretches(s *scratch, a, b location.Location) []stretch {
 	p.corridorFill(s, a, b, false)
 	return s.stretches
 }
-
-// lineCellLag is how many line cells after lc the corridor fill must reach
-// before lc's verdict is final: a flag of a cell around lc changes only when
-// a neighbour of that cell joins, which lies within Chebyshev distance 3 of
-// lc, and the line, monotone on both axes, is farther than that after six
-// cells.
-const lineCellLag = 6
 
 // addStretch appends lc to s.stretches when it fails, merging it into the
 // last stretch when they touch.
@@ -143,18 +140,16 @@ func (p *Planner) addStretch(s *scratch, lc lineCell) {
 // corridorClear reports whether the segment from a to b passes the
 // open-corridor test, stopping at the first cell that fails: every corridor
 // cell lies around some line cell, so the test fails exactly when a corridor
-// cell fails conditions 1 and 2 or climbs to a neighbour, and corridorAdd
-// sees each such failure as it adds the cell. Unlike corridorStretches, it
-// takes a stacked cell on its top (topsHold): a corridor that passes whole
-// keeps the chain on the tops, while the exact check that walks a failing
-// stretch starts and ends where every cell holds one layer.
+// cell fails conditions 1 and 2, its link to a neighbour or the layer rule,
+// and corridorAdd sees each such failure as it adds the cell.
 func (p *Planner) corridorClear(s *scratch, a, b location.Location) bool {
 	return p.corridorFill(s, a, b, true)
 }
 
 // corridorFill puts every cell the line from a to b crosses, and every cell
 // next to one of those within corridorReach of the segment, into a new
-// corridor of s.grid, the line cells in s.line.
+// corridor of s.grid, the line cells in s.line. Each line cell joins before
+// the cells around it, so the walking layer spreads from the start's cell.
 // With stop it returns false at the first cell that makes the test fail;
 // else it fills the whole corridor, collects the failing runs of line cells
 // in s.stretches as their verdicts become final (lineCellLag), and reports
@@ -165,33 +160,34 @@ func (p *Planner) corridorFill(s *scratch, a, b location.Location, stop bool) bo
 	s.grid.begin()
 	s.grid.ends = [2]gridEnd{{engine.GeoX(a.X), engine.GeoY(a.Y), a.Z}, {engine.GeoX(b.X), engine.GeoY(b.Y), b.Z}}
 	req := quadrant(a, b)
-	stacked := stop && p.Lmax > 0
+	lag := p.lineCellLag()
 	open := true
 	seg := newSegment(a, b)
 	for i, lc := range s.line {
-		for dx := -1; dx <= 1; dx++ {
-			for dy := -1; dy <= 1; dy++ {
-				if (dx != 0 || dy != 0) && (s.grid.member(lc.x+dx, lc.y+dy) != nil || !seg.nearCell(lc.x+dx, lc.y+dy)) {
-					continue // in the corridor already, or out of reach
+		s.grid.line = i
+		for k := range 9 {
+			// The line cell first, then the ring around it.
+			dx, dy := (k+4)%9%3-1, (k+4)%9/3-1
+			if k > 0 && (s.grid.member(lc.x+dx, lc.y+dy) != nil || !seg.nearCell(lc.x+dx, lc.y+dy)) {
+				continue // in the corridor already, or out of reach
+			}
+			if !p.corridorAdd(s, lc.x+dx, lc.y+dy, req) {
+				if stop {
+					return false
 				}
-				if !p.corridorAdd(s, lc.x+dx, lc.y+dy, req, stacked) {
-					if stop {
-						return false
-					}
-					open = false
-				}
+				open = false
 			}
 		}
-		if !stop && i >= lineCellLag {
-			p.addStretch(s, s.line[i-lineCellLag])
+		if !stop && i >= lag {
+			p.addStretch(s, s.line[i-lag])
 		}
 	}
 	if !stop {
-		for _, lc := range s.line[max(len(s.line)-lineCellLag, 0):] {
+		for _, lc := range s.line[max(len(s.line)-lag, 0):] {
 			p.addStretch(s, lc)
 		}
 	}
-	return open && (len(s.grid.tops) == 0 || p.topsHold(s))
+	return open
 }
 
 // lineCellOpen reports whether every corridor cell around lc passed.

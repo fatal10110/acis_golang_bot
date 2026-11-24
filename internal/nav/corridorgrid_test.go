@@ -13,79 +13,154 @@ import (
 )
 
 // refCorridor is the corridor test written plainly on a map rebuilt per
-// test: the oracle the grid version must match. It returns the stretches
-// corridorStretches must find and whether corridorClear must pass.
+// test: the oracle the grid version must match. It fills the corridor in
+// the grid's order (each line cell, then its ring), gives each cell its
+// walking layer as it joins, and applies the pair rules over the whole
+// corridor at the end, with the engine's own Height. It returns the
+// stretches corridorStretches must find and whether corridorClear must pass.
 func refCorridor(p *Planner, a, b location.Location) ([]stretch, bool) {
 	type cell struct {
-		h, gap    int16
-		stacked   bool
-		ok, climb bool
+		layers    []block.Cell
+		h         int16
+		nswe      block.NSWE
+		ok, bad   bool
+		layered   bool
+		hasLayers bool
 	}
 	line := appendLineCells(nil, a, b)
 	req := quadrant(a, b)
-	var buf [block.MaxLayers]block.Cell
-	// read returns the corridor cells and whether each passes conditions 1
-	// and 2, stacked tops allowed or not.
-	read := func(stacked bool) map[[2]int]cell {
-		corridor := map[[2]int]cell{}
-		for _, lc := range line {
-			for dx := -1; dx <= 1; dx++ {
-				for dy := -1; dy <= 1; dy++ {
-					k := [2]int{lc.x + dx, lc.y + dy}
-					if _, ok := corridor[k]; ok || (dx != 0 || dy != 0) && refDistance(a, b, k) > corridorReach {
-						continue
-					}
-					var c cell
-					if p.hasGeo(k[0], k[1]) {
-						layers := p.Engine.AppendLayers(buf[:0], k[0], k[1])
-						heights := make([]int16, 0, len(layers))
-						for _, l := range layers {
-							heights = append(heights, l.Height)
-						}
-						slices.Sort(heights)
-						top := layers[slices.IndexFunc(layers, func(l block.Cell) bool { return l.Height == heights[len(heights)-1] })]
-						c = cell{h: top.Height, gap: math.MaxInt16, stacked: len(layers) > 1}
-						if c.stacked {
-							c.gap = top.Height - heights[len(heights)-2]
-						}
-						c.ok = (!c.stacked || stacked && c.gap > 0) && top.NSWE.Allows(req) && !p.Water.wet(k[0], k[1], top.Height)
-						for _, e := range []location.Location{a, b} {
-							if c.stacked && engine.GeoX(e.X) == k[0] && engine.GeoY(e.Y) == k[1] && e.Z != int(top.Height) {
-								c.ok = false
-							}
-						}
-					}
-					corridor[k] = c
-				}
+	corridor := map[[2]int]*cell{}
+	var order [][2]int
+	ea := [2]int{engine.GeoX(a.X), engine.GeoY(a.Y)}
+	eb := [2]int{engine.GeoX(b.X), engine.GeoY(b.Y)}
+	below := func(layers []block.Cell, q int) (block.Cell, bool) {
+		var best block.Cell
+		found := false
+		for _, l := range layers {
+			if int(l.Height) < q && (!found || l.Height > best.Height) {
+				best, found = l, true
 			}
 		}
-		for k, c := range corridor {
-			if !c.ok {
-				continue
-			}
-			for _, d := range [2][2]int{{1, 0}, {0, 1}} {
-				nk := [2]int{k[0] + d[0], k[1] + d[1]}
-				nc, in := corridor[nk]
-				if !in || !nc.ok {
+		return best, found
+	}
+	nearest := func(k [2]int, z int) int16 { return p.Engine.HeightNearest(k[0], k[1], z) }
+	// anchor is the floor of the first passing neighbour the quadrant
+	// crosses from, else of another 4-neighbour, else of a diagonal one.
+	anchor := func(k [2]int) (int16, bool) {
+		var other, diag []int16
+		for dx := -1; dx <= 1; dx++ {
+			for dy := -1; dy <= 1; dy++ {
+				n, in := corridor[[2]int{k[0] + dx, k[1] + dy}]
+				if (dx == 0 && dy == 0) || !in || !n.ok {
 					continue
 				}
-				if abs(int(c.h)-int(nc.h)) >= block.CellIgnoreHeight {
-					c.climb, nc.climb = true, true
-					corridor[k], corridor[nk] = c, nc
+				switch {
+				case dx != 0 && dy != 0:
+					diag = append(diag, n.h)
+				case req.Allows(stepDir(-dx, -dy)):
+					return n.h, true
+				default:
+					other = append(other, n.h)
 				}
 			}
 		}
-		return corridor
+		if all := append(other, diag...); len(all) > 0 {
+			return all[0], true
+		}
+		return 0, false
+	}
+	ring := [9][2]int{{0, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}, {-1, -1}, {0, -1}, {1, -1}, {-1, 0}}
+	for _, lc := range line {
+		for i, d := range ring {
+			k := [2]int{lc.x + d[0], lc.y + d[1]}
+			if _, in := corridor[k]; in || i > 0 && refDistance(a, b, k) > corridorReach {
+				continue
+			}
+			c := &cell{}
+			corridor[k] = c
+			order = append(order, k)
+			if !p.hasGeo(k[0], k[1]) {
+				continue
+			}
+			c.layers = p.Engine.AppendLayers(nil, k[0], k[1])
+			c.layered = len(c.layers) > 1
+			switch {
+			case !c.layered:
+				c.h, c.nswe, c.hasLayers = c.layers[0].Height, c.layers[0].NSWE, true
+			case p.Lmax <= 0:
+				continue
+			case k == ea:
+				c.h, c.hasLayers = nearest(k, a.Z), true
+			default:
+				from, ok := anchor(k)
+				if !ok {
+					continue
+				}
+				l, ok := below(c.layers, int(from)+block.CellIgnoreHeight)
+				if !ok {
+					continue
+				}
+				c.h, c.hasLayers = l.Height, true
+			}
+			if c.layered {
+				if k == eb && c.h != nearest(k, b.Z) {
+					continue
+				}
+				for _, l := range c.layers {
+					if l.Height == c.h {
+						c.nswe = l.NSWE
+						break
+					}
+				}
+			}
+			c.ok = c.nswe.Allows(req) && !p.Water.wet(k[0], k[1], c.h)
+		}
+	}
+	// Condition 3 and CanMove's crossings between neighbours.
+	for _, k := range order {
+		c := corridor[k]
+		for _, d := range [2][2]int{{1, 0}, {0, 1}} {
+			nk := [2]int{k[0] + d[0], k[1] + d[1]}
+			n, in := corridor[nk]
+			if !c.ok || !in || !n.ok {
+				continue
+			}
+			bad := abs(int(c.h)-int(n.h)) >= block.CellIgnoreHeight
+			if l, ok := below(n.layers, int(c.h)+block.CellIgnoreHeight); req.Allows(stepDir(d[0], d[1])) && (!ok || l.Height != n.h) {
+				bad = true
+			}
+			if l, ok := below(c.layers, int(n.h)+block.CellIgnoreHeight); req.Allows(stepDir(-d[0], -d[1])) && (!ok || l.Height != c.h) {
+				bad = true
+			}
+			if bad {
+				c.bad, n.bad = true, true
+			}
+		}
+	}
+	// The layer rule: a step from O within reach into a layered C lands on
+	// C's walking layer.
+	reach := int((p.Lmax+2*stepSlack)/block.CellSize) + 1
+	for _, k := range order {
+		c := corridor[k]
+		if !c.ok || !c.layered {
+			continue
+		}
+		x, y := engine.WorldX(k[0]), engine.WorldY(k[1])
+		for _, ok := range order {
+			o := corridor[ok]
+			if o.ok && abs(ok[0]-k[0]) <= reach && abs(ok[1]-k[1]) <= reach && p.Engine.Height(x, y, int(o.h)+2*block.CellHeight) != c.h {
+				c.bad = true
+			}
+		}
 	}
 
-	strict := read(false)
 	var out []stretch
 	for _, lc := range line {
 		open := true
 		for dx := -1; dx <= 1 && open; dx++ {
 			for dy := -1; dy <= 1 && open; dy++ {
-				if c, in := strict[[2]int{lc.x + dx, lc.y + dy}]; in {
-					open = c.ok && !c.climb
+				if c, in := corridor[[2]int{lc.x + dx, lc.y + dy}]; in {
+					open = c.ok && !c.bad
 				}
 			}
 		}
@@ -98,22 +173,7 @@ func refCorridor(p *Planner, a, b location.Location) ([]stretch, bool) {
 		}
 		out = append(out, stretch{lc.t0, lc.t1})
 	}
-
-	relaxed := read(p.Lmax > 0)
-	clear := true
-	reach := int((p.Lmax+stepSlack)/block.CellSize) + 1
-	for k, n := range relaxed {
-		clear = clear && n.ok && !n.climb
-		if !n.stacked {
-			continue
-		}
-		for c, in := range relaxed {
-			if in.ok && abs(c[0]-k[0]) <= reach && abs(c[1]-k[1]) <= reach && 2*(int(n.h)-int(in.h)-2*block.CellHeight) >= int(n.gap) {
-				clear = false
-			}
-		}
-	}
-	return out, clear
+	return out, len(out) == 0
 }
 
 // refDistance is the distance from the segment a-b to the closed square of

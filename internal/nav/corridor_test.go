@@ -19,7 +19,7 @@ func TestCorridorOpen(t *testing.T) {
 		{"open ground, axis aligned", at(Open, 0, 0, 0), at(Open, 0, -700, 0), true},
 		{"along the corridor beside both walls", loc(geotest.CorridorWest), loc(geotest.CorridorEast), true},
 		{"stacked tops along the bridge deck", loc(geotest.BridgeWestDeck), loc(geotest.BridgeEastDeck), true},
-		{"ends under the stacked tops of the bridge", loc(geotest.BridgeWestGround), loc(geotest.BridgeEastGround), false},
+		{"under the bridge deck, on the ground's walking layer", loc(geotest.BridgeWestGround), loc(geotest.BridgeEastGround), true},
 		{"stacked tops along the stair deck", cell(203, 1005, 80), cell(214, 1005, 80), true},
 		{"onto the stair deck: a step over its 40 cell lands on the 20 layer", loc(StairLow), loc(StairDeck), false},
 		{"partial NSWE: north-east toward the corridor wall", cell(260, 262, 0), cell(300, 260, 0), false},

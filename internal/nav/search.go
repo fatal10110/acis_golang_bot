@@ -31,6 +31,9 @@ type scratch struct {
 	band  []bandPoint
 	seen  indexTable
 	queue []chainState
+	// work counts the corridor cells filled and the CanMove calls of exact
+	// checks, for the pull's budget of farther candidates.
+	work int
 	// Stand points.
 	stands []standCandidate
 	layers [block.MaxLayers]block.Cell
