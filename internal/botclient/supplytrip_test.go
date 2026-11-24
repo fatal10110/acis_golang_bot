@@ -76,8 +76,8 @@ func TestSupplyCause(t *testing.T) {
 			name: "potions gone, no merchant sells them",
 			edit: func(b *Brain) { b.supplyTrip.potions = true; b.cfg.Travel.spawnedSold = nil },
 		},
-		{name: "past ReturnLoad with ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 70001, want: causeLoad},
-		{name: "past BuyLoad, under ReturnLoad", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 70000},
+		{name: "past ReturnLoad with ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 60001, want: causeLoad},
+		{name: "past BuyLoad, under ReturnLoad", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 60000},
 		{name: "past ReturnLoad, under ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 999)}, load: 90000},
 		{
 			name: "past ReturnLoad, kept with nowhere to go", items: []Item{potionStack(20), lootStack(60, keptMat, 5000)}, load: 90000,

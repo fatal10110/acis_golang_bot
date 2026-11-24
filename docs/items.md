@@ -119,7 +119,7 @@ server. The gaps are in data and spawns, not in code.
 | Spawned grocers sell 1060, 1061, 734 (Haste), 735 (Alacrity), 6035 (Magic Haste), 736 (SoE), and no-grade 1835, 2509, 3947. 1539, 728 and 5591/5592 are not on any spawned list. | `buyLists.xml` (lists 14, 20-23, ...) |
 | HP potions: 10 s reuse, and the stronger heal-over-time replaces the weaker (`hp_recover`). | `items/1000-1099.xml:492`, `skills/2000-2099.xml:251` |
 | Buff potions: 500 ms reuse, 1200 s effect. Alacrity (skill 2012) is `attack_time_down` order 1, the same type as Haste (1086) and Haste for Beginners (4327, Newbie Guide). Magic Haste (2169) is `casting_time_down`, the same type as Acumen (1085) and Acumen for Beginners (4329). The higher order wins. Some skills give the order per level through a `#stackOrder` table (Haste 1086, Magic Haste 2169), so the order depends on the effect's level. | `skills/2000-2099.xml:127`, `skills/2100-2199.xml:714,725`, `skills/1000-1099.xml:1548,1566,1586`, `skills/4300-4399.xml` (4327 order 2, 4329 order 4) |
-| Weight penalty starts at 50 % of the limit (then 66.6 %, 80 %). | `model/actor/player/character_weight_penalty.go:48-52` |
+| Weight penalty starts at 50 % of the limit (then 66.6 %, 80 %, 100 %). Regen is halved from 50 %, move speed from 66.6 %, and the character cannot move from 100 %. Attack speed does not change. | `model/actor/player/character_weight_penalty.go:48-52,80-99` |
 | A UseItem whose item is still in reuse is dropped in silence. | `network/inventory.go` (`live.ItemDisabled`) |
 | SoE: a 20 s cast of skill 2013 (RECALL, not magic). Damage does not interrupt it. A move sent mid-cast is answered ActionFailed and **queued** to run when the cast ends. It lands at the nearest town. | `skills/2000-2099.xml:132-139`, `model/actor/cast/controller.go:919-924`, `network/movement.go:71-81`, `network/recall.go:14-30` |
 | Enchant is ported. It is safe below +3 (+4 for full-body armor). Every `<enchant>` entry in the item files has `val="0"`: the gain is a server formula keyed by stat, grade and weapon type (`applyEnchant`), and `<enchant>` only names the stats an enchant raises. Weapon scrolls come only from multisells; armor scrolls only from castle and clan hall stewards. | `enchant/service.go:45-88,558`, `skill/effect/mod.go:175-230`, `items/0200-0299.xml:2032-2033` |
@@ -499,12 +499,20 @@ grocer lists).
 - **Going home.** A farmer starts a supply trip when any of these holds:
   - it would run out within `Supply.ReturnMinutes` (default 10) of fighting;
   - its HP potions are gone;
-  - its load passes `Supply.ReturnLoad` (default 70 %, well above the 45 % `BuyLoad`, so a bot
-    that bought to the cap does not turn round at its first loot) **and** a town visit would shed
+  - its load passes `Supply.ReturnLoad` (default 60 %, well above the 45 % `BuyLoad`, so a bot
+    that bought to the cap does not turn round at its first loot, and under the server's
+    half-speed band at 66.6 %, so it walks home at full speed) **and** a town visit would shed
     at least `Supply.ShedMin` (default 10 % of the limit). Shed weight is the junk it would sell
     (I8); I8b adds what the "trip in town" hook reports it will hand off. So items kept with
     nowhere to go do not send it home after every return;
   - the saved adena covers the gear goal.
+
+  A load the trip cannot shed must not slow the bot down either. It gives up a queued pickup that
+  would bring its load to `Loot.StopAbove` (default 65 %, under the 66.6 % band), weighing the
+  item by its template's weight times its count, and drops its `Loot.Junk` from `Loot.DropAbove`
+  (default 65 %). An item that weighs nothing, such as adena, is still picked up. The server's
+  pickup checks only free slots, never weight (`network/pickup.go:76-78`), and past 100 % the bot
+  cannot move at all, so the bot caps itself.
 
   It reads SoE only with no attacker. The recall is not a magic cast, so a hit does not break it
   (server `cast/controller.go` `InterruptOnDamage`); only death, or a stun, sleep or paralysis a
