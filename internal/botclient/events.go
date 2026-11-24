@@ -91,6 +91,12 @@ type UserInfo struct {
 	// stats, gear and buffs counted: what it weighs a fight with
 	// (Brain.packRisk).
 	PAtk, PDef, Evasion, Accuracy int32
+	// STR, DEX, CON, INT, WIT and MEN are the base stats; Critical, MAtk,
+	// CastSpd (the magic attack speed) and MDef the rest of the combat
+	// stats, gear and buffs counted. They are kept, not yet read by a rule
+	// (docs/strategy.md, Design 1).
+	STR, DEX, CON, INT, WIT, MEN  int32
+	Critical, MAtk, CastSpd, MDef int32
 	// CollisionHeight is the character's; the server adds it to the Z of
 	// every ground click (network/movement.go moveLivePlayer).
 	CollisionHeight float64
