@@ -38,6 +38,11 @@ func TestLiveArrows(t *testing.T) {
 		// first visit and the bow's adena (it did on main too).
 		p.Shop.Restock = nil
 		p.Gear.Jewelry = false
+		// No Newbie Guide walk after the recall: from the guide the
+		// armor merchant's spawn is nearer than the grocer, and the
+		// visit, which takes the nearest merchant selling any want
+		// (#370), would go there instead.
+		p.Newbie.MaxLevel = 0
 	})
 	t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 
