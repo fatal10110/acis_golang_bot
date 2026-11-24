@@ -5,7 +5,9 @@ Modes and preset ship in X4b, panel and metrics in X12. Decision D35.
 ## Modes
 
 `PvPPolicy` (today `FightFlagged`, `ForceAttack`, `SupportFlagged`) gains these modes, persona
-defaults (D6) shown and switched per bot on the panel:
+defaults (D6) shown and switched per bot on the panel. `ForceAttack` becomes the open-world PK mode
+([rule 7](targets.md#mayfight), X11): from X4 it no longer lets any player pass `MayFight` ahead of
+rules 1-8, so until X11 it does nothing.
 
 | Mode | What the bot does | `pvp` preset | Other presets |
 | --- | --- | --- | --- |
@@ -40,7 +42,7 @@ server's PvP count, which under the shipped `AwardPKKillPVPPoint = False` skips 
 and its duel results. Counters:
 
 - `bot_pvp_fights_total{kind}`: per opponent at the first attack, by its record's kind: `duel`,
-  `fight_back` (X4), `arena`, `flagged` (X5), `pk` (X11);
+  `fight_back` (X4), `arena` (X4b), `flagged` (X5), `pk` (X11);
 - `bot_pvp_deaths_total{kind}`: per death to a player or its summon, by the killer's kind
   (`fight_back`, `arena`, `flagged`, `pk`, or `unfought`, set by X4 on an attacker `MayFight`
   refused, such as a clean attacker fled with karma); a duel defeat leaves 1 HP and counts in
@@ -49,9 +51,15 @@ and its duel results. Counters:
   name → won, the opponent's → lost (a 1955 withdrawal precedes the deciding 1950), 1952 → tie; a
   cancel and a timeout show the same tie (`network/duel.go:513-539`, `duelEndMessages`;
   `serverpackets/systemmessage_duel.go:22-25`);
-- `bot_pvp_interrupts_total{result}` (cast, landed, too late) from X6's interrupts.
+- `bot_pvp_interrupts_total{result}` from X6's interrupts: `cast` per interrupt sent, then `landed`
+  on the opponent's `MagicSkillCanceled` before its landing time, else `too late` at that time.
 
 ## Tests
 
-None of their own: modes are tested through the rules they switch, kinds and duel results in
-`TestPvPDuelFight` ([finding](finding.md#tests)).
+Modes are tested through the rules they switch.
+
+- `TestPvPCounters` (X12): a first attack on a duel, fight-back, arena, flagged and PK-mode
+  opponent → one count each under its kind, none for a second attack; a death to each but the duel
+  opponent, and to an attacker `MayFight` refused → that kind, `unfought`; 1950 with its own name,
+  the opponent's, 1952 → won, lost, tie; an interrupt then the opponent's `MagicSkillCanceled` →
+  `cast`, `landed`; an interrupt and the landing time passed → `cast`, `too late`.

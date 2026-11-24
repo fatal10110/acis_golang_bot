@@ -60,8 +60,9 @@ first:
   step before the order;
 - the panel's `leave` (`CommandLeave`, `mailbox.go:213-220`), clearing before the `ErrNoParty`
   check: a partyless bot holding a slot answers nil, one with no slot `ErrNoParty`;
-- a whispered command that takes the bot out (a GM's `leave`, a GM's or player's `invite me`,
-  [players](players.md)): `obey` (`command.go:194-203`) gains the step.
+- a whispered command that takes the bot out: a GM's `leave` or `invite me`, in `obey`
+  (`command.go:194-203`), which gains the step; a player's `invite me` only on a Support member
+  through the [player path](players.md#invite-me).
 
 Every clear from no party resets the leader watch ([members](members.md#clearing-from-no-party)).
 

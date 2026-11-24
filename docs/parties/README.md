@@ -7,7 +7,8 @@ epic and issues to be filed after the owner's answers.
 
 Server paths (`network/`, `party/`, `data/`, `model/`, `skill/`, `handler/`, `trade/`,
 `inventory/`, `duel/`) are under `internal/gameserver/` in
-[fatal10110/acis_golang](https://github.com/fatal10110/acis_golang), as is `cmd/gameserver/`.
+[fatal10110/acis_golang](https://github.com/fatal10110/acis_golang); `cmd/gameserver/` is at its
+root.
 Datapack paths (`classes/`, `skills/`) are under `aCis_datapack/data/xml`; `players.properties` is
 `aCis_gameserver/config/players.properties` (same defaults in Go). Other paths are this
 repository's; bare file names are mostly `internal/botclient` (`supervisor.go`, `registry.go`:

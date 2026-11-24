@@ -36,7 +36,7 @@ by `StatusUpdate`; no flag, karma, store or known blocked polygon), also holds i
 
 ## Clear of monsters
 
-Any hit between a duellist and an NPC cancels the duel, restoring nothing. So the bot accepts or
+Any hit between a duellist and an NPC cancels the duel ([duel end](server-duels.md)). So the bot accepts or
 challenges only with no NPC in its attackers table and no aggressive monster in sight (`aggroRange`
 above 0, `internal/datapack/npc.go` `AggroRange`) within its aggro range plus `DuelClear` (300).
 From the challenge until idle it starts no monster fight (also refused as combat at the answer,
@@ -45,10 +45,9 @@ attacks anyway cancels the duel; the bot then fights it ([rule 1](targets.md#may
 
 ## Duel ground
 
-The server cancels a duel, once a second, when a duellist stands in a peace, siege or PvP zone or
-more than 2000 (3D) from its opponent (`duel/duel.go:203-213`, `disturbed`;
-`character_duel.go:66-69`, `InDuelBlockedZone`; `duel/state.go:54-56`, `Range`; arenas are PvP
-zones, `model/zone/kinds.go:17-22`), restoring nothing (`network/duel.go:445`, `:553-564`). From the
+The server cancels a duel when a duellist stands in a peace, siege or PvP zone (arenas included)
+or more than 2000 (3D) from its opponent ([duel end](server-duels.md);
+`character_duel.go:66-69`, `InDuelBlockedZone`). From the
 countdown to the end every move the bot sends (clearance, kite stand points, pole reposition,
 disengage moves) is checked: destination and every point of its M7 path at least `DuelEdge` (100)
 outside every peace, town, Derby track and arena polygon and every siege polygon it is not already
@@ -71,8 +70,8 @@ position.
   and whenever the segment fails before an attack, no `Action` or out-of-range skill, only steps
   castable where it stands. Otherwise a chase only closes in, so an opponent beyond `DuelLeash` is
   chased at once.
-- A duel run out this way times out, restoring everything (`duel/duel.go:183-184`; only `Canceled`
-  is abnormal, `network/duel.go:445`). An opponent's own move into such ground cancels it.
+- A duel run out this way times out, which restores everything (only a cancel does not). An
+  opponent's own move into such ground cancels it.
 
 ## Tests
 

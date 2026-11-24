@@ -1,6 +1,7 @@
 # The PvP layer over the M10 rotation
 
-Ships in X6 (the hit-time predictor in [Interrupts](#interrupts) in X4b, for the arena edge).
+Ships in X6 (the hit-time predictor in [Interrupts](#interrupts) in X4b, for the arena edge; CP,
+cures, break-off and Ultimate Defense in X6b).
 Against a player the bot runs its M10 row (same `Step` list, gates, `Melee` policy) with its
 [PvP row](rows.md) on top. Land rates, archetypes and the engage estimate: [model](model.md).
 
@@ -50,12 +51,12 @@ on PK, Cripple on MO, Entangle on EK) do not kite. No kiting of monsters.
 ## Interrupts
 
 An opponent's `MagicSkillUse` is **interrupt-worthy** when its type is HEAL, HOT, HEAL_PERCENT,
-RESURRECT, SLEEP, ROOT, FEAR or MUTE, or MDAM with template hit time 3000 or more, aimed at the
-opponent, its ally, the bot or the bot's party; it lands at arrival + `HitTime`. The bot answers
+RESURRECT (aimed at anyone), or SLEEP, ROOT, FEAR, MUTE, or MDAM with template hit time 3000 or
+more (aimed at the bot or the bot's party); it lands at arrival + `HitTime`. The bot answers
 with its `Interrupt` step when that step's scaled hit time plus the
 [reaction delay](wire.md#changes-to-todays-code-x4) and the walk to range end before the landing (a stun or sleep), or at least 200 ms before it on an `isMagic` cast (a
 damage step: damage breaks only a magic cast inside its interrupt window). Its own time as the
-server computes it ([server](server.md), Cast time): template time × 333 / cast speed (magic) or
+server computes it ([cast time](server-casts.md)): template time × 333 / cast speed (magic) or
 attack speed (`UserInfo`), truncated; × 0.70 for an `isMagic` step while a spiritshot is expected
 charged (auto-use reported on, `Inventory.AutoShots` from `ExAutoSoulShot`, `items.go:178-181`,
 `:224-227`, and a stack carried); floored at 500 ms for a template time of 500 or more. A short
@@ -73,19 +74,17 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
 - **CP.** CP potion (5592, then 5591) under `CPPotion` (50 %) CP in a PvP fight other than a duel,
   under the 500 ms reuse; HP potions, heals and drains follow M10's `ruleCritical`. CP potions are
   kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (none are
-  bought, and a duel that ends uncancelled restores CP, HP, MP, `network/duel.go:553-564`,
-  `restoreDuelCondition`; a cancelled one restores nothing, `:445`).
-- **Cures.** In a PvP fight, duels too (cures are cheap, a DOT decides a 2-minute duel, and only an
-  uncancelled end restores effects, `network/duel.go:565-569`): its own `AbnormalStatusUpdate` shows
+  bought, and an uncancelled duel end restores CP, [duel end](server-duels.md)).
+- **Cures.** In a PvP fight, duels too (cures are cheap and a DOT decides a 2-minute duel): its own `AbnormalStatusUpdate` shows
   a poison or bleed (stack type `poison`, `bleeding`, or effect type POISON, BLEED) with half its
   ticks left → the cure. Its level is the lower set level (`hooks_buff.go:221-233`,
   `negateLevelAllows`): `effectAbnormalLvl` (only with an `effectType`; Sting 223 sets only this) or
   `abnormalLvl` (Poison, Curse: Poison, Venom, Bleed); neither set → no cure. Up to 3: Antidote 1831
   or Bandage 1833; 4-7: Greater Antidote 1832 or Emergency Dressing 1834 (plain first when both
   work); 8: none. One `UseItem` per effect seen, 500 ms reuse. None against monsters.
-- **Pool estimate.** HP and max HP read once at selection (continuously from
-  `ExDuelUpdateUserInfo`), CP and max CP from the latest `CharInfo` or the duel window; each 35 on
-  the target comes off CP, then HP. It drives finishers and the break-off, never a re-selection.
+- **Pool estimate.** The opponent record's vitals: HP and max HP from the selection `StatusUpdate`
+  or the latest `ExDuelUpdateUserInfo` (resent only when a gauge leaves its segment), CP and max CP
+  from the latest `CharInfo` or duel window; each 35 since that read comes off CP, then HP. It drives finishers and the break-off, never a re-selection.
 - **Break off** (open world only): CP gone, HP under the row's `PvPBreakHP` (tank 20, normal 30,
   glass cannon 40 %), no heal or potion ready, its pool fraction under the opponent's → its ready
   `Break` step (root, stun, fear, slow, Dash, a sleep under the rule above), then M10's flee
@@ -130,14 +129,14 @@ and junk-rule cases in X10.
   opponent → a walk to a stand point at 600, then the next cast; in a duel with points at 600 in or
   within 100 of a town polygon → skipped, the first passing one; none passes → no walk, the next
   cast in place; a kiting caster whose duel opponent is 1900 away → `Action` (the chase), no kite.
-- `TestPvPCPPotion` (X6; the junk set in X10): CP under 50 % in a PvP fight with 5592 → `UseItem`;
+- `TestPvPCPPotion` (X6b; the junk set in X10): CP under 50 % in a PvP fight with 5592 → `UseItem`;
   PvE → none; a duel → none, but a Poison 129 in it → the cure; CP potions not junk.
-- `TestPvPCure` (X6; the supply list in X10): Poison 129 at skill level 1 (`abnormalLvl` 3), most
+- `TestPvPCure` (X6b; the supply list in X10): Poison 129 at skill level 1 (`abnormalLvl` 3), most
   ticks left → 1831, at skill level 3 (6) → 1832; Bleed `abnormalLvl` 5 → 1834, 8 → none; Sting 223
   at skill level 1 (`effectAbnormalLvl` 3) → 1833, 20 (level 5) → 1834, 45 (level 8) → none; a test
   poison with neither level → none; vs a monster → none; the `pvp` supply list holds 1831 and 1833,
   from level 20 also 1832 and 1834.
-- `TestPvPBreakOff` (X6; OM in X8, Ultimate Defense in X7): open world, CP gone, HP under the bound,
+- `TestPvPBreakOff` (X6b; OM in X8, Ultimate Defense in X7): open world, CP gone, HP under the bound,
   losing, faster → the `Break` step, then flee; duel or arena → fights on; an OM whose melee
   opponent would break Dreaming Spirit more often than not → no `Break`, flees at once; a test sleep
   `Break` vs a poison mask bit, or 5 s after its own DOT landed with ticks left → the fear (OM:

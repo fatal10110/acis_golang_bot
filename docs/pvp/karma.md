@@ -42,8 +42,7 @@ After a PK, or a timing accident. While karma (`UserInfo`) is above 0:
   killer's karma (`character_karma.go:44-56`).
 - **Restart** at a chaotic point outside town (resurrections accepted as today): no town trip, M8
   death penalty or supply trip until karma is 0. It walks to its spot (M7) on a **karma route**: on
-  foot in its SCC, no gatekeeper (gatekeepers and shops refuse it, [server](server.md) Karma and NPC
-  services), every segment at least `KarmaClear` (600: the guards' 450 see range plus a margin)
+  foot in its SCC, no gatekeeper (gatekeepers and shops refuse it, [karma and NPC services](server-karma.md)), every segment at least `KarmaClear` (600: the guards' 450 see range plus a margin)
   from every town polygon (X2) and guard spawn (spawn-list NPCs of template type `Guard`,
   `internal/datapack/npc.go:13-15`). With no such route it farms the nearest spot of its band that
   has one until karma is 0. Its flee skips headings entering that margin like blocked ones.

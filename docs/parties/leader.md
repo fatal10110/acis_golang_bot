@@ -4,7 +4,7 @@ A bot with a `lead` slot ([orders](orders.md)), P1d. Spot and trips: [spots](spo
 
 ## Invitations
 
-A new rule `party`, after `announce` (flee, heal and chat go first): one `RequestJoinParty` at a
+A new rule `party`, after `announce` (every rule from `dead` to `chat` goes first, `rules.go:475-483`): one `RequestJoinParty` at a
 time, only while the bot is in no party or leads its own. The invitee is the head of the `join`
 queue ([players](players.md#join)), else the first listed member not in the party. The in-flight
 state records its invitee, since the server answers a second invitation 164

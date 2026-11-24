@@ -2,8 +2,8 @@
 
 Ships in X9. Runs for every preset in any party, whoever leads it: a `support` bot in a player's
 party (today's main use, `docs/plan.md` "support"), a `pvp` bot in a player's party, and with M11
-`farmer` and `support` bots in a bot party. KN, CL, EO, SO rows are `support` bots, damage rows
-`farmer` or `pvp`. Fighting the enemy set counts as fighting back (no hunting mode needed).
+`farmer` and `support` bots in a bot party ([who plays which row](modes.md#who-plays-which-row)).
+Fighting the enemy set counts as fighting back (no hunting mode needed).
 
 - **Enemies**: players hitting a member (`Attack`, or a hostile `MagicSkillUse` with that member as
   target, [wire](wire.md#changes-to-todays-code-x4)), a player healing one of them once `MayFight`
@@ -17,7 +17,7 @@ party (today's main use, `docs/plan.md` "support"), a `pvp` bot in a player's pa
   hit; it sleeps another enemy no member hits, carrying no DOT ([sleep](layer.md#pvp-order)); a root
   row roots a fleeing healer. Otherwise assist the leader; a member under 30 % HP pulls them onto
   its attacker.
-- **Peel.** A tank row (KN, EK, PK) casts 28 Aggression (`TargetMe`) on the enemy hitting its healer
+- **Peel.** A row with a `Peel` step (KN, EK, PK) casts 28 Aggression (`TargetMe`) on the enemy hitting its healer
   or leader.
 - **The bot's healer** heals as today (leader, self, others) under its own `SupportFlagged`: on for
   a healing `pvp` bot (base mystic 1011 Heal, OS Chant of Life; off in its own duel, never its duel

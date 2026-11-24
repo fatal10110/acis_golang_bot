@@ -1,6 +1,6 @@
 # Whom the bot may fight
 
-Ships in X4 (`MayFight`, summons; rule 3 in X4b), X5 (hunting, arena targets). Decisions D38, D39.
+Ships in X4 (`MayFight`, summons; rule 3 in X4b, rule 7 in X11), X5 (hunting, arena targets). Decisions D38, D39.
 What keeps a fight from giving karma: [guards](guards.md).
 
 ## MayFight
@@ -9,20 +9,15 @@ For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summ
 [Summons and pets](#summons-and-pets)):
 
 1. **Duel.** From the countdown to the end, only the duel opponent, and only while fighting
-   ([wire](wire.md#world-model-x4)). In the countdown nobody: force-free duel hits need both
-   Duelling (`duel/state.go:82-86`, `character_social.go:201`) and a hit on a duellist not yet
-   Duelling interrupts the duel (`character_duel.go:114-124`), cancelled at the next 1 s check with
-   nothing restored. An opponent's countdown hit is not answered; after the cancel (1952,
-   `ExDuelEnd`) it is a clean player (no flag between duellists, `character_pvpflag.go:127-129`).
+   ([wire](wire.md#world-model-x4)). In the countdown nobody; an opponent's countdown hit cancels
+   the duel and is not answered, and after the cancel (1952, `ExDuelEnd`) it is a clean player.
    While fighting, the opponent is fought even as a clan mate or party member (duel hits come before
    party and clan checks, `character_social.go:201`, `:230`; one-on-one duels check no party, clan
    or ally, `network/duel.go:31-62`, `:145-187`; only party duels do, `:102`). Every other player
-   waits (hitting one flags the bot, cancelling the duel), and so does every NPC: none targeted, no
-   area skill or pole swing with one in reach ([guards](guards.md#area-hits-and-bystanders)), since
-   hitting one cancels the duel (`creature/duel.go:34-41`). A monster's hit cancels it too
-   (`character_duel.go:121-124`); the bot holds that monster off until the cancel arrives (1952, the
-   tie a cancel shows, then `ExDuelEnd`: `network/duel.go:538`, `duelEndMessages`;
-   `serverpackets/systemmessage_duel.go:24`), then fights it and rests;
+   and every NPC waits: none targeted, no area skill or pole swing with one in reach
+   ([guards](guards.md#area-hits-and-bystanders)). A monster that hits the bot is held off until
+   the cancel arrives (1952, then `ExDuelEnd`), then fought, then the bot rests. What cancels a
+   duel: [duel end, duel opponent attackable](server-duels.md);
 2. never a party member, in an arena too (`character_social.go:204-206`, `:233-235`);
 3. in the same arena: anyone else, clan mates, allies and bots included (D38;
    `character_social.go:206`, `:235`);
@@ -32,7 +27,7 @@ For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summ
 5. never a bot (nickname marker) unless it hit the bot first (an `Attack` or hostile cast in the
    attackers table, D38);
 6. `FightFlagged` and `o` flagged or with karma (today);
-7. PK mode on and the D39 limits pass ([PK mode](karma.md#pk-mode)), a clean attacker of a karma
+7. PK mode (today's `ForceAttack`) on and the D39 limits pass ([PK mode](karma.md#pk-mode)), a clean attacker of a karma
    bot included ([with karma](karma.md#with-karma));
 8. else no.
 

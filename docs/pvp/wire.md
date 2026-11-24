@@ -33,7 +33,8 @@ Each decoder and encoder has a recorded or server-built fixture and an exact `le
 - Skill fields: `isDebuff`, `isMagic`, `lvlDepend`, `magicLvl`, effect powers and types,
   `abnormalLvl`, `effectAbnormalLvl` (both default -1), stack types, `nextActionAttack`, `offensive`
   (defaulted from skill type and `isDebuff`, `model/skill/definition.go:443-446`), target types,
-  `skillRadius`; cure negate fields; jewel stat functions; weapon `pvp*Dmg`; `cpTable`.
+  `skillRadius`; cure negate fields; vulnerability stat functions of jewels, sets and active `Buff`
+  effects (Lionheart 287, Mental Shield 1035); weapon `pvp*Dmg`; `cpTable`.
 
 ## World model (X4)
 
@@ -91,7 +92,7 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   already skips summons (`farm.go:79`, `monster`).
 
 - **Reaction.** `salient` (`brain.go:595-625`) also takes an `ExDuel*` packet, `MagicSkillCanceled`,
-  a `MagicSkillUse` by or at a player it fights or at a party member, and a fought player's
+  a `MagicSkillUse` by or at a player it fights or by a player at a party member, and a fought player's
   `MoveToLocation` or `CharInfo` changing its mask or flag. Those arm the reaction at 200-600 ms
   (`PvPReact`; others keep 300-1200 ms, `:17-21`), moving an armed one earlier, never later (today
   the first wins, `:587-588`). A [guard](guards.md) stop (Esc, disengage move) takes no delay: its
@@ -113,4 +114,4 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   `TownZone.xml`: 18 towns with Rune; shipped `SiegeZone.xml`: 15 (9 castles, 6 clan halls); water
   on `LoadWaterZones` and its tests. The skill fields, Sting 223 read as `effectAbnormalLvl` 3 at
   skill level 1 and 8 at 45, `abnormalLvl` -1; `offensive` defaulted; target types and
-  `skillRadius`; `negateStats`, `negateLvl`; the jewel vulnerabilities; `pvp*Dmg`; `cpTable`.
+  `skillRadius`; `negateStats`, `negateLvl`; the jewel, set and Lionheart vulnerabilities; `pvp*Dmg`; `cpTable`.

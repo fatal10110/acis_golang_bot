@@ -30,7 +30,7 @@ Outside duels, arenas and PvP zones, against a flagged karma-free opponent:
   attack). The disengage move drops the intention the late Esc left;
 - **follow-up swing.** A `nextActionAttack` cast that ends or is Esc-cancelled on a player the bot
   may attack without force (blinking included) makes the server swing at or walk to it (carriers:
-  [server](server.md#server-behavior), Attack after a cast). None starts after the blink, Shield
+  [attack after a cast](server-casts.md)). None starts after the blink, Shield
   Stun and Bleed included; for one in flight the disengage move is the first send after it ends
   (`MagicSkillCanceled`, or its landing time);
 - the flag back to state 1 → attacks resume; the flag gone → no attack.
@@ -39,8 +39,8 @@ Outside duels, arenas and PvP zones, against a flagged karma-free opponent:
 
 Arena hits raise no flag and an arena kill is free only with both in a PvP zone at the death
 (`character_karma.go:29-34`, `character_pvpflag.go:131-133`), so an opponent who steps out (or the
-bot stepping out) makes the kill a PK, with no blink, unless it still carries a flag from outside,
-which the flag guard then covers. Against a karma-free arena opponent:
+bot stepping out) makes the kill a PK with no blink (a flag it carries from outside may end too).
+Against any karma-free arena opponent, flagged or not:
 
 - a damage step starts only while the opponent's edge distance exceeds its run speed × (**free
   time** + `EdgeSlack` 0.5 s). Free time = time to landing (the predicted scaled hit time,
@@ -60,17 +60,15 @@ which the flag guard then covers. Against a karma-free arena opponent:
   `ArenaStay`, `ArenaDeaths`) it stops, waits one attack interval after the move, then walks out;
 - **cost.** Opponents run 121-144 and no point of Dion, Gludin or Giran is more than about 490
   from an edge, so a step starts only under about 2.9-3.5 s at the middle (490 / speed − 0.5).
-  With the [long hit times](server.md#server-behavior) and a spiritshot, the Human and Elven
-  Mystics start the 4000 ms nukes and drains near the middle, the Dark only at the middle against
-  slower opponents, the Orc never; Ice Bolt starts; Solar and Shadow Spark only for the fastest
-  casters at the very middle. Shot-less 4-5 s steps, Drain Health (fighter rows charge soulshots),
-  Power Shot and Stunning Shot almost never start unless rooted first. So
-  bow rows and the Orc Mystic fight square arenas with roots (CL, EO, SO, OS), DOTs, non-damage
-  control, short steps (Energy Bolt 2 s, Aura Burn 1.5 s), plain shots and melee; the RO, ES and AS
-  Stunning Shot `Hold` and `Int` steps wait with Power Shot. The Colosseum (up to about 1370 from
-  an edge, about 9 s) lets every step start near its middle.
+  Against the [long hit times](server-casts.md), bow rows and the Orc Mystic fight square
+  arenas with roots (CL, EO, SO, OS), DOTs, non-damage control, short steps (Energy Bolt 2 s, Aura
+  Burn 1.5 s), plain shots and melee; the RO, ES and AS Stunning Shot `Hold` and `Int` steps wait
+  with Power Shot. The Colosseum (up to about 1370 from an edge, about 9 s) lets every step start
+  near its middle.
 
-Left over: a Dash, Sprint or root cure taking the opponent out in a cast's last 200 ms. Under
+Left over (accidental PK the guards cannot see): a `RelationChanged` or `CharInfo` delayed past
+about 3.5 s, a move delayed past the arena margin, a Dash, Sprint or root cure taking the opponent
+out in a cast's last 200 ms. Under
 [Ultimate Defense](layer.md#ultimate-defense) stop moves still go; only walks wait.
 
 ## Area hits and bystanders
@@ -90,8 +88,9 @@ anyone flagged (blinking included) or with karma outside its party, clan and all
   karma-free player other than the target, or a summon or pet showing a flag and no karma (its
   owner's, kept current by its `RelationChanged`; its kill after the flag ends gives karma,
   `character_karma.go:84-87`), is in reach: that bystander's flag may end before the hit and its
-  death would be a PK (`character_karma.go:45-55`). Summons are not linked to owners, so the
-  target's and a flagged party or clan mate's summon count too; a summoner next to its summon gets
+  death would be a PK (`character_karma.go:45-55`). Here a summon counts on its own flag, its owner
+  (by title, [summons](targets.md#summons-and-pets)) not consulted, so the target's and a flagged
+  party or clan mate's summon count too; a summoner next to its summon gets
   single-target steps.
 - **Weapons**: off a pole, single-target steps (WA, OR: 255 Power Smash, 100 Stun Attack, M10
   gates SWORD, BLUNT, BIGBLUNT, BIGSWORD and BLUNT, BIGBLUNT, `docs/strategy.md:293`, `:299`; 255's
@@ -113,10 +112,9 @@ anyone flagged (blinking included) or with karma outside its party, clan and all
   [Arena edge](#arena-edge).
 - **Duel**: from the countdown to the end, no offensive area or aura skill (Wild Sweep, Seal of
   Binding 1208, AURA) and no pole swing while any player but the opponent, any summon or pet, or any
-  attackable NPC is in reach (radii included): a flag cancels the duel (`duel/duel.go:206-213`), so
-  does a hit on an NPC or on a summon whose owner is not in it (`target_predicates.go:22`,
-  `:33-37`, `attack/controller.go:370-381`; `creature/duel.go:43-50`). Every summon counts (duel
-  team unread). A pole wielder repositions or holds; a swing under way still lands.
+  attackable NPC is in reach (radii included): a hit on any of them can cancel the duel
+  ([duel end](server-duels.md); area reach: [area skills](server-casts.md)). Every summon counts
+  (duel team unread). A pole wielder repositions or holds; a swing under way still lands.
 
 ## Duel support
 
@@ -125,7 +123,7 @@ From the countdown to the end `SupportFlagged` counts as off through the new `Ma
 (`character_pvpflag.go:88-93`), which cancels the duel (`duel/duel.go:205-207`). So no beneficial
 skill on such a player but itself, and no party skill (Chant of Life 1229, Chant of Fire 1006) while
 such a member is in its radius (`character_pvpflag.go:65-95`). Nor on its duel opponent, a clean
-party member included (one-on-one duels check no party, `network/duel.go:31-62`): `MaySupport`
+party member included ([rule 1](targets.md#mayfight)): `MaySupport`
 refuses it, and a party skill waits while it is a member in the radius.
 
 ## Tests
@@ -145,7 +143,7 @@ refuses it, and a party skill waits while it is a member in the radius.
   (about 490), speed 124 → no Wind Strike (124 × 4.5 = 558 > 490), a test-built 2000 ms damage step
   started; with blessed spiritshot auto-use (`ExAutoSoulShot`) and a stack → Wind Strike (124 × 3.3
   ≈ 409 < 490), at 380 → not; that cast's `MagicSkillUse` carrying 4000 ms, 0.1 s after the send,
-  opponent at 450 → cancel at once (450 < 124 × 4.4 ≈ 546); shot-less, opponent under its Dryad
+  opponent at 450 → cancel at once (450 < 124 × (4.0 + 0.5) = 558); shot-less, opponent under its Dryad
   Root (no 139, bit 0x200, 20 s left) → Wind Strike; a `CharInfo` clearing the bit with 2.5 s to
   landing, opponent (124) at 300 (< 372) → cancel; 0.4 s left (300 > 112) → none; the opponent
   nears the edge in the window → cancel, a move at least 150 inside; back by the margin → attacks;
@@ -173,5 +171,5 @@ refuses it, and a party skill waits while it is a member in the radius.
   → no heal; a clean member → heal; both in an arena → heal. Duelling a clean party member → no heal
   or buff on it, no PARTY skill while it is in the radius; after `ExDuelEnd` → heal.
 - e2e `TestLivePvPArena` (X13): two `pvp` bots of fighter rows and a client fight in the Gludin
-  arena (base mystic long nukes are held there); a bot's death leaves its experience unchanged and
+  arena; a bot's death leaves its experience unchanged and
   it walks back (GM, client, two bots).

@@ -1,8 +1,10 @@
 # Real players and GMs
 
 Ships in P6, except a GM's `invite me` and `leave` clearing the slot (P1b,
-[orders](orders.md#slot-clearing)). A player inviting a bot of a bot party is answered 160 and the
-bot never hears of it; the player can whisper instead.
+[orders](orders.md#slot-clearing)). A player inviting a bot in its bot party is answered 160
+(`network/party.go:55-57`) and the bot never hears of it; the player can whisper instead. A slot
+holder in no party gets the invitation, and accepting it clears the slot
+([members](members.md#joining)).
 
 ## join
 
@@ -47,9 +49,8 @@ releases the claim and the bot stays unclaimed (`partyclaim.go:111-121`; claims 
 accepted invitations, `partyclaim.go:46-48`). P6 acts only for a bot whose `join` or `lead` slot
 that very window clears, reached by no invitation answer of its own (no `RequestAnswerJoinParty`
 since its last window). It asks its party hook about the new leader, as an invitation would
-(`Persona.JoinParty`): `Authority.Hooks` accepts a commander or a GM confirmed within `knownFor`
-(10 minutes) with no claim (`authority.go:274-288,296-300`), else the claim table claims the leader
-for the first bot asking (`partyclaim.go:46-48,61-73`). A bot accepted stays; every other bot,
+(`Persona.JoinParty`, accepting as in [server](server.md#the-bot-today), Joining). A bot accepted
+stays; every other bot,
 Support or Damage, withdraws through the `withdraw` step. A commander or known GM so keeps every
 bot; an unconfirmed GM counts as a player and keeps one bot. A bot with no slot keeps today's behavior.
 

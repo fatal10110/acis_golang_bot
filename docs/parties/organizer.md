@@ -60,7 +60,7 @@ answer channel (`Sent`), and polls every open channel without waiting before eac
 | none, or `ErrBusy` at `Command` | never entered the mailbox | plans the order again |
 | `ErrBadCommand` at `Command` | `Command.valid` refused it (a bug) | logs it, breaks that party, never resends |
 | pending | in the mailbox or queued for the next session | reads nothing into the slot and sends that bot no further order (a break's `unparty` included) until the answer |
-| answered with an error (`ErrStopped`, a refusal) | not carried out | plans the order again |
+| answered with an error (`ErrStopped`, `ErrWhispered`) | not carried out | plans the order again, after `ErrWhispered` only once `Whispered` clears |
 | answered nil | the brain set the slot | from now on an empty slot means the bot cleared it itself |
 
 The brain sets or clears the slot, publishes at once (`publishStatus` with force), then answers;
@@ -121,8 +121,8 @@ and composition say, and of the breaks above only `DissolveParty` and a bot leav
 apply: a pinned bot only gone
 keeps its place and gets its slot again with a live run. While the pinned leader is offline its members get no `join`, first or
 resent (one holding its slot stands in the join hold at most `JoinWait`, then plays its persona);
-once it is online, `join`, then `lead`. Pin orders replace an earlier standing order; a whispered
-member answers `ErrWhispered` and is ordered again once `Whispered` clears.
+once it is online, `join`, then `lead`. Pin orders replace an earlier standing order, not a whispered one
+(`ErrWhispered`, above).
 
 A bot leaves the pin, not ordered back, when its delivered slot reads empty with `PartyLeft`
 `left` (any [slot clear](orders.md#slot-clearing) after the pin), or the panel sets it `off`

@@ -73,8 +73,8 @@ Else, the dispersal having set `lost` and `JoinWait` passing `LeaderWait`, the b
 old leader and `/unstuck` at once; freed, it plays its persona where it stands. So no bot of a bot
 party whispers another (`docs/plan.md:343-344`): while the slot is set `ruleLeader` skips the
 lost-leader branch for the named leader, and a clear inside the party ends with the withdrawal
-(whose send resets the watch, `actLeaveParty`, `brain.go:815-817`) or the dropped `withdraw` flag
-(which resets it), or leaves the bot under a player. A bot with no slot keeps today's behavior.
+or the dropped `withdraw` flag, each resetting the watch
+([orders](orders.md#withdrawal-and-reply-in-order)), or leaves the bot under a player. A bot with no slot keeps today's behavior.
 
 ## Tests (brain unit: events and an injected clock in, packets out)
 

@@ -5,8 +5,7 @@ estimate) and X10 (mix table, gear scores, consumables). Decision D37.
 
 ## Land rates
 
-`charmodel.LandRate(skill, caster, target)` copies the server formula ([server](server.md), Debuff
-land rate). The opponent's CON and MEN come from its class template (dyes, at most ±5, ignored), its
+`charmodel.LandRate(skill, caster, target)` copies the server formula ([debuff land rate](server-casts.md)). The opponent's CON and MEN come from its class template (dyes, at most ±5, ignored), its
 M.Def and level from its tier at the bot's band (cancelling in `matk` to about 1 at equal level);
 the bot's own vulnerabilities from its gear and buffs (jewel, set and buff stat functions, X2). A
 jewel or set multiplies the matching rate by `1 − v/100` (Earring of Antharas: stun × 0.4).
