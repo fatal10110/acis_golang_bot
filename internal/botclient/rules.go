@@ -272,8 +272,10 @@ type Action struct {
 	// item is the template id of the item a UseItem or RequestAutoSoulShot
 	// acts on.
 	item int32
-	// skill is the skill a cast casts.
+	// skill is the skill a cast casts; opens marks a cast of an attack
+	// step, which uses up the target's opener (Brain.opened).
 	skill int32
+	opens bool
 	// walk marks a move that is one of the walker's segments (goTo), or
 	// the walker's own /unstuck.
 	walk bool
@@ -602,30 +604,50 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	return Action{}, true
 }
 
-// ruleCritical is rule 3: in combat with HP critical, stand up, then drink
-// a potion whose reuse has run out, else heal itself, else flee away from
-// the target unless FleeOutrun holds it in the fight (mayFlee), which
-// leaves the turn to the fight rules. With two or more attackers on the bot
-// and HP under CrowdedHP it drinks one early, standing, and leaves the turn
-// to the next rules when none is ready.
+// ruleCritical is rule 3: in combat with HP critical, cast a ready heal or
+// drain step whose gates pass (sustain, standing up first), else drink a
+// potion whose reuse has run out, else heal itself, else flee away from the
+// target unless FleeOutrun holds it in the fight (mayFlee), which leaves
+// the turn to the fight rules. With two or more attackers on the bot and HP
+// under CrowdedHP it heals or drains, else drinks a potion, early,
+// standing, and leaves the turn to the next rules when none is ready. No
+// potion goes out over a heal or drain in flight (sustaining), and no heal
+// or drain during a recall (escaping).
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
 		return Action{}, false
 	}
 	th := b.build().Thresholds
+	esc := b.escaping(now)
 	if !below(s.HP, s.MaxHP, th.CriticalHP) {
 		if s.Sitting || !below(s.HP, s.MaxHP, th.CrowdedHP) || len(b.attackers(now)) < 2 {
 			return Action{}, false
 		}
+		if !esc {
+			if a, ok := b.sustain(now); ok {
+				return a, true
+			}
+			if b.sustaining(now) {
+				return Action{}, true
+			}
+		}
 		return b.drinkPotion(now)
+	}
+	if !esc {
+		if a, ok := b.sustain(now); ok {
+			return a, true
+		}
+		if b.sustaining(now) {
+			return Action{}, true
+		}
 	}
 	if !s.Sitting {
 		if a, ok := b.drinkPotion(now); ok {
 			return a, true
 		}
 	}
-	if b.escaping(now) {
+	if esc {
 		// A heal or a run away sent mid-recall would run after the
 		// teleport (ruleEscape); the potion above does not wait.
 		return Action{}, true
@@ -753,9 +775,10 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 }
 
 // ruleRest is rule 6: out of combat with HP or MP low, sit until both
-// recover, then stand, by the build's thresholds. A bot that knows one of
-// its rotation's skills also sits under MPReserve: there fight casts
-// nothing, and the next pull would be all melee.
+// recover, then stand, by the build's thresholds; it sits with Relax where
+// the kit has it, its combat toggles off first (sitDown). A bot that knows
+// one of its rotation's skills also sits under MPReserve: there fight casts
+// no attack, and the next pull would be all melee.
 func (b *Brain) ruleRest(now time.Time) (Action, bool) {
 	s, p := &b.world.Self, b.build().Thresholds
 	if s.InCombat {
@@ -768,7 +791,7 @@ func (b *Brain) ruleRest(now time.Time) (Action, bool) {
 	if b.resting {
 		if below(s.HP, s.MaxHP, p.StandHP) || below(s.MP, s.MaxMP, max(p.StandMP, sitMP)) {
 			if !s.Sitting && !s.Moving(now) {
-				return b.toggle(now), true
+				return b.sitDown(now), true
 			}
 			return Action{}, true
 		}
@@ -785,7 +808,7 @@ func (b *Brain) ruleRest(now time.Time) (Action, bool) {
 	if s.Sitting || s.Moving(now) {
 		return Action{}, true
 	}
-	return b.toggle(now), true
+	return b.sitDown(now), true
 }
 
 // ruleGoal is rule 9: the persona's goal.

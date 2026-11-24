@@ -48,7 +48,7 @@ func newClassBrain(t *testing.T, class, level int32) *Brain {
 	p.IdleChance = 0
 	b, _ := newTestBrain(t, p)
 	b.world.Self.ClassID, b.world.Self.Level = class, level
-	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{classMaster: {{X: 5000}}}}
+	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{classMaster: {{X: 5000}}}, trainers: testTrainers}
 	return walkOn(t, b)
 }
 
@@ -254,7 +254,8 @@ func TestTransferTier(t *testing.T) {
 
 // TestBuildTables checks every build step goes from a class to one of the
 // next tier, every starting class has a first step, and every mystic class
-// of the support build learns the persona's skills at a trainer.
+// of the support build learns the persona's skills (its trainers come from
+// the datapack: TestTrainersShipped).
 func TestBuildTables(t *testing.T) {
 	support := DefaultPersona()
 	for _, c := range StartingClasses() {
@@ -267,8 +268,8 @@ func TestBuildTables(t *testing.T) {
 			t.Errorf("first profession %d builds %d, want a second profession", first, second)
 		}
 		for _, cl := range []int32{c.ID, first, second} {
-			if k := compileFor(support, cl, 40).Kit; c.Mystic && (len(k.Skills) == 0 || len(k.Trainers) == 0) {
-				t.Errorf("mystic class %d: learn %v trainers %v, want both", cl, k.Skills, k.Trainers)
+			if k := compileFor(support, cl, 40).Kit; c.Mystic && len(k.Skills) == 0 {
+				t.Errorf("mystic class %d: learns nothing", cl)
 			}
 		}
 	}

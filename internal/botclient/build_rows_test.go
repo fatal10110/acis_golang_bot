@@ -33,10 +33,11 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 }
 
 // checkRow checks a row against the class trees and skill templates: every
-// skill is in the class's merged tree by the row's end, every step starts at
-// max(row start, the skill's first merged minLvl) (its "@N"), every weapon
-// gate fits the skill's weaponsAllowed at each level the row reaches and a
-// skill with weaponsAllowed has one, every charge gate equals the skill's
+// skill is in the class's merged tree by the row's end, every step and
+// toggle starts at max(row start, the skill's first merged minLvl) (its
+// "@N"), every bracket gate equals the skill's weaponsAllowed and every
+// branch gate (Step.Branch) fits it at each level the row reaches, a skill
+// with weaponsAllowed has a gate, every charge gate equals the skill's
 // charge condition, and the next profession is a direct child of the
 // class.
 func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapack.SkillRef]datapack.Skill) []string {
@@ -54,13 +55,21 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 		}
 		return lvl, true
 	}
-	for _, st := range r.kit.Rotation {
-		lvl, ok := known(st.Skill)
-		if !ok {
-			continue
+	starts := func(skill, from int32) bool {
+		lvl, ok := known(skill)
+		if ok {
+			if want, got := max(r.start, lvl), max(r.start, from); got != want {
+				fail("skill %d starts at %d, want @%d", skill, got, want)
+			}
 		}
-		if want, got := max(r.start, lvl), max(r.start, st.From); got != want {
-			fail("skill %d starts at %d, want @%d", st.Skill, got, want)
+		return ok
+	}
+	for _, tg := range r.kit.Toggles {
+		starts(tg.Skill, tg.From)
+	}
+	for _, st := range r.kit.Rotation {
+		if !starts(st.Skill, st.From) {
+			continue
 		}
 		for _, g := range c.Skills {
 			if g.ID != st.Skill || int32(g.MinLevel) > r.end {
@@ -74,6 +83,9 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 				if len(sk.WeaponsAllowed) > 0 && !slices.Contains(sk.WeaponsAllowed, k) {
 					fail("skill %d level %d allows %v, the step's gate has %s", g.ID, g.Level, sk.WeaponsAllowed, k)
 				}
+			}
+			if len(st.Weapons) > 0 && !st.Branch && !slices.Equal(slices.Sorted(slices.Values(st.Weapons)), slices.Sorted(slices.Values(sk.WeaponsAllowed))) {
+				fail("skill %d level %d allows %v, the step's bracket gate is %v", g.ID, g.Level, sk.WeaponsAllowed, st.Weapons)
 			}
 			wantCharges, wantToMax := 0, sk.Charges.Not
 			if !sk.Charges.Not {
@@ -93,8 +105,10 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 	for _, bf := range r.kit.Buffs {
 		known(bf.Skill)
 	}
-	if r.kit.Flee != 0 {
-		known(r.kit.Flee)
+	for _, id := range []int32{r.kit.Flee, r.kit.Relax} {
+		if id != 0 {
+			known(id)
+		}
 	}
 	if r.next != 0 && classes[r.next].Parent != r.class {
 		fail("profession %d is not a direct child of class %d", r.next, r.class)
@@ -103,9 +117,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 }
 
 // shippedRows are the rows of every base class (levels 1-19) and first
-// profession (20-39) in classes, for every role. A line without a kit of its
-// own plays supportKit, which is no row of its: only its professions are
-// checked until its rows land (S6 #325).
+// profession (20-39) in classes, for every role.
 func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 	ids := make([]int32, 0, len(classes))
 	for id := range classes {
@@ -122,12 +134,8 @@ func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 			}
 			start, end = 20, 39
 		}
-		base, _ := datapack.BaseClass(id)
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
 			bd := CompileBuild(c.Race, id, end, role)
-			if _, ok := lineKits[base]; !ok {
-				bd.Kit.Rotation, bd.Kit.Heals, bd.Kit.Buffs = nil, nil, nil
-			}
 			rows = append(rows, behaviorRow{
 				name: fmt.Sprintf("class %d %v", id, role), class: id, start: start, end: end,
 				kit: bd.Kit, next: bd.Race.Professions[id],
@@ -137,7 +145,8 @@ func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 	return rows
 }
 
-// TestBehaviorRowsShipped checks the build's rows against the shipped
+// TestBehaviorRowsShipped checks the build's rows, and that every class
+// that learns a skill has a trainer (indexTrainers), against the shipped
 // datapack when BOT_DATAPACK_XML names its data/xml directory, and skips
 // otherwise (docs/strategy.md, "Testing").
 func TestBehaviorRowsShipped(t *testing.T) {
@@ -153,6 +162,11 @@ func TestBehaviorRowsShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	npcs, err := datapack.LoadNPCs(filepath.Join(dir, "npcs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	trainers := indexTrainers(npcs)
 	rows := shippedRows(classes)
 	if len(rows) != 3*(9+18) {
 		t.Errorf("%d rows, want every role of the 9 base classes and 18 first professions", len(rows))
@@ -161,13 +175,17 @@ func TestBehaviorRowsShipped(t *testing.T) {
 		for _, e := range checkRow(r, classes, skills) {
 			t.Error(e)
 		}
+		if len(r.kit.Skills) > 0 && len(trainers[r.class]) == 0 {
+			t.Errorf("%s learns %v at no trainer", r.name, r.kit.Skills)
+		}
 	}
 }
 
 // TestBehaviorRowsCheck checks checkRow on a fixture tree: a right row
-// passes; a wrong weapon gate, a missing one, a wrong level, a skill out of
-// the tree, a wrong charge gate and a profession that is not a direct child
-// each fail.
+// passes, a branch gate inside weaponsAllowed too; a wrong weapon gate, a
+// missing one, a bracket gate narrower than weaponsAllowed, a wrong level of
+// a step or a toggle, a skill out of the tree (a heal's, Relax), a wrong
+// charge gate and a profession that is not a direct child each fail.
 func TestBehaviorRowsCheck(t *testing.T) {
 	const sword, plain, charged = int32(100), int32(101), int32(102)
 	classes := map[int32]datapack.Class{
@@ -194,8 +212,13 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		row  behaviorRow
 		fail bool
 	}{
-		{"right", row(11, Step{Skill: sword, Weapons: []string{"SWORD"}}, Step{Skill: plain, From: 7}, Step{Skill: charged, From: 5, Charges: 2}), false},
+		{"right", row(11, Step{Skill: sword, Weapons: []string{"BLUNT", "SWORD"}}, Step{Skill: plain, From: 7}, Step{Skill: charged, From: 5, Charges: 2}), false},
+		{"branch gate inside", row(11, Step{Skill: sword, Weapons: []string{"SWORD"}, Branch: true}), false},
+		{"bracket gate narrower", row(11, Step{Skill: sword, Weapons: []string{"SWORD"}}), true},
 		{"wrong weapon gate", row(11, Step{Skill: sword, Weapons: []string{"BOW"}}), true},
+		{"toggle level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: plain, From: 7}}}}, false},
+		{"wrong toggle level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: plain}}}}, true},
+		{"relax not in the tree", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Relax: 999}}, true},
 		{"no weapon gate", row(11, Step{Skill: sword}), true},
 		{"no level", row(11, Step{Skill: plain}), true},
 		{"wrong level", row(11, Step{Skill: plain, From: 9}), true},

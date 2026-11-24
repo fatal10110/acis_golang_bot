@@ -84,8 +84,14 @@ type SelfState struct {
 	// (World.applyDeathPenalty).
 	DeathPenalty      int32
 	deathPenaltyKnown bool
-	PvPFlag           uint8
-	Karma             int32
+	// Charges are the force charges of the latest EtcStatusUpdate: the
+	// server sends the bot's own on every change (event.ChargesChanged,
+	// network/live_player_events.go), and another player's only when its
+	// Charm of Courage starts or ends, which the bot's next change of its
+	// own corrects.
+	Charges int32
+	PvPFlag uint8
+	Karma   int32
 	// StoreType is the private store mode, 0 for none.
 	StoreType                        uint8
 	Sitting, InCombat, Dead, Running bool
@@ -737,6 +743,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 			o.Dead = false
 		}
 	case EtcStatusUpdate:
+		w.Self.Charges = e.Charges
 		w.applyDeathPenalty(e)
 	case MyTargetSelected:
 		w.Target = e.ObjectID

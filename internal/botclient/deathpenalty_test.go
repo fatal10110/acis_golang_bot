@@ -17,15 +17,16 @@ const (
 )
 
 // TestDecodeEtcStatusUpdate pins the decoder to the server writer
-// (serverpackets/etcstatusupdate.go): seven int32s, the whole frame
-// consumed, a frame one byte short or long refused.
+// (serverpackets/etcstatusupdate.go): seven int32s, the force charges first
+// and the death penalty last, the whole frame consumed, a frame one byte
+// short or long refused.
 func TestDecodeEtcStatusUpdate(t *testing.T) {
-	raw := packet(opGameEtcStatusUpdate, 0, 2, 1, 0, 1, 0, 3)
+	raw := packet(opGameEtcStatusUpdate, 2, 2, 1, 0, 1, 0, 3)
 	ev, ok, err := decodeEvent(raw)
 	if err != nil || !ok {
 		t.Fatalf("decodeEvent = %v, %v", ok, err)
 	}
-	if want := (EtcStatusUpdate{DeathPenalty: 3}); !reflect.DeepEqual(ev, want) {
+	if want := (EtcStatusUpdate{Charges: 2, DeathPenalty: 3}); !reflect.DeepEqual(ev, want) {
 		t.Fatalf("decoded %+v, want %+v", ev, want)
 	}
 	if _, _, err := decodeEvent(raw[:len(raw)-1]); err == nil {

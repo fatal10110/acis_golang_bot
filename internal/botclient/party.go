@@ -216,10 +216,12 @@ type PartyMate struct {
 	// PosAt is zero until the first report.
 	Pos   Point
 	PosAt time.Time
-	// Buffs are its effects as its last PartySpelled listed them; nil
-	// until one arrives, which the server sends only for a member who
-	// ever held an effect.
-	Buffs Buffs
+	// Buffs are its effects as its last PartySpelled listed them, and
+	// BuffLevels the skill level of each, by skill id; nil until one
+	// arrives, which the server sends only for a member who ever held an
+	// effect.
+	Buffs      Buffs
+	BuffLevels map[int32]int32
 }
 
 // applyParty updates the prompt and the party model with a party event.
@@ -236,7 +238,7 @@ func (w *World) applyParty(ev Event, now time.Time) {
 			mate := &PartyMate{PartyMember: m}
 			if o := old[m.ObjectID]; o != nil {
 				// A leader change resends the window, not the effects.
-				mate.Buffs = o.Buffs
+				mate.Buffs, mate.BuffLevels = o.Buffs, o.BuffLevels
 			}
 			p.Members[m.ObjectID] = mate
 		}

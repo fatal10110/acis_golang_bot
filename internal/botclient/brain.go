@@ -154,6 +154,13 @@ type Brain struct {
 	// is its skill.
 	castAt    time.Time
 	castSkill int32
+	// opened is the last target an attack of the bot went out on: a melee
+	// click or an attack step's cast (Action.opens). An Opener step casts
+	// only on another (stepState.fresh).
+	opened int32
+	// skillToggledAt is when a cast of each toggle skill last went out
+	// (toggleSettling).
+	skillToggledAt map[int32]time.Time
 	// progressAt is the last sign an attack is getting somewhere: an
 	// attempt sent, a swing or cast of the bot's own, a move toward the
 	// target. Engaged and still past stuckAfter, the bot side steps.
@@ -784,10 +791,19 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.metrics.Sent()
 	switch a.kind {
 	case actAttack:
-		b.engaged = a.object
+		b.engaged, b.opened = a.object, a.object
 		b.attempt(a.object, now)
 	case actCast:
 		b.castAt, b.castSkill = now, a.skill
+		if a.opens {
+			b.opened = a.object
+		}
+		if b.isToggle(a.skill) {
+			if b.skillToggledAt == nil {
+				b.skillToggledAt = make(map[int32]time.Time)
+			}
+			b.skillToggledAt[a.skill] = now
+		}
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
 		b.buffSent(a, now)
