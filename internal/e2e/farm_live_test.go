@@ -38,6 +38,10 @@ func TestLiveFarmFight(t *testing.T) {
 		// adena, potions and shots is junk, dropped at any load.
 		p.Loot.Junk = junkBut(slices.Concat([]int32{adena, soulshotNG}, p.Potions)...)
 		p.Loot.DropAbove = 1
+		// The shots the GM gives every run pile up (4 each): the pinned
+		// character carries over the default pickup cap of 65 %, and the
+		// scenario checks the pickup, not the cap.
+		p.Loot.StopAbove = 0
 	})
 	waitFor(t, ctx, "the farmer at its spot", func() bool { return f.bot.Status().Rule == "farm" })
 	t.Logf("%s farms at %v", f.name, f.bot.Status().Position)

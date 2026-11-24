@@ -137,6 +137,10 @@ func TestLiveNavPickUpObstacle(t *testing.T) {
 		p.Spots.Leash = 200
 		p.Loot.Junk = junkBut(slices.Concat([]int32{adena, soulshotNG}, p.Potions)...)
 		p.Loot.DropAbove = 1
+		// The shots the GM gives every run pile up (4 each): the pinned
+		// character carries over the default pickup cap of 65 %, and the
+		// scenario checks the pickup, not the cap.
+		p.Loot.StopAbove = 0
 	})
 	recallBot(t, ctx, tg, gm, f.name)
 	botLanded(t, ctx, gm, f.bot, gm.Pos())
