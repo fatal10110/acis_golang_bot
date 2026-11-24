@@ -75,14 +75,10 @@ func (r *Refusal) Error() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "server refused packet 0x%02x (target %d) with %s %s after it",
 		r.Packet.Op, r.Packet.Target, eventText(r.Answer.Event), r.Answer.At.Sub(r.Packet.At))
-	b.WriteString("; last sent:")
-	for _, s := range r.Sent {
-		fmt.Fprintf(&b, " 0x%02x(%d)@%s", s.Op, s.Target, s.At.Format("15:04:05.000"))
-	}
-	b.WriteString("; last read:")
-	for _, s := range r.Seen {
-		fmt.Fprintf(&b, " %s@%s", eventText(s.Event), s.At.Format("15:04:05.000"))
-	}
+	b.WriteString("; ")
+	writeSent(&b, r.Sent)
+	b.WriteString("; ")
+	writeSeen(&b, r.Seen)
 	return b.String()
 }
 

@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"context"
 	"slices"
 	"testing"
 	"time"
@@ -107,9 +106,7 @@ func TestLiveSpotSpread(t *testing.T) {
 		}
 	}
 	leash := int64(p.Leash) * int64(p.Leash)
-	walk, cancel := context.WithTimeout(ctx, 15*time.Minute)
-	defer cancel()
-	waitFor(t, walk, f.name+" at a spot past the full ones", func() bool {
+	waitForBy(t, ctx, f.name+" at a spot past the full ones", time.Now().Add(15*time.Minute), func() bool {
 		st := f.bot.Status()
 		if st.Spot == "" {
 			return false

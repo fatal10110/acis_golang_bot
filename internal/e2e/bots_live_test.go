@@ -203,22 +203,27 @@ func leaderIs(b *botclient.Bot, leader string) func() bool {
 	return func() bool { return strings.EqualFold(b.Status().Leader, leader) }
 }
 
-// watchUntil reads c, handing fn (when set) every event, until cond holds,
-// or fails the test once ctx ends. It is waitFor for a scenario whose
-// client must keep reading meanwhile.
+// watchUntil is watchUntilBy with the default step bound.
 func watchUntil(t *testing.T, ctx context.Context, c *Client, what string, cond func() bool, fn func(botclient.Event)) {
 	t.Helper()
-	if fn == nil {
-		fn = func(botclient.Event) {}
-	}
-	for !cond() {
-		if ctx.Err() != nil {
-			t.Fatalf("waiting for %s: %v", what, ctx.Err())
-		}
-		if err := c.Watch(ctx, 500*time.Millisecond, fn); err != nil {
-			t.Fatalf("waiting for %s: %v", what, err)
-		}
-	}
+	watchUntilBy(t, ctx, c, what, time.Now().Add(stepBound), cond, fn)
+}
+
+// watchUntilBy reads c, handing fn (when set) every event, until cond
+// holds, or fails the test, with the last events c read, once the step is
+// overdue at due or ctx ends. It is waitForBy for a scenario whose client
+// must keep reading meanwhile.
+func watchUntilBy(t *testing.T, ctx context.Context, c *Client, what string, due time.Time, cond func() bool, fn func(botclient.Event)) {
+	t.Helper()
+	tail := eventTail{clock: botclient.SystemClock{}}
+	runStep(t, ctx, what, due, func(ctx context.Context) error {
+		return c.Watch(ctx, 500*time.Millisecond, func(ev botclient.Event) {
+			tail.note(ev)
+			if fn != nil {
+				fn(ev)
+			}
+		})
+	}, pending(cond), tail.String)
 }
 
 // settleFor is how long a following bot's position stays put before it

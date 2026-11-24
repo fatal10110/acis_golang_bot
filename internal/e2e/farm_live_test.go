@@ -86,7 +86,9 @@ func TestLiveFarmFight(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 	alive := time.Now()
 
-	until(t, ctx, "the farm fight", func() string {
+	// The step's bound: run 8 passed after 19m50s (a kill with a non-herb
+	// drop is rare), so the fight alone may take most of the scenario.
+	untilBy(t, ctx, "the farm fight", time.Now().Add(25*time.Minute), func() string {
 		if time.Since(alive) > gmKeepAlive {
 			gmTeleport(t, ctx, gm, townTI)
 			alive = time.Now()

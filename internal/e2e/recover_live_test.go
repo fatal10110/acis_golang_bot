@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -78,7 +79,12 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 		t.Logf("%s restarted %v after its death", name, waited)
 	}
 	// The restart teleports the bot to the village (#131).
-	_, tp, err := f.watch.Await(ctx, killed, func(ev botclient.Event) bool {
+	// The server teleports the bot right after the restart's Revive
+	// (network/restartpoint.go restartOnceLanded), so the teleport is
+	// overdue after EntryTimeout (#366).
+	teleported, cancel := context.WithTimeout(ctx, EntryTimeout)
+	defer cancel()
+	_, tp, err := f.watch.Await(teleported, killed, func(ev botclient.Event) bool {
 		e, ok := ev.(botclient.TeleportToLocation)
 		return ok && e.ObjectID == f.id
 	})

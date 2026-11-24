@@ -167,6 +167,9 @@ func TestLiveCrystallize(t *testing.T) {
 
 	var before, after czStock
 	crystallized, sent := false, 0
+	// The step's bound: the crystallization and the deposit after it
+	// (docs/e2e-live.md, "Step deadlines").
+	overdue := time.After(stepBound)
 	for done := false; !done; {
 		select {
 		case <-tap.sent:
@@ -191,6 +194,8 @@ func TestLiveCrystallize(t *testing.T) {
 					after, done = n, true
 				}
 			}
+		case <-overdue:
+			t.Fatalf("waiting for the soulshots in the clan warehouse (crystallized %v): overdue after %v; crafter %+v", crystallized, stepBound, b.Status().Crafter)
 		case <-ctx.Done():
 			t.Fatalf("waiting for the soulshots in the clan warehouse (crystallized %v): %v; crafter %+v", crystallized, ctx.Err(), b.Status().Crafter)
 		}

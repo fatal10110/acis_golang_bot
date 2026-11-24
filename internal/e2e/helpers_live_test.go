@@ -134,17 +134,17 @@ func charInfoOf(id int32) func(botclient.Event) bool {
 	}
 }
 
-// waitFor polls cond every half second until it holds, or fails the test
-// once ctx ends.
+// waitFor is waitForBy with the default step bound.
 func waitFor(t *testing.T, ctx context.Context, what string, cond func() bool) {
+	t.Helper()
+	waitForBy(t, ctx, what, time.Now().Add(stepBound), cond)
+}
+
+// waitForBy polls cond every half second until it holds, or fails the test
+// once the step is overdue at due or ctx ends.
+func waitForBy(t *testing.T, ctx context.Context, what string, due time.Time, cond func() bool) {
 	t.Helper()
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
-	for !cond() {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("waiting for %s: %v", what, ctx.Err())
-		case <-tick.C:
-		}
-	}
+	runStep(t, ctx, what, due, tickPoll(tick.C), pending(cond), nil)
 }

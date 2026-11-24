@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -144,7 +145,11 @@ func TestLiveNewbieGuideBuffs(t *testing.T) {
 	// (newbiehelper.go SupportMagic: CallSkill(p, p, buff)), so the caster
 	// is the bot; at level 8 a fighter gets Wind Walk alone
 	// (newbieBuffs.xml).
-	_, seen, err := f.watch.Await(ctx, 0, func(ev botclient.Event) bool {
+	// The walk to the guide and the talk take a bot well under stepBound
+	// (#366: a step fails once overdue, not at the scenario's end).
+	buffed, cancel := context.WithTimeout(ctx, stepBound)
+	defer cancel()
+	_, seen, err := f.watch.Await(buffed, 0, func(ev botclient.Event) bool {
 		m, ok := ev.(botclient.MagicSkillUse)
 		return ok && m.TargetID == f.id && m.SkillID == windWalk
 	})

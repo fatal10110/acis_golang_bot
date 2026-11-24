@@ -127,9 +127,7 @@ func TestLiveNavDoor(t *testing.T) {
 	}
 	reach := func(what string, there func(botclient.Point) bool, within time.Duration) {
 		t.Helper()
-		wctx, stop := context.WithTimeout(ctx, within)
-		defer stop()
-		watchUntil(t, wctx, gm.Client, what, func() bool {
+		watchUntilBy(t, ctx, gm.Client, what, time.Now().Add(within), func() bool {
 			walkSeen()
 			return there(b.Status().Position)
 		}, nil)

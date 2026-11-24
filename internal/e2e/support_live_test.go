@@ -37,6 +37,29 @@ const vukuOrc int32 = 20009
 // the leader only selected: past the 1.5 s an assist would take.
 const bareSelection = 4 * time.Second
 
+// The scenario's step bounds (docs/e2e-live.md, "Step deadlines"). A
+// passing run takes about 324 s, of which at least four minutes are the
+// wait for the renewal after the leader's first Might: the setup, the
+// bot's own buffs (cast 2 s and 7 s after its heal, #362) and the leader's
+// took under 90 s together. A bot that never buffs the leader then fails
+// at leaderBuffBound, not at the scenario's deadline (#366: 720 s).
+const (
+	// setupBound bounds a GM command's effect on the bot: a round trip
+	// and the bot's next UserInfo.
+	setupBound = time.Minute
+	// selfBuffBound bounds the bot's own Might and Shield from its heal.
+	selfBuffBound = 2 * time.Minute
+	// leaderBuffBound bounds its Might and Shield on the leader from the
+	// invitation: the join, then two casts the bot's own were 5 s apart.
+	leaderBuffBound = 2 * time.Minute
+	// fightBound bounds each fight phase: the bot done casting, its
+	// assist, and the orc taking the leader under 60 % HP and the heal.
+	fightBound = 2 * time.Minute
+	// renewalGrace is how long past its due time (buffTime less
+	// supportRebuff after the first Might) the renewal is overdue.
+	renewalGrace = time.Minute
+)
+
 // castQuiet is how long the bot has cast nothing before the leader swings,
 // so no cast in flight delays the assist being timed.
 const castQuiet = 3 * time.Second
@@ -245,13 +268,13 @@ func TestLiveSupport(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	watchUntil(t, ctx, gm.Client, "the bot at level 15", func() bool { return b.Status().Level >= 15 }, seen.note)
+	watchUntilBy(t, ctx, gm.Client, "the bot at level 15", time.Now().Add(setupBound), func() bool { return b.Status().Level >= 15 }, seen.note)
 	// Healed only once at level 15, so to a full bar of the level 15 MP:
 	// with the MP of its old level the bot sits out its buffs resting.
 	if err := gm.Command(ctx, "heal "+name); err != nil {
 		t.Fatal(err)
 	}
-	watchUntil(t, ctx, gm.Client, "Might and Shield on the bot itself", func() bool {
+	watchUntilBy(t, ctx, gm.Client, "Might and Shield on the bot itself", time.Now().Add(selfBuffBound), func() bool {
 		_, might := seen.first(botID, skill(skillMight, botID))
 		_, shield := seen.first(botID, skill(skillShield, botID))
 		return might && shield
@@ -309,7 +332,7 @@ func TestLiveSupport(t *testing.T) {
 		t.Fatalf("%s answered %d, want 1", name, r)
 	}
 	buffs := []func(botclient.Event) bool{skill(skillMight, self), skill(skillShield, self), skill(skillMight, botID), skill(skillShield, botID)}
-	watchUntil(t, ctx, leader, "Might and Shield on the leader and the bot", func() bool {
+	watchUntilBy(t, ctx, leader, "Might and Shield on the leader and the bot", time.Now().Add(leaderBuffBound), func() bool {
 		for _, m := range buffs {
 			if _, ok := seen.first(botID, m); !ok {
 				return false
@@ -345,14 +368,14 @@ func TestLiveSupport(t *testing.T) {
 		t.Fatal(err)
 	}
 	quiet := time.Now().Add(bareSelection)
-	watchUntil(t, ctx, leader, "the bare selection window", func() bool { return time.Now().After(quiet) }, track)
+	watchUntilBy(t, ctx, leader, "the bare selection window", quiet.Add(setupBound), func() bool { return time.Now().After(quiet) }, track)
 	if s, ok := seen.first(botID, on(mob)); ok {
 		t.Fatalf("%s went for the orc on the leader's bare selection: %+v", name, s.ev)
 	}
 
 	// The leader attacks once the bot has cast nothing for castQuiet: the
 	// bot follows 0.5 to 1.5 s later.
-	watchUntil(t, ctx, leader, "the bot done casting", func() bool {
+	watchUntilBy(t, ctx, leader, "the bot done casting", time.Now().Add(fightBound), func() bool {
 		return time.Since(seen.last(botID, anyCast)) >= castQuiet
 	}, track)
 	if left := time.Until(might.at.Add(buffTime - supportRebuff)); left < time.Minute {
@@ -363,7 +386,7 @@ func TestLiveSupport(t *testing.T) {
 	}
 	var attackAt time.Time
 	assisted := func() time.Time { return firstAfter(seen.all(botID, on(mob)), attackAt) }
-	watchUntil(t, ctx, leader, "the bot assisting", func() bool {
+	watchUntilBy(t, ctx, leader, "the bot assisting", time.Now().Add(fightBound), func() bool {
 		if attackAt.IsZero() {
 			if a, ok := seen.first(self, hits(mob)); ok {
 				attackAt = a.at
@@ -384,7 +407,7 @@ func TestLiveSupport(t *testing.T) {
 	// leader is hurt leaves nothing to hurt it.
 	heal := func(ev botclient.Event) bool { return skill(skillHeal, self)(ev) || skill(skillBattleHeal, self)(ev) }
 	died := func(ev botclient.Event) bool { _, ok := ev.(botclient.Die); return ok }
-	watchUntil(t, ctx, leader, "the leader under 60 % HP and the bot healing it", func() bool {
+	watchUntilBy(t, ctx, leader, "the leader under 60 % HP and the bot healing it", time.Now().Add(fightBound), func() bool {
 		for _, who := range []int32{botID, self, mob} {
 			if at := firstAfter(seen.all(who, died), attackAt); !at.IsZero() && (who != mob || hurtAt.IsZero()) {
 				t.Fatalf("%d died %v after the leader's first swing, before the heal", who, at.Sub(attackAt))
@@ -408,7 +431,7 @@ func TestLiveSupport(t *testing.T) {
 	}
 
 	// Renewal: a second Might on the leader once four minutes of it ran.
-	watchUntil(t, ctx, leader, "Might renewed on the leader", func() bool {
+	watchUntilBy(t, ctx, leader, "Might renewed on the leader", might.at.Add(buffTime-supportRebuff+renewalGrace), func() bool {
 		return len(seen.all(botID, skill(skillMight, self))) >= 2
 	}, track)
 	again := seen.all(botID, skill(skillMight, self))[1]
