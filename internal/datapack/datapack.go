@@ -3,10 +3,11 @@
 // (spawnlist/*.xml), gatekeeper destinations (teleports.xml), merchant
 // buylists (buyLists.xml), weapon, armor and etc item templates
 // (items/*.xml), skill templates (skills/*.xml), craft recipes
-// (recipes.xml), armor sets (armorSets.xml) and water zones
-// (zones/WaterZone.xml). Parse rules follow the server's loaders (acis_golang
-// internal/gameserver/data/xml npc.go, spawnlist.go, item.go, skill.go,
-// economy.go and zone.go), reduced to the fields bots use.
+// (recipes.xml), armor sets (armorSets.xml), water zones
+// (zones/WaterZone.xml) and class templates (classes/*.xml). Parse rules
+// follow the server's loaders (acis_golang internal/gameserver/data/xml
+// npc.go, spawnlist.go, item.go, skill.go, economy.go, zone.go and
+// classtemplate.go), reduced to the fields bots use.
 //
 // Load runs once per process. The returned Datapack is never mutated after
 // Load returns, so any number of goroutines may read it without locking.
@@ -49,13 +50,16 @@ type Datapack struct {
 	Hennas map[int32]Henna
 	// WaterZones are the water zones in file order: where a player swims.
 	WaterZones []WaterZone
+	// Classes maps a class ID to its template, skill tree merged with its
+	// line's.
+	Classes map[int32]Class
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
 // and skills/*.xml file directly under it, its teleports.xml, its
-// buyLists.xml, its recipes.xml, its armorSets.xml, its hennas.xml and its
-// zones/WaterZone.xml. xmlDir is configuration; the bot ships no datapack of its
+// buyLists.xml, its recipes.xml, its armorSets.xml, its hennas.xml, its
+// zones/WaterZone.xml and every classes/*.xml file. xmlDir is configuration; the bot ships no datapack of its
 // own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
@@ -98,10 +102,14 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
+	classes, err := LoadClasses(filepath.Join(xmlDir, "classes"))
+	if err != nil {
+		return nil, err
+	}
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
 		Items: items, EtcItems: etc, Prices: prices, Skills: skills, Recipes: recipes,
-		ArmorSets: armorSets, Hennas: hennas, WaterZones: water,
+		ArmorSets: armorSets, Hennas: hennas, WaterZones: water, Classes: classes,
 	}, nil
 }
 

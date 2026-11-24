@@ -179,6 +179,60 @@ func (r *attrReader) floatDefault(key string, def float64) float64 {
 	return f
 }
 
+// float returns the required decimal value at key.
+func (r *attrReader) float(key string) float64 {
+	if r.err != nil {
+		return 0
+	}
+	if _, ok := r.vals[key]; !ok {
+		r.fail(key, errMissing)
+		return 0
+	}
+	return r.floatDefault(key, 0)
+}
+
+// floats returns the required value at key split on ";", each part a
+// decimal, as the server's float64Array reads it (data/xml/attrvalues.go):
+// an empty part fails.
+func (r *attrReader) floats(key string) []float64 {
+	raw := r.str(key)
+	if r.err != nil {
+		return nil
+	}
+	parts := strings.Split(raw, ";")
+	out := make([]float64, len(parts))
+	for i, p := range parts {
+		f, err := strconv.ParseFloat(p, 64)
+		if err != nil {
+			r.fail(key, err)
+			return nil
+		}
+		out[i] = f
+	}
+	return out
+}
+
+// ints returns the required value at key split on ";", each part a
+// base-10 integer, as the server's intArray reads it (data/xml/files.go
+// parseInts): an empty part fails.
+func (r *attrReader) ints(key string) []int32 {
+	raw := r.str(key)
+	if r.err != nil {
+		return nil
+	}
+	parts := strings.Split(raw, ";")
+	out := make([]int32, len(parts))
+	for i, p := range parts {
+		n, err := strconv.ParseInt(p, 10, 32)
+		if err != nil {
+			r.fail(key, err)
+			return nil
+		}
+		out[i] = int32(n)
+	}
+	return out
+}
+
 // duration returns the game duration at key (see parseGameDuration), or 0
 // when it is absent or empty.
 func (r *attrReader) duration(key string) time.Duration {

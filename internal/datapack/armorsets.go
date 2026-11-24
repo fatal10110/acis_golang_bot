@@ -11,7 +11,10 @@ type ArmorSet struct {
 	Name string
 	// Chest keys the set: the server finds a worn set by its chest.
 	Chest, Legs, Head, Gloves, Feet int32
-	// SkillID is the skill a complete set grants.
+	// SkillID is the skill a complete set grants. A set skill has one
+	// level: what the set grants is the stat functions of
+	// Skills[SkillRef{SkillID, 1}].Funcs, as for the shield and enchant
+	// skills below.
 	SkillID int32
 	// Shield is the set's shield and ShieldSkillID the skill a complete set
 	// grants with it worn too; 0 for a set without one.
