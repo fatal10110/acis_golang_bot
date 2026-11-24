@@ -20,19 +20,18 @@ const gearBound = 5 * time.Minute
 // logs in (stripEnd).
 const gearAdena int32 = 30000
 
-// warriorGear is the persona's class table cut to the entry a warrior
-// (class 1) plays by default, the one of every fighter the table does not
-// name: swords, blunts and their two-handed kinds, with a shield. The
-// scenario's character is a human fighter (class 0): the GM changes no
-// class, and the table is a persona default (D6).
+// warriorGear pins the persona's class table to the entry a warrior
+// (class 1) plays by default, the build's: swords, blunts and their
+// two-handed kinds, with a shield. The scenario's character is a human
+// fighter (class 0): the GM changes no class, and the table is a persona
+// default (D6). The default persona holds no table of its own since the
+// builds (S4, #323): the warrior's build gives the entry.
 func warriorGear(p *botclient.Persona) {
-	for _, c := range p.Gear.Classes {
-		if len(c.Classes) == 0 {
-			p.Gear.Classes = []botclient.GearClass{c}
-			return
-		}
+	g := botclient.CompileBuild(0, 1, 20, botclient.RoleDamage).Kit.Gear
+	if len(g.Weapons) == 0 {
+		panic("the warrior's build wields nothing")
 	}
-	panic("the default class table has no catch-all entry")
+	p.Gear.Classes = []botclient.GearClass{g}
 }
 
 // TestLiveGearWear runs a fighter that wears the warrior's gear in the
