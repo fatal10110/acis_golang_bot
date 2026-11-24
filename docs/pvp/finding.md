@@ -83,8 +83,8 @@ position.
   1940 in combat stance (`AutoAttackStart` without `AutoAttackStop`) → no hold, accepted once it
   ends; a whispered `duel` from a player in a town → no challenge; a clan mate's or party member's
   one-on-one → accepted; a bot-marked challenger → declined at once.
-- `TestPvPDuelFight` (X4; the area, pole and duel ground cases in X4b): in the countdown (1945 each
-  second) no `Action`, `AttackRequest` or cast on anyone; the opponent's countdown `Attack` or Wind
+- `TestPvPDuelFight` (X4; the area, pole and duel ground cases in X4b): in the countdown (1945 at 3, 2
+  and 1) no `Action`, `AttackRequest` or cast on anyone; the opponent's countdown `Attack` or Wind
   Strike → not answered, then 1952 and `ExDuelEnd` → the unflagged player not fought; `ExDuelStart`
   alone → no attack; the first `ExDuelUpdateUserInfo` plus the delay → plain `Action` and casts,
   never forced; its `MagicSkillUse` at the bot enters the attackers table; a clan mate or party

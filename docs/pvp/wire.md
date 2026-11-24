@@ -55,7 +55,7 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   gap to the bot's own start step, queued by the same loop (`network/duel.go:364-395`, `:396-399`; `duel/state.go:82-86`).
   Only while fighting is the opponent attackable with a plain `Action`.
 - **Arena state**: the bot's position in an arena polygon (X2; 283 and 284 come from sieges too).
-  Another player not in its party in the same arena is attackable without force. The server reads positions
+  Another player in the same arena is attackable without force by [rule 3](targets.md#mayfight). The server reads positions
   live at every attack and at death, so the bot keeps its own and each arena opponent's edge
   distance (from `CharInfo` and moves).
 
@@ -67,9 +67,8 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
 - **Hostile casts.** `hostileCaster` (`combat_world.go:115-120`; today only from flagged or karma
   players, and any `MagicSkillUse` at the bot, beneficial ones included, `:107-113`) becomes: an
   `offensive` skill whose `MagicSkillUse` names the bot, from any player, no test of the caster or
-  `MayFight`. The server lets it reach the bot only from a player who may attack it (without force,
-  `character_attack.go:937-948`, `character_social.go:200-213`, or by a ctrl-held damage skill,
-  `OffensiveCastAllowed`, `:225-266`), so it is an attack like every `Attack` hit (`applyAttack`,
+  `MayFight`. The server lets it reach the bot only from a player who may attack it
+  ([attack without force, forcing](server-karma.md)), so it is an attack like every `Attack` hit (`applyAttack`,
   `combat_world.go:74-77`). `MayFight` then decides: a karma bot flees a clean mystic's nukes
   ([karma](karma.md#with-karma)), a flagged bot's nukes are [rule 5](targets.md#mayfight)'s first
   hit, a countdown cast goes unanswered. Heals and buffs are no attack; summons' casts count the
@@ -82,12 +81,10 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   counts as off and the duel opponent is never supported ([duel support](guards.md#duel-support));
   in a PvP zone nothing flags the bot, so it passes everyone.
 - **Summons and pets.** A summon (`KindNPC`, `NPCInfo` with `Summon`, `world.go:888-900`) is taken
-  by `o.Attackable` (`combat_rules.go:60-68`, `combat_world.go:115-120`), a snapshot of
-  `AttackableWithoutForceBy` (`network/visibility.go:441`; `summon/target_actor.go:151-164`) that
-  `RelationChanged` never refreshes (`world.go:766-771`, `if o.Kind == KindPlayer`): after its
-  owner's flag ends it still reads attackable (being hit never refreshes the owner's flag,
-  `character_pvpflag.go:122-136`), and its death then gives karma
-  (`character_karma.go:84-87`, `:44-56`). `MayFight` applies
+  by `o.Attackable` (`combat_rules.go:60-68`, `combat_world.go:115-120`), a snapshot from its
+  `NPCInfo` that `RelationChanged` never refreshes (`world.go:766-771`, `if o.Kind == KindPlayer`):
+  after its owner's flag ends it still reads attackable, and its death then gives karma
+  ([area skills](server-casts.md)). `MayFight` applies
   [Summons and pets](targets.md#summons-and-pets) on its own `PvPFlag` and `Karma` instead. Farming
   already skips summons (`farm.go:79`, `monster`).
 
@@ -106,8 +103,7 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   fields (radii included) over the recorded fixtures, consuming exactly `len(payload)`.
 - **Reaction (X4):** an opponent's Heal on its ally, the first `ExDuelUpdateUserInfo`, an arena
   opponent's move → a decision 200-600 ms later, a pending 300-1200 ms one moved earlier; a stranger's
-  move → none before the tick; the arena opponent under the edge margin with a damage cast in
-  flight → `RequestTargetCancel` at the next frame.
+  move → none before the tick.
 - **Datapack (X2):** the zone reader on fixtures for each zone kind, a position in and out: an
   `NPoly` with `minZ`/`maxZ`; a reversed-corner `Cuboid` (as Rune, `zones/TownZone.xml:445-449`: x
   47150 then 32531, y -44815 then -52045) contains a point between; any other shape fails. Shipped

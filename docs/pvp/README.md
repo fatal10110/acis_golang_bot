@@ -53,25 +53,23 @@ PvP value blended into M10's gear score, a karma policy. No server change.
   tier when the engage estimate passes; visits the nearest arena on a timer. Holds and bounds:
   [finding](finding.md#sources).
 - **D37, items.** One loadout scored by M10's `Value` and `PvPValue` blended by relative gains,
-  50 % each for `pvp` (others 0 %); no set swap; PvP sets and boss jewels worn when owned and
-  within grade, never bought; poison and bleed cures (Antidote, Bandage, and their greater kinds
-  from level 20) bought on M8 trips; CP potions kept, never sold or bought.
-  [model](model.md)
+  50 % each for `pvp` (others 0 %); no set swap; Mithril Heavy (D) bought like any M10 gear,
+  B-and-up PvP sets, PvP weapons and boss jewels only worn; cures bought on M8 trips; CP potions
+  kept, never sold or bought. [model](model.md)
 - **D38, bots vs bots.** Outside an arena a bot never attacks, hunts or challenges a bot and fights
   one back only after its hit or offensive cast; in an arena anyone but its party. No bot duels.
   [targets](targets.md)
 - **D39, death and karma.** Duels to the end, no surrender; arenas to the death under a death cap;
   open world, break off by the row and avoid its killer ([by fight](karma.md#by-fight)). No karma
-  by accident ([guards](guards.md)), at a stated cost: in the three small arenas long steps rarely
-  start against an unrooted karma-free opponent ([arena edge](guards.md#arena-edge)), and in a duel
-  nothing that would cancel it. Opt-in PK mode and life with karma: [karma](karma.md).
+  by accident and, in a duel, nothing that would cancel it ([guards](guards.md), at a cost in the
+  small arenas). Opt-in PK mode and life with karma: [karma](karma.md).
 
 ## Delivery (milestone M13)
 
 Dependencies name M10 issues by number. Every PR also reads [server](server.md) (the bot today,
 pacing for its senders) and the server facts of its topic: [duels](server-duels.md) (X1, X4, X4b,
 X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](server-casts.md)
-(X3, X4b, X6, X6b, X7-X9), [items](server-items.md) (X2, X6b, X10).
+(X1, X3, X4, X4b, X6, X6b, X7-X9), [items](server-items.md) (X2, X6b, X10).
 
 | PR | Scope | Depends on | Reads |
 | --- | --- | --- | --- |
@@ -89,7 +87,7 @@ X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](
 | X10 | PvP gear: mix table, `PvPValue` in gear, set, jewel and dye scores, shipped-row model tests, cures on the supply list, CP potion and cure keep rule (D37). | X3, X6b, X7, X8, S5 (#324), M8 I3 (#170, supply list), I4 (#171, `keeps`) | [model](model.md), [layer](layer.md#tests) (supply-list and junk cases) |
 | X11 | Death and karma: arena return loop, avoid list, PK mode (`MayFight` rule 7), karma state (flee or PK, chaotic restart, karma route, work-off) (D39). | X4, X5, X6b, X7, X8 (`TestPvPPKCap` rows) | [karma](karma.md), [targets](targets.md#hunting), [finding](finding.md) (holds) |
 | X12 | Panel switches, PvP counts, the four counters. | X4, X5, X6, X11, S9 (#331) | [modes](modes.md#panel-and-metrics-x12) |
-| X13 | e2e live scenarios for X5-X11, at most 4 characters each, GM included. | each; M11 for `TestLivePvPHealer` | the e2e cases in each file's Tests |
+| X13 | e2e live scenarios for X4-X11, at most 4 characters each, GM included. | each; M11 for `TestLivePvPHealer` | the e2e cases in each file's Tests |
 | Backlog | Second-profession rows (with #332), party duels (with M11), the gaps below. | X7, X8 | [Risks and gaps](#risks-and-gaps) |
 
 Most urgent: X1-X5 (X4b included) give a bot that takes duels and fights in arenas with its M10
@@ -110,7 +108,7 @@ with no row); **arena deaths** (the 5-death cap and stay limit).
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11); party duels
 (M11); a challenge hold shared by all bots; clan wars, sieges, the Olympiad; buying CP potions;
-fighting summons for their own sake.
+fighting summons for their own sake; command-channel mates in an arena (rule 3).
 
 ## Files
 

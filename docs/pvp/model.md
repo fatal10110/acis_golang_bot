@@ -77,9 +77,8 @@ row's M10 spot margin (tank 1.5, normal 2.0, glass cannon 3.0).
 
 The expected share of won fights over the mix (row `r`, share `s_r`). A **reference opponent**
 plays its row's damage, DOT and control steps under their `Vs` gates against the bot's archetype.
-Every poison step is gated (Curse: Poison `vs H` on HM, `vs C, H` on DM, SO, DW; Poison 129
-`vs C, H` on PK, AS; Venom `vs C, H` on OM), so melee, archer and battle-caster bots are never
-poisoned; bleeds (Bleed 96 on RO, ES, AS daggers; Sting 223 on PK, AS) are ungated.
+Every poison step is gated `vs C, H` (`vs H` on HM; [rows](rows.md)), so melee, archer and
+battle-caster bots are never poisoned; bleeds (Bleed 96, Sting 223) are ungated.
 
 - `TTD_r` = (bot max CP + max HP) / the opponent's damage per second: physical vs P.Def and evasion,
   magic vs M.Def, poison and bleed ticks by land rate vs the bot's CON, `poisonVuln`, `bleedVuln`.
@@ -98,15 +97,15 @@ set swap.
 ## Gear and consumables (X10)
 
 - At 1-39 PvP value means HP, CP, P.Def, M.Def and cures; jewels to C carry only M.Def, so a
-  mystic-heavy mix buys jewels sooner. Mithril Heavy (D) is not expected to beat Brigandine for a
-  heavy row: Brigandine's pieces have 208 P.Def (41 + 103 + 64) to Mithril's 193 (37 + 95 + 61), its
+  mystic-heavy mix buys jewels sooner. Mithril Heavy (D, sold like Brigandine) is a purchase candidate,
+  not expected to beat Brigandine for a heavy row: Brigandine's pieces have 208 P.Def (41 + 103 + 64) to Mithril's 193 (37 + 95 + 61), its
   set P.Def ×1.05 and 153 HP, its shield 20 HP, against Mithril's `poisonVuln` 20 and shield 126 HP
   (`armorSets.xml:5-6`; `items/0000-0099.xml` 47, 58, 59; `items/2400-2499.xml` 2411,
   `items/0300-0399.xml` 352, `items/2300-2399.xml` 2378; `skills/3500-3599.xml:22-30`, `:59-66`,
-  `:492-507`). `poisonVuln` only cuts the gated **poison rows'** DOTs (HM vs H, DM, SO, DW: Curse:
-  Poison; PK, AS: Poison; OM: Venom), so it counts only for a caster or healer in those pieces.
+  `:492-507`). `poisonVuln` only cuts the gated poison steps ([PvP value](#pvp-value)), so it counts
+  only for a caster or healer in those pieces.
 - **PvP damage weapons** (186 C- to S-grade; C 26, B 14, A 102, S 44; for example 4809 Blood
-  Tornado - Haste, `item_skill` 3068-2), Tallum, Nightmare, Majestic and the boss jewels (B and up)
+  Tornado - Haste, `item_skill` 3068-2), the B-and-up [PvP sets](server-items.md) and the boss jewels
   score through the same model, worn when owned and within grade (M8), never bought (boss jewels
   list at 616 000 to 4 940 000 adena); all past the M10 range (C grade is 40).
 - **Consumables.** The `pvp` M8 supply list (`docs/items.md` "The default list") adds `CureStock`

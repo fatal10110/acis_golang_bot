@@ -25,9 +25,9 @@ repository.
 | M8 - Items and loadout | #166 | #167-#182 (`docs/items.md`, PRs I0-I13 with I8b, and the enchant backlog issue) |
 | M9 - Clan crafter | #184 | #185-#194 (`docs/crafting.md`, PRs C1-C10) |
 | M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332) |
-| M11 - Bot parties | to be filed | to be filed (`docs/parties/`, PRs P1a-P8, proposed D25-D29) |
-| M12 - Merchant valuables | to be filed | to be filed (`docs/valuables/`, PRs V1-V9 with V2a-b, V3a-b, V7a-b, proposed D30-D34) |
-| M13 - PvP persona | to be filed | to be filed (`docs/pvp/`, PRs X1-X13, proposed D35-D39) |
+| M11 - Bot parties | to be filed | to be filed (`docs/parties/`, PRs P1a-P8, 13 PRs, proposed D25-D29) |
+| M12 - Merchant valuables | to be filed | to be filed (`docs/valuables/`, PRs V1-V9, 13 PRs, proposed D30-D34) |
+| M13 - PvP persona | to be filed | to be filed (`docs/pvp/`, PRs X1-X13, 15 PRs, proposed D35-D39) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to

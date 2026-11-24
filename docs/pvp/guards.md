@@ -74,7 +74,9 @@ out in a cast's last 200 ms. Under
 ## Area hits and bystanders
 
 An area skill or pole swing also hits everyone else in reach the bot may attack without force:
-anyone flagged (blinking included) or with karma outside its party, clan and ally.
+anyone flagged (blinking included) or with karma outside its party, clan and ally. A pole swing at
+a monster hits no player, summon or pet ([area skills](server-casts.md)), so the pole rules below
+apply only to a swing at a player or summon.
 
 - **Reach**: the skill's radius around its anchor (target for AREA, bot for AURA), or for a pole
   the bot's attack range (spear 80) inside the 120° cone it faces (`attack/controller.go:367-375`);
@@ -146,7 +148,7 @@ refuses it, and a party skill waits while it is a member in the radius.
   opponent at 450 → cancel at once (450 < 124 × (4.0 + 0.5) = 558); shot-less, opponent under its Dryad
   Root (no 139, bit 0x200, 20 s left) → Wind Strike; a `CharInfo` clearing the bit with 2.5 s to
   landing, opponent (124) at 300 (< 372) → cancel; 0.4 s left (300 > 112) → none; the opponent
-  nears the edge in the window → cancel, a move at least 150 inside; back by the margin → attacks;
+  nears the edge in the window → cancel at the next frame, a move at least 150 inside; back by the margin → attacks;
   a karma opponent at the edge → fight goes on; a clan mate or ally in the arena → attack; a party
   member → never; an unflagged player healing or buffing the bot → not in the attackers table,
   casting Wind Strike → in it.
@@ -155,7 +157,7 @@ refuses it, and a party skill waits while it is a member in the radius.
   karma-free player 40 from the bot in the cone → no Wild Sweep, swing or `nextActionAttack` step
   (an ungated test PDAM carrying it not cast): a move, a walk to a stand point with the bystander
   out of the cone, then `Action`; bystanders on both sides → no swing or damage step, War Cry cast,
-  until one leaves; a BIGBLUNT → 255 and 100; the bystander 95 from the bot in the cone → no swing;
+  until one leaves; a BIGBLUNT → 255 and 100; the pole at a monster, the same bystander in the cone → swing; the bystander 95 from the bot in the cone → no swing;
   the bot 40 from its target, the bystander 165 beyond it (205 from the bot) → no Wild Sweep, swing
   allowed; at 175 → allowed; a male Orc Fighter (11) at 169 → no; a female Dwarven Fighter (5) at
   165 → allowed; the bystander gone or with karma → allowed; a summon (radius 9) flag 1, karma 0
