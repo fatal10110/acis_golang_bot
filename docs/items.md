@@ -48,7 +48,7 @@ wrong.
 | Shots | Turns on auto-use for **every** shot template it carries (`shotTemplates`, all grades). Restocks only **no-grade** soulshots (fighters, 100-500) or no-grade spiritshots (mystics, 50-200). | `items.go` `ruleShots`, `shop.go` `defaultShopPolicy` |
 | Potions | Drinks the best of 1539, 1061, 1060 below 20 % HP in combat. Restocks only Lesser Healing Potion (5-20). | `items.go` `drinkPotion`, `rules.go` `ruleCritical` |
 | Arrows | Grade-matched arrows for the worn bow and for the next bow, 200-1000. This is done right. | `arrows.go` |
-| Restocking | Only when a merchant is in sight or its spawn is within `Shop.Reach` (8000), at most every 5 min. A miss pushes the next try 5 min out. The visit goes to a merchant selling a supplies-tier want (arrows for a bow the bot waits to wear, shots, potions) before one selling only gear, then one in sight before a spawn, the nearest first. | `shop.go` `startShop` |
+| Restocking | Only when a merchant is in sight or its spawn is within `Shop.Reach` (8000), at most every 5 min. A miss pushes the next try 5 min out. | `shop.go` `startShop` |
 | Selling | Everything not kept is junk and goes to an NPC merchant. Enchant scrolls of a grade and kind the bot wears are kept (section 10). Merchants sell loot in their store. | `shop.go` `junk`, `store.go` |
 | Enchant | Enchants the worn gear to the safe level in town (section 10). | `enchant.go` |
 | Dyes, class change, crafting, buying from player stores | None. | — |

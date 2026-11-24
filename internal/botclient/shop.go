@@ -1,7 +1,6 @@
 package botclient
 
 import (
-	"cmp"
 	"math"
 	"slices"
 	"strconv"
@@ -497,83 +496,58 @@ func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 	return a, true
 }
 
-// startShop starts a visit when one is due, at the merchant nearest the
-// bot that sells something it wants: one selling a supplies-tier want
-// (arrows for the bow it waits to wear, shots, potions) first, wherever it
-// stands, then one in sight before a merchant spawn within Reach; for a
-// visit only to sell, at any merchant. Supplies first keeps a bot from
-// spending its trips, and the adena past the gear floor, at a gear
-// merchant in sight while what it needs to fight is sold elsewhere. It
-// reports whether it started one.
+// startShop starts a visit when one is due: at the merchant in sight, else
+// at the merchant spawn within Reach, nearest the bot that sells something it wants,
+// or for a visit only to sell, at any merchant. It reports whether it
+// started one.
 func (b *Brain) startShop(now time.Time) bool {
 	sh, p := &b.shop, &b.persona.Shop
 	if b.cfg.Travel == nil || now.Before(sh.nextAt) {
 		return false
 	}
 	junk := len(b.junk())
-	want := b.dueWants(junk > 0 && p.SellAt > 0)
+	want := b.shopWants(junk > 0 && p.SellAt > 0)
 	sellDue := p.SellAt > 0 && junk >= p.SellAt
 	sell := sellDue || (p.SellAt > 0 && len(want) > 0 && junk > 0)
 	if len(want) == 0 && !sell {
 		return false
 	}
 	shops, from := b.cfg.Travel.shops, b.world.Self.Position(now)
-	// lists returns the lists of merchant npcID the visit opens and
-	// whether one sells a supplies-tier want; ok is false for a merchant
-	// the visit has no use for: one selling nothing wanted, unless selling
-	// is due on its own.
-	lists := func(npcID int32) (ids []int32, supplies, ok bool) {
+	// lists returns the lists of merchant npcID the visit opens; ok is
+	// false for a merchant the visit has no use for: one selling nothing
+	// wanted, unless selling is due on its own.
+	lists := func(npcID int32) (ids []int32, ok bool) {
 		if now.Before(sh.shunned[npcID]) {
-			return nil, false, false
+			return nil, false
 		}
 		for _, l := range shops[npcID] {
-			sold := false
-			for _, w := range want {
-				if _, ok := l.sells(w.item); ok {
-					sold = true
-					supplies = supplies || w.tier == tierSupplies
-				}
-			}
-			if sold {
+			if slices.ContainsFunc(want, func(r buyRow) bool { _, ok := l.sells(r.item); return ok }) {
 				ids = append(ids, l.id)
 			}
 		}
-		return ids, supplies, len(ids) > 0 || (sellDue && len(shops[npcID]) > 0)
-	}
-	// rank orders the candidates: supplies first, then in sight, then
-	// nearest.
-	type rank struct {
-		other, spawn bool
-		d            int64
-	}
-	less := func(x, y rank) bool {
-		return cmp.Or(cmpBool(x.other, y.other), cmpBool(x.spawn, y.spawn), cmp.Compare(x.d, y.d)) < 0
+		return ids, len(ids) > 0 || (sellDue && len(shops[npcID]) > 0)
 	}
 	var best shopVisit
-	bestRank := rank{other: true, spawn: true, d: math.MaxInt64}
-	consider := func(v npcVisit, r rank) {
-		if !less(r, bestRank) {
-			return
-		}
-		if ids, supplies, ok := lists(v.npcID); ok {
-			if r.other = !supplies; less(r, bestRank) {
-				best, bestRank = shopVisit{v: v, lists: ids}, r
-			}
-		}
-	}
+	bestDist := int64(math.MaxInt64)
 	for id, o := range b.world.Objects {
 		if o.Kind != KindNPC || o.Dead {
 			continue
 		}
 		at := o.Position(now)
-		consider(npcVisit{npcID: o.NPCID, at: at, obj: id}, rank{d: dist2(from, at)})
+		if d := dist2(from, at); d < bestDist {
+			if ids, ok := lists(o.NPCID); ok {
+				best, bestDist = shopVisit{v: npcVisit{npcID: o.NPCID, at: at, obj: id}, lists: ids}, d
+			}
+		}
 	}
-	if !best.v.active() || bestRank.other {
+	if !best.v.active() {
 		reach := int64(p.Reach) * int64(p.Reach)
 		for npcID := range shops {
 			for _, at := range b.cfg.Travel.spawns[npcID] {
-				if d := dist2(from, at); d <= reach {
-					consider(npcVisit{npcID: npcID, at: at}, rank{spawn: true, d: d})
+				if d := dist2(from, at); d <= reach && d < bestDist {
+					if ids, ok := lists(npcID); ok {
+						best, bestDist = shopVisit{v: npcVisit{npcID: npcID, at: at}, lists: ids}, d
+					}
 				}
 			}
 		}
