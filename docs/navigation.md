@@ -536,7 +536,8 @@ rule. #209 changes no answer: routes, distances and members are byte for byte th
   across one pull's candidates, stops at its first failing cell, and runs before `CanMove` (both
   must pass, so the order changes nothing). The grid is toroidal and fixed at 256×256 cells
   (1 MB) for a segment of any length: the corridor fills in line order and each line cell's
-  verdict is taken six line cells later, so no cell is evicted while it is still needed.
+  verdict is taken `2 × (⌊(Lmax + 3)/16⌋ + 3)` line cells later (eight at the measured `Lmax`;
+  six before #307's layer rule), so no cell is evicted while it is still needed.
 - **Indexes**: the cell search, the abstract search and the exact check index their nodes in an
   open-addressing table cleared in O(1), instead of Go maps.
 - **Water**: boxes are indexed per 2048-unit bucket, not per region tile, and a crossing tests
@@ -617,6 +618,45 @@ changes: the drop off the synthetic bridge deck (`TestWalkerRecovery`) was one e
 the ground beside it and is now two, to the deck's edge on its stacked tops, then down. The pull
 takes the farthest candidate that passes the corridor test before it tries any exact one, and the
 tops now pass the corridor test up to the edge.
+
+**Longer segments** (#307). Most segments were short because the pull gave up early: when the
+corridor test failed it tried exact candidates only within `exactCells` (8) cells, so a quarter of
+all segments were exactly 128 units. Three changes:
+
+- **Walking layer** (Step-chain check, below): the corridor test carries the floor the chain
+  stands on from the segment's start, through cells of several layers, so a corridor may run on
+  the ground under a deck and the stretches the exact check walks shrink to the cells where the
+  layer is in doubt. String-pull candidates and the exact check's stretches use the same rule.
+- **Farther exact candidates** (`pull`): from a waypoint whose corridor segment is shorter than
+  `farShort` (600), or that has none, the pull tries the path cells past `exactCells`, farthest
+  first. A candidate is taken when it passes `CanMove`, its stretches failing the corridor test
+  total at most `farStretch` (16 cells) and the exact check passes over them. A candidate whose
+  line passes within `farMiss` (two cells) of where an earlier candidate's exact check failed
+  is skipped. The work is capped per route at `farWork` (800,000 corridor cells filled plus
+  `CanMove` calls); once it is spent the rest of the route takes the `exactCells` rule. Without
+  the 600 gate, the extra exact checks went to segments already long; without a cap, warm p50
+  rose to 85 ms. The cap's sweep (warm p50, share under 300): 150,000 58.5 ms, 32.4%; 300,000
+  59.3 ms, 29.1%; 500,000 62.5 ms, 26.3%; 800,000 58.5 ms, 24.1%; none 60.5 ms, 22.7% (cold p50
+  92 ms).
+- **Blocked-stop avoid width** (Server answers to its own moves, below).
+
+Measured with `BenchmarkOwnerNav` (same cache and 200 pairs of 40,000 units, both builds back to
+back on the same machine; main 3f62617 before, this change after; the segment lengths are those of
+the 200 warm routes, logged by the benchmark since #307):
+
+| | before | after |
+| --- | --- | --- |
+| route warm p50 / p99 | 61.9 / 663.7 ms | 59.1 / 392.1 ms |
+| route cold p50 / p99 | 89.7 / 777.4 ms | 86.5 / 435.2 ms |
+| cold heap per route p99 / max | 19.4 / 43.8 MB | 19.4 / 43.8 MB |
+| segments | 11,047 | 6,853 (−38%) |
+| segment length p25 / median / p75 | 128 / 181 / 1776 | 316 / 1371 / 2486 |
+| segments under 300 units | 54.8% | 24.1% |
+| routes failed | 8 of 400 | 8 of 400 |
+
+Answers change: the routes are pulled into fewer, longer segments; as many routes fail as before.
+The p99 fell with the walking layer's first build already (warm p99 377 ms with a 150,000 cap and
+no gate): the exact check no longer walks every cell of several layers point by point.
 
 | Measure | Target | Before | After |
 | --- | --- | --- | --- |
@@ -814,11 +854,11 @@ unreachable (with a reason).
   parts: a cheap test that covers almost every segment, and an exact check only where that test
   fails.
   - **Facts it rests on.**
-    - The first step of a move can be any length from about 0, because the global position ticker
-      runs at a fixed phase and the move's clock starts when the request arrives
-      (`task/positionupdates.go:34-35, 80-84`, `creature.go:833-835`, `:408-415`).
-    - Later steps are at most `Lmax` = run speed × `Emax` (`Emax` from N0); the 100 ms run-out
-      steps fall inside that.
+    - Every step, the first included, is at most `Lmax` = run speed × `Emax` (`Emax` from N0); the
+      100 ms run-out steps fall inside that. The server sets the move's `lastUpdate` when the
+      request arrives (`model/actor/move/creature.go:890-891`) and times the first position update
+      from it (`:1360-1362`, `playerPassed`), so the first step spans at most the time to the next
+      tick of the global ticker (#307; this section took it as any length before).
     - Each step re-aims from its rounded point toward the destination (`creature.go:1374-1376`),
       so step points stay within about one unit of the segment's line.
   - **Open-corridor test (cheap, sufficient).** Take every cell the segment's line crosses, plus
@@ -828,61 +868,82 @@ unreachable (with a reason).
     between two of them strays from their own line by at most about 1.5 more (it picks each
     crossing from the line's Y at the cell's last column, truncated to an integer). The segment
     passes when, in all of those cells:
-    1. the cell has exactly one layer (a flat or complex block, or a multilayer cell holding one
-       layer), so `belowCell`, `HeightNearest` and `Height` can only ever answer that floor,
-       whatever Z the chain carries. **Stacked tops** (#256, string-pull candidates only): a cell
-       with several layers counts as one floor, its top, when each endpoint of the segment that
-       stands in such a cell stands on its top, and for each such cell N and each corridor cell C
-       within one step of it (Chebyshev distance `⌊(Lmax + 1.5)/16⌋ + 1` cells),
-       `2 × (T_N − T_C − 16) < gap_N`, T the floors and gap_N the top of N minus the layer below.
-       Then a chain on the tops stays on them: `HeightNearest` of a top is that top;
-       `belowCell(z + 48)` scans down from the top and finds it (condition 3); and
-       `Height(N, T_C + 16)` is nearer the top than the layer below, a tie going to the lower
-       layer. The rule is what keeps a step that crosses a low cell of a stair from landing on
-       the layer under the deck. The stretches the exact check walks keep the one-layer rule;
+    1. the cell has geodata and a **walking layer** L, the floor the chain stands on there, carried
+       from the segment's start floor (#307; #256 took a cell of several layers on its top only).
+       A cell of one layer has that layer. A cell of several gets, as the segment's start cell,
+       the layer nearest the start's Z (`CanMove`'s origin floor), and elsewhere the layer
+       `CanMove` crosses onto from a neighbour N already on its own, `belowCell(C, L_N + 48)`: a
+       neighbour the quadrant crosses from first, then any other 4-neighbour, then a diagonal one.
+       A cell no neighbour reaches fails, and so does the end's cell when its walking layer is
+       not the end's floor. The cells fill in line order, each line cell before the ring around
+       it, so the layer spreads from the start's cell. The floor must be dry;
     2. the NSWE flags allow crossing in both directions of the segment's quadrant. No step turns
        back on either axis: a step adds (destination − rounded origin) × a fraction below 1 to a
        float position that rounds half up to the origin, so it never passes the destination's
        integer coordinate (`stepLocked`; N2 found the reversal earlier assumed here does not
        occur, and `TestStepChainAgreesWithWalkSteps` checks it against `WalkSteps`);
-    3. no two neighbouring corridor cells differ in height by 48 or more: `belowCell(z + 48)`
+    3. no two neighbouring corridor cells differ in walking layer by 48 or more: `belowCell(z + 48)`
        takes a layer strictly below `z + 48`, so a step up of exactly 48 is blocked (#256 fixed
-       the earlier "more than 48").
+       the earlier "more than 48"). And in each direction the quadrant crosses from N into C,
+       `belowCell(C, L_N + 48) = L_C`: no other layer of C lies in `(L_C, L_N + 48)`. A cell two
+       neighbours would put on two walking layers fails here;
+    4. **layer rule**: for each corridor cell C of several layers and each corridor cell O within
+       one step of it (Chebyshev distance `⌊(Lmax + 3)/16⌋ + 1` cells: a step of at most
+       `Lmax + 2 × 1.5` between rounded points), `Height(C, L_O + 16) = L_C`, the nearest layer
+       to `L_O + 16`, a tie going to the lower one (`block.Multilayer.Nearest`). O = C counts: a
+       short update rounds back onto its own point and re-floors there. The rule is what keeps a
+       step that crosses a low cell of a stair from landing on the layer under the deck, and
+       what fails the ground under a deck less than 32 above it.
 
     Under those conditions every per-step `CanMove` between two points in the corridor holds,
-    wherever the rounding lands, and on a corridor of one-layer cells whatever the step lengths;
-    on a corridor with stacked tops only for steps of at most `Lmax + 1.5`, the bound `topsHold`
-    checks, as for the exact check:
-    - every border crossing is allowed;
-    - `belowCell(z + 48)` finds the one floor;
-    - the final `goz == Height(target)` compares that floor with itself.
+    wherever the rounding lands: on a corridor of one-layer cells whatever the step lengths, and
+    with cells of several layers for steps of at most `Lmax + 3`, the layer rule's bound. By
+    induction along the chain, a state in cell O stands on L_O:
+    - `CanMove` starts on `HeightNearest(O, L_O) = L_O`;
+    - each border crossing goes from a corridor cell N on L_N into a corridor cell C in a direction
+      of the quadrant, which N's NSWE allows (condition 2), and lands on
+      `belowCell(C, L_N + 48) = L_C` (condition 3), so the walk stays on walking layers;
+    - the step's target Z is `Height(T, L_O + 16) = L_T` (condition 4, trivially on one layer),
+      and the final `goz == Height(target)` compares L_T with itself, so the next state stands
+      on L_T.
 
     The test costs O(cells along the segment): no `CanMove` calls, a few microseconds.
-    String-pull candidates use only this test. `TestNarrowCorridorAgreesWithExact` checks every
-    segment the narrowed test passes and the old one failed against the exact check over its
-    whole length and against random step sequences of the copied step chain.
+    String-pull candidates take this test first; farther candidates add the exact check on the
+    stretches that fail it (#307, "Longer segments" above). `TestNarrowCorridorAgreesWithExact`
+    checks every segment the narrowed test passes and the old one failed against the exact check
+    over its whole length and against random step sequences of the copied step chain, around the
+    bridge, the stair and stacked floors 30, 40, 60 and 100 apart. `TestCorridorReachBothSigns`
+    checks `corridorReach` against `CanMove`'s traced border walk at every sign of the world
+    coordinates: the walk takes each crossing's row with `int()`, which truncates toward zero, so
+    down for positive coordinates and up for negative ones (server `engine_query.go:46`).
   - **Exact check (short stretches only).** Where the corridor test fails (a doorway with partial
     NSWE, a bridge end, a stair with mixed layers), the stretch from the last corridor cell before
     the failure to the first after it is checked exactly:
     - It is a dynamic program over states keyed by rounded `(X, Y, Z)`.
     - It starts from every rounded point within one unit of the line and within `Lmax` before the
-      stretch, at its one floor.
+      stretch, on the walking layer the corridor gave its cell (#307; before, `Height` at the
+      segment start's Z). A stretch at the segment's start starts from the start alone: the first
+      step is bounded like the others. Every state it reaches past the stretch must stand on the
+      corridor's walking layer there, where the corridor test takes over.
     - The server carries a float position inside each rounded point. So from each state, every
       rounded point within `Lmax + 1.5` ahead, within 1.5 units of the line, and between the state
       and the destination on each axis must pass `CanMove`, with Z from
       `Height(next, prevZ + 2*CellHeight)`. The float position stays within √2/2 of the line and
       rounding adds √2/2 more, so 1.5 bounds both (N2, `internal/nav/exact.go`).
     - The stretch passes when every reachable state does, up to the far side.
-    - It runs only on the final segments of a route, not on pull candidates. A stretch is a few
-      cells long, so it costs a few thousand short `CanMove` calls; N1 benchmarks one call, and N3
-      sets the route thresholds from that measurement.
+    - It runs on the segments the pull takes past the corridor test: within `exactCells` (8) cells
+      of a waypoint, and farther ones while the route's budget lasts (#307, "Longer segments"
+      above). A stretch is a few cells long, so it costs a few thousand short `CanMove` calls; N1
+      benchmarks one call, and N3 sets the route thresholds from that measurement.
     - A segment whose exact check fails is split at the stretch, and the planner tries another
       way past it.
   - **What it does not cover**: a server tick that stalls past `Emax` (a GC pause, for example)
-    inside a stretch that needed the exact check, or on a corridor that passed on stacked tops,
-    where a longer step can land on the layer below. Open corridors of one-layer cells are immune
-    to it.
-    `nav_blocked_total` measures what is left.
+    inside a stretch that needed the exact check, or over a corridor cell of several layers, where
+    a longer step can land on another layer. The ticker runs missed updates back to back
+    (`commons/scheduler/ticker.go`), so a stall shows as one long step, and a move requested
+    during one as a long first step: the same exposure. Corridors of one-layer cells stay immune
+    to it. The exposure is per exact stretch and per cell of several layers walked, so it depends
+    on the terrain crossed, not on segment length. `nav_blocked_total` measures what is left.
 - **Sending**:
   - Every segment goes out from standstill, from the server-confirmed position.
   - A pawn walk (an approach to attack or cast) ends on the server's first 100 ms step in range,
@@ -908,9 +969,15 @@ unreachable (with a reason).
   - A `MoveToLocation` for the bot whose origin equals its destination is a **blocked stop**. The
     step chain differed from the bot's check. So is a `StopMove` short of the stand point during an
     approach to talk. The walker counts `nav_blocked_total`, replans from the stop point, and
-    avoids the segment's cells for this route: every plan of the walk keeps out of the geodata
-    columns of the rest of the refused segment, from the stop point to its end (`nav.Avoid`, per
-    planner; the shared nav cache never sees it). The route's own start and goal columns stay
+    avoids the refused part of the segment for this route: every plan of the walk keeps out of
+    its geodata columns (`nav.Avoid`, per planner; the shared nav cache never sees it). The server
+    stops before the step that failed (`creature.go:1384-1390`), so that step starts at the stop
+    and spans at most `Lmax`. The refused part (#307, `Planner.BlockedEnd`) runs from the stop
+    one step and a cell on, then to the end of the next stretch beyond that the corridor test
+    fails, as far as the exact check walked it: a blocked stop means the bot's data differ from
+    the server's (a stale door, a GM fence), so an open stretch can block too, but the next one
+    the check only vouched for exactly is the likelier cause. A stop inside such a stretch refuses
+    the whole rest of the segment, as before #307. The route's own start and goal columns stay
     allowed; a new destination clears the set. When the set cuts every way, the walk ends
     unreachable as blocked.
   - A `MoveToLocation` answering the bot's click with another destination is a **desync**. The
@@ -1022,11 +1089,13 @@ geodata is committed here, and CI never sees it.**
     category, which would add an offline oracle (fatal10110/acis_golang#5435).
 - **`nav`** (CI, synthetic regions):
   - every returned path passes both checks of the Goal, segment by segment;
-  - the open-corridor test accepts open ground and rejects corridors with a multilayer cell,
-    partial NSWE or a climb over 48;
+  - the open-corridor test accepts open ground and the ground under a deck at least 60 above,
+    and rejects corridors whose walking layer a crossing or a step leaves (the ground under a
+    40 deck, a stair's mixed layers), partial NSWE or a climb over 48;
   - the exact check rejects a stretch that only some step sequences get through (a synthetic
-    ledge edge, a first step of any length), and agrees with `WalkSteps` run over random step
-    sequences;
+    ledge edge, a step longer than `Lmax`), and agrees with `WalkSteps` run over random step
+    sequences, and over a first step of every length up to `Lmax`
+    (`TestFirstStepAgreesWithWalkSteps`);
   - entrances: a border with one-way terrain keeps separate nodes, and no run is merged across
     cells that are not mutually reachable;
   - cluster labels computed while a door is closed equal those computed with it open;
@@ -1137,6 +1206,8 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | field | wf/walker-wake a3d8512 (after #305) | 2026-11-24 | 14 | 6494 | 5674 | 55.64 s | 51.54 s | 45.03 s | 0.926 | 0.921 | 100 / 101 ms | 0 | 0 |
 | town | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 15 | 3260 | 3021 | 29.94 s | 25.87 s | 23.98 s | 0.864 | 0.855 | 100 / 101 ms | 0 | 0 |
 | field | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 25 | 6777 | 5673 | 61.46 s | 53.79 s | 45.02 s | 0.875 | 0.870 | 100 / 101 ms | 0 | 0 |
+| town | wf/nav-long-segments 95d875c (after #307) | 2026-11-24 | 9 | 3206 | 3021 | 27.92 s | 25.44 s | 23.98 s | 0.911 | 0.899 | 100 / 100 ms | 0 | 0 |
+| field | wf/nav-long-segments 95d875c (after #307) | 2026-11-24 | 16 | 6748 | 5690 | 58.59 s | 53.56 s | 45.16 s | 0.914 | 0.908 | 100 / 100 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
@@ -1156,6 +1227,12 @@ answer latency and the server's walk-speed start, and the shorter pull bends the
 units longer: efficiency 0.904 to 0.864 in town and 0.926 to 0.875 in the field. That is the cost
 of the cap toward a leader that stands still; the scenario's GM never moves.
 
+After #307 the pull reaches past the corridor test with exact-checked candidates, within the same
+500 cap: 9 segments instead of 15 in town and 16 instead of 25 in the field, efficiency 0.864 to
+0.911 and 0.875 to 0.914, the elapsed time 2.0 s and 2.9 s shorter. Every idle is still the one
+position tick, and nothing was blocked or desynced. Fewer segments mean fewer answer latencies
+and walk-speed starts, which is most of what the elapsed time saved.
+
 What #306 buys shows with a leader that moves. `TestLiveFollowMovingLeader` starts the bot 1900
 from the field route's end, in sight of the GM, who paces 300 back and forth there while the bot
 walks; the bot's follow delay is 1.5 s, so a re-path is pending for most of each leg. Its gaps are
@@ -1170,11 +1247,19 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveFollowMovingLeader' -
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | main 673403d + the scenario (before #306) | 2026-11-24 | 11 | 18 | 1011 / 1841 ms | 739 / 1601 ms | 0 | 0 |
 | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 6 | 13 | 311 / 401 ms | 100 / 101 ms | 0 | 0 |
+| main 3f62617 (before #307) | 2026-11-24 | 7 | 17 | 326 / 399 ms | 100 / 101 ms | 0 | 0 |
+| wf/nav-long-segments 0849cc1 (after #307) | 2026-11-24 | 12 | 14 | 349 / 381 ms | 100 / 101 ms | 0 | 0 |
 
 Before #306 the bot stood through the follow delay after each segment that ended while a re-path
 was pending; after it, the bot keeps walking to its old slot and turns to the new one when the
 delay ends, so it arrives in about half the GM's legs. The gaps include the server's walk-speed
 start of each move, which is why they exceed the bot's own idle.
+
+#307's longer segments broke the scenario's start: it took the first waypoint of the bot's route
+within 1900 of the end, and with segments as long as a click that waypoint was the end itself, so
+the bot started at the goal and walked no leg. The start is now the point on the route where it
+first comes within 1900, on the segment that crosses that distance. That start lies farther out
+than the waypoint before #307 did, so the GM paces more legs; the rows are not comparable in legs.
 
 ## Delivery (milestone M7, "Own navigation", epic #151)
 
@@ -1202,11 +1287,12 @@ Walking efficiency (the stop at every waypoint, short segments, the follower's h
   is not). The cache key rejects a changed local copy, and the desync counter catches a changed
   server copy at the first segment. `docs/home.md` keeps the geodata in the same rsync step as the
   datapack.
-- **Tick jitter in the step chain.** Open corridors of one-layer cells are immune to it; one on
-  stacked tops, like the exact check, holds for steps up to `Lmax + 1.5`. The exact check covers
-  every step length in `(0, Lmax]` on the short stretches that need it; the clearance cost keeps
-  routes off such stretches where it can; a blocked stop is a replan. What is left, ticks past
-  `Emax` inside exact stretches or on stacked tops, is measured by `nav_blocked_total` against its e2e threshold.
+- **Tick jitter in the step chain.** Open corridors of one-layer cells are immune to it; one over
+  cells of several layers, like the exact check, holds for steps up to `Lmax + 3`. The exact
+  check covers every step length in `(0, Lmax]` on the stretches that need it; the clearance cost
+  keeps routes off such stretches where it can; a blocked stop is a replan. What is left, ticks
+  past `Emax` inside exact stretches or over cells of several layers, is measured by
+  `nav_blocked_total` against its e2e threshold.
 - **Stale or misordered door state** (a door no bot sees, changed by a script or timer, or events
   from lagging sessions): it shows up as door replans, never as plain unreachable.
 - **Multilayer Z** (bridges, buildings): settled in N0 (the floor Z goes out; a layer less than

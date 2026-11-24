@@ -7,6 +7,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
 
@@ -61,7 +62,13 @@ func (p *Planner) stepChainOK(s *scratch, a, b location.Location) bool {
 	if a.X == b.X && a.Y == b.Y {
 		return true // the first update lands on b: CanMove alone decides
 	}
-	stretches := p.corridorStretches(s, a, b)
+	return p.exactStretches(s, a, b, p.corridorStretches(s, a, b))
+}
+
+// exactStretches runs the exact check over the stretches the corridor test
+// of the segment from a to b just failed, s.grid still holding that
+// corridor.
+func (p *Planner) exactStretches(s *scratch, a, b location.Location, stretches []stretch) bool {
 	if len(stretches) == 0 {
 		return true
 	}
@@ -97,12 +104,16 @@ func (p *Planner) stepChainOK(s *scratch, a, b location.Location) bool {
 //
 // Reachable points are rounded points within bandRadius of the line, at most
 // Lmax + stepSlack ahead, and between the state and b on each axis (the chain
-// is monotone per axis, see quadrant). The first step can be any length, so
-// a stretch near a starts from a alone; any other starts from every band
-// point within Lmax + stepSlack before it, on its one floor. A state in
-// water fails the stretch, the server would swim the walker from there,
-// unless the planner swims: then the state goes on as a swimmer
-// (swimStates).
+// is monotone per axis, see quadrant). The first step is bounded like any
+// other: the server times the first update from the move request (acis_golang
+// model/actor/move/creature.go, lastUpdate set with the move). So a stretch
+// near a starts from a alone; any other starts from every band point within
+// Lmax + stepSlack before it, on the walking layer the corridor gave its cell
+// (corridorAdd), and every state it reaches past the stretch must stand on
+// that layer too, where the corridor test takes over. A state in water fails
+// the stretch, the server would swim the walker from there, unless the
+// planner swims: then the state goes on as a swimmer (swimStates). Each
+// CanMove it makes counts toward s.work.
 func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) bool {
 	dx, dy := float64(b.X-a.X), float64(b.Y-a.Y)
 	length := math.Hypot(dx, dy)
@@ -122,22 +133,25 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 	} else {
 		for _, bp := range s.band {
 			if bp.t >= lo && bp.t <= t0 {
-				z := p.Engine.Height(bp.x, bp.y, a.Z)
+				z, ok := s.grid.floorAt(engine.GeoX(bp.x), engine.GeoY(bp.y))
+				if !ok {
+					return s.failedAt(bp.x, bp.y)
+				}
 				s.addState(chainState{int32(bp.x), int32(bp.y), z})
 			}
 		}
 	}
 
 	for head := 0; head < len(s.queue); head++ {
-		if len(s.queue) > maxChainStates {
-			return false
-		}
 		cur := s.queue[head]
 		cx, cy, cz := int(cur.x), int(cur.y), int(cur.z)
+		if len(s.queue) > maxChainStates {
+			return s.failedAt(cx, cy)
+		}
 		ct := (float64(cx-a.X)*dx + float64(cy-a.Y)*dy) / length
 		if p.Water.Contains(cx, cy, cz) {
 			if !p.swims() {
-				return false
+				return s.failedAt(cx, cy)
 			}
 			if ct <= t1 {
 				p.swimStates(s, cur, b, bz, ct, reach)
@@ -145,15 +159,21 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 			continue
 		}
 		if ct > t1 {
-			continue // past the stretch: the corridor test holds from here
+			// Past the stretch the corridor test holds from here, on its
+			// walking layers.
+			if z, ok := s.grid.floorAt(engine.GeoX(cx), engine.GeoY(cy)); !ok || p.Engine.Height(cx, cy, cz) != z {
+				return s.failedAt(cx, cy)
+			}
+			continue
 		}
+		s.work += 2
 		if hypot(b.X-cx, b.Y-cy) <= p.Lmax && !p.Engine.CanMove(cx, cy, cz, b.X, b.Y, bz) {
 			return false
 		}
 		// A short update rounds back onto cur itself, and the chain re-floors
 		// it like any other step: a layer just above cz wins and blocks.
 		if sz := p.Engine.Height(cx, cy, cz+2*block.CellHeight); !p.Engine.CanMove(cx, cy, cz, cx, cy, int(sz)) {
-			return false
+			return s.failedAt(cx, cy)
 		}
 		first := sort.Search(len(s.band), func(i int) bool { return s.band[i].t >= ct-stepSlack })
 		for _, bp := range s.band[first:] {
@@ -165,13 +185,21 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 				continue
 			}
 			nz := p.Engine.Height(bp.x, bp.y, cz+2*block.CellHeight)
+			s.work++
 			if !p.Engine.CanMove(cx, cy, cz, bp.x, bp.y, int(nz)) {
-				return false
+				return s.failedAt(cx, cy)
 			}
 			s.addState(chainState{int32(bp.x), int32(bp.y), nz})
 		}
 	}
 	return true
+}
+
+// failedAt records (x, y) as where the exact check failed and returns
+// false.
+func (s *scratch) failedAt(x, y int) bool {
+	s.failAt, s.failed = [2]int{x, y}, true
+	return false
 }
 
 func (s *scratch) addState(st chainState) {

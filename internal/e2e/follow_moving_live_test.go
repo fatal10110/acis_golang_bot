@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -147,8 +148,10 @@ func moveGaps(seen []Seen, id int32, run float64, until time.Time) []time.Durati
 	return gaps
 }
 
-// movingStart is the first waypoint of the bot's own route along r within
-// movingSight of its end, on the ground the walk takes.
+// movingStart is where the bot's own route along r first comes within
+// movingSight of its end, on the ground the walk takes: on the segment that
+// crosses that distance, its floor there. A segment can be as long as a
+// click (#307), so the first waypoint within reach may be the end itself.
 func movingStart(t *testing.T, tg *Target, r walkRoute) botclient.Point {
 	t.Helper()
 	n := tg.Nav(t)
@@ -159,10 +162,34 @@ func movingStart(t *testing.T, tg *Target, r walkRoute) botclient.Point {
 	if err != nil {
 		t.Fatalf("route %s: %v", r.name, err)
 	}
-	for _, l := range route {
-		if at := (botclient.Point{X: int32(l.X), Y: int32(l.Y), Z: int32(l.Z)}); dist(at, r.to) <= movingSight {
+	point := func(x, y, z float64) botclient.Point {
+		return botclient.Point{X: int32(math.Round(x)), Y: int32(math.Round(y)), Z: int32(math.Round(z))}
+	}
+	for i, l := range route {
+		at := point(float64(l.X), float64(l.Y), float64(l.Z))
+		if dist(at, r.to) > movingSight {
+			continue
+		}
+		if i == 0 {
 			return at
 		}
+		// The previous waypoint is out of reach and this one within: bisect
+		// the segment between them for the crossing.
+		a := route[i-1]
+		along := func(f float64) botclient.Point {
+			return point(float64(a.X)+f*float64(l.X-a.X), float64(a.Y)+f*float64(l.Y-a.Y), float64(a.Z)+f*float64(l.Z-a.Z))
+		}
+		lo, hi := 0.0, 1.0
+		for range 30 {
+			if m := (lo + hi) / 2; dist(along(m), r.to) > movingSight {
+				lo = m
+			} else {
+				hi = m
+			}
+		}
+		at = along(hi)
+		at.Z = int32(n.Engine.Height(int(at.X), int(at.Y), int(at.Z)))
+		return at
 	}
 	t.Fatalf("route %s: no waypoint within %d of its end", r.name, movingSight)
 	return botclient.Point{}
