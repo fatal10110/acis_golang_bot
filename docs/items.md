@@ -127,7 +127,7 @@ server. The gaps are in data and spawns, not in code.
 | Item stats are `<for>` children: `<set stat="pAtk" val=.../>` on weapons, `<baseadd stat="pDef" val=.../>` on armor. | `items/0200-0299.xml:2010-2034`, `items/0300-0399.xml:1194-1206` |
 | A private store buy needs the buyer within trade interaction distance (150, 3D) of the owner. A package store (type 8) sells only whole. A store list opens through the second `Action` on the owner, not a packet of its own. The full flow is under "Buying from a private sell store" below. | `network/privatestore.go:389-398`, `network/trade.go:15`; bot `store.go:37` |
 | Dyes are ported: `RequestHennaItemList`, `RequestHennaItemInfo`, `RequestHennaEquip`, and the unequip trio. Neither the list nor the draw checks for a Symbol Maker nearby. Slots by class level are 0 / 2 / 3. Each `hennas.xml` row lists only profession ids. Drawing takes 10 dyes plus the fee. The fee is 37000, 87000 or 149000 for the first-profession symbols 1-36, and 87000 to 628000 for symbols 37+. First-profession dyes trade +1 of one stat for -1, -2 or -3 of another, and the dearer the dye, the smaller the loss. Dyes (4445+) are on merchant lists (for example npc 30093). The full flow is under "Drawing dyes" below. | `network/client_dispatch.go:85-90`, `network/henna.go:65`, `network/client_ingame.go:237`, `model/henna/list.go:58-66`, `symbolmaker/symbolmaker.go:82-160`, `hennas.xml:3-40` |
-| Class master mod is ported, and `ConfigClassMaster = 1;[];[];2;[];[];3;[];[]` makes it free with no quests. That value is a deployment setting: the code default is empty, so no tier is offered. Its NPC 50000 is in no spawnlist (fatal10110/acis_golang#5419). Grand masters need the path quest token (q401-q419 are ported). The full flow is under "Changing class at the class master" below. | `classmaster/settings.go:39-66`, `network/classmaster.go:91`, `npcs.properties:52`, `internal/config/testdata/reference_defaults.golden:106` |
+| Class master mod is ported, and `ConfigClassMaster = 1;[];[];2;[];[];3;[];[]` makes it free with no quests. That value is a deployment setting: the code default is empty, so no tier is offered. Its NPC 50000 stands in every town (`spawnlist/custom_classmaster.xml`, fatal10110/acis_golang#5419). Grand masters need the path quest token (q401-q419 are ported). The full flow is under "Changing class at the class master" below. | `classmaster/settings.go:39-66`, `network/classmaster.go:91`, `npcs.properties:52`, `internal/config/testdata/reference_defaults.golden:106` |
 | Crystallize, recipe crafting, `RequestPrivateStoreBuy` and private buy stores are ported. | `network/client_dispatch.go:80-100`, `network/privatestore_dispatch.go:54,60` |
 
 ### Flows settled in I0
@@ -210,6 +210,12 @@ stackable items are fine in a sell store. Send one request per list.
 NPC 50000 (Hasha, the Class Manager, `xml/npcs/50000-50999.xml:3`). Its pages are
 `html/mods/classmaster/50000.htm` and `50000-1.htm` to `50000-6.htm`
 (`model/actor/npc/folk_chat.go:95`).
+
+On the wire it is not 50000: `NpcInfo` carries the template's `idTemplate`, 31228, the look of
+Roy the Cat (an Event Manager in most villages, one about 1190 from Talking Island's master). The
+master uses its server-side name and title, so its `NpcInfo` names it "Hasha", while Roy's name
+is empty (`model/actor/npc/folk.go` `infoSnapshot`). The bot tells them apart by display id and
+name (`NPCInfo.Template`, #343).
 
 1. **Talk.** The same two `Action`s as any folk NPC. The answer is `NpcHtmlMessage` (0x0f,
    `network/serverpackets/npchtmlmessage.go:10`) with `50000.htm`. Its links are

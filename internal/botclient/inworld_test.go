@@ -186,8 +186,8 @@ func npcInfoPacket(n NPCInfo, run, walk int32, mult float64) []byte {
 	w.WriteUint8(wire.BoolByte(n.InCombat))
 	w.WriteUint8(wire.BoolByte(n.Dead))
 	w.WriteUint8(2) // summon animation
-	w.WriteString("Gremlin")
-	w.WriteString("a title")
+	w.WriteString(n.Name)
+	w.WriteString(n.Title)
 	w.WriteInt32(wire.BoolInt32(n.Summon))
 	w.WriteInt32(n.PvPFlag)
 	w.WriteInt32(n.Karma)
@@ -232,6 +232,7 @@ var (
 	testNPCInfo = NPCInfo{
 		ObjectID: 0x10000003, NPCID: 20001, Attackable: true, Pos: Point{X: 4, Y: 5, Z: 6}, Heading: 2000,
 		RunSpeed: 195, WalkSpeed: 60, Running: true, Dead: true, Summon: true, PvPFlag: 2, Karma: 3,
+		Name: "Gremlin", Title: "a title",
 	}
 )
 
@@ -252,6 +253,8 @@ func inworldCases() []struct {
 		{"CharInfo", charInfoPacket(testCharInfo, 120, 80, 1.3, 2), testCharInfo},
 		{"CharInfo standing", charInfoPacket(CharInfo{ObjectID: 9, Running: true, Dead: true}, 0, 0, 1, 0), CharInfo{ObjectID: 9, Running: true, Dead: true}},
 		{"NPCInfo", npcInfoPacket(testNPCInfo, 130, 40, 1.5), testNPCInfo},
+		{"NPCInfo no server-side name", npcInfoPacket(NPCInfo{ObjectID: 7, NPCID: 31228}, 0, 0, 1), NPCInfo{ObjectID: 7, NPCID: 31228}},
+		{"NPCInfo class master", npcInfoPacket(liveMaster, 0, 0, 1), liveMaster},
 		{
 			"StatusUpdate", packet(opGameStatusUpdate, 7, 12, 9, 300, 10, 410, 11, 120, 12, 150, 13, 5000, 14, 1500, 15, 80000, 18, 333, 24, 444, 27, 7, 33, 90, 34, 200),
 			StatusUpdate{ObjectID: 7, Set: StatusHP | StatusMaxHP | StatusMP | StatusMaxMP | StatusSP | StatusLoad | StatusMaxLoad | StatusKarma | StatusCP | StatusMaxCP, HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, SP: 5000, Load: 1500, MaxLoad: 80000, Karma: 7, CP: 90, MaxCP: 200},

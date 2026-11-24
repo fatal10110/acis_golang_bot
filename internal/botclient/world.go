@@ -891,7 +891,7 @@ func (w *World) applyNPCInfo(e NPCInfo, now time.Time) {
 		return
 	}
 	*o = Object{
-		Kind: KindNPC, NPCID: e.NPCID, Karma: e.Karma,
+		Kind: KindNPC, NPCID: e.Template(), Karma: e.Karma,
 		HP: o.HP, MaxHP: o.MaxHP,
 		RunSpeed: e.RunSpeed, WalkSpeed: e.WalkSpeed, Heading: e.Heading,
 		PvPFlag:    uint8(e.PvPFlag),
