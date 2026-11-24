@@ -246,6 +246,19 @@ type ClassKit struct {
 	// minLvl under 20), which TestBehaviorRowsShipped checks; the brain does
 	// not read it.
 	Base []int32
+	// Roles are the row's parts that differ by role (docs/strategy.md,
+	// "Numbers and summary": "Support / Damage"); a role without one plays
+	// the row's own.
+	Roles map[Role]RolePart
+}
+
+// RolePart is what one role of a row plays in place of the row's own: its
+// learn table when non-nil, its melee policy, and its thresholds, each
+// non-zero one over the row's.
+type RolePart struct {
+	Skills     []int32
+	Melee      MeleePolicy
+	Thresholds Thresholds
 }
 
 // RaceProfile is what a race's lines share (docs/strategy.md, Design section
@@ -325,34 +338,19 @@ type Build struct {
 }
 
 // lineKits are the combat parts of the kits by base class, the same for a
-// line's every profession without its own row (professionKits; the mystic
-// professions until S7): the fighters
-// play their base rows (fighterKits, S6); the mystics keep the support
-// persona's values from before builds (D24): the human, elven and dark elven mystics heal with
-// Battle Heal under 35 % and Heal under 60 %, buff Might and Shield and nuke
-// with Wind Strike; the orc mystics buff Soul Shield and Chant of Battle and
-// nuke with Chill Flame and Life Drain, from level 7. Every skill is in the
-// line's tree (data/xml/classes, TestBehaviorRowsShipped), so each line
-// keeps exactly the part of supportKit it can know.
+// line's every profession without its own row (professionKits): the
+// fighters play their base rows (fighterKits, S6), the mystics theirs
+// (kits_mystic.go, S7).
 var lineKits = map[int32]ClassKit{
-	classHumanMystic: casterKit,
-	classElvenMystic: casterKit,
-	classDarkMystic:  casterKit,
-	classOrcMystic: {
-		Rotation: []Step{{Skill: skillChillFlame, From: 7}, {Skill: skillLifeDrain, From: 7}},
-		Buffs:    []Buff{{Skill: skillSoulShield}, {Skill: skillChantBattle, Party: true}},
-	},
+	classHumanMystic:  humanMysticKit,
+	classElvenMystic:  elvenMysticKit,
+	classDarkMystic:   darkMysticKit,
+	classOrcMystic:    orcMysticKit,
 	HumanFighter.ID:   humanFighterKit,
 	ElvenFighter.ID:   elvenFighterKit,
 	DarkFighter.ID:    darkFighterKit,
 	OrcFighter.ID:     orcFighterKit,
 	DwarvenFighter.ID: dwarvenFighterKit,
-}
-
-var casterKit = ClassKit{
-	Rotation: []Step{{Skill: skillWindStrike}},
-	Heals:    []Heal{{Skill: skillBattleHeal, HP: 35}, {Skill: skillHeal, HP: 60}},
-	Buffs:    []Buff{{Skill: skillMight}, {Skill: skillShield}},
 }
 
 // professionKit is the kit of class's nearest profession with one in
@@ -377,11 +375,11 @@ func professionKit(class int32) (ClassKit, bool) {
 // (docs/strategy.md, Design section 4): its profession's kit
 // (professionKits; a second profession plays its first profession's until
 // it has its own, docs/strategy.md "Second professions"), else its line's
-// (lineKits), with the steps, toggles and
-// buffs the role plays from the level reached (a buff another one of the
-// level Replaces left out), its class's
-// skills, gear and dyes, its race's professions and the row's thresholds
-// (defaultThresholds for a row without its own). The trainers come from the
+// (lineKits), with the steps, toggles, heals and buffs the role plays from
+// the level reached (a buff another one of the level Replaces left out),
+// the role's part of the row (ClassKit.Roles) over the row's learn table,
+// melee policy and thresholds (defaultThresholds for a row without its
+// own), its class's gear and dyes and its race's professions. The trainers come from the
 // datapack (Brain.build). RoleNone compiles the zero Build. The tables are
 // Go tables, checked against the shipped datapack by
 // TestBehaviorRowsShipped.
@@ -409,17 +407,25 @@ func CompileBuild(race, class, level int32, role Role) Build {
 			}
 		}
 	}
-	k.Skills = mysticSkills[class]
-	if line.Skills != nil {
-		k.Skills = line.Skills
-	}
-	k.Heals, k.Flee, k.Melee, k.Relax, k.Base = line.Heals, line.Flee, line.Melee, line.Relax, line.Base
+	plays := func(r Role) bool { return r == RoleNone || r == role }
+	k.Skills, k.Flee, k.Melee, k.Relax, k.Base = line.Skills, line.Flee, line.Melee, line.Relax, line.Base
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
+	if part, ok := line.Roles[role]; ok {
+		if part.Skills != nil {
+			k.Skills = part.Skills
+		}
+		k.Melee, bd.Thresholds = part.Melee, bd.Thresholds.override(part.Thresholds)
+	}
 	for _, st := range line.Rotation {
-		if st.From <= level && (st.Role == RoleNone || st.Role == role) {
+		if st.From <= level && plays(st.Role) {
 			k.Rotation = append(k.Rotation, st)
+		}
+	}
+	for _, h := range line.Heals {
+		if plays(h.Role) {
+			k.Heals = append(k.Heals, h)
 		}
 	}
 	for _, tg := range line.Toggles {
@@ -428,7 +434,7 @@ func CompileBuild(race, class, level int32, role Role) Build {
 		}
 	}
 	for _, bf := range line.Buffs {
-		if bf.From <= level && !slices.ContainsFunc(line.Buffs, func(x Buff) bool { return x.Replaces == bf.Skill && x.From <= level }) {
+		if bf.From <= level && plays(bf.Role) && !slices.ContainsFunc(line.Buffs, func(x Buff) bool { return x.Replaces == bf.Skill && x.From <= level && plays(x.Role) }) {
 			k.Buffs = append(k.Buffs, bf)
 		}
 	}

@@ -174,7 +174,8 @@ func (b *Brain) knowsAttackSkill() bool {
 	return false
 }
 
-// fight attacks id: select it, switch a combat toggle that is due
+// fight attacks id: cast a side cast due on the selected attacker
+// (sideCasting) or select id, switch a combat toggle that is due
 // (toggleCast), then cast the first ready step of the build's rotation
 // whose gates pass (rotationCast: self-target steps, sustain, then attacks
 // with MP at MPReserve or more), or click it once for melee as the kit's
@@ -186,6 +187,9 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	s := &b.world.Self
 	from := s.Position(now)
 	if t := b.world.Target; id != t {
+		if a, ok := b.sideCasting(t, now); ok {
+			return a
+		}
 		if b.engaged != 0 && b.engaged == t && !b.mayFight(t, now) {
 			return b.disengage(now)
 		}

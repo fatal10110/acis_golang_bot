@@ -24,10 +24,9 @@ func stepSkills(steps []Step) []int32 {
 	return ids
 }
 
-// TestCompileBuild compiles every starting class and one profession for
-// every role: a mystic line keeps the part of the support table it can
-// know (D24), the orc mystic's spells from level 7, with the support
-// thresholds; a fighter line its base row's steps from the level reached,
+// TestCompileBuild compiles every starting fighter class for every role (the
+// mystic rows are TestCompileMysticBuild's): a fighter line its base row's
+// steps from the level reached,
 // buffs, Relax, skills and thresholds (S6); every class its gear entry and
 // dyes and its race's professions only, and no trainers (they come from the
 // travel map). RoleNone compiles nothing.
@@ -35,7 +34,6 @@ func TestCompileBuild(t *testing.T) {
 	if bd := CompileBuild(RaceHuman, classHumanMystic, 20, RoleNone); !reflect.DeepEqual(bd, Build{}) {
 		t.Errorf("RoleNone build = %+v, want the zero Build", bd)
 	}
-	caster := []int32{skillWindStrike}
 	attacks := []int32{skillPowerShot, skillMortalBlow, skillPowerStrike}
 	tests := []struct {
 		class, level int32
@@ -45,29 +43,19 @@ func TestCompileBuild(t *testing.T) {
 	}{
 		{class: HumanFighter.ID, level: 1, kit: humanFighterKit},
 		{class: HumanFighter.ID, level: 5, rotation: attacks, kit: humanFighterKit},
-		{class: HumanMystic.ID, level: 1, rotation: caster, heals: 2, buffs: 2},
 		{class: ElvenFighter.ID, level: 10, rotation: attacks, buffs: 2, kit: elvenFighterKit},
 		{class: ElvenFighter.ID, level: 15, rotation: append([]int32{skillElementalHeal}, attacks...), buffs: 2, kit: elvenFighterKit},
-		{class: ElvenMystic.ID, level: 10, rotation: caster, heals: 2, buffs: 2},
 		{class: DarkFighter.ID, level: 10, rotation: attacks, buffs: 2, kit: darkFighterKit},
 		{class: DarkFighter.ID, level: 15, rotation: append([]int32{skillDrainHealth, skillDrainHealth}, attacks...), buffs: 2, kit: darkFighterKit},
-		{class: DarkMystic.ID, level: 10, rotation: caster, heals: 2, buffs: 2},
 		{class: OrcFighter.ID, level: 10, rotation: []int32{skillIronPunch, skillPowerStrike}, kit: orcFighterKit},
-		{class: OrcMystic.ID, level: 6, rotation: nil, heals: 0, buffs: 2},
-		{class: OrcMystic.ID, level: 7, rotation: []int32{skillChillFlame, skillLifeDrain}, heals: 0, buffs: 2},
 		{class: DwarvenFighter.ID, level: 10, kit: dwarvenFighterKit},
-		{class: classShillienOracle, level: 25, rotation: caster, heals: 2, buffs: 2},
-		{class: classWarcryer, level: 45, rotation: []int32{skillChillFlame, skillLifeDrain}, heals: 0, buffs: 2},
 	}
 	for _, tt := range tests {
 		race, _ := datapack.ClassRace(tt.class)
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
 			bd := CompileBuild(race, tt.class, tt.level, role)
 			k := bd.Kit
-			wantTh, wantSkills := defaultThresholds, mysticSkills[tt.class]
-			if tt.kit.Thresholds != (Thresholds{}) {
-				wantTh, wantSkills = tt.kit.Thresholds, tt.kit.Skills
-			}
+			wantTh, wantSkills := tt.kit.Thresholds, tt.kit.Skills
 			if bd.Role != role || bd.Branch != 0 || bd.Thresholds != wantTh || k.Relax != tt.kit.Relax {
 				t.Errorf("class %d %v: role %v branch %d thresholds %+v", tt.class, role, bd.Role, bd.Branch, bd.Thresholds)
 			}
@@ -124,16 +112,17 @@ func TestBuildRecompiles(t *testing.T) {
 		class, level int32
 		rotation     []int32
 		next         int32
+		skills       []int32
 	}{
-		{class: classOrcMystic, level: 6, rotation: nil, next: classOrcShaman},
-		{class: classOrcMystic, level: 7, rotation: []int32{skillChillFlame, skillLifeDrain}, next: classOrcShaman},
-		{class: classOrcShaman, level: 20, rotation: []int32{skillChillFlame, skillLifeDrain}, next: classWarcryer},
+		{class: classOrcMystic, level: 6, rotation: nil, next: classOrcShaman, skills: orcMysticKit.Roles[RoleSupport].Skills},
+		{class: classOrcMystic, level: 7, rotation: []int32{skillLifeDrain, skillChillFlame, skillLifeDrain}, next: classOrcShaman, skills: orcMysticKit.Roles[RoleSupport].Skills},
+		{class: classOrcShaman, level: 20, rotation: []int32{skillLifeDrain, skillFrostFlame, skillLifeDrain, skillStunAttack}, next: classWarcryer, skills: orcShamanKit.Skills},
 	}
 	for _, st := range steps {
 		b.world.Apply(UserInfo{ObjectID: selfID, Name: "bot7", ClassID: st.class, Level: st.level, RunSpeed: 100, WalkSpeed: 50}, t0)
 		bd := b.build()
 		if got := stepSkills(bd.Kit.Rotation); !slices.Equal(got, st.rotation) || bd.Race.Professions[st.class] != st.next ||
-			!slices.Equal(bd.Kit.Skills, mysticSkills[st.class]) || bd.Race.Race != RaceOrc {
+			!slices.Equal(bd.Kit.Skills, st.skills) || bd.Race.Race != RaceOrc {
 			t.Errorf("class %d level %d: rotation %v next %d skills %v race %d, want %v %d", st.class, st.level, got, bd.Race.Professions[st.class], bd.Kit.Skills, bd.Race.Race, st.rotation, st.next)
 		}
 	}
@@ -167,12 +156,12 @@ func TestOverrides(t *testing.T) {
 		{"dyes", func(p *Persona) { p.Dyes.Symbols = map[int32][]int32{classCleric: {8}} }, classCleric, func(bd Build) bool { return slices.Equal(bd.Kit.Dyes, []int32{8}) }},
 		{"gear classes", func(p *Persona) { p.Gear.Classes = []GearClass{{Armor: "HEAVY"}} }, classCleric, func(bd Build) bool { return bd.Kit.Gear.Armor == "HEAVY" }},
 		{"threshold", func(p *Persona) { p.MPReserve, p.SitHP = 70, 10 }, classCleric, func(bd Build) bool {
-			want := defaultThresholds
+			want := healerThresholds
 			want.MPReserve, want.SitHP = 70, 10
 			return bd.Thresholds == want
 		}},
 		{"threshold off", func(p *Persona) { p.CriticalHP = -1 }, classCleric, func(bd Build) bool {
-			return bd.Thresholds.CriticalHP == -1 && !below(1, 100, bd.Thresholds.CriticalHP) && bd.Thresholds.CrowdedHP == defaultThresholds.CrowdedHP
+			return bd.Thresholds.CriticalHP == -1 && !below(1, 100, bd.Thresholds.CriticalHP) && bd.Thresholds.CrowdedHP == healerThresholds.CrowdedHP
 		}},
 		{"no role: the persona's own only", func(p *Persona) { *p = Persona{AttackSkills: []int32{skillWindStrike}, SitHP: 40} }, classCleric, func(bd Build) bool {
 			return reflect.DeepEqual(bd, Build{Kit: ClassKit{Rotation: []Step{{Skill: skillWindStrike}}}, Thresholds: Thresholds{SitHP: 40}})
@@ -338,8 +327,8 @@ func TestHealMembers(t *testing.T) {
 			b.world.Apply(CharInfo{ObjectID: pc2, Name: "mate", Pos: Point{X: 100}}, t0)
 			b.world.Party.LeaderID = selfID
 			b.world.Party.Members = map[int32]*PartyMate{pc2: {PartyMember: PartyMember{ObjectID: pc2, HP: tt.mateHP, MaxHP: 100}}}
-			if got := b.healSkill(selfID, at(time.Second)); got != tt.want {
-				t.Errorf("healSkill = %d, want %d", got, tt.want)
+			if got, _ := b.healSkill(selfID, at(time.Second)); got.Skill != tt.want {
+				t.Errorf("healSkill = %d, want %d", got.Skill, tt.want)
 			}
 		})
 	}

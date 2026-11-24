@@ -70,32 +70,6 @@ const (
 	classWarcryer       int32 = 52
 )
 
-// mysticSkills are the support persona's skills by mystic base class and by
-// profession of the support build (docs/plan.md, support persona): human,
-// elven and dark elven mystics heal and buff, orc mystics buff. A
-// profession's trainer offers the next level of every skill of its tree
-// merged with its parents' (Cleric: Heal, Battle Heal, Might and Shield up
-// to 35; Shillien and Elven Elder: Might and Shield at 40-44; Orc Shaman:
-// Soul Shield and Chant of Battle at 25-35, Warcryer at 44). Their attack
-// spells come after them, so the SP goes to the support skills first: Wind
-// Strike (level 1 granted at creation, 2-5 at 7-14), Life Drain and Chill
-// Flame. Ids and levels are the datapack's class skill trees
-// (data/xml/classes).
-var mysticSkills = map[int32][]int32{
-	classHumanMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classElvenMystic:    {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classDarkMystic:     {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classOrcMystic:      {skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame},
-	classCleric:         {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classBishop:         {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classElvenOracle:    {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classElvenElder:     {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classShillienOracle: {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classShillienElder:  {skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike},
-	classOrcShaman:      {skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame},
-	classWarcryer:       {skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame},
-}
-
 // noSkillPage are trainers whose teachTo lists classes but whose first page
 // has no skill list link, so a visit would only end in a shun: Grand
 // Magister Celes (32098, data/html/villagemaster/32098.htm).

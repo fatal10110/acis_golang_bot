@@ -158,6 +158,12 @@ type Brain struct {
 	// click or an attack step's cast (Action.opens). An Opener step casts
 	// only on another (stepState.fresh).
 	opened int32
+	// side is a step cast on another attacker than the fight's (Dryad Root,
+	// TargetOtherAttacker) whose select went out and whose cast is due once
+	// it is the bot's target; sided is the last attacker one went to, which
+	// no other side cast goes to again (otherCast in rotation.go).
+	side  sideCast
+	sided int32
 	// skillToggledAt is when a cast of each toggle skill last went out
 	// (toggleSettling).
 	skillToggledAt map[int32]time.Time
