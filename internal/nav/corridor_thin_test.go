@@ -60,6 +60,8 @@ func TestNarrowCorridorAgreesWithExact(t *testing.T) {
 		geotest.BridgeWestDeck, geotest.BridgeEastGround, geotest.LedgeHigh, geotest.LedgeLow,
 		geotest.CorridorWest, geotest.UInside, geotest.PitOutside, StairLow, StairDeck, StackedGround,
 		{CellX: 300, CellY: 1002, Z: 30},
+		Floors40, Floors60, Floors100, {CellX: Floors40.CellX, CellY: Floors40.CellY, Z: 40},
+		{CellX: Floors100.CellX, CellY: Floors100.CellY, Z: 100},
 	}
 	s := getScratch()
 	defer putScratch(s)

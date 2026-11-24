@@ -30,6 +30,13 @@ var (
 	// Stacked: ground 0 under a second layer at 30, too close above it to
 	// click the ground.
 	StackedGround = geotest.Point{CellX: 302, CellY: 1002, Z: 0}
+	// Floors: ground 0 under a deck 40, 60 or 100 above it, each over the
+	// 11 columns around the point's, rows 1000..1010. CanMove crossing the ground under
+	// the 40 deck lands on the deck (belowCell(0 + 48)); under the others it
+	// stays on the ground.
+	Floors40  = geotest.Point{CellX: 325, CellY: 1005, Z: 0}
+	Floors60  = geotest.Point{CellX: 345, CellY: 1005, Z: 0}
+	Floors100 = geotest.Point{CellX: 365, CellY: 1005, Z: 0}
 	// Open: plain ground far from every shape.
 	Open = geotest.Point{CellX: 100, CellY: 100, Z: 0}
 )
@@ -38,6 +45,9 @@ func terrain() *geotest.Terrain {
 	t := geotest.Scenes()
 	t.Raise(200, 1000, 200, 1010, 40).Raise(201, 1000, 215, 1010, 20).AddDeck(201, 1000, 215, 1010, 80)
 	t.AddDeck(300, 1000, 305, 1005, 30)
+	t.AddDeck(Floors40.CellX-5, 1000, Floors40.CellX+5, 1010, 40)
+	t.AddDeck(Floors60.CellX-5, 1000, Floors60.CellX+5, 1010, 60)
+	t.AddDeck(Floors100.CellX-5, 1000, Floors100.CellX+5, 1010, 100)
 	return t
 }
 
@@ -60,6 +70,12 @@ func testEngine(tb testing.TB) *engine.Engine {
 }
 
 func buildEngine(t *geotest.Terrain) (*engine.Engine, error) {
+	return buildEngineAt(t, [2]int{geotest.RegionX, geotest.RegionY})
+}
+
+// buildEngineAt builds an engine holding t's region at each given region
+// tile.
+func buildEngineAt(t *geotest.Terrain, tiles ...[2]int) (*engine.Engine, error) {
 	dir, err := os.MkdirTemp("", "navtest")
 	if err != nil {
 		return nil, err
@@ -82,8 +98,10 @@ func buildEngine(t *geotest.Terrain) (*engine.Engine, error) {
 		return nil, err
 	}
 	e := engine.New()
-	if err := e.SetRegion(geotest.RegionX, geotest.RegionY, region); err != nil {
-		return nil, err
+	for _, tile := range tiles {
+		if err := e.SetRegion(tile[0], tile[1], region); err != nil {
+			return nil, err
+		}
 	}
 	return e, nil
 }
@@ -118,6 +136,26 @@ func walkSteps(e *engine.Engine, rng *rand.Rand, a, b location.Location, lmax fl
 	for range n {
 		for i := range durations {
 			durations[i] = time.Duration(1+rng.IntN(100)) * time.Millisecond
+		}
+		w := e.WalkSteps(a, b, speed, speed, durations)
+		if w.Blocked || !w.Reached {
+			return w, false
+		}
+	}
+	return engine.Walk{}, true
+}
+
+// walkFirst runs n random update sequences of the copied step chain from a
+// to b whose first step is first units long, every later one at most lmax,
+// and reports the first one that is blocked or does not arrive.
+func walkFirst(e *engine.Engine, rng *rand.Rand, a, b location.Location, lmax, first float64, n int) (engine.Walk, bool) {
+	speed := lmax * 10
+	steps := int(hypot(b.X-a.X, b.Y-a.Y)) + 8
+	durations := make([]time.Duration, steps*100/int(max(lmax, 1))+16)
+	for range n {
+		durations[0] = time.Duration(first / speed * float64(time.Second))
+		for i := range durations[1:] {
+			durations[i+1] = time.Duration(1+rng.IntN(100)) * time.Millisecond
 		}
 		w := e.WalkSteps(a, b, speed, speed, durations)
 		if w.Blocked || !w.Reached {

@@ -59,6 +59,8 @@ func TestStepChainAgreesWithWalkSteps(t *testing.T) {
 	scenes := []geotest.Point{
 		geotest.BridgeWestDeck, geotest.BridgeEastGround, geotest.LedgeHigh, geotest.LedgeLow,
 		geotest.CorridorWest, geotest.UInside, geotest.PitOutside, StairLow, StairDeck,
+		Floors40, Floors60, Floors100, {CellX: Floors40.CellX, CellY: Floors40.CellY, Z: 40},
+		{CellX: Floors100.CellX, CellY: Floors100.CellY, Z: 100},
 	}
 	long := *p
 	long.Lmax = 40

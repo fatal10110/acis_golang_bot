@@ -38,8 +38,8 @@ func (n *Nav) closed() func(door int) bool {
 const (
 	// navEmax bounds the gap between two of the server's position updates:
 	// N0 measured 141 ms at most on the live server, and the walker takes a
-	// margin over it. Lmax, the longest step after the first, is the run
-	// speed times navEmax.
+	// margin over it. Lmax, the longest step (the first one too: the server
+	// times it from the move request), is the run speed times navEmax.
 	navEmax = 200 * time.Millisecond
 	// positionTick is the server's position update interval: the walker
 	// waits one past a segment's modeled arrival before the next goes out.
@@ -766,13 +766,15 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 
 // walkBlocked takes a blocked stop at stop of the segment in flight: the
 // step chain differed from the walker's check. It replans from the stop
-// point, and every plan of this walk keeps out of the columns of the rest of
-// the segment, from the stop point to its end (docs/navigation.md, "Server
-// answers to its own moves").
+// point, and every plan of this walk keeps out of the columns of the refused
+// part of the segment: from the stop point one step and a cell on, then to
+// the end of the next stretch only the exact check passed, or to the
+// segment's end from a stop inside one (nav.Planner.BlockedEnd;
+// docs/navigation.md, "Server answers to its own moves").
 func (b *Brain) walkBlocked(stop Point) {
 	w := &b.walk
 	b.metrics.NavBlocked()
-	w.plan.Avoid.AddLine(toLoc(stop), toLoc(w.seg.to))
+	w.plan.Avoid.AddLine(toLoc(stop), w.plan.BlockedEnd(toLoc(w.seg.from), toLoc(w.seg.to), toLoc(stop)))
 	w.seg, w.route = segment{}, nil
 	if w.blocked++; w.blocked >= walkMaxBlocked {
 		w.unreachable(reasonBlocked)
