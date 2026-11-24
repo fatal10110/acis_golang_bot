@@ -1248,7 +1248,7 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveFollowMovingLeader' -
 | main 673403d + the scenario (before #306) | 2026-11-24 | 11 | 18 | 1011 / 1841 ms | 739 / 1601 ms | 0 | 0 |
 | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 6 | 13 | 311 / 401 ms | 100 / 101 ms | 0 | 0 |
 | main 3f62617 (before #307) | 2026-11-24 | 7 | 17 | 326 / 399 ms | 100 / 101 ms | 0 | 0 |
-| wf/nav-long-segments 0d0b1c4 (after #307) | 2026-11-24 | 12 | 14 | 349 / 381 ms | 100 / 101 ms | 0 | 0 |
+| wf/nav-long-segments 0849cc1 (after #307) | 2026-11-24 | 12 | 14 | 349 / 381 ms | 100 / 101 ms | 0 | 0 |
 
 Before #306 the bot stood through the follow delay after each segment that ended while a re-path
 was pending; after it, the bot keeps walking to its old slot and turns to the new one when the
