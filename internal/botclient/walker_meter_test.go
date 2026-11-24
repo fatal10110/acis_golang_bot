@@ -46,7 +46,7 @@ func TestWalkerIdleMetric(t *testing.T) {
 			b.handle([]Event{answer}, answeredAt)
 			arrival := answeredAt
 			if !tt.blocked {
-				arrival = b.walk.seg.eta
+				arrival = b.world.Self.arrival()
 				if !arrival.After(answeredAt) {
 					t.Fatalf("modeled arrival %v, want after the answer at %v", arrival.Sub(t0), tt.answerLag)
 				}
@@ -93,7 +93,7 @@ func TestWalkerEfficiencyMetric(t *testing.T) {
 		length += math.Sqrt(float64(horizontal2(origin, to)))
 		segs++
 		b.handle([]Event{segAnswer(origin, to)}, now)
-		now = b.walk.seg.eta.Add(positionTick + stand)
+		now = b.world.Self.arrival().Add(positionTick + stand)
 	}
 	if segs < 2 {
 		t.Fatalf("%d segments, want the route around the U", segs)

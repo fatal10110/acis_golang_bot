@@ -149,6 +149,12 @@ func runFor(a, b Point) time.Duration {
 	return time.Duration(float64(time.Second)*math.Sqrt(float64(horizontal2(a, b)))/100) + positionTick
 }
 
+// segRun is how long after now the walker of b sends its next segment: one
+// position tick past the modeled end of the bot's own move (the walk wake).
+func segRun(b *Brain, now time.Time) time.Duration {
+	return b.world.Self.arrival().Add(positionTick).Sub(now)
+}
+
 // walkOn has brain b walk on the shared synthetic navigation, as NewBrain
 // sets it up from BrainConfig.Nav: the consumer tests' points along the X
 // axis east of the origin lie on its open flat ground at height 0.

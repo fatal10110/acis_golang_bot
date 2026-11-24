@@ -60,7 +60,7 @@ func TestSpotFarmWalkPastLeash(t *testing.T) {
 					if err := b.handle([]Event{segAnswer(from, to)}, now); err != nil {
 						t.Fatal(err)
 					}
-					now = now.Add(runFor(from, to))
+					now = now.Add(segRun(b, now))
 					past = past || horizontal2(to, centre) > leash*leash
 					continue
 				}

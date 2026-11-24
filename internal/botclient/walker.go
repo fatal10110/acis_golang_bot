@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
@@ -41,13 +42,13 @@ const (
 	// speed times navEmax.
 	navEmax = 200 * time.Millisecond
 	// positionTick is the server's position update interval: the walker
-	// waits one past a segment's simulated arrival before the next goes out.
+	// waits one past a segment's modeled arrival before the next goes out.
 	positionTick = 100 * time.Millisecond
 	// walkAnswerWait is how long a segment waits for the server's
 	// MoveToLocation before the watchdog counts it as failed (a refused
 	// move gets ActionFailed and no MoveToLocation).
 	walkAnswerWait = 2 * time.Second
-	// walkSlack is the time a segment may run past its simulated arrival
+	// walkSlack is the time a segment may run past its modeled arrival
 	// before the watchdog counts it as failed.
 	walkSlack = 2 * time.Second
 	// walkMaxBlocked, walkMaxDesync and walkMaxWatchdog are the failures of
@@ -149,12 +150,17 @@ func (p walkPurpose) drops() bool { return p == walkFollow }
 type segment struct {
 	from, to Point
 	sentAt   time.Time
-	// answered is set by the server's MoveToLocation for it; eta is the
-	// simulated arrival from then and deadline the watchdog's limit.
-	answered      bool
-	eta, deadline time.Time
-	door          bool
+	// answered is set by the server's MoveToLocation for it; deadline is
+	// the watchdog's limit from then. Its arrival is the bot's own move's
+	// modeled end (SelfState.arrival).
+	answered bool
+	deadline time.Time
+	door     bool
 }
+
+// walkLags is how many recent segments' answer latencies A is the
+// maximum of (docs/walking.md, "One arrival model").
+const walkLags = 8
 
 // walker walks the bot along routes it checked on its own geodata
 // (docs/navigation.md, "Walker"; D13). It is owned by the brain goroutine.
@@ -204,6 +210,14 @@ type walker struct {
 	escapeRefused bool
 	// meter measures the walk for the walking-efficiency metrics.
 	meter walkMeter
+	// asked is set when a decision called goTo, cleared at the start of
+	// each decision; wokeAt is when the walk wake last fired (walkWake).
+	asked  bool
+	wokeAt time.Time
+	// lags are the answer latencies of the recent segments, lagAt the
+	// next slot to fill.
+	lags  [walkLags]time.Duration
+	lagAt int
 }
 
 func newWalker(n *Nav) walker {
@@ -240,15 +254,17 @@ func (w *walker) failed() string {
 
 // goTo is the next packet of a walk to dest: done once the bot stands within
 // arrive of it (horizontally), unreachable when no route there holds. Each
-// segment goes out from standstill, after the previous one's simulated
-// arrival plus one position tick (no click-ahead: a click while moving runs
-// the server's catch-up step of any length, creature.go catchUpLocked), never
-// during the bot's own swing or cast, and only after CanMove and the
-// step-chain check pass from where the bot stands. The bot stands up first.
+// segment goes out from standstill, one position tick after the previous
+// one's modeled arrival (SelfState.arrival; the walk wake runs the decision
+// then, Brain.walkWake), never during the bot's own swing or cast, and only
+// after CanMove and the step-chain check pass from where the bot stands. No
+// click-ahead (#308): a click while moving retargets the server's walk from
+// its catch-up point. The bot stands up first.
 //
 // Pacing: one MoveBackwardToLocation per segment through the frame pacer
-// (gateNone); a segment waits for the previous one's arrival, so a running
-// bot sends about one move a second, far below the server's 80 frames/s.
+// (gateNone); a segment waits for the previous one's answer plus its arrival
+// and one tick, so at most 10 walker moves a second (16-unit segments) and
+// about one a second typically, far below the server's 80 frames/s.
 // /unstuck (RequestUserCommand) has no server gate (client_ingame.go
 // handleRequestUserCommand): on isolated ground the walker asks it at least
 // escapeRetry apart while no recall cast runs, and at most escapeTries times
@@ -267,6 +283,7 @@ func (b *Brain) goTo(dest Point, arrive int32, purpose walkPurpose, now time.Tim
 
 func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time.Time) (Action, walkStatus) {
 	w := &b.walk
+	w.asked = true
 	if w.nav == nil {
 		w.status, w.reason = walkUnreachable, reasonNoNav
 		return Action{}, walkUnreachable
@@ -281,7 +298,7 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 	}
 	s := &b.world.Self
 	if w.seg.sentAt != (time.Time{}) {
-		if !w.segmentDone(now) {
+		if !w.segmentDone(now, s.arrival()) {
 			return Action{}, w.status
 		}
 		if w.status == walkUnreachable {
@@ -369,11 +386,12 @@ func (w *walker) segmentOK(from, to Point) bool {
 	return w.plan.CorridorOpen(a, b) || w.plan.StepChainOK(a, b)
 }
 
-// segmentDone reports whether the segment in flight is over at now: its
-// simulated arrival plus one tick passed. The watchdog counts a segment
-// unanswered past walkAnswerWait, or still on its way past its deadline,
-// and ends the route after walkMaxWatchdog of them.
-func (w *walker) segmentDone(now time.Time) bool {
+// segmentDone reports whether the segment in flight is over at now: it was
+// answered and one tick passed since end, the bot's own move's modeled
+// arrival. The watchdog counts a segment unanswered past walkAnswerWait, or
+// still on its way past its deadline, and ends the route after
+// walkMaxWatchdog of them.
+func (w *walker) segmentDone(now, end time.Time) bool {
 	seg := &w.seg
 	switch {
 	case !seg.answered && now.Sub(seg.sentAt) >= walkAnswerWait,
@@ -383,11 +401,11 @@ func (w *walker) segmentDone(now time.Time) bool {
 			w.unreachable(reasonWatchdog)
 		}
 		return true
-	case !seg.answered || now.Before(seg.eta.Add(positionTick)):
+	case !seg.answered || now.Before(end.Add(positionTick)):
 		return false
 	}
 	w.floor = seg.to
-	w.meter.arrivedAt = seg.eta
+	w.meter.arrivedAt = end
 	w.seg = segment{}
 	if len(w.route) > 0 {
 		w.route = w.route[1:]
@@ -670,23 +688,25 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 		switch {
 		case !seg.sentAt.IsZero() && !seg.answered:
 			seg.answered = true
+			w.answered(now.Sub(seg.sentAt), s)
 			switch {
 			case still:
 				b.walkBlocked(e.Dest)
 			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
 				b.walkDesync(e)
 			default:
-				run := s.legTime(e.Origin, e.Dest)
-				seg.eta = now.Add(run)
-				seg.deadline = seg.eta.Add(run/2 + walkSlack)
+				// The arrival model Apply builds from this answer next.
+				end := s.moved(now, e.Origin, e.Dest).end()
+				seg.deadline = end.Add(end.Sub(now)/2 + walkSlack)
 			}
 		case !seg.sentAt.IsZero() && still:
 			if horizontal2(e.Dest, seg.to) > walkSlop*walkSlop {
 				b.walkBlocked(e.Dest)
 				return
 			}
-			// Stopped on the segment's end: it arrived.
-			seg.eta, seg.deadline = now, now.Add(walkSlack)
+			// Stopped on the segment's end: it arrived (Apply stands the
+			// bot there at now).
+			seg.deadline = now.Add(walkSlack)
 		case still && !w.talkAt.IsZero():
 			if horizontal2(e.Dest, w.talkTo) > visitTalkRange*visitTalkRange {
 				b.talkBlocked()
@@ -769,6 +789,14 @@ func (b *Brain) walkDesync(answer MoveToLocation) {
 	if w.desync++; w.desync >= walkMaxDesync {
 		w.unreachable(reasonDesync)
 	}
+}
+
+// answered records lag, the answer latency of the segment in flight, and
+// gives the bot's own move A, the maximum over the recent segments.
+func (w *walker) answered(lag time.Duration, s *SelfState) {
+	w.lags[w.lagAt] = lag
+	w.lagAt = (w.lagAt + 1) % walkLags
+	s.answerLag = slices.Max(w.lags[:])
 }
 
 // logPoint is p as a log value: x,y,z.

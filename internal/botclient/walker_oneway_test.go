@@ -72,7 +72,7 @@ func TestWalkerFollowsOneWayFar(t *testing.T) {
 			}
 			segs++
 			b.handle([]Event{segAnswer(origin, to)}, now)
-			now, prev = now.Add(runFor(origin, to)+time.Millisecond), to
+			now, prev = now.Add(segRun(b, now)+time.Millisecond), to
 		}
 		if prev.Z != dest.Z || horizontal2(prev, dest) > walkSlop*walkSlop {
 			t.Errorf("ended at %+v, want %+v", prev, dest)

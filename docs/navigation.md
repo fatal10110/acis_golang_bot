@@ -109,8 +109,11 @@ one-way. `CanMove` is a pure function of geodata and the door overlay.
   timing;
 - the first 5 updates of a move use the start speed, which for a player is the walk speed
   (`walkStartUpdates`, `:34`, `:443-447`). The end of a walk is run out in fixed 100 ms steps
-  (`runOutLegLocked`, `:1084-1095`). A click while already moving first runs a catch-up step of
-  any length (`:1418-1426`);
+  (`runOutLegLocked`, `:1084-1095`). The server keeps one destination. A click while already
+  moving first runs a catch-up step along the current destination, speed × the time since the
+  last update, bounded like every step and checked with `CanMove` (`catchUpLocked`, `:1482`),
+  then starts a fresh click from that point with route resolution (`moveToLocationLocked`,
+  `:876`). A retarget in flight keeps the start-speed update count (`:880-889`) (#308);
 - the step point is rounded half up, and its Z is `Height(next, origin.Z + 2*CellHeight)`;
 - the server checks `CanMove(stepFrom, stepTo)`. If that fails, the walk stops there, and the
   server broadcasts a `MoveToLocation` whose origin and destination are both the stop point
@@ -744,8 +747,8 @@ world units):
 - **Walker**: `Planner.Swim` is the swim speed times `swimBreath`, 24 s: half the dwarf's 48 s,
   since the bot sees neither its Breath stat nor, with `AllowWater` off, a countdown. The bot's
   own dead reckoning swims the part of a move in water (`Water.Span`) at the swim speed in 3D,
-  its height on the swim line rather than the floor, and a segment's simulated arrival uses the
-  same timing.
+  its height on the swim line rather than the floor, and the arrival model (below, "Walker") times
+  the part in water at the swim speed, with one more update per change between land and water.
 
 **Measured for #223** with `TestOwnerSwimSample` (`internal/nav/swim_owner_test.go`, local only:
 `BOT_NAV_GEODATA`, `BOT_NAV_GEOENGINE`, `BOT_NAV_GEODATA_CACHE`, `BOT_NAV_DATAPACK`) on the owner's
@@ -794,6 +797,19 @@ unreachable (with a reason).
   `StopMove`, `TeleportToLocation`). Between those, the bot simulates its own walk with the copied
   step chain at the nominal 100 ms steps. That replaces the linear Z interpolation in `world.go`.
   Arrival is inferred from the simulation, because the server sends nothing on arrival.
+- **Arrival model** (#305): the end of the bot's own move is timed like the server's arrival
+  timer (`creature.go` `travelTicksLocked`, `arrivalDelayLocked`), in whole 100 ms updates. The
+  first 5 updates of a move from standstill advance at the walk speed on land, even running
+  (`moveStartSpeed`; in water the start speed is the full speed). Each change between land and
+  water along the line adds one update, where the server re-times the rest. The anchor (the
+  receipt of the answer that started the move from standstill) and so the update count survive a
+  resample, a `MoveToPawn` and a retarget; a resample re-times the distance left from now, as
+  `retimeLocked` does, never earlier unless the speed changed. A move received within one tick
+  plus the walker's answer latency (the maximum over its last 8 segments, at least one tick) of
+  the modeled end counts as a fresh start. The distance timed is the larger of the server's
+  origin and the bot's estimate to the destination. The fields sit behind the motion's one
+  Self-only pointer, so `Object` stays compact. `Moving`, the walk wake, `segmentDone` and the
+  watchdog all read this end (`docs/walking.md`, "One arrival model").
 - **Step-chain check**: it holds whatever sequence of steps the server takes. It comes in two
   parts: a cheap test that covers almost every segment, and an exact check only where that test
   fails.
@@ -875,10 +891,17 @@ unreachable (with a reason).
     exactly: every `Attack` position, and the position in the bot's own `MagicSkillUse` for a cast
     it asked for with a hit time of 500 ms or more (shorter casts may go out while walking:
     `stopForCast` stops only above a 50 ms template hit time, which cast speed can scale up).
-  - **No click-ahead.** A click while moving would run the server's catch-up step of any length
-    (`creature.go:1418-1426`), which no bound covers. The walker waits for the simulated arrival
-    plus one tick, then sends the next segment. With segments of about 2500 units, this is a
-    short pause every 10 to 20 seconds of running, like a player clicking again.
+  - **Wake on arrival** (#305). The walker sends the next segment one tick after the modeled end
+    of the bot's own move. The walk wake brings the decision there instead of the next regular
+    tick: `decisionAt` offers the end plus one tick while the walk is walking with a segment in
+    flight or the last decision called `goTo`, and only while that time is later than the last
+    walk wake. The wake is derived from the bot's motion, fires once per end and re-arms when the
+    end moves later (a resample, a speed change, the next answer). It covers a normal answer, a
+    reset mid-segment, a desync or door replan (once the server's own move ends) and a blocked
+    stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
+  - **No click-ahead.** A click while moving would retarget the server's walk: a catch-up step
+    along the old destination, then a fresh routed click from there (see "Server behavior this
+    rests on"). Clicking ahead of the arrival is a separate design (#308).
   - No move goes out while the bot's own swing or cast is in progress, because the server would
     defer it and answer `ActionFailed`.
 - **Server answers to its own moves**:
@@ -901,8 +924,9 @@ unreachable (with a reason).
     of looping.
   - `ActionFailed` is not a navigation signal: the server sends it for many other reasons,
     successful pick-up and talk included.
-- **Progress watchdog**: from the route length and the bot's speed, the walker knows when each
-  segment should arrive (injected clock). This replaces "100 units closer per leg".
+- **Progress watchdog**: from the arrival model the walker knows when each segment should arrive
+  (injected clock). A segment unanswered after 2 s, or still on its way past its end plus half its
+  run plus 2 s, counts as failed. This replaces "100 units closer per leg".
 - **Recovery**: replan from where the server says the bot is.
   - A bot standing on one-way-out ground first drops, with one checked route, into the nearest
     abstract SCC it reaches.
@@ -916,8 +940,9 @@ unreachable (with a reason).
   - Sidesteps and wall detours are deleted.
 - **Pacing**:
   - one `MoveBackwardToLocation` per segment, through the frame pacer (`gateNone`);
-  - segments are at least about 300 units long, so a running bot sends at most about one move per
-    second, far below the server's 80 frames/s average;
+  - a segment's next click waits for the server's answer plus the move's end and one tick (100
+    ms), so at most 10 walker moves per second (16-unit segments) and about one per second
+    typically, far below the server's 80 frames/s average;
   - `Action` (melee, cast, talk, pick-up) keeps its existing gates.
 
 ### 4. Consumers
@@ -1104,10 +1129,19 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | town | main 6199fe3 (before #305) | 2026-11-24 | 11 | 3295 | 3020 | 36.98 s | 26.15 s | 23.97 s | 0.707 | 0.691 | 1076 / 1706 ms | 0 | 0 |
 | field | main 6199fe3 (before #305) | 2026-11-24 | 14 | 6503 | 5668 | 65.06 s | 51.61 s | 44.98 s | 0.793 | 0.788 | 1025 / 1857 ms | 0 | 0 |
+| town | wf/walker-wake a3d8512 (after #305) | 2026-11-24 | 10 | 3235 | 3021 | 28.41 s | 25.67 s | 23.98 s | 0.904 | 0.894 | 100 / 101 ms | 0 | 0 |
+| field | wf/walker-wake a3d8512 (after #305) | 2026-11-24 | 14 | 6494 | 5674 | 55.64 s | 51.54 s | 45.03 s | 0.926 | 0.921 | 100 / 101 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
 segment waits about a second after its arrival, the brain tick of `docs/walking.md`.
+
+After #305 every idle, 9 in town and 13 in the field, fell in the bucket up to 127 ms: the walk wake
+sends each segment one position tick after the modeled end, so the idle is that tick by
+construction. What the wake saves shows in the elapsed time: 8.6 s on the town route and 9.4 s on
+the field route, efficiency 0.707 to 0.904 and 0.793 to 0.926, with no blocked stop or desync, so
+no segment went out before the server's move had ended. The rest of the gap to run speed is the
+start-speed updates and the answer latency of each segment (#306, #307, #308).
 
 ## Delivery (milestone M7, "Own navigation", epic #151)
 
