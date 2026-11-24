@@ -30,7 +30,8 @@ type DyePolicy struct {
 	// Symbols is the persona's dye table: the symbol ids the bot wears, by
 	// the class it has, drawn in order into its free slots; an id may
 	// repeat. An id the datapack does not hold, or whose class list leaves
-	// the class out, is skipped. A class with no entry draws nothing.
+	// the class out, is skipped. A class with no entry draws nothing. nil
+	// plays the build's symbols (Persona, overrides).
 	Symbols map[int32][]int32
 	// Makers are the NPC template ids of the Symbol Makers.
 	Makers []int32
@@ -45,7 +46,7 @@ type DyePolicy struct {
 	RetryAfter time.Duration
 }
 
-// defaultDyeTable is the default persona's dye table, each row checked
+// defaultDyeTable is the dye table builds compile (CompileBuild), each row checked
 // against hennas.xml's class lists. First professions (2 slots) wear the
 // 37000-adena +1/-3 rows: fighters STR+1 CON-3 (symbol 1) and DEX+1 CON-3
 // (6); nukers INT+1 WIT-3 (8); healers, whom the INT/WIT rows leave out,
@@ -72,7 +73,6 @@ func defaultDyeTable() map[int32][]int32 {
 // visit that could not finish waits visitShunFor before the next.
 func defaultDyePolicy() DyePolicy {
 	return DyePolicy{
-		Symbols:    defaultDyeTable(),
 		Makers:     slices.Clone(symbolMakers),
 		Reach:      8000,
 		RetryAfter: visitShunFor,
@@ -236,7 +236,7 @@ func (b *Brain) dyePlan() (remove, draw []datapack.Henna) {
 	}
 	class := b.world.Self.ClassID
 	var want []datapack.Henna
-	for _, id := range b.persona.Dyes.Symbols[class] {
+	for _, id := range b.build().Kit.Dyes {
 		if h, ok := m.hennas[id]; ok && slices.Contains(h.Classes, class) {
 			want = append(want, h)
 		}

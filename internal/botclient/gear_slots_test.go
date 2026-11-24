@@ -172,7 +172,7 @@ func TestGearSlotsBeats(t *testing.T) {
 			b := newSlotsBrain(t, tt.class, tt.items...)
 			b.persona.Gear.Jewelry = !tt.noJewelry
 			if tt.noTable {
-				b.persona.Gear.Classes = nil
+				b.persona.Gear.Classes = []GearClass{}
 			}
 			w := b.worn()
 			if got := b.beats(tt.id, &w); got != tt.want {

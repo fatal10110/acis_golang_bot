@@ -14,7 +14,7 @@ func newTrainerWalkBrain(t *testing.T) *Brain {
 	t.Helper()
 	p := DefaultPersona()
 	p.IdleChance = 0
-	p.Buffs = nil
+	p.Buffs = []Buff{}
 	p.Newbie.MaxLevel = 0
 	b, _ := newTestBrain(t, p)
 	s := &b.world.Self

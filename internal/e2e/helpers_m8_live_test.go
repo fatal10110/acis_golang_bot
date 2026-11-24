@@ -121,9 +121,11 @@ func lowSpots(p *botclient.Persona) {
 // errandsOff leaves a level 20 farmer to its spot and supplies: no class
 // master, dyes, trainer, Newbie Guide or gear purchase.
 func errandsOff(p *botclient.Persona) {
-	p.ClassChange, p.Dyes = botclient.ClassChangePolicy{}, botclient.DyePolicy{}
+	// Empty tables, not nil: a nil one is the build's (Persona).
+	p.ClassChange = botclient.ClassChangePolicy{Builds: map[int32]int32{}}
+	p.Dyes = botclient.DyePolicy{Symbols: map[int32][]int32{}}
 	p.Newbie = botclient.NewbiePolicy{}
-	p.LearnSkills = nil
+	p.LearnSkills = map[int32][]int32{}
 	p.Gear.Buy = false
 }
 

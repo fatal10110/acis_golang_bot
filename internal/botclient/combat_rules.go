@@ -150,7 +150,7 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 	if len(hits) < 2 {
 		return Action{}, false
 	}
-	if below(s.HP, s.MaxHP, b.persona.OutmatchedHP) && b.mayFlee(now) {
+	if below(s.HP, s.MaxHP, b.build().Thresholds.OutmatchedHP) && b.mayFlee(now) {
 		return b.flee(hits[0], now), true
 	}
 	if s.Sitting {
@@ -163,19 +163,21 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 	return b.fight(id, now), true
 }
 
-// knowsAttackSkill reports whether the character knows one of the
-// persona's AttackSkills as an active skill.
+// knowsAttackSkill reports whether the character knows one of its
+// rotation's skills as an active skill.
 func (b *Brain) knowsAttackSkill() bool {
-	for _, id := range b.persona.AttackSkills {
-		if s, ok := b.world.Skills[id]; ok && !s.Passive {
+	for _, st := range b.build().Kit.Rotation {
+		if s, ok := b.world.Skills[st.Skill]; ok && !s.Passive {
 			return true
 		}
 	}
 	return false
 }
 
-// fight attacks id: select it, then cast the persona's first ready attack
-// skill or click it once for melee, side stepping when stuck. Either goes
+// fight attacks id: select it, then cast the first ready step of the
+// build's rotation whose gates pass, with MP at MPReserve or more, or click
+// it once for melee as the kit's Melee policy allows, side stepping when
+// stuck. Either goes
 // out only while the straight line to id is open, else the bot walks to a
 // stand point first (engageWalk). A target out of attempts is blacklisted
 // instead.
@@ -192,12 +194,15 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 		return Action{}
 	}
 	forced := b.forced(id)
-	var skills []int32
-	if !below(s.MP, s.MaxMP, b.persona.MPReserve) {
-		skills = b.persona.AttackSkills
-	}
-	for _, skill := range skills {
-		if b.world.SkillReady(skill, now) {
+	bd := b.build()
+	underReserve := below(s.MP, s.MaxMP, bd.Thresholds.MPReserve)
+	if rot := bd.Kit.Rotation; !underReserve && len(rot) > 0 {
+		st := b.stepState(id, rot, now)
+		for _, step := range rot {
+			skill := step.Skill
+			if step.Target != TargetEnemy || !step.passes(st) || !b.world.SkillReady(skill, now) {
+				continue
+			}
 			if b.exhausted(id, now) {
 				return Action{}
 			}
@@ -208,6 +213,9 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 			}
 			return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, forced), object: id, skill: skill}
 		}
+	}
+	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) {
+		return Action{}
 	}
 	r := b.attackReach()
 	if b.engaged != id {

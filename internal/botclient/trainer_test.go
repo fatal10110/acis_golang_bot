@@ -186,7 +186,7 @@ func newTrainerBrain(t *testing.T, sp int32) *Brain {
 	t.Helper()
 	p := DefaultPersona()
 	p.IdleChance = 0
-	p.Buffs = nil // a skill learned would be cast at once (rule 7)
+	p.Buffs = []Buff{} // a skill learned would be cast at once (rule 7)
 	b, _ := newTestBrain(t, p)
 	s := &b.world.Self
 	s.ClassID, s.Level, s.SP = classHumanMystic, 15, sp
@@ -389,7 +389,7 @@ func TestRuleTrainStarts(t *testing.T) {
 		{"trainer of the class in sight", nil, "train", actSelect},
 		{"a fighter wants no skill", func(b *Brain) { b.world.Self.ClassID = 0 }, "", actHold},
 		{"no trainer of the class in sight", func(b *Brain) { b.world.Self.ClassID = classDarkMystic }, "", actHold},
-		{"persona with no skills for the class", func(b *Brain) { b.persona.LearnSkills = nil }, "", actHold},
+		{"persona with no skills for the class", func(b *Brain) { b.persona.LearnSkills = map[int32][]int32{} }, "", actHold},
 		{"dead trainer", func(b *Brain) { b.world.Objects[trainerObj].Dead = true }, "", actHold},
 		{"sitting stands up first", func(b *Brain) { b.world.Self.Sitting, b.world.Target = true, trainerObj }, "train", actSitStand},
 		{"combat goes first", func(b *Brain) { b.world.Self.InCombat = true }, "attacked", actHold},
@@ -420,30 +420,31 @@ func TestRuleTrainStarts(t *testing.T) {
 	}
 }
 
-// TestDefaultPersonaSkills checks the support skills against the classes
-// the plan names: healers learn Heal, Battle Heal, Might and Shield, then
-// Wind Strike; orc mystics their buffs, then Life Drain and Chill Flame,
-// and no heal; every listed class has trainers.
+// TestDefaultPersonaSkills checks the support skills of the default
+// persona's builds against the classes the plan names: healers learn Heal,
+// Battle Heal, Might and Shield, then Wind Strike; orc mystics their buffs,
+// then Life Drain and Chill Flame, and no heal; every listed class has
+// trainers. The persona overrides none of them.
 func TestDefaultPersonaSkills(t *testing.T) {
 	p := DefaultPersona()
+	if p.LearnSkills != nil || p.Trainers != nil {
+		t.Fatalf("DefaultPersona overrides the build: learn %v trainers %v", p.LearnSkills, p.Trainers)
+	}
+	kit := func(c int32) ClassKit { return compileFor(p, c, 1).Kit }
 	for _, c := range []int32{classHumanMystic, classElvenMystic, classDarkMystic} {
-		if got := p.LearnSkills[c]; !slices.Equal(got, []int32{skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike}) {
+		if got := kit(c).Skills; !slices.Equal(got, []int32{skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike}) {
 			t.Errorf("class %d skills = %v", c, got)
 		}
 	}
-	if got := p.LearnSkills[classOrcMystic]; !slices.Equal(got, []int32{skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame}) {
+	if got := kit(classOrcMystic).Skills; !slices.Equal(got, []int32{skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame}) {
 		t.Errorf("orc mystic skills = %v, want buffs then attack spells", got)
 	}
-	for c := range p.LearnSkills {
-		if len(p.Trainers[c]) == 0 {
+	for c := range mysticSkills {
+		if len(kit(c).Trainers) == 0 {
 			t.Errorf("class %d has no trainers", c)
 		}
 	}
-	if slices.Contains(p.Trainers[classHumanMystic], 32098) {
+	if slices.Contains(kit(classHumanMystic).Trainers, 32098) {
 		t.Error("human mystic trainers list 32098, whose page has no skill list link")
-	}
-	p.LearnSkills[classHumanMystic] = nil
-	if len(DefaultPersona().LearnSkills[classHumanMystic]) == 0 {
-		t.Error("DefaultPersona shares its skill map")
 	}
 }
