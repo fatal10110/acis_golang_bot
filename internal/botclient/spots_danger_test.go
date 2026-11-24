@@ -84,9 +84,10 @@ func setSquire(b *Brain, s squire, potions int32) {
 // TestMobFight checks one monster's fight against a squire. A Werewolf
 // Chieftain (level 12) has 314 HP (199 by CON 43's 1.58), P.Atk 30.5 (25.2
 // by STR 40's 1.20 and level 12's 1.01) and P.Def 60.6, swings at 272
-// (247.42 by DEX 30's 1.10) and lands 87.7% of its swings on evasion 46,
-// 1.1% of them critical: 27.3 a hit on P.Def 86. The level 14 squire's 7
-// P.Atk hits it for 8.9, 92.3% of the time, every 1.2 s.
+// (247.42 by DEX 30's 1.10) and lands 86% of its swings on evasion 46
+// (accuracy 44, truncated), 1.1% of them critical: 27.3 a hit on P.Def 86.
+// The level 14 squire's 7 P.Atk hits it for 8.9, 94% of the time, every
+// 1.2 s.
 func TestMobFight(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -94,8 +95,8 @@ func TestMobFight(t *testing.T) {
 		mob       datapack.Mob
 		kill, dps float64
 	}{
-		{"werewolf chieftain", squire14, datapack.Mob{Level: 12, Combat: werewolfChieftain}, 46.05, 13.20},
-		{"giant toad", squire6, datapack.Mob{Level: 5, Combat: giantToad}, 16.44, 6.38},
+		{"werewolf chieftain", squire14, datapack.Mob{Level: 12, Combat: werewolfChieftain}, 45.20, 12.93},
+		{"giant toad", squire6, datapack.Mob{Level: 5, Combat: giantToad}, 16.13, 6.25},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,14 +124,14 @@ func TestPackRisk(t *testing.T) {
 		risk float64
 		fit  bool
 	}{
-		{"level 14 at the werewolves, 13 potions", squire14, 13, tiWolves, 3.31, false},
-		{"level 14 at the werewolves in better armour", with(squire14, func(s *squire) { s.pDef = 120 }), 13, tiWolves, 2.37, true},
-		{"level 14 at the orcs, 13 potions", squire14, 13, tiOrcs01, 2.28, true},
-		{"level 14 at the orcs, 3 potions", squire14, 3, tiOrcs01, 2.28, true},
-		{"level 14 at the orcs, potions run out", squire14, 0, tiOrcs01, 4.04, false},
-		{"level 6 at five toads, no potion", squire6, 0, tiToads27, 2.37, true},
-		{"level 6 at four toads, no potion", squire6, 0, tiToads28, 1.90, true},
-		{"level 6 at four toads, 12 potions", squire6, 12, tiToads28, 1.19, true},
+		{"level 14 at the werewolves, 13 potions", squire14, 13, tiWolves, 3.21, false},
+		{"level 14 at the werewolves in better armour", with(squire14, func(s *squire) { s.pDef = 120 }), 13, tiWolves, 2.30, true},
+		{"level 14 at the orcs, 13 potions", squire14, 13, tiOrcs01, 2.21, true},
+		{"level 14 at the orcs, 3 potions", squire14, 3, tiOrcs01, 2.21, true},
+		{"level 14 at the orcs, potions run out", squire14, 0, tiOrcs01, 3.90, false},
+		{"level 6 at five toads, no potion", squire6, 0, tiToads27, 2.28, true},
+		{"level 6 at four toads, no potion", squire6, 0, tiToads28, 1.82, true},
+		{"level 6 at four toads, 12 potions", squire6, 12, tiToads28, 1.15, true},
 		{"level 6 with its death penalty at five toads, 12 potions", weak6, 12, tiToads27, 15.19, false},
 		{"stats not in yet", with(squire14, func(s *squire) { s.pAtk = 0 }), 0, tiWolves, 0, true},
 		{"no aggressive monster", squire14, 0, datapack.Spot{MinLevel: 11, MaxLevel: 13}, 0, true},

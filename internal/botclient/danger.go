@@ -45,7 +45,7 @@ func mobFight(self *SelfState, m *datapack.Mob) (kill, dps float64) {
 	pAtk, pDef := c.PAtk*strBonus(c.STR)*mod, c.PDef*mod
 	atkSpd := math.Trunc(c.AtkSpd * dexBonus(c.DEX))
 	crit := min(500, c.Crit*dexBonus(c.DEX)*10) / 1000
-	acc := math.Sqrt(float64(c.DEX))*6 + level
+	acc := math.Trunc(math.Sqrt(float64(c.DEX))*6 + level) // HitRate takes ints
 	dps = pAtk * 77 / float64(self.PDef) * (1 + crit) * hitRate(acc, float64(self.Evasion)) * atkSpd / 500
 	hit := float64(self.PAtk) * 77 / pDef * hitRate(float64(self.Accuracy), acc)
 	return hp / (hit * float64(self.PAtkSpd) / 500), dps

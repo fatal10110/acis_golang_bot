@@ -89,7 +89,7 @@ type UserInfo struct {
 	PAtkSpd int32
 	// PAtk, PDef, Evasion and Accuracy are the character's final combat
 	// stats, gear and buffs counted: what it weighs a fight with
-	// (spotDanger).
+	// (Brain.packRisk).
 	PAtk, PDef, Evasion, Accuracy int32
 	// CollisionHeight is the character's; the server adds it to the Z of
 	// every ground click (network/movement.go moveLivePlayer).

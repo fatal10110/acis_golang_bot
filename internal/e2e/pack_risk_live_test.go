@@ -38,6 +38,7 @@ func TestLivePackRisk(t *testing.T) {
 
 	start := time.Now()
 	var last string
+	claimed := false
 	seen := 0
 	for time.Since(start) < riskWatch {
 		if err := ctx.Err(); err != nil {
@@ -46,6 +47,7 @@ func TestLivePackRisk(t *testing.T) {
 		st := f.bot.Status()
 		if st.Spot != last {
 			last = st.Spot
+			claimed = claimed || st.Spot != ""
 			t.Logf("%s rule %q spot %q at %v, HP %d/%d", f.name, st.Rule, st.Spot, st.Position, st.HP, st.MaxHP)
 		}
 		if st.Spot == wolves {
@@ -64,6 +66,10 @@ func TestLivePackRisk(t *testing.T) {
 		case <-ctx.Done():
 		case <-time.After(time.Second):
 		}
+	}
+	if !claimed {
+		t.Log(f.digest())
+		t.Fatalf("%s claimed no spot in %v", f.name, riskWatch)
 	}
 	t.Logf("%s: spot %q after %v", f.name, last, riskWatch)
 }
