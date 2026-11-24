@@ -44,16 +44,16 @@ func wideCorridorOpen(p *Planner, a, b location.Location) bool {
 	return true
 }
 
-// TestNarrowCorridorAgreesWithExact checks the corridor test's two
-// widenings (#256) against the exact check and the copied step chain: a
-// segment the corridor test passes where the wide one fails, because a cell
-// out of reach of the step chain fails or because it stands on stacked
-// tops, must pass the exact check over its whole length and survive random
-// step sequences. The run must include both kinds.
+// TestNarrowCorridorAgreesWithExact checks the corridor test's widenings
+// (#256, #307) against the exact check and the copied step chain: a segment
+// the corridor test passes where the wide one fails, because a cell out of
+// reach of the step chain fails or because it carries its walking layer
+// over cells of several layers, must pass the exact check over its whole
+// length and survive random step sequences. The run must include both kinds.
 func TestNarrowCorridorAgreesWithExact(t *testing.T) {
 	short := testPlanner(t)
 	long := *short
-	long.Lmax = 40 // a longer step bound reaches farther stacked cells
+	long.Lmax = 40 // a longer step bound reaches farther layered cells
 	e := short.Engine
 	rng := rand.New(rand.NewPCG(5, 13))
 	scenes := []geotest.Point{
@@ -94,9 +94,9 @@ func TestNarrowCorridorAgreesWithExact(t *testing.T) {
 			t.Fatalf("Lmax %v: %v -> %v passes the corridor test, but a step sequence ends %+v", p.Lmax, a, b, w)
 		}
 	}
-	t.Logf("narrowed %d, on stacked tops %d", narrow, stacked)
+	t.Logf("narrowed %d, over layered cells %d", narrow, stacked)
 	if narrow == 0 || stacked == 0 {
-		t.Fatalf("coverage: narrowed %d, on stacked tops %d; want each > 0", narrow, stacked)
+		t.Fatalf("coverage: narrowed %d, over layered cells %d; want each > 0", narrow, stacked)
 	}
 }
 

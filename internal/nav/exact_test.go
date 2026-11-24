@@ -12,9 +12,9 @@ import (
 // TestExactStair is the stretch only some step sequences pass: short steps
 // climb the stair 0, 40, 80, while a step long enough to cross the 40 cell
 // lands on the 20 layer and is blocked. With the measured Lmax no step is
-// that long, and the exact check passes; with a longer Lmax (a first step
-// of any length up to it) it rejects, and the copied step chain confirms a
-// blocking sequence.
+// that long, and the exact check passes; with a longer Lmax (a step of any
+// length up to it, the first included) it rejects, and the copied step
+// chain confirms a blocking sequence.
 func TestExactStair(t *testing.T) {
 	p := testPlanner(t)
 	e := p.Engine

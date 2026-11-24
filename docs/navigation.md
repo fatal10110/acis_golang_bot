@@ -619,6 +619,45 @@ the ground beside it and is now two, to the deck's edge on its stacked tops, the
 takes the farthest candidate that passes the corridor test before it tries any exact one, and the
 tops now pass the corridor test up to the edge.
 
+**Longer segments** (#307). Most segments were short because the pull gave up early: when the
+corridor test failed it tried exact candidates only within `exactCells` (8) cells, so a quarter of
+all segments were exactly 128 units. Three changes:
+
+- **Walking layer** (Step-chain check, below): the corridor test carries the floor the chain
+  stands on from the segment's start, through cells of several layers, so a corridor may run on
+  the ground under a deck and the stretches the exact check walks shrink to the cells where the
+  layer is in doubt. String-pull candidates and the exact check's stretches use the same rule.
+- **Farther exact candidates** (`pull`): from a waypoint whose corridor segment is shorter than
+  `farShort` (600), or that has none, the pull tries the path cells past `exactCells`, farthest
+  first. A candidate is taken when it passes `CanMove`, its stretches failing the corridor test
+  total at most `farStretch` (16 cells) and the exact check passes over them. A candidate whose
+  line passes within `farMiss` (two cells) of where an earlier candidate's exact check failed
+  is skipped. The work is capped per route at `farWork` (800,000 corridor cells filled plus
+  `CanMove` calls); once it is spent the rest of the route takes the `exactCells` rule. Without
+  the 600 gate, the extra exact checks went to segments already long; without a cap, warm p50
+  rose to 85 ms. The cap's sweep (warm p50, share under 300): 150,000 58.5 ms, 32.4%; 300,000
+  59.3 ms, 29.1%; 500,000 62.5 ms, 26.3%; 800,000 58.5 ms, 24.1%; none 60.5 ms, 22.7% (cold p50
+  92 ms).
+- **Blocked-stop avoid width** (Server answers to its own moves, below).
+
+Measured with `BenchmarkOwnerNav` (same cache and 200 pairs of 40,000 units, both builds back to
+back on the same machine; main 3f62617 before, this change after; the segment lengths are those of
+the 200 warm routes, logged by the benchmark since #307):
+
+| | before | after |
+| --- | --- | --- |
+| route warm p50 / p99 | 61.9 / 663.7 ms | 59.1 / 392.1 ms |
+| route cold p50 / p99 | 89.7 / 777.4 ms | 86.5 / 435.2 ms |
+| cold heap per route p99 / max | 19.4 / 43.8 MB | 19.4 / 43.8 MB |
+| segments | 11,047 | 6,853 (−38%) |
+| segment length p25 / median / p75 | 128 / 181 / 1776 | 316 / 1371 / 2486 |
+| segments under 300 units | 54.8% | 24.1% |
+| routes failed | 8 of 400 | 8 of 400 |
+
+Answers change: the routes are pulled into fewer, longer segments; as many routes fail as before.
+The p99 fell with the walking layer's first build already (warm p99 377 ms with a 150,000 cap and
+no gate): the exact check no longer walks every cell of several layers point by point.
+
 | Measure | Target | Before | After |
 | --- | --- | --- | --- |
 | `Locate` cold | p99 ≤ 30 ms | p50 10.8 ms, p99 24.1 ms | p50 11.7 ms, p99 32.3 ms (code unchanged: noise) |
@@ -1167,6 +1206,8 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | field | wf/walker-wake a3d8512 (after #305) | 2026-11-24 | 14 | 6494 | 5674 | 55.64 s | 51.54 s | 45.03 s | 0.926 | 0.921 | 100 / 101 ms | 0 | 0 |
 | town | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 15 | 3260 | 3021 | 29.94 s | 25.87 s | 23.98 s | 0.864 | 0.855 | 100 / 101 ms | 0 | 0 |
 | field | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 25 | 6777 | 5673 | 61.46 s | 53.79 s | 45.02 s | 0.875 | 0.870 | 100 / 101 ms | 0 | 0 |
+| town | wf/nav-long-segments 95d875c (after #307) | 2026-11-24 | 9 | 3206 | 3021 | 27.92 s | 25.44 s | 23.98 s | 0.911 | 0.899 | 100 / 100 ms | 0 | 0 |
+| field | wf/nav-long-segments 95d875c (after #307) | 2026-11-24 | 16 | 6748 | 5690 | 58.59 s | 53.56 s | 45.16 s | 0.914 | 0.908 | 100 / 100 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
@@ -1185,6 +1226,12 @@ the bucket up to 127 ms) and nothing was blocked or desynced, but each extra seg
 answer latency and the server's walk-speed start, and the shorter pull bends the field route 283
 units longer: efficiency 0.904 to 0.864 in town and 0.926 to 0.875 in the field. That is the cost
 of the cap toward a leader that stands still; the scenario's GM never moves.
+
+After #307 the pull reaches past the corridor test with exact-checked candidates, within the same
+500 cap: 9 segments instead of 15 in town and 16 instead of 25 in the field, efficiency 0.864 to
+0.911 and 0.875 to 0.914, the elapsed time 2.0 s and 2.9 s shorter. Every idle is still the one
+position tick, and nothing was blocked or desynced. Fewer segments mean fewer answer latencies
+and walk-speed starts, which is most of what the elapsed time saved.
 
 What #306 buys shows with a leader that moves. `TestLiveFollowMovingLeader` starts the bot 1900
 from the field route's end, in sight of the GM, who paces 300 back and forth there while the bot
