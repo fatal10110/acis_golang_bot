@@ -41,6 +41,7 @@ function world(cap, scen) {
       return { status: 'idle_exit', summary: 'exited right after the push' }
     }
     if (sc.implNoChange) { post(slug, 'review', 'no_change', { summary: 'already fixed' }); return { status: 'no_change', summary: 'x' } }
+    if (sc.implBlocked) { post(slug, 'review', 'blocked', { reason: 'halted' }); return { status: 'blocked', summary: 'x' } }
     const resume = /RESUME:/.test(prompt)
     sc.prompts = (sc.prompts || []).concat(prompt)
     // A long first implementation: the first-push watcher times out several times meanwhile.
@@ -121,8 +122,10 @@ function world(cap, scen) {
       if (/ drain /.test(prompt)) lane(slug).review = lane(slug).review.filter(m => m.kind !== 'no_change' && m.kind !== 'blocked')
       for (let i = 0; i < 20 && !lane(slug).review.length; i++) await tick()
       const msgs = lane(slug).review.map((m, i) => ({ seq: i + 1, kind: m.kind, data: JSON.stringify(m.data) }))
-      return { messages: msgs, timeout: msgs.length === 0 }
+      // $fakeStop: the watcher invents "stop": true although the run is not stopping.
+      return scen.$fakeStop ? { messages: msgs, timeout: false, stop: true } : { messages: msgs, timeout: msgs.length === 0 }
     }
+    if (kind === 'stop-check') return { stop: !!scen.$stop, lines: [] }
     if (kind === 'final') {
       const m = prompt.match(/--kind final --data '(.*?)'/)
       // --unless-ended: the reviewer's final already set a terminal lane status.
@@ -401,6 +404,17 @@ const count = (w, prefix) => w.labels.filter(l => l === prefix || l.startsWith(p
   assert.equal(count(p1.w, 'review:a'), 1)
   const p2 = await run({ run: 'sim', track: 'A', plan: one, restarts: 1 }, { a: { implDies: true, implExitsAfterPush: true } })
   assert.equal(p2.res[0].status, 'merged', JSON.stringify(p2.res[0]))
+}
+
+// 14. A watcher that invents "stop" (w1125): a blocked lane ends only itself, the next lane on the
+//     track still starts, and a stop the run's marker does not confirm is ignored.
+{
+  const two = { tracks: ['A'], waves: [{ name: '1', lanes: [lane('a', 'A'), lane('b', 'A')] }] }
+  const { res, w } = await run({ run: 'sim', track: 'A', plan: two }, { $fakeStop: true, a: { implBlocked: true }, b: { reviewRounds: 1 } })
+  const r = by(res)
+  assert.equal(r.a.status, 'blocked', JSON.stringify(res))
+  assert.equal(r.b.status, 'merged', JSON.stringify(res))
+  assert.equal(count(w, 'impl:b'), 1, 'the next lane on the track starts')
 }
 
 console.log('waves_sim: all scenarios passed')
