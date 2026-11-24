@@ -36,17 +36,24 @@ const (
 func TestLiveSpoilSweep(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 25*time.Minute)
+	ctx := scenarioCtx(t, 30*time.Minute)
 	spots, travel := spotRegistry(t, tg), travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
 		class: &botclient.DwarvenFighter,
-		// Spots of its level, not the newbie ones (lowSpots): a monster 5
-		// levels or more under the killer cuts its spoil chances (the
-		// server's deep blue drop rules, model/item/drop.go), and a level 2
-		// monster's few-percent spoil items then hardly ever roll.
-		persona: farmerPersona(spoilLevel),
+		// The spots of monsters up to 5 levels under it: a monster more
+		// than 5 levels under the killer cuts its spoil chances (the
+		// server's deep blue drop rules, model/item/drop.go), and a level
+		// 2 monster's few-percent spoil items then hardly ever roll (none
+		// in 11 spoils live); the level 7 to 9 packs of the spots of its
+		// level are too much for a dwarf of level 10 in starter gear
+		// (packFits), which leaves it no spot by its village.
+		persona: func() botclient.Persona {
+			p := farmerPersona(spoilLevel)()
+			p.Spots.Above = 5
+			return p
+		},
 		// The travel map as cmd/bots' farmers have it: the corpse times
 		// of its NPC templates bound the sweep window (TravelMap.corpseTime).
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },
@@ -63,7 +70,7 @@ func TestLiveSpoilSweep(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 	start, alive := time.Now(), time.Now()
 	var r spoilRun
-	untilBy(t, ctx, f.name+" spoiling and sweeping", start.Add(18*time.Minute), func() string {
+	untilBy(t, ctx, f.name+" spoiling and sweeping", start.Add(22*time.Minute), func() string {
 		if time.Since(alive) > gmKeepAlive {
 			gmTeleport(t, ctx, gm, townTI)
 			alive = time.Now()
