@@ -473,6 +473,9 @@ type rule struct {
 // runs, after "critical" so a potion still goes down. "enchant" uses the
 // enchant scrolls on the worn gear in town, after the errands that wear,
 // buy and draw and ahead of every rule that would walk the bot out of town.
+// "sweep" casts Sweeper on a corpse the bot spoiled while its sweep window
+// lasts, right after "outnumbered" so only the critical, escape, heal,
+// outnumbered and flee rules go first, and ahead of "loot".
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -481,6 +484,7 @@ var playRules = []rule{
 	{"escape", (*Brain).ruleEscape},
 	{"heal", (*Brain).ruleHeal},
 	{"outnumbered", (*Brain).ruleOutnumbered},
+	{"sweep", (*Brain).ruleSweep},
 	{"chat", (*Brain).ruleChat},
 	{"announce", (*Brain).ruleAnnounce},
 	{"shots", (*Brain).ruleShots},

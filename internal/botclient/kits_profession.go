@@ -34,6 +34,8 @@ const (
 	skillSting            int32 = 223
 	skillSprint           int32 = 230
 	skillWildSweep        int32 = 245
+	skillSpoil            int32 = 254
+	skillSweeper          int32 = 42
 	skillPowerSmash       int32 = 255
 	skillAccuracy         int32 = 256
 	skillHurricaneAssault int32 = 284
@@ -277,12 +279,15 @@ var professionKits = map[int32]ClassKit{
 			SitHP: 30, SitMP: 20, StandHP: 85, StandMP: 80,
 		},
 	},
-	// SC: Stun Attack with a blunt; Spoil and Sweeper are S10's (#329).
+	// SC: Spoil opens on a fresh target, then Stun Attack with a blunt;
+	// Sweeper on the spoiled corpse (ruleSweep).
 	54: {
-		Skills: []int32{skillStunAttack},
+		Skills: []int32{skillSpoil, skillStunAttack, skillSweeper},
 		Rotation: []Step{
+			{Skill: skillSpoil, Spoil: true},
 			{Skill: skillStunAttack, Weapons: stunWeapons},
 		},
+		Sweep: skillSweeper,
 		Thresholds: Thresholds{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30, MPReserve: 10,
 			SitHP: 35, SitMP: 20, StandHP: 90, StandMP: 80,

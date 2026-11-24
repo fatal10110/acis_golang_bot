@@ -247,12 +247,19 @@ func TestRowOF(t *testing.T) {
 	}
 }
 
-// TestRowWF checks the dwarven fighter melees with no step (Spoil is S10)
-// and plays its row's thresholds.
+// TestRowWF checks the dwarven fighter opens with Spoil from 10 (spoil and
+// sweep: row_spoil_test.go), melees before and once it opened, and plays
+// its row's thresholds.
 func TestRowWF(t *testing.T) {
-	b := rowBrain(t, DwarvenFighter.ID, 10, "BLUNT")
+	b := rowBrain(t, DwarvenFighter.ID, 9, "BLUNT", skillSpoil)
 	if a := b.fight(npcID, at(time.Second)); a.kind != actAttack {
-		t.Fatalf("fight = kind %d skill %d, want a melee click", a.kind, a.skill)
+		t.Fatalf("fight at 9 = kind %d skill %d, want a melee click", a.kind, a.skill)
+	}
+	b = rowBrain(t, DwarvenFighter.ID, 10, "BLUNT", skillSpoil)
+	wantCast(t, b.fight(npcID, at(time.Second)), skillSpoil, npcID)
+	b.opened = npcID
+	if a := b.fight(npcID, at(time.Second)); a.kind != actAttack {
+		t.Fatalf("fight once opened = kind %d skill %d, want a melee click", a.kind, a.skill)
 	}
 	if th := b.build().Thresholds; th != dwarvenFighterKit.Thresholds {
 		t.Errorf("thresholds %+v, want the row's %+v", th, dwarvenFighterKit.Thresholds)

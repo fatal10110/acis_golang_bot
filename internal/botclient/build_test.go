@@ -48,7 +48,8 @@ func TestCompileBuild(t *testing.T) {
 		{class: DarkFighter.ID, level: 10, rotation: attacks, buffs: 2, kit: darkFighterKit},
 		{class: DarkFighter.ID, level: 15, rotation: append([]int32{skillDrainHealth, skillDrainHealth}, attacks...), buffs: 2, kit: darkFighterKit},
 		{class: OrcFighter.ID, level: 10, rotation: []int32{skillIronPunch, skillPowerStrike}, kit: orcFighterKit},
-		{class: DwarvenFighter.ID, level: 10, kit: dwarvenFighterKit},
+		{class: DwarvenFighter.ID, level: 9, kit: dwarvenFighterKit},
+		{class: DwarvenFighter.ID, level: 10, rotation: []int32{skillSpoil}, kit: dwarvenFighterKit},
 	}
 	for _, tt := range tests {
 		race, _ := datapack.ClassRace(tt.class)
@@ -56,7 +57,7 @@ func TestCompileBuild(t *testing.T) {
 			bd := CompileBuild(race, tt.class, tt.level, role)
 			k := bd.Kit
 			wantTh, wantSkills := tt.kit.Thresholds, tt.kit.Skills
-			if bd.Role != role || bd.Branch != 0 || bd.Thresholds != wantTh || k.Relax != tt.kit.Relax {
+			if bd.Role != role || bd.Branch != 0 || bd.Thresholds != wantTh || k.Relax != tt.kit.Relax || k.Sweep != tt.kit.Sweep {
 				t.Errorf("class %d %v: role %v branch %d thresholds %+v", tt.class, role, bd.Role, bd.Branch, bd.Thresholds)
 			}
 			if got := stepSkills(k.Rotation); !slices.Equal(got, tt.rotation) || len(k.Heals) != tt.heals || len(k.Buffs) != tt.buffs {
