@@ -45,6 +45,7 @@ var (
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30,
 			SitHP: 35, SitMP: 15, StandHP: 90, StandMP: 70,
 		},
+		SpotMargin: marginNormal,
 	}
 	// elvenFighterKit (EF): HF's attacks, Elemental Heal on itself under
 	// 50 % HP from 15, the auras out of combat.
@@ -58,6 +59,7 @@ var (
 			CriticalHP: 25, CrowdedHP: 80, OutmatchedHP: 50, MPReserve: 20,
 			SitHP: 45, SitMP: 20, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	}
 	// darkFighterKit (DF): Drain Health under 60 % HP and as the opener from
 	// 15, then HF's attacks; the auras out of combat.
@@ -72,6 +74,7 @@ var (
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 20,
 			SitHP: 50, SitMP: 20, StandHP: 95, StandMP: 80,
 		},
+		SpotMargin: marginGlassCannon,
 	}
 	// orcFighterKit (OF): Iron Punch with fist weapons, Power Strike with a
 	// sword or blunt; rests on HP with Relax and fights on longest.
@@ -86,6 +89,7 @@ var (
 			CriticalHP: 15, CrowdedHP: 50, OutmatchedHP: 25,
 			SitHP: 30, SitMP: 15, StandHP: 85, StandMP: 70,
 		},
+		SpotMargin: marginTank,
 	}
 	// dwarvenFighterKit (WF): Spoil opens on a fresh target from 10, then
 	// melee; Sweeper on the spoiled corpse (ruleSweep).
@@ -97,5 +101,6 @@ var (
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30,
 			SitHP: 35, SitMP: 20, StandHP: 90, StandMP: 80,
 		},
+		SpotMargin: marginNormal,
 	}
 )

@@ -124,6 +124,7 @@ var (
 		},
 		Roles: map[Role]RolePart{RoleSupport: supportPart(baseMysticSupportPart,
 			skillIceBolt, skillWindStrike, skillSelfHeal, skillVampiricTouch)},
+		SpotMargin: marginGlassCannon,
 	}
 	// elvenMysticKit (EM): the Damage role opens with Wind Shackle from 14
 	// above 50 % MP; Ice Bolt, Wind Strike; Self Heal under 50 % HP, no
@@ -145,6 +146,7 @@ var (
 		},
 		Roles: map[Role]RolePart{RoleSupport: supportPart(baseMysticSupportPart,
 			skillIceBolt, skillWindStrike, skillSelfHeal)},
+		SpotMargin: marginGlassCannon,
 	}
 	// darkMysticKit (DM): the Damage role opens with Curse: Poison from 7
 	// above 60 % MP; Ice Bolt, Wind Strike; Vampiric Touch under 70 % HP
@@ -167,6 +169,7 @@ var (
 		},
 		Roles: map[Role]RolePart{RoleSupport: supportPart(baseMysticSupportPart,
 			skillIceBolt, skillWindStrike, skillVampiricTouch, skillSelfHeal)},
+		SpotMargin: marginGlassCannon,
 	}
 	// orcMysticKit (OM): Chill Flame opens from 7, then Life Drain, which
 	// also drains under 70 % HP; Soul Cry on in combat above 30 % MP; Soul
@@ -196,6 +199,7 @@ var (
 			Melee:      MeleeAlways,
 			Thresholds: Thresholds{MPReserve: 50, SitMP: 30},
 		}},
+		SpotMargin: marginNormal,
 	}
 )
 
@@ -229,6 +233,7 @@ var (
 		Melee:      MeleeAloneUnderReserve,
 		Base:       []int32{skillMight, skillShield},
 		Thresholds: healerThresholds,
+		SpotMargin: marginGlassCannon,
 	}
 	// elvenOracleKit (EO): the healers' heals; Dryad Root from 25 on a
 	// second attacker, Wind Strike on the leader's target; Might, Shield,
@@ -249,6 +254,7 @@ var (
 		Melee:      MeleeAloneUnderReserve,
 		Base:       []int32{skillMight, skillShield},
 		Thresholds: healerThresholds,
+		SpotMargin: marginGlassCannon,
 	}
 	// shillienOracleKit (SO): the healers' heals; Wind Shackle once on the
 	// leader's target, then Wind Strike; Might, Shield, Wind Walk, Greater
@@ -272,6 +278,7 @@ var (
 			CriticalHP: 35, CrowdedHP: 90, OutmatchedHP: 65, MPReserve: 50,
 			SitHP: 55, SitMP: 30, StandHP: 95, StandMP: 90,
 		},
+		SpotMargin: marginGlassCannon,
 	}
 	// humanWizardKit (HW): Blaze from 750, Ice Bolt, Energy Bolt within
 	// 400, Aura Burn within 150; Vampiric Touch under 60 % HP, Body To Mind
@@ -294,6 +301,7 @@ var (
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 10,
 			SitHP: 50, SitMP: 20, StandHP: 90, StandMP: 90,
 		},
+		SpotMargin: marginGlassCannon,
 	}
 	// elvenWizardKit (EW): Wind Shackle opens above 50 % MP, else Solar
 	// Spark from 25, Aqua Swirl, Ice Bolt, Energy Bolt within 400, Aura
@@ -319,6 +327,7 @@ var (
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 10,
 			SitHP: 50, SitMP: 20, StandHP: 90, StandMP: 90,
 		},
+		SpotMargin: marginGlassCannon,
 	}
 	// darkWizardKit (DW): Curse: Poison opens above 60 % MP, else Shadow
 	// Spark from 25, Twister, Ice Bolt, Aura Burn within 150; Vampiric
@@ -343,6 +352,7 @@ var (
 			CriticalHP: 35, CrowdedHP: 90, OutmatchedHP: 65, MPReserve: 10,
 			SitHP: 55, SitMP: 20, StandHP: 95, StandMP: 90,
 		},
+		SpotMargin: marginGlassCannon,
 	}
 	// orcShamanKit (OS): Frost Flame opens from 750, Life Drain (also under
 	// 70 % HP), Stun Attack with a blunt, else melee; Chant of Life with a
@@ -377,6 +387,7 @@ var (
 			CriticalHP: 25, CrowdedHP: 80, OutmatchedHP: 50, MPReserve: 30,
 			SitHP: 45, SitMP: 25, StandHP: 90, StandMP: 90,
 		},
-		Roles: map[Role]RolePart{RoleSupport: {Melee: MeleeAlways, Thresholds: Thresholds{MPReserve: 50}}},
+		Roles:      map[Role]RolePart{RoleSupport: {Melee: MeleeAlways, Thresholds: Thresholds{MPReserve: 50}}},
+		SpotMargin: marginNormal,
 	}
 )

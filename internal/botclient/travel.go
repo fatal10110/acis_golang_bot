@@ -49,7 +49,7 @@ type TravelMap struct {
 	// (indexPotions): what WithItemIndex puts in a persona.
 	potions []int32
 	// heals are what each of them restores (indexPotionHeals): what the
-	// bot weighs a pack with (Brain.packRisk).
+	// bot weighs a pack with (Brain.packFight).
 	heals map[int32]potionHeal
 	// buffPotions are the datapack's buff potions (indexBuffPotions), and
 	// stacks the stack effect of every skill level that shares a stack type

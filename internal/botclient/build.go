@@ -239,6 +239,11 @@ type ClassKit struct {
 	// Thresholds are the row's (docs/strategy.md, "Numbers and summary");
 	// the zero value compiles defaultThresholds.
 	Thresholds Thresholds
+	// SpotMargin is the row's spot margin (docs/strategy.md column 10,
+	// packFits): tank 1.5, normal 2.0, glass cannon 3.0. 0, a row
+	// without one, leaves the model bound off; SpotPolicy.Margin replaces
+	// it.
+	SpotMargin float64
 	// Gear is the class's gear table entry, Dyes its dye symbols: the
 	// table the dye errand draws where the model cannot value dyes
 	// (dyePlan).
@@ -387,7 +392,7 @@ func professionKit(class int32) (ClassKit, bool) {
 // the level reached (a buff another one of the level Replaces left out),
 // the role's part of the row (ClassKit.Roles) over the row's learn table,
 // melee policy and thresholds (defaultThresholds for a row without its
-// own), its class's gear and dyes and its race's professions. The trainers come from the
+// own), its spot margin, its class's gear and dyes and its race's professions. The trainers come from the
 // datapack (Brain.build). RoleNone compiles the zero Build. The tables are
 // Go tables, checked against the shipped datapack by
 // TestBehaviorRowsShipped.
@@ -417,7 +422,7 @@ func CompileBuild(race, class, level int32, role Role) Build {
 	}
 	plays := func(r Role) bool { return r == RoleNone || r == role }
 	k.Skills, k.Flee, k.Melee, k.Relax, k.Base = line.Skills, line.Flee, line.Melee, line.Relax, line.Base
-	k.Sweep = line.Sweep
+	k.Sweep, k.SpotMargin = line.Sweep, line.SpotMargin
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
@@ -451,8 +456,9 @@ func CompileBuild(race, class, level int32, role Role) Build {
 }
 
 // override is bd with the persona's own tables and thresholds in place of
-// the build's, for class: each non-nil table and non-zero threshold of the
-// persona replaces the build's (docs/strategy.md, "Overrides").
+// the build's, for class: each non-nil table and non-zero threshold or spot
+// margin of the persona replaces the build's (docs/strategy.md,
+// "Overrides").
 func (p *Persona) override(bd Build, class int32) Build {
 	k := &bd.Kit
 	if p.LearnSkills != nil {
@@ -481,6 +487,9 @@ func (p *Persona) override(bd Build, class int32) Build {
 	}
 	if p.ClassChange.Builds != nil {
 		bd.Race.Professions = p.ClassChange.Builds
+	}
+	if p.Spots.Margin != 0 {
+		k.SpotMargin = p.Spots.Margin
 	}
 	bd.Thresholds = bd.Thresholds.override(Thresholds{
 		CriticalHP: p.CriticalHP, CrowdedHP: p.CrowdedHP, OutmatchedHP: p.OutmatchedHP,

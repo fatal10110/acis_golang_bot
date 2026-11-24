@@ -89,7 +89,7 @@ type UserInfo struct {
 	PAtkSpd int32
 	// PAtk, PDef, Evasion and Accuracy are the character's final combat
 	// stats, gear and buffs counted: what it weighs a fight with
-	// (Brain.packRisk).
+	// (Brain.packFight).
 	PAtk, PDef, Evasion, Accuracy int32
 	// STR, DEX, CON, INT, WIT and MEN are the base stats; Critical, MAtk,
 	// CastSpd (the magic attack speed) and MDef the rest of the combat
