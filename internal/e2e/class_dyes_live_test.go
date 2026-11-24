@@ -28,10 +28,10 @@ const (
 // draw a SymbolAdded, its HennaInfo showing both symbols active. Levelled
 // to 40 at the master, it becomes a Gladiator; back in Gludin, given its
 // three symbols' dyes and fees, it removes the two first-profession
-// symbols the new class leaves inactive and draws its three. A class
-// change cannot be undone, so every run starts from a new character;
-// without the class master at its spawn (fatal10110/acis_golang#5419) the
-// scenario is skipped.
+// symbols the new class leaves inactive and draws its three. Every draw is
+// answered before the next goes out (drawReplies). A class change cannot
+// be undone, so every run starts from a new character; the class master
+// missing at its spawn (fatal10110/acis_golang#5419) fails the scenario.
 func TestLiveClassChangeDyes(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -101,7 +101,8 @@ func TestLiveClassChangeDyes(t *testing.T) {
 }
 
 // masterAt teleports the GM to the class master's Talking Island spawn and
-// skips the test unless the master shows there.
+// fails the test unless the master shows there, told from Roy the Cat, whose
+// look it borrows, as the bot tells it (botclient.NPCInfo.Template).
 func masterAt(t *testing.T, ctx context.Context, gm *GMClient) {
 	t.Helper()
 	if err := gm.Command(ctx, fmt.Sprintf("teleport %d %d %d", tiMaster.X, tiMaster.Y, tiMaster.Z)); err != nil {
@@ -109,9 +110,9 @@ func masterAt(t *testing.T, ctx context.Context, gm *GMClient) {
 	}
 	if _, err := gm.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
 		n, ok := ev.(botclient.NPCInfo)
-		return ok && n.NPCID == classMaster
+		return ok && n.Template() == classMaster
 	}); err != nil {
-		t.Skipf("the class master (%d) is not at %v on this server, fatal10110/acis_golang#5419: %v", classMaster, tiMaster, err)
+		t.Fatalf("the class master (%d) is not at %v on this server (fatal10110/acis_golang#5419): %v", classMaster, tiMaster, err)
 	}
 }
 
@@ -176,4 +177,68 @@ func draws(t *testing.T, ctx context.Context, f *farmer, from int, symbols []int
 	sent := f.watch.Sent()
 	t.Logf("%s drew %v: %d RequestHennaEquip, %d RequestHennaUnequip", f.name, symbols,
 		len(sentOf(sent, botclient.OpRequestHennaEquip)), len(sentOf(sent, botclient.OpRequestHennaUnequip)))
+	replies := drawReplies(f.watch.Seen(from), sent, symbolDyes)
+	var drawn []int32
+	for _, r := range replies {
+		drawn = append(drawn, r.symbol)
+		if !r.answered() {
+			t.Errorf("%s's draw of symbol %d before its next request: %+v, want its HennaInfo with the symbol active, an InventoryUpdate of its dye and SymbolAdded", f.name, r.symbol, r)
+		}
+	}
+	if !slices.Equal(drawn, symbols) {
+		t.Errorf("%s asked to draw %v, want %v one at a time", f.name, drawn, symbols)
+	}
+}
+
+// symbolDyes is the dye of each symbol the scenario draws.
+var symbolDyes = map[int32]int32{symbolStr1: dyeStr1, symbolDex1: dyeDex1, symbolStr3: dyeStr3, symbolDex3: dyeDex3}
+
+// drawReply is what the server answered one RequestHennaEquip with before
+// the bot's next one (network/henna.go drawHenna): info, a HennaInfo with
+// the symbol worn and active; dye, an InventoryUpdate of the symbol's dye;
+// added, SymbolAdded.
+type drawReply struct {
+	symbol           int32
+	info, dye, added bool
+}
+
+func (r drawReply) answered() bool { return r.info && r.dye && r.added }
+
+// drawReplies is, for each RequestHennaEquip in sent from the first seen
+// event's on, in order, the replies seen after it and before the next
+// RequestHennaEquip (Seen.SentBefore); dyes is each symbol's dye.
+func drawReplies(seen []Seen, sent []Sent, dyes map[int32]int32) []drawReply {
+	first := 0
+	if len(seen) > 0 {
+		first = seen[0].SentBefore
+	}
+	var reqs []int
+	for i := first; i < len(sent); i++ {
+		if sent[i].Op == botclient.OpRequestHennaEquip {
+			reqs = append(reqs, i)
+		}
+	}
+	replies := make([]drawReply, len(reqs))
+	for k, i := range reqs {
+		r := &replies[k]
+		r.symbol = sent[i].Target
+		next := len(sent)
+		if k+1 < len(reqs) {
+			next = reqs[k+1]
+		}
+		for _, s := range seen {
+			if s.SentBefore <= i || s.SentBefore > next {
+				continue
+			}
+			switch e := s.Event.(type) {
+			case botclient.HennaInfo:
+				r.info = r.info || slices.Contains(e.Worn, botclient.WornSymbol{SymbolID: r.symbol, Active: r.symbol})
+			case botclient.InventoryUpdate:
+				r.dye = r.dye || slices.ContainsFunc(e.Changes, func(c botclient.ItemChange) bool { return c.Item.TemplateID == dyes[r.symbol] })
+			case botclient.SystemMessage:
+				r.added = r.added || e.ID == msgSymbolAdded
+			}
+		}
+	}
+	return replies
 }

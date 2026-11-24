@@ -167,7 +167,9 @@ type CharInfo struct {
 // NPCInfo describes an NPC (a monster, a townsperson or a summon) in sight.
 type NPCInfo struct {
 	ObjectID int32
-	// NPCID is the NPC template id.
+	// NPCID is the template id the wire shows: the template's idTemplate,
+	// which is its own id for all but a few custom NPCs that borrow another
+	// template's look (Template).
 	NPCID      int32
 	Attackable bool
 	Pos        Point
@@ -177,6 +179,34 @@ type NPCInfo struct {
 	Running, InCombat   bool
 	Dead, Summon        bool
 	PvPFlag, Karma      int32
+	// Name and Title are the server-side name and title, "" unless the
+	// template uses them (usingServerSideName and usingServerSideTitle,
+	// npc/folk.go infoSnapshot): the client shows its own otherwise.
+	Name, Title string
+}
+
+// npcLook is how the wire shows an NPC: its display template id and its
+// server-side name.
+type npcLook struct {
+	npcID int32
+	name  string
+}
+
+// borrowedLooks are the custom NPCs whose wire template id is another
+// NPC's, by the server-side name that tells them apart: the class master
+// (50000, idTemplate 31228, data/xml/npcs/50000-50999.xml) shows as Roy the
+// Cat (31228), who stands in most villages and has no server-side name.
+var borrowedLooks = map[npcLook]int32{
+	{npcID: 31228, name: "Hasha"}: classMaster,
+}
+
+// Template is the NPC's template id: NPCID, or for an NPC that borrows
+// another template's look (borrowedLooks), its own.
+func (n NPCInfo) Template() int32 {
+	if id, ok := borrowedLooks[npcLook{npcID: n.NPCID, name: n.Name}]; ok {
+		return id
+	}
+	return n.NPCID
 }
 
 // MoveToPawn reports an object starting to move from Origin toward
