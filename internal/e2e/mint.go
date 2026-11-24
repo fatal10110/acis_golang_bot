@@ -197,6 +197,11 @@ func (t *Target) mintGM(ctx context.Context, account string) error {
 	if err != nil {
 		return err
 	}
+	// A human fighter starts at the human newbie start of Talking Island,
+	// the open ground the scenarios recall their bots to and walk the GM
+	// on (openGround); another race's start put the recalled bots on
+	// ground they could not path across (#367's live run, dwarven start).
+	ch.Class = botclient.HumanFighter
 	name := mintedCharacter(account)
 	ch.Names = []string{name}
 	c, err := t.place(newScope()).enterWhenFree(ctx, account, t.Password(account), ch, nil)
