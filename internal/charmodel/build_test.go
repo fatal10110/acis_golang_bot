@@ -174,6 +174,22 @@ func TestWeapon(t *testing.T) {
 	}
 }
 
+// TestSetThenBaseMul checks that a base multiplier after a weapon's set
+// scales the weapon's value, not the class default (calcChain sets base to
+// the set value): a dagger's rCrit 12 with Critical Chance's basemul 0.4 is
+// (12+12*0.4)*1.1*10 = 184.8 at DEX 30, not (12+4*0.4)*1.1*10 = 149.6.
+func TestSetThenBaseMul(t *testing.T) {
+	dagger := datapack.Item{
+		Type: "Weapon", BodyPart: "rhand", Kind: "DAGGER",
+		Stats: datapack.Stats{PAtk: 24, PAtkSpd: 433, RCrit: 12},
+	}
+	criticalChance := datapack.StatFunc{Op: "basemul", Stat: "rCrit", Value: 0.4}
+	got := Model(Build{Class: humanFighter, Level: 1, Worn: []datapack.Item{dagger}, Funcs: []datapack.StatFunc{criticalChance}})
+	if got.Critical != 184 {
+		t.Errorf("Critical = %v, want 184", got.Critical)
+	}
+}
+
 // TestSetTrade checks a set's stat trade: the Demon set (-270 max HP, +4
 // INT, -1 WIT) with Doom Robe's +7 run speed on a level 20 human mystic:
 // max HP 424*0.98-270 = 145.52, M.Atk 6*1.09^2*1.31^2 = 12.23 at INT 45,

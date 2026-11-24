@@ -192,6 +192,11 @@ func (c calc) stat(name string, base float64, finalize func(float64) float64) fl
 				continue
 			}
 			v = apply(f, base, v)
+			if f.Op == "set" {
+				// A set replaces the base the later base functions
+				// scale (skill/effect/mod.go calcChain).
+				base = v
+			}
 		}
 	}
 	return v
