@@ -27,14 +27,14 @@ func TestSpotMarginRows(t *testing.T) {
 	for _, class := range []int32{0, 1, 4, 7, 10, 11, 15, 18, 19, 22, 25, 26, 29, 31, 32, 35, 38, 39, 42, 44, 45, 47, 49, 50, 53, 54, 56} {
 		race, _ := datapack.ClassRace(class)
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
-			if got, want := CompileBuild(race, class, 20, role).Kit.SpotMargin, rowSpotMargins[class]; got != want {
+			if got, want := CompileBuild(race, class, 20, role, BranchChoice{}).Kit.SpotMargin, rowSpotMargins[class]; got != want {
 				t.Errorf("class %d %v: SpotMargin %v, want %v", class, role, got, want)
 			}
 		}
 	}
 	p := DefaultPersona()
 	p.Spots.Margin = 2.5
-	if got := p.override(CompileBuild(0, OrcFighter.ID, 20, RoleDamage), OrcFighter.ID).Kit.SpotMargin; got != 2.5 {
+	if got := p.override(CompileBuild(0, OrcFighter.ID, 20, RoleDamage, BranchChoice{}), OrcFighter.ID).Kit.SpotMargin; got != 2.5 {
 		t.Errorf("persona Margin 2.5 compiles %v", got)
 	}
 }

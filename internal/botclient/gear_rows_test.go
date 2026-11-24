@@ -80,7 +80,7 @@ func checkGearRow(class int32, r gearRow, classes map[int32]datapack.Class, item
 	}
 	var kinds, stats []string
 	for _, role := range []Role{RoleDamage, RoleSupport} {
-		bd := CompileBuild(c.Race, class, end, role)
+		bd := CompileBuild(c.Race, class, end, role, BranchChoice{})
 		kinds = append(kinds, bd.Kit.Gear.Armor)
 		stats = append(stats, bd.Kit.DyeStats...)
 		for _, g := range bd.Race.MysticArmor {

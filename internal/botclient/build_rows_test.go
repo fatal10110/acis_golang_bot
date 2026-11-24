@@ -177,7 +177,7 @@ func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 			start, end = 20, 39
 		}
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
-			bd := CompileBuild(c.Race, id, end, role)
+			bd := CompileBuild(c.Race, id, end, role, BranchChoice{})
 			rows = append(rows, behaviorRow{
 				name: fmt.Sprintf("class %d %v", id, role), class: id, start: start, end: end,
 				kit: bd.Kit, next: bd.Race.Professions[id],
@@ -223,6 +223,22 @@ func TestBehaviorRowsShipped(t *testing.T) {
 		}
 		if len(r.kit.Skills) > 0 && len(trainers[r.class]) == 0 {
 			t.Errorf("%s learns %v at no trainer", r.name, r.kit.Skills)
+		}
+		if r.next == 0 {
+			t.Errorf("%s takes no profession next (branchTables)", r.name)
+		}
+	}
+	// Every line of the branch tables goes from its base class to a
+	// direct child and on to that one's direct child (#328).
+	for role, tab := range branchTables {
+		for base, ls := range tab {
+			for _, l := range ls {
+				first, ok1 := classes[l.first]
+				second, ok2 := classes[l.second]
+				if !ok1 || !ok2 || first.Parent != base || second.Parent != l.first || second.Race != classes[base].Race {
+					t.Errorf("%v class %d: line %d -> %d is not in its tree", role, base, l.first, l.second)
+				}
+			}
 		}
 	}
 	items, _, _, err := datapack.LoadItems(filepath.Join(dir, "items"))

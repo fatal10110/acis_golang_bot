@@ -27,7 +27,7 @@ const gearAdena int32 = 30000
 // default (D6). The default persona holds no table of its own since the
 // builds (S4, #323): the warrior's build gives the entry.
 func warriorGear(p *botclient.Persona) {
-	g := botclient.CompileBuild(0, 1, 20, botclient.RoleDamage).Kit.Gear
+	g := botclient.CompileBuild(0, 1, 20, botclient.RoleDamage, botclient.BranchChoice{}).Kit.Gear
 	if len(g.Weapons) == 0 {
 		panic("the warrior's build wields nothing")
 	}
