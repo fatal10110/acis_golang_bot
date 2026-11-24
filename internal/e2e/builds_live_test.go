@@ -34,14 +34,21 @@ const (
 const farmerRole = botclient.RoleDamage
 
 // farmerPersona is the farmer preset's persona (cmd/bots damagePersona)
-// with no loot, which carried run after run would weigh a character set
-// back to level 1 down, and no errands.
-func farmerPersona() botclient.Persona {
-	p := botclient.DefaultPersona()
-	p.Role = farmerRole
-	p.Loot.Pickup = false
-	errandsOff(&p)
-	return p
+// for a bot the GM levels to level in its newbie zone, with no loot, which
+// carried run after run would weigh a character set back to level 1 down,
+// and no errands. Nearly every monster of a newbie zone is aggressive
+// (#133): held to AggroAbove past SpotPolicy.Newbie, a bot levelled there
+// finds a fitting spot only when one is free, so the scenarios bind the
+// aggressive monsters by Below up to level, as at the newbie levels.
+func farmerPersona(level int32) func() botclient.Persona {
+	return func() botclient.Persona {
+		p := botclient.DefaultPersona()
+		p.Role = farmerRole
+		p.Loot.Pickup = false
+		p.Spots.Newbie = int(level)
+		errandsOff(&p)
+		return p
+	}
 }
 
 // TestLiveBuildFighters farms a human, an elven and a dark elven fighter
@@ -88,7 +95,7 @@ func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 		account, _ := tg.Account(group, i+1)
 		setup := botSetup{
 			class:   class,
-			persona: farmerPersona,
+			persona: farmerPersona(kitLevel),
 			// The travel map as cmd/bots' farmers have it: the brain
 			// tells the worn weapon's kind from its items (wornKind), and
 			// a weapon-gated step never passes without it.

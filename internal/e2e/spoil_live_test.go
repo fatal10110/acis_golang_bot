@@ -42,13 +42,11 @@ func TestLiveSpoilSweep(t *testing.T) {
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
 		class: &botclient.DwarvenFighter,
-		persona: func() botclient.Persona {
-			p := farmerPersona()
-			// The newbie spots by its village: a spot of level 10 is a
-			// gatekeeper trip away.
-			lowSpots(&p)
-			return p
-		},
+		// Spots of its level, not the newbie ones (lowSpots): a monster 5
+		// levels or more under the killer cuts its spoil chances (the
+		// server's deep blue drop rules, model/item/drop.go), and a level 2
+		// monster's few-percent spoil items then hardly ever roll.
+		persona: farmerPersona(spoilLevel),
 		// The travel map as cmd/bots' farmers have it: the corpse times
 		// of its NPC templates bound the sweep window (TravelMap.corpseTime).
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },
