@@ -1,0 +1,269 @@
+package e2e
+
+import (
+	"fmt"
+	"maps"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+)
+
+// The kit farms (#333, docs/strategy.md "Testing"): each runs three level
+// kitLevel farmers of starting classes on one spot registry, the GM handing
+// each its build's kit skills, until every one killed kitKills monsters it
+// fought and cast its rotation kitCasts times over at least kitFarm. A
+// rotation with weapon-gated steps (Step.Weapons) must have cast one of them,
+// and no farmer may ever read SystemMessage 113, the server's refusal of a
+// skill whose condition, the weapon among them, fails.
+const (
+	// kitLevel opens the fighters' attacks (from 5) and the mystics' second
+	// spells (from 7).
+	kitLevel = 7
+	kitKills = 3
+	kitCasts = 3
+	kitFarm  = 3 * time.Minute
+)
+
+// TestLiveBuildFighters farms a human, an elven and a dark elven fighter
+// with their kits: their attacks are gated by the weapon they wield (Power
+// Strike with a sword or blunt, Mortal Blow with a dagger, Power Shot with
+// a bow).
+func TestLiveBuildFighters(t *testing.T) {
+	t.Parallel()
+	farmKits(t, "kf", &botclient.HumanFighter, &botclient.ElvenFighter, &botclient.DarkFighter)
+}
+
+// TestLiveBuildMystics farms a human, an elven and a dark elven mystic with
+// their kits: Wind Strike, Ice Bolt and their self heal.
+func TestLiveBuildMystics(t *testing.T) {
+	t.Parallel()
+	farmKits(t, "km", &botclient.HumanMystic, &botclient.ElvenMystic, &botclient.DarkMystic)
+}
+
+// TestLiveBuildMixed farms the other races' starting classes with their
+// kits: an orc fighter (Iron Punch with fists, Power Strike with a sword or
+// blunt), an orc mystic (Chill Flame, Life Drain, Soul Cry) and a dwarven
+// fighter, which melees: its kit's Spoil opens from 10
+// (TestLiveSpoilSweep).
+func TestLiveBuildMixed(t *testing.T) {
+	t.Parallel()
+	farmKits(t, "kx", &botclient.OrcFighter, &botclient.OrcMystic, &botclient.DwarvenFighter)
+}
+
+// farmKits runs one kit farm of classes, the accounts of group. The farmers
+// keep no loot, which carried run after run would weigh them down, and run
+// no errands; they go back to level 1 at the end (runFresh).
+func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
+	tg := Live(t, NeedGM, NeedDatapack)
+	ctx := scenarioCtx(t, 25*time.Minute)
+	spots := spotRegistry(t, tg)
+	gm := enterGM(t, ctx, tg)
+	type kitFarmer struct {
+		f    *farmer
+		kit  kitSkills
+		from int
+	}
+	farmers := make([]kitFarmer, len(classes))
+	for i, class := range classes {
+		account, _ := tg.Account(group, i+1)
+		setup := botSetup{
+			class: class,
+			persona: func() botclient.Persona {
+				p := botclient.DefaultPersona()
+				p.Loot.Pickup = false
+				errandsOff(&p)
+				return p
+			},
+			brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
+		}
+		f := runFresh(t, ctx, gm, kitLevel, func() *farmer { return runWatched(t, ctx, tg, account, setup) })
+		kit := kitOf(t, class.ID, kitLevel, account)
+		levelTo(t, ctx, gm, f, kitLevel)
+		gmOn(t, ctx, gm, f, kit.grants()...)
+		farmers[i] = kitFarmer{f: f, kit: kit, from: f.seen()}
+	}
+	// Out of the farmers' way, in a peace zone out of any monster's reach.
+	gmTeleport(t, ctx, gm, townTI)
+	start, alive := time.Now(), time.Now()
+	for _, k := range farmers {
+		untilBy(t, ctx, k.f.name+" farming with its kit", start.Add(15*time.Minute), func() string {
+			if time.Since(alive) > gmKeepAlive {
+				gmTeleport(t, ctx, gm, townTI)
+				alive = time.Now()
+			}
+			r := kitRunOf(k.f.watch.Seen(k.from), k.f.id, k.kit)
+			if bad := r.refusals(); bad != "" {
+				t.Fatalf("%s: %s", k.f.name, bad)
+			}
+			return r.short(time.Since(start))
+		})
+	}
+	for _, k := range farmers {
+		r := kitRunOf(k.f.watch.Seen(k.from), k.f.id, k.kit)
+		// The whole run, the level up and the grants included.
+		if bad := kitRunOf(k.f.watch.Seen(0), k.f.id, k.kit).refusals(); bad != "" {
+			t.Errorf("%s: %s", k.f.name, bad)
+		}
+		t.Logf("%s (class %d, level %d, worn %v) farmed %s: %d kills, casts %v, weapon-gated %v",
+			k.f.name, k.f.bot.Status().ClassID, k.f.bot.Status().Level, slices.Sorted(maps.Keys(worn(inventory(k.f.watch.Seen(0))))),
+			time.Since(start).Round(time.Second), r.kills, r.casts, r.gatedCasts())
+	}
+}
+
+// kitSkills is what a kit farm reads of a build: every skill its kit learns
+// or casts, the GM grants them all, and its rotation's skills, those of its
+// weapon-gated steps apart.
+type kitSkills struct {
+	all, rotation, gated []int32
+}
+
+// kitOf is the kit of a bot of class at level in the default persona's role,
+// its line drawn for account as the bot draws it (CompileBuild).
+func kitOf(t *testing.T, class, level int32, account string) kitSkills {
+	t.Helper()
+	race, ok := datapack.ClassRace(class)
+	if !ok {
+		t.Fatalf("class %d: no race", class)
+	}
+	return kitFrom(botclient.CompileBuild(race, class, level, botclient.DefaultPersona().Role, botclient.BranchChoice{Account: account}).Kit)
+}
+
+// kitFrom is the kitSkills of k.
+func kitFrom(k botclient.ClassKit) kitSkills {
+	var s kitSkills
+	add := func(ids *[]int32, id int32) {
+		if id != 0 && !slices.Contains(*ids, id) {
+			*ids = append(*ids, id)
+		}
+	}
+	for _, id := range k.Skills {
+		add(&s.all, id)
+	}
+	for _, st := range k.Rotation {
+		add(&s.all, st.Skill)
+		add(&s.rotation, st.Skill)
+		if len(st.Weapons) > 0 {
+			add(&s.gated, st.Skill)
+		}
+	}
+	for _, b := range k.Buffs {
+		add(&s.all, b.Skill)
+	}
+	for _, h := range k.Heals {
+		add(&s.all, h.Skill)
+	}
+	for _, g := range k.Toggles {
+		add(&s.all, g.Skill)
+	}
+	add(&s.all, k.Relax)
+	add(&s.all, k.Sweep)
+	return s
+}
+
+// grants are the GM commands that teach every skill of s at level 1.
+func (s kitSkills) grants() []string {
+	cmds := make([]string, len(s.all))
+	for i, id := range s.all {
+		cmds[i] = "skill set " + strconv.Itoa(int(id)) + " 1"
+	}
+	return cmds
+}
+
+// kitRun is what a farmer did with its kit: its casts by skill, the monsters
+// it fought (swung at or cast at) that died, and the system messages of its
+// refused skills.
+type kitRun struct {
+	kit     kitSkills
+	casts   map[int32]int
+	kills   int
+	refused []int32
+}
+
+// refusedSkill are the system messages a kit farm never reads: 113, a
+// skill's condition (its weapon among them) failing.
+var refusedSkill = []int32{msgS1CannotBeUsed}
+
+// kitRunOf is the kitRun of the bot self in seen.
+func kitRunOf(seen []Seen, self int32, kit kitSkills) kitRun {
+	r := kitRun{kit: kit, casts: make(map[int32]int)}
+	fought, dead := make(map[int32]bool), make(map[int32]bool)
+	for _, s := range seen {
+		switch e := s.Event.(type) {
+		case botclient.Attack:
+			if e.AttackerID == self {
+				for _, h := range e.Hits {
+					fought[h.TargetID] = true
+				}
+			}
+		case botclient.MagicSkillUse:
+			if e.CasterID == self {
+				r.casts[e.SkillID]++
+				if e.TargetID != self && e.TargetID != 0 {
+					fought[e.TargetID] = true
+				}
+			}
+		case botclient.Die:
+			if fought[e.ObjectID] && !dead[e.ObjectID] {
+				dead[e.ObjectID] = true
+				r.kills++
+			}
+		case botclient.SystemMessage:
+			if slices.Contains(refusedSkill, e.ID) {
+				r.refused = append(r.refused, e.ID)
+			}
+		}
+	}
+	return r
+}
+
+// rotationCasts is how many casts of r are of its kit's rotation.
+func (r kitRun) rotationCasts() int {
+	n := 0
+	for _, id := range r.kit.rotation {
+		n += r.casts[id]
+	}
+	return n
+}
+
+// gatedCasts are r's casts of its kit's weapon-gated steps, by skill.
+func (r kitRun) gatedCasts() map[int32]int {
+	g := make(map[int32]int)
+	for _, id := range r.kit.gated {
+		if r.casts[id] > 0 {
+			g[id] = r.casts[id]
+		}
+	}
+	return g
+}
+
+// refusals is "" when r read no refused skill, else what it read.
+func (r kitRun) refusals() string {
+	if len(r.refused) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("the server refused a skill: system messages %v (casts %v)", r.refused, r.casts)
+}
+
+// short is "" once r farmed its kit for long enough after farming for
+// elapsed, else what it still lacks.
+func (r kitRun) short(elapsed time.Duration) string {
+	var miss []string
+	if r.kills < kitKills {
+		miss = append(miss, fmt.Sprintf("%d of %d kills", r.kills, kitKills))
+	}
+	if n := r.rotationCasts(); len(r.kit.rotation) > 0 && n < kitCasts {
+		miss = append(miss, fmt.Sprintf("%d of %d casts of %v", n, kitCasts, r.kit.rotation))
+	}
+	if len(r.kit.gated) > 0 && len(r.gatedCasts()) == 0 {
+		miss = append(miss, fmt.Sprintf("no weapon-gated cast of %v", r.kit.gated))
+	}
+	if elapsed < kitFarm {
+		miss = append(miss, fmt.Sprintf("%s of %s farmed", elapsed.Round(time.Second), kitFarm))
+	}
+	return strings.Join(miss, ", ")
+}
