@@ -652,9 +652,9 @@ func (b *Brain) wake(now time.Time) error {
 		}
 	}
 	if !now.Before(b.decisionAt()) {
-		// The assist's and the re-path's wake-ups are spent here, before
-		// Appearing may postpone the decision, so they cannot keep
-		// decisionAt past due.
+		// The assist's, the re-path's, the whisper's and the walk's
+		// wake-ups are spent here, before Appearing may postpone the
+		// decision, so they cannot keep decisionAt past due.
 		if !now.Before(b.assist.at) {
 			b.assist.wake = false
 		}
@@ -664,6 +664,7 @@ func (b *Brain) wake(now time.Time) error {
 		if !now.Before(b.chat.at) {
 			b.chat.wake = false
 		}
+		b.spendWalkWake(now)
 		if b.appearing {
 			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
 			if err != nil {
@@ -685,6 +686,7 @@ func (b *Brain) wake(now time.Time) error {
 		b.nextTick = now.Add(b.tickDelay())
 		b.tidyPartyClaim(now)
 		b.resolveOrder()
+		b.walk.asked = false
 		name, a := b.decide(now)
 		b.lastRule = name
 		b.metrics.Rule(name)
@@ -706,9 +708,9 @@ func (b *Brain) wake(now time.Time) error {
 }
 
 // decisionAt is when the next decision is due: the reaction to an event
-// or the regular tick, or the leader's assist, the follow re-path or a
-// whisper reply when that comes sooner, and never before a landing awaited
-// times out.
+// or the regular tick, or the leader's assist, the follow re-path, a
+// whisper reply or the walk wake when that comes sooner, and never before a
+// landing awaited times out.
 func (b *Brain) decisionAt() time.Time {
 	t := b.nextTick
 	if !b.reactAt.IsZero() {
@@ -722,6 +724,9 @@ func (b *Brain) decisionAt() time.Time {
 	}
 	if b.chat.wake && b.chat.at.Before(t) {
 		t = b.chat.at
+	}
+	if at, ok := b.walkWake(); ok && at.Before(t) {
+		t = at
 	}
 	if t.Before(b.landingUntil) {
 		t = b.landingUntil
