@@ -39,8 +39,7 @@ default from V2b), so V3a stands alone. The anchor, not `storeTownRadius` (3000,
 anywhere, else the nearest spawn within `Reach` (8000) of the bot (`warehouse.go:585-637`, `Reach`
 at `warehouse.go:244`). The walk, `warehouseChats` and the end at the keeper are today's; rule
 "valuables" [walks back](round.md#back-to-the-anchor). The private link is looked for on the first
-page, then on `Chat` pages (19 first pages, e.g. Wilford 30005; 11 second pages, e.g.
-`30083-1.htm`).
+page, then on `Chat` pages ([server](server.md#server), "Private warehouse links").
 
 ## Keeper marks
 
@@ -66,7 +65,9 @@ ignores system messages at its talk step (`warehouse.go:675-676`), times out, ta
 end every later private request where the only keeper in reach has its link on `Chat 1` (11
 keepers). V3a takes a 142 at the talk step, after a link went out, as a refusal: `WarehouseRefused`
 (`fail`, `retryAt` 60 s on, `warehouse.go:350-360`), with neither `noPrivate` nor `noClan` set. Clan
-requests too.
+requests too. A 142 to the open link or the request is refused as today (`warehouseRefusals`,
+`warehouse.go:68-71`, no `retryAt`; the next open 60 s from `openedAt`,
+`warehouse.go:302-311,373-374`).
 
 ## Private status
 

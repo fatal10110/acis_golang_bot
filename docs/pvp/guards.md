@@ -29,13 +29,10 @@ Outside duels, arenas and PvP zones, against a flagged karma-free opponent:
   (only a selection on a non-target, with a fresh `StatusUpdate`), never a second one (it would
   attack). The disengage move drops the intention the late Esc left;
 - **follow-up swing.** A `nextActionAttack` cast that ends or is Esc-cancelled on a player the bot
-  may attack without force (blinking included) makes the server swing at or walk to it
-  (`network/live_player_events.go:794-822`, `endCastIntention`, `attackAfterCast`;
-  `model/actor/ai/player.go:218-229`, `:384-394`; `character_social.go:257`). Carriers: 3 Power
-  Strike, 16 Mortal Blow, 29 Iron Punch, 92 Shield Stun, 96 Bleed, 100 Stun Attack, 120 Stunning
-  Fist, 223 Sting, 245 Wild Sweep, 255 Power Smash, 284 Hurricane Assault. None starts after the
-  blink, Shield Stun and Bleed included; for one in flight the disengage move is the first send
-  after it ends (`MagicSkillCanceled`, or its landing time);
+  may attack without force (blinking included) makes the server swing at or walk to it (carriers:
+  [server](server.md#server-behavior), Attack after a cast). None starts after the blink, Shield
+  Stun and Bleed included; for one in flight the disengage move is the first send after it ends
+  (`MagicSkillCanceled`, or its landing time);
 - the flag back to state 1 → attacks resume; the flag gone → no attack.
 
 ## Arena edge
@@ -62,13 +59,12 @@ which the flag guard then covers. Against a karma-free arena opponent:
 - its own moves (chase, kite, stand points) stay `ArenaEdge` inside; to leave (`ArenaAlone`,
   `ArenaStay`, `ArenaDeaths`) it stops, waits one attack interval after the move, then walks out;
 - **cost.** Opponents run 121-144 and no point of Dion, Gludin or Giran is more than about 490
-  from an edge, so a step starts only under about 2.9-3.5 s at the middle (490 / speed − 0.5). With
-  a spiritshot ([long hit times](server.md#server-behavior)) the Human Mystic starts the 4000 ms
-  nukes and drains from 400-475 from the edge (121-144 × 3.3), the Elven from 350-420 (× 2.9), the
-  Dark only at the middle and not against the fastest (needs 420-500), the Orc never (495-590). Ice
-  Bolt (about 2.2 s, Human Mystic with a spiritshot) starts too; Solar and Shadow Spark only for
-  the fastest casters at the very middle. Shot-less 4-5 s steps (3.4-6.4 s), Drain Health (fighter
-  rows charge soulshots), Power Shot and Stunning Shot almost never start unless rooted first. So
+  from an edge, so a step starts only under about 2.9-3.5 s at the middle (490 / speed − 0.5).
+  With the [long hit times](server.md#server-behavior) and a spiritshot, the Human and Elven
+  Mystics start the 4000 ms nukes and drains near the middle, the Dark only at the middle against
+  slower opponents, the Orc never; Ice Bolt starts; Solar and Shadow Spark only for the fastest
+  casters at the very middle. Shot-less 4-5 s steps, Drain Health (fighter rows charge soulshots),
+  Power Shot and Stunning Shot almost never start unless rooted first. So
   bow rows and the Orc Mystic fight square arenas with roots (CL, EO, SO, OS), DOTs, non-damage
   control, short steps (Energy Bolt 2 s, Aura Burn 1.5 s), plain shots and melee; the RO, ES and AS
   Stunning Shot `Hold` and `Int` steps wait with Power Shot. The Colosseum (up to about 1370 from

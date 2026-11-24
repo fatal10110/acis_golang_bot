@@ -7,6 +7,8 @@
 - Metrics: `valuables_ads_total`, `valuables_replies_total`,
   `valuables_sold_total{via="trade|store"}`, `valuables_deposits_total`, `valuables_released_total`,
   and a gauge of held valuables. The panel's bot view shows held valuables (name, place, rounds, ask).
+  V8 hooks them into V4-V7c's steps; `TestValuablesMetrics`: each counter steps once per line,
+  reply, sale by kind, deposit and release, the gauge and view follow the ledger.
 
 ## Defaults
 
@@ -58,8 +60,8 @@ Live harness, at most 4 characters each, never with `-race`.
   ETC (`items/0300-0399.xml:224-227`), which `indexGear` skips for every class (`gear.go:350`). Each
   scenario checks that it wears neither after the gift.
 - **Keepers.** Talking Island (`townTI`, `internal/e2e/farm_live_test.go:114`; `toTown`,
-  `helpers_m4_live_test.go:53-57`): the first look marks the freightman Rant and goes on to Rolfe
-  ([keepers by town](round.md#keepers-by-town)), where every deposit and withdrawal happens.
+  `helpers_m4_live_test.go:53-57`): every deposit and withdrawal at Rolfe ([keepers by
+  town](round.md#keepers-by-town)).
 
 Scenarios:
 

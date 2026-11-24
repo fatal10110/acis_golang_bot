@@ -34,7 +34,7 @@ today (`datapack/spawnlist.go:85-89`).
   × 0.75 for 0 (night is 6 of 24 game hours, `task/gameclock.go:20`, a constant);
   `maker_instant_spawn_random` × the fraction of its linked set (by `maker_name1`-`maker_name3`)
   starting at boot, a pair with one starter 0.5 each (even spread, approximate). The 43 other
-  own-maker types (290 makers, such as `royal_rush_maker`, `manage_teleport_dungeon`) count like
+  own-maker types ([server](server.md#server), "Maker types") count like
   `default_maker`, an approximation `TestValueScore` names.
 
 **Cycle:**
@@ -116,7 +116,7 @@ template privates move no row nor Recipe: Halberd; maker types move Elven Tunic 
 toward valuable, and `R` by 0.1 or more for 112. Of the DROP items of spawned monsters to level 20
 that no spawned NPC sells or non-upgrade multisell makes, 5 of 71 are valuable; to level 30, 14 of 155
 (counted before the Seven Signs, respawn, private and type rules, by spawned seller, not `cheapest`;
-V2a's test recounts them).
+no test pins them).
 
 ## Tests
 

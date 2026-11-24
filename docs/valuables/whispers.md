@@ -41,15 +41,15 @@ line with two or more prices takes none and gets the asks. Examples: [tests](#te
 A whisper in a round (no bot marker, not a command) goes to the responder, not the canned reply
 (`chatHeard`):
 
-- naming a held item or asking a price (`?`, `how much`, `price`): `<name> <current>, trade me`,
-  the partner's current price (the ask until countered); pointing at several: `WTS <name> <ask>,
-  <name> <ask>, which?`;
+- with no price, naming a held item or asking a price (`?`, `how much`, `price`): `<name> <current>,
+  trade me`, the partner's current price (the ask until countered); pointing at several: `WTS <name>
+  <ask>, <name> <ask>, which?`;
 - with a price: an **offer** on the item it names; naming nothing, on the only valuable, else the
   top-scored one; pointing at several, no offer (the asks as above). An offer under half the floor
   is answered like a question and uses no counter. Otherwise:
   - at or above the current price: agreed at the current price, `ok <price>, trade me`;
   - below it with `Counters` left (2 per partner and item a round): the counter `max(floor, (offer +
-    current) / 2)` rounded up to 1k, `<price> lowest`, the new current price;
+    current) / 2)` rounded up to 1k, at most `current`, `<price> lowest`, the new current price;
   - no counters left: agreed at the offer when at or above the floor, else `sorry, no`;
 - anything else: `WTS <names>, trade me`.
 

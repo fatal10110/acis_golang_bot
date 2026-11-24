@@ -1,7 +1,7 @@
 # The members and keeping the party together
 
 A bot with a `join` slot ([orders](orders.md)). Joining ships in P1a, the join hold and the spot
-release in P1c, trips and errands in P2, the raise in P3.
+release in P1c, trips and errands in P2b, the raise in P3.
 
 ## Joining
 
@@ -28,8 +28,8 @@ assist, heals and buffs; under rule 3 every member may pick up loot.
 | --- | --- |
 | A member dies | A Support member with Resurrection (Cleric, Elven Oracle, Shillien Oracle, from 20) casts it out of combat on a dead member in sight, the leader first (a new rule `raise` after `heal`; 1016 joins their learn tables, P3). The dead bot accepts (`AcceptResurrection`) within `ResurrectWait` (2 min in a party). Unraised, it restarts in the village and follows the leader's reported position back. |
 | The leader dies | Members sit by the body as today (`byLeaderBody`), and a raiser raises it. Unraised, the leader restarts in the village (a teleport). |
-| The leader teleports away (a restart, its supply trip) | The member skips `ruleLeader`'s wait, whisper and `/unstuck`, and starts its own supply trip when it has a Scroll of Escape and nothing attacks it, else walks to the leader's last reported position. `supplyDue` (`supplytrip.go:322-324`) needs a spot farmed, held or beside (`farming()`, `spots.go:229`), and reached, so P2 adds a trip cause, the bot leader's teleport, for a `join` member with no spot, skipping that test; the trip is today's. The gather gate holds the leader at its next spot. |
-| A member runs low on its own | P2 reads `supplyDue`'s own causes (`supplytrip.go:19-33`: a consumable running out, potions gone, load, gear) for a `join` bot in its bot party within `GatherRange` (1200) of its leader's reported position (`Party.Members`, `follow.go:154-161`) instead of at a reached spot. `supplyCheck`, `supplyTripGap` and the trip are today's. It keeps its slot and follows back by the window's positions; the gather gate waits for it at most `GatherWait`, not beyond `FarAway`; a trip that keeps it out of party range past `BehindFor` drops it as fallen behind. |
+| The leader teleports away (a restart, its supply trip) | The member skips `ruleLeader`'s wait, whisper and `/unstuck`, and starts its own supply trip when it has a Scroll of Escape and nothing attacks it, else walks to the leader's last reported position. `supplyDue` (`supplytrip.go:322-324`) needs a spot farmed, held or beside (`farming()`, `spots.go:229`), and reached, so P2b adds a trip cause, the bot leader's teleport, for a `join` member with no spot, skipping that test; the trip is today's. The gather gate holds the leader at its next spot. |
+| A member runs low on its own | P2b reads `supplyDue`'s own causes (`supplytrip.go:19-33`: a consumable running out, potions gone, load, gear) for a `join` bot in its bot party within `GatherRange` (1200) of its leader's reported position (`Party.Members`, `follow.go:154-161`) instead of at a reached spot. `supplyCheck`, `supplyTripGap` and the trip are today's. It keeps its slot and follows back by the window's positions; the gather gate waits for it at most `GatherWait`, not beyond `FarAway`; a trip that keeps it out of party range past `BehindFor` drops it as fallen behind. |
 | A member falls behind | Out of the 1500 party range for `BehindFor` (10 min): dropped, ousted, the pair banned for `RePairAfter` (30 min) ([organizer](organizer.md#breaks-and-drops)). |
 | A member logs out | The server takes it out (a party of two disperses). Its slot stays with its `Bot`; the leader re-invites it, `InviteRetry` after it left at the earliest; a new run gets the slot from the organizer, which keeps its place for `LeaderGone`. |
 | The leader logs out | The server hands the party to the first other member. A bot made leader of bots leaves, dispersing it; the members keep their slot in the join hold until re-invited. A party a player now leads is the player's ([players](players.md#handover-to-a-player)). After `LeaderGone` the organizer frees the members that kept their slot. |
@@ -37,7 +37,7 @@ assist, heals and buffs; under rule 3 every member may pick up loot.
 ## Errands in a bot party
 
 Today's party gate (`trainer.go:469-477` `startTrainerWalk`; `visit.go:89-106` `pickVisit`, from
-`classchange.go:212`, `dyes.go:217`) would cost a bot party its D15 class change, 1016 and 1011. P2
+`classchange.go:212`, `dyes.go:217`) would cost a bot party its D15 class change, 1016 and 1011. P2b
 lifts it for a bot in its own bot party (`lead` and leading, or `join` in the named leader's party):
 both read `b.world.Party.In() && !b.inBotParty()`; the `orders.follow` gate stays. The errand rules
 run before `leader` and `follow` (`rules.go:494-507`). Members follow a walking leader by the
@@ -90,14 +90,14 @@ lost-leader branch for the named leader, and a clear inside the party ends with 
   `JoinWait` it clears (`timeout`) and plays its persona, no whisper or `/unstuck` then or 10
   minutes after; likewise after `unparty`, a panel `leave` (nil) or `follow` and a GM's `leave` in
   the hold, each at least `LeaderWait` after the dispersal; a bot with no slot behaves as today.
-- `TestPartyLeaderTeleported` (P2): a member of a teleporting bot leader: no whisper or `/unstuck`;
+- `TestPartyLeaderTeleported` (P2b): a member of a teleporting bot leader: no whisper or `/unstuck`;
   no spot, a Scroll of Escape, no attacker: supply trip; no scroll: walks to the last
   `PartyMemberPosition`; a bot with no `join` slot and no spot: no trip.
-- `TestPartyMemberSupply` (P2): a Damage and a Support member, no spot, within 1200 of the leader,
+- `TestPartyMemberSupply` (P2b): a Damage and a Support member, no spot, within 1200 of the leader,
   potions gone (or a consumable out, or load past `ReturnLoad`): a trip at the next `supplyCheck`,
   slot and party kept, following after; beyond 1200, within `supplyTripGap`, or no slot and no
   spot: none.
-- `TestPartyErrandWalks` (P2): a `join` member, trainer due, none in sight: walks to the nearest
+- `TestPartyErrandWalks` (P2b): a `join` member, trainer due, none in sight: walks to the nearest
   within `TrainerReach`, learns, follows again; at 20 to a class master out of sight, with dyes due
   to a dye maker; a `lead` leader likewise, members following; a bot in a player's party or told to
   follow: none out of sight.

@@ -52,8 +52,8 @@ on PK, Cripple on MO, Entangle on EK) do not kite. No kiting of monsters.
 An opponent's `MagicSkillUse` is **interrupt-worthy** when its type is HEAL, HOT, HEAL_PERCENT,
 RESURRECT, SLEEP, ROOT, FEAR or MUTE, or MDAM with template hit time 3000 or more, aimed at the
 opponent, its ally, the bot or the bot's party; it lands at arrival + `HitTime`. The bot answers
-with its `Interrupt` step when that step's scaled hit time plus the reaction delay and the walk to
-range end before the landing (a stun or sleep), or at least 200 ms before it on an `isMagic` cast (a
+with its `Interrupt` step when that step's scaled hit time plus the
+[reaction delay](wire.md#changes-to-todays-code-x4) and the walk to range end before the landing (a stun or sleep), or at least 200 ms before it on an `isMagic` cast (a
 damage step: damage breaks only a magic cast inside its interrupt window). Its own time as the
 server computes it ([server](server.md), Cast time): template time × 333 / cast speed (magic) or
 attack speed (`UserInfo`), truncated; × 0.70 for an `isMagic` step while a spiritshot is expected

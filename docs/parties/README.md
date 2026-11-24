@@ -24,8 +24,7 @@ model) and claims room for all; members follow, assist, heal, buff and raise; pa
 a death, logout or trip, and break and re-form; players can still get a bot, a GM always wins; the
 panel shows, forms and dissolves parties.
 
-Out of scope: command channels, party matching rooms (`network/partymatch.go`), a party travelling
-by gatekeeper, and `bots swarm` (headless runs get no organizer; the home run uses the panel, D10).
+Out of scope and follow-ups: [risks and gaps](#risks-and-gaps).
 
 ## Approach
 
@@ -53,7 +52,8 @@ only a grouping key. The code: a pure planner on the supervisor goroutine, three
   bots of bot parties only). `invite me` still passes the authority check (with none configured
   every sender takes the player path), and a player's goes ahead only when no other bot holds that
   player in the claim table. A GM's `invite me` always takes the bot out, and a GM's `leave` to the
-  leader disperses the party; each clears the bot's slot, so the party does not re-form.
+  leader disperses the party; each clears the bot's slot: a pin never re-forms, an auto party's
+  bots regroup only after `Cooldown`.
 - **D29, bots invite.** A bot invites only the bots the organizer or the panel assigned to its
   party, and players who whisper `join`; never unasked. Members join outside the claim table. Bots
   of a bot party never whisper each other.
@@ -83,16 +83,17 @@ the table above says.
 | P1b | [slot clearing](orders.md#slot-clearing) and its step setting `withdraw`, [clearing from no party](members.md#clearing-from-no-party), the slot kept for a [handover](leader.md#handover). Unit tests only. | P1a |
 | P1c | [join hold](members.md#join-hold), the spot release of [joining](members.md#joining). Unit tests only. | P1a, P1b (its test's clears from no party) |
 | P1d | [leader](leader.md), its part of the [join hold](members.md#join-hold), [pacing](server.md#pacing). | P1a, P1b, P1c |
-| P2 | [spots](spots.md), the trip causes of [events](members.md#events), [errands](members.md#errands-in-a-bot-party). | P1d |
+| P2a | [spots](spots.md). | P1d |
+| P2b | the trip causes of [events](members.md#events), [errands](members.md#errands-in-a-bot-party). | P1d |
 | P3 | the `raise` rule of [events](members.md#events), 1016 in the Cleric, Elven Oracle and Shillien Oracle learn tables. | P1a, S7 (#327) |
-| P4 | [model](model.md), [fit by level](spots.md#fit-by-level). | P2, S3 (#322), S11 (#330) |
+| P4 | [model](model.md). | P2a, S3 (#322), S11 (#330) |
 | P5a | the planner: [organizer](organizer.md) but its P5b parts, [composition](composition.md). | P1a, S4 (#323), S7 (#327, the healer flag) |
 | P5b | [supervisor wiring](organizer.md#supervisor-wiring), [`Sent`](organizer.md#which-orders-arrived) polling, registry fields and pin rows ([pins](organizer.md#pinned-parties)), `Status.Heals` ([healer](composition.md#healer)). | P5a, P1b-P1d, S9 (#331, the `farmer` preset) |
 | P6 | [players](players.md), on [invitations](leader.md#invitations), [handover](leader.md#handover) and [withdrawal](orders.md#withdrawal-and-reply-in-order). | P1d, S4 (#323, roles) |
 | P7 | [panel](panel.md), on [pins](organizer.md#pinned-parties) and the [`Sent` rule](organizer.md#which-orders-arrived). | P5b |
-| P8 | [e2e](e2e.md). | each; the raise scenario also P2 (the errand gate) and S8 (#328) |
+| P8 | [e2e](e2e.md). | each; the raise scenario also P2b (the errand gate) and S8 (#328) |
 
-Most urgent: P1a-P1d and P5a-P5b give parties at all; P2 makes them play as a group.
+Most urgent: P1a-P1d and P5a-P5b give parties at all; P2a-P2b make them play as a group.
 
 ## Risks and gaps
 
@@ -105,11 +106,12 @@ Most urgent: P1a-P1d and P5a-P5b give parties at all; P2 makes them play as a gr
   idling until `NoSpotFor` frees the leader; **model error** from uncalibrated member profiles, the
   model only comparing spots under the leader's row margin.
 
-To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep today's party behavior); a party travelling by
-gatekeeper or recalling together (P2 covers only the teleport answer; until then a party with no
-spot in reach, a given-back outgrown spot included, is broken at `NoSpotFor`, P5a); party matching
-rooms (`network/partymatch.go`) listing bot parties: backlog; command channels: out of scope;
-measuring a bot party's exp per hour against a solo farmer of the same level on the home run once P4 lands.
+Out of scope: command channels; party matching rooms (`network/partymatch.go`) listing bot parties
+(backlog). To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep
+today's party behavior, the home run uses the panel, D10); a party travelling by gatekeeper or
+recalling together (P2b covers only the teleport answer; until then a party with no spot in
+reach, a given-back outgrown spot included, is broken at `NoSpotFor`, P5a); measuring a bot party's
+exp per hour against a solo farmer of the same level on the home run once P4 lands.
 
 ## Files
 

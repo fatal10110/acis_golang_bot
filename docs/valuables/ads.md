@@ -2,11 +2,9 @@
 
 ## Lines
 
-- **Channel:** Trade (Say2 channel 8), never Shout: players read Trade for sales, Shout reads as noise
-  (its gate is shared with the general channel, which no bot line uses, so no reason either way). No
-  channel a bot can use reaches the whole server, despite the owner's "global message": Trade and
-  Shout reach only the speaker's restart region (`network/chat.go:108-122`), Hero Voice drops a
-  non-hero's line (`network/chat.go:123-128`); an ad in Giran is not heard in Aden. D30.
+- **Channel:** Trade (Say2 channel 8), never Shout (D30): players read Trade for sales, Shout reads
+  as noise. Despite the owner's "global message", an ad reaches only the speaker's restart region
+  ([server](server.md#server)): one in Giran is not heard in Aden.
 - **Wording:** `WTS <name> <price>[, <name> <price>]..., pm me`. The datapack reader names only the
   templates it keeps (`datapack/items.go:238,354`; `buildEtcItem` drops the 939 `RECIPE` scrolls,
   `:327-352`), and the travel map's `itemNames` only recipe products (`travel.go:88-91,138`,
@@ -35,9 +33,9 @@ process said fewer than `ProcessPerHour` (30) in the last hour.
   their own goroutines. The ad step claims at the decision: `Claim(region, now)` checks both limits
   and records the line in one step under the mutex, as `StoreRegistry.claim`
   (`storeregistry.go:14-25,90-101`; `store.go:345-350`); a failed claim says nothing that decision.
-- It claims only when the chat gate lets a line out now (`b.pace.allow(gateChat, now)`, as rule
-  "announce", `craftorder.go:225`); a line the frame bucket holds (`send`, `brain.go:774-779`) stays
-  the round's pending line and goes out later with no second claim. A line counts at its claim, even
+- It claims only when the chat gate lets a line out now (`b.pace.allow(gateChat, now)`, frame bucket
+  included, as rule "announce", `craftorder.go:225`), so `send` at the same `now` never holds a
+  claimed line (`brain.go:704-710,774-779`). A line counts at its claim, even
   if never sent (session ended): the board may over-count, never under-count. No line queues past the
   round; `FirstLineWait` bounds the first.
 - **Per bot:** `AdEvery`, `AdLines` and `RoundGap` give at most 6 lines an hour, each through the chat
@@ -53,5 +51,4 @@ process said fewer than `ProcessPerHour` (30) in the last hour.
 - `TestAdText` (V4): a line of several labels; the 100-unit clip, the rest on the next line by score.
 - `TestAdPacing` (V4; rounds by `openRound`, lines out of `decide` through rule "valuables"): two
   brains on one `AdBoard` in one region say one line per 60 s between them, also deciding at the same
-  instant (one claims, the other says nothing); a claimed line held by the frame bucket goes out later
-  with no second claim; `AdEvery` and `AdLines` per round; the hour cap; the chat gate.
+  instant (one claims, the other says nothing); no claim while the frame bucket is empty; `AdEvery` and `AdLines` per round; the hour cap; the chat gate.

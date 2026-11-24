@@ -1,15 +1,14 @@
 # How the bot finds fights
 
 Ships in X5 (sources, holds, clearance) and X4b (duel ground). Decisions D36, D38. Values are
-persona defaults. The PvP reaction delay is 200-600 ms (other events keep the plan's 300-1200 ms),
-so an interrupt can land in time.
+persona defaults.
 
 ## Sources
 
 | Source | What the bot does | Bound |
 | --- | --- | --- |
 | A player attacks it | Fights back (today). | — |
-| A duel challenge (`ExDuelAskStart`) | Accepts after the reaction delay when it can duel (out of combat, HP and MP at least half, no flag, karma or store, not a party duel, on [allowed ground](#where-a-duel-is-allowed), [clear of monsters](#clear-of-monsters)); else declines at once. Clan mates, allies and party members are taken like anyone ([rule 1](targets.md#mayfight)); a bot-marked challenger is declined at once (D38); party duels are declined. | one answer per challenge |
+| A duel challenge (`ExDuelAskStart`) | Accepts after the [reaction delay](wire.md#changes-to-todays-code-x4) when it can duel (out of combat, HP and MP at least half, no flag, karma or store, not a party duel, on [allowed ground](#where-a-duel-is-allowed), [clear of monsters](#clear-of-monsters)); else declines at once. Clan mates, allies and party members are taken like anyone ([rule 1](targets.md#mayfight)); a bot-marked challenger is declined at once (D38); party duels are declined. | one answer per challenge |
 | A whispered `duel` | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did (M11's proposed `join`, D28, would too). Dropped within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered. Never held by `DeclineHold`; its decline (1931) or refusal (153, 1926, 2017-2028) starts `DeclineHold` for the bot's own challenges of that player only. | one per `ChallengeEvery` (3 min) per bot, shared; once per player per `ChallengeSameEvery` (30 min) |
 | Its own challenge | Out of combat, clear of monsters, at its spot or on the road: challenges one non-bot player in sight within 2000, out of combat, unflagged, no karma or store, of its tier, both on allowed ground, when the [engage estimate](model.md#engage-estimate) passes against its row. A decline or refusal of any challenge to that player holds it. Holds are per bot. | one per `ChallengeEvery`, shared with whispers; once per player per `ChallengeSameEvery`; `DeclineHold` (2 h) |
 | Flagged and karma players in sight | [Hunting](targets.md#hunting). | the fight rules |
@@ -24,7 +23,8 @@ water or no-restart zone: 1940 to the one who cannot, 2017-2028 to a challenger 
 nor its player may stand in a peace, town, Derby track, arena, water or no-restart polygon
 (`zones/PeaceZone.xml`, `TownZone.xml`, `DerbyTrackZone.xml`, `ArenaZone.xml`, `WaterZone.xml`,
 `NoRestartZone.xml`, X2). A siege zone blocks only during its siege (`model/zone/siege.go:45-57`),
-which the bot cannot see.
+which the bot sees only from inside (283 at its start or on entry, 284 on leaving,
+`network/siege.go:220-229`); it then counts that polygon as blocked.
 
 1940 covers every reason the bot's side cannot duel (`network/duel.go:37-40`, `:170-173`), passing
 ones included (combat stance, HP or MP under half, `:202-205`), and always returns the state to
@@ -54,7 +54,7 @@ disengage moves) is checked: destination and every point of its M7 path at least
 outside every peace, town, Derby track and arena polygon and every siege polygon it is not already
 in (`zones/SiegeZone.xml`, 15 `NPoly`: 9 castles; clan halls `partisan_agit001`,
 `devastated_castle`, `bandits_stronghold`, `rainbow_spring`, `beast_farm_guildhall`,
-`fortress_of_dead`; a running siege is invisible, `model/zone/siege.go:38-42`,
+`fortress_of_dead`; a running siege is invisible from outside, `model/zone/siege.go:38-42`,
 `setBattlefieldHolds`), and the destination within `DuelLeash` (1800) of the opponent's last
 position.
 

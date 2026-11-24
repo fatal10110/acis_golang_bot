@@ -69,8 +69,9 @@ of sight or refused, and then only:
 - with plain `Action` and casts only, never forced, so the server still refuses a summon of an owner
   the bot could not place.
 
-A refused summon is held off: neither `attackers` nor `unfought` returns it
-(`combat_rules.go:88-120`). The same holds for a summon a party leader attacks ([party](party.md)).
+A refused summon is held off: `attackers` never returns it, nor does `unfought` while the bot has
+no karma (`combat_rules.go:88-120`; with karma it flees it, [with karma](karma.md#with-karma)).
+The same holds for a summon a party leader attacks ([party](party.md)).
 
 ## Tests
 

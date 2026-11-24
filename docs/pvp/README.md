@@ -45,15 +45,13 @@ PvP value blended into M10's gear score, a karma policy. No server change.
 - **D35, modes.** A new `pvp` preset (M10 Damage role, farms between fights): duels, flagged and
   karma players, arenas on; open-world PK off (opt-in per bot). Other presets keep fight back only
   with `SupportFlagged` off and now decline duels at once, but every preset fights players with the
-  PvP layer (`support` bots play KN, CL, EO, SO; party PvP in any party). Persona defaults (D6).
-  [modes](modes.md)
-- **D36, finding fights.** Any duel it can take, clear of monsters, its duel moves kept off
-  cancelling ground; challenges a player who whispers `duel` (extends D3 as the approved D20 did; once per 30
-  minutes per player, a decline not counted); its own challenge of one non-bot player of its tier
-  every 3 minutes when the engage estimate passes, not the same player within 30 minutes or 2 hours
-  after a decline or refusal; hunts flagged and karma players of its tier on the estimate; the
-  nearest arena every 90 minutes, staying while others are there (20 minutes at most).
-  [finding](finding.md)
+  PvP layer (`support` bots play KN, CL, EO, SO; party PvP in any party). PvP events wake the
+  brain after 200-600 ms, amending `docs/plan.md`'s shared 300-1200 ms for them only
+  ([reaction](wire.md#changes-to-todays-code-x4)). Persona defaults (D6). [modes](modes.md)
+- **D36, finding fights.** Takes any duel it can; challenges a player who whispers `duel` (extends
+  D3 as the approved D20 did); challenges non-bot players and hunts flagged and karma players of its
+  tier when the engage estimate passes; visits the nearest arena on a timer. Holds and bounds:
+  [finding](finding.md#sources).
 - **D37, items.** One loadout scored by M10's `Value` and `PvPValue` blended by relative gains,
   50 % each for `pvp` (others 0 %); no set swap; PvP sets and boss jewels worn when owned and
   within grade, never bought; poison and bleed cures (Antidote, Bandage, and their greater kinds
@@ -62,17 +60,11 @@ PvP value blended into M10's gear score, a karma policy. No server change.
 - **D38, bots vs bots.** Outside an arena a bot never attacks, hunts or challenges a bot and fights
   one back only after its hit or offensive cast; in an arena anyone but its party. No bot duels.
   [targets](targets.md)
-- **D39, death and karma.** Duels to the end, no surrender; arenas to the death, walking back after
-  each of the first 4 deaths an hour, home after the 5th; open world, break off by the row, avoid
-  its killer 30 minutes. No karma by accident ([guards](guards.md)), at a stated cost: in the three
-  small arenas steps over about 3 s rarely start against an unrooted karma-free opponent ([arena
-  edge](guards.md#arena-edge); the Colosseum allows them). In a duel: no attack at all during the
-  countdown; then no area skill or pole swing near a third player, a summon or an NPC (collision
-  radii counted), no hit on an NPC, no support on a flagged player, each of which would cancel the
-  duel. PK mode: one an hour, on the hunting preconditions, non-debuff damage until the victim
-  flags, never at 4 PK kills. With karma: farm to 0, flee clean attackers unless a PK within limits
-  (else take the death), walk on foot 600 from towns and guards, no gatekeeper, shop, hunt, duel,
-  arena or town trip. [karma](karma.md)
+- **D39, death and karma.** Duels to the end, no surrender; arenas to the death under a death cap;
+  open world, break off by the row and avoid its killer ([by fight](karma.md#by-fight)). No karma
+  by accident ([guards](guards.md)), at a stated cost: in the three small arenas long steps rarely
+  start against an unrooted karma-free opponent ([arena edge](guards.md#arena-edge)), and in a duel
+  nothing that would cancel it. Opt-in PK mode and life with karma: [karma](karma.md).
 
 ## Delivery (milestone M13)
 
@@ -83,14 +75,14 @@ Dependencies name M10 issues by number. Every PR also reads [server](server.md) 
 | X1 | Wire: duel packets, `RequestTargetCancel`, `MagicSkillCanceled` event, new `CharInfo`, `NPCInfo`, `UserInfo` fields, SystemMessage ids; codec tests. | S1 (#320, same `UserInfo` decoder) | [wire](wire.md#wire-x1) |
 | X2 | Datapack: zone reader (`NPoly`, `Cuboid`; water on `LoadWaterZones`), skill landing, `nextActionAttack`, `offensive`, target and radius fields, cure negate fields, jewel stats, `pvp*Dmg`, `cpTable`. | S2 (#321) | [wire](wire.md#datapack-x2) |
 | X3 | `charmodel` PvP: `LandRate`, cast-break chance, archetypes, class-to-row map, `RowTable` and reference opponents, `PvPValue`, engage estimate; tests on test-built tables; no row data. | S3 (#322), S11 (#330), X2 | [model](model.md) |
-| X4 | World model: opponent record (fight kind, `unfought`), duel and arena states, duel result, `MayFight` but rule 3 (arena), summons by own flag and karma, the five code changes, duel support. | X1, X2, X3 (class and tier map), S4 (#323, `Step`), S6 (#325, rotation runner), S9 (#331) | [wire](wire.md#world-model-x4), [targets](targets.md#mayfight) (and summons), [guards](guards.md#duel-support), [finding](finding.md#tests) (`TestPvPDuelFight`) |
-| X4b | The guards: Esc and late Esc, follow-up swing, arena edge with the hit-time predictor, area and bystander reach, pole reposition and hold; duel ground and the follow stop; `MayFight` rule 3; `PvPPolicy` modes, the `pvp` preset (D35, D38). | X4 | [guards](guards.md), [layer](layer.md#interrupts) (the predictor), [finding](finding.md#duel-ground), [targets](targets.md), [modes](modes.md) |
+| X4 | World model: opponent record (fight kind, `unfought`), duel and arena states, duel result, `MayFight` but rule 3 (arena), summons by own flag and karma, the code changes (reaction included), duel support. | X1, X2, X3 (class and tier map), S4 (#323, `Step`), S6 (#325, rotation runner), S9 (#331) | [wire](wire.md#world-model-x4) (and changes, tests), [targets](targets.md#mayfight) (and summons, `TestPvPSummon`), [guards](guards.md#duel-support) (and `TestPvPDuelNoFlaggedSupport`), [finding](finding.md#tests) (`TestPvPDuelFight`) |
+| X4b | The guards: Esc and late Esc, follow-up swing, arena edge with the hit-time predictor, area and bystander reach, pole reposition and hold; duel ground and the follow stop; `MayFight` rule 3; `PvPPolicy` modes, the `pvp` preset (D35, D38). | X4 | [guards](guards.md), [layer](layer.md#interrupts) (the predictor), [finding](finding.md#duel-ground) (and its `TestPvPDuelFight` cases), [targets](targets.md), [modes](modes.md) |
 | X5 | Finding fights: duel answer, whispered `duel`, own challenges and holds (unexplained 1940), clear of monsters, hunting with the estimate (empty `RowTable` until X6), arena trips, targets and leave (D36). | X3, X4b | [finding](finding.md), [targets](targets.md) (hunting, arena targets, tests), [model](model.md#engage-estimate), [guards](guards.md#arena-edge) |
 | X6 | The PvP layer: `Step` fields, PvP order, long-cast and sleep rules, interrupts, land-rate control, kite, pool estimate, CP potions, cures, break-off and gate; `pvpRowTable` into X5's estimate; `TestPvPRowsShipped` with no row. | X3, X4b, X5, S6 (#325), S11 (#330) | [layer](layer.md), [model](model.md#row-table) |
 | X7 | Fighter PvP rows (HF, EF, DF, OF, WF, KN, WA, RO, EK, ES, PK, AS, OR, MO, SC) and their `TestPvPRowsShipped` cases. | X6, S6b (#326) | [rows](rows.md), [layer](layer.md), [guards](guards.md#tests) |
 | X8 | Mystic PvP rows (HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS) and their `TestPvPRowsShipped` cases. | X6, S7 (#327) | [rows](rows.md), [layer](layer.md), [guards](guards.md#tests) |
 | X9 | Party PvP for every preset in any party: enemy set, healer marking, peel, healer buffs under its own `SupportFlagged`. | X6, X7 (KN peel), X8 (Mental Shield); `farmer` in bot parties needs M11 | [party](party.md) |
-| X10 | PvP gear: mix table, `PvPValue` in gear, set, jewel and dye scores, shipped-row model tests, cures on the supply list, CP potion and cure keep rule (D37). | X3, X6, X7, X8, S5 (#324), M8 I3 (#170, supply list), I4 (#171, `keeps`) | [model](model.md) |
+| X10 | PvP gear: mix table, `PvPValue` in gear, set, jewel and dye scores, shipped-row model tests, cures on the supply list, CP potion and cure keep rule (D37). | X3, X6, X7, X8, S5 (#324), M8 I3 (#170, supply list), I4 (#171, `keeps`) | [model](model.md), [layer](layer.md#tests) (supply-list and junk cases) |
 | X11 | Death and karma: arena return loop, avoid list, PK mode, karma state (flee or PK, chaotic restart, karma route, work-off) (D39). | X4, X5, X6, X7, X8 (`TestPvPPKCap` rows) | [karma](karma.md), [targets](targets.md#hunting) |
 | X12 | Panel switches, PvP counts, the four counters. | X4, X5, X6, X11, S9 (#331) | [modes](modes.md#panel-and-metrics-x12) |
 | X13 | e2e live scenarios for X5-X11, at most 4 characters each, GM included. | each; M11 for `TestLivePvPHealer` | the e2e cases in each file's Tests |

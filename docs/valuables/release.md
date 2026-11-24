@@ -3,8 +3,7 @@
 ## The cap
 
 The cap runs only at the end of a round that advertised ([round-end](round-end.md#steps), step 5,
-before the deposit; also at a cut-off after the first line; never after `FirstLineWait` or a cut-off
-before the first line), so every entry gets a round with players before its release; a unit found
+before the deposit, or its [cut-off](round-end.md#cut-off)), so every entry gets a round with players before its release; a unit found
 later joins its entry, released or not ([ledger](ledger.md#entries-and-units)). Counting carried and
 stored derived units, the bot **releases** to its store:
 
@@ -57,9 +56,9 @@ never list. With `left = Budget - sold` (`sold` the session's valuable sales):
   at 600000: the first two list, the third waits.
 
 Every unit starts under `Budget`, so the Scythe still sells once a session and sales stay under
-`Budget` plus one unit's price. Once `sold` reaches `Budget`, nothing is offered or listed for the
-session: the carried valuables, released or not, are deposited by the [off-round
-deposit](round-end.md#off-round-errands), and no released stored one is withdrawn.
+`Budget` plus one unit's price. Once `sold` reaches `Budget`, the round ends at once
+([round-end](round-end.md#steps), step 4) and nothing is offered or listed for the session: the
+carried valuables, released or not, are deposited by the [off-round deposit](round-end.md#off-round-errands), and no released stored one is withdrawn.
 
 **Counting.** A trade counts its price on `SendTradeDone` with success. The store counts one total
 today (`countSold` adds the adena gained since the list to `store.sold` at the close,

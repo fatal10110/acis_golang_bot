@@ -26,7 +26,7 @@ Ships in P7. Party mode and pins: [organizer](organizer.md#pinned-parties).
 - **Page:** a Parties page (each party with its bot members' class, level and role and its player
   members' names, the spot, its state; the free pool by town; form by hand, dissolve, auto on or
   off), and the party slot on the Bots table and the Bot detail.
-- **Metrics:** parties formed and broken by reason, members invited and refused.
+- **Metrics:** parties formed and broken by reason.
 
 ## Tests
 

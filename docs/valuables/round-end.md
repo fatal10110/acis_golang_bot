@@ -12,7 +12,9 @@
 3. **Answer** [whispers](whispers.md) and trade requests; [ask](trades.md#asking-for-a-trade)
    whisperers for a trade (within `RoundReach` of the anchor, then the walk back).
 4. **End** `RoundWait` (5 min) after the first line, once extended up to `Grace` (2 min) by an open
-   trade or a buyer with an agreed price in sight. If the board still holds the first line
+   trade or a buyer with an agreed price in sight; at once, with no `Grace`, when a trade brings
+   `sold` to `Budget` ([budget](release.md#valuables-budget-d34)): no line, haggle reply or
+   `TradeRequest` follows. If the board still holds the first line
    `FirstLineWait` (2 min) after the withdrawal's walk back (or the start), the round ends with no
    ad: it deposits, steps no rounds or asks and runs no cap (nobody heard). Bound: withdrawal +
    `FirstLineWait` + `RoundWait` + `Grace` + deposit, about 9 minutes plus two keeper visits and
@@ -30,15 +32,13 @@
      (`RequestTimeout`, server `trade/book.go:13`) and no player's request awaits an answer. The bot
      sends no other request (`encodeRequestJoinParty`, `encodeRequestJoinPledge`: harness only,
      `harness.go:124,130`) and sees three it receives (`Prompts`, `world.go:271-286`): party and
-     clan invitations, answered at once by rule "prompt" (rule 2, `rulePrompt`, `rules.go:584-603`;
-     clan ones do not count on the server anyway), and trade requests (`ruleTrade`, checked by
+     clan invitations, answered at once by rule "prompt" (rule 2, `rulePrompt`, `rules.go:584-603`),
+     and trade requests (`ruleTrade`, checked by
      `storeReady`). A friend, duel, party room or command channel request it cannot decode, received
      in the 15 s before the link or request, fails the deposit like any failure, the keeper
      unmarked. Invites stop 15 s before the end, so its own wait is rare and at most 15 s.
-   - **142** to the open link or the request: refused as today (`warehouseRefusals`,
-     `warehouse.go:68-71`, no `retryAt`; the next open 60 s from `openedAt`,
-     `warehouse.go:302-311,373-374`); to a `Chat` link, [no mark](warehouse.md#refused-links). The
-     deposit is lost this round.
+   - **142** to a link or the request: [refused](warehouse.md#refused-links); the deposit is lost
+     this round.
 6. **Store:** the walk back, then the rule lets go and the store opens as today at the anchor with
    the loot and released valuables. A pending request refuses the set-up
    ([server](server.md#server)), so `storeReady` also waits while the bot's own `TradeRequest` is
@@ -113,8 +113,9 @@ V7a unless named.
   gets `<name> not now, wts again soon`. An open timeout in the round: it ends on time, carried, no
   deposit or wait.
 - `TestValuablesGrace`: an open trade at `RoundWait` holds the deposit up to `Grace`; no
-  `TradeRequest` within 15 s of the extended end. The bot's unanswered request holds the deposit
-  until `TradeStart`, a refusal or 15 s, then `_DepositP` (no 142); a player's unanswered request
+  `TradeRequest` within 15 s of the extended end. A trade bringing `sold` to `Budget` ends the round
+  at once: no Trade line, haggle reply or `TradeRequest` after it, then step 5. The bot's unanswered
+  request holds the deposit until `TradeStart`, a refusal or 15 s, then `_DepositP` (no 142); a player's unanswered request
   likewise; a party invitation at the end is answered by rule "prompt" first. A 142 from an unseen
   request (a friend invitation): at a `Chat 1` keeper the deposit fails `WarehouseRefused` with no
   mark and the next round uses that keeper; at Wilford's fixture the 142 to `_DepositP` ends it

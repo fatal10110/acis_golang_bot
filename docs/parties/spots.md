@@ -1,6 +1,6 @@
 # Spots for a party
 
-Ships in P2. Code as after #142 (#353): `claimSpot` (`spots.go:495-541`) tries `claim` within
+Ships in P2a. Code as after #142 (#353): `claimSpot` (`spots.go:495-541`) tries `claim` within
 `MaxTravel`, then beyond (`:509-512`); with neither it sets `retryAt` (`:514`), plans a trip
 (`:515-517`), gives its spot back for an active trip (`:518-523`), keeps a held spot it is not
 outlevelled for (`:524-526`, `if b.trip.v.active() || (v.held && !b.outleveled())`), tries
@@ -41,7 +41,7 @@ take 1, called once by `leaveSpot` (`spots.go:601-610`). The brain records `spot
 give-back (`:522`), the old spot on a new claim (`:539`), `farmBeside` moving (`:553`), `moveOn`
 (`:584`, from an unreachable walk `:274`, a crowded spot `:283`, a death with `DeathAvoid` `:593`)
 and `diedAtSpot` (`:596`); outside: `supplytrip.go:121`, `command.go:241`, `brain.go:359`. P1c adds
-the release on [joining](members.md#joining), P2 the [gated give-back](#no-gatekeeper-trip).
+the release on [joining](members.md#joining), P2a the [gated give-back](#no-gatekeeper-trip).
 
 A new claim sets `spot.weight`: `n` for `claimN`, `claimOverN`, `farmBesideN`; 1 for the `go`
 claim (`command.go:238-242`), whose order clears the slot first. A size change (formation, end of
@@ -75,7 +75,7 @@ pin past `MaxSpread`, or an auto party up to one `PartyTick` after a level-up pa
 `outleveled` checks only the bot's own level against `MaxLevel + Outlevel` (`spots.go:423-426`), so
 a leader's formation spot (fit alone: `Below` 2, `Above` 3, `AggroAbove` 0, `spots.go:110-125`)
 could keep members 3 lower at a top monster up to `Lmin + 5`, aggressive up to `Lmin + 3`, against
-the band's `Lmin + 2` and `Lmin`; level-ups and member changes too. P2 adds `misfit`: leading bot
+the band's `Lmin + 2` and `Lmin`; level-ups and member changes too. P2a adds `misfit`: leading bot
 members, the held spot fails the band fit while some spot of the map fits it. It counts as
 `outleveled`: `ruleSpot` re-picks (`!v.held || b.outleveled() || b.misfit() || ...`) and
 `claimSpot` keeps only while `!b.outleveled() && !b.misfit()`, so the leader claims a band-fitting
@@ -93,7 +93,7 @@ members follow by walking only (`follow.go`, the walker within the SCC). Its sup
 
 An `outleveled` or `misfit` holder with no candidate in reach would keep its spot for good (the
 keep is skipped, `spots.go:524`, `claimOver` gets an empty order, `:527-529`, a holder skips
-`farmBeside`, `:530-532`, `spotCands` never lists the held spot). So P2 adds the **gated trip's
+`farmBeside`, `:530-532`, `spotCands` never lists the held spot). So P2a adds the **gated trip's
 give-back**: where a solo bot calls `planTrip` (`:515-517`, `here != nil`), such a leader with
 `len(cands) == 0` gives the spot back (`leaveSpot`, the whole weight), farms beside nothing, and
 `NoSpotSince` starts; the spot fails the fit, so it is not reclaimed. It so idles only when no spot
@@ -106,7 +106,7 @@ At its spot the leader picks no new target while a living bot member stands fart
 `GatherRange` (1200, inside the 1500 party range) from it, for at most `GatherWait` (60 s); a
 member beyond `FarAway` (10000) does not hold it.
 
-## Tests (brain unit, P2)
+## Tests (brain unit, P2a)
 
 - `TestPartyClaimN`: a party of 3 claims 3, skips room for 2; a member leaving: held -1 in one step;
   a member's death, raise or trip: unchanged; a player joining at a cap-3 spot: 4, then a move to

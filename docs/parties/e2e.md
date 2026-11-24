@@ -17,10 +17,10 @@ a player invites a bot expecting 1 (`party_live_test.go:56`, `support_live_test.
   attacker or not.
 - `TestLiveBotPartyLeaderDeath` (3 bots): after the GM's `//kill` of the leader the same party farms
   together again within a timeout.
-- `TestLiveBotPartyRaise` (3 bots; needs P2 and S8, #328): a human mystic support set to 20 by
+- `TestLiveBotPartyRaise` (3 bots; needs P2b and S8, #328): a human mystic support set to 20 by
   `//set level` becomes a Cleric through M10's class change at 20 (the harness's GM forms set
   level, SP and skills, not the class, `internal/e2e/gm.go:152-154`), walking to the class master
-  in its bot party under P2's lifted errand gate. `//set level` gives no SP and 1016 costs 3300 SP,
+  in its bot party under P2b's lifted errand gate. `//set level` gives no SP and 1016 costs 3300 SP,
   so the GM gives it with `//skill set 1016 1` (P3's learn table is unit-tested); the Cleric raises
   the killed leader.
 - `TestLiveBotPartyPlayers` (2 bots, the harness's GM and a plain player whose name carries the

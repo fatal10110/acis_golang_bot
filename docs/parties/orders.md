@@ -80,8 +80,9 @@ One reply slot, `orders.reply`, sent by `ruleCommand`, is replaced by a later re
 (`command.go:122-125,252-258`); a clearing command that answers needs the withdrawal first (a GM's
 `invite me`, a failing `go <spot>`), so `orders` gains a `withdraw` flag:
 
-- set only while the bot is in a party, by `unparty` (P1a, which ships the flag) and the clearing
-  step (P1b); the panel `leave` sets it instead of the reply;
+- set only while the bot is in a party, by `unparty` (P1a, which ships the flag), the clearing
+  step (P1b) and a [handover to a player](players.md#handover-to-a-player) (P6); the panel `leave`
+  sets it instead of the reply;
 - `ruleCommand` sends `RequestWithdrawParty` (`actLeaveParty`) while it is set and the bot is in a
   party, then the reply; the send clears it and resets the leader watch (`brain.go:815-817`). No
   chat gate for it; the whisper follows within the gate;

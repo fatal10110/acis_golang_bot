@@ -28,8 +28,7 @@ gets only the whisper (`trade me`); its own request is still accepted.
   more this round.
 - At most one request open; none while the store is open or opening, during the round's private
   warehouse request, or within 15 s (`RequestTimeout`) of the round's end as it stands (`RoundWait`
-  after the first line, or the extended `Grace` end): an unexpired request refuses the keeper and
-  the store with 142 ([round-end](round-end.md#steps), steps 5, 6).
+  after the first line, or the extended `Grace` end; [round-end](round-end.md#steps), steps 5, 6).
 
 ## Tests
 

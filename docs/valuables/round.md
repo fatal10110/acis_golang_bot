@@ -118,33 +118,35 @@ only a longer wait (a backoff) lets the store open first, the stored ones waitin
 
 ## Tests
 
-- `TestValuablesRoundStart` (V7a): with the look done, arriving with a new valuable sends the first
-  Trade line (Say2 8) and no `RequestPrivateStoreManageSell`. None: within `RoundGap`; store open or
-  opening; out of a registry town (within `storeTownRadius` of a full town still starts); region -1;
-  board held (a line within `RegionGap`, or the hour cap); a warehouse request, market visit, gear
-  `UseItem`, craft cycle or enchant exchange running (at `enchantChosen` the `RequestEnchantItem` and
-  its result come first, no `_WithdrawP`/`_DepositP` meanwhile); a clan member with `member.asked`
-  until rule "member" settles it (rows off, lease back, orders posted); the open not due (60 s after
-  a clan open, backoff, `retryAt`), then once due. A leftover starts the next round `RoundGap` later;
-  stored ones alone none; no line names a released carried one. Dion: from Trisha's spawn the look
-  goes to 30058 (5348) and walks back within `anchorArrive` before the round starts; withdrawal at
-  30058, first line after the walk back; the end's deposit at 30058, the walk back, then
-  `RequestPrivateStoreManageSell` at the anchor with the loot; a buyer walk is followed by the walk
-  back before the next line; an unreachable walk back after the withdrawal ends the round with no ad
-  or deposit. No private keeper in reach: no round, the store with the loot. Talking Island with Rant
-  marked: withdrawal and deposit at Rolfe (30055). Teranu Mardui with Hagos marked: nothing pending,
-  the store at once. Sessions: none before the look; after a process start the stored Sword of
-  Watershadow and +5 Conjuror's Staff start none, and a new carried valuable starts a round whose
-  `_WithdrawP` takes both and whose first line names all three (in a variant the gear errand wears
-  the staff next and it leaves the ledger); after a reconnect no round or deposit before the look,
-  and a new valuable is deposited after its round and counts stored; a round open at a session's end
-  is ended by the next as a cut-off, nothing carried over. Cap cases are V7c's.
+- `TestValuablesRoundStart` (V7a; loot carried only with the look already done, since until V7b's
+  hold the store opens with it in the 60 s between the look and the next open): with the look done,
+  arriving with a new valuable sends the first Trade line (Say2 8) and no
+  `RequestPrivateStoreManageSell`. None: within `RoundGap`; store open or opening; out of a registry
+  town (within `storeTownRadius` of a full town still starts); region -1; board held (a line within
+  `RegionGap`, or the hour cap); a warehouse request, market visit, gear `UseItem`, craft cycle or
+  enchant exchange running (at `enchantChosen` the `RequestEnchantItem` and its result come first,
+  no `_WithdrawP`/`_DepositP` meanwhile); a clan member with `member.asked` until rule "member"
+  settles it (rows off, lease back, orders posted); the open not due (60 s after a clan open,
+  backoff, `retryAt`), then once due. A leftover starts the next round `RoundGap` later; stored ones
+  alone none; no line names a released carried one. Dion: from Trisha's spawn the look goes to 30058
+  (5348) and walks back within `anchorArrive`, the round starting once the open is due; with the
+  look done, withdrawal at 30058, first line after the walk back; the end's deposit at 30058, the
+  walk back, then `RequestPrivateStoreManageSell` at the anchor with the loot; a buyer walk is
+  followed by the walk back before the next line; an unreachable walk back after the withdrawal ends
+  the round with no ad or deposit. No unmarked private keeper in reach: no round, the store with the
+  loot. Sessions: none before the look; after a process start the stored Sword of Watershadow and +5
+  Conjuror's Staff start none, and a new carried valuable starts a round whose `_WithdrawP` takes
+  both and whose first line names all three (in a variant the gear errand wears the staff next and
+  it leaves the ledger); after a reconnect no round or deposit before the look, and a new valuable
+  is deposited after its round and counts stored; a round open at a session's end is ended by the
+  next as a cut-off, nothing carried over. Cap cases are V7c's.
 - `TestValuablesStoreHold` (V7b): pending on another bot's board line: no
   `RequestPrivateStoreManageSell`, no move; freed within `StoreHold`: the round starts, no store until
   it ends; held past it: the store with the loot only; the same for a backoff; a running market visit
   steps to its end, no opening; within `RoundGap` of the last start: the store at once; leaving and
   returning restarts the count; a running look does not count; no loot and the board held past
-  `StoreHold`: the hold stops, a due supply trip starts; a 30 min backoff holds the turn `StoreHold`
+  `StoreHold`: the hold stops, a due supply trip starts; a look with loot carried: no store in the
+  60 s to the next open, then the round; a 30 min backoff holds the turn `StoreHold`
   only; look not done and board held: the look starts once the open is due, its wait counting; in
   Dion the look's visit does not reset the count; the opening waits for the bot's unanswered
   `TradeRequest` up to 15 s.

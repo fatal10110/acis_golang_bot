@@ -20,8 +20,8 @@ Each decoder and encoder has a recorded or server-built fixture and an exact `le
   bot's collision radius, ally id, PK and PvP kills. Dropped today: `UserInfo` at `inworld.go:56`,
   `:62`, `:66`; `CharInfo` at `:127`, `:137`, `:140`, `:148`, `:150-151`; `NPCInfo` at `:171`,
   `:183`, its title read at `:178` but not kept by `applyNPCInfo` (`world.go:888-900`).
-- SystemMessages: 35, 36 (damage dealt, taken), 139 (resisted), 283, 284 (arena in, out), 84, 85
-  (peace refusals), 692 (frozen duel opponent), 153 (busy), the duel set 1926-2028.
+- SystemMessages: 35, 36 (damage dealt, taken), 139 (resisted), 283, 284 (combat zone in, out:
+  an arena or a running siege), 84, 85 (peace refusals), 692 (frozen duel opponent), 153 (busy), the duel set 1926-2028.
 
 ## Datapack (X2)
 
@@ -50,11 +50,11 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
 - **Duel state**: `idle → asked` (`ExDuelAskStart`, or its own challenge) `→ countdown` (1930 or
   1929) `→ fighting` (`ExDuelStart`, the opponent's first `ExDuelUpdateUserInfo`, carrying its
   object id, then the reaction delay) `→ idle` (`ExDuelEnd`, 1950-1956, 1931, a refusal 153, 1926,
-  1940, 2017-2028, or 15 s unanswered). The 200-600 ms delay covers the gap to the bot's own start
-  step, queued by the same loop (`network/duel.go:364-395`, `:396-399`; `duel/state.go:82-86`).
+  1940, 2017-2028, or 15 s unanswered). The PvP [reaction](#changes-to-todays-code-x4) covers the
+  gap to the bot's own start step, queued by the same loop (`network/duel.go:364-395`, `:396-399`; `duel/state.go:82-86`).
   Only while fighting is the opponent attackable with a plain `Action`.
-- **Arena state**: the bot's position in an arena polygon (X2), confirmed by 283 and 284. Another
-  player not in its party in the same arena is attackable without force. The server reads positions
+- **Arena state**: the bot's position in an arena polygon (X2; 283 and 284 come from sieges too).
+  Another player not in its party in the same arena is attackable without force. The server reads positions
   live at every attack and at death, so the bot keeps its own and each arena opponent's edge
   distance (from `CharInfo` and moves).
 
@@ -90,12 +90,23 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   [Summons and pets](targets.md#summons-and-pets) on its own `PvPFlag` and `Karma` instead. Farming
   already skips summons (`farm.go:79`, `monster`).
 
+- **Reaction.** `salient` (`brain.go:595-625`) also takes an `ExDuel*` packet, `MagicSkillCanceled`,
+  a `MagicSkillUse` by or at a player it fights or at a party member, and a fought player's
+  `MoveToLocation` or `CharInfo` changing its mask or flag. Those arm the reaction at 200-600 ms
+  (`PvPReact`; others keep 300-1200 ms, `:17-21`), moving an armed one earlier, never later (today
+  the first wins, `:587-588`). A [guard](guards.md) stop (Esc, disengage move) takes no delay: its
+  event wakes the brain at the next frame (`time.Second / frameRate`), which `EdgeSlack` covers.
+
 ## Tests
 
 - **Codec (X1):** the five duel server packets decode from server-layout frames and consume
   exactly `len(payload)`, as does `MagicSkillCanceled` from a `FrameMagicSkillCanceled` frame; the
   two requests encode the server's field order; `CharInfo`, `NPCInfo`, `UserInfo` keep their new
   fields (radii included) over the recorded fixtures, consuming exactly `len(payload)`.
+- **Reaction (X4):** an opponent's Heal on its ally, the first `ExDuelUpdateUserInfo`, an arena
+  opponent's move → a decision 200-600 ms later, a pending 300-1200 ms one moved earlier; a stranger's
+  move → none before the tick; the arena opponent under the edge margin with a damage cast in
+  flight → `RequestTargetCancel` at the next frame.
 - **Datapack (X2):** the zone reader on fixtures for each zone kind, a position in and out: an
   `NPoly` with `minZ`/`maxZ`; a reversed-corner `Cuboid` (as Rune, `zones/TownZone.xml:445-449`: x
   47150 then 32531, y -44815 then -52045) contains a point between; any other shape fails. Shipped

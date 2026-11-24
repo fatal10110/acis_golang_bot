@@ -29,7 +29,9 @@ party. M10's Damage role never picks KN, CL, EO or SO (`docs/strategy.md` sectio
 by race and role": Support column only) and M11 bot parties take only `farmer` and `support`
 ([eligible bots](../parties/organizer.md#eligible-bots)). So `pvp` bots play HF, EF, DF, OF, WF,
 HM, EM, DM, OM, WA, RO, EK, ES, PK, AS, OR, MO, SC, HW, EW, DW, OS; `support` bots play KN, CL, EO,
-SO when they fight back, alone, in a player's party or in an M11 bot party.
+SO when they fight back, alone, in a player's party or in an M11 bot party. A bot moved to another
+preset after its first profession keeps its row (a role change affects only the choices still
+ahead, `docs/strategy.md:629`), so a `pvp` KN, CL, EO or SO can exist.
 
 ## Panel and metrics (X12)
 

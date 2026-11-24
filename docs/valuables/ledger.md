@@ -71,17 +71,15 @@ town visit, before any round and any other private request, valuable carried or 
   [pending round](round.md#the-store-waits-for-a-pending-round); once they hold, the rule queues it,
   steps it and [walks back](round.md#back-to-the-anchor), holding the turn.
 - **Until done:** no round, cap or other private request; entries keep rounds, asks and marks.
-- **Keeper-less towns:** none within `RoundReach`: no look, no round, the store as today. Teranu
-  Mardui and Kurfa ([alliance keepers](round.md#keepers-by-town)) become so once each bot's first
-  look of the process [marks](warehouse.md#keeper-marks) them. One open a session
-  ([pacing](server.md#pacing)).
+- **Keeper-less towns:** none unmarked within `RoundReach` ([marks](warehouse.md#keeper-marks)):
+  no look, no round, the store as today. One open a session ([pacing](server.md#pacing)).
 
 ## The valuables value
 
-The ledger, the round state (open or not, start time, **anchor**, ad lines said, and per partner:
-replies, counters left, agreed price, asked for a trade) and the `noPrivate` marks are one
-`valuables` value with `openRound(anchor)` and `endRound`. Each `Bot` owns its own and hands it to
-its sessions like the chat log (`cfg.chat`; `session.go:212,349`; `chat.go:43-45`), so `RoundGap`,
+The ledger, the round state (open or not, start time, **anchor**, ad lines said, per partner
+replies and asked for a trade, per partner and item counters left, current and agreed price) and the
+`noPrivate` marks are one `valuables` value with `openRound(anchor)` and `endRound`. Each `Bot`
+owns its own and hands it to its sessions like the chat log (`cfg.chat`; `session.go:212,349`; `chat.go:43-45`), so `RoundGap`,
 `AnswerAfter`, reply counts and marks survive a reconnect, per bot. The anchor is the position at
 `openRound`, read by the invite walk and every walk back. V2b adds the value, rule "valuables" as a
 stepper matching only while a round is open (only tests call `openRound` before V7a), the [walk
@@ -89,8 +87,7 @@ back](round.md#back-to-the-anchor) (`anchorArrive`), and a stored-units accessor
 stored and the status known until V3b wires it to V3a's private status.
 
 A round open when its session ends is ended by the next session's first decision as a
-[cut-off](round-end.md#cut-off): after its first line rounds step and asks drop at once, the cap
-(V7c) running once that session's look is done; before it nothing changes. Its reply queue, partners
+[cut-off](round-end.md#cut-off), its cap (V7c) waiting for that session's look. Its reply queue, partners
 and trade request are dropped; nothing is deposited.
 
 ## Tests
@@ -113,8 +110,6 @@ and trade request are dropped; nothing is deposited.
   the sword and staff get entries (rounds 0, the first ask, the staff's with five scrolls, not
   released, one stored unit), the others none. After a reconnect an entry with a stored unit is kept
   unchanged while the status is unknown, and the look finds the unit. With [V3a's keeper
-  fixtures](warehouse.md#tests): at Talking Island the look marks Rant and, next decision with no
-  walk back between, takes Rolfe's type 1 list, then walks back; the next session goes straight to
-  Rolfe. At Teranu Mardui Hagos is marked, the bot walks back, and no look runs that session or the
-  next. A `follow` on the walk to the keeper ends the look (no `_WithdrawP`, no walk back, the next
+  fixtures](warehouse.md#tests), marks survive the session: the next goes straight to Rolfe, and at
+  Teranu Mardui no look runs again. A `follow` on the walk to the keeper ends the look (no `_WithdrawP`, no walk back, the next
   legs rule "follow"'s); it runs on the next town visit.
