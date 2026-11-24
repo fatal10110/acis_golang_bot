@@ -51,10 +51,8 @@ func TestLiveTrainer(t *testing.T) {
 	// Level 10: a visit, and Heal 1-3 learned when the bot lacks them.
 	seen := f.watch.Len()
 	gmOn(t, ctx, gm, f, fmt.Sprintf("set sp %d", trainerSP), "set level 10")
-	vctx, vcancel := context.WithTimeout(ctx, 6*time.Minute)
-	defer vcancel()
 	asked := false
-	until(t, vctx, f.name+"'s visit at level 10", func() string {
+	untilBy(t, ctx, f.name+"'s visit at level 10", time.Now().Add(6*time.Minute), func() string {
 		spellbook(t, ctx, gm, f, &asked)
 		listed := slices.ContainsFunc(f.watch.Seen(seen), func(s Seen) bool {
 			_, ok := s.Event.(botclient.AcquireSkillList)
@@ -99,15 +97,14 @@ func spellbook(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, asked
 // by a RequestAcquireSkill f sent from index from of its sent packets on.
 func learn(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, from int, level int32) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
-	defer cancel()
+	due := time.Now().Add(6 * time.Minute)
 	fromSeen := f.watch.Len()
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Log(trainerTrail(f, fromSeen, from))
 		}
 	})
-	until(t, ctx, fmt.Sprintf("%s learns Heal level %d", f.name, level), func() string {
+	untilBy(t, ctx, fmt.Sprintf("%s learns Heal level %d", f.name, level), due, func() string {
 		learned := false
 		for _, p := range sentOf(f.watch.Sent()[from:], botclient.OpRequestAcquireSkill) {
 			learned = learned || p.Target == skillHeal && len(p.Payload) >= 9 && int32(binary.LittleEndian.Uint32(p.Payload[5:9])) >= level

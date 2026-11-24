@@ -291,5 +291,29 @@ answers no successful step with it and the scenario tolerates no failed try, sin
 click, a move or an interrupted cast also end with one. `TestLiveStoreBuy`, `TestLiveTownPrep`
 and `TestLiveSupplyTrip` check their buys and the scroll read.
 
+### Step deadlines
+
+Every waiting step of a live scenario has a deadline of its own, short of the scenario's: a step
+that is overdue fails at once, naming the step, how long it waited, what it still misses and the
+last packets it saw, instead of waiting out the scenario's context (#366: a support bot that never
+buffed its leader waited out 12 minutes). The wait helpers (`until`, `untilServed`, `waitFor`,
+`watchUntil`) all run through `runStep` (`internal/e2e/helpers_refusal_live_test.go`, over
+`awaitStep` in `internal/e2e/step.go`) and give a step `stepBound`, five minutes, unless it names its
+own deadline through the `...By` form of the helper (`untilBy`, `untilServedBy`, `waitForBy`,
+`watchUntilBy`). A deadline is a time, so a step may count it from an event of the run (the support
+bot's renewal is due a minute past four minutes after its first Might on the leader) rather than
+from when it starts waiting. A step that takes stepNote (10 s) or more logs how long it took and how
+far its deadline was, so a run's log shows each slow step's margin.
+
+A step that may take longer than `stepBound` names its deadline with the reason at its call site:
+the farm fight (`TestLiveFarmFight`, 25 minutes: a passing run took 19m50s), the trip home of
+`TestLiveSupplyTrip` (15 minutes: the shots run out after about ten), the visits and the delivery
+of `TestLiveClanMember` (the walk to town and the supply-trip gap), the gear purchases of
+`TestLiveGearBuy` and `TestLiveArrows`, the walks of `TestLiveSpotSpread`, `TestLiveMysticStart`,
+`TestLiveTrainer` and the follow and nav scenarios. `TestLiveSupport` bounds each of its steps:
+the leader's buffs are overdue two minutes after the invitation. Observation windows
+(`TestLivePackSpot`, `TestLivePackRisk`, `TestLiveSoak`) wait out their window on purpose, and a
+scenario whose own deadline is within `stepBound` needs no step deadline.
+
 No scenario covers #28, a monster another player fights skipped: #138 dropped that rule, and a
 farmer may take such a monster.

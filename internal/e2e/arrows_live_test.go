@@ -50,9 +50,8 @@ func TestLiveArrows(t *testing.T) {
 	// The bow at the weapon merchant, then, five minutes on (shopRetry),
 	// the arrows next to the grocer: the village's merchants stand too
 	// far apart for the merchant in sight to be the right one.
-	wctx, cancel := context.WithTimeout(ctx, 2*gearBound)
-	defer cancel()
-	until(t, wctx, f.name+" buys a bow", func() string {
+	due := time.Now().Add(2 * gearBound)
+	untilBy(t, ctx, f.name+" buys a bow", due, func() string {
 		for _, it := range inventory(f.watch.Seen(0)) {
 			if items[it.TemplateID].Kind == "BOW" {
 				return ""
@@ -64,7 +63,7 @@ func TestLiveArrows(t *testing.T) {
 	recallBot(t, ctx, tg, gm, f.name)
 
 	var bow, arrows int32
-	until(t, wctx, f.name+" buys a bow and its arrows and wears the bow", func() string {
+	untilBy(t, ctx, f.name+" buys a bow and its arrows and wears the bow", due, func() string {
 		inv := inventory(f.watch.Seen(0))
 		bow, arrows = 0, 0
 		for _, it := range inv {
@@ -134,8 +133,10 @@ func TestLiveArrows(t *testing.T) {
 		if answer, err = f.bot.Command(assist); err == nil {
 			select {
 			case err = <-answer:
-			case <-ctx.Done():
-				err = ctx.Err()
+			// A bot in session answers within a brain tick: the step
+			// shares the sight wait's EntryTimeout.
+			case <-sctx.Done():
+				err = fmt.Errorf("no answer: %w", sctx.Err())
 			}
 		}
 		if !errors.Is(err, botclient.ErrNotInSight) {

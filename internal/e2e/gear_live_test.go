@@ -131,10 +131,8 @@ func TestLiveGearBuy(t *testing.T) {
 		t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 	}
 
-	bctx, cancel := context.WithTimeout(ctx, 2*gearBound)
-	defer cancel()
 	var replaced, sold []string
-	until(t, bctx, buyer.name+" buys, wears and sells", func() string {
+	untilBy(t, ctx, buyer.name+" buys, wears and sells", time.Now().Add(2*gearBound), func() string {
 		seen, sent := buyer.watch.Seen(0), buyer.watch.Sent()
 		inv := inventory(seen)
 		w := worn(inv)

@@ -136,7 +136,9 @@ func TestLiveSupplyTrip(t *testing.T) {
 				f.carries(soulshotNG), f.carries(lesserHealingPotion), f.carries(scrollOfEscape), f.carries(adena), st.Position, st.Level, st.HP, st.MaxHP, st.State)
 		}
 	}
-	untilServed(t, ctx, "the trip home", f.watch, escapeRefused(f.watch, objectsOf(f.watch.Seen(0), scrollOfEscape)), func() string {
+	// The step's bound: farming to the run-out trigger takes about ten
+	// minutes, then the safe wait and the read.
+	untilServedBy(t, ctx, "the trip home", time.Now().Add(15*time.Minute), f.watch, escapeRefused(f.watch, objectsOf(f.watch.Seen(0), scrollOfEscape)), func() string {
 		note()
 		st := f.bot.Status()
 		if tripAt.IsZero() && st.Rule == "supply" {

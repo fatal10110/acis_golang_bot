@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -61,9 +60,7 @@ func TestLiveMysticStart(t *testing.T) {
 	}
 	trained := false
 	var logged time.Time
-	wctx, cancel := context.WithTimeout(ctx, 9*time.Minute)
-	defer cancel()
-	until(t, wctx, f.name+" done with its trainer errand", func() string {
+	untilBy(t, ctx, f.name+" done with its trainer errand", time.Now().Add(9*time.Minute), func() string {
 		s := f.bot.Status()
 		echoes, _, casts := f.echoes(seen)
 		state := fmt.Sprintf("rule %q at %v (%.0f from the trainers), %d moves, %d refused in place, %d /unstuck casts, walk %q",

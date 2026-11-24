@@ -212,6 +212,9 @@ func TestLiveClanWarehouse(t *testing.T) {
 		select {
 		case r := <-script.out:
 			return r
+		case <-time.After(stepBound):
+			t.Fatalf("waiting for the %s: overdue after %v", what, stepBound)
+			return whReport{}
 		case <-ctx.Done():
 			t.Fatalf("waiting for the %s: %v", what, ctx.Err())
 			return whReport{}

@@ -431,21 +431,18 @@ func maxPerSecond(sent []Sent) int {
 // (botclient.Pacer: burst 10 plus rate 5), far under the server's 160.
 const frameCap = 15
 
-// until checks report every two seconds until it returns "" and fails the
-// test with its last answer, what is still missing, once ctx ends.
+// until is untilBy with the default step bound.
 func until(t *testing.T, ctx context.Context, what string, report func() string) {
+	t.Helper()
+	untilBy(t, ctx, what, time.Now().Add(stepBound), report)
+}
+
+// untilBy checks report every two seconds until it returns "" and fails the
+// test with its last answer, what is still missing, once the step is
+// overdue at due or ctx ends.
+func untilBy(t *testing.T, ctx context.Context, what string, due time.Time, report func() string) {
 	t.Helper()
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
-	for {
-		missing := report()
-		if missing == "" {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatalf("%s: %v; missing: %s", what, ctx.Err(), missing)
-		case <-tick.C:
-		}
-	}
+	runStep(t, ctx, what, due, tickPoll(tick.C), report, nil)
 }
