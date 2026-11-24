@@ -273,8 +273,8 @@ var casterKit = ClassKit{
 // (docs/strategy.md, Design section 4): its line's kit (lineKits, else
 // supportKit), with the steps the role plays from the level reached, its
 // class's skills, trainers, gear and dyes, its race's professions and the
-// thresholds. RoleNone compiles the zero Build. The tables are Go tables, checked against the shipped datapack
-// by TestBehaviorRowsShipped.
+// thresholds. RoleNone compiles the zero Build. The tables are Go tables,
+// checked against the shipped datapack by TestBehaviorRowsShipped.
 func CompileBuild(race, class, level int32, role Role) Build {
 	if role == RoleNone {
 		return Build{}
