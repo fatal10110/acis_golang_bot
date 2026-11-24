@@ -147,8 +147,12 @@ for its whole context again as a cache write, about 12x a cache read. On w1122, 
   `docs/agents/test-strategy.md`). When a change touches the protocol client, sessions, a codec or
   a behavior a scenario asserts, the agents run the related scenarios locally with
   `BOT_REQUIRE_E2E=1` and confirm they ran rather than skipped.
-- The PR body carries an "E2E scenarios (local)" line, and the reviewer re-runs them when the
-  stack is reachable. A related scenario that is missing or failing is a [must-fix].
+- The PR body carries an "E2E scenarios (local)" line. The implementation agent saves each live
+  run's `go test -v` output as `lanes/<slug>/logs/e2e-<head>[-<label>].log`. The reviewer accepts
+  a log at the head it reviews that shows a scenario passing, and reruns live only a scenario with
+  no passing log at that head, one that failed or was flaky in an earlier round, or one the change
+  reaches that the author did not run. A related scenario that is missing or failing is a
+  [must-fix].
 - The merge agent never runs tests. The `runner` helper refuses full-suite commands.
 
 ## Concurrency budget (read before choosing tracks)
