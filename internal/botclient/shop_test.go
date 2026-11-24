@@ -183,7 +183,7 @@ func newShopBrain(t *testing.T, items ...Item) *Brain {
 		{ID: 29, NPCID: 30094, Products: []datapack.Product{{ItemID: healBook, Price: 110}}},
 	})
 	spawns := map[int32][]Point{30004: {{X: 5000}}}
-	b.cfg.Travel = &TravelMap{spawns: spawns, shops: shops, cheapest: cheapest, spawnedSold: spawnedSold(shops, spawns)}
+	b.cfg.Travel = &TravelMap{spawns: spawns, shops: shops, cheapest: cheapest, spawnedSold: spawnedSold(shops, spawns), trainers: testTrainers}
 	b.world.Apply(ItemList{Items: items}, t0)
 	return walkOn(t, b)
 }
@@ -463,7 +463,7 @@ func TestTrainerBuysSpellbook(t *testing.T) {
 	b := newTrainerBrain(t, 200)
 	b.persona.AutoShots = false
 	shops, cheapest := indexShops([]datapack.BuyList{{ID: 29, NPCID: 30094, Products: []datapack.Product{{ItemID: healBook, Price: 110}}}})
-	b.cfg.Travel = &TravelMap{shops: shops, cheapest: cheapest}
+	b.cfg.Travel = &TravelMap{shops: shops, cheapest: cheapest, trainers: testTrainers}
 	b.world.Apply(ItemList{Items: []Item{adenaStack(2000), potionsOf(20), spiritsOf(100), sword}}, t0)
 	b.world.Apply(NPCInfo{ObjectID: bookSellerObj, NPCID: 30094, Pos: Point{X: -300}}, t0)
 	heal1 := AcquirableSkill{skillHeal, 1, 160}

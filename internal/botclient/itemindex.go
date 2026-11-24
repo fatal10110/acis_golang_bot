@@ -140,12 +140,68 @@ func indexBuffPotions(etc map[int32]datapack.EtcItem, skills map[datapack.SkillR
 	return potions, stacks
 }
 
+// indexSkillStacks indexes the stack effect of every skill level whose
+// effects have a stack type that stacks with anything but its own kind
+// (not stackless): its first such effect's, by skill id then level.
+func indexSkillStacks(skills map[datapack.SkillRef]datapack.Skill) map[int32]map[int32]stackEffect {
+	stacks := make(map[int32]map[int32]stackEffect)
+	for ref, sk := range skills {
+		for _, e := range sk.Effects {
+			if slices.Contains(stackless, e.StackType) {
+				continue
+			}
+			if stacks[ref.ID] == nil {
+				stacks[ref.ID] = make(map[int32]stackEffect)
+			}
+			stacks[ref.ID][ref.Level] = stackEffect{e.StackType, e.StackOrder}
+			break
+		}
+	}
+	return stacks
+}
+
 // stackOf is the stack effect of skill at level (indexBuffPotions); false
 // for a skill of no buff potion's stack type. An enchanted level (101 and
 // up), which the skill reader does not read, stacks as the skill's top
 // level.
 func (m *TravelMap) stackOf(skill, level int32) (stackEffect, bool) {
-	levels := m.stacks[skill]
+	return stackAt(m.stacks[skill], level)
+}
+
+// skillStackOf is the stack effect of skill at level (indexSkillStacks),
+// false for a skill without one or with no travel map; an enchanted level
+// stacks as stackOf's.
+func (m *TravelMap) skillStackOf(skill, level int32) (stackEffect, bool) {
+	if m == nil {
+		return stackEffect{}, false
+	}
+	return stackAt(m.skillStacks[skill], level)
+}
+
+// indexMaxCharges indexes the maxCharges of every skill level with one
+// (datapack.Skill.MaxCharges: Focused Force's 1 to 7 by level).
+func indexMaxCharges(skills map[datapack.SkillRef]datapack.Skill) map[datapack.SkillRef]int {
+	out := make(map[datapack.SkillRef]int)
+	for ref, sk := range skills {
+		if sk.MaxCharges > 0 {
+			out[ref] = sk.MaxCharges
+		}
+	}
+	return out
+}
+
+// maxChargesOf is the most force charges skill holds at level
+// (indexMaxCharges); 0 for a skill level without, or with no travel map.
+func (m *TravelMap) maxChargesOf(skill, level int32) int {
+	if m == nil {
+		return 0
+	}
+	return m.maxCharges[datapack.SkillRef{ID: skill, Level: level}]
+}
+
+// stackAt is the stack effect of levels at level, an enchanted level's
+// that of the top plain level.
+func stackAt(levels map[int32]stackEffect, level int32) (stackEffect, bool) {
 	if st, ok := levels[level]; ok {
 		return st, true
 	}

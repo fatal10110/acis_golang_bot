@@ -106,6 +106,15 @@ func buffsOf(effects []Effect, now time.Time) Buffs {
 	return b
 }
 
+// levelsOf is the skill level of each of effects, by skill id.
+func levelsOf(effects []Effect) map[int32]int32 {
+	l := make(map[int32]int32, len(effects))
+	for _, e := range effects {
+		l[e.SkillID] = e.Level
+	}
+	return l
+}
+
 // Due reports whether skill is missing from b or ends within before of
 // now.
 func (b Buffs) Due(skill int32, before time.Duration, now time.Time) bool {
@@ -119,17 +128,13 @@ func (b Buffs) Due(skill int32, before time.Duration, now time.Time) bool {
 func (w *World) applyEffects(ev Event, now time.Time) {
 	switch e := ev.(type) {
 	case AbnormalStatusUpdate:
-		w.Buffs = buffsOf(e.Effects, now)
-		w.BuffLevels = make(map[int32]int32, len(e.Effects))
-		for _, ef := range e.Effects {
-			w.BuffLevels[ef.SkillID] = ef.Level
-		}
+		w.Buffs, w.BuffLevels = buffsOf(e.Effects, now), levelsOf(e.Effects)
 	case PartySpelled:
 		if e.Kind != partySpelledPlayer {
 			return
 		}
 		if m := w.Party.Members[e.ObjectID]; m != nil {
-			m.Buffs = buffsOf(e.Effects, now)
+			m.Buffs, m.BuffLevels = buffsOf(e.Effects, now), levelsOf(e.Effects)
 		}
 	}
 }
@@ -148,11 +153,17 @@ type Heal struct {
 // and lands on the members around it; any other is cast on each member.
 // Weapons casts it only while the bot wields one of those datapack weapon
 // kinds; Members casts a member buff only on a member of those classes.
+// From is the level the buff starts at, as Step.From; Replaces is the
+// buff it replaces from that level (a row's "replaced by"): CompileBuild
+// leaves that one out.
 type Buff struct {
 	Skill   int32
 	Party   bool
 	Weapons []string
 	Members []int32
+	From    int32
+	// Replaces is a skill id; 0 for none.
+	Replaces int32
 }
 
 // assistPlan is the creature the party leader last attacked: the bot
@@ -325,27 +336,47 @@ func (b *Brain) wounded(id int32) bool {
 	})
 }
 
-// ruleRebuff is rule 7: out of combat, renew a buff that is missing or
-// has under RebuffBefore left on a patient, one cast at a time. A Party
-// buff is renewed when the bot's own runs low.
+// partyBuffReach is how far from the bot a party member takes its Party
+// buffs: the chants' skillRadius (data/xml/skills/1000-1099.xml, 1007 and
+// 1009).
+const partyBuffReach = 1000
+
+// ruleRebuff is rule 7: out of combat, turn off the combat toggles left on,
+// then cast the Idle steps, then put up a buff the stack rule lets go out
+// on a patient (buffDue: missing, or its own effect with under
+// RebuffBefore left), one cast at a time. A Party buff is cast on the bot
+// while some patient within partyBuffReach, the bot included, needs it.
 func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
-	s, p := &b.world.Self, &b.persona
+	s := &b.world.Self
 	kit := b.build().Kit
-	if s.InCombat || len(kit.Buffs) == 0 {
+	if s.InCombat {
+		return Action{}, false
+	}
+	if a, ok := b.toggleCast(kit.Toggles, false, now); ok {
+		return a, true
+	}
+	if a, ok := b.idleStep(kit.Rotation, now); ok {
+		return a, true
+	}
+	if len(kit.Buffs) == 0 {
 		return Action{}, false
 	}
 	weapon := b.buffWeapon(kit.Buffs)
+	from := s.Position(now)
 	for _, id := range b.patients(now) {
-		buffs := b.world.Buffs
-		if id != s.ObjectID {
-			buffs = b.world.Party.Members[id].Buffs
-		}
 		for _, bf := range kit.Buffs {
-			if bf.Party && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !buffs.Due(bf.Skill, p.RebuffBefore, now) ||
-				!b.world.SkillReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{id, bf.Skill}]) < buffRetry {
+			on := id
+			if bf.Party {
+				on = s.ObjectID
+				if o := b.world.object(id); id != s.ObjectID && (o == nil || dist2(from, o.Position(now)) > partyBuffReach*partyBuffReach) {
+					continue
+				}
+			}
+			if !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
+				!b.world.SkillReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
 				continue
 			}
-			return b.castOn(id, bf.Skill, !bf.Party, now), true
+			return b.castOn(on, bf.Skill, !bf.Party, now), true
 		}
 	}
 	return Action{}, false

@@ -19,7 +19,7 @@ func newTrainerWalkBrain(t *testing.T) *Brain {
 	b, _ := newTestBrain(t, p)
 	s := &b.world.Self
 	s.ClassID, s.Level, s.SP = classHumanMystic, 15, 5000
-	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {{X: 5000}}}}
+	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {{X: 5000}}}, trainers: testTrainers}
 	return walkOn(t, b)
 }
 
@@ -65,7 +65,7 @@ func TestTrainerWalkDue(t *testing.T) {
 			b.train.walkShunned = map[int32]time.Time{30022: at(time.Hour)}
 		}},
 		{name: "another class's trainer", setup: func(b *Brain) {
-			b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30031: {{X: 5000}}}}
+			b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30031: {{X: 5000}}}, trainers: testTrainers}
 		}},
 	}
 	for _, tt := range tests {
@@ -108,7 +108,7 @@ func TestTrainerWalkGivesUp(t *testing.T) {
 			name: "spawn walled off",
 			steps: []trainerStep{
 				{name: "unreachable", at: time.Second, setup: func(b *Brain) {
-					b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {scenePoint(geotest.PocketInside, 0, 0)}}}
+					b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{30022: {scenePoint(geotest.PocketInside, 0, 0)}}, trainers: testTrainers}
 					b.persona.TrainerReach = 1 << 20
 				}},
 			},
