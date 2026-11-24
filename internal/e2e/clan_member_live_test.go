@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // Clan member scenario (#244): Recipe: Soulshot D (recipe 20, scroll 1804,
@@ -48,6 +49,9 @@ const (
 	// scenario takes it for the server's silent refusal (no warehouse
 	// privilege, network/warehouse.go clanWithdrawGate).
 	withdrawAnswer = 20 * time.Second
+	// spotArrival bounds the member's walk to its spot: from the village
+	// at its entry, back from town after a visit.
+	spotArrival = 10 * time.Minute
 )
 
 // TestLiveClanMember plays the clan member option against a clan crafter
@@ -72,7 +76,15 @@ func TestLiveClanMember(t *testing.T) {
 	alone(t, &newbieSpots)
 	ctx := scenarioCtx(t, 50*time.Minute)
 	travel, items := townData(t, tg)
-	spots := spotRegistry(t, tg)
+	dp, err := datapack.Load(tg.Config().Datapack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spots := botclient.NewSpotRegistry(dp.Spots(), 1)
+	centres := map[string]botclient.Point{}
+	for _, s := range dp.Spots() {
+		centres[s.Maker] = botclient.Point{X: s.Center.X, Y: s.Center.Y, Z: s.Z}
+	}
 	gm := enterGM(t, ctx, tg)
 	board := botclient.NewCraftBoard()
 	leaderAcc, _ := tg.Account("cm", 1)
@@ -158,11 +170,15 @@ func TestLiveClanMember(t *testing.T) {
 		return fmt.Sprintf("crafter %+v, rule %q; orders %v", crafter.bot.Status().Crafter, crafter.bot.Status().Rule, orders)
 	})
 
+	// The waits below outlast the server's idle timeout of a silent GM.
+	awake := gmAwake(t, ctx, gm, nearKeeper)
+
 	// First trip: the visit deposits the spare Saber and the ore and posts
 	// the order; the board credits the member nothing yet.
-	gave := spareSaber(t, ctx, gm, member)
+	gave := spareSaber(t, ctx, gm, member, centres, func() { noteMember(); awake() })
 	untilServed(t, ctx, "the member's first visit: a deposit and a Soulshot D order", member.watch, memberRefused(member.watch), func() string {
 		noteMember()
+		awake()
 		st := member.bot.Status()
 		switch {
 		case len(sentSince(member.watch.Sent(), opWHDeposit, gave)) == 0:
@@ -181,6 +197,7 @@ func TestLiveClanMember(t *testing.T) {
 	var owned int64
 	untilServed(t, ctx, "the crafter's delivery of the order", crafter.watch, warehouseRefused(crafter.watch), func() string {
 		noteCrafter()
+		awake()
 		if owned = board.Owned(clanID, member.name)[soulshotD]; owned > 0 {
 			return ""
 		}
@@ -193,11 +210,12 @@ func TestLiveClanMember(t *testing.T) {
 	}
 
 	// Second trip: the visit withdraws the credited shots.
-	gave = spareSaber(t, ctx, gm, member)
+	gave = spareSaber(t, ctx, gm, member, centres, func() { noteMember(); awake() })
 	var took time.Time
 	untilServed(t, ctx, "the member's second visit withdrawing its shots", member.watch, memberRefused(member.watch), func() string {
 		noteMember()
 		noteCrafter()
+		awake()
 		st := member.bot.Status()
 		w := sentSince(member.watch.Sent(), opWHWithdraw, gave)
 		if len(w) == 0 {
@@ -305,11 +323,25 @@ func foundClan(t *testing.T, ctx context.Context, gm *GMClient, leader *Client) 
 	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
 		t.Fatalf("clan %s at level 1: %v", clan, err)
 	}
-	// The server answers the set with nothing; a member's warehouse open
-	// without the privilege is refused (msgNoRightClanWH), and its
-	// withdrawal unanswered.
+	// A set that takes effect refreshes every online member's clan window
+	// (network/clan.go requestPledgePower, clan_view.go
+	// broadcastClanStatus): PledgeShowMemberListDeleteAll, then the pledge
+	// lists. One that does not is unanswered, and would show only as the
+	// member's withdrawal left unanswered (network/warehouse.go
+	// clanWithdrawGate), so it fails here.
 	if err := leader.Send(ctx, encodeRequestPledgePower(memberRank, privWarehouseSearch)); err != nil {
 		t.Fatal(err)
+	}
+	for _, want := range []func(botclient.Event) bool{
+		func(ev botclient.Event) bool { _, ok := ev.(botclient.PledgeShowMemberListDeleteAll); return ok },
+		func(ev botclient.Event) bool {
+			r, ok := ev.(botclient.PledgeShowMemberListAll)
+			return ok && r.PledgeType == 0 && r.ClanID == rc.id
+		},
+	} {
+		if _, err := leader.Await(ctx, 30*time.Second, want); err != nil {
+			t.Fatalf("rank %d of clan %s given the warehouse privilege: %v", memberRank, clan, err)
+		}
 	}
 	return rc
 }
@@ -354,6 +386,21 @@ func inviteToClan(t *testing.T, ctx context.Context, leader *Client, f *farmer, 
 	}
 }
 
+// gmAwake returns a func that teleports gm to at once gmKeepAlive passed
+// since it last did: the server drops a connection it read nothing from for
+// 15 minutes (session.go clientReadIdleTimeout), and the scenario's cleanup
+// dissolves its clan through the GM.
+func gmAwake(t *testing.T, ctx context.Context, gm *GMClient, at botclient.Point) func() {
+	alive := time.Now()
+	return func() {
+		t.Helper()
+		if time.Since(alive) > gmKeepAlive {
+			gmTeleport(t, ctx, gm, at)
+			alive = time.Now()
+		}
+	}
+}
+
 // noteChanges returns a func that logs line, with who, whenever it
 // changed since the func last logged it.
 func noteChanges(t *testing.T, who string, line func() string) func() {
@@ -366,13 +413,27 @@ func noteChanges(t *testing.T, who string, line func() string) func() {
 	}
 }
 
-// spareSaber waits for the member farming at its spot, has the GM give it a
-// spare Saber there, and brings the GM back to the village; it returns when
-// the GM gave it.
-func spareSaber(t *testing.T, ctx context.Context, gm *GMClient, member *farmer) time.Time {
+// spareSaber waits up to spotArrival for the member at its spot, within its
+// leash of the centre (centres, by spot name), calling note on every poll,
+// has the GM give it a spare Saber there, and brings the GM back to the
+// village; it returns when the GM gave it. The member need not be farming:
+// on a spot other players farm bare it idles there (#360), and the gift's
+// weight starts its trip all the same (rule "supply" runs ahead of "farm").
+func spareSaber(t *testing.T, ctx context.Context, gm *GMClient, member *farmer, centres map[string]botclient.Point, note func()) time.Time {
 	t.Helper()
-	waitFor(t, ctx, member.name+" farming at its spot", func() bool { return member.bot.Status().Rule == "farm" })
-	t.Logf("%s farms at %q, wielding the Saber %v, %d D shots, %d Soul Ore", member.name, member.bot.Status().Spot, member.wields(saber), member.carries(soulshotD), member.carries(soulOre))
+	leash := int64(memberPersona().Spots.Leash)
+	actx, cancel := context.WithTimeout(ctx, spotArrival)
+	defer cancel()
+	until(t, actx, member.name+" at its spot", func() string {
+		note()
+		st := member.bot.Status()
+		if c, ok := centres[st.Spot]; ok && within(st.Position, c, leash) {
+			return ""
+		}
+		return fmt.Sprintf("rule %q, spot %q, walk %q at %v", st.Rule, st.Spot, st.Walk, st.Position)
+	})
+	st := member.bot.Status()
+	t.Logf("%s at %q (rule %q), wielding the Saber %v, %d D shots, %d Soul Ore", member.name, st.Spot, st.Rule, member.wields(saber), member.carries(soulshotD), member.carries(soulOre))
 	gmOn(t, ctx, gm, member)
 	gave := time.Now()
 	gmGiveGear(t, ctx, gm, member, saber, 1)

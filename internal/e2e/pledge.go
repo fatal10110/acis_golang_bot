@@ -25,7 +25,9 @@ const (
 // and Privs, each an int32 little-endian after the opcode, the privileges
 // read only when Action sets them (clientpackets/pledge.go
 // DecodeRequestPledgePower). Only the clan leader's set takes effect, for
-// ranks 1 to 9 (clan/rank.go SetRankPrivileges); the server answers none.
+// ranks 1 to 9 (clan/rank.go SetRankPrivileges); a set that changes them
+// refreshes every online member's clan window (network/clan_view.go
+// broadcastClanStatus), one that does not is unanswered.
 func encodeRequestPledgePower(rank, privs int32) []byte {
 	b := make([]byte, 1, 13)
 	b[0] = opRequestPledgePower
