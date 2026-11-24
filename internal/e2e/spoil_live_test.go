@@ -41,18 +41,20 @@ func TestLiveSpoilSweep(t *testing.T) {
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
-		class:   &botclient.DwarvenFighter,
-		persona: farmerPersona,
+		class: &botclient.DwarvenFighter,
+		persona: func() botclient.Persona {
+			p := farmerPersona()
+			// The newbie spots by its village: a spot of level 10 is a
+			// gatekeeper trip away.
+			lowSpots(&p)
+			return p
+		},
 		// The travel map as cmd/bots' farmers have it: the corpse times
 		// of its NPC templates bound the sweep window (TravelMap.corpseTime).
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },
 	}
 	f := runFresh(t, ctx, gm, int(spoilLevel), func() *farmer { return runWatched(t, ctx, tg, account, setup) })
-	t.Cleanup(func() {
-		if t.Failed() {
-			t.Log(f.digest())
-		}
-	})
+	logSpotOnFail(t, spots, f)
 	kit := kitOf(t, botclient.DwarvenFighter.ID, spoilLevel, account)
 	if !slices.Contains(kit.rotation, skillSpoil) || !slices.Contains(kit.all, skillSweeper) {
 		t.Fatalf("the level %d dwarven fighter's kit casts %v and learns %v: no Spoil or Sweeper", spoilLevel, kit.rotation, kit.all)

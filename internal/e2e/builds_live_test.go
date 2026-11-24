@@ -95,6 +95,7 @@ func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 			brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },
 		}
 		f := runFresh(t, ctx, gm, kitLevel, func() *farmer { return runWatched(t, ctx, tg, account, setup) })
+		logSpotOnFail(t, spots, f)
 		kit := kitOf(t, class.ID, kitLevel, account)
 		levelTo(t, ctx, gm, f, kitLevel)
 		gmOn(t, ctx, gm, f, kit.grants()...)
@@ -279,4 +280,23 @@ func (r kitRun) short(elapsed time.Duration) string {
 		miss = append(miss, fmt.Sprintf("%s of %s farmed", elapsed.Round(time.Second), kitFarm))
 	}
 	return strings.Join(miss, ", ")
+}
+
+// logSpotOnFail logs, when the test fails, the spot f holds then and its
+// registry status: levels, aggressive level, holders and cap. Registered
+// after runFresh, it runs before the level goes back to 1.
+func logSpotOnFail(t *testing.T, spots *botclient.SpotRegistry, f *farmer) {
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		st := f.bot.Status()
+		for _, s := range spots.Statuses() {
+			if s.Name == st.Spot {
+				t.Logf("%s (level %d, rule %q) holds %+v", f.name, st.Level, st.Rule, s)
+				return
+			}
+		}
+		t.Logf("%s (level %d, rule %q) holds no spot of the registry (%q)", f.name, st.Level, st.Rule, st.Spot)
+	})
 }
