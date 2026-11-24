@@ -180,8 +180,10 @@ var homeRun = map[string]int{
 // at once on one registry over the real datapack's starter spots (#137),
 // on open ground (pickStraight):
 // every spot that fits them within Wander of a start is held, none past its
-// limit, and a farmer holds nothing only when every spot that fits it in
-// reach is at its limit.
+// limit, a farmer holds nothing only when every spot that fits it in reach
+// is at its limit, and then it farms beside one of those (#142): every
+// farmer of a village with a spot in reach farms, the Dwarven and Orc
+// villages' too.
 func TestStarterSpread(t *testing.T) {
 	spots := loadStarterSpots(t)
 	r := NewSpotRegistry(spots, 1)
@@ -212,7 +214,7 @@ func TestStarterSpread(t *testing.T) {
 	inReach := func(at Point, i int) bool {
 		return p.fits(&spots[i], 1) && dist2(at, Point{X: spots[i].Center.X, Y: spots[i].Center.Y}) <= wander
 	}
-	placed := map[string]int{}
+	placed, beside := map[string]int{}, map[string]int{}
 	for _, f := range farmers {
 		if f.b.spot.held {
 			placed[f.village]++
@@ -224,13 +226,29 @@ func TestStarterSpread(t *testing.T) {
 				t.Errorf("a %s farmer holds nothing; %s in reach is below its limit", f.village, spots[i].Maker)
 			}
 		}
+		switch v := &f.b.spot; {
+		case !v.beside:
+			t.Errorf("a %s farmer holds nothing and farms beside nothing", f.village)
+		case !inReach(at, v.idx) || r.Held(v.idx) < r.limits[v.idx]:
+			t.Errorf("a %s farmer farms beside %s, out of reach or below its limit", f.village, spots[v.idx].Maker)
+		default:
+			beside[f.village]++
+		}
 	}
-	total := 0
+	total, besides := 0, 0
 	for _, st := range starterStarts {
-		t.Logf("%s: %d of %d farmers hold a spot", st.village, placed[st.village], homeRun[st.village])
+		t.Logf("%s: %d of %d farmers hold a spot, %d farm beside one", st.village, placed[st.village], homeRun[st.village], beside[st.village])
 		total += placed[st.village]
+		besides += beside[st.village]
 	}
-	t.Logf("%d of %d farmers hold a spot", total, len(farmers))
+	t.Logf("%d of %d farmers hold a spot, %d farm beside one", total, len(farmers), besides)
+	n := 0
+	for i := range spots {
+		n += r.Beside(i)
+	}
+	if n != besides {
+		t.Errorf("the registry counts %d farmers beside, the farmers %d", n, besides)
+	}
 	for i := range spots {
 		if r.Held(i) > r.limits[i] {
 			t.Errorf("%s held by %d, past its limit %d", spots[i].Maker, r.Held(i), r.limits[i])

@@ -21,6 +21,10 @@ type SpotRegistry struct {
 
 	mu   sync.Mutex
 	held []int
+	// beside are how many bots farm each spot with no claim
+	// (SpotPolicy.Beside): counted apart from held, toward neither the cap
+	// nor the limit.
+	beside []int
 }
 
 // NewSpotRegistry returns a registry over spots (datapack.Datapack.Spots).
@@ -31,7 +35,7 @@ type SpotRegistry struct {
 func NewSpotRegistry(spots []datapack.Spot, multiplier float64) *SpotRegistry {
 	r := &SpotRegistry{
 		spots: spots, caps: make([]int, len(spots)), limits: make([]int, len(spots)),
-		held: make([]int, len(spots)),
+		held: make([]int, len(spots)), beside: make([]int, len(spots)),
 	}
 	for i, s := range spots {
 		r.caps[i] = spotCap(s.MaximumNPCs, multiplier)
@@ -57,13 +61,21 @@ func (r *SpotRegistry) Held(i int) int {
 	return r.held[i]
 }
 
+// Beside is the number of bots farming spot i with no claim
+// (SpotPolicy.Beside).
+func (r *SpotRegistry) Beside(i int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.beside[i]
+}
+
 // SpotStatus is a spot of the registry as the control panel lists it: its
-// maker name (the argument of "go"), its monsters' levels, its cap and how
-// many bots hold it.
+// maker name (the argument of "go"), its monsters' levels, its cap, how
+// many bots hold it and how many farm beside it with no claim.
 type SpotStatus struct {
 	Name                           string
 	MinLevel, MaxLevel, AggroLevel int
-	Cap, Held                      int
+	Cap, Held, Beside              int
 }
 
 // Statuses returns every spot in registry order with its held count; nil
@@ -78,7 +90,7 @@ func (r *SpotRegistry) Statuses() []SpotStatus {
 	for i, s := range r.spots {
 		out[i] = SpotStatus{
 			Name: s.Maker, MinLevel: s.MinLevel, MaxLevel: s.MaxLevel, AggroLevel: s.AggroLevel,
-			Cap: r.caps[i], Held: r.held[i],
+			Cap: r.caps[i], Held: r.held[i], Beside: r.beside[i],
 		}
 	}
 	return out
@@ -129,6 +141,38 @@ func (r *SpotRegistry) claimOver(order []int) (int, bool) {
 	}
 	r.held[best]++
 	return best, true
+}
+
+// farmBeside counts a bot farming, with no claim, the spot of order that
+// the bots beside fill least per monster the server keeps there (its
+// limit), the first in order on a tie, and reports which; none for an
+// empty order. It is for a bot that finds every spot that fits it full
+// (SpotPolicy.Beside): those bots spread over the full spots by their
+// monsters rather than piling on the nearest one.
+func (r *SpotRegistry) farmBeside(order []int) (int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	best := -1
+	for _, i := range order {
+		// beside/limit below the best's, in integers.
+		if best < 0 || r.beside[i]*r.limits[best] < r.beside[best]*r.limits[i] {
+			best = i
+		}
+	}
+	if best < 0 {
+		return 0, false
+	}
+	r.beside[best]++
+	return best, true
+}
+
+// leaveBeside gives back a count farmBeside took.
+func (r *SpotRegistry) leaveBeside(i int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.beside[i] > 0 {
+		r.beside[i]--
+	}
 }
 
 // overCap reports whether more bots than its cap hold spot i.

@@ -46,6 +46,15 @@ type SpotPolicy struct {
 	// up to one bot per monster the server keeps there, rather than wait
 	// (#137). Each spotRetry it looks again for a spot with room.
 	Overflow bool
+	// Beside: a bot holding no spot that finds every spot that fits it
+	// within Wander full (at its limit, or at its cap without Overflow) and
+	// takes no trip farms beside one of them with no claim (owner decision
+	// on #142): it walks to the spot and fights its monsters as a holder
+	// does, under the same level fit, leash and pacing, and counts toward
+	// neither the spot's cap nor its limit. The bots beside spread over the
+	// full spots, fewest per monster first (SpotRegistry.farmBeside). Each
+	// spotRetry it looks again for a spot to claim.
+	Beside bool
 	// Crowd is the number of other players within Leash of the spot's
 	// centre, party members and the bots sharing the spot's claim aside,
 	// that makes a spot crowded on arrival: the bot moves on and avoids the
@@ -96,12 +105,12 @@ type SpotPolicy struct {
 // above the bot, aggressive ones not above it (plan, farmer) once it is
 // past level 5, leaving at five levels over; spread over every spot that
 // fits within twice the newbie zone's reach, sharing full ones rather than
-// waiting (#137); a death at a pack passes over its like (#281). PackRisk
-// is off: see its doc.
+// waiting (#137) and farming beside them past their limit (#142); a death
+// at a pack passes over its like (#281). PackRisk is off: see its doc.
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
-		MaxTravel: 20000, Wander: 40000, Overflow: true,
+		MaxTravel: 20000, Wander: 40000, Overflow: true, Beside: true,
 		Crowd: 4, AvoidFor: 10 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
 		PackShare: 0.8,
 	}
@@ -200,7 +209,11 @@ type spotVisit struct {
 	// (spotPoint): where the bot walks and stays.
 	idx  int
 	held bool
-	at   Point
+	// beside is set while the bot farms spot idx with no claim
+	// (SpotPolicy.Beside); it is counted in the registry's beside counts,
+	// not its held ones. held and beside are never both set.
+	beside bool
+	at     Point
 	// arrived is set once the bot reached the spot's centre.
 	arrived bool
 	// retryAt is when the bot may look for a spot again after finding none.
@@ -210,6 +223,10 @@ type spotVisit struct {
 	// pack is the pack its deaths taught it to pass over.
 	pack packBound
 }
+
+// farming reports whether the bot has a spot to farm: one it holds or one
+// it farms beside.
+func (v *spotVisit) farming() bool { return v.held || v.beside }
 
 // ruleSpot is a rule 9 errand ahead of the persona's goal: with a spot
 // registry, the bot claims a fitting spot it can walk to (pickSpot), walks
@@ -229,7 +246,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	if r == nil || s.InCombat {
 		return Action{}, false
 	}
-	if !v.held && b.preparing() {
+	if !v.farming() && b.preparing() {
 		// The town preparation gate: no spot before the errands ahead
 		// stocked the bot up.
 		return Action{}, false
@@ -237,7 +254,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || b.overRisk() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
-	if !v.held {
+	if !v.farming() {
 		return Action{}, false
 	}
 	if v.arrived {
@@ -379,8 +396,9 @@ func (b *Brain) walkable(from, to navPoint) bool {
 
 // crowded reports whether Persona.Spots.Crowd players or more stand within
 // Leash of the spot's centre at, party members aside and less the other bots
-// holding the spot: the registry's cap already counts those, so a spot under
-// its cap is not crowded by its own holders.
+// holding the spot or farming beside it: the registry's cap already counts
+// the holders, so a spot under its cap is not crowded by its own holders,
+// and the bots beside it went there knowing it full (SpotPolicy.Beside).
 func (b *Brain) crowded(at Point, now time.Time) bool {
 	p := &b.persona.Spots
 	if p.Crowd <= 0 {
@@ -396,7 +414,8 @@ func (b *Brain) crowded(at Point, now time.Time) bool {
 			n++
 		}
 	}
-	return n-(b.cfg.Spots.Held(b.spot.idx)-1) >= p.Crowd
+	r := b.cfg.Spots
+	return n-(r.Held(b.spot.idx)+r.Beside(b.spot.idx)-1) >= p.Crowd
 }
 
 // outleveled reports whether the bot's level is past its spot's highest
@@ -422,8 +441,10 @@ func (b *Brain) overRisk() bool {
 // it looks again after spotRetry and plans a trip by gatekeeper (rule
 // "travel", planTrip), giving up the spot it holds for the trip; with no
 // trip either, a bot holding no spot that fits shares, past its cap, the
-// spot in Wander its bots fill least (SpotPolicy.Overflow), and one that
-// holds a spot that fits keeps it. A spot in another SCC is never claimed.
+// spot in Wander its bots fill least (SpotPolicy.Overflow), one with every
+// such spot at its limit farms beside one (SpotPolicy.Beside, farmBeside),
+// and one that holds a spot that fits keeps it. A spot in another SCC is
+// never claimed.
 func (b *Brain) pickSpot(now time.Time) {
 	here, ok := b.locate(b.standing(now))
 	if !ok {
@@ -500,22 +521,52 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 			// than block a place there for the trip and walk back to it.
 			b.leaveSpot()
 		}
-		if !p.Overflow || b.trip.v.active() || (v.held && !b.outleveled()) {
+		if b.trip.v.active() || (v.held && !b.outleveled()) {
 			return
 		}
-		if i, ok = r.claimOver(order); !ok {
+		if p.Overflow {
+			i, ok = r.claimOver(order)
+		}
+		if !ok {
+			if !v.held {
+				b.farmBeside(cands, order)
+			}
 			return
 		}
 	}
 	// A spot claimed after a landing ends the path the trip was on.
 	b.trip.onward = 0
 	b.leaveSpot()
-	v.idx, v.held = i, true
+	v.idx, v.held, v.at = i, true, candAt(cands, i)
+}
+
+// farmBeside makes a bot holding no spot, with every spot of order (the
+// candidates, best first) full, farm beside one of them with no claim
+// (SpotPolicy.Beside): the one it farms beside while that one is still a
+// candidate, else the one the bots beside fill least per monster. With
+// none, or Beside off, it farms beside none.
+func (b *Brain) farmBeside(cands []spotCand, order []int) {
+	r, v := b.cfg.Spots, &b.spot
+	if v.beside && slices.Contains(order, v.idx) {
+		return
+	}
+	b.leaveSpot()
+	if !b.persona.Spots.Beside {
+		return
+	}
+	if i, ok := r.farmBeside(order); ok {
+		v.idx, v.beside, v.at = i, true, candAt(cands, i)
+	}
+}
+
+// candAt is where the bot walks for candidate spot i.
+func candAt(cands []spotCand, i int) Point {
 	for _, c := range cands {
 		if c.i == i {
-			v.at = c.at
+			return c.at
 		}
 	}
+	return Point{}
 }
 
 // moveOn gives the spot up and avoids it for d.
@@ -533,11 +584,11 @@ func (b *Brain) moveOn(now time.Time, d time.Duration) {
 	b.leaveSpot()
 }
 
-// diedAtSpot gives back the spot the bot holds, if any, on its death,
-// avoiding it, and the packs like it (learnPack), for
+// diedAtSpot gives back the spot the bot holds or farms beside, if any, on
+// its death, avoiding it, and the packs like it (learnPack), for
 // SpotPolicy.DeathAvoid.
 func (b *Brain) diedAtSpot(now time.Time) {
-	if d := b.persona.Spots.DeathAvoid; b.spot.held && d > 0 {
+	if d := b.persona.Spots.DeathAvoid; b.spot.farming() && d > 0 {
 		b.learnPack(&b.cfg.Spots.spots[b.spot.idx], now)
 		b.moveOn(now, d)
 		return
@@ -545,12 +596,15 @@ func (b *Brain) diedAtSpot(now time.Time) {
 	b.leaveSpot()
 }
 
-// leaveSpot gives back the spot the bot holds, if any: on a move, on death
-// and when the brain stops.
+// leaveSpot gives back the spot the bot holds or farms beside, if any: on a
+// move, on death and when the brain stops.
 func (b *Brain) leaveSpot() {
 	v := &b.spot
-	if v.held {
+	switch {
+	case v.held:
 		b.cfg.Spots.release(v.idx)
+	case v.beside:
+		b.cfg.Spots.leaveBeside(v.idx)
 	}
-	v.idx, v.held, v.at, v.arrived = 0, false, Point{}, false
+	v.idx, v.held, v.beside, v.at, v.arrived = 0, false, false, Point{}, false
 }

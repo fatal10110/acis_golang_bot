@@ -136,7 +136,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	s := &w.Self
 	st.At, st.State, st.Rule, st.Order = now, StateOnline, b.lastRule, l.order.cmd
 	st.Spot, st.Walk = "", b.walk.failed()
-	if b.spot.held {
+	if b.spot.farming() {
 		st.Spot = b.cfg.Spots.spots[b.spot.idx].Maker
 	}
 	st.Character, st.ClassID, st.Level = s.Name, s.ClassID, s.Level

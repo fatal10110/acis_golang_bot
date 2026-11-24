@@ -34,7 +34,7 @@ func (b *Brain) buffPotion() (int32, buffPotion, bool) {
 // pacer bounds the rest.
 func (b *Brain) ruleBuffPotion(now time.Time) (Action, bool) {
 	s, v := &b.world.Self, &b.spot
-	if b.cfg.Spots == nil || !v.held || !v.arrived || s.InCombat || s.Sitting || len(b.attackers(now)) > 0 {
+	if b.cfg.Spots == nil || !v.farming() || !v.arrived || s.InCombat || s.Sitting || len(b.attackers(now)) > 0 {
 		return Action{}, false
 	}
 	id, bp, ok := b.buffPotion()
