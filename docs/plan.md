@@ -62,6 +62,10 @@ the goal.
 | D18 | How the clan crafter's Create Item grows | Through the class change of D15 (M8 #178): Artisan at 20, Warsmith at 40; until then Create Item 1 and no crystallizing. Owner, 2026-11-21. Design: `docs/crafting.md` |
 | D19 | What the clan crafter may take from the clan warehouse | Anything a crafting chain it plans needs, any time; it crafts a chain only when the chain is worth it. Never adena, items no reachable recipe uses, or unpriced items without an order. Owner, 2026-11-21. Design: `docs/crafting.md` |
 | D20 | Who may add the clan crafter to a clan and order crafts | Beside GMs, any player: a clanless crafter accepts any player's clan invitation (or only the names in its preset's `ClanInviters`), and its clan's leader orders crafts like a GM. Extends D3 for the crafter only. Owner, 2026-11-22. Design: `docs/crafting.md` |
+| D21 | Which role each preset plays, and the default preset | New `farmer` preset: Damage, and the default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support; `merchant`: Damage; `crafter`: Crafter; `town`: Support. Owner, 2026-11-24. Design: `docs/strategy.md` |
+| D22 | How a bot picks its profession branch | Weighted by race fit, drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). Owner, 2026-11-24. Design: `docs/strategy.md` |
+| D23 | Which professions are out of scope | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone (#332); the Overlord is not picked (a group class). Owner, 2026-11-24. Design: `docs/strategy.md` |
+| D24 | May the M10 rewrite change today's behavior | Yes, per PR: S4 lands behavior-neutral, and every later PR states the behavior it changes. Owner, 2026-11-24. Design: `docs/strategy.md` |
 
 ## Consequences of a separate repository (D5)
 
@@ -225,13 +229,12 @@ Shared behavior in every persona:
 
 ### 3. Personas
 
-**Builds, every persona** (M10, `docs/strategy.md`, proposed): a bot plays a build compiled from
+**Builds, every persona** (M10, `docs/strategy.md`, D21-D24): a bot plays a build compiled from
 its race, its class and its persona's role: its class's skills gated by its weapon, the armor
 kinds and sets that pay off for its race, a profession fitting its race and role, and thresholds
 and spots from a character model fed by its own `UserInfo` stats. It replaces the support
 persona's role by class (below) and the M8 build table (`docs/items.md` section 2); its spec is
-`docs/strategy.md` "Behavior per class". A new `farmer` preset would become the default (D21,
-proposed).
+`docs/strategy.md` "Behavior per class". A new `farmer` preset becomes the default (D21).
 
 **Walking, every persona** (D13, M7, `docs/navigation.md`): a bot finds its own routes on its copy
 of the server's geodata and sends only segments it checked with the copied `CanMove` and step
@@ -263,7 +266,7 @@ sidesteps, detours, hops and the hour-long spot avoid are gone. The live scenari
 - loot follows the leader's party loot rule; under finders-keepers the support never loots;
 - role by class: human, elven or dark elven mystic heals and buffs (Heal, Might, Shield from level 7,
   Battle Heal from 14); orc mystic buffs only; fighters assist only. Skills are learned at the
-  trainer with SP (`AutoLearnSkills` is off), from PR2b. M10 (`docs/strategy.md`, proposed)
+  trainer with SP (`AutoLearnSkills` is off), from PR2b. M10 (`docs/strategy.md`)
   replaces this list with the Support rows of "Behavior per class": fighters fight with their own
   skills and take a tank line, and the orc mystic also burns and drains.
 
