@@ -36,11 +36,12 @@ plan's server prerequisites P1-P4, #5) once it exists, both through the same har
   `cmd/bots/ui_live_test.go`. No build tag hides them.
 - **Target.** Environment variables that point at files only, never a secret: `BOT_E2E_LOGIN`,
   `BOT_E2E_SECRET_FILE`, `BOT_E2E_GM_FILE` (both default to the primary checkout's gitignored
-  `.e2e/`, the GM file to its pool `gm`, `gm2`, ...; a list pins the pool), `BOT_E2E_PREFIX` (default `e2e`; refused when it overlaps `hz` or the owner's panel
+  `.e2e/`; unset, the GM file's `gm`, `gm2`, ... are the roots of the GMs the run mints, #367;
+  a list pins the pool, which then never mints), `BOT_E2E_PREFIX` (default `e2e`; refused when it overlaps `hz` or the owner's panel
   prefix), `BOT_E2E_ALLOWLISTED`, `BOT_E2E_DATAPACK`, `BOT_E2E_ALLOW_LOGINFAIL`.
 - **Server config:** `AutoCreateAccounts = True`, `MaximumOnlineUsers` headroom for 8 more
-  characters per test process, and existing GM characters (access level 7), one per scenario
-  running at once.
+  characters per test process, and at least one existing GM character (access level 7), the root
+  that promotes the GMs the harness mints.
 - **Seeding** goes through GM commands only, never the database (no DSN, tunnel or SQL):
   `//teleport`, `//teleportto`, `//recall`, `//kick`, `//kill`, `//spawn` and `//delete` on the
   run's own characters and monsters (`e2e.Scope`). **Assertions** use the packets the bot or the
@@ -60,9 +61,10 @@ plan's server prerequisites P1-P4, #5) once it exists, both through the same har
 - **Live debug loop** (#250). A live run costs minutes; keep the loop short:
   - Run every scenario still failing in a round in one invocation (`-run '^(TestA|TestB)$'`),
     not one after another.
-  - Give a parallel run as many GMs (`BOT_E2E_GM_FILE` list) as GM scenarios it runs at once, or
-    run them one at a time (`-parallel 1`): a scenario left without a GM fails with `GM pool
-    exhausted` after the pool's 2-minute bound, and the run warns at start.
+  - Pin no GM (`BOT_E2E_GM_FILE` unset): the run mints a GM for each GM scenario it runs at once,
+    so run the related GM scenarios in one invocation with `-parallel 2`. A pinned run needs as
+    many GMs as GM scenarios it runs at once, or runs them one at a time (`-parallel 1`): a
+    scenario left without a GM fails with `GM pool exhausted` after the pool's 2-minute bound.
   - Reproduce a live failure from its recorded frames (`BOT_E2E_RECORD`, `botclient.NewRecorder`)
     in a unit test before rerunning live, and keep the test.
   - Seed the smallest setup that triggers the behavior (a few shots, not thousands).

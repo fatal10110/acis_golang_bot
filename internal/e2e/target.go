@@ -81,7 +81,11 @@ type run struct {
 	clock  botclient.Clock
 	gate   *botclient.LoginGate
 	net    network
-	gms    *gmPool
+	// gms is the pool the scenarios lease their GMs from; roots, of a
+	// minting run (Config.GMMint), the GM files that promote the GMs it
+	// mints, nil otherwise.
+	gms   *gmPool
+	roots *gmPool
 	// scenarios holds a token per scenario open.
 	scenarios chan struct{}
 	// loginFail is set once the run's one wrong-password login was sent.
@@ -118,6 +122,9 @@ func newTarget(cfg Config, secret botaccounts.Secret, clock botclient.Clock, n n
 		cfg: cfg, secret: secret, clock: clock, gate: gate, net: n,
 		gms:       newGMPool(cfg.GMFiles, clock),
 		scenarios: make(chan struct{}, MaxScenarios),
+	}
+	if cfg.GMMint != "" {
+		r.roots, r.gms = r.gms, newMintPool(cfg.GMMint, cfg.Prefix, clock)
 	}
 	return r.target()
 }
@@ -265,6 +272,12 @@ func (t *Target) enterWhenFree(ctx context.Context, account, password string, ch
 
 // enter takes a turn of the gate for the two dials of an entry.
 func (t *Target) enter(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*botclient.GameConn, botclient.Self, error) {
+	// The marker of a refusal in another process halts this one's next
+	// login, not only its next scenario: a mint retried after another
+	// process's refused one would be refused again.
+	if err := checkHalt(t.cfg.HaltFile()); err != nil {
+		return nil, botclient.Self{}, err
+	}
 	turn, err := t.gate.Take(ctx)
 	if err != nil {
 		return nil, botclient.Self{}, err
@@ -621,14 +634,15 @@ type GMClient struct {
 }
 
 // EnterGM logs in a GM of the run's pool that no other scenario, of this
-// process or another, holds, waiting while every one is held; the GM is the
-// scenario's until it logs out or its connection closes.
+// process or another, holds: with every one held, a minting run mints
+// another (Target.mintGM), a pinned one waits. The GM is the scenario's
+// until it logs out or its connection closes.
 func (t *Target) EnterGM(ctx context.Context) (*GMClient, error) {
-	lease, err := t.gms.take(ctx)
+	lease, err := t.gms.take(ctx, t.mintGM)
 	if err != nil {
 		return nil, err
 	}
-	gm, err := LoadGM(lease.file)
+	gm, err := lease.load(t.secret)
 	if err != nil {
 		lease.release()
 		return nil, err

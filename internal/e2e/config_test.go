@@ -21,7 +21,7 @@ func TestConfigFromEnv(t *testing.T) {
 		want Config
 	}{
 		{"nothing set, no dir", nil, "", Config{Prefix: DefaultPrefix}},
-		{"files default to the dir", nil, "/p/.e2e", Config{Prefix: DefaultPrefix, SecretFile: "/p/.e2e/secret"}},
+		{"files default to the dir", nil, "/p/.e2e", Config{Prefix: DefaultPrefix, SecretFile: "/p/.e2e/secret", GMMint: "/p/.e2e"}},
 		{
 			"every variable",
 			map[string]string{

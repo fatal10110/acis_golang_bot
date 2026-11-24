@@ -66,11 +66,11 @@ func TestPoolLeasesDifferentGMsAndWaits(t *testing.T) {
 	files := gmDir(t, "gm", "gm2")
 	clock := newParkClock()
 	p := newGMPool(files, clock)
-	first, err := p.take(t.Context())
+	first, err := p.take(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := p.take(t.Context())
+	second, err := p.take(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,13 +79,13 @@ func TestPoolLeasesDifferentGMsAndWaits(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := p.take(ctx); !errors.Is(err, context.Canceled) {
+	if _, err := p.take(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("take with the pool exhausted = %v, want it to wait until ctx ends", err)
 	}
 	<-clock.parked
 	got := make(chan *gmLease, 1)
 	go func() {
-		l, err := p.take(t.Context())
+		l, err := p.take(t.Context(), nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -103,7 +103,7 @@ func TestPoolLeasesDifferentGMsAndWaits(t *testing.T) {
 }
 
 func TestPoolNoGM(t *testing.T) {
-	if _, err := newGMPool(nil, newParkClock()).take(t.Context()); err == nil {
+	if _, err := newGMPool(nil, newParkClock()).take(t.Context(), nil); err == nil {
 		t.Fatal("take from an empty pool succeeded")
 	}
 }
@@ -115,7 +115,7 @@ const gmLockHelperEnv = "E2E_GM_LOCK_HELPER_FILES"
 
 func TestPoolGMLockOfAnotherProcess(t *testing.T) {
 	if list := os.Getenv(gmLockHelperEnv); list != "" {
-		l, err := newGMPool(filepath.SplitList(list), botclient.SystemClock{}).take(context.Background())
+		l, err := newGMPool(filepath.SplitList(list), botclient.SystemClock{}).take(context.Background(), nil)
 		if err != nil {
 			os.Exit(1)
 		}
@@ -145,7 +145,7 @@ func TestPoolGMLockOfAnotherProcess(t *testing.T) {
 		t.Fatalf("helper said %q, %v", line, err)
 	}
 	p := newGMPool(files, newParkClock())
-	mine, err := p.take(t.Context())
+	mine, err := p.take(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,14 +154,14 @@ func TestPoolGMLockOfAnotherProcess(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := p.take(ctx); !errors.Is(err, context.Canceled) {
+	if _, err := p.take(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("take with both GMs held = %v, want it to wait", err)
 	}
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
 	_ = cmd.Wait()
-	freed, err := p.take(t.Context())
+	freed, err := p.take(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("take after the holder was killed: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestPoolEnterGMGivesTheGMBack(t *testing.T) {
 			t.Fatalf("EnterGM = %v, want %v", err, errNoGame)
 		}
 	}
-	l, err := tg.gms.take(t.Context())
+	l, err := tg.gms.take(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("GM kept by a failed entry: %v", err)
 	}
