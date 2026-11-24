@@ -190,9 +190,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   as many Scrolls: Recovery of the character's level band as it lacks, and the character reads
   one per 10 s reuse until the server reports the penalty lifted (SystemMessage 1917). A scroll
   the server refuses or never answers fails setup, naming the level.
+  `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.
 - `TestLiveFarmFight`'s GM tops the farmer's soulshots up to 500 rather than giving 500 every
   run: its pinned character keeps them, and they weigh 4 each.
-  `TestLiveArrows` ends with the GM visible at the Talking Island newbie spots.
 - Monsters the GM spawned are deleted in cleanup; one a bot killed is gone already. A `//spawn`
   never respawns.
 - The GM's commands land in the server's GM audit log.
