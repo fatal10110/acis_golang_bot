@@ -253,7 +253,7 @@ PHASE 1 — implement. Load and follow ${skillRef('bot-issue')}: ${brief
 - Worktree: ${MB} worktree --run ${RUN} --lane ${L.slug} (one call: creates or reuses ${WT}/wf-${L.slug} on branch wf/${L.slug} from origin/main, records it in the lane state, and prints head, dirty files and how far it is behind main). Push with git -C ${WT}/wf-${L.slug} push -u origin wf/${L.slug}.
 ${(L.deps || []).length ? `- This lane builds on lane(s) ${L.deps.join(', ')}, already merged to origin/main: read their merged PRs and reuse their primitives.` : ''}
 - An issue already fixed on main or stale: no code for it; comment with evidence (main SHA, file:line, merging PR), close it, leave it out of "Closes".
-- Live e2e debug loop (docs/agents/test-strategy.md, "Live debug loop"): run every scenario still failing in a round in ONE invocation, never one after another; give a parallel live run as many GMs as GM scenarios it runs at once, or run them one at a time (-parallel 1 with one pinned GM: a scenario left without a GM fails with "GM pool exhausted"); reproduce a live failure from its recorded frames (BOT_E2E_RECORD) in a unit test before rerunning live, and keep the test; seed the smallest setup that triggers the behavior; give the step under test a refusal check (untilServed with a RefusalCheck, docs/e2e-live.md "Refusal checks") so a refused request fails at once.
+- Live e2e debug loop (docs/agents/test-strategy.md, "Live debug loop"): run every scenario still failing in a round in ONE invocation, never one after another; pin no GM (BOT_E2E_GM_FILE unset): the harness mints a GM for each GM scenario running at once (#367, docs/e2e-live.md "GM pool"), so run the related GM scenarios in one invocation with -parallel 2 (the per-process limit of open scenarios); reproduce a live failure from its recorded frames (BOT_E2E_RECORD) in a unit test before rerunning live, and keep the test; seed the smallest setup that triggers the behavior; give the step under test a refusal check (untilServed with a RefusalCheck, docs/e2e-live.md "Refusal checks") so a refused request fails at once.
 - Keep ${D}/worklog.md current: decisions and why, server evidence paths, what each round changed, open questions. A replacement agent resumes from it if you stop.
 - STOP: once the run is stopping, every ${MB} call prints "stop": true, ${LOOK} prints "### STOP", and heavy prints "### STOP" and refuses to run. When you see any of them: update the worklog (where you are, what is left), push nothing, and return status stopped. Never spend a call of its own checking for it.
 
@@ -363,7 +363,20 @@ function watchPrompt(L, drain) {
 ${drain ? `1. ${MB} drain --run ${RUN} --lane ${L.slug} --box review --kinds no_change,blocked   (discards answers left from an earlier run)
 2. ` : ''}${MB} recv --run ${RUN} --lane ${L.slug} --box review --peek --wait 570
 While its output has "timeout": true and no "stop", run it again: at most ${WAIT_CALLS} recv runs in total.
-Return the last output: messages (seq, kind, and data re-encoded as a JSON string), timeout, stop.`
+Return the last output: messages (seq, kind, and data re-encoded as a JSON string), timeout, and stop. Set stop to true only if that output literally contains "stop": true; a blocked or no_change message is not a stop.`
+}
+
+function stopCheckPrompt() {
+  return `Run exactly this Bash command (timeout 600000): ${MB} status --run ${RUN}
+Return stop: true only if its output literally contains "stop": true, otherwise stop: false; lines: [].`
+}
+
+// confirmStop asks a fresh agent whether the run's STOP marker really exists, so one agent's
+// invented flag cannot end a track.
+async function confirmStop() {
+  const c = await agentAs('coord', stopCheckPrompt(), { label: 'stop-check', phase: 'Coordinate', model: M.coord, effort: 'low', schema: LINES_SCHEMA })
+  if (!(c && c.stop)) log('watcher reported stop, but the run is not stopping: ignored')
+  return !!(c && c.stop)
 }
 
 function deliverFinalPrompt(L, data) {
@@ -535,14 +548,17 @@ async function lifecycle(L, prev, retried) {
     const w = ev && ev.w
     if (ev) watching = null
     if (w) firstWatch = false
-    if (w && w.stop) { STOPPING = true; await live.impl; return { slug, status: 'stopped', history, impl: done.impl } }
     const msgs = w ? (w.messages || []).map(m => ({ kind: m.kind, data: parseData(m.data) })) : []
+    // A lane's own messages come first: a blocked or no_change ends this lane only, never the track.
     const term = msgs.find(m => m.kind === 'no_change' || m.kind === 'blocked')
     if (term) {
       await live.impl
       log(`${slug}: ${term.kind} — ${(term.data.summary || term.data.reason || '').slice(0, 160)}`)
       return { slug, status: term.kind, history, impl: done.impl }
     }
+    // The watcher's stop flag is a model's report: stop the track only when a second, independent
+    // check of the run's STOP marker agrees (w1125: a watcher invented "stop" next to a blocked).
+    if (w && w.stop && !msgs.length && await confirmStop()) { STOPPING = true; await live.impl; return { slug, status: 'stopped', history, impl: done.impl } }
     if (msgs.some(m => m.kind === 'ready')) { reviewing = pushed = true; break }
     if (done.impl) {
       seen.impl = runs.impl

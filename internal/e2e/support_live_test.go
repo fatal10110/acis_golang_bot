@@ -173,6 +173,10 @@ func TestLiveSupport(t *testing.T) {
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 12*time.Minute)
 	gm := enterGM(t, ctx, tg)
+	// The leader, the bot and the orc meet at the GM: a pooled GM stands
+	// wherever its last run left it, ground the mystic may not path across
+	// to the orc (#367's live run: a ledge at the dwarven start).
+	gmToOpenGround(t, ctx, gm)
 	// The leader has an account of its own: e2esu1 is TestLiveSupplyTrip's
 	// farmer (#252), which that run strips, levels to 6, loads and gets
 	// killed. As this leader it swung every 3.8 s for 0 to 2 damage, so

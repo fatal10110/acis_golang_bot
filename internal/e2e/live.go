@@ -45,7 +45,7 @@ func Live(t testing.TB, needs ...Need) *Target {
 			}
 		}
 		runTarget, runErr = NewTarget(cfg, panel)
-		if runErr == nil {
+		if runErr == nil && cfg.GMMint == "" {
 			warnGMShortfall(t, len(cfg.GMFiles))
 		}
 	})
