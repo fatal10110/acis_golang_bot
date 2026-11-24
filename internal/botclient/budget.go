@@ -103,13 +103,23 @@ func (b *Brain) wants(comfort bool) []want {
 }
 
 // shopWants are the items the bot buys now and how many: the supplies and
-// gear tiers of wants, in order. The comfort tier never makes a visit due
-// nor opens a list: it only tops up what a window opened anyway sells
-// (buyRows). Unless anyAdena, only what the bot's adena past its tier's
-// floor buys one of at a merchant's base price is listed.
+// gear tiers of wants, in order (dueWants).
 func (b *Brain) shopWants(anyAdena bool) []buyRow {
-	adena := int64(b.carried(adenaID))
 	var rows []buyRow
+	for _, w := range b.dueWants(anyAdena) {
+		rows = append(rows, w.buyRow)
+	}
+	return rows
+}
+
+// dueWants are the supplies and gear tiers of wants, in order. The comfort
+// tier never makes a visit due nor opens a list: it only tops up what a
+// window opened anyway sells (buyRows). Unless anyAdena, only what the
+// bot's adena past its tier's floor buys one of at a merchant's base price
+// is listed.
+func (b *Brain) dueWants(anyAdena bool) []want {
+	adena := int64(b.carried(adenaID))
+	var out []want
 	for _, w := range b.wants(false) {
 		if !anyAdena && b.cfg.Travel != nil {
 			price, ok := b.cfg.Travel.cheapest[w.item]
@@ -117,9 +127,9 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 				continue
 			}
 		}
-		rows = append(rows, w.buyRow)
+		out = append(out, w)
 	}
-	return rows
+	return out
 }
 
 // buyRows is the purchase from window l, the budget spent tier by tier:
