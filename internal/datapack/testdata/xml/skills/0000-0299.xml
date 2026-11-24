@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/skills, values not read and table rows trimmed. -->
+	<skill id="50" levels="2" name="Focused Force" >
+		<table name="#maxCharges"> 1 2 </table>
+		<set name="mpConsume" val="5" />
+		<set name="hpConsume" val="20" />
+		<set name="target" val="SELF" />
+		<set name="reuseDelay" val="1000"/>
+		<set name="hitTime" val="900" />
+		<set name="skillType" val="BUFF" />
+		<set name="operateType" val="ACTIVE" />
+		<set name="weaponsAllowed" val="DUALFIST" />
+		<set name="numCharges" val="1" />
+		<set name="maxCharges" val="#maxCharges" />
+		<cond msgId="113" addName="1">
+			<not>
+				<player Charges="#maxCharges" />
+			</not>
+		</cond>
+	</skill>
+	<skill id="142" levels="2" name="Armor Mastery" >
+		<table name="#pDef"> 9 11 </table>
+		<table name="#rEvas"> 0 3 </table>
+		<set name="target" val="SELF"/>
+		<set name="skillType" val="BUFF"/>
+		<set name="operateType" val="PASSIVE"/>
+		<for>
+			<add stat="pDef" val="#pDef"/>
+			<add stat="rEvas" val="#rEvas">
+				<using kind="LIGHT, HEAVY"/>
+			</add>
+		</for>
+	</skill>
+	<skill id="163" levels="1" name="Spellcraft" >
+		<set name="target" val="SELF"/>
+		<set name="skillType" val="BUFF"/>
+		<set name="operateType" val="PASSIVE"/>
+		<for>
+			<mul stat="mAtkSpd" val="0.5">
+				<not>
+					<using kind="MAGIC" />
+				</not>
+			</mul>
+			<!-- Not a stat function: skipped, as on the server. -->
+			<unknown stat="pAtk" val="1"/>
+		</for>
+	</skill>
+	<skill id="256" levels="1" name="Accuracy" >
+		<set name="mpConsume" val="1"/>
+		<set name="target" val="SELF"/>
+		<set name="skillType" val="CONT"/>
+		<set name="operateType" val="TOGGLE"/>
+		<for>
+			<effect count="0x7fffffff" name="ManaDamOverTime" time="5" val="4.8">
+				<add stat="accCombat" val="3"/>
+			</effect>
+		</for>
+	</skill>
+	<skill id="284" levels="2" name="Hurricane Assault" >
+		<table name="#mpConsume"> 49 50 </table>
+		<table name="#power"> 501.0 535.0 </table>
+		<set name="weaponsAllowed" val="DUALFIST" />
+		<set name="mpConsume" val="#mpConsume"/>
+		<set name="power" val="#power"/>
+		<set name="target" val="ONE"/>
+		<set name="reuseDelay" val="17000"/>
+		<set name="hitTime" val="1360"/>
+		<set name="skillType" val="CHARGEDAM"/>
+		<set name="operateType" val="ACTIVE"/>
+		<set name="castRange" val="40"/>
+		<set name="numCharges" val="2" />
+		<cond msgId="113" addName="1">
+			<player Charges="2" />
+		</cond>
+	</skill>
+	<skill id="290" levels="1" name="Final Frenzy" >
+		<set name="target" val="SELF"/>
+		<set name="skillType" val="BUFF"/>
+		<set name="operateType" val="PASSIVE"/>
+		<for>
+			<add stat="pAtk" val="2">
+				<player hp="30"/>
+			</add>
+		</for>
+	</skill>
+</list>

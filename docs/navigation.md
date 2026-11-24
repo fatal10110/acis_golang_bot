@@ -1131,6 +1131,8 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | field | main 6199fe3 (before #305) | 2026-11-24 | 14 | 6503 | 5668 | 65.06 s | 51.61 s | 44.98 s | 0.793 | 0.788 | 1025 / 1857 ms | 0 | 0 |
 | town | wf/walker-wake a3d8512 (after #305) | 2026-11-24 | 10 | 3235 | 3021 | 28.41 s | 25.67 s | 23.98 s | 0.904 | 0.894 | 100 / 101 ms | 0 | 0 |
 | field | wf/walker-wake a3d8512 (after #305) | 2026-11-24 | 14 | 6494 | 5674 | 55.64 s | 51.54 s | 45.03 s | 0.926 | 0.921 | 100 / 101 ms | 0 | 0 |
+| town | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 15 | 3260 | 3021 | 29.94 s | 25.87 s | 23.98 s | 0.864 | 0.855 | 100 / 101 ms | 0 | 0 |
+| field | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 25 | 6777 | 5673 | 61.46 s | 53.79 s | 45.02 s | 0.875 | 0.870 | 100 / 101 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
@@ -1142,6 +1144,33 @@ construction. What the wake saves shows in the elapsed time: 8.6 s on the town r
 the field route, efficiency 0.707 to 0.904 and 0.793 to 0.926, with no blocked stop or desync, so
 no segment went out before the server's move had ended. The rest of the gap to run speed is the
 start-speed updates and the answer latency of each segment (#306, #307, #308).
+
+After #306 the scenario's follow walk takes segments of at most `movingSegment` (500): 15 instead
+of 10 in town and 25 instead of 14 in the field. Every idle is still the one position tick (all in
+the bucket up to 127 ms) and nothing was blocked or desynced, but each extra segment pays its
+answer latency and the server's walk-speed start, and the shorter pull bends the field route 283
+units longer: efficiency 0.904 to 0.864 in town and 0.926 to 0.875 in the field. That is the cost
+of the cap toward a leader that stands still; the scenario's GM never moves.
+
+What #306 buys shows with a leader that moves. `TestLiveFollowMovingLeader` starts the bot 1900
+from the field route's end, in sight of the GM, who paces 300 back and forth there while the bot
+walks; the bot's follow delay is 1.5 s, so a re-path is pending for most of each leg. Its gaps are
+the time from the modeled end of one of the bot's moves, as the server answered them, to the start
+of the next:
+
+```sh
+go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveFollowMovingLeader' -v
+```
+
+| Build | Date | Legs | Segments | Gap mean / max | Idle mean / max | Blocked | Desync |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| main 673403d + the scenario (before #306) | 2026-11-24 | 11 | 18 | 1011 / 1841 ms | 739 / 1601 ms | 0 | 0 |
+| wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 6 | 13 | 311 / 401 ms | 100 / 101 ms | 0 | 0 |
+
+Before #306 the bot stood through the follow delay after each segment that ended while a re-path
+was pending; after it, the bot keeps walking to its old slot and turns to the new one when the
+delay ends, so it arrives in about half the GM's legs. The gaps include the server's walk-speed
+start of each move, which is why they exceed the bot's own idle.
 
 ## Delivery (milestone M7, "Own navigation", epic #151)
 

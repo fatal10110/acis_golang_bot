@@ -1,6 +1,6 @@
 # Race and class strategy: each bot plays its race, class and role
 
-Status: draft for owner review. Proposed decisions D21-D24 are open (see "Owner decisions").
+Status: approved. The owner approved decisions D21-D24 on 2026-11-24 (see "Owner decisions").
 Milestone M10 ("Race and class strategy"): epic #319, issues #320-#333 ("Delivery").
 
 Nine rounds of independent review, every finding checked against the datapack, the server or the
@@ -719,9 +719,9 @@ reply timeouts. All of it goes through the per-connection frame bucket (`pacing.
 
 ## Owner decisions
 
-Proposed, awaiting the owner:
+Approved by the owner on 2026-11-24, as proposed (also in `docs/plan.md`, "Owner decisions"):
 
-| # | Question | Proposal |
+| # | Question | Decision |
 | --- | --- | --- |
 | D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: Support (as today; it farms nowhere). |
 | D22 | How does a bot pick its profession branch? | Weighted by race fit (section 6), drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). |

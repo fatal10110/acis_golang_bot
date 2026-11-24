@@ -209,6 +209,9 @@ Table-driven, with an injected clock:
     past its segment's end + 100 ms.
   - Follow, melee and flee routes have no segment longer than 500.
   - `Hierarchy.Route` and `RouteOneWay` honor `MaxSegment`.
+- **Measured.** `TestLiveFollowMovingLeader` (a leader pacing around the end of the walk) and the
+  cost of the cap on `TestLiveWalkEfficiency` (a leader standing still) are in
+  `docs/navigation.md`, "Walking efficiency".
 
 ## Longer checked segments (#307)
 

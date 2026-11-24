@@ -5,10 +5,10 @@
 // CanMove exactly: down any height, up at most block.CellIgnoreHeight, and a
 // diagonal only when both L-shaped detours are open. A route is a cell A*
 // search with a node budget, pulled into straight segments of at most
-// navSegment units. Every segment passes CanMove and the step-chain check:
-// the cheap open-corridor test, and on the stretches that test fails, the
-// exact check over every step sequence the server can take (section 3,
-// "Step-chain check").
+// navSegment units (Planner.MaxSegment when shorter). Every segment passes
+// CanMove and the step-chain check: the cheap open-corridor test, and on the
+// stretches that test fails, the exact check over every step sequence the
+// server can take (section 3, "Step-chain check").
 //
 // The hierarchy (HPA*) groups cells into clusters of DefaultClusterCells
 // square. Entrance nodes are runs of border cells with a crossing, merged

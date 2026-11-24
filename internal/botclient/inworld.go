@@ -31,7 +31,8 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	u.Race, u.Sex, u.BaseClass = r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
 	u.Level = r.ReadInt32()
 	u.Exp = r.ReadInt64()
-	r.Skip(6 * 4) // STR, DEX, CON, INT, WIT, MEN
+	u.STR, u.DEX, u.CON = r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
+	u.INT, u.WIT, u.MEN = r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
 	u.MaxHP, u.HP = r.ReadInt32(), r.ReadInt32()
 	u.MaxMP, u.MP = r.ReadInt32(), r.ReadInt32()
 	u.SP = r.ReadInt32()
@@ -43,7 +44,9 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	r.Skip(14*2 + 4 + 12*2 + 4 + 4*2)
 	u.PAtk, u.PAtkSpd = r.ReadInt32(), r.ReadInt32()
 	u.PDef, u.Evasion, u.Accuracy = r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
-	r.Skip(5 * 4) // crit, mAtk, castSpd, atkSpd, mDef
+	u.Critical, u.MAtk, u.CastSpd = r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
+	r.Skip(4) // attack speed again
+	u.MDef = r.ReadInt32()
 	u.PvPFlag, u.Karma = r.ReadInt32(), r.ReadInt32()
 	run, walk, swim := r.ReadInt32(), r.ReadInt32(), r.ReadInt32()
 	r.Skip(5 * 4) // swim walk, 0, 0, fly run, fly walk

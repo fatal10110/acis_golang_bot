@@ -47,9 +47,9 @@ const (
 // the floor as the server snaps a destination). Unless the planner swims, an
 // endpoint whose cell is in water is ErrWater; a swimming planner's route
 // that swims a stretch longer than p.Swim is ErrBreath. Each consecutive pair is one
-// segment of at most navSegment units that passes CanMove and StepChainOK;
-// the planner takes a segment only after both checks pass, and every
-// intermediate waypoint is a click target on its layer.
+// segment of at most navSegment units (p.MaxSegment when shorter) that passes
+// CanMove and StepChainOK; the planner takes a segment only after both checks
+// pass, and every intermediate waypoint is a click target on its layer.
 func (p *Planner) Route(from, to location.Location) ([]location.Location, error) {
 	s := getScratch()
 	defer putScratch(s)
@@ -111,7 +111,7 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 }
 
 // pull string-pulls the cell path into segments, in s.route. From each
-// waypoint it takes the farthest cell ahead, within navSegment, that is a
+// waypoint it takes the farthest cell ahead, within the segment cap, that is a
 // click target and passes CanMove and the corridor test. When none does, a
 // swimming planner at a waypoint in water takes the farthest its swim line
 // reaches (swimLeg); else it takes the farthest within exactCells that
@@ -174,11 +174,20 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 }
 
 // inReach reports whether the segment from waypoint i to cell j is within
-// navSegment and ends on a click target.
+// the planner's segment cap and ends on a click target.
 func (p *Planner) inReach(s *scratch, cells []Cell, i, j, n int) bool {
 	a, b := s.points[i], s.points[j]
-	if hypot(b.X-a.X, b.Y-a.Y) > navSegment {
+	if hypot(b.X-a.X, b.Y-a.Y) > p.segmentCap() {
 		return false
 	}
 	return j == n || p.clickable(cells[j], &s.layers)
+}
+
+// segmentCap is the longest segment the planner takes: MaxSegment, or
+// navSegment when that is zero or longer.
+func (p *Planner) segmentCap() float64 {
+	if p.MaxSegment > 0 && p.MaxSegment < navSegment {
+		return p.MaxSegment
+	}
+	return navSegment
 }

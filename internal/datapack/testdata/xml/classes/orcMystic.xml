@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/classes, values not read trimmed. -->
+	<class><!-- Orc Mystic: no skills. -->
+		<set id="49" pAtk="3" pDef="54" mAtk="6" mDef="41" hpTable="95;106.5" mpTable="40;47.4"/>
+	</class>
+</list>

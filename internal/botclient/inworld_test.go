@@ -26,8 +26,8 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 		w.WriteInt32(v)
 	}
 	w.WriteInt64(u.Exp)
-	for i := range int32(6) { // STR..MEN
-		w.WriteInt32(40 + i)
+	for _, v := range []int32{u.STR, u.DEX, u.CON, u.INT, u.WIT, u.MEN} {
+		w.WriteInt32(v)
 	}
 	for _, v := range []int32{u.MaxHP, u.HP, u.MaxMP, u.MP, u.SP, u.Load, u.MaxLoad, 40} {
 		w.WriteInt32(v)
@@ -40,8 +40,11 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 	fillUint16(w, 12)
 	w.WriteInt32(8888)
 	fillUint16(w, 4)
-	for i := range int32(10) { // pAtk..mDef
-		w.WriteInt32(300 + i)
+	// The attack speed is written twice (userinfo.go).
+	for _, v := range []int32{
+		u.PAtk, u.PAtkSpd, u.PDef, u.Evasion, u.Accuracy, u.Critical, u.MAtk, u.CastSpd, u.PAtkSpd, u.MDef,
+	} {
+		w.WriteInt32(v)
 	}
 	w.WriteInt32(u.PvPFlag)
 	w.WriteInt32(u.Karma)
@@ -220,6 +223,7 @@ var (
 		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000,
 		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
 		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001,
+		STR: 40, DEX: 41, CON: 42, INT: 43, WIT: 44, MEN: 45, Critical: 305, MAtk: 306, CastSpd: 307, MDef: 309,
 	}
 	testCharInfo = CharInfo{
 		ObjectID: 0x10000002, Name: "other", Pos: Point{X: 1, Y: 2, Z: 3}, Heading: 1000, ClassID: 10,

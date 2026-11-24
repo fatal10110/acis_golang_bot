@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='utf-8'?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/classes, values not read and table rows trimmed. -->
+	<class><!-- Elf Fighter -->
+		<set id="18" baseLvl="1" fists="244"/>
+		<set str="36" con="36" dex="35" int="23" wit="14" men="26"/>
+		<set pAtk="4" pDef="80" mAtk="6" mDef="41" runSpd="125" walkSpd="90" swimSpd="50"/>
+		<set hpTable="89;101.74;114.62"/>
+		<set mpTable="30;35.46;40.98"/>
+		<items>
+			<item id="2369" count="1" isEquipped="true"/>
+		</items>
+		<skills>
+			<skill id="77" lvl="1" cost="910" minLvl="10"/>
+			<skill id="142" lvl="1" cost="160" minLvl="5"/>
+		</skills>
+	</class>
+	<class><!-- Elf Knight: a later <set> wins, runSpd absent reads as 1. -->
+		<set id="19" baseLvl="20" fists="244"/>
+		<set pAtk="4" pDef="80" mAtk="6" mDef="41"/>
+		<set pAtk="5"/>
+		<set hpTable="89" mpTable="30"/>
+		<skills>
+			<skill id="77" lvl="2" cost="5000" minLvl="28"/>
+		</skills>
+	</class>
+	<class><!-- Temple Knight: merges the already merged Elf Knight tree. -->
+		<set id="20" baseLvl="40" fists="244"/>
+		<set pAtk="4" pDef="80" mAtk="6" mDef="41" hpTable="89" mpTable="30"/>
+		<skills>
+			<skill id="10" lvl="1" cost="25000" minLvl="40"/>
+		</skills>
+	</class>
+</list>

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadSkills(t *testing.T) {
@@ -27,14 +28,14 @@ func TestLoadSkills(t *testing.T) {
 	// 1086's enchanted levels are not read; 4327 keeps its last
 	// declaration.
 	want := map[SkillRef]Skill{
-		{1086, 1}: {Name: "Haste", CastRange: 400, Effects: haste(1)},
-		{1086, 2}: {Name: "Haste", CastRange: 400, Effects: haste(2)},
+		{1086, 1}: {Name: "Haste", Target: "TARGET_ONE", CastRange: 400, Effects: haste(1)},
+		{1086, 2}: {Name: "Haste", Target: "TARGET_ONE", CastRange: 400, Effects: haste(2)},
 		{1177, 1}: {Name: "Wind Strike", CastRange: 600},
 		{4110, 1}: {Name: "Breath Attack", CastRange: 500},
 		{4110, 2}: {Name: "Breath Attack", CastRange: 1000},
 		{2002, 1}: {Name: "Healing Drug", Potion: true, Effects: []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: 1.5, Time: 5, Count: 4, Value: 1.5}}},
 		{2012, 1}: {Name: "Potion of Alacrity", Potion: true, Effects: haste(1)},
-		{2013, 1}: {Name: "Scroll of Escape"},
+		{2013, 1}: {Name: "Scroll of Escape", Type: "TELEPORT"},
 		{2031, 1}: {Name: "Lesser Healing Potion", Potion: true, Effects: hot(1, 16)},
 		{2032, 1}: {Name: "Healing potion", Potion: true, Effects: hot(2, 48)},
 		{2037, 1}: {Name: "Greater Healing Potion", Potion: true, Effects: hot(3, 100)},
@@ -42,6 +43,44 @@ func TestLoadSkills(t *testing.T) {
 		{2169, 2}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(3)},
 		{4327, 1}: {Name: "Haste for Beginners", Effects: []Effect{{Name: "Buff", StackType: "attack_time_down", StackOrder: 2, Time: 3600, Count: 1}}},
 	}
+	// Combat fields, charges and stat functions: maxCharges, the
+	// <not><player Charges> of 50 and the val of 142 differ by level
+	// (#maxCharges, #rEvas); 163's unknown <for> element is skipped; 256's
+	// effect count is hex and its <add> inside the effect is not read.
+	focused := func(max int) Skill {
+		return Skill{
+			Name: "Focused Force", Type: "BUFF", OperateType: "ACTIVE", Target: "SELF", WeaponsAllowed: []string{"DUALFIST"},
+			HitTime: 900 * time.Millisecond, ReuseDelay: time.Second, MPConsume: 5,
+			NumCharges: 1, MaxCharges: max, Charges: ChargeCond{Min: max, Not: true},
+		}
+	}
+	hurricane := func(mp int, power float64) Skill {
+		return Skill{
+			Name: "Hurricane Assault", Type: "CHARGEDAM", OperateType: "ACTIVE", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"},
+			CastRange: 40, HitTime: 1360 * time.Millisecond, ReuseDelay: 17 * time.Second, MPConsume: mp, Power: power,
+			NumCharges: 2, Charges: ChargeCond{Min: 2},
+		}
+	}
+	passive := func(name string, funcs ...StatFunc) Skill {
+		return Skill{Name: name, Type: "BUFF", OperateType: "PASSIVE", Target: "SELF", Funcs: funcs}
+	}
+	pDef := func(v float64) StatFunc { return StatFunc{Op: "add", Stat: "pDef", Value: v} }
+	rEvas := func(v float64) StatFunc {
+		return StatFunc{Op: "add", Stat: "rEvas", Value: v, Using: []string{"LIGHT", "HEAVY"}}
+	}
+	want[SkillRef{50, 1}] = focused(1)
+	want[SkillRef{50, 2}] = focused(2)
+	want[SkillRef{142, 1}] = passive("Armor Mastery", pDef(9), rEvas(0))
+	want[SkillRef{142, 2}] = passive("Armor Mastery", pDef(11), rEvas(3))
+	want[SkillRef{163, 1}] = passive("Spellcraft", StatFunc{Op: "mul", Stat: "mAtkSpd", Value: 0.5, Using: []string{"MAGIC"}, NotUsing: true})
+	want[SkillRef{256, 1}] = Skill{
+		Name: "Accuracy", Type: "CONT", OperateType: "TOGGLE", Target: "SELF", MPConsume: 1,
+		Effects: []Effect{{Name: "ManaDamOverTime", StackType: "none", Time: 5, Count: 0x7fffffff, Value: 4.8}},
+	}
+	want[SkillRef{284, 1}] = hurricane(49, 501)
+	want[SkillRef{284, 2}] = hurricane(50, 535)
+	want[SkillRef{290, 1}] = passive("Final Frenzy", StatFunc{Op: "add", Stat: "pAtk", Value: 2, OtherCond: true})
+	want[SkillRef{3502, 1}] = passive("Mithril Heavy Armor Set", StatFunc{Op: "addMul", Stat: "poisonVuln", Value: 20})
 	if !reflect.DeepEqual(dp.Skills, want) {
 		t.Errorf("Skills = %+v, want %+v", dp.Skills, want)
 	}
@@ -65,6 +104,19 @@ func TestLoadSkillsRejects(t *testing.T) {
 		{"potion table", `<skill id="1" levels="1" name="x"><set name="isPotion" val="#potion"/></skill>`, "undefined table"},
 		{"cast range", `<skill id="1" levels="1" name="x"><set name="castRange" val="far"/></skill>`, `"castRange"`},
 		{"cast range table", `<skill id="1" levels="2" name="x"><table name="#range"> 400 </table><set name="castRange" val="#range"/></skill>`, "no row 2"},
+		{"hit time", `<skill id="1" levels="1" name="x"><set name="hitTime" val="0.9"/></skill>`, `"hitTime"`},
+		{"reuse delay", `<skill id="1" levels="1" name="x"><set name="reuseDelay" val="soon"/></skill>`, `"reuseDelay"`},
+		{"mp consume", `<skill id="1" levels="1" name="x"><set name="mpConsume" val="1.5"/></skill>`, `"mpConsume"`},
+		{"power", `<skill id="1" levels="1" name="x"><set name="power" val="strong"/></skill>`, `"power"`},
+		{"power table", `<skill id="1" levels="2" name="x"><table name="#power"> 10 </table><set name="power" val="#power"/></skill>`, "no row 2"},
+		{"max charges", `<skill id="1" levels="1" name="x"><set name="maxCharges" val="#max"/></skill>`, "undefined table"},
+		{"num charges", `<skill id="1" levels="1" name="x"><set name="numCharges" val="two"/></skill>`, `"numCharges"`},
+		{"charges", `<skill id="1" levels="1" name="x"><cond><player Charges="many"/></cond></skill>`, `"Charges"`},
+		{"charges table", `<skill id="1" levels="2" name="x"><table name="#c"> 1 </table><cond><not><player Charges="#c"/></not></cond></skill>`, "no row 2"},
+		{"func stat", `<skill id="1" levels="1" name="x"><for><add val="1"/></for></skill>`, `"stat"`},
+		{"func val", `<skill id="1" levels="1" name="x"><for><mul stat="pAtk"/></for></skill>`, `"val"`},
+		{"func val number", `<skill id="1" levels="1" name="x"><for><mul stat="pAtk" val="x"/></for></skill>`, `"val"`},
+		{"func val table", `<skill id="1" levels="2" name="x"><table name="#v"> 1 </table><for><add stat="pAtk" val="#v"/></for></skill>`, "no row 2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

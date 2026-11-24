@@ -74,10 +74,14 @@ func TestRuleTable(t *testing.T) {
 			name:     "critical HP in combat flees away from the target",
 			setup:    func(b *Brain) { b.world.Self.InCombat, b.world.Self.HP, b.world.Target = true, 10, npcID },
 			wantRule: "critical", wantKind: actMove,
-			check: func(t *testing.T, _ *Brain, a Action) {
-				// The NPC stands 1000 east of the bot.
-				if to := moveTarget(a.payload); to.X != groundShift.X-600 || to.Y != groundShift.Y || !a.walk {
-					t.Errorf("flee to %+v (walker %v), want a walker segment 600 west of %+v", to, a.walk, groundShift)
+			check: func(t *testing.T, b *Brain, a Action) {
+				// The NPC stands 1000 east of the bot. The flight's segments
+				// are capped at movingSegment (#306).
+				if to := b.fleeing.to; to.X != groundShift.X-600 || to.Y != groundShift.Y {
+					t.Errorf("flee to %+v, want 600 west of %+v", to, groundShift)
+				}
+				if to := moveTarget(a.payload); !a.walk || to.X >= groundShift.X || horizontal2(groundShift, to) > movingSegment*movingSegment {
+					t.Errorf("segment to %+v (walker %v), want a walker segment west of %+v, at most %d long", to, a.walk, groundShift, movingSegment)
 				}
 			},
 		},
