@@ -159,8 +159,8 @@ func TestPackRisk(t *testing.T) {
 
 // TestPackRiskPick checks which spot a level 14 squire with 13 potions
 // claims, the werewolves the nearest: a calm spot that fits over them, and
-// with none, the pack least over SpotPolicy.PackRisk, the orcs, rather
-// than none; at PackRisk 0 the nearest.
+// none over the orcs, whose pack is too much for it too; at PackRisk 0 the
+// nearest.
 func TestPackRiskPick(t *testing.T) {
 	place := func(s datapack.Spot, name string, x, y int32) datapack.Spot {
 		s.Maker, s.Center, s.MaximumNPCs = name, datapack.Point{X: x, Y: y}, 11
@@ -171,10 +171,11 @@ func TestPackRiskPick(t *testing.T) {
 		name     string
 		packRisk float64
 		other    datapack.Spot
-		want     int
+		// want is the spot held, -1 for none.
+		want int
 	}{
 		{"a calm spot", 3, testSpot("calm", 0, 3000, 11, 13, 9), 1},
-		{"the least deadly pack", 3, orcs, 1},
+		{"the orcs: none", 3, orcs, -1},
 		{"PackRisk 0: the nearest", 0, orcs, 0},
 	}
 	for _, tt := range tests {
@@ -184,8 +185,12 @@ func TestPackRiskPick(t *testing.T) {
 			b.persona.Spots.PackRisk = tt.packRisk
 			setSquire(b, squire14, 13)
 			b.decide(at(time.Second))
-			if !b.spot.held || b.spot.idx != tt.want {
-				t.Fatalf("spot %d held %v, want %d", b.spot.idx, b.spot.held, tt.want)
+			got := -1
+			if b.spot.held {
+				got = b.spot.idx
+			}
+			if got != tt.want {
+				t.Fatalf("spot %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -254,31 +259,56 @@ func TestPackRiskShipped(t *testing.T) {
 }
 
 // TestPackRiskRepick checks a bot that took the werewolves before its
-// stats came in moves to the orcs, whose pack is less over
-// SpotPolicy.PackRisk, once they do, and stays there: no spot's pack is
-// less over it than theirs.
+// stats came in moves to a calm spot once they do, and one holding the
+// orcs keeps them when its potions run out with no spot that fits.
 func TestPackRiskRepick(t *testing.T) {
 	wolves, orcs := tiWolves, tiOrcs01
 	wolves.Maker, wolves.Center, wolves.MaximumNPCs = "wolves", datapack.Point{X: 1000}, 10
-	orcs.Maker, orcs.Center, orcs.MaximumNPCs = "orcs", datapack.Point{Y: 3000}, 11
-	b := newSpotBrain(t, 14, wolves, orcs)
-	b.persona.Potions = []int32{lesserHealingPotion}
-	steps := []struct {
-		name  string
-		stats bool
-		want  int
-	}{
-		{"no stats yet: the nearest", false, 0},
-		{"stats in: the orcs", true, 1},
-		{"no flip back", true, 1},
+	orcs.Maker, orcs.Center, orcs.MaximumNPCs = "orcs", datapack.Point{X: 1000}, 11
+	better := squire14
+	better.pAtk, better.pDef = 12, 110
+	type step struct {
+		name    string
+		self    squire
+		potions int32
+		want    int
 	}
-	for i, s := range steps {
-		if s.stats {
-			setSquire(b, squire14, 13)
-		}
-		b.decide(at(time.Duration(i+1) * time.Second))
-		if !b.spot.held || b.spot.idx != s.want {
-			t.Fatalf("%s: spot %d held %v, want %d", s.name, b.spot.idx, b.spot.held, s.want)
-		}
+	tests := []struct {
+		name  string
+		spots []datapack.Spot
+		steps []step
+	}{
+		{
+			name:  "stats come in",
+			spots: []datapack.Spot{wolves, testSpot("calm", 0, 3000, 11, 13, 9)},
+			steps: []step{
+				{name: "no stats yet: the nearest", want: 0},
+				{name: "stats in: the calm spot", self: squire14, potions: 13, want: 1},
+				{name: "stays", self: squire14, potions: 13, want: 1},
+			},
+		},
+		{
+			name:  "potions run out",
+			spots: []datapack.Spot{orcs},
+			steps: []step{
+				{name: "the orcs fit", self: better, potions: 13, want: 0},
+				{name: "none left: kept", self: better, want: 0},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newSpotBrain(t, 14, tt.spots...)
+			b.persona.Potions = []int32{lesserHealingPotion}
+			for i, s := range tt.steps {
+				if s.self.level > 0 {
+					setSquire(b, s.self, s.potions)
+				}
+				b.decide(at(time.Duration(i+1) * time.Second))
+				if !b.spot.held || b.spot.idx != s.want {
+					t.Fatalf("%s: spot %d held %v, want %d", s.name, b.spot.idx, b.spot.held, s.want)
+				}
+			}
+		})
 	}
 }

@@ -81,11 +81,9 @@ type SpotPolicy struct {
 	// orc pack it farmed until its potions ran out about 3.4; to a level 6
 	// one with 12 its toad spots are 1.8 to 2.3. Regeneration, shots, the
 	// fight's lulls and a pack drawn in turn are left out, so it is a ratio
-	// against the worst case rather than a death line: with no spot within
-	// it, the bot takes the one least over it (spotCands), and holding one
-	// over it, it moves to one less over it as one comes in reach
-	// (overRisk). A mystic's spells are left out too, so a mystic is not
-	// judged. 0 never passes one over.
+	// against the worst case rather than a death line. Holding a spot over
+	// it, the bot moves to one that fits (overRisk). A mystic's spells are
+	// left out too, so a mystic is not judged. 0 never passes one over.
 	PackRisk float64
 }
 
@@ -127,18 +125,12 @@ func spotPack(s *datapack.Spot) float64 {
 }
 
 // spotFits reports whether s fits the bot at now: its level, no pack a
-// death taught it to pass over (spotFitsLevel), and no pack too much for
-// its stats (SpotPolicy.PackRisk).
+// death taught it to pass over, and no pack too much for its stats
+// (SpotPolicy.PackRisk).
 func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
-	return b.spotFitsLevel(s, now) && b.packFits(s)
-}
-
-// spotFitsLevel reports whether s fits the bot at now by its level, with no
-// pack a death taught it to pass over.
-func (b *Brain) spotFitsLevel(s *datapack.Spot, now time.Time) bool {
 	self := &b.world.Self
 	level := int(self.Level)
-	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now)
+	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s)
 }
 
 // packFits reports whether s's pack is within SpotPolicy.PackRisk.
@@ -410,9 +402,9 @@ func (b *Brain) outleveled() bool {
 }
 
 // overRisk reports whether the pack of the spot the bot holds is over
-// SpotPolicy.PackRisk: the bot looks for a spot that fits, or one whose
-// pack is less over it (spotCands), as when it took the spot on its first
-// stats or its potions run out.
+// SpotPolicy.PackRisk, as when it took the spot before its stats came in
+// or its potions ran out: it looks for one that fits, and keeps the one it
+// holds with none.
 func (b *Brain) overRisk() bool {
 	v := &b.spot
 	return v.held && !b.packFits(&b.cfg.Spots.spots[v.idx])
@@ -447,21 +439,14 @@ type spotCand struct {
 
 // spotCands are the spots that fit the bot standing at here, are not
 // avoided and lie in its SCC within Wander in straight line, but the one it
-// holds. With none whose pack is within SpotPolicy.PackRisk, they are the
-// ones whose pack is least over it, and less than the held one's: a bot in
-// poor gear farms the least deadly pack rather than none, where it would
-// earn nothing to buy better with (#294).
+// holds.
 func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	far := max(float64(p.MaxTravel), float64(p.Wander))
-	var cands, over []spotCand
-	least := math.Inf(1)
-	if v.held && p.PackRisk > 0 {
-		least = math.Nextafter(b.packRisk(&r.spots[v.idx]), 0)
-	}
+	var cands []spotCand
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !b.spotFitsLevel(sp, now) {
+		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !b.spotFits(sp, now) {
 			continue
 		}
 		line := math.Sqrt(float64(horizontal2(here.at, Point{X: sp.Center.X, Y: sp.Center.Y})))
@@ -472,26 +457,9 @@ func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
 		if !ok {
 			continue
 		}
-		d, ok := b.navDistance(here, at)
-		if !ok {
-			continue
+		if d, ok := b.navDistance(here, at); ok {
+			cands = append(cands, spotCand{i: i, d: d, line: line, at: at.at})
 		}
-		c := spotCand{i: i, d: d, line: line, at: at.at}
-		risk := 0.0
-		if p.PackRisk > 0 {
-			risk = b.packRisk(sp)
-		}
-		switch {
-		case risk <= p.PackRisk || p.PackRisk <= 0:
-			cands = append(cands, c)
-		case risk < least:
-			over, least = append(over[:0], c), risk
-		case risk == least:
-			over = append(over, c)
-		}
-	}
-	if len(cands) == 0 {
-		return over
 	}
 	return cands
 }
