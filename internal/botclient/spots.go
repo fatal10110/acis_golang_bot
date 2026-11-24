@@ -71,19 +71,34 @@ type SpotPolicy struct {
 	// in the datapack, so a death is what tells it a pack is too much. 0
 	// avoids the one spot alone.
 	PackShare float64
+	// PackRisk passes over a spot whose pack deals the bot more than
+	// PackRisk times what it can take while it kills one of them: its max
+	// HP plus what the healing potions it carries restore in that time
+	// (packRisk, from the bot's own stats against the monsters'), and has
+	// the bot leave the spot it holds for one that fits once that is so
+	// (its potions run out). It judges a pack before a death there (#294):
+	// to a level 14 fighter in Squire's gear with Lesser Healing Potions,
+	// Talking Island's werewolf pack that killed it is about 3.3 and its
+	// orc packs about 2.3 to 2.4, 4 to 4.7 with fewer than three potions
+	// left; to a level 6 one without a potion its toad spots are 1.9 to 2.9.
+	// Regeneration, the fight's lulls and a pack drawn in turn are left
+	// out, so it is a ratio against the worst case rather than a death
+	// line. 0 never passes one over.
+	PackRisk float64
 }
 
 // defaultSpotPolicy is the farmer's spot choice: monsters up to two levels
 // above the bot, aggressive ones not above it (plan, farmer) once it is
 // past level 5, leaving at five levels over; spread over every spot that
 // fits within twice the newbie zone's reach, sharing full ones rather than
-// waiting (#137); a death at a pack passes over its like (#281).
+// waiting (#137); a death at a pack passes over its like (#281), and a
+// pack too much for the bot's stats is passed over before one (#294).
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
 		MaxTravel: 20000, Wander: 40000, Overflow: true,
 		Crowd: 4, AvoidFor: 10 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
-		PackShare: 0.8,
+		PackShare: 0.8, PackRisk: 3,
 	}
 }
 
@@ -109,12 +124,14 @@ func spotPack(s *datapack.Spot) float64 {
 	return float64(s.Aggressive) * min(1, math.Pi*r*r/s.Area)
 }
 
-// spotFits reports whether s fits the bot at now: its level, and no pack
-// a death taught it to pass over.
+// spotFits reports whether s fits the bot at now: its level, no pack a
+// death taught it to pass over, and no pack too much for its stats
+// (SpotPolicy.PackRisk).
 func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
-	self := &b.world.Self
+	p, self := &b.persona.Spots, &b.world.Self
 	level := int(self.Level)
-	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now)
+	return p.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now) &&
+		(p.PackRisk <= 0 || b.packRisk(s) <= p.PackRisk)
 }
 
 // packBound is the pack a death at one taught the bot to pass over
@@ -207,7 +224,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || b.outgrown() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.held {
@@ -379,6 +396,14 @@ func (b *Brain) outleveled() bool {
 	return v.held && int(b.world.Self.Level) > b.cfg.Spots.spots[v.idx].MaxLevel+b.persona.Spots.Outlevel
 }
 
+// outgrown reports whether the bot leaves the spot it holds for one that
+// fits: it is outlevelled, or its pack is now too much for the bot
+// (SpotPolicy.PackRisk), as when its potions run out.
+func (b *Brain) outgrown() bool {
+	p, v := &b.persona.Spots, &b.spot
+	return b.outleveled() || (v.held && p.PackRisk > 0 && b.packRisk(&b.cfg.Spots.spots[v.idx]) > p.PackRisk)
+}
+
 // pickSpot claims a spot that fits the bot's level, is not avoided and that
 // the bot can walk to, in place of the one it holds (#137): within MaxTravel
 // in straight line, then within Wander, the nearest by the abstract graph
@@ -460,11 +485,11 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 		}
 		if b.trip.v.active() {
 			// A bot on a trip farms near its destination: it gives back the
-			// spot it holds (outlevelled, or shared past its cap) rather
+			// spot it holds (outgrown, or shared past its cap) rather
 			// than block a place there for the trip and walk back to it.
 			b.leaveSpot()
 		}
-		if !p.Overflow || b.trip.v.active() || (v.held && !b.outleveled()) {
+		if !p.Overflow || b.trip.v.active() || (v.held && !b.outgrown()) {
 			return
 		}
 		if i, ok = r.claimOver(order); !ok {

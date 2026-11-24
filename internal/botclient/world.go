@@ -101,9 +101,11 @@ type SelfState struct {
 	// castEnd is when the bot's own cast in progress hits, swingEnd when
 	// its own melee swing in progress ends.
 	castEnd, swingEnd time.Time
-	// PAtkSpd and CollisionHeight are UserInfo's.
-	PAtkSpd         int32
-	CollisionHeight float64
+	// PAtkSpd, CollisionHeight, PAtk, PDef, Evasion and Accuracy are
+	// UserInfo's.
+	PAtkSpd                       int32
+	CollisionHeight               float64
+	PAtk, PDef, Evasion, Accuracy int32
 	// ground, when set, is the geodata the bot's own walk is simulated on
 	// (World.SetGround).
 	ground groundHeight
@@ -802,6 +804,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
 	s.SwimSpeed = e.SwimSpeed
 	s.PAtkSpd, s.CollisionHeight = e.PAtkSpd, e.CollisionHeight
+	s.PAtk, s.PDef, s.Evasion, s.Accuracy = e.PAtk, e.PDef, e.Evasion, e.Accuracy
 	s.Heading = e.Heading
 	w.applyClanID(e.ClanID)
 	s.resample(now, e.Pos)

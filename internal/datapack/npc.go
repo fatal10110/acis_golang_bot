@@ -22,6 +22,20 @@ type NPC struct {
 	// its clan to join the fight (the server's makesClanCalls and
 	// forEachClanMember, npc/clan.go); 0 for an NPC of no clan.
 	ClanRange int
+	// Combat is what the NPC fights with.
+	Combat Combat
+}
+
+// Combat is an NPC template's base combat stats, at the server's defaults
+// (data/xml/npc.go buildNPCTemplate) where the template leaves one out:
+// before the server's stat pipeline finalizes them (hostile_stats.go
+// defaultBuiltin: max HP by CON, P.Atk by STR and level, P.Def by level,
+// attack speed and critical rate by DEX).
+type Combat struct {
+	HP, PAtk, PDef float64
+	// AtkSpd is the base physical attack speed, Crit the base critical rate.
+	AtkSpd, Crit  float64
+	STR, CON, DEX int
 }
 
 type npcFile struct {
@@ -71,8 +85,10 @@ func addNPCs(npcs map[int32]NPC, els []npcElement) error {
 
 // buildNPC mirrors the server's buildNPCTemplate for the fields bots read:
 // <set> values override same-named attributes, id, name and type are
-// required, level defaults to 1, aggroRange to 0 and runSpd to 0, and
-// clanRange is required with a clan and read only then.
+// required, level defaults to 1, aggroRange to 0 and runSpd to 0, clanRange
+// is required with a clan and read only then, and the combat stats default
+// as the server's do (hp, pAtk and pDef to 0, which the server requires of
+// pAtk and pDef alone).
 func buildNPC(el npcElement) (NPC, error) {
 	a := foldAttrs(el.Attrs)
 	for _, s := range el.Sets {
@@ -85,6 +101,11 @@ func buildNPC(el npcElement) (NPC, error) {
 		Level:      a.intDefault("level", 1),
 		AggroRange: a.intDefault("aggroRange", 0),
 		RunSpeed:   a.floatDefault("runSpd", 0),
+		Combat: Combat{
+			HP: a.floatDefault("hp", 0), PAtk: a.floatDefault("pAtk", 0), PDef: a.floatDefault("pDef", 0),
+			AtkSpd: a.floatDefault("atkSpd", 300), Crit: a.floatDefault("crit", 4),
+			STR: a.intDefault("str", 40), CON: a.intDefault("con", 21), DEX: a.intDefault("dex", 30),
+		},
 	}
 	if _, clan := a.vals["clan"]; clan {
 		npc.ClanRange = a.int("clanRange")

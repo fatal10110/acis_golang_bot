@@ -2,6 +2,7 @@ package datapack
 
 import (
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -58,7 +59,7 @@ func TestSpots(t *testing.T) {
 				}
 				return
 			}
-			if len(got) != 1 || got[0] != tt.want {
+			if len(got) != 1 || !reflect.DeepEqual(got[0], tt.want) {
 				t.Fatalf("Spots = %+v, want [%+v]", got, tt.want)
 			}
 		})
