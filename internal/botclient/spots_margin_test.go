@@ -8,14 +8,16 @@ import (
 )
 
 // rowSpotMargins are the spot margins of the rows (docs/strategy.md
-// column 10) by class: the fighter base rows and first professions, the
-// artisan playing the dwarven fighter's. The mystic lines have none until
-// S7 (#327) ships their rows.
+// column 10) by class: the base rows and first professions, the artisan
+// playing the dwarven fighter's.
 var rowSpotMargins = map[int32]float64{
 	HumanFighter.ID: marginNormal, ElvenFighter.ID: marginNormal, DarkFighter.ID: marginGlassCannon,
 	OrcFighter.ID: marginTank, DwarvenFighter.ID: marginNormal,
 	4: marginTank, 1: marginNormal, 7: marginNormal, 19: marginNormal, 22: marginNormal,
 	32: marginNormal, 35: marginGlassCannon, 45: marginTank, 47: marginNormal, 54: marginTank, 56: marginNormal,
+	10: marginGlassCannon, 25: marginGlassCannon, 38: marginGlassCannon, 49: marginNormal,
+	15: marginGlassCannon, 11: marginGlassCannon, 29: marginGlassCannon, 26: marginGlassCannon,
+	42: marginGlassCannon, 39: marginGlassCannon, 50: marginNormal,
 }
 
 // TestSpotMarginRows checks every role of every base class and first

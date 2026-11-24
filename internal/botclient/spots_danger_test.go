@@ -136,10 +136,10 @@ func TestPackFit(t *testing.T) {
 	}{
 		{"stats not in yet", with(squire14, func(s *squire) { s.pAtk = 0 }), tiWolves, nil, true},
 		{"no monster with stats", squire14, datapack.Spot{MinLevel: 11, MaxLevel: 13}, nil, true},
-		{"a mystic line has no margin until S7", squire14, tiWolves, func(b *Brain) { b.world.Self.ClassID = 10 }, true},
+		{"a mystic row's glass cannon margin passes over it", squire14, tiWolves, func(b *Brain) { b.world.Self.ClassID = 10 }, false},
 		{"SpotPolicy.Margin below 0 turns it off", squire14, tiWolves, func(b *Brain) { b.persona.Spots.Margin = -1 }, true},
 		{"SpotPolicy.Margin replaces the row's", squire14, tiWolves, func(b *Brain) { b.persona.Spots.Margin = 1.25 }, true},
-		{"SpotPolicy.Margin gives a mystic one", squire14, tiWolves, func(b *Brain) { b.world.Self.ClassID, b.persona.Spots.Margin = 10, 2 }, false},
+		{"SpotPolicy.Margin replaces a mystic row's", squire14, tiWolves, func(b *Brain) { b.world.Self.ClassID, b.persona.Spots.Margin = 10, 1.25 }, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newSquireBrain(t, tt.self, 0)

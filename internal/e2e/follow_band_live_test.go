@@ -71,9 +71,7 @@ func followAcross(t *testing.T, prefix string, from, to botclient.Point) {
 	start := time.Now()
 	t.Cleanup(func() { logRoute(t, f, seen, start) })
 	t.Logf("%s at %v, %.0f from the GM at %v", name, at, dist(at, gm.Pos()), gm.Pos())
-	deadline, stop := context.WithTimeout(ctx, 8*time.Minute)
-	defer stop()
-	watchUntil(t, deadline, gm.Client, "the bot at the GM", func() bool {
+	watchUntilBy(t, ctx, gm.Client, "the bot at the GM", time.Now().Add(8*time.Minute), func() bool {
 		return dist(b.Status().Position, gm.Pos()) <= followReach
 	}, nil)
 	t.Logf("%s at the GM after %v", name, time.Since(start).Round(time.Second))

@@ -14,7 +14,6 @@ import (
 // Acumen and their beginners' kinds from the Newbie Guide.
 const (
 	skillHaste         int32 = 1086
-	skillAcumen        int32 = 1085
 	skillHasteNewbie   int32 = 4327
 	skillAcumenNewbie  int32 = 4329
 	skillAlacrity      int32 = 2012

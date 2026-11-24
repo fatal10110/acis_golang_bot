@@ -303,4 +303,12 @@ var professionKits = map[int32]ClassKit{
 		},
 		SpotMargin: marginTank,
 	},
+	// The mystic first professions (kits_mystic.go).
+	classCleric:         clericKit,
+	classHumanWizard:    humanWizardKit,
+	classElvenOracle:    elvenOracleKit,
+	classElvenWizard:    elvenWizardKit,
+	classShillienOracle: shillienOracleKit,
+	classDarkWizard:     darkWizardKit,
+	classOrcShaman:      orcShamanKit,
 }

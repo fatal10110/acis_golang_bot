@@ -140,22 +140,27 @@ func (w *World) applyEffects(ev Event, now time.Time) {
 }
 
 // Heal is a heal skill and the HP percent under which the bot casts it on
-// a party member. With Members it is cast only while at least that many of
-// the members the bot supports, itself included, are under the percent (a
-// group heal).
+// a party member. With Members it is a party heal (Group Heal, Chant of
+// Life: target PARTY), cast on the bot only while at least that many of the
+// members the bot supports within partyBuffReach, itself included, are
+// under the percent. Role puts it in that role's heals only, as Step.Role.
 type Heal struct {
 	Skill   int32
 	HP      int
 	Members int
+	Role    Role
 }
 
 // Buff is a buff skill the bot keeps up. A Party buff is cast on the bot
 // and lands on the members around it; any other is cast on each member.
 // Weapons casts it only while the bot wields one of those datapack weapon
-// kinds; Members casts a member buff only on a member of those classes.
+// kinds; Members casts a member buff only on a member of those classes;
+// Self casts it on the bot only (a row's self-buff with a target ONE skill,
+// Concentration).
 // From is the level the buff starts at, as Step.From; Replaces is the
 // buff it replaces from that level (a row's "replaced by"): CompileBuild
-// leaves that one out.
+// leaves that one out. Role puts it in that role's buffs only, as
+// Step.Role.
 type Buff struct {
 	Skill   int32
 	Party   bool
@@ -164,6 +169,8 @@ type Buff struct {
 	From    int32
 	// Replaces is a skill id; 0 for none.
 	Replaces int32
+	Self     bool
+	Role     Role
 }
 
 // assistPlan is the creature the party leader last attacked: the bot
@@ -266,24 +273,31 @@ func (b *Brain) vitals(id int32) (hp, maxHP int32) {
 }
 
 // healSkill is the build's first heal ready at now whose HP percent
-// member id is under, and whose member count is, or 0.
-func (b *Brain) healSkill(id int32, now time.Time) int32 {
+// member id is under, and whose member count is; ok is false for none.
+func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 	hp, maxHP := b.vitals(id)
 	if hp <= 0 {
-		return 0
+		return Heal{}, false
 	}
 	for _, h := range b.build().Kit.Heals {
 		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
-			return h.Skill
+			return h, true
 		}
 	}
-	return 0
+	return Heal{}, false
 }
 
-// patientsUnder is how many of the patients are alive with HP under pct.
+// patientsUnder is how many of the patients within partyBuffReach of the
+// bot, the bot included, are alive with HP under pct: those a party heal
+// reaches.
 func (b *Brain) patientsUnder(pct int, now time.Time) int {
+	s := &b.world.Self
+	from := s.Position(now)
 	n := 0
 	for _, id := range b.patients(now) {
+		if o := b.world.object(id); id != s.ObjectID && (o == nil || dist2(from, o.Position(now)) > partyBuffReach*partyBuffReach) {
+			continue
+		}
 		if hp, maxHP := b.vitals(id); hp > 0 && below(hp, maxHP, pct) {
 			n++
 		}
@@ -291,14 +305,17 @@ func (b *Brain) patientsUnder(pct int, now time.Time) int {
 	return n
 }
 
-// heal heals member id at now when a heal is ready for its HP: it reports
-// false when none is.
+// heal heals member id at now when a heal is ready for its HP: a party
+// heal is cast on the bot, any other on id. It reports false when none is.
 func (b *Brain) heal(id int32, now time.Time) (Action, bool) {
-	skill := b.healSkill(id, now)
-	if skill == 0 {
+	h, ok := b.healSkill(id, now)
+	switch {
+	case !ok:
 		return Action{}, false
+	case h.Members > 0:
+		return b.castOn(b.world.Self.ObjectID, h.Skill, false, now), true
 	}
-	return b.castOn(id, skill, true, now), true
+	return b.castOn(id, h.Skill, true, now), true
 }
 
 // ruleHeal is the rule 3 heal of the party: the first patient under a
@@ -372,7 +389,7 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 					continue
 				}
 			}
-			if !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
+			if bf.Self && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
 				!b.world.SkillReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
 				continue
 			}

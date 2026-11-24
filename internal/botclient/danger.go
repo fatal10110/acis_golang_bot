@@ -23,8 +23,8 @@ var damageSkillTypes = []string{"PDAM", "BLOW", "MDAM", "DRAIN", "DEATHLINK"}
 // packFits reports whether s fits the bot's stats by the model
 // (docs/strategy.md, Design section 11): it lasts against the spot's likely
 // pack at least its margin times as long as it takes to kill one of the
-// spot's monsters (packFight). With no margin (a row without one, the
-// mystic lines until S7, or SpotPolicy.Margin below 0) or nothing to judge
+// spot's monsters (packFight). With no margin (a row without one, or
+// SpotPolicy.Margin below 0) or nothing to judge
 // by (packFight not ok) only the level and a death's teaching bound a spot.
 func (b *Brain) packFits(s *datapack.Spot) bool {
 	bd := b.build()

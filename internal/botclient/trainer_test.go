@@ -424,11 +424,13 @@ func TestRuleTrainStarts(t *testing.T) {
 	}
 }
 
-// TestDefaultPersonaSkills checks the support skills of the default
-// persona's builds against the classes the plan names: healers learn Heal,
-// Battle Heal, Might and Shield, then Wind Strike; orc mystics their buffs,
-// then Life Drain and Chill Flame, and no heal. The persona overrides none
-// of them; the trainers come from the datapack (TestTrainersShipped).
+// TestDefaultPersonaSkills checks the learn tables of the default persona's
+// Support builds (docs/strategy.md, rows HM EM DM OM): the human, elven and
+// dark elven mystics learn Heal, Battle Heal, Group Heal, Might and Shield,
+// then their nukes and sustain; orc mystics their buffs, then the armor
+// masteries, Soul Cry, Chill Flame and Life Drain, and no heal. The persona
+// overrides none of them; the trainers come from the datapack
+// (TestTrainersShipped).
 func TestDefaultPersonaSkills(t *testing.T) {
 	p := DefaultPersona()
 	if p.LearnSkills != nil || p.Trainers != nil {
@@ -436,11 +438,15 @@ func TestDefaultPersonaSkills(t *testing.T) {
 	}
 	kit := func(c int32) ClassKit { return compileFor(p, c, 1).Kit }
 	for _, c := range []int32{classHumanMystic, classElvenMystic, classDarkMystic} {
-		if got := kit(c).Skills; !slices.Equal(got, []int32{skillHeal, skillBattleHeal, skillMight, skillShield, skillWindStrike}) {
+		if got := kit(c).Skills; !slices.Equal(got[:5], []int32{skillHeal, skillBattleHeal, skillGroupHeal, skillMight, skillShield}) || !slices.Contains(got, skillWindStrike) {
 			t.Errorf("class %d skills = %v", c, got)
 		}
 	}
-	if got := kit(classOrcMystic).Skills; !slices.Equal(got, []int32{skillSoulShield, skillChantBattle, skillLifeDrain, skillChillFlame}) {
-		t.Errorf("orc mystic skills = %v, want buffs then attack spells", got)
+	want := []int32{
+		skillSoulShield, skillChantBattle, skillLightArmorMastery, skillHeavyArmorMastery, skillRobeMastery,
+		skillSoulCry, skillChillFlame, skillLifeDrain,
+	}
+	if got := kit(classOrcMystic).Skills; !slices.Equal(got, want) {
+		t.Errorf("orc mystic skills = %v, want buffs, armor masteries, then attack spells", got)
 	}
 }

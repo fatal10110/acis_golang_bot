@@ -38,9 +38,12 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 // "@N"), as does every buff with a From, every bracket gate equals the
 // skill's weaponsAllowed and every branch gate (Step.Branch) fits it at each
 // level the row reaches, a skill with weaponsAllowed has a gate, every
-// charge gate equals the skill's charge condition, every skill tagged
-// (base) (ClassKit.Base) is first granted under 20, and the next profession
-// is a direct child of the class.
+// charge gate equals the skill's charge condition, every Within gate equals
+// the skill's castRange, every toggle is a TOGGLE skill, a Party buff and a
+// party heal (Heal.Members) are exactly the PARTY-target skills among the
+// buffs and heals, every skill tagged (base) (ClassKit.Base) is first
+// granted under 20, and the next profession is a direct child of the
+// class.
 func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapack.SkillRef]datapack.Skill) []string {
 	var errs []string
 	fail := func(format string, args ...any) { errs = append(errs, r.name+": "+fmt.Sprintf(format, args...)) }
@@ -65,8 +68,32 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 		}
 		return ok
 	}
+	// templates are skill's templates at each level the row reaches.
+	templates := func(skill int32) []datapack.Skill {
+		var ts []datapack.Skill
+		for _, g := range c.Skills {
+			if g.ID == skill && int32(g.MinLevel) <= r.end {
+				ts = append(ts, skills[datapack.SkillRef{ID: g.ID, Level: int32(g.Level)}])
+			}
+		}
+		return ts
+	}
+	party := func(kind string, skill int32, want bool) {
+		for _, sk := range templates(skill) {
+			if (sk.Target == "PARTY") != want {
+				fail("%s %d targets %s, the row casts it as a party one %v", kind, skill, sk.Target, want)
+				return
+			}
+		}
+	}
 	for _, tg := range r.kit.Toggles {
 		starts(tg.Skill, tg.From)
+		for _, sk := range templates(tg.Skill) {
+			if sk.OperateType != "TOGGLE" {
+				fail("toggle %d is operateType %s", tg.Skill, sk.OperateType)
+				break
+			}
+		}
 	}
 	for _, st := range r.kit.Rotation {
 		if !starts(st.Skill, st.From) {
@@ -95,6 +122,9 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			if st.Charges != wantCharges || st.ChargeToMax != wantToMax {
 				fail("skill %d level %d charge condition %+v, the step has charges %d to max %v", g.ID, g.Level, sk.Charges, st.Charges, st.ChargeToMax)
 			}
+			if st.Within != 0 && st.Within != sk.CastRange {
+				fail("skill %d level %d castRange %d, the step's Within is %d", g.ID, g.Level, sk.CastRange, st.Within)
+			}
 		}
 	}
 	for _, id := range r.kit.Skills {
@@ -102,6 +132,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 	}
 	for _, h := range r.kit.Heals {
 		known(h.Skill)
+		party("heal", h.Skill, h.Members > 0)
 	}
 	for _, bf := range r.kit.Buffs {
 		if bf.From != 0 {
@@ -109,6 +140,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 		} else {
 			known(bf.Skill)
 		}
+		party("buff", bf.Skill, bf.Party)
 	}
 	for _, id := range r.kit.Base {
 		if lvl, ok := known(id); ok && lvl >= 20 {
@@ -213,13 +245,16 @@ func TestBehaviorRowsShipped(t *testing.T) {
 }
 
 // TestBehaviorRowsCheck checks checkRow on a fixture tree: a right row
-// passes, a branch gate inside weaponsAllowed too; a wrong weapon gate, a
-// missing one, a bracket gate narrower than weaponsAllowed, a wrong level of
-// a step, a toggle or a buff, a skill out of the tree (a heal's, Relax), a
-// wrong charge gate, a (base) tag on a skill first granted from 20 and a
+// passes, as do a branch gate inside weaponsAllowed, a Within gate at
+// castRange and PARTY skills cast as party ones; a wrong weapon gate, a
+// missing one, a bracket gate narrower than weaponsAllowed, a Within gate
+// off castRange, a wrong level of a step, a toggle or a buff, a toggle of a
+// skill that is none, a party buff or heal of a single-target skill and the
+// other way round, a skill out of the tree (a heal's, Relax), a wrong
+// charge gate, a (base) tag on a skill first granted from 20 and a
 // profession that is not a direct child each fail.
 func TestBehaviorRowsCheck(t *testing.T) {
-	const sword, plain, charged, late = int32(100), int32(101), int32(102), int32(103)
+	const sword, plain, charged, late, aura, chant = int32(100), int32(101), int32(102), int32(103), int32(104), int32(105)
 	classes := map[int32]datapack.Class{
 		10: {ID: 10, Parent: -1, Skills: []datapack.SkillGrant{
 			{ID: sword, Level: 1, MinLevel: 1},
@@ -227,16 +262,20 @@ func TestBehaviorRowsCheck(t *testing.T) {
 			{ID: plain, Level: 2, MinLevel: 14},
 			{ID: charged, Level: 1, MinLevel: 5},
 			{ID: late, Level: 1, MinLevel: 20},
+			{ID: aura, Level: 1, MinLevel: 7},
+			{ID: chant, Level: 1, MinLevel: 1},
 		}},
 		11: {ID: 11, Parent: 10},
 		12: {ID: 12, Parent: 11},
 	}
 	skills := map[datapack.SkillRef]datapack.Skill{
 		{ID: sword, Level: 1}:   {WeaponsAllowed: []string{"SWORD", "BLUNT"}},
-		{ID: plain, Level: 1}:   {},
-		{ID: plain, Level: 2}:   {},
+		{ID: plain, Level: 1}:   {CastRange: 600},
+		{ID: plain, Level: 2}:   {CastRange: 600},
 		{ID: charged, Level: 1}: {Charges: datapack.ChargeCond{Min: 2}},
 		{ID: late, Level: 1}:    {},
+		{ID: aura, Level: 1}:    {OperateType: "TOGGLE"},
+		{ID: chant, Level: 1}:   {Target: "PARTY"},
 	}
 	row := func(next int32, steps ...Step) behaviorRow {
 		return behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Rotation: steps, Heals: []Heal{{Skill: plain, HP: 50}}}, next: next}
@@ -250,8 +289,16 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{"branch gate inside", row(11, Step{Skill: sword, Weapons: []string{"SWORD"}, Branch: true}), false},
 		{"bracket gate narrower", row(11, Step{Skill: sword, Weapons: []string{"SWORD"}}), true},
 		{"wrong weapon gate", row(11, Step{Skill: sword, Weapons: []string{"BOW"}}), true},
-		{"toggle level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: plain, From: 7}}}}, false},
-		{"wrong toggle level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: plain}}}}, true},
+		{"toggle level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: aura, From: 7}}}}, false},
+		{"wrong toggle level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: aura}}}}, true},
+		{"not a toggle", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Toggles: []Toggle{{Skill: plain, From: 7}}}}, true},
+		{"within gate", row(11, Step{Skill: plain, From: 7, Within: 600}), false},
+		{"wrong within gate", row(11, Step{Skill: plain, From: 7, Within: 400}), true},
+		{"party buff and heal", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: chant, Party: true}}, Heals: []Heal{{Skill: chant, HP: 50, Members: 1}}}}, false},
+		{"party buff of a single target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: plain, From: 7, Party: true}}}}, true},
+		{"member buff of a party target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: chant}}}}, true},
+		{"party heal of a single target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: plain, HP: 60, Members: 2}}}}, true},
+		{"single heal of a party target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: chant, HP: 60}}}}, true},
 		{"relax not in the tree", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Relax: 999}}, true},
 		{"no weapon gate", row(11, Step{Skill: sword}), true},
 		{"no level", row(11, Step{Skill: plain}), true},

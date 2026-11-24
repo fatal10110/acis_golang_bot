@@ -52,6 +52,16 @@ const (
 	// spotArrival bounds the member's walk to its spot: from the village
 	// at its entry, back from town after a visit.
 	spotArrival = 10 * time.Minute
+	// visitBound bounds a member's trip from its spot to its visit's
+	// errands: the walk to town, as long as spotArrival's back, then
+	// warehouse opens MinOpenGap (a minute) apart.
+	visitBound = spotArrival + 5*time.Minute
+	// deliveryBound bounds the crafter's delivery of a posted order: its
+	// next open, the craft and the deposit, opens MinOpenGap apart.
+	deliveryBound = 10 * time.Minute
+	// tripGap is the brain's supplyTripGap: the least time between two
+	// supply trips, which delays the member's second visit.
+	tripGap = 10 * time.Minute
 )
 
 // TestLiveClanMember plays the clan member option against a clan crafter
@@ -176,7 +186,7 @@ func TestLiveClanMember(t *testing.T) {
 	// First trip: the visit deposits the spare Saber and the ore and posts
 	// the order; the board credits the member nothing yet.
 	gave := spareSaber(t, ctx, gm, member, centres, func() { noteMember(); awake() })
-	untilServed(t, ctx, "the member's first visit: a deposit and a Soulshot D order", member.watch, memberRefused(member.watch), func() string {
+	untilServedBy(t, ctx, "the member's first visit: a deposit and a Soulshot D order", time.Now().Add(visitBound), member.watch, memberRefused(member.watch), func() string {
 		noteMember()
 		awake()
 		st := member.bot.Status()
@@ -195,7 +205,7 @@ func TestLiveClanMember(t *testing.T) {
 	}
 
 	var owned int64
-	untilServed(t, ctx, "the crafter's delivery of the order", crafter.watch, warehouseRefused(crafter.watch), func() string {
+	untilServedBy(t, ctx, "the crafter's delivery of the order", time.Now().Add(deliveryBound), crafter.watch, warehouseRefused(crafter.watch), func() string {
 		noteCrafter()
 		awake()
 		if owned = board.Owned(clanID, member.name)[soulshotD]; owned > 0 {
@@ -212,7 +222,7 @@ func TestLiveClanMember(t *testing.T) {
 	// Second trip: the visit withdraws the credited shots.
 	gave = spareSaber(t, ctx, gm, member, centres, func() { noteMember(); awake() })
 	var took time.Time
-	untilServed(t, ctx, "the member's second visit withdrawing its shots", member.watch, memberRefused(member.watch), func() string {
+	untilServedBy(t, ctx, "the member's second visit withdrawing its shots", time.Now().Add(tripGap+visitBound), member.watch, memberRefused(member.watch), func() string {
 		noteMember()
 		noteCrafter()
 		awake()
@@ -422,9 +432,7 @@ func noteChanges(t *testing.T, who string, line func() string) func() {
 func spareSaber(t *testing.T, ctx context.Context, gm *GMClient, member *farmer, centres map[string]botclient.Point, note func()) time.Time {
 	t.Helper()
 	leash := int64(memberPersona().Spots.Leash)
-	actx, cancel := context.WithTimeout(ctx, spotArrival)
-	defer cancel()
-	until(t, actx, member.name+" at its spot", func() string {
+	untilBy(t, ctx, member.name+" at its spot", time.Now().Add(spotArrival), func() string {
 		note()
 		st := member.bot.Status()
 		if c, ok := centres[st.Spot]; ok && within(st.Position, c, leash) {

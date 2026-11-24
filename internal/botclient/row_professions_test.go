@@ -458,7 +458,7 @@ func TestCompileProfessionBuild(t *testing.T) {
 		}
 	}
 	if bd := CompileBuild(RaceHuman, classCleric, 25, RoleSupport); !slices.Equal(stepSkills(bd.Kit.Rotation), []int32{skillWindStrike}) {
-		t.Errorf("cleric rotation %v, want the human mystic line's", stepSkills(bd.Kit.Rotation))
+		t.Errorf("cleric rotation %v, want the cleric row's", stepSkills(bd.Kit.Rotation))
 	}
 	// A second profession plays its first profession's row until it has
 	// its own kit (docs/strategy.md "Second professions").
@@ -472,7 +472,7 @@ func TestCompileProfessionBuild(t *testing.T) {
 		}
 	}
 	if bd, want := CompileBuild(RaceHuman, 16, 45, RoleSupport), CompileBuild(RaceHuman, classCleric, 45, RoleSupport); !slices.Equal(stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation)) {
-		t.Errorf("bishop rotation %v, want the human mystic line's %v", stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation))
+		t.Errorf("bishop rotation %v, want the cleric row's %v", stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation))
 	}
 }
 

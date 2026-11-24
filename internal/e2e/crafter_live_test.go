@@ -188,6 +188,9 @@ func TestLiveCrafter(t *testing.T) {
 	// cycle deposited, and steel a character of an earlier run carried.
 	var before, after whStock
 	made := false
+	// The step's bound: the craft and the deposit after it (docs/e2e-live.md,
+	// "Step deadlines").
+	overdue := time.After(stepBound)
 	for done := false; !done; {
 		select {
 		case ev := <-tap.out:
@@ -212,6 +215,8 @@ func TestLiveCrafter(t *testing.T) {
 					after, done = n, true
 				}
 			}
+		case <-overdue:
+			t.Fatalf("waiting for the crafted steel in the clan warehouse (crafted %v): overdue after %v; crafter %+v", made, stepBound, b.Status().Crafter)
 		case <-ctx.Done():
 			t.Fatalf("waiting for the crafted steel in the clan warehouse (crafted %v): %v; crafter %+v", made, ctx.Err(), b.Status().Crafter)
 		}

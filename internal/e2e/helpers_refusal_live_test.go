@@ -42,10 +42,32 @@ func storeBuyRefused(w *Watch, store int32) RefusalCheck {
 	}
 }
 
-// untilServed is until with a refusal check over w: it also fails the test
-// at once when the server refuses the step's packet, with the refusal and
-// the last packets and events around it, instead of waiting out ctx.
+// runStep runs one waiting step of a live scenario (awaitStep) on the wall
+// clock: it fails the test once the step is overdue at due, refused, or ctx
+// ends, naming the step, how long it waited, what is missing and, through
+// last, the packets it last saw. Every live wait helper runs through it
+// (docs/e2e-live.md, "Step deadlines").
+func runStep(t *testing.T, ctx context.Context, what string, due time.Time, poll func(context.Context) error, report, last func() string) {
+	t.Helper()
+	took, err := awaitStep(ctx, botclient.SystemClock{}, what, due, poll, report, last)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if took >= stepNote {
+		t.Logf("%s: served after %v, due %v later", what, took.Round(time.Second), time.Until(due).Round(time.Second))
+	}
+}
+
+// untilServed is untilServedBy with the default step bound.
 func untilServed(t *testing.T, ctx context.Context, what string, w *Watch, check RefusalCheck, report func() string) {
+	t.Helper()
+	untilServedBy(t, ctx, what, time.Now().Add(stepBound), w, check, report)
+}
+
+// untilServedBy is untilBy with a refusal check over w: it also fails the
+// test at once when the server refuses the step's packet, with the refusal
+// and the last packets and events around it, instead of waiting out due.
+func untilServedBy(t *testing.T, ctx context.Context, what string, due time.Time, w *Watch, check RefusalCheck, report func() string) {
 	t.Helper()
 	wctx, cancel := context.WithCancel(ctx)
 	refused := make(chan *Refusal, 1)
@@ -62,19 +84,16 @@ func untilServed(t *testing.T, ctx context.Context, what string, w *Watch, check
 	}()
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
-	for {
-		missing := report()
-		if missing == "" {
-			return
-		}
+	runStep(t, ctx, what, due, func(ctx context.Context) error {
 		select {
 		case r := <-refused:
-			t.Fatalf("%s: %v; missing: %s", what, r, missing)
+			return r
 		case <-ctx.Done():
-			t.Fatalf("%s: %v; missing: %s", what, ctx.Err(), missing)
+			return ctx.Err()
 		case <-tick.C:
+			return nil
 		}
-	}
+	}, report, w.Tail)
 }
 
 // escapeRefused is what refuses reading a Scroll of Escape, one of objects
