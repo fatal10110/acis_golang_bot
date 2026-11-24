@@ -183,3 +183,16 @@ func TestLoadShippedClassesAndCombat(t *testing.T) {
 		t.Errorf("%d NPCs teach, want 216", trainers)
 	}
 }
+
+// TestParentClass checks ParentClass reads the profession table: a
+// profession's parent, -1 for a base class, not ok for an unknown id.
+func TestParentClass(t *testing.T) {
+	for _, tt := range []struct {
+		id, want int32
+		ok       bool
+	}{{46, 45, true}, {45, 44, true}, {44, -1, true}, {118, 57, true}, {60, 0, false}} {
+		if got, ok := ParentClass(tt.id); got != tt.want || ok != tt.ok {
+			t.Errorf("ParentClass(%d) = %d, %v, want %d, %v", tt.id, got, ok, tt.want, tt.ok)
+		}
+	}
+}

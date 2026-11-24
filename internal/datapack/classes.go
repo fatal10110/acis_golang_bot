@@ -80,6 +80,13 @@ func BaseClass(id int32) (base int32, ok bool) {
 	return id, true
 }
 
+// ParentClass is the profession id upgrades from, -1 for a base class; ok
+// is false for an id the profession table does not hold.
+func ParentClass(id int32) (parent int32, ok bool) {
+	parent, ok = classParents[id]
+	return parent, ok
+}
+
 // ClassRace is the race of profession id's line (0 Human, 1 Elf, 2 Dark
 // Elf, 3 Orc, 4 Dwarf); ok is false for an id the profession table does not
 // hold.

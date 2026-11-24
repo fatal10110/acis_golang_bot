@@ -292,9 +292,29 @@ var casterKit = ClassKit{
 	Buffs:    []Buff{{Skill: skillMight}, {Skill: skillShield}},
 }
 
+// professionKit is the kit of class's nearest profession with one in
+// professionKits: class itself, else its parents up to the base class. ok is
+// false when none has one (the base class, a line without profession kits,
+// or an id the profession table does not hold).
+func professionKit(class int32) (ClassKit, bool) {
+	for id := class; id >= 0; {
+		if k, ok := professionKits[id]; ok {
+			return k, true
+		}
+		parent, ok := datapack.ParentClass(id)
+		if !ok {
+			break
+		}
+		id = parent
+	}
+	return ClassKit{}, false
+}
+
 // CompileBuild is the build of a bot of race playing class at level in role
 // (docs/strategy.md, Design section 4): its profession's kit
-// (professionKits), else its line's (lineKits), with the steps, toggles and
+// (professionKits; a second profession plays its first profession's until
+// it has its own, docs/strategy.md "Second professions"), else its line's
+// (lineKits), with the steps, toggles and
 // buffs the role plays from the level reached (a buff another one of the
 // level Replaces left out), its class's
 // skills, gear and dyes, its race's professions and the row's thresholds
@@ -314,7 +334,7 @@ func CompileBuild(race, class, level int32, role Role) Build {
 	}
 	k := &bd.Kit
 	k.Gear, k.Dyes = gearClassOf(defaultGearClasses(), class), defaultDyeTable()[class]
-	line, ok := professionKits[class]
+	line, ok := professionKit(class)
 	if base, isBase := datapack.BaseClass(class); !ok && isBase {
 		line = lineKits[base]
 	}
