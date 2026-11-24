@@ -428,6 +428,10 @@ func warehouseRefused(w *Watch) RefusalCheck {
 			return s.Op == opWHDeposit || s.Op == opWHWithdraw || s.Op == opBypass
 		},
 		Messages: []int32{msgNoRightClanWH, msgClanWHLevel, msgLeaderOnlyWithdraw, msgNotEnoughAdena, msgSlotsFull, msgWeightLimitExceeded, msgQuantityExceeded},
+		// The leader-only message answers only the withdrawal
+		// (clanWithdrawGate, from the withdraw handler): it blames the
+		// 0x32, not the keeper's bypass the visit sent a moment before.
+		MessageOps: map[int32][]byte{msgLeaderOnlyWithdraw: {opWHWithdraw}},
 	}
 }
 
