@@ -148,10 +148,14 @@ func TestCombatRules(t *testing.T) {
 				b.world.Self.HP = 40
 			},
 			wantRule: "outnumbered", wantKind: actMove,
-			check: func(t *testing.T, _ *Brain, a Action) {
-				// The player stands 1000 north of the bot.
-				if to := moveTarget(a.payload); to.X != groundShift.X || to.Y != groundShift.Y-600 {
+			check: func(t *testing.T, b *Brain, a Action) {
+				// The player stands 1000 north of the bot. The flight's
+				// segments are capped at movingSegment (#306).
+				if to := b.fleeing.to; to.X != groundShift.X || to.Y != groundShift.Y-600 {
 					t.Errorf("flee to %+v, want 600 south of %+v", to, groundShift)
+				}
+				if to := moveTarget(a.payload); to.Y >= groundShift.Y || horizontal2(groundShift, to) > movingSegment*movingSegment {
+					t.Errorf("segment to %+v, want south of %+v, at most %d long", to, groundShift, movingSegment)
 				}
 			},
 		},

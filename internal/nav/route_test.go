@@ -11,7 +11,7 @@ import (
 )
 
 // checkRoute asserts the route invariants: it runs from from to to on their
-// floors, every segment is at most navSegment long and passes CanMove and
+// floors, every segment is at most the planner's cap long and passes CanMove and
 // StepChainOK, every intermediate waypoint is a clickable cell centre, and a
 // few random step sequences of the copied step chain walk each segment.
 func checkRoute(t *testing.T, p *Planner, rng *rand.Rand, route []location.Location, from, to location.Location) {
@@ -22,7 +22,7 @@ func checkRoute(t *testing.T, p *Planner, rng *rand.Rand, route []location.Locat
 	}
 	for i := 1; i < len(route); i++ {
 		a, b := route[i-1], route[i]
-		if d := hypot(b.X-a.X, b.Y-a.Y); d > navSegment {
+		if d := hypot(b.X-a.X, b.Y-a.Y); d > p.segmentCap() {
 			t.Fatalf("segment %d %v -> %v is %.0f long", i, a, b, d)
 		}
 		if !e.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
