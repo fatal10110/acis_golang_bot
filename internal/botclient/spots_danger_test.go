@@ -252,3 +252,33 @@ func TestPackRiskShipped(t *testing.T) {
 		})
 	}
 }
+
+// TestPackRiskRepick checks a bot that took the werewolves before its
+// stats came in moves to the orcs, whose pack is less over
+// SpotPolicy.PackRisk, once they do, and stays there: no spot's pack is
+// less over it than theirs.
+func TestPackRiskRepick(t *testing.T) {
+	wolves, orcs := tiWolves, tiOrcs01
+	wolves.Maker, wolves.Center, wolves.MaximumNPCs = "wolves", datapack.Point{X: 1000}, 10
+	orcs.Maker, orcs.Center, orcs.MaximumNPCs = "orcs", datapack.Point{Y: 3000}, 11
+	b := newSpotBrain(t, 14, wolves, orcs)
+	b.persona.Potions = []int32{lesserHealingPotion}
+	steps := []struct {
+		name  string
+		stats bool
+		want  int
+	}{
+		{"no stats yet: the nearest", false, 0},
+		{"stats in: the orcs", true, 1},
+		{"no flip back", true, 1},
+	}
+	for i, s := range steps {
+		if s.stats {
+			setSquire(b, squire14, 13)
+		}
+		b.decide(at(time.Duration(i+1) * time.Second))
+		if !b.spot.held || b.spot.idx != s.want {
+			t.Fatalf("%s: spot %d held %v, want %d", s.name, b.spot.idx, b.spot.held, s.want)
+		}
+	}
+}

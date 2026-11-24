@@ -109,15 +109,22 @@ func TestLivePackSpot(t *testing.T) {
 	t.Logf("%s: %d deaths in %v, last spot %q, %d potions left", f.name, deaths, packWatch, held, f.carries(lesserHealingPotion))
 }
 
-// logStats logs the combat stats of f's first UserInfo: the ones its spot
-// fit weighs packs with (SpotPolicy.PackRisk; TestPackRisk's squires).
+// logStats logs, at the end of the test, the combat stats of every UserInfo
+// of f that changed them: the ones its spot fit weighs packs with
+// (SpotPolicy.PackRisk; TestPackRisk's squires).
 func logStats(t *testing.T, f *farmer) {
 	t.Helper()
-	for _, s := range f.watch.Seen(0) {
-		if u, ok := s.Event.(botclient.UserInfo); ok && u.ObjectID == f.id {
-			t.Logf("%s level %d: pAtk %d, pDef %d, evasion %d, accuracy %d, attack speed %d, max HP %d",
-				f.name, u.Level, u.PAtk, u.PDef, u.Evasion, u.Accuracy, u.PAtkSpd, u.MaxHP)
-			return
+	t.Cleanup(func() {
+		var last botclient.UserInfo
+		for _, s := range f.watch.Seen(0) {
+			u, ok := s.Event.(botclient.UserInfo)
+			if !ok || u.ObjectID != f.id || (u.Level == last.Level && u.PAtk == last.PAtk && u.PDef == last.PDef &&
+				u.Evasion == last.Evasion && u.Accuracy == last.Accuracy && u.PAtkSpd == last.PAtkSpd && u.MaxHP == last.MaxHP) {
+				continue
+			}
+			last = u
+			t.Logf("%s at %v level %d: pAtk %d, pDef %d, evasion %d, accuracy %d, attack speed %d, max HP %d",
+				f.name, s.At.Format(time.TimeOnly), u.Level, u.PAtk, u.PDef, u.Evasion, u.Accuracy, u.PAtkSpd, u.MaxHP)
 		}
-	}
+	})
 }

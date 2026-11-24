@@ -82,9 +82,10 @@ type SpotPolicy struct {
 	// one with 12 its toad spots are 1.8 to 2.3. Regeneration, shots, the
 	// fight's lulls and a pack drawn in turn are left out, so it is a ratio
 	// against the worst case rather than a death line: with no spot within
-	// it, the bot takes the one least over it (spotCands). A mystic's
-	// spells are left out too, so a mystic is not judged. 0 never passes
-	// one over.
+	// it, the bot takes the one least over it (spotCands), and holding one
+	// over it, it moves to one less over it as one comes in reach
+	// (overRisk). A mystic's spells are left out too, so a mystic is not
+	// judged. 0 never passes one over.
 	PackRisk float64
 }
 
@@ -236,7 +237,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || b.overRisk() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.held {
@@ -408,6 +409,15 @@ func (b *Brain) outleveled() bool {
 	return v.held && int(b.world.Self.Level) > b.cfg.Spots.spots[v.idx].MaxLevel+b.persona.Spots.Outlevel
 }
 
+// overRisk reports whether the pack of the spot the bot holds is over
+// SpotPolicy.PackRisk: the bot looks for a spot that fits, or one whose
+// pack is less over it (spotCands), as when it took the spot on its first
+// stats or its potions run out.
+func (b *Brain) overRisk() bool {
+	v := &b.spot
+	return v.held && !b.packFits(&b.cfg.Spots.spots[v.idx])
+}
+
 // pickSpot claims a spot that fits the bot's level, is not avoided and that
 // the bot can walk to, in place of the one it holds (#137): within MaxTravel
 // in straight line, then within Wander, the nearest by the abstract graph
@@ -438,14 +448,17 @@ type spotCand struct {
 // spotCands are the spots that fit the bot standing at here, are not
 // avoided and lie in its SCC within Wander in straight line, but the one it
 // holds. With none whose pack is within SpotPolicy.PackRisk, they are the
-// ones whose pack is least over it: a bot in poor gear farms the least
-// deadly pack rather than none, where it would earn nothing to buy better
-// with (#294).
+// ones whose pack is least over it, and less than the held one's: a bot in
+// poor gear farms the least deadly pack rather than none, where it would
+// earn nothing to buy better with (#294).
 func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	far := max(float64(p.MaxTravel), float64(p.Wander))
 	var cands, over []spotCand
 	least := math.Inf(1)
+	if v.held && p.PackRisk > 0 {
+		least = math.Nextafter(b.packRisk(&r.spots[v.idx]), 0)
+	}
 	for i := range r.spots {
 		sp := &r.spots[i]
 		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !b.spotFitsLevel(sp, now) {
