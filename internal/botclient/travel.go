@@ -105,6 +105,10 @@ type TravelMap struct {
 	skills    map[datapack.SkillRef]datapack.Skill
 	setSkills map[int32]bool
 	refMobs   map[int]charmodel.Profile
+	// corpseTimes are the corpse times of the NPC templates whose
+	// corpseTime is not the default (indexCorpseTimes): the sweep window
+	// (corpseTime).
+	corpseTimes map[int32]time.Duration
 	// products maps the lower-case name of each recipe product to its
 	// template, and itemNames each such product to its name: what a craft
 	// order names (indexProductNames).
@@ -162,6 +166,7 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.classes, m.skills = dp.Classes, dp.Skills
 	m.setSkills = indexSetSkills(dp.ArmorSets)
 	m.refMobs = indexRefMobs(dp.NPCs)
+	m.corpseTimes = indexCorpseTimes(dp.NPCs)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
