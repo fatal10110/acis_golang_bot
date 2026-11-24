@@ -116,11 +116,16 @@ func TestLiveGearBuy(t *testing.T) {
 
 	buyer := runTownBot(t, ctx, tg, buyerAcc, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		// Gear only, and the piece it takes off sold at the next visit.
+		// No jewelry: from the trainer both bots visit first, the
+		// jewelry merchant stands nearest, and its visits took the
+		// scenario's time (on main d9410f0 too).
 		p.Shop.Restock, p.Shop.SellAt = nil, 1
+		p.Gear.Jewelry = false
 	})
 	rogue := runTownBot(t, ctx, tg, rogueAcc, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		p.Gear.Classes = []botclient.GearClass{{Weapons: []string{"DAGGER"}, Armor: "LIGHT"}}
 		p.Shop.Restock = nil
+		p.Gear.Jewelry = false
 	})
 	for _, f := range []*farmer{buyer, rogue} {
 		t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
