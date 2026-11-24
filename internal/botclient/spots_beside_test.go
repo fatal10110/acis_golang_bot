@@ -138,3 +138,45 @@ func TestSpotBesideSpread(t *testing.T) {
 		t.Fatal("four other players: want crowded")
 	}
 }
+
+// TestSpotBesideLeaves: a bot beside a full spot that is no longer a
+// candidate for it, outlevelled or avoided, gives its place there up on the
+// next retry: it moves beside the full spot still left, or drops out when
+// none is left, and the beside count it held is returned either way.
+func TestSpotBesideLeaves(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(b *Brain)
+		want   int // the spot it farms beside after the retry, -1 for none
+	}{
+		{name: "outlevelled", change: func(b *Brain) { b.world.Self.Level = 5 }, want: 1},
+		{name: "avoided", change: func(b *Brain) { b.spot.avoid = map[int]time.Time{0: at(time.Hour)} }, want: 1},
+		{name: "none left", change: func(b *Brain) { b.world.Self.Level = 10 }, want: -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newSpotBrain(t, 1, testSpot("a", 2000, 0, 1, 1, 3), testSpot("b", 0, 6000, 1, 3, 3))
+			b.world.Objects = map[int32]*Object{}
+			r := b.cfg.Spots
+			r.held[0], r.held[1] = 3, 3 // both at their limit
+			b.decide(at(time.Second))
+			if !b.spot.beside || b.spot.idx != 0 || r.Beside(0) != 1 {
+				t.Fatalf("spot %+v beside %d: want beside spot 0", b.spot, r.Beside(0))
+			}
+			tt.change(b)
+			b.decide(at(spotRetry + time.Second))
+			if r.Beside(0) != 0 {
+				t.Fatalf("beside spot 0 %d after the retry: want 0", r.Beside(0))
+			}
+			if tt.want < 0 {
+				if b.spot.farming() || r.Beside(1) != 0 {
+					t.Fatalf("spot %+v beside spot 1 %d: want none", b.spot, r.Beside(1))
+				}
+				return
+			}
+			if !b.spot.beside || b.spot.idx != tt.want || r.Beside(tt.want) != 1 {
+				t.Fatalf("spot %+v beside spot 1 %d: want beside spot %d", b.spot, r.Beside(1), tt.want)
+			}
+		})
+	}
+}

@@ -78,8 +78,8 @@ type SpotStatus struct {
 	Cap, Held, Beside              int
 }
 
-// Statuses returns every spot in registry order with its held count; nil
-// for a nil registry (no datapack).
+// Statuses returns every spot in registry order with its held and beside
+// counts; nil for a nil registry (no datapack).
 func (r *SpotRegistry) Statuses() []SpotStatus {
 	if r == nil {
 		return nil
