@@ -321,7 +321,7 @@ func (b *Brain) safeToEscape(now time.Time) bool {
 // the last trip.
 func (b *Brain) supplyDue(now time.Time) tripCause {
 	v := &b.supplyTrip
-	if b.cfg.Travel == nil || !b.spot.held || !b.spot.arrived || now.Before(v.checkAt) ||
+	if b.cfg.Travel == nil || !b.spot.farming() || !b.spot.arrived || now.Before(v.checkAt) ||
 		!v.endedAt.IsZero() && now.Sub(v.endedAt) < supplyTripGap {
 		return causeNone
 	}

@@ -162,7 +162,8 @@ func (p *Panel) classes(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, classList())
 }
 
-// spotView is a farming spot in the API: name is the argument of "go".
+// spotView is a farming spot in the API: name is the argument of "go";
+// beside is how many bots farm it with no claim, past its limit (#142).
 type spotView struct {
 	Name       string `json:"name"`
 	MinLevel   int    `json:"min_level"`
@@ -170,6 +171,7 @@ type spotView struct {
 	AggroLevel int    `json:"aggro_level"`
 	Cap        int    `json:"cap"`
 	Held       int    `json:"held"`
+	Beside     int    `json:"beside"`
 }
 
 // spots lists the farming spots, how many bots each takes and holds; none

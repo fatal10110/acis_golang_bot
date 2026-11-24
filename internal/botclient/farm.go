@@ -17,7 +17,7 @@ import (
 // of a bot that sat down idling.
 func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 	s, v := &b.world.Self, &b.spot
-	if b.cfg.Spots == nil || !v.held || !v.arrived || s.InCombat {
+	if b.cfg.Spots == nil || !v.farming() || !v.arrived || s.InCombat {
 		return Action{}, false
 	}
 	id := b.farmTarget(now)

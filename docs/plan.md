@@ -289,9 +289,17 @@ there through its walker, and a walk that ends unreachable gives the spot up for
 destinations and the spots with room, walks priced by time and teleports by adena, when it carries
 the price; with none, it shares past its cap the fitting spot within `Wander` that its bots fill least for
 its cap, up to one bot per monster (`maximumNpcs`), and looks again each minute for a spot with room.
+Owner decision (#142): with every fitting spot within `Wander` at that limit, a bot holding no spot
+farms beside one of them with no claim, counted toward neither its cap nor its limit, under the same
+level fit, leash and pacing as a holder; the bots beside spread over the full spots by their monsters,
+and look again each minute for a spot to claim. The owner also asked for a longer `Wander` for the
+Dwarven start as far as routes reach more level-1 spots: the datapack has none between 9353 and 168107
+of the Dwarven start in straight line, and those at 168107 are the Orc village's, full with its own
+farmers and over 24 minutes' run (115) away, so the Dwarven start keeps the default `Wander`.
 The same choice runs at every level-up that outlevels its spot. Level 1 farmers find room at 17
 (Talking Island), 36 (elven and dark elven), 13 (orc) and 4 (dwarven) per village and share up to 58,
-118, 46 and 13; a home run's 340 hold 235 spots at once, the rest wait for a holder to level on.
+118, 46 and 13; a home run's 340 hold 235 spots at once and the other 105 farm beside full ones
+(31 orc, 43 dwarven), until a holder levels on (`TestStarterSpread`).
 Owner decision (#138): it is fine for a farmer to steal a kill. A monster another player is fighting
 is a target like any other, which keeps more farmers fighting on shared spots. A farm target lies
 within the leash (1500) of the spot's centre, and a bot that ends a fight beyond the leash walks back;
