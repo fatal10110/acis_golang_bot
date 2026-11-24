@@ -25,7 +25,7 @@ const (
 	msgEarnedItem      int32 = 54
 )
 
-// TestLiveSpoilSweep runs a level 10 dwarven fighter farming with its kit
+// TestLiveSpoilSweep runs a level 10 dwarven fighter farmer with its kit
 // (S10, #329): Spoil opens on a fresh monster, and once a monster it spoiled
 // dies it casts Sweeper on the corpse, which earns it the corpse's spoil
 // (#333). The GM grants both skills (the bot runs no trainer errand). It
@@ -41,14 +41,9 @@ func TestLiveSpoilSweep(t *testing.T) {
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
-		class: &botclient.DwarvenFighter,
-		persona: func() botclient.Persona {
-			p := botclient.DefaultPersona()
-			p.Loot.Pickup = false
-			errandsOff(&p)
-			return p
-		},
-		brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
+		class:   &botclient.DwarvenFighter,
+		persona: farmerPersona,
+		brain:   func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
 	}
 	f := runFresh(t, ctx, gm, int(spoilLevel), func() *farmer { return runWatched(t, ctx, tg, account, setup) })
 	t.Cleanup(func() {

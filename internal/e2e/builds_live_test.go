@@ -29,6 +29,21 @@ const (
 	kitFarm  = 3 * time.Minute
 )
 
+// farmerRole is the role the scenarios play: the farmer preset's, the
+// default preset of cmd/bots (D21).
+const farmerRole = botclient.RoleDamage
+
+// farmerPersona is the farmer preset's persona (cmd/bots damagePersona)
+// with no loot, which carried run after run would weigh a character set
+// back to level 1 down, and no errands.
+func farmerPersona() botclient.Persona {
+	p := botclient.DefaultPersona()
+	p.Role = farmerRole
+	p.Loot.Pickup = false
+	errandsOff(&p)
+	return p
+}
+
 // TestLiveBuildFighters farms a human, an elven and a dark elven fighter
 // with their kits: their attacks are gated by the weapon they wield (Power
 // Strike with a sword or blunt, Mortal Blow with a dagger, Power Shot with
@@ -55,9 +70,8 @@ func TestLiveBuildMixed(t *testing.T) {
 	farmKits(t, "kx", &botclient.OrcFighter, &botclient.OrcMystic, &botclient.DwarvenFighter)
 }
 
-// farmKits runs one kit farm of classes, the accounts of group. The farmers
-// keep no loot, which carried run after run would weigh them down, and run
-// no errands; they go back to level 1 at the end (runFresh).
+// farmKits runs one kit farm of classes, the accounts of group, each a
+// farmerPersona; they go back to level 1 at the end (runFresh).
 func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 25*time.Minute)
@@ -72,14 +86,9 @@ func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 	for i, class := range classes {
 		account, _ := tg.Account(group, i+1)
 		setup := botSetup{
-			class: class,
-			persona: func() botclient.Persona {
-				p := botclient.DefaultPersona()
-				p.Loot.Pickup = false
-				errandsOff(&p)
-				return p
-			},
-			brain: func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
+			class:   class,
+			persona: farmerPersona,
+			brain:   func(cfg *botclient.BrainConfig) { cfg.Spots = spots },
 		}
 		f := runFresh(t, ctx, gm, kitLevel, func() *farmer { return runWatched(t, ctx, tg, account, setup) })
 		kit := kitOf(t, class.ID, kitLevel, account)
@@ -122,7 +131,7 @@ type kitSkills struct {
 	all, rotation, gated []int32
 }
 
-// kitOf is the kit of a bot of class at level in the default persona's role,
+// kitOf is the kit of a bot of class at level in farmerRole,
 // its line drawn for account as the bot draws it (CompileBuild).
 func kitOf(t *testing.T, class, level int32, account string) kitSkills {
 	t.Helper()
@@ -130,7 +139,7 @@ func kitOf(t *testing.T, class, level int32, account string) kitSkills {
 	if !ok {
 		t.Fatalf("class %d: no race", class)
 	}
-	return kitFrom(botclient.CompileBuild(race, class, level, botclient.DefaultPersona().Role, botclient.BranchChoice{Account: account}).Kit)
+	return kitFrom(botclient.CompileBuild(race, class, level, farmerRole, botclient.BranchChoice{Account: account}).Kit)
 }
 
 // kitFrom is the kitSkills of k.
