@@ -52,9 +52,12 @@ func newClassBrain(t *testing.T, class, level int32) *Brain {
 	return walkOn(t, b)
 }
 
-// masterInSight puts the master in sight 200 units away, selected.
+// masterInSight puts the master in sight 200 units away, selected, as the
+// live server shows it (liveMaster).
 func masterInSight(b *Brain) {
-	b.world.Apply(NPCInfo{ObjectID: masterObj, NPCID: classMaster, Pos: Point{X: 200}}, t0)
+	n := liveMaster
+	n.ObjectID, n.Pos = masterObj, Point{X: 200}
+	b.world.Apply(n, t0)
 	b.world.Target = masterObj
 }
 

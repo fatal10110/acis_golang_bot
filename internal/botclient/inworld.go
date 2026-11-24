@@ -174,9 +174,8 @@ func decodeNPCInfo(r *wire.Reader) Event {
 	n.Running = r.ReadUint8() != 0
 	n.InCombat = r.ReadUint8() != 0
 	n.Dead = r.ReadUint8() != 0
-	r.Skip(1)      // summon animation
-	r.ReadString() // name
-	r.ReadString() // title
+	r.Skip(1) // summon animation
+	n.Name, n.Title = r.ReadString(), r.ReadString()
 	n.Summon = r.ReadInt32() != 0
 	n.PvPFlag, n.Karma = r.ReadInt32(), r.ReadInt32()
 	r.Skip(5 * 4) // abnormal effect, clan, clan crest, ally, ally crest
