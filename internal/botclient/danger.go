@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"math"
+	"slices"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -82,11 +83,12 @@ func indexPotionHeals(etc map[int32]datapack.EtcItem, skills map[datapack.SkillR
 // (spotPack, at least one) times the damage one of its aggressive monsters
 // deals it while the bot kills it (mobFight, by their spawn totals), over
 // its max HP plus what the healing potions it carries restore in that
-// time. 0 when s has no aggressive monster with HP and P.Def or the bot's
-// stats are not in yet.
+// time. 0 when s has no aggressive monster with HP and P.Def, the bot's
+// stats are not in yet, or it is a mystic, whose spells kill rather than
+// its melee.
 func (b *Brain) packRisk(s *datapack.Spot) float64 {
 	self := &b.world.Self
-	if self.PAtk <= 0 || self.PDef <= 0 || self.PAtkSpd <= 0 || self.MaxHP <= 0 {
+	if self.PAtk <= 0 || self.PDef <= 0 || self.PAtkSpd <= 0 || self.MaxHP <= 0 || slices.Contains(mysticClasses, self.ClassID) {
 		return 0
 	}
 	var n, kill, damage float64

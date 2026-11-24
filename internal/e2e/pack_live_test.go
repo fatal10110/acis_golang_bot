@@ -51,6 +51,7 @@ func TestLivePackSpot(t *testing.T) {
 	f := runFieldFarmer(t, ctx, tg, account, func(p *botclient.Persona) {
 		p.Potions = []int32{lesserHealingPotion}
 	})
+	logStats(t, f)
 	gmTeleport(t, ctx, gm, townTI)
 	t.Logf("%s at %v", f.name, f.bot.Status().Position)
 
@@ -60,7 +61,6 @@ func TestLivePackSpot(t *testing.T) {
 	var held, last string
 	var lastAt, diedAt time.Time
 	seen := 0
-	stats := false
 	for time.Since(start) < packWatch {
 		if err := ctx.Err(); err != nil {
 			t.Fatalf("%s: %v after %d deaths", f.name, err, deaths)
@@ -90,12 +90,6 @@ func TestLivePackSpot(t *testing.T) {
 		}
 		events := f.watch.Seen(seen)
 		for _, s := range events {
-			if u, ok := s.Event.(botclient.UserInfo); ok && u.ObjectID == f.id && !stats {
-				// The stats the fit weighs packs with (TestPackRisk's squire14).
-				stats = true
-				t.Logf("%s level %d: pAtk %d, pDef %d, evasion %d, accuracy %d, attack speed %d, max HP %d",
-					f.name, u.Level, u.PAtk, u.PDef, u.Evasion, u.Accuracy, u.PAtkSpd, u.MaxHP)
-			}
 			if d, ok := s.Event.(botclient.Die); ok && d.ObjectID == f.id && s.At.After(start) {
 				deaths++
 				died[held], diedAt = true, s.At
@@ -113,4 +107,17 @@ func TestLivePackSpot(t *testing.T) {
 		}
 	}
 	t.Logf("%s: %d deaths in %v, last spot %q, %d potions left", f.name, deaths, packWatch, held, f.carries(lesserHealingPotion))
+}
+
+// logStats logs the combat stats of f's first UserInfo: the ones its spot
+// fit weighs packs with (SpotPolicy.PackRisk; TestPackRisk's squires).
+func logStats(t *testing.T, f *farmer) {
+	t.Helper()
+	for _, s := range f.watch.Seen(0) {
+		if u, ok := s.Event.(botclient.UserInfo); ok && u.ObjectID == f.id {
+			t.Logf("%s level %d: pAtk %d, pDef %d, evasion %d, accuracy %d, attack speed %d, max HP %d",
+				f.name, u.Level, u.PAtk, u.PDef, u.Evasion, u.Accuracy, u.PAtkSpd, u.MaxHP)
+			return
+		}
+	}
 }

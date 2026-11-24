@@ -114,6 +114,7 @@ func TestLiveSupplyTrip(t *testing.T) {
 		p.Shop.SellAt = 0
 		p.Potions = []int32{lesserHealingPotion}
 	})
+	logStats(t, f)
 	gmTeleport(t, ctx, gm, townTI)
 	t.Logf("%s low on shots at %v", f.name, f.bot.Status().Position)
 
