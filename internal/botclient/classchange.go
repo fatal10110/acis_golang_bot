@@ -1,7 +1,6 @@
 package botclient
 
 import (
-	"maps"
 	"slices"
 	"strconv"
 	"time"
@@ -33,7 +32,8 @@ type ClassChangePolicy struct {
 	// next, by the class it has. A base class maps to a first profession,
 	// taken from level 20, a first profession to a second one, taken from
 	// level 40, a second to a third, from 76. Class ids are per race, so the
-	// table is per race too. A class with no entry is kept.
+	// table is per race too. A class with no entry is kept. nil plays the
+	// build's professions (Persona, overrides).
 	Builds map[int32]int32
 	// Masters are the NPC template ids of the class masters.
 	Masters []int32
@@ -48,7 +48,8 @@ type ClassChangePolicy struct {
 	RetryAfter time.Duration
 }
 
-// supportBuilds is the default persona's build table, over each race's own
+// supportBuilds is the professions table builds compile per race
+// (CompileBuild), over each race's own
 // tree (data/xml/classes, classParent): mystics take the healer and buffer
 // line (Cleric and Bishop, Elven Oracle and Elven Elder, Shillien Oracle and
 // Shillien Elder, Orc Shaman and Warcryer) whose heals and buffs the persona
@@ -78,7 +79,6 @@ const (
 // nothing waits visitShunFor before the next.
 func defaultClassChangePolicy() ClassChangePolicy {
 	return ClassChangePolicy{
-		Builds:     maps.Clone(supportBuilds),
 		Masters:    []int32{classMaster},
 		Reach:      8000,
 		RetryAfter: visitShunFor,
@@ -180,7 +180,7 @@ func (b *Brain) ruleClassChange(now time.Time) (Action, bool) {
 func (b *Brain) classLink() (string, bool) {
 	c, s := &b.class, &b.world.Self
 	prefix := "npc_" + strconv.Itoa(int(c.v.obj)) + "_"
-	want := b.persona.ClassChange.Builds[s.ClassID]
+	want := b.build().Race.Professions[s.ClassID]
 	if cmd := prefix + changeClassCommand + " " + strconv.Itoa(int(want)); b.world.Dialog.Has(cmd) {
 		return cmd, true
 	}
@@ -203,7 +203,7 @@ func (b *Brain) classChanged() {
 // at the bot's level (pickVisit), reporting whether it did.
 func (b *Brain) startClassChange(now time.Time) bool {
 	c, s, p := &b.class, &b.world.Self, &b.persona.ClassChange
-	if p.Builds[s.ClassID] == 0 || now.Before(c.retryAt) {
+	if b.build().Race.Professions[s.ClassID] == 0 || now.Before(c.retryAt) {
 		return false
 	}
 	if level, _ := transferTier(s.ClassID); s.Level < level {

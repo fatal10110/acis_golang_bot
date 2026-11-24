@@ -34,7 +34,7 @@ func TestRestUnderMPReserve(t *testing.T) {
 		{name: "orc mystic at 40% MP sits", skills: []int32{skillChillFlame}, mp: 40, wantRule: "rest", wantKind: actSitStand},
 		{name: "fighter at 40% MP does not sit", skills: []int32{3}, mp: 40, wantRule: ""},
 		{name: "mystic at the reserve does not sit", skills: []int32{skillWindStrike}, mp: 50, wantRule: ""},
-		{name: "mystic without a reserve keeps SitMP", persona: func(p *Persona) { p.MPReserve = 0 }, skills: []int32{skillWindStrike}, mp: 40, wantRule: ""},
+		{name: "mystic without a reserve keeps SitMP", persona: func(p *Persona) { p.MPReserve = -1 }, skills: []int32{skillWindStrike}, mp: 40, wantRule: ""},
 		{
 			name: "resting mystic stays seated above the reserve until StandMP", skills: []int32{skillWindStrike},
 			mp: 60, sitting: true, resting: true, wantRule: "rest",

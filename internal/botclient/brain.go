@@ -134,6 +134,11 @@ type Brain struct {
 	cfg     BrainConfig
 	log     *slog.Logger
 
+	// built is the build last compiled, for builtFor once builtOK (build).
+	built    Build
+	builtFor buildKey
+	builtOK  bool
+
 	pace pacer
 	// nextTick is the next regular decision; reactAt, when set, replaces it
 	// with the reaction to an event.
@@ -205,6 +210,8 @@ type Brain struct {
 	class classVisit
 	// dyes is the Symbol Maker visit (rule 9 errand "dyes").
 	dyes dyeVisit
+	// ench is the enchant rule's exchange (ruleEnchant).
+	ench enchantState
 	// supplyTrip is the farmer's trip home to restock (rule "supply").
 	supplyTrip supplyTrip
 	// prep is the town preparation gate.
@@ -568,6 +575,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.dyeList(e)
 		case HennaInfo:
 			b.dyeAnswered()
+		case ChooseInventoryItem:
+			b.enchantChosen(e)
+		case EnchantResult:
+			b.enchantResult(e, now)
 		case PrivateStoreManageListSell:
 			b.storeManageList(e)
 		case PrivateStoreListSell:
@@ -842,6 +853,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.class.sent(a, now)
 	b.dyes.sent(a, now)
+	b.ench.sent(a, now)
 	b.shop.sent(a, now)
 	b.market.sent(a, now)
 	b.wh.sent(a, now)

@@ -135,30 +135,25 @@ func (w *World) applyEffects(ev Event, now time.Time) {
 }
 
 // Heal is a heal skill and the HP percent under which the bot casts it on
-// a party member.
+// a party member. With Members it is cast only while at least that many of
+// the members the bot supports, itself included, are under the percent (a
+// group heal).
 type Heal struct {
-	Skill int32
-	HP    int
+	Skill   int32
+	HP      int
+	Members int
 }
 
 // Buff is a buff skill the bot keeps up. A Party buff is cast on the bot
 // and lands on the members around it; any other is cast on each member.
+// Weapons casts it only while the bot wields one of those datapack weapon
+// kinds; Members casts a member buff only on a member of those classes.
 type Buff struct {
-	Skill int32
-	Party bool
+	Skill   int32
+	Party   bool
+	Weapons []string
+	Members []int32
 }
-
-// Support defaults (docs/plan.md, support persona): Battle Heal under
-// 35 %, else Heal under 60 %; the mystics' buffs; their attack spells,
-// cast above the MP reserve before melee. A bot casts only the skills it
-// knows, so its class picks its role: human, elven and dark elven mystics
-// heal, buff and nuke, orc mystics buff and nuke, fighters assist and
-// fight in melee.
-var (
-	defaultHeals        = []Heal{{skillBattleHeal, 35}, {skillHeal, 60}}
-	defaultBuffs        = []Buff{{Skill: skillMight}, {Skill: skillShield}, {Skill: skillSoulShield}, {Skill: skillChantBattle, Party: true}}
-	defaultAttackSkills = []int32{skillWindStrike, skillChillFlame, skillLifeDrain}
-)
 
 // assistPlan is the creature the party leader last attacked: the bot
 // attacks it from at, while the leader's last hit on it (seen) is within
@@ -259,19 +254,30 @@ func (b *Brain) vitals(id int32) (hp, maxHP int32) {
 	return 0, 0
 }
 
-// healSkill is the persona's first heal ready at now whose HP percent
-// member id is under, or 0.
+// healSkill is the build's first heal ready at now whose HP percent
+// member id is under, and whose member count is, or 0.
 func (b *Brain) healSkill(id int32, now time.Time) int32 {
 	hp, maxHP := b.vitals(id)
 	if hp <= 0 {
 		return 0
 	}
-	for _, h := range b.persona.Heals {
-		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) {
+	for _, h := range b.build().Kit.Heals {
+		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
 			return h.Skill
 		}
 	}
 	return 0
+}
+
+// patientsUnder is how many of the patients are alive with HP under pct.
+func (b *Brain) patientsUnder(pct int, now time.Time) int {
+	n := 0
+	for _, id := range b.patients(now) {
+		if hp, maxHP := b.vitals(id); hp > 0 && below(hp, maxHP, pct) {
+			n++
+		}
+	}
+	return n
 }
 
 // heal heals member id at now when a heal is ready for its HP: it reports
@@ -291,7 +297,7 @@ func (b *Brain) heal(id int32, now time.Time) (Action, bool) {
 // and down against the rest.
 func (b *Brain) ruleHeal(now time.Time) (Action, bool) {
 	s := &b.world.Self
-	if len(b.persona.Heals) == 0 || (s.Sitting || !s.InCombat) && below(s.MP, s.MaxMP, b.persona.SitMP) {
+	if bd := b.build(); len(bd.Kit.Heals) == 0 || (s.Sitting || !s.InCombat) && below(s.MP, s.MaxMP, bd.Thresholds.SitMP) {
 		return Action{}, false
 	}
 	ids := b.patients(now)
@@ -313,7 +319,7 @@ func (b *Brain) ruleHeal(now time.Time) (Action, bool) {
 // a heal the bot knows.
 func (b *Brain) wounded(id int32) bool {
 	hp, maxHP := b.vitals(id)
-	return hp > 0 && slices.ContainsFunc(b.persona.Heals, func(h Heal) bool {
+	return hp > 0 && slices.ContainsFunc(b.build().Kit.Heals, func(h Heal) bool {
 		_, known := b.world.Skills[h.Skill]
 		return known && below(hp, maxHP, h.HP)
 	})
@@ -324,16 +330,18 @@ func (b *Brain) wounded(id int32) bool {
 // buff is renewed when the bot's own runs low.
 func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 	s, p := &b.world.Self, &b.persona
-	if s.InCombat || len(p.Buffs) == 0 {
+	kit := b.build().Kit
+	if s.InCombat || len(kit.Buffs) == 0 {
 		return Action{}, false
 	}
+	weapon := b.buffWeapon(kit.Buffs)
 	for _, id := range b.patients(now) {
 		buffs := b.world.Buffs
 		if id != s.ObjectID {
 			buffs = b.world.Party.Members[id].Buffs
 		}
-		for _, bf := range p.Buffs {
-			if bf.Party && id != s.ObjectID || !buffs.Due(bf.Skill, p.RebuffBefore, now) ||
+		for _, bf := range kit.Buffs {
+			if bf.Party && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !buffs.Due(bf.Skill, p.RebuffBefore, now) ||
 				!b.world.SkillReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{id, bf.Skill}]) < buffRetry {
 				continue
 			}
@@ -364,7 +372,7 @@ func (b *Brain) castOn(id, skill int32, selectFirst bool, now time.Time) Action 
 
 // buffSent records a buff cast going out at now, for buffRetry.
 func (b *Brain) buffSent(a Action, now time.Time) {
-	if !slices.ContainsFunc(b.persona.Buffs, func(bf Buff) bool { return bf.Skill == a.skill }) {
+	if !slices.ContainsFunc(b.build().Kit.Buffs, func(bf Buff) bool { return bf.Skill == a.skill }) {
 		return
 	}
 	maps.DeleteFunc(b.buffedAt, func(_ buffKey, at time.Time) bool { return now.Sub(at) >= buffRetry })

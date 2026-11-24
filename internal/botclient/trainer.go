@@ -1,7 +1,6 @@
 package botclient
 
 import (
-	"maps"
 	"math"
 	"strconv"
 	"time"
@@ -147,11 +146,6 @@ var (
 		30906, 31280, 31281, 31282, 31329, 31332, 31969,
 	}
 )
-
-// defaultLearnSkills and defaultTrainers return fresh maps for a persona;
-// the id slices are shared and never written.
-func defaultLearnSkills() map[int32][]int32 { return maps.Clone(mysticSkills) }
-func defaultTrainers() map[int32][]int32    { return maps.Clone(mysticTrainers) }
 
 // AcquirableSkill is one skill level a trainer offers: the next level of a
 // skill the bot may learn at its level, and its SP cost.
@@ -437,7 +431,7 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 // walk runs.
 func (b *Brain) startVisit(now time.Time) bool {
 	t, s := &b.train, &b.world.Self
-	if len(b.persona.LearnSkills[s.ClassID]) == 0 ||
+	if len(b.build().Kit.Skills) == 0 ||
 		(t.doneLevel != 0 && s.Level <= t.doneLevel && (t.needSP == 0 || s.SP < t.needSP)) {
 		t.walk = npcVisit{}
 		return false
@@ -445,7 +439,7 @@ func (b *Brain) startVisit(now time.Time) bool {
 	from := s.Position(now)
 	var best int32
 	var bestDist int64
-	for _, npcID := range b.persona.Trainers[s.ClassID] {
+	for _, npcID := range b.build().Kit.Trainers {
 		for id, o := range b.world.Objects {
 			if o.Kind != KindNPC || o.NPCID != npcID || o.Dead || now.Before(t.shunned[id]) {
 				continue
@@ -481,7 +475,7 @@ func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 	}
 	var best npcVisit
 	bestDist := int64(math.MaxInt64)
-	for _, npcID := range b.persona.Trainers[b.world.Self.ClassID] {
+	for _, npcID := range b.build().Kit.Trainers {
 		if now.Before(t.walkShunned[npcID]) {
 			continue
 		}
@@ -521,7 +515,7 @@ func dist2(a, b Point) int64 {
 // offers and the bot has the SP for; skills it cannot afford are skipped.
 func (b *Brain) nextSkill() (AcquirableSkill, bool) {
 	t, sp := &b.train, b.world.Self.SP
-	for _, id := range b.persona.LearnSkills[b.world.Self.ClassID] {
+	for _, id := range b.build().Kit.Skills {
 		for _, s := range t.offer {
 			if s.ID != id || t.skipped[id] {
 				continue

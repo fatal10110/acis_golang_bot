@@ -32,7 +32,7 @@ func TestLiveFarmFight(t *testing.T) {
 	f = runFarmer(t, ctx, tg, account, spots, func(p *botclient.Persona) {
 		p.CriticalHP = 99 // any hit that lands makes it drink
 		p.AttackSkills = []int32{powerStrike}
-		p.MPReserve = 0
+		p.MPReserve = -1 // off over the support build's 50: it casts and fights at any MP
 		// No merchant visits here: what it loots stays, run after run,
 		// until its inventory refuses the GM's gifts. All it carries but
 		// adena, potions and shots is junk, dropped at any load.

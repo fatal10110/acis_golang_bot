@@ -224,9 +224,9 @@ func TestFleeOutrun(t *testing.T) {
 // 45 % HP is three potions.
 func TestPotionsThroughAFight(t *testing.T) {
 	const npc2 = int32(0x20000005)
-	d := DefaultPersona()
+	d, th := DefaultPersona(), defaultThresholds
 	b, _ := newTestBrain(t, Persona{
-		CriticalHP: d.CriticalHP, CrowdedHP: d.CrowdedHP, OutmatchedHP: d.OutmatchedHP,
+		CriticalHP: th.CriticalHP, CrowdedHP: th.CrowdedHP, OutmatchedHP: th.OutmatchedHP,
 		FleeDistance: d.FleeDistance, FleeOutrun: d.FleeOutrun, Potions: []int32{healingPotion},
 	})
 	b.world.Apply(ItemList{Items: []Item{{ObjectID: 0x30000011, TemplateID: healingPotion, Count: 13}}}, t0)

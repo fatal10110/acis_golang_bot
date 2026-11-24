@@ -67,6 +67,30 @@ var baseClassRaces = map[int32]int32{
 	0: 0, 10: 0, 18: 1, 25: 1, 31: 2, 38: 2, 44: 3, 49: 3, 53: 4,
 }
 
+// BaseClass is the base class of profession id's line (id itself for a
+// base class); ok is false for an id the profession table does not hold.
+func BaseClass(id int32) (base int32, ok bool) {
+	parent, ok := classParents[id]
+	if !ok {
+		return 0, false
+	}
+	for parent >= 0 {
+		id, parent = parent, classParents[parent]
+	}
+	return id, true
+}
+
+// ClassRace is the race of profession id's line (0 Human, 1 Elf, 2 Dark
+// Elf, 3 Orc, 4 Dwarf); ok is false for an id the profession table does not
+// hold.
+func ClassRace(id int32) (race int32, ok bool) {
+	base, ok := BaseClass(id)
+	if !ok {
+		return 0, false
+	}
+	return baseClassRaces[base], true
+}
+
 type classFile struct {
 	Classes []classElement `xml:"class"`
 }
@@ -143,10 +167,7 @@ func buildClass(el classElement) (Class, error) {
 	if !ok {
 		return Class{}, fmt.Errorf("class %d: unknown profession id", id)
 	}
-	root := id
-	for classParents[root] >= 0 {
-		root = classParents[root]
-	}
+	root, _ := BaseClass(id)
 	c := Class{
 		ID: id, Parent: parent, Race: baseClassRaces[root],
 		STR: a.intDefault("str", 40), CON: a.intDefault("con", 21), DEX: a.intDefault("dex", 30),

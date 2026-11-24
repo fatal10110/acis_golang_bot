@@ -105,19 +105,21 @@ var warsmithTrainers = []int32{
 }
 
 // CrafterPersona is the clan crafter (docs/crafting.md section 5), played
-// by a Dwarven Fighter: DefaultPersona plus the crafter's cycle, Create
-// Item learned at the dwarven trainers, and the clan invitation of any
-// player while clanless, or only of a name of inviters when it names some
-// (D20, AcceptClanFrom). With nothing to craft it farms the spot registry
-// the preset gives it.
+// by a Dwarven Fighter in the Crafter role: DefaultPersona plus the
+// crafter's cycle, Create Item learned at the dwarven trainers, and the clan
+// invitation of any player while clanless, or only of a name of inviters
+// when it names some (D20, AcceptClanFrom). With nothing to craft it farms
+// the spot registry the preset gives it.
 func CrafterPersona(inviters ...string) Persona {
 	p := DefaultPersona()
+	p.Role = RoleCrafter
 	p.Crafter = defaultCrafterPolicy()
 	p.JoinClan = AcceptClanFrom(inviters...)
 	// The crafter line, Artisan at 20 and Warsmith at 40 (D18), learns
-	// Create Item at the trainers whose teachTo lists its class.
-	p.ClassChange.Builds[DwarvenFighter.ID] = classArtisan
-	p.ClassChange.Builds[classArtisan] = classWarsmith
+	// Create Item at the trainers whose teachTo lists its class: overrides
+	// of the build's professions, skills and trainers (Persona).
+	p.ClassChange.Builds = map[int32]int32{DwarvenFighter.ID: classArtisan, classArtisan: classWarsmith}
+	p.LearnSkills, p.Trainers = make(map[int32][]int32), make(map[int32][]int32)
 	for c, trainers := range map[int32][]int32{
 		DwarvenFighter.ID: dwarvenTrainers,
 		classArtisan:      artisanTrainers,
