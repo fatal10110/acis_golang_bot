@@ -8,13 +8,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
-// Skills of the stack rule tests (data/xml/skills): Frenzy and Guts share
-// the pinch stack at one order; Might, Soul Shield, Chant of Shielding and
-// Accuracy as named.
-const (
-	skillChantShielding = int32(1009)
-)
-
 // stackTravel is a travel map with the tests' stack effects: Frenzy and
 // Guts pinch 1; Might pa_up 1 and 2 by level; Attack Aura pa_up 1; Soul
 // Shield and Chant of Shielding pd_up at their levels.

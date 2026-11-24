@@ -174,7 +174,19 @@ func (b *Brain) knowsAttackSkill() bool {
 	return false
 }
 
-// fight attacks id: select it, switch a combat toggle that is due
+// knowsNuke reports whether the character knows the skill of one of rot's
+// attack steps as an active skill: a caster that knows none melees
+// whatever its Melee policy, as before its row (a mystic seeded or trained
+// without its nukes would otherwise stand by while its leader fights).
+func (b *Brain) knowsNuke(rot []Step) bool {
+	return slices.ContainsFunc(rot, func(st Step) bool {
+		s, ok := b.world.Skills[st.Skill]
+		return ok && !s.Passive && st.rank() == rankAttack
+	})
+}
+
+// fight attacks id: cast a side cast due on the selected attacker
+// (sideCasting) or select id, switch a combat toggle that is due
 // (toggleCast), then cast the first ready step of the build's rotation
 // whose gates pass (rotationCast: self-target steps, sustain, then attacks
 // with MP at MPReserve or more), or click it once for melee as the kit's
@@ -186,6 +198,9 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	s := &b.world.Self
 	from := s.Position(now)
 	if t := b.world.Target; id != t {
+		if a, ok := b.sideCasting(t, now); ok {
+			return a
+		}
 		if b.engaged != 0 && b.engaged == t && !b.mayFight(t, now) {
 			return b.disengage(now)
 		}
@@ -203,7 +218,7 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	if a, ok := b.rotationCast(id, bd.Kit.Rotation, underReserve, now); ok {
 		return a
 	}
-	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) {
+	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) && b.knowsNuke(bd.Kit.Rotation) {
 		return Action{}
 	}
 	r := b.attackReach()
