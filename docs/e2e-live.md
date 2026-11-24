@@ -8,15 +8,21 @@ and never edit the server's config: a scenario the server cannot satisfy is reco
 
 - **Login server:** `AutoCreateAccounts = True` (the first login of an `e2e` account creates it),
   `MaximumOnlineUsers` headroom for 8 more characters per test process (2 scenarios of 4).
-- **GM characters:** existing accounts whose characters have access level 7, created over the
-  protocol and promoted once by the owner, one per scenario running at once. The harness never
-  promotes anything.
+- **GM characters:** at least one existing account whose character has access level 7, created
+  over the protocol and promoted once by the owner: the root GMs. A run that pins no GM file
+  mints the GMs its scenarios use (owner decision on #367, "GM pool" below), so the pool has no
+  size limit; the harness promotes only the GMs it mints, and only through a root GM.
 - **Config files** in `.e2e/` at the root of the primary checkout (gitignored; dir 0700, files
   0600, refused when readable by others):
   - `secret`: the HMAC secret the `e2e` account passwords derive from (strong, as persistent mode
     wants it);
-  - `gm`, `gm2`, `gm3`, ...: the GM pool, one GM file each, three `key=value` lines, `account=`,
-    `password=` and `character=`. The harness keeps a lock file next to each (`gm.lock`, ...).
+  - `gm`, `gm2`, `gm3`, ...: the owner's GMs, one GM file each, three `key=value` lines,
+    `account=`, `password=` and `character=`: the roots of minting, or the pinned pool. The
+    harness keeps a lock file next to each (`gm.lock`, ...).
+  - `minted-<prefix>` (`minted-e2e`): written by the harness, the accounts it minted for the
+    prefix, one name a line, never a password; refused like the others when readable by others.
+    Its lock file (`minted-e2e.lock`) is the mint lock, and each minted GM has a lock file of its
+    own (`e2egm1.lock`, ...).
 - **Allowlist:** set `BOT_E2E_ALLOWLISTED=1` only when the source address is on
   `AcceptFilterAllowlist` of both servers; otherwise logins are paced by the bot's login gate.
 
@@ -28,7 +34,7 @@ Environment variables only, each a value or a path, never a secret:
 | --- | --- | --- |
 | `BOT_E2E_LOGIN` | login server `host:port` | none: every scenario skips |
 | `BOT_E2E_SECRET_FILE` | secret file | `.e2e/secret` of the primary checkout |
-| `BOT_E2E_GM_FILE` | GM file, or a list of them (`:` between, `;` on Windows): pins the run's GM pool | every `gm`, `gm2`, ... of the primary checkout's `.e2e/` |
+| `BOT_E2E_GM_FILE` | GM file, or a list of them (`:` between, `;` on Windows): pins the run's GM pool, which then never mints | unset: the run mints its GMs, rooted in every `gm`, `gm2`, ... of the primary checkout's `.e2e/` |
 | `BOT_E2E_PREFIX` | account prefix; refused when it overlaps `hz` or the owner's `bots ui` panel prefix | `e2e` |
 | `BOT_E2E_ALLOWLISTED` | `1`: no login spacing | unset |
 | `BOT_E2E_DATAPACK` | local datapack XML directory (the panel's `town` preset) | none |
@@ -67,14 +73,29 @@ variables and `BOT_REQUIRE_E2E=1`.
   the village's grocer, stores, trainers and merchants. Each scenario logs in accounts of its own
   (an account group no other scenario uses): a login to an account already in game evicts that
   session.
-- **GM pool:** each scenario that needs a GM leases one from the pool (`.e2e/gm*`, or the
-  `BOT_E2E_GM_FILE` list) through a lock on its lock file, held until the GM logs out, so two
-  scenarios of one process, of two processes or of two runs never share a GM. With every GM
-  held, the scenario waits for one at most 2 minutes, on a bound of the pool's own, apart from
-  its deadline, then fails with `GM pool exhausted` (#250). A run whose pool holds fewer GMs than
-  the scenarios it keeps open at once (`-parallel`, at most 2) says so as it starts: pin as many
-  GMs as that, or run a one-GM pin with `-parallel 1`. The kernel drops the lock of a process
-  that dies, so a killed run never blocks a later one.
+- **GM pool:** each scenario that needs a GM leases one from the pool through a lock on its lock
+  file, held until the GM logs out, so two scenarios of one process, of two processes or of two
+  runs never share a GM. The kernel drops the lock of a process that dies, so a killed run never
+  blocks a later one.
+  - **Minting** (no `BOT_E2E_GM_FILE`, #367): the pool is the GMs minted for the prefix
+    (`.e2e/minted-<prefix>`). With every one held, the scenario mints the next instead of
+    waiting: account `<prefix>gm<N>` (`e2egm1`, `e2egm2`, ...; no scenario may use the account
+    group `gm`), its password derived from the secret like every `e2e` account's, logs in once
+    (the login server creates the account) and creates its character `<prefix>gm<N>Bot`, which
+    then logs out; a root GM (a free one of `.e2e/gm*`, leased like a pool GM for the few
+    seconds it takes) sends `//set access <prefix>gm<N>Bot 7`, which the server stores for the
+    character out of the world ahead of its next login (`admin_access.go`,
+    `admin_offline.go`), so the GM's next login is a GM's and needs no relog. Then the name is
+    recorded and the scenario plays the new GM. One mint runs at a time over every process (the
+    mint lock); a scenario that finds the lock held waits for a GM another frees or for its own
+    turn to mint, at most 2 minutes. A mint that fails records nothing; the next one mints the
+    same `N` again and adopts the character already made. Minted GMs stay on the server and in
+    the record, and later runs lease them before minting any more. Minting adds two logins (the
+    new account's and the root's) through the run's login gate and breaker.
+  - **Pinned** (`BOT_E2E_GM_FILE`): the pool is the listed files and never mints. With every GM
+    held, the scenario waits for one at most 2 minutes, on a bound of the pool's own, apart from
+    its deadline, then fails with `GM pool exhausted` (#250). A pinned run whose pool holds fewer
+    GMs than the scenarios it keeps open at once (`-parallel`, at most 2) says so as it starts.
 - **Packages:** `./internal/e2e/` and `./cmd/bots/` are separate test processes, each with its own
   login gate. They run at the same time only with `BOT_E2E_ALLOWLISTED=1`: two spaced gates
   dialing at once would burst the accept filter.
@@ -85,11 +106,12 @@ Live runs may run at the same time, as real bot runs do (several agents, or an a
 owner's own bots). Each concurrent run needs:
 
 - **GMs:** the second login of an account drops the first, so two runs never share a GM session.
-  Runs of this harness lease GMs from the pool through the per-GM locks, so they may share the
-  pool; a run may still pin its own GM files (`BOT_E2E_GM_FILE=.e2e/gm2`, or a list) to keep out
-  of the GMs another run uses, for example a run of an older harness that takes no lock. A run
-  needs as many GMs as GM scenarios it runs at once: with one GM pinned, run its GM scenarios
-  one at a time (`-parallel 1`), or a second one fails on the exhausted pool.
+  Runs of this harness lease GMs through the per-GM locks and mint more when every one is held,
+  so they share the pool with no pin: run the related GM scenarios in one invocation with
+  `-parallel 2` (a test process keeps at most 2 scenarios open, `e2e.MaxScenarios`; a third
+  waits for a scenario, not for a GM). A run of an older harness that cannot mint still pins its
+  own GM files (`BOT_E2E_GM_FILE=.e2e/gm2`, or a list), and with one GM pinned runs its GM
+  scenarios one at a time (`-parallel 1`).
 - **Its own lock** when the run goes through `scripts/agent-tools/heavy`: `heavy` puts every e2e
   run (an argument naming `internal/e2e`, an `e2e-live` target or a `TestLive` scenario) on the
   e2e lock with a 60m timeout, never on the unit-test and lint lock, so live runs queue behind each
@@ -131,7 +153,10 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
   character, `hide` (the GM's own invisibility), `spawn ID`, `delete` and `para` (paralysis) on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
-  (announce, shutdown, reload) are refused before anything is sent. The GM targets only run
+  (announce, shutdown, reload) are refused before anything is sent. `set access` is refused to
+  every scenario GM; a root GM promoting a minted one may send only `set access NAME 7`, NAME a
+  character of the minted namespace (`<prefix>gm<N>Bot`), never another level (a ban is one
+  below 0) and nothing else. The GM targets only run
   objects, so a command that falls back on its target cannot reach anyone else.
 - **Pacing:** every frame a scenario sends passes the bot's pacer (`botclient.Pacer`); GM
   commands are also spaced like dialog clicks.
@@ -145,6 +170,10 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   `e2epn1`, `e2ewm1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
+- The minted GMs `<prefix>gm<N>` (`e2egm1`, ...), each with one character `<prefix>gm<N>Bot` of
+  access level 7, recorded in `.e2e/minted-<prefix>`; later runs lease them again. They stay
+  until the owner retires them (`//set access <name> 0` from a GM, then delete the record's
+  line).
 - Characters end where the scenario left them (a recalled bot next to the GM, a killed one in a
   village); nothing is restored but the level below.
 - `TestLiveFarmFight` sets its farmer to level 5 and runs it with every item but adena, potions

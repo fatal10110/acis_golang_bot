@@ -40,14 +40,14 @@ func (firedTimer) Stop()                 {}
 func TestPoolExhaustedWithinItsBound(t *testing.T) {
 	clock := &stepClock{now: time.Unix(1000, 0)}
 	p := newGMPool(gmDir(t, "gm"), clock)
-	held, err := p.take(t.Context())
+	held, err := p.take(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer held.release()
 	start := clock.Now()
 	// The scenario's ctx has no deadline: the pool's own bound ends the wait.
-	_, err = p.take(t.Context())
+	_, err = p.take(t.Context(), nil)
 	if err == nil || !strings.Contains(err.Error(), "GM pool exhausted") {
 		t.Fatalf("take with every GM held = %v, want GM pool exhausted", err)
 	}

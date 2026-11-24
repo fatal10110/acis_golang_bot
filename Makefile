@@ -36,7 +36,8 @@ lint:
 # The live e2e scenarios against the server BOT_E2E_LOGIN names
 # (docs/e2e-live.md); never in CI. Inside a package, the scenarios that call
 # t.Parallel run MaxScenarios (2) at once, each with a GM of its own from the
-# pool (.e2e/gm, gm2, ...; a lock per GM). The packages run in parallel only
+# pool (a lock per GM): the GMs the run mints, rooted in .e2e/gm, gm2, ...,
+# or the BOT_E2E_GM_FILE list. The packages run in parallel only
 # from an allowlisted address (BOT_E2E_ALLOWLISTED=1): each test process has
 # its own login gate, and two spaced gates dialing at once would burst the
 # accept filter. Every process refuses to log in while the breaker's marker

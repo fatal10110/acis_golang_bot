@@ -97,6 +97,9 @@ type Scope struct {
 	npcs   map[int32]bool
 	doors  map[int32]bool
 	target int32 // 0: none
+	// mint is the minted namespace (mintRecord.namespace) of a root GM's
+	// scope, which may only promote a minted GM there; "" for a scenario's.
+	mint string
 }
 
 func newScope() *Scope {
@@ -166,12 +169,25 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	                     character
 //	pledge level N       sets the clan level of the GM's target, a run
 //	                     character, to N (0 to 8, admin_pledge.go)
+//
+// A root GM's scope (mint set, Target.mintGM) refuses all of them and
+// allows only
+//
+//	set access NAME 7    promotes NAME, a character of the minted namespace,
+//	                     to mintedLevel (admin_access.go); never another
+//	                     level, never a ban (a level below 0)
 func (s *Scope) check(cmd string) error {
 	f := strings.Fields(cmd)
 	if len(f) == 0 {
 		return fmt.Errorf("%w: empty", ErrCommandRefused)
 	}
 	word, args := strings.ToLower(f[0]), f[1:]
+	if s.mint != "" {
+		if word == "set" && len(args) == 3 && args[0] == "access" && isMintedCharacter(args[1], s.mint) && args[2] == strconv.Itoa(mintedLevel) {
+			return nil
+		}
+		return fmt.Errorf("%w: %q from a root GM", ErrCommandRefused, cmd)
+	}
 	ok := false
 	switch word {
 	case "teleport":

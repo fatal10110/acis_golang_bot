@@ -72,11 +72,16 @@ var reservedPrefixes = []string{"hz"}
 
 // Config is the target of a run.
 type Config struct {
-	Login          string
-	SecretFile     string
-	Prefix         string
-	Allowlisted    bool
-	GMFiles        []string
+	Login       string
+	SecretFile  string
+	Prefix      string
+	Allowlisted bool
+	GMFiles     []string
+	// GMMint is the folder of the GM files when no GM file is pinned: the
+	// run mints the GMs its scenarios lease (#367) and records them there,
+	// the GM files being the roots that promote them; "" for a pinned
+	// pool, which never mints.
+	GMMint         string
 	Datapack       string
 	AllowLoginFail bool
 	// Nav names the caches of NeedNav.
@@ -105,6 +110,7 @@ func ConfigFromEnv(getenv func(string) string, dir string) Config {
 		c.SecretFile = cmp.Or(c.SecretFile, filepath.Join(dir, "secret"))
 		if len(c.GMFiles) == 0 {
 			c.GMFiles = gmFiles(dir)
+			c.GMMint = dir
 		}
 	}
 	return c
