@@ -1,6 +1,6 @@
 # Merchant valuables: offer rare loot to players before the town store
 
-Status: draft for owner review. The review-fix loop ran 10 rounds; round 10's fixes are not
+Status: draft for owner review. The review-fix loop ran 11 rounds; round 11's fixes are not
 re-reviewed. Proposed decisions D30-D34 are open (see "Owner decisions").
 Milestone M12 ("Merchant valuables"): the epic and the V1-V9 issues (V2 as V2a and V2b, V3 as V3a and V3b, V7 as V7a and V7b) are filed once
 the owner approves.
@@ -207,6 +207,29 @@ against the datapack, the server or the bot code before it was fixed):
   session's look, with `TestValuablesLedgerLook`, whose round cases move to
   `TestValuablesRoundStart`), which takes the look out of V7a; the Risks bullet says the
   `maximumNpcs` caps are read (`datapack/spawnlist.go:31-33`) but not applied.
+- Round 11 (independent reviewer, 6 findings; each checked against the cited bot code, server,
+  datapack and `docs/plan.md`, all confirmed and fixed): a bot called away no longer keeps walking
+  to a keeper: rule "warehouse" (`rules.go:500`) comes before "follow" (`rules.go:507`) and steps
+  any running request (`warehouse.go:402-406`), so at the `called()` cut-off rule "valuables"
+  ends its own private request through a new `cancelPrivate` (V3a) before the request's own
+  packet went out, with no result, no `retryAt` and no walk back, and waits at most 5 s for one
+  already sent (`whSent`), since the errand drops events once ended (`warehouse.go:655-659`); the
+  look and the off-round errands are cancelled the same way (section 3, V3a, V3b, V7a,
+  `TestValuablesHoldsTurn`, `TestPrivateWarehouseErrand`, `TestValuablesLedgerLook`); released
+  stored valuables now reach the store opening ahead of the loot: the round's withdrawal takes
+  them too while the valuables budget is not spent, and a release withdrawal waiting for its open
+  (60 s after the look or a deposit, `warehouse.go:302-311,330-341`) is pending like a round and
+  holds the store back under `StoreHold` (sections 2, 3, 7, V7b, `TestValuablesRoundStart`,
+  `TestValuablesRelease`); the enchant exchange of #356 joins the errand checks of `roundReady`,
+  the pending round and the look (`ench.step` idle; `enchant.go:222-259`, server
+  `network/warehouse.go:291` cancels the selected scroll), with test cases; the stale bot and
+  `docs/plan.md` line citations moved by #356, #359 and the M11-M13 rows are updated (`rules.go`,
+  `brain.go`, `harness.go`, `gear.go`, `crafter.go`, `shop.go`, `store.go`, `clanmember.go`,
+  `datapack_test.go`, `farm_live_test.go`; plan.md lines 321, 328, 332, 343-344); the `noPrivate`
+  marks are per bot and process, since each `Bot` hands its own `valuables` value to its sessions
+  (`session.go:212,349`, `chat.go:43-45`), so N merchants visit a freightman up to N times (sections
+  2, 3, 6, Pacing); the datapack name is `Recipe: Halberd(60%)`, with no space
+  (`items/5400-5499.xml:476`, sections 1, 5).
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang). Datapack paths (`npcs/...`,
@@ -235,7 +258,7 @@ be marked not only by price, but also by how rare the item is".
 | What is worth something | Nothing is. A carried item is kept (supplies, keep set, keep hook, gear worn next), sold to an NPC as junk, or listed in the merchant's store as loot. The `merchant` preset is a clan member: while that option is active (a clan with a crafter on the board), its part of the keep hook keeps every recipe scroll, every material of a clan recipe and every graded item the bot would not wear, and the supply trip's arrival deposits them in the clan warehouse. | `shop.go` `junk`, `keepsItem`; `store.go` `storeLoot`; `cmd/bots/persona.go:46`; `clanmember.go` `wireMember`, `memberActive`, `memberHold`, `memberKeep`, `memberDeposit` (lines 51-60, 101-137, 326-334) |
 | Store | The `merchant` preset opens a private sell store of its loot in a town of the store registry (at most 5 per town, 150 apart), priced 120-150 % of the NPC buy-back price (60-75 % of the reference price), at most 4 rows, within a 50000 adena budget per session. It stays open until sold out, a teleport or a `follow`. | `cmd/bots/persona.go:46`; `cmd/bots/store.go:13,28-30`; `store.go` `StorePolicy`, `defaultStorePolicy`, `ruleStore`, `storePrice`, `storeRows`; `storeregistry.go` |
 | Trade | Answers a player's request: declines in store mode, in combat, from a player out of sight, within `Every` (1 min) of the partner's last accepted request, or with no goods. Offers the whole stack of the first priced item, at the policy price or the store price, adena only in return, confirms once the partner's adena covers the price and the partner stands within 120 (150 less a margin), cancels after `Timeout` (1 min). | `trade.go` `acceptTrade`, `tradeGoods`, `tradePrice`, `tradePaid`, `inTradeRange`, `defaultTradePolicy` |
-| Asking for a trade | Never. `encodeTradeRequest` is reached only from the e2e harness. | `trade.go:139`; `harness.go:136` |
+| Asking for a trade | Never. `encodeTradeRequest` is reached only from the e2e harness. | `trade.go:139`; `harness.go:147` |
 | Chat out | Whisper replies from a canned list, at most 5 an hour, 3-12 s after the whisper, never to a name with the bot marker; the crafter's clan lines. Every line passes the chat gate (3 s). No Shout or Trade line: `docs/plan.md` section 4 says "never on Shout or Trade". The Say2 encoder takes any channel. | `chat.go` `ChatPolicy`, `defaultChatPolicy`, `chatHeard`; `craftorder.go` `answerOrder`; `pacing.go` `chatGap`; `brainpackets.go` `encodeSay2` |
 | Chat in | Whispers (commands, then the canned reply) and clan lines; every other channel is ignored, so bots never react to Trade lines. | `command.go` `heard` (lines 134-157) |
 | Warehouse | The clan warehouse only: the `_DepositC` / `_WithdrawC` links, list type 2, no errand without a clan; 30 adena per deposited row; opens at least 60 s apart. | `warehouse.go` `clanWarehouseCommand`, `clanWarehouseType`, `startWarehouse`, `warehouseFee`, `warehouseOpenGap` |
@@ -263,7 +286,7 @@ Read in the Go server and the datapack on 2026-11-24. Every design choice below 
 | Topic | Server behavior | Evidence |
 | --- | --- | --- |
 | Trade channel (8) | Heard by every player whose position falls in the speaker's restart region; its own flood gate, `TradeChatTime`. | `network/chat.go:115-121`, `handler/chat/chat.go:14-22` |
-| Shout channel (1) | The same region, but its flood gate `GlobalChatTime` is shared with the general (all) channel. Whisper replies go on the tell channel, which has no flood gate. (The bot says nothing on the general channel today: `sayAction`, bot `rules.go:403-405`, has only test callers, `brain_test.go:205,246`, `rules_test.go:69`.) | `network/chat.go:24-28,89-113,149-171` |
+| Shout channel (1) | The same region, but its flood gate `GlobalChatTime` is shared with the general (all) channel. Whisper replies go on the tell channel, which has no flood gate. (The bot says nothing on the general channel today: `sayAction`, bot `rules.go:415-418`, has only test callers, `brain_test.go:205,246`, `rules_test.go:69`.) | `network/chat.go:24-28,89-113,149-171` |
 | Hero Voice channel (17) | The only channel heard by every player online, but a line from a player who is not a hero is dropped with no answer. So no channel a non-hero bot speaks on reaches the whole server. | `network/chat.go:123-128`; `handler/chat/chat.go:12-33` |
 | Restart region | The restart point whose `map` tiles (32768 units square) contain the position: Talking Island town's region is nine tiles (X 15-18, Y 23-25), so farmers at the island's spots hear the town. A position in no region (index -1) is grouped with every other such position. | `network/chat.go:236-255`; `model/restart/restart.go:83-117`; `restartPointAreas.xml:1062-1108` |
 | Chat gates as shipped | `GlobalChatTime = 0`, `TradeChatTime = 0`: no server gate. A line inside a configured gate is dropped with no answer, and the gate is not extended by the dropped line. | `ops/docker/config/server.properties:228-229`; `aCis_gameserver/config/server.properties:228-229`; `network/floodprotector.go:32-41` |
@@ -390,7 +413,7 @@ Each signal and how it is read:
     leader, or `respawn + KillFloor` when its own `respawn` is above 0 and that is shorter (it
     comes back while its leader lives).
     12 templates priced at 10000 or more drop (DROP or SPOIL) only from privates, among them
-    Recipe: Halberd (60%) (5458, 366000), a SPOIL of Judge of Light (21546), a private of Judge of
+    Recipe: Halberd(60%) (5458, 366000; the datapack name has no space, `items/5400-5499.xml:476`), a SPOIL of Judge of Light (21546), a private of Judge of
     Splendor (21544, `respawn="100sec"`) with its own `respawn="0sec"`
     (`spawnlist/22_15.xml:441`). It comes out at `S` 0.045 and `R` 3.35, not at `R = 0`.
 
@@ -440,7 +463,7 @@ worth is not in the datapack.
 **The clan member's hold comes after valuable, on purpose.** The `merchant` preset is a clan
 member (`member: true`, `cmd/bots/persona.go:46`). While that option is active (in a clan with a
 crafter on the board, `clanmember.go:101-104`), `wireMember` wraps the persona's keep hook with
-`memberHold` (`clanmember.go:51-60`), which keeps every recipe scroll, every material of a clan
+`memberHold` (`clanmember.go:51-61`), which keeps every recipe scroll, every material of a clan
 recipe, and every graded item the bot would not wear (`memberKeep`, `clanmember.go:112-137`); the
 member's visit deposits them all in the clan warehouse (`memberDeposit`, `clanmember.go:326-334`).
 Ahead of the valuable test, that hold would take every graded valuable and every valuable recipe
@@ -450,7 +473,7 @@ two are D grade, Conjuror's Staff (184, `items/0100-0199.xml`, `crystal_type` D)
 two, Sword of Watershadow (121, `items/0100-0199.xml`) and Tears of Eva (309,
 `items/0300-0399.xml`), have no `crystal_type`, so the server does not crystallize them,
 `indexCrystals` leaves them out of `TravelMap.crystals` (`crystallize.go:66`, `crystalItem` 0 for
-no grade), and `memberKeep` returns no hold for them (`clanmember.go:121-123`); neither is a
+no grade), and `memberKeep` returns no hold for them (`clanmember.go:127-129`); neither is a
 material of any recipe (`recipes.xml`). The hold would still take half of the table and every
 valuable recipe. So V2b makes two changes in `clanmember.go`:
 
@@ -528,7 +551,7 @@ its owner is the current brain goroutine (`chat.go` `chatLog` is the model).
   first ask, not released, when the row passes the valuable test as far as a warehouse row can
   be tested. A `WarehouseItem` (`warehouse.go:75-84`) carries `TemplateID`, `Enchant`,
   `Augmentation` and `SubCategory`, but no `Equipped` and no `ManaLeft`, and `keeps` and the
-  keep hook take an `Item` the bot carries (`shop.go:609`, `clanmember.go:53-60`). So a row is
+  keep hook take an `Item` the bot carries (`shop.go:610`, `clanmember.go:53-61`). So a row is
   tested on its template and enchant: `ref ≥ PriceFloor`, `V ≥ ValueMin` at the row's `Enchant`,
   not sold by a counted buylist (`cheapest`), not a quest item (`SubCategory` 3,
   `subCategoryQuest`, `trade.go:31`), not augmented (`Augmentation` 0), and not a shadow item (the
@@ -556,15 +579,16 @@ its owner is the current brain goroutine (`chat.go` `chatLog` is the model).
 - **What a round uses.** A round starts for an entry with carried units that is not released
   (section 3); each ad line names the entries with carried units that are not released, at the
   time of the line, so an item sold earlier in the round is not named again. A released entry is
-  in no round: the round's withdrawal leaves it stored, no ad line names it, the round's whisper
-  replies and trades leave it out (section 5), and its rounds and ask do not step. It goes to the
-  store: carried, at the next store opening; stored, through the off-round withdraw errand
-  (sections 3, 7). The cap counts each entry once, released or not, from its derived units.
+  in no round: no ad line names it, the round's whisper replies and trades leave it out (section
+  5), its rounds and ask do not step, and the round's deposit leaves it carried. It goes to the
+  store: carried, at the next store opening; stored, through the round's withdrawal, which takes
+  it along while the valuables budget is not spent, or through the off-round withdraw errand,
+  which holds the store opening back for it under `StoreHold` (sections 3, 7). The cap counts each entry once, released or not, from its derived units.
 
 **Every session looks first.** The ledger lives on the `Bot` and survives sessions, but the
 private status it reads stored units from does not: the warehouse errand is a field of the brain
-(`wh`, `brain.go:220`), `NewBrain` builds a new brain for every session (`session.go:350`), and
-only the chat log is handed across (`session.go:212`, `brain.go:302`). After any reconnect the
+(`wh`, `brain.go:230`), `NewBrain` builds a new brain for every session (`session.go:350`), and
+only the chat log is handed across (`session.go:212`, `brain.go:311-313`). After any reconnect the
 private status is not known, and `trackContents` applies no moved row to a status that is not
 known (`warehouse.go:718-720`), so a deposit before a look would leave the ledger too. So every
 session, not only the first after a process start, learns the stored items from a look at the
@@ -574,8 +598,8 @@ and before any other private request (the off-round errands of section 3 include
 valuable is carried, as soon as the off-round errands' conditions hold (section 3): `roundReady`
 without its region and ad board checks, that is `storeReady`'s state checks, a registry town, a
 private keeper within `RoundReach` (a keeper spawn not marked `noPrivate`, section 6), no errand running (warehouse request, market visit,
-gear `UseItem`, crafter cycle, a clan member's visit not yet settled, store opening or open
-store) and the warehouse open due (`openDue`, `retryAt`). The look says nothing, so it waits neither on `RoundGap`, the valuables budget nor the
+gear `UseItem`, crafter cycle, enchant exchange, a clan member's visit not yet settled, store
+opening or open store) and the warehouse open due (`openDue`, `retryAt`). The look says nothing, so it waits neither on `RoundGap`, the valuables budget nor the
 ad board (whose `ProcessPerHour` cap can hold a region up to an hour, section 3), and the
 off-round deposit and release withdraw that wait for it are not held up by the board either.
 While those conditions do not hold, the look waits outside the turn: the rule does not match for
@@ -590,7 +614,7 @@ look needs a private keeper within `RoundReach` like a round (section 3); in a r
 none, the bot neither looks nor starts a round, and its store opens as today with its loot, the
 valuables staying carried. A town whose only keepers within reach show no private link (Teranu
 Mardui and Kurfa, whose keepers are the alliance keepers; section 3) counts as having none once
-those keepers are marked: its first look of the process marks them (section 6) and ends, and no
+those keepers are marked: its first look of the process (each bot's own, section 2) marks them (section 6) and ends, and no
 look or round follows there. A look is one warehouse open per session, under `warehouseOpenGap`
 like any other (Pacing).
 
@@ -600,7 +624,10 @@ keepers marked `noPrivate` (section 6) live in one `valuables` value, with `open
 and `endRound`, that the `Bot` hands to each session's brain like the chat log
 (`cfg.chat`, `session.go:349`), so the last round's start and end times and its reply counts
 (`RoundGap`, `AnswerAfter`) hold across a reconnect, and so do the `noPrivate` marks, so a
-keeper with no private link is visited once per process, not once per session (section 6). The
+keeper with no private link is visited once per bot and process, not once per session (section 6).
+The value is the bot's own, like its chat log (a field of each `Bot`, `session.go:212`, handed on
+at `session.go:349`; `chat.go:43-45`), so every merchant learns the marks for itself: with N
+merchants in one town, a freightman there is visited up to N times per process. The
 anchor is the bot's position when the round opens: `openRound` takes it and records it with the
 start time, and the invite walk (V6) and every walk back (section 3) read it from the round
 state. A round still open when its session ends
@@ -627,19 +654,19 @@ across sessions (the left-over round).
 ### 3. The round (rule "valuables")
 
 A new rule, right after "loot" and ahead of rule "store" in the brain's rule list
-(`rules.go:461-498`), for a persona with `Valuables` enabled. Combat, prompts and the trade window
+(`rules.go:474-514`), for a persona with `Valuables` enabled. Combat, prompts and the trade window
 (rule 2) and every rule before "loot" keep their priority over it.
 
 **Holding the turn.** From the round's start to its end the rule matches on every decision, also
 while it only waits, so no rule after it runs: no store opening, assist, gear, market, shop, dyes,
 warehouse, supply, travel or spot errand starts and walks the bot away in the middle of a round.
 The private warehouse steps (the look, withdraw and deposit) therefore cannot wait for rule
-"warehouse", which sits after the errands (`rules.go:483-488`) and starts and steps its errand only
+"warehouse", which sits after the errands (`rules.go:493-500`) and starts and steps its errand only
 when it is reached (`warehouse.go:402-406`). The round queues its private request in the warehouse
 errand's private slot (`privateWant`, section 6), starts it with `startWarehouse`, which takes
 that slot ahead of `warehouseWant`, and steps the errand itself: V3a splits the body of `ruleWarehouse` past its start check
 (`warehouse.go:407-433`) into `stepWarehouse`, which both rules call. This turns the crafter's
-arrangement around: "craft" sits after rule "warehouse" and waits for it (`crafter.go:277-279`),
+arrangement around: "craft" sits after rule "warehouse" and waits for it (`crafter.go:279-281`),
 which works because a craft cycle may let errands run between its steps. A round must keep the bot
 where it advertised, so it drives the errand itself.
 
@@ -665,14 +692,14 @@ trade prompt or window, no shop, trip, newbie, class, dyes or train visit, not c
   30151 at 1641 from Mirabel 30146, Julia 30152 at 1664), Esmeralda (30233: Silva 30686 at 1735,
   Sorint 30232 at 1870), Bella (30256: Ballin 30322 at 1946, Haprock 30255 at 2208), Tamil
   (30576: Imantu 30563 at 2328, Grookin 30562 at 2495) and Flauen (30899: Kluck 30895 at 1889, Mia
-  30896 at 1945). There the first private request of the process marks the freightman and the
+  30896 at 1945). There each bot's first private request of the process marks the freightman and the
   next takes the private keeper (section 6). At two town points the only keeper within reach is
   an alliance keeper: Teranu Mardui (31383, `spawnlist/23_16.xml:850`) has Hagos (31381, `:826`)
   at 3326 and its nearest private keeper, Hakon (31268, `spawnlist/24_16.xml:68`), 39103 away;
   Kurfa (31376, `spawnlist/24_15.xml:1099`) has Jaff (31374, `:1123`) at 1007 and Lietta (31267,
   `spawnlist/24_16.xml:67`) 22595 away. Before its first visit the check passes there; once the
   look has marked the alliance keeper, the town counts as having no keeper (below), and with the
-  marks kept for the process that costs one visit per process. A merchant is not allied with
+  marks kept for the process that costs one visit per bot and process. A merchant is not allied with
   either tribe (no preset runs the alliance quests); an allied bot would see `_DepositP` but no
   `_WithdrawP`, and its look marks the keeper the same way. The bot's position when the round
   starts is the round's
@@ -696,10 +723,20 @@ trade prompt or window, no shop, trip, newbie, class, dyes or train visit, not c
   start into a board that holds it;
 - the errands `storeReady` does not check (`store.go:367`): no warehouse request running
   (`wh.running`), no market visit (`market.active()`), no gear `UseItem` waited for (`gear.obj`),
-  no crafter cycle (`craft.phase`), no clan member's visit waiting to be settled
-  (`member.asked`), and no store opening under way or store open. Rule "member" sits after
+  no crafter cycle (`craft.phase`), no enchant exchange (`ench.step` at `enchantIdle`), no clan
+  member's visit waiting to be settled (`member.asked`), and no store opening under way or store
+  open. The enchant check matters because rule "enchant" (`rules.go:501`) sits after
+  "valuables" and runs in town (`enchantFree` asks `inTown`, `enchant.go:274-286`), where rounds
+  start, and its exchange spans several decisions: the scroll's `UseItem`, the server's selection,
+  `RequestEnchantItem`, then the result (`ruleEnchant`, `enchant.go:222-259`, steps
+  `enchantUsed`, `enchantChosen`, `enchantRequested`, `enchantSettling`). A round started between
+  those steps would hold the turn for about 9 minutes with the scroll selected on the server, which
+  refuses a logout meanwhile (`enchant.go:232-238`), and the round's private request would cancel
+  the selection (server `network/warehouse.go:291`, `cancelActiveEnchant` in
+  `warehouseRequestGate`). With the check, rule "enchant" steps its exchange to its end first.
+  Rule "member" sits after
   "warehouse" and runs only once the clan request has ended and it is reached
-  (`clanmember.go:422-462`, `rules.go:487`): it takes the withdrawn rows off the craft board,
+  (`clanmember.go:422-462`, `rules.go:502`): it takes the withdrawn rows off the craft board,
   gives the warehouse lease back, posts the ore shot orders the deposit carried in and resets the
   reserved fees, and never takes the turn. The supply trip's arrival in town, a member's clan
   deposit, is exactly when a round would start, and a round holds the turn for about 9 minutes
@@ -768,16 +805,16 @@ its own moves away from the anchor, holding the turn:
   today.
 
 **Store and round take turns.** A round holds the turn, so rule "store" is not reached while one
-runs. An open store puts the brain on `storeRules` (`rules.go:503-509`), which have no "valuables"
+runs. An open store puts the brain on `storeRules` (`rules.go:518-524`), which have no "valuables"
 rule, so no round starts while the store is open; `roundReady` also refuses an opening under way.
 The server refuses any trade in store mode (`network/trade.go:69-75`), so this order is required,
 not a choice.
 
 **The store waits for a pending round.** Rule "store" sits right after "valuables"
-(`rules.go:477-478` today has "loot", then "store"), and `startStore` opens wherever the bot
+(`rules.go:491-492` today has "loot", then "store"), and `startStore` opens wherever the bot
 stands in a registry town (`store.go:329-353`; `storeReady`, `store.go:356-379`, has no valuables
 check). So when a round cannot start for a moment, the store would open in the same decision; an
-open store puts the brain on `storeRules` (`rules.go:503-509`), where no round starts, and
+open store puts the brain on `storeRules` (`rules.go:518-524`), where no round starts, and
 `acceptTrade` declines every trade in store mode (`trade.go:348-351`); the store then stays open
 until it sells out, a teleport or a `follow` (`store.go:310-314`, it closes only when `StoreType`
 goes to 0). The new valuable would get no round for that whole store session. To prevent this, a
@@ -786,9 +823,28 @@ enabled, an entry with carried units not released, the valuables budget not spen
 passed, a registry town with a private keeper (a keeper spawn not marked `noPrivate`) within
 `RoundReach`, region not -1. The short waits
 are the ad board (`Free`), the warehouse open (`openDue`, `retryAt`), the errand checks
-(warehouse request, market visit, gear `UseItem`, crafter cycle, a clan member's visit not yet
-settled) and the session's look not yet
+(warehouse request, market visit, gear `UseItem`, crafter cycle, enchant exchange, a clan
+member's visit not yet settled) and the session's look not yet
 done (it waits on the same warehouse open and errand checks, section 2).
+
+A **release withdrawal** is pending the same way (V7b): the session's look is done, the ledger
+holds released stored valuables, the valuables budget is not spent, and the bot is in a registry
+town with a private keeper within `RoundReach`; its short waits are the warehouse open and the
+errand checks. Without this the released stored valuables would miss the store in the usual
+flows. The withdrawal needs an open to be due, and right after the session's look or a round's
+deposit the next open is `warehouseOpenGap` (60 s) away: `openDue` waits that long after
+`openedAt` (`warehouse.go:302-311`), and `endTransaction` lifts the wait (`exempt`) only for a
+deposit queued in the same request as a withdrawal (`warehouse.go:330-341`). `storeReady` has no
+such wait (`store.go:356-379`), so rule "store" would open in that minute with the loot and the
+released valuables already carried. The brain would then run `storeRules`, which have no
+"valuables" rule (`rules.go:518-524`), and the store stays open until it sells out, a teleport or
+a `follow` (`store.go:310-314`), so the stored ones would wait that long. This is the common case
+in the session after one whose valuables budget ran out, when the off-round deposit put released
+valuables in the warehouse. So everything below that holds for a pending round holds for a pending
+release withdrawal too, under the same `StoreHold` count. `StoreHold` (2 min) covers the 60 s gap:
+the withdrawal runs, the bot walks back to its anchor, and the opening lists the released
+valuables ahead of the loot (section 7). Only a longer wait, such as a backoff after unanswered
+opens, lets the store open first; the stored ones then wait for the next opening.
 
 - While a round is pending, `storeReady` returns false, for at most `StoreHold` (2 min) counted
   from the first decision it held the store back in this town (the count resets when `town`
@@ -802,12 +858,12 @@ done (it waits on the same warehouse open and errand checks, section 2).
   ends, whatever the timers say: the board can hold a region until the process falls back under
   `ProcessPerHour` (up to an hour), and the warehouse open can be up to `warehouseBackoffMax`
   (30 min, `warehouse.go:22-23,302-311`) away, so a hold on the timers alone would keep rule
-  "store" (`rules.go:477-478`, right after "valuables") and every errand after it from running
+  "store" (`rules.go:491-492`, right after "valuables") and every errand after it from running
   for that long. While an errand runs, the rule does not match, and that errand's rule steps it to
   its end (holding the turn would stall it); the store stays shut by `storeReady`.
-- Once `StoreHold` has passed with no round, the rule stops holding the turn for the pending
-  round and `storeReady` stops holding the store back: the store opens as today with its loot
-  only, or, with no loot to sell, the bot goes on with its errands or farming. The carried
+- Once `StoreHold` has passed with no round (or no release withdrawal), the rule stops holding
+  the turn for it and `storeReady` stops holding the store back: the store opens as today with
+  its loot (and any released valuables already carried), or, with nothing to sell, the bot goes on with its errands or farming. The carried
   valuables stay out of the store (section 1) and start a round once the store has closed, or
   when `roundReady` holds again while the bot is in town (the count starts afresh only in another
   town or after leaving this one).
@@ -818,9 +874,13 @@ done (it waits on the same warehouse open and errand checks, section 2).
 
 **Steps.**
 
-1. **Withdraw** (only when the ledger holds stored valuables that are not released): the private
-   warehouse errand (section 6) withdraws every stored valuable not released, one request; a
-   released stored one stays for the off-round withdraw errand (below, section 7). Then the bot
+1. **Withdraw** (only when the ledger holds stored valuables that are not released, or released
+   ones while the valuables budget is not spent): the private warehouse errand (section 6)
+   withdraws every stored valuable not released, one request. While the valuables budget is not
+   spent, the same request also takes every released stored one (V7b): no ad names them and the
+   round leaves them out (section 2), but they come out with the others, skip the round's deposit
+   (step 5) and are listed by the store opening at the round's end (step 6), with no second open
+   for the off-round withdraw errand. Then the bot
    walks back to the anchor ("Back to the anchor"). A withdrawal that fails (no keeper, no answer)
    leaves them stored in the ledger, and the round advertises only what it carries.
 2. **Advertise:** the first ad line (section 4), said at the anchor once the walk back has ended,
@@ -872,9 +932,9 @@ done (it waits on the same warehouse open and errand checks, section 2).
    refusal) or 15 s have passed since it was sent (`RequestTimeout`, server `trade/book.go:13`),
    and no request from a player waits for the bot's answer. The bot sends no other request
    (`encodeRequestJoinParty` and `encodeRequestJoinPledge` are reached only from the e2e harness,
-   `harness.go:114,119`). Of the requests it receives it sees three (`Prompts`, `world.go:269-284`):
+   `harness.go:124,130`). Of the requests it receives it sees three (`Prompts`, `world.go:269-284`):
    a party invitation and a clan invitation, which rule "prompt" (rule 2, ahead of "valuables")
-   answers at once (`rules.go:563-577`), and a trade request, which it answers there too
+   answers at once (`rulePrompt`, `rules.go:584-603`), and a trade request, which it answers there too
    (`ruleTrade`) and which `storeReady` already checks; a clan invitation does not count on the
    server in any case (server table). A friend, duel, party room or command channel request the
    bot does not decode, so it cannot wait for one: such a request received in the 15 s before the
@@ -891,8 +951,44 @@ done (it waits on the same warehouse open and errand checks, section 2).
    "prompt" answers a party invitation before rule "store" is reached). A request the bot cannot
    see refuses the set-up as it can today, since any player can already send one.
 
-The rule checks `called()` on every decision: a bot called away (`follow`, assist) ends the round
-at once, keeping its valuables carried and depositing nothing. A round cut off after its first ad
+The rule checks `called()` on every decision: a bot called away (`follow`, assist, or the party
+leader it follows, `followed`, `command.go:277-286`; `called`, `store.go:400-403`) ends the round at
+once, keeping its valuables carried and depositing nothing.
+
+**The cut-off cancels the private request.** Ending the round is not enough on its own: a private
+request of the rule may be running (the look, the round's withdrawal or deposit, an off-round
+errand), with the bot on its way to a keeper up to `RoundReach` (6000) away. Once rule
+"valuables" stops matching, rule "warehouse" (`rules.go:500`) is reached before rule "follow"
+(`rules.go:507`), and `ruleWarehouse` steps any running request to its end: it returns early only
+in combat or when no request runs and none starts (`warehouse.go:402-406`), whatever `called()`
+says. Left alone, a `follow` during the deposit would still walk the bot to the keeper and
+deposit. So at the cut-off rule "valuables" ends its own running private request itself, through a
+`cancelPrivate(now)` that V3a adds to the errand:
+
+- before the request's own `RequestWarehouseDeposit` or `RequestWarehouseWithdraw` has gone out
+  (the walk, the talk, the `Chat` links, the open link sent and its list awaited or received, steps
+  `whTalk`, `whOpening`, `whListed`), the request ends at once through `end()`
+  (`warehouse.go:345-348`): no result is recorded, `retryAt` is not set and the private status is
+  left as it was. An open that already went out keeps its `openedAt`, so the next open still waits
+  `warehouseOpenGap` from it (`warehouse.go:302-311`); its late list or 282 is ignored, since the
+  errand drops every event while no request runs (`warehouseEvent`, `warehouse.go:655-659`). A
+  cancelled look leaves the session's look not done, to be run again on a later town visit; a
+  cancelled withdrawal leaves the valuables stored, a cancelled deposit leaves them carried;
+- once the request has gone out (step `whSent`), it is not cancelled: the server may already have
+  moved the rows, and only the errand's `InventoryUpdate` step applies them to the private status
+  (`trackContents`, `warehouse.go:687-693`), which an ended errand would skip. Rule "valuables"
+  keeps holding the turn with a wait, without moving, and steps the request (`stepWarehouse`)
+  until its answer or its timeout, at most `warehouseReplyTimeout` (5 s, `warehouse.go:29`), then
+  lets the turn go;
+- no walk back to the anchor follows a cut-off: the bot is wanted elsewhere, and rule "follow" or
+  "assist" takes it there. A walk back or a walk to a buyer already under way simply stops being
+  stepped.
+
+The same holds for the look and the off-round errands, which are not rounds: a bot called away
+during one cancels its request the same way and lets the turn go. A clan request is never
+cancelled this way: `cancelPrivate` touches only a running request with `Private` set.
+
+A round cut off after its first ad
 line counts like a round that ran to its end: each unsold item's rounds go up by one, its ask
 drops, and the cap runs (step 5), since the items were advertised and did not sell. A round cut
 off before its first line changes nothing, like one that ended at `FirstLineWait`. A failed
@@ -908,7 +1004,9 @@ bot's position when an errand starts is its anchor, and its keeper is chosen as 
 (section 6):
 
 - withdrawing released valuables that are stored (section 7), only while the valuables budget is
-  not spent: once `sold` reaches `Budget` no valuable lists for the rest of the session
+  not spent; while it waits for the warehouse open it is a pending release withdrawal and holds
+  the store back under `StoreHold` ("The store waits for a pending round", above), so it runs
+  ahead of the store opening: once `sold` reaches `Budget` no valuable lists for the rest of the session
   (section 8), so a withdrawal then would only pay an open for an item that stays carried; the
   released ones stay stored, keeping their release mark, for a later session;
 - depositing every carried valuable, released or not, once the valuables budget is spent, so none
@@ -956,7 +1054,7 @@ their way; one the bot cannot see fails the errand as in step 5.
   (`storeregistry.go:14-25,90-101`, claimed at the decision, `store.go:345-350`); a failed claim
   says nothing that decision. The ad step claims only when the chat gate lets a line out now
   (`b.pace.allow(gateChat, now)`, as rule "announce" does, `craftorder.go:225`), so the chat gate
-  never holds a claimed line; one the frame bucket still holds (`send`, `brain.go:760-765`) stays
+  never holds a claimed line; one the frame bucket still holds (`send`, `brain.go:774-779`) stays
   the round's pending line and goes out on a later decision with no second claim. A line counts
   as said at its claim, also when it never goes out (the session ended first), so the board may
   over-count but never under-counts. A held line waits for the next tick; it never queues past the round, and `FirstLineWait` bounds
@@ -984,22 +1082,46 @@ their way; one the bot cannot see fails the errand as in step 5.
 valuables responder instead of the canned reply (`chatHeard`):
 
 - **naming an item** (case-insensitive, over the entries with carried units that are not
-  released, section 2): a line names an
-  entry when it contains the entry's full name, the longest such name winning (`sword of
-  watershadow`); else when it contains a distinctive word of exactly one entry's name. A
-  distinctive word has at least 4 letters, is no stop word (`of`, `the`, `and`, `for`, `with`,
-  `from`) and no word the item names share by kind (`scroll`, `enchant`, `recipe`, `grade`,
-  `weapon`, `armor`), and matches a whole word of the line, not a part of one. Common words in
+  released, section 2). A word of an entry's name **points at** that entry when it has at least
+  4 letters, is no stop word (`of`, `the`, `and`, `for`, `with`, `from`) and matches a whole word
+  of the line, not a part of one. A pointing word is **distinctive** unless it is a word the item
+  names share by kind (`scroll`, `enchant`, `recipe`, `grade`, `weapon`, `armor`). Each line has
+  exactly one of three outcomes, tested in this order:
+  1. it **names** an entry when it contains the entry's full name, the longest such name winning
+     (`sword of watershadow`);
+  2. else, when its distinctive words point at any entry: it names that entry when they point at
+     exactly one, and it **points at several** when they point at two or more;
+  3. else, when its kind words point at any entry: it names that entry when they point at exactly
+     one, and it points at several when they point at two or more;
+  4. else it **names nothing**.
+
+  Stop words point at nothing, and a distinctive word wins over a kind word. Common words in
   names are real: Sword of Watershadow (`items/0100-0199.xml:300`) and Tears of Eva
   (`items/0300-0399.xml:224`) both hold `of`, so "of course" or "out of adena" name nothing,
-  while "tears?" names Tears of Eva and "watershadow 150k" names the sword. A line whose
-  distinctive words point at two or more entries names none of them;
+  while "tears?" names Tears of Eva and "watershadow 150k" names the sword. With two scrolls
+  held, "scroll 50k" points at both (its only pointing word is the kind word `scroll`); with one
+  scroll and the sword held, it names the scroll; "watershadow scroll" names the sword;
+- **reading a price.** A price is a whole word of the line, after the full item name it
+  contains (if any) is taken out, that is a number written with digits (an optional `.` or `,`
+  decimal part) and either a suffix `k` (thousand), `kk` or `m` (million), or no suffix and a
+  value of at least 1000 (`150000`, `150k`, `1.2kk`, `1.2m`; `150 000` reads as no price). These
+  are never a price: a number with a `+` before it (the enchant of a label, `+5`), a number with
+  `x` right before or after it (a unit count, `2x`, `x2`), a number inside a word or with other
+  signs around it (`Halberd(60%)`, `items/5400-5499.xml:476`, has `60%`, which is no whole word of
+  digits), and a bare number under 1000 (`how much for 2 tears`). A price is per unit, as the
+  labels show (section 4: `2x <name> <price>`, the price each). A line with two or more prices
+  takes none and gets the asks (it is not clear which one is the offer). So "how much for +5
+  conjuror's staff?" holds no price and is a price question, "2x tears 150k" an offer of 150000
+  each, "recipe: halberd(60%) 300k" an offer of 300000;
 - a line naming a held item or asking a price (`?`, `how much`, `price`) is answered `<name> <ask>,
-  trade me`; one whose words point at several entries is answered with their asks, `WTS <name>
+  trade me`; one that points at several entries is answered with their asks, `WTS <name>
   <ask>, <name> <ask>, which?`;
-- a line with a price (`150000`, `150k`, `1.2kk`, `1.2m`) is an **offer** on the item it names, else
-  on the only valuable, else on the top-scored one; an offer in a line whose words point at
-  several entries is not taken, and the line gets the asks as above:
+- a line with a price is an **offer** on the item it names; when it names nothing, on the only
+  valuable, else on the top-scored one; an offer in a line that points at several entries is
+  not taken, and the line gets the asks as above. An offer below half the item's floor is not
+  haggled on: it is answered like a price question (`<name> <current>, trade me`, the partner's
+  current price) and uses no counter, so a lowball or a misread number never draws the floor out
+  of the bot. Otherwise:
   - at or above the partner's current price: agreed at the current price, answered `ok <price>,
     trade me`;
   - below it, with counters left (`Counters`, 2 per partner and item a round): the bot counters
@@ -1020,7 +1142,7 @@ own bound is `chatMaxText`, `craftorder.go:23`). A dropped reply would still cou
 `RepliesPerPartner` and `Replies` and leave the buyer with nothing, so every reply is composed to
 fit: a reply that lists entries (`WTS <name> <ask>, <name> <ask>, which?`, `WTS <names>, trade
 me`, `WTS <names> again soon`) takes whole labels in score order, as many as fit with its fixed
-words, and leaves the rest out (six held entries with names such as `Recipe: Halberd (60%)` or
+words, and leaves the rest out (six held entries with names such as `Recipe: Halberd(60%)` or
 `Conjuror's Staff (D)` do not fit one line); a one-item reply whose label alone would not fit
 is cut on a rune by `clipChat` (`craftorder.go:231-240`), which no shipped name needs. The
 check runs when the reply is composed, as it goes out (Queue, below).
@@ -1033,7 +1155,7 @@ Reply pacing and queue:
   (`chat.go:128`, `b.chat.reply.kind != actHold`). The responder keeps its own queue in the round
   state instead: at most one pending reply per partner (a newer whisper from that partner replaces
   its pending reply, answered on the newest state), any number of partners, sent earliest due
-  first by rule "chat" (`rules.go:468`, ahead of "valuables"), so a second buyer's whisper is not
+  first by rule "chat" (`rules.go:482`, ahead of "valuables"), so a second buyer's whisper is not
   dropped while the first one's reply waits. The queue belongs to the responder, not to the open
   round: it outlives the round for `AnswerAfter`, so a whisper heard during the round whose reply
   is still waiting when the round ends keeps its reply. Such a reply is composed when it goes out,
@@ -1118,7 +1240,7 @@ The warehouse errand (`warehouse.go`) gains a `Private` request flag:
   `Persona.Warehouse.Want` is set or the crafter's cycle runs, and unless the bot is in a clan
   (`if (p.Want == nil && !b.crafting()) || ... || b.world.Clan.ID == 0 || ...`,
   `warehouse.go:588-590`), and it takes its request only from `warehouseWant`: the crafter's
-  cycle while it runs, else `Persona.Warehouse.Want`, else none (`crafter.go:214-222`). A
+  cycle while it runs, else `Persona.Warehouse.Want`, else none (`crafter.go:214-224`). A
   valuables persona has no `Want` of its own, so as written no private request could start. V3a
   adds a slot on the errand, `e.privateWant`, holding at most one queued `WarehouseRequest` with
   `Private` set; rule "valuables" fills it with the round's look, withdrawal or deposit and with
@@ -1169,7 +1291,9 @@ the request's `Anchor` once the request ends (section 3, "Back to the anchor"), 
   errand's `noPrivate` set is a field V3a adds, and V3b gives the errand the set kept in the
   `valuables` value (section 2), which the `Bot` hands to each session's brain, so a session
   after a reconnect neither walks to a marked keeper again nor waits `retryAt` for it. The marks
-  are per process; a process restart learns them again, once per keeper. A 142 does not set the
+  are per bot and per process, not shared between bots: each `Bot` hands its own `valuables`
+  value to its sessions (section 2), so each merchant marks a keeper once, and a process restart
+  learns them again, once per keeper and bot. A 142 does not set the
   mark (next bullet);
 - a refused link is not a missing link: during a transaction in progress the server answers every
   bypass to a keeper, its `Chat` links included, with 142 (server table, "Warehouse request
@@ -1257,9 +1381,11 @@ released alone after `MaxRounds`. Example: Scythe (96), reference price 2290000
 Glaive (298) at the same price.
 
 A released valuable that is carried at the round's end is not deposited (step 5); one that is
-stored is withdrawn by the rule's withdraw errand (section 3) while the valuables budget is not
-spent; once it is, the released one stays stored for a later session. It needs no round, and is listed by
-the store opening ahead of the ordinary loot, at its floor (section 5: the worth `W`, the enchant
+stored is withdrawn while the valuables budget is not spent, by the next round's withdrawal
+(step 1) or by the rule's off-round withdraw errand (section 3), which holds the store opening
+back under `StoreHold` while it waits for its open; once the budget is spent, the released one
+stays stored for a later session. It needs no round, and is listed by the store opening ahead
+of the ordinary loot, at its floor (section 5: the worth `W`, the enchant
 scrolls included, times `FloorPct`). That needs three changes to the store, all in V7b:
 
 - `storeReady` returns false once the store budget is spent (`store.go:358`); it now holds back
@@ -1306,7 +1432,7 @@ stored one is withdrawn (section 3).
 
 Counting: a trade counts its price on `SendTradeDone` with success. The store counts one total
 today: `countSold` adds the adena gained since the list to `store.sold` when the store closes, with
-no split by row (`store.go:541-553`). V7b adds the split: the opening keeps each listed valuable
+no split by row (`countSold`, `store.go:547-556`). V7b adds the split: the opening keeps each listed valuable
 row's object, count and price; at the close, the units a valuable row lost (its listed count less
 the count still carried) times its price count in the valuables budget, and the store budget gets
 the total less that. The ledger needs no step of its own for either sale: the sold units leave the
@@ -1356,7 +1482,7 @@ one `TravelMap.supply` table every bot shares, so `NewTravelMap` takes them in i
 | Trade window (`AddTradeItem`, `TradeDone`) | unchanged: one add and one confirm per trade | unchanged |
 | Walk to a buyer | the walker's legs through the frame bucket (5/s, burst 10) | 160 frames/s, 400 per 5 s (`pacing.go`) |
 | Walk back to the anchor (after each keeper visit and each walk to a buyer) | the walker's legs (`goTo`) through the frame bucket (5/s, burst 10); one walk per keeper visit or buyer, at most `RoundReach` (6000) long | 160 frames/s, 400 per 5 s (`pacing.go`) |
-| Private warehouse (bypasses, two requests) | one look per session, then a withdrawal and a deposit per round; off-round, a release withdraw while released valuables are stored and the valuables budget allows, and a deposit of the carried valuables once the budget is spent (one open each, the deposit at most once per new find); every open at least `warehouseOpenGap` (60 s) after the last but the deposit after its own withdrawal, `retryAt` (60 s) and the timeout backoff (up to 30 min) after a failure; `bypassGap` (500 ms), the reply timeout (5 s); a keeper visit that ends on a new `noPrivate` mark sends no open (a talk and its `Chat` clicks, at most `visitClicks`) and repeats at most once per keeper template per process, the marks kept across sessions | `ServerBypassTime` (100 ms), the silent request gate |
+| Private warehouse (bypasses, two requests) | one look per session, then a withdrawal and a deposit per round; off-round, a release withdraw while released valuables are stored and the valuables budget allows, and a deposit of the carried valuables once the budget is spent (one open each, the deposit at most once per new find); every open at least `warehouseOpenGap` (60 s) after the last but the deposit after its own withdrawal, `retryAt` (60 s) and the timeout backoff (up to 30 min) after a failure; `bypassGap` (500 ms), the reply timeout (5 s); a keeper visit that ends on a new `noPrivate` mark sends no open (a talk and its `Chat` clicks, at most `visitClicks`) and repeats at most once per keeper template per bot and process (N merchants in one town visit its freightman up to N times), the marks kept across sessions of that bot | `ServerBypassTime` (100 ms), the silent request gate |
 | Store | unchanged | unchanged |
 
 ## Owner decisions
@@ -1365,10 +1491,10 @@ Proposed, awaiting the owner:
 
 | # | Question | Proposal |
 | --- | --- | --- |
-| D30 | May a bot speak on Trade or Shout? | The owner asked for "a global message"; the server has none for a bot: Trade and Shout are heard only in the speaker's restart region (`network/chat.go:108-122`), and Hero Voice, the only channel heard server-wide, drops a non-hero's line (`network/chat.go:123-128`). So an ad reaches the players of the bot's own region only (a merchant advertising in Giran is not heard in Aden). Proposal: the `merchant` preset may advertise its valuables on **Trade** only (channel 8, heard in the speaker's restart region), at the per-bot, per-region and process caps of section 4; never on Shout. This amends the `docs/plan.md` section 4 bullet (lines 329-330) in two places: "never on Shout or Trade" gains this exception, and "Chat only when answering a whisper" gains the ads, the only unprompted lines a bot says. The alternative is Trade and Shout both, under the same caps. |
+| D30 | May a bot speak on Trade or Shout? | The owner asked for "a global message"; the server has none for a bot: Trade and Shout are heard only in the speaker's restart region (`network/chat.go:108-122`), and Hero Voice, the only channel heard server-wide, drops a non-hero's line (`network/chat.go:123-128`). So an ad reaches the players of the bot's own region only (a merchant advertising in Giran is not heard in Aden). Proposal: the `merchant` preset may advertise its valuables on **Trade** only (channel 8, heard in the speaker's restart region), at the per-bot, per-region and process caps of section 4; never on Shout. This amends the `docs/plan.md` section 4 bullet (lines 343-344) in two places: "never on Shout or Trade" gains this exception, and "Chat only when answering a whisper" gains the ads, the only unprompted lines a bot says. The alternative is Trade and Shout both, under the same caps. |
 | D31 | What makes an item valuable? | The score of section 1: reference price times `2^R`, `R` from the server-wide supply ceiling (drops times spawns over the respawn cycle; the Seven Signs catacomb and `_none` seal makers at half, seasonal event makers not at all), 0 for items a spawned NPC multisell makes from non-gear ingredients, halved for craftable items, raised by enchant past the safe level; valuable at score 100000 and price 10000. Multisell upgrade rows (which consume another weapon or armor) do not make an item common, a refinement of "multisell items are never rare". A second refinement of the same kind for shops: an item an NPC buylist sells is never valuable, but only buylists of an NPC id above 0 count (`cheapest`, the test `storeLoot` uses; `indexShops` skips the rest, `shop.go:283-285`). The 212 `npcId="-1"` lists, which no NPC sells from, are left out, and they carry all four valuable rows of the section 1 table (433 in list 1001, `buyLists.xml:9408,9477`; 309 in 2012, `:10437,10442`; 121 in 9001, `:11612,11620`; 184 in 9017, `:11868,11872`): read literally, "items sold in buylists are never rare" would make none of them valuable. A valuable comes before the clan member's hold (section 1): a member merchant sells a valuable recipe scroll or valuable graded gear to players instead of depositing it for the clan crafter. The alternative is the member's hold first, so a member merchant whose clan has a crafter never sells a graded valuable or a valuable recipe scroll (two of the four valuable rows of the section 1 table, Conjuror's Staff and Elven Tunic, are D grade, and Recipe: Halberd is a recipe); the two with no grade, Sword of Watershadow and Tears of Eva, are not in the member's hold either way. |
-| D32 | How does a bot price and sell a valuable? | Ask 100-150 % of the reference price by rarity, plus the reference price of the enchant scrolls on the item, lowered 10 points per unsold round; floor the worth (reference price plus the enchant scrolls) or the store price, whichever is higher; two counters per buyer and item a round; no sale below the floor, so an enchanted item never goes for its bare reference price. The bot may ask a whisperer in sight for a trade (one request per buyer a round). This amends two `docs/plan.md` trade defaults: "trades are fixed-price sales of the bot's own goods for adena" (line 314) gains that a valuable's trade price is haggled between ask and floor; and "rate-limit trade requests per partner" (line 318), which today covers only requests a player sends (the bot never sends one, `trade.go:139`), gains that the bot may send one, at most one per partner a round and one open at a time. It also amends the section 4 chat bullet (lines 329-330, "rate-limited per sender and capped per bot in total") for whisper replies during a round and for `AnswerAfter` (30 min) after it to a whisper naming a held item (no offer, no trade outside a round): up to 4 per partner and 20 per round (rounds 30 min apart, about 40 an hour), outside the canned reply's caps of one per sender per 10 min and 5 an hour (`chat.go:32-40`), still after a 3-12 s delay, still never to a marked name. |
-| D33 | Hold, warehouse and cap | A 5 min round of ads, then the private warehouse (30 adena a row); a new valuable brings the stored ones out for another round together; after a round, everything goes to the town store once the held valuables take more than 6 warehouse rows or the asks of those asking at most 2000000 pass 2000000, and an item unsold through 3 rounds (or one asking more than 2000000 alone, after its 3 rounds) goes alone. The cap runs before the round's deposit, so a released item that is carried is never deposited. Released valuables list at their floor, the worth (reference price plus the enchant scrolls, so a +5 item lists at its scrolls' worth too), at least the reference price, i.e. at least twice the NPC buy-back: this amends the `docs/plan.md` merchant default "price between 1.2 and 1.5 times the NPC buy-back price" (line 307), and `StorePolicy.MaxMarkup` (under 200) does not bound these rows. |
+| D32 | How does a bot price and sell a valuable? | Ask 100-150 % of the reference price by rarity, plus the reference price of the enchant scrolls on the item, lowered 10 points per unsold round; floor the worth (reference price plus the enchant scrolls) or the store price, whichever is higher; two counters per buyer and item a round; no sale below the floor, so an enchanted item never goes for its bare reference price. The bot may ask a whisperer in sight for a trade (one request per buyer a round). This amends two `docs/plan.md` trade defaults: "trades are fixed-price sales of the bot's own goods for adena" (line 328) gains that a valuable's trade price is haggled between ask and floor; and "rate-limit trade requests per partner" (line 332), which today covers only requests a player sends (the bot never sends one, `trade.go:139`), gains that the bot may send one, at most one per partner a round and one open at a time. It also amends the section 4 chat bullet (lines 343-344, "rate-limited per sender and capped per bot in total") for whisper replies during a round and for `AnswerAfter` (30 min) after it to a whisper naming a held item (no offer, no trade outside a round): up to 4 per partner and 20 per round (rounds 30 min apart, about 40 an hour), outside the canned reply's caps of one per sender per 10 min and 5 an hour (`chat.go:32-40`), still after a 3-12 s delay, still never to a marked name. |
+| D33 | Hold, warehouse and cap | A 5 min round of ads, then the private warehouse (30 adena a row); a new valuable brings the stored ones out for another round together; after a round, everything goes to the town store once the held valuables take more than 6 warehouse rows or the asks of those asking at most 2000000 pass 2000000, and an item unsold through 3 rounds (or one asking more than 2000000 alone, after its 3 rounds) goes alone. The cap runs before the round's deposit, so a released item that is carried is never deposited. Released valuables list at their floor, the worth (reference price plus the enchant scrolls, so a +5 item lists at its scrolls' worth too), at least the reference price, i.e. at least twice the NPC buy-back: this amends the `docs/plan.md` merchant default "price between 1.2 and 1.5 times the NPC buy-back price" (line 321), and `StorePolicy.MaxMarkup` (under 200) does not bound these rows. |
 | D34 | Which budget bounds valuable sales? | Their own per-session budget, `-valuables-budget`, default 2000000 adena, apart from `-store-budget`. Valuables are offered and listed while the session's valuable sales are under it, so one sale may pass it by its own price (an item priced above it still sells once a session). |
 
 ## Testing
@@ -1380,7 +1506,7 @@ Proposed, awaiting the owner:
   row's NPCs, ingredients and productions; the restart reader keeps each point's map tiles; the
   enchant scroll table by grade and kind. `TestLoadShippedDatapack` and a
   `TestLoadShippedValuables` (both under `BOT_DATAPACK_XML`, skipped without it, as
-  `datapack_test.go:205-211` does) load the shipped files.
+  `datapack_test.go:215-221` does) load the shipped files.
 - **Score (unit, table-driven):** `TestValueScore`: a shop-sold item is no loot; a non-gear
   multisell product has `R = 0`; an upgrade row is no source; a recipe halves `R`; a raid-only
   drop is rare; SPOIL counts at 0.2; a maker with no event or a `SpawnEvents` event counts
@@ -1436,15 +1562,19 @@ Proposed, awaiting the owner:
     opening under way; none out of a registry town (a bot within `storeTownRadius` of a town with
     no free store place still starts one); none in region -1; none while the ad board holds the
     region (another bot's line within `RegionGap`, or the process hour cap); none while a
-    warehouse request, a market visit, a gear `UseItem` or a craft cycle runs; for a clan member
+    warehouse request, a market visit, a gear `UseItem`, a craft cycle or an enchant exchange runs
+    (with the scroll selected, `enchantChosen`, the exchange's `RequestEnchantItem` goes out and
+    its result is taken before the round starts, and no `_WithdrawP` or `_DepositP` goes out
+    meanwhile); for a clan member
     arriving with its supply trip's clan deposit just ended (`member.asked` set), none until rule
     "member" has settled it (the withdrawn rows taken off the board, the lease given back, the
     ore shot orders posted), and the round starts on a later decision; none while the
     warehouse open is not due (within 60 s of a clan open, or in the backoff after an unanswered
     one) or before `retryAt`, and the round starts once it is due; a valuable left carried by a
     cut-off round or a failed deposit starts the next round `RoundGap` later with no new find;
-    stored valuables with none carried start no round; a released stored valuable is not in the
-    round's `_WithdrawP` rows and no ad line names a released carried one. Dion (`town` at
+    stored valuables with none carried start no round; no ad line names a released carried one
+    (that the round's `_WithdrawP` also takes the released stored ones is V7b's, in
+    `TestValuablesRelease`). Dion (`town` at
     keeper 30058's spawn finds no town): a bot at Dion's town point (Trisha's spawn) with the
     session's look not done looks at keeper 30058, 5348 away (within `RoundReach`), walks back to
     within `anchorArrive` of where it started, and only then starts the round, so `roundReady`'s
@@ -1489,8 +1619,16 @@ Proposed, awaiting the owner:
   - `TestValuablesHoldsTurn`: during a round, a due gear, market, shop, supply or clan warehouse
     errand does not start and the bot does not move off; the deposit's private request runs to its
     end while rule "warehouse" is not reached; a `follow` ends the round at once with no deposit:
-    after the first line it steps the items' rounds and asks, before it nothing changes. The cap
-    at that cut-off is V7b's and is tested in `TestValuablesRelease`.
+    after the first line it steps the items' rounds and asks, before it nothing changes. A
+    `follow` (and, in a variant, the party leader moving off) while the round's deposit walks to
+    a keeper 5348 away (Dion): the private request ends on that decision, no `_DepositP` and no
+    `RequestWarehouseDeposit` go out, no walk back follows, and the next decision's legs are rule
+    "follow"'s toward the commander, not toward the keeper; the valuables stay carried and no
+    `retryAt` is set. A `follow` with the deposit's list open (`whListed`): no deposit request goes
+    out. A `follow` after `RequestWarehouseDeposit` went out (`whSent`): the bot sends no legs
+    until the `InventoryUpdate` (the ledger then counts the units stored) or the 5 s timeout, then
+    follows. A `follow` during the round's withdrawal likewise ends it, the valuables staying
+    stored. The cap at that cut-off is V7b's and is tested in `TestValuablesRelease`.
   - `TestItemLabel` (V2b): names (every scored template has one in `itemNames`, not only recipe
     products), enchant and grade, an entry of two units as `2x <name>`, `k` and `kk` rounded up to
     the shown unit, never below the ask.
@@ -1510,8 +1648,14 @@ Proposed, awaiting the owner:
     Names: with Sword of Watershadow and Tears of Eva held, "of course" and "out of adena" name
     nothing (a price-less line gets `WTS <names>, trade me`, an offer in it goes to the top-scored
     one), "tears?" names Tears of Eva, "watershadow 150k" is an offer on the sword, "sword of
-    watershadow" names it by its full name; with two held scrolls, "scroll 50k" takes no offer and
-    gets both asks. Length: with seven held entries of long names, a price question naming
+    watershadow" names it by its full name; with two held scrolls, "scroll 50k" points at both,
+    takes no offer and gets both asks; with one held scroll and the sword, "scroll 50k" is an offer
+    on the scroll, and "watershadow scroll" names the sword. Prices: with a +5 Conjuror's Staff
+    held, "how much for +5 conjuror's staff?" gets the ask and uses no counter (`+5` is no price);
+    "2x tears 150k" is an offer of 150000 a unit; with `Recipe: Halberd(60%)` held, "recipe:
+    halberd(60%) 300k" is an offer of 300000 (the `60` is no price); "tears 500" (under 1000) and
+    "tears 150k 140k" (two prices) take no offer; an offer below half the floor gets the current
+    price and leaves both counters. Length: with seven held entries of long names, a price question naming
     several, a line naming none and an after-round price question each get a reply of at most
     100 UTF-16 units listing the top-scored labels that fit, whole, and every reply sent counts
     once in the caps. After the round (ended with `endRound`, the valuable still carried, since
@@ -1578,14 +1722,20 @@ Proposed, awaiting the owner:
     counts in no cap; with the budget spent, a released stored valuable is not withdrawn, and the
     off-round deposit takes the carried released ones too. A round with a released stored
     valuable and a released carried one (both from an earlier round's cap): the round's
-    `_WithdrawP` rows leave the stored one out, no Trade line names either, a whisper naming one
+    `_WithdrawP` rows take the stored one too while the valuables budget is not spent (none with
+    it spent), no Trade line names either, a whisper naming one
     gets no haggle answer and `tradeGoods` offers neither, and their rounds do not step at the
     round's end. Dion: the store opening after a round whose cap released a carried valuable
     sends `RequestPrivateStoreManageSell` at the anchor, not at keeper 30058, and lists the
     released valuable first, then the loot. After a process start, the look's stored rows (a +0
     Sword of Watershadow, a +5 Conjuror's Staff) count in the cap of the next round's end; a
     round left open by an ended session and cut off after its first line runs its cap only once
-    the next session's look is done.
+    the next session's look is done. A session whose look finds a released stored valuable
+    (marked in an earlier session of the process, with loot to sell): no
+    `RequestPrivateStoreManageSell` goes out and the bot does not move during the 60 s until the
+    open is due; then the off-round `_WithdrawP` takes it, the bot walks back, and the opening
+    lists it first, then the loot. With the warehouse open in a backoff past `StoreHold`, the store
+    opens at `StoreHold` with the loot only.
   - `TestValuablesStoreSplit`: a store listing one valuable row and two loot rows closes with the
     valuable and one loot row sold: the valuable's price counts in the valuables budget, the rest
     of the adena gained in the store budget; the sold valuable's entry is gone from the ledger and
@@ -1596,7 +1746,7 @@ Proposed, awaiting the owner:
     visit looks at the private warehouse (282 or a type 1 list) with no valuable carried too, as
     soon as the warehouse open is due, with the ad board held (another bot's line within
     `RegionGap`, or the process hour cap) and within `RoundGap` of the last round; not while a
-    warehouse request, market visit, gear `UseItem` or crafter cycle runs, nor out of a registry
+    warehouse request, market visit, gear `UseItem`, crafter cycle or enchant exchange runs, nor out of a registry
     town or with no private keeper within `RoundReach`; after the look the bot walks back to within
     `anchorArrive` of where it started and lets the turn go. After a process start (a fresh
     `valuables` value, no entries) the look's type 1 list holds a +0 Sword of Watershadow, a +5
@@ -1613,7 +1763,9 @@ Proposed, awaiting the owner:
     the next session's look goes straight to Rolfe, the mark kept in the `valuables` value.
     Teranu Mardui (Hagos 31381 answering a page with no link, as `31381-no.htm`): the look marks
     Hagos, no unmarked keeper is left within `RoundReach`, the bot walks back, and no further look
-    runs in that session or the next.
+    runs in that session or the next. A `follow` while the look walks to its keeper ends the look
+    request at once (no `_WithdrawP`, no walk back, the next legs rule "follow"'s), and the
+    session's look is still not done, so it runs on the next town visit.
   - `TestPrivateWarehouseErrand`: a queued private request starts for a persona with no
     `Persona.Warehouse.Want`, no crafter cycle and no clan, and with a clan `Want` due it starts
     first; with the slot empty and no `Want`, nothing starts; no clan needed; the exact `_DepositP` and `_WithdrawP` links; a
@@ -1621,7 +1773,11 @@ Proposed, awaiting the owner:
     links found on a first page and on `Chat 1`; a private request neither sets nor reads
     `noClan`; a 142 answering the `Chat 1` bypass fails the request `WarehouseRefused` with
     `retryAt` 60 s on and marks the keeper neither `noPrivate` nor (for a clan request) `noClan`,
-    and a later request at that keeper follows `Chat 1` again; `stepWarehouse` steps a request without rule "warehouse"; for a clan member with a
+    and a later request at that keeper follows `Chat 1` again; `stepWarehouse` steps a request without rule "warehouse";
+    `cancelPrivate` ends a private request on its walk, at its talk, with its open link sent and
+    with its list received, each with no result recorded, no `retryAt`, the private status
+    unchanged and `openedAt` kept (a list arriving after it is ignored), leaves a request at
+    `whSent` running, and leaves a running clan request alone; for a clan member with a
     known clan view, a private look (a type 1 list, or 282), withdrawal and deposit leave the clan
     `Contents`, `Known`, `Withdraw` and `Deposit` unchanged and fill the private status; a private
     deposit counts free slots against the private contents and 100 (120 for a dwarf), and the
@@ -1662,14 +1818,14 @@ Proposed, awaiting the owner:
     (`gear.go:219`), and Sword of Watershadow is a sword that is not magical
     (`items/0100-0199.xml:300-302`, pAtk 24, no grade), an upgrade for a fighter but no gear for
     a mystic; Tears of Eva is `weapon_type` ETC (`items/0300-0399.xml:224-227`), which `indexGear`
-    leaves out for every class (`gear.go:356-358`). Each scenario checks at its start that the
+    leaves out for every class (`gear.go:350`). Each scenario checks at its start that the
     merchant wears neither item after the gift. The buyer accepts the bot's `TradeRequest`, which
     no harness client has done: the harness exports `EncodeTradeRequest`, `EncodeAddTradeItem`
-    and `EncodeTradeDone` (`internal/botclient/harness.go:136-143`) but no answer, and
+    and `EncodeTradeDone` (`internal/botclient/harness.go:147-154`) but no answer, and
     `encodeAnswerTradeRequest` is unexported (`trade.go:145-150`, used only by `trade.go:181` and
     the unit tests), so V9 adds `EncodeAnswerTradeRequest(accept bool)` to `harness.go`, a
     wrapper like the other three.
-  - Keepers. The scenarios run in Talking Island (`townTI`, `internal/e2e/farm_live_test.go:113`,
+  - Keepers. The scenarios run in Talking Island (`townTI`, `internal/e2e/farm_live_test.go:114`,
     beside Roxxy; `toTown`, `helpers_m4_live_test.go:53-56`), where the keeper nearest the town
     point is the freightman Rant (30054, 2317 from Roxxy) and the private keeper is Rolfe (30055,
     2508; `spawnlist/17_25.xml:197-200`). So the merchant's first look of the process talks to
@@ -1700,13 +1856,13 @@ Each PR lands behavior-neutral for every preset until V8 enables the policy for 
 | V1 | Datapack: NPC drops and each NPC template's `<private>` rows (id, respawn), multisell rows, the spawnlist's `<private>` rows under each entry (id, respawn; `spawnlist.go:92` skips them today), each maker's `<ai type>` with its `<set>` params and its `spawnTime` attribute (`spawnlist.go:85-89` skips `<ai>` today; the supply needs the type, `EventName`, `IsNight`, `on_start_spawn`, `maker_name1`-`maker_name3` and `maker_cnt`), restart point map tiles, the normal enchant scroll ids by grade and kind (item names need no reader work: `datapack/items.go:238,354` already keep every name); fixture and shipped tests. | 1, 4 | M10 S2 (#321), which also extends `datapack/npc.go` |
 | V2a | The supply table on the travel map (`S` and the multisell and craftable marks), with the maker shares by event, start and type, and `NewTravelMap`'s `SupplyConfig` (the `-spawn-events` flag and the supply defaults); the score: `ValuablePolicy` with only its score fields (`PriceFloor`, `ValueMin`, `CommonSupply`, `RMax`, `CraftDivisor`, `EnchantRare`; disabled), the per-persona rarity `R`, the enchant terms and the score `V` over the map's table, called from tests only; the restart region of a position; `TestValueScore`, `TestValuablesShipped`, `TestRestartRegion`. | 1, 4 | V1 |
 | V2b | The rest of `ValuablePolicy` (`Enabled`, `RoundReach` and the other persona defaults; disabled); the classification and its precedence in `junk`, `storeLoot` and `tradeGoods`, ahead of the clan member's hold (`wireMember` keeps the persona's own hook, `memberKeep` leaves valuables, section 1); the `valuables` value: the ledger's entries, derived units, rows and lifecycle, the round state with its anchor, `openRound(anchor)` and `endRound`, and the set for the `noPrivate` marks (section 2); rule "valuables" in the rule list as a stepper that matches only while a round is open and opens none, with the walk back to an anchor (`anchorArrive`) that V3b, V6 and V7a call; the travel map's `itemNames` extended from recipe products to every scored template (section 4); the item label (name, `+N`, grade) and the price shorthand (`173k`, `1.2kk`), which the ad composer (V4) and the responder (V5) both use; `TestValuableClassification`, `TestValuablesLedger`, `TestItemLabel`. | 1, 2, 3, 4, 9 | V2a |
-| V3a | The private warehouse in the warehouse errand: the `Private` flag, links on any page, list type, the queued private request slot (`privateWant`) and `startWarehouse`'s guard and order (a queued private request starts with no `Want`, no crafter cycle and no clan, ahead of `warehouseWant`), no clan, `noPrivate` apart from `noClan` (keyed by template, set when the pages lack the link the request needs, ending the request `WarehouseUnreachable` with no `retryAt`, the keeper choice skipping marked keepers, the set one the errand can be handed), a 142 at the talk step failing the request with no mark (private and clan requests), look, priority over clan requests; the private status apart from the clan one (list, 282, results, `trackContents` with the deposited row's `ObjectID` and `Enchant`, `depositRows`) and the private slot count; the `Anchor` and `Reach` of a private request and the keeper rule that reads them (within `Reach` of the request's `Anchor`; V3b and V7a pass the anchor and `RoundReach`); `stepWarehouse` split out of `ruleWarehouse`; `TestPrivateWarehouseErrand`. | 6 | — |
-| V3b | The session's look in rule "valuables": its conditions (the off-round errands': `storeReady`'s state checks, a registry town, a private keeper within `RoundReach`, no errand running, the warehouse open due; not the ad board, `RoundGap` or the budget), the look request with the look's anchor and `RoundReach`, the walk back after it (after the next keeper's request when one ended on a new `noPrivate` mark), the stored-units accessor wired to the private status, entries started by look rows with no entry (the warehouse row test), and the errand handed the `noPrivate` set of the `valuables` value so the marks hold across sessions; `TestValuablesLedgerLook`. Nothing opens a round yet. | 2, 3, 6 | V2b, V3a |
+| V3a | The private warehouse in the warehouse errand: the `Private` flag, links on any page, list type, the queued private request slot (`privateWant`) and `startWarehouse`'s guard and order (a queued private request starts with no `Want`, no crafter cycle and no clan, ahead of `warehouseWant`), no clan, `noPrivate` apart from `noClan` (keyed by template, set when the pages lack the link the request needs, ending the request `WarehouseUnreachable` with no `retryAt`, the keeper choice skipping marked keepers, the set one the errand can be handed), a 142 at the talk step failing the request with no mark (private and clan requests), look, priority over clan requests; the private status apart from the clan one (list, 282, results, `trackContents` with the deposited row's `ObjectID` and `Enchant`, `depositRows`) and the private slot count; the `Anchor` and `Reach` of a private request and the keeper rule that reads them (within `Reach` of the request's `Anchor`; V3b and V7a pass the anchor and `RoundReach`); `stepWarehouse` split out of `ruleWarehouse`; `cancelPrivate`, which ends a running private request before its request went out with no result and no `retryAt` (section 3, "The cut-off cancels the private request"); `TestPrivateWarehouseErrand`. | 6 | — |
+| V3b | The session's look in rule "valuables": its conditions (the off-round errands': `storeReady`'s state checks, a registry town, a private keeper within `RoundReach`, no errand running (the enchant exchange included), the warehouse open due; not the ad board, `RoundGap` or the budget), the look request with the look's anchor and `RoundReach`, the walk back after it (after the next keeper's request when one ended on a new `noPrivate` mark), the stored-units accessor wired to the private status, entries started by look rows with no entry (the warehouse row test), and the errand handed the `noPrivate` set of the `valuables` value so the marks hold across sessions; a look of a bot called away (`called()`) cancelled with `cancelPrivate`, no walk back; `TestValuablesLedgerLook`. Nothing opens a round yet. | 2, 3, 6 | V2b, V3a |
 | V4 | The ad board and the Trade line: region keyed caps, `Free` and the atomic `Claim`, the ad composer (line packing over V2b's labels and prices, entries not released), per-bot pacing, and the ad step of rule "valuables" (an open round says its lines); `TestAdText`, `TestAdPacing`. | 4 | V2b |
-| V5 | The whisper responder: intent and price parsing, asks, floors, counters, the reply delay, the per-partner reply queue sent by rule "chat", reply caps apart from `chatLog`, precedence over the canned reply, item names by full name or distinctive word over entries not released during a round, the after-round replies within `AnswerAfter` (the `in my store` reply comes with V7b); `TestValuablesWhisperHaggle`. | 5 | V2b |
+| V5 | The whisper responder: intent and price parsing (prices as whole words, never a `+N` enchant, an `Nx` count or digits inside a name; no offer from a line with two prices; an offer below half the floor drawing no counter), the three naming outcomes (names, points at several, names nothing; distinctive words before kind words), asks, floors, counters, the reply delay, the per-partner reply queue sent by rule "chat", reply caps apart from `chatLog`, precedence over the canned reply, item names over entries not released during a round, the after-round replies within `AnswerAfter` (the `in my store` reply comes with V7b); `TestValuablesWhisperHaggle`. | 5 | V2b |
 | V6 | Trades: valuables in `acceptTrade`, `tradeGoods`, `tradePrice`, `tradePaid`; asking a whisperer for a trade, the invite step of rule "valuables" (walk bounded to `RoundReach` of the round state's anchor, `TradeRequest`, every refusal, none within 15 s of the round's end, V2b's walk back to the anchor once the trade or request is over), `tradeGoods` never offering a released entry; trade sales counted in the valuables budget and its offer gate; `TestValuablesTradeInvite`, `TestValuablesTradeConfirm`. | 5, 8 | V2b, V4, V5 |
-| V7a | The round's opening and end in rule "valuables": `roundReady` (town, a private keeper within `RoundReach`, region, ad board and warehouse open checks, a clan member's visit settled first), which opens the round with `openRound` at the bot's position, the start condition (an entry with carried units, not released), the pending round and `storeReady`'s `StoreHold` wait (rule "valuables" holding the turn on the timers), no round before the session's look (V3b), stepping the private requests (with the round's anchor and `RoundReach` on each request), V2b's walk back after the round's keeper visits and the off-round errand, before the ads and the store opening (V6 has the one after a buyer), the left-over round of an ended session, withdraw, end, `FirstLineWait` and grace, `called()`, the round step (rounds and asks), deposit (skipped when no open is due, held while a trade request is pending), the store opening held while the bot's own request is pending, the off-round deposit once the budget is spent, then the store as today; the `valuableFees` reserve term; `TestValuablesRoundStart`, `TestValuablesStoreHold`, `TestValuablesFirstLineWait`, `TestValuablesHoldsTurn`, `TestValuablesRoundDeposit`, `TestValuablesGrace`, `TestValuablesReadvertise`. Without V7b nothing is released: unsold valuables stay held, which no preset sees before V8. | 2, 3, 6, 8 | V3b, V4, V6 |
-| V7b | The cap and release: the cap between the round step and the deposit (released carried items skip the deposit), and after the round step of a round cut off by `called()` after its first line, the release withdraw errand outside a round (not once the valuables budget is spent), the `storeReady` and `storeSells` gate, released rows first in `storeRows` at their floor by the valuables budget's listing rule, and the per-row split of store sales; the after-round replies for released entries (`in my store` when listed, `not now` when not); `TestValuablesRelease`, `TestValuablesStoreSplit`. | 3, 7, 8 | V7a |
+| V7a | The round's opening and end in rule "valuables": `roundReady` (town, a private keeper within `RoundReach`, region, ad board and warehouse open checks, the errand checks with the enchant exchange idle, a clan member's visit settled first), which opens the round with `openRound` at the bot's position, the start condition (an entry with carried units, not released), the pending round and `storeReady`'s `StoreHold` wait (rule "valuables" holding the turn on the timers), no round before the session's look (V3b), stepping the private requests (with the round's anchor and `RoundReach` on each request), V2b's walk back after the round's keeper visits and the off-round errand, before the ads and the store opening (V6 has the one after a buyer), the left-over round of an ended session, withdraw, end, `FirstLineWait` and grace, `called()` with the cancel of the running private request (`cancelPrivate`, or the wait for one at `whSent`) and no walk back, the round step (rounds and asks), deposit (skipped when no open is due, held while a trade request is pending), the store opening held while the bot's own request is pending, the off-round deposit once the budget is spent, then the store as today; the `valuableFees` reserve term; `TestValuablesRoundStart`, `TestValuablesStoreHold`, `TestValuablesFirstLineWait`, `TestValuablesHoldsTurn`, `TestValuablesRoundDeposit`, `TestValuablesGrace`, `TestValuablesReadvertise`. Without V7b nothing is released: unsold valuables stay held, which no preset sees before V8. | 2, 3, 6, 8 | V3b, V4, V6 |
+| V7b | The cap and release: the cap between the round step and the deposit (released carried items skip the deposit), and after the round step of a round cut off by `called()` after its first line, the release withdraw errand outside a round (not once the valuables budget is spent) and the pending release withdrawal that holds the store back under `StoreHold`, the round's withdrawal taking the released stored entries too while the budget is not spent, the `storeReady` and `storeSells` gate, released rows first in `storeRows` at their floor by the valuables budget's listing rule, and the per-row split of store sales; the after-round replies for released entries (`in my store` when listed, `not now` when not); `TestValuablesRelease`, `TestValuablesStoreSplit`. | 3, 7, 8 | V7a |
 | V8 | The preset: `merchant` enables the policy, the shared ad board, `-valuables-budget`, the ad board flags, metrics, the panel's held valuables. | 9 | V7a, V7b, M10 S9 (#331), which also edits the preset catalog |
 | V9 | e2e live scenarios `TestLiveValuablesTradeSale`, `TestLiveValuablesWarehouse`, `TestLiveValuablesRelease`; the unmarked buyer account and its character helper, the Human Mystic merchant; `EncodeAnswerTradeRequest` in `internal/botclient/harness.go`, so the buyer can accept the bot's `TradeRequest`; the `docs/e2e-live.md` rows. | Testing | V8 |
 
@@ -1732,9 +1888,12 @@ that drives it (V3b), which also takes the look out of V7a.
   `maximumNpcs` caps (read by the spawnlist reader, `Maker.MaximumNPCs`, `datapack/spawnlist.go:31-33`, but not applied); `TestValueScore` pins each rule as it stands. `ValueMin` and `CommonSupply` absorb the scale and are persona defaults.
 - **Unknown sources.** Quest rewards and event drops have no datapack source and count as common;
   price alone decides for them.
-- **Haggling text.** The parser reads numbers with `k`, `kk` or `m` and item names by full name or
-  distinctive word (section 5), so a common word such as `of` names nothing; a line it cannot read
-  gets the price, and one that could mean several items gets their asks and no offer is taken. It never sells below the floor, whatever it misreads.
+- **Haggling text.** The parser reads prices as whole words with `k`, `kk` or `m`, or bare numbers
+  of at least 1000, never a `+N` enchant, an `Nx` count or digits inside a name, and item names by
+  full name, distinctive word or kind word (section 5), so a common word such as `of` names
+  nothing; a line it cannot read gets the price, and one that could mean several items or holds
+  two prices gets the asks and no offer is taken. An offer below half the floor draws no counter.
+  It never sells below the floor, whatever it misreads.
 - **Ledger lost on a process restart.** The stored items are found again by the look, which
   starts an entry for each row that passes the warehouse row test (section 2, "Stored rows with no
   entry"), but their rounds restart at 0 and a release mark is lost, so an item may get up to

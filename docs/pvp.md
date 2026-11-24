@@ -1,6 +1,6 @@
 # PvP persona: bots that fight players
 
-Status: draft for owner review. The review-fix loop ran 10 rounds; round 10's fixes are not
+Status: draft for owner review. The review-fix loop ran 11 rounds; round 11's fixes are not
 re-reviewed. Proposed decisions D35-D39 are open (see "Owner decisions").
 Milestone M13 ("PvP persona"): epic and issues to be filed after the owner's answers ("Delivery").
 
@@ -179,6 +179,32 @@ before they are applied):
   which PR sets each fight kind (`duel` and `fight_back` X4, `arena` and `flagged` X5, `pk` X11),
   the death kinds, and the duel results the bot can tell apart (won, lost, tie: a cancel and a
   timeout send the same tie message); X12 and X4 match.
+- Round 11 (7 findings, all confirmed and fixed): the cast time now includes the spiritshot
+  factor (a magic skill's scaled hit time × 0.70 while a spiritshot or blessed spiritshot is
+  charged, floored at 500 ms, `cast/controller.go:966-970`, `:993-999`), which the bots' mystics
+  charge by auto-use. Section 7 predicts the bot's own step time with it while the server reports
+  the auto-use on and a stack is carried; the arena-edge rule re-checks against the hit time of
+  the bot's own `MagicSkillUse` and Esc-cancels when that is longer. The arena cost is restated:
+  with a spiritshot the Elven and Human Mystics' 4000 ms nukes (2.4-2.8 s) start in the middle
+  part of the small arenas, the Dark Mystic's (3.0 s) only at the middle, the Orc Mystic's
+  (3.6 s) never. The OM and OS Dreaming Spirit cells now say about 3.6 s, so it can interrupt a
+  Heal cast without a spiritshot. Server rows Cast time and Long hit times, sections 3, 5, 7 and
+  10, D39, Risks, Gaps, `TestPvPArenaAttackable` (cast speed and shot state named, a late-hit-time
+  cancel case) and `TestPvPInterruptTooLate` are updated. Duel ground: the server keeps following
+  an opponent the bot attacks with no new packet (`ai/player.go:358-394`), so the bot checks the
+  line to the opponent and its own follow legs while it has an intention and sends a checked
+  disengage move before the follow could lead into a blocked polygon (section 4, Pacing, D36, X4,
+  Risks, `TestPvPDuelFight`). With karma, the walk-back and the flee take a karma route: on foot,
+  no gatekeeper or shop (both refuse a karma player under the shipped `players.properties:119-121`),
+  `KarmaClear` (600) from town polygons and guard spawns, a nearer spot when its own has no such
+  route (new server row Karma and NPC services, Guards row extended, section 13, D39, X11, Pacing,
+  `TestPvPKarma`). Bot-code line citations are moved to HEAD after S4 (#323), and the siege
+  polygons are named as 9 castles and 6 clan halls. The duel kite case moved from
+  `TestPvPDuelFight` (X4) to `TestPvPKite` (X6). The opponent record carries `Kind`, X4 owns the
+  duel result (1950, 1952, 1955), and deaths to an attacker `MayFight` refused count as
+  `unfought` (section 14, X4, X12, `TestPvPDuelFight`). A whispered `duel` is never held by
+  `DeclineHold`, and a decline or refusal of it starts that hold for the bot's own challenges
+  (section 4, D36, Pacing, `TestPvPChallengeWhisper`).
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang). Datapack paths (`classes/...`,
@@ -260,7 +286,7 @@ Read in the Go server and the datapack on 2026-11-24; every design choice below 
 | Area skills | A player's area or aura skill affects only creatures it may attack without force; a clean player in the radius is never hit, but any player whose PvP flag is up or blinking, or who has karma, is (outside its party, clan and ally), and so is every attackable NPC, and so is every summon or pet (a playable, like a player) that it may attack without force: one whose owner has karma or a PvP flag, or one standing in a PvP zone with the caster in one too. A pole swing also hits up to `atkCountMax` other creatures in the 120° cone the attacker faces, within its own attack range (80 for a spear): any NPC it may attack, and other players and summons by the same rule as an area skill. A summon's `NPCInfo` (with `Summon` set) carries its owner's name as its title and its owner's PvP flag and karma, and the owner's flag and karma changes reach observers as the summon's own `RelationChanged` too; nothing shows the owner's party, clan or position. Killing the summon of a karma-free, unflagged owner gives the killer karma (`KarmaGain` at the summon rate, no PK kill), with the owner's flag, karma and zone read at the summon's death, so a summon in an arena whose owner stands outside it is such a kill. Both reaches are measured in 3D from the anchor (the target for an AREA skill, the caster for an AURA skill and the pole) and widened by the collision radii of the anchor and the creature hit: a creature is hit when its distance is at most reach + both radii. A player's radius is its class template's by race and sex, 5 to 11 (Human Fighter 9, female 8; Orc Fighter 11 and 7; Dwarven Fighter 9 and 5; Human Mystic 7.5 and 6.5; Orc Mystic 7 and 8; Dark Elf 7.5 and 7), sent in `CharInfo`; an NPC's is often larger. Each player hit counts as a PvP hit for the caster's flag (Duel end, PvP flag) and its death as a kill (Kill credit); each NPC hit takes a duellist out of its duel (Duel end). | `handler/target/target_predicates.go:22` (`isPlayable`: a player or its summon), `:31-46` (`isAttackable`, `areaCanAffect`); `model/actor/summon/target_actor.go:151-164` (a summon's `AttackableWithoutForceBy`: its owner's social rules, its own zone, its owner's karma and flag); `network/visibility.go:415-442` (a summon's `NPCInfo`: title, `PvpFlag`, `Karma`, `Team` from its owner); `network/relations.go:98-121` (the summon's `RelationChanged`); `character_karma.go:24-56` (`creditKill`: the owner's zone, flag and karma), `:84-87` (`AwardSummonKillKarma`); `skill/formulas/karma.go:21-23` (the summon rate); `handler/target/target_handlers_area.go:89-93` and `target.go:129-133` (`ForEachKnownInRadius`); `model/actor/player/character_runtime.go:576-580` and `model/door/doorhit/doorhit.go:50-51` (the pole's search, the same call); `world/visibility.go:759-761`, `:837-862` (`rangeBody3D` adds both `CollisionRadius`, then `<=`); `classes/humanFighter.xml:7` (`radius` 9, female 8), `orcFighter.xml:7` (11, 7), `dwarfFighter.xml:7` (9, 5), `humanMystic.xml:7` (7.5, 6.5), `orcMystic.xml:7` (7, 8), `darkFighter.xml:7` (7.5, 7); `serverpackets/charinfo.go:53`, `:107` (the radius sent); `model/actor/player/character_attack.go:937-948`; `model/actor/attack/controller.go:358-389` (`:367-375`: radius `PhysicalAttackRange`, `IsFacing` the attacker's heading); `items/0000-0099.xml` 15, 16 (`attack_range` 80); `character_pvpflag.go:65-95` |
 | Arenas | Four arena zones (Dion, Gludin, Giran, the Colosseum), each an `NPoly` with `minZ`/`maxZ`. Dion, Gludin and Giran are about 1000 × 1000 squares, so no point inside is more than about 490 from an edge; the Colosseum is about 3450 × 2740 with notched sides, up to about 1370 from an edge near its middle. Inside, everyone fights freely; entering and leaving send SystemMessage 283 and 284. | `zones/ArenaZone.xml` (dion 11941..12943 × 183019..184010, gludin -88411..-87429 × 141732..142708, giran 72493..73493 × 142263..143261, colosseum 147769..151221 × 45344..48087, sides notched to 148048 and 150948); `model/zone/kinds.go:3-30`; `network/arena_zone.go:9-16`; `serverpackets/olympiad_match.go:37-38` |
 | Run speed | A player's run speed is its template `runSpd` times the DEX bonus `floor(1.009^(DEX − 19.36) × 100 + 0.5) / 100`. The base classes run about 121 (Human Mystic), 124 (Orc Fighter), 125-127 (Dwarven Fighter, Dark, Elven and Orc Mystic, Human Fighter), 139 (Dark Fighter) and 144 (Elven Fighter) before buffs and Dash or Sprint. | `classes/*.xml` (`runSpd`, `dex`); `skill/statbonus/statbonus.go:37` (`dexCurve`), `buildCurve`; `skill/funcs/movespeed.go:10` |
-| Long hit times | Template hit times of the rows' long damage steps: 4000 ms for 1177 Wind Strike, 1220 Blaze, 1175 Aqua Swirl, 1178 Twister, 1090 Life Drain, 1147 Vampiric Touch; 5000 for 1264 Solar Spark and 1266 Shadow Spark; 3200 for 56 Power Shot, 3100 for 1184 Ice Bolt, 3000 for 70 Drain Health and for 101 Stunning Shot; 2500 for 1201 Dryad Root. Power Shot and Stunning Shot are PDAM bow skills, scaled by the P.Atk speed, and a bow's is low (293 for the Bow 14, against 379 for a sword), so before DEX and buffs they take about 3.6 s and 3.4 s. A player's cast speed is 333 × the WIT bonus (`1.05^(WIT − 20)`), so with the base mystics' WIT 15-23 and no cast speed buff the 4000 ms skills take about 3.4-4.2 s scaled (5.1 s for an Orc Mystic). | `skills/1100-1199.xml`, `skills/1200-1299.xml`, `skills/1000-1099.xml`, `skills/0000-0099.xml` (`hitTime`); `skill/formulas/speed.go:16-30`; `model/actor/player/character_attack.go:24`, `:376-385`; `skill/funcs/attack.go` (`MAtkSpeed`); `statbonus.go` (`witCurve`); `classes/*Mystic.xml` (`wit`); `skills/0100-0199.xml` 101 (`hitTime` 3000, `skillType` PDAM, `weaponsAllowed` BOW); `items/0000-0099.xml` 14 (`pAtkSpd` 293), 1 (379) |
+| Long hit times | Template hit times of the rows' long damage steps: 4000 ms for 1177 Wind Strike, 1220 Blaze, 1175 Aqua Swirl, 1178 Twister, 1090 Life Drain, 1147 Vampiric Touch; 5000 for 1264 Solar Spark and 1266 Shadow Spark; 3200 for 56 Power Shot, 3100 for 1184 Ice Bolt, 3000 for 70 Drain Health and for 101 Stunning Shot; 2500 for 1201 Dryad Root. Power Shot and Stunning Shot are PDAM bow skills, scaled by the P.Atk speed, and a bow's is low (293 for the Bow 14, against 379 for a sword), so before DEX and buffs they take about 3.6 s and 3.4 s. A player's cast speed is 333 × the WIT bonus (`1.05^(WIT − 20)`), so with the base mystics' WIT 15-23 and no cast speed buff the 4000 ms skills take about 3.4-4.2 s scaled (5.1 s for an Orc Mystic). Those are the times without a spiritshot: a charged spiritshot or blessed spiritshot multiplies a magic skill's scaled time by 0.70 (Cast time), and the bots' mystics charge one on every cast while their auto-use is on, so with it the 4000 ms skills take about 2.4 s (Elven Mystic, WIT 23, cast 386), 2.8 s (Human Mystic, WIT 20, cast 333), 3.0 s (Dark Mystic, WIT 19, cast 316) and 3.6 s (Orc Mystic, WIT 15, cast 259-260), and the 5000 ms ones 3.0-4.5 s. Power Shot and Stunning Shot are not magic and keep their time; 70 Drain Health is magic, but its fighter rows charge soulshots, not spiritshots. | `skills/1100-1199.xml`, `skills/1200-1299.xml`, `skills/1000-1099.xml`, `skills/0000-0099.xml` (`hitTime`); `skill/formulas/speed.go:16-30`; `model/actor/player/character_attack.go:24`, `:376-385`; `skill/funcs/attack.go` (`MAtkSpeed`); `statbonus.go:38`, `:61-65` (`witCurve`, rounded to 0.01); `classes/*Mystic.xml` (`wit`: elven 23, human 20, dark 19, orc 15); `model/actor/cast/controller.go:966-967`, `:993-999` (spiritshot factor); bot `shots.go:127-134` (`shotKindsOf`: spiritshots for a mystic, soulshots otherwise), `:421-441` (`ruleShots`); `skills/0000-0099.xml` 70 (`isMagic` true); `skills/0100-0199.xml` 101 (`hitTime` 3000, `skillType` PDAM, `weaponsAllowed` BOW); `items/0000-0099.xml` 14 (`pAtkSpd` 293), 1 (379) |
 | Peace flag | Three zone kinds raise the peace flag that refuses an attack (84, 85): peace zones, every town (a town is peaceful by default; only the town combat rule 2 lifts it) and the Derby track. | `zones/PeaceZone.xml`, `zones/TownZone.xml` (18 zones), `zones/DerbyTrackZone.xml`; `model/zone/kinds.go:45-50`, `:227-228`, `:360-367`, `:386`, `:394-406` |
 | PvP flag | A hit (physical or offensive skill) on a karma-free player flags the attacker: 40 s (`PvPVsNormalTime`), or 20 s (`PvPVsPvPTime`) when the victim was already flagged and the attacker has no karma; no flag for a hit on a karma player, between duellists, or inside a PvP zone. A beneficial skill on a flagged or karma player outside a PvP zone flags the caster. Only the attacker is flagged: being hit never refreshes the victim's flag. The flag task ticks once a second and blinks the flag (state 2) once 5 s or less are left, so a blink is seen 4-5 s before the flag ends; a refreshed flag goes back to state 1 on the next tick. | `character_pvpflag.go:89-102`, `:122-136` (`notePvPHitFromAttacker` flags `pk`, the attacker); `task/pvpflag.go:14` (`PvPFlagTick`), `:19-26`, `:43-49`, `:125-132`, `:154-170`; `players.properties:147-150` |
 | Kill credit | No credit in a duel or with both in a PvP zone at the death. Killing a flagged, karma-free player (killer karma-free) or a clan-war enemy is a PvP kill; so is killing a karma player, but only while `AwardPKKillPVPPoint` is on, and the shipped `players.properties:144` sets it to `False`, so under the shipped config the kill of a karma player is neither a PvP kill nor a PK (no count, no karma). Killing any other karma-free, unflagged player adds a PK kill and karma `KarmaGain(PKKills)` (240 for the first). The victim's karma and flag and both players' zones are read at death, so a direct hit that lands after the victim's flag ended is a PK, and so is one that lands on an arena opponent who has stepped out of the arena (arena hits raise no flag, so it is unflagged) or after the killer has stepped out. | `model/actor/player/character_karma.go:24-71` (`:29-34` the PvP-zone exemption, `:44-56`, `:60-71` `pvpKill`: `victimKarma > 0 && AwardPKKillPVPPoint`); `players.properties:144`; `character_pvpflag.go:131-133` (no flag inside a PvP zone); `attackable/playable.go:27-31` (`InArena`, read live); `skill/formulas/karma.go:9-25` |
@@ -270,7 +296,8 @@ Read in the Go server and the datapack on 2026-11-24; every design choice below 
 | Death costs | In an arena, a death to a player or its summon costs no experience; in a siege zone only a Charm of Courage exempts. Elsewhere a death costs the level's normal loss, times `RateKarmaExpLost` with karma, a quarter at clan war or in a siege zone. | `character_death_exp_karma.go:11-24`, `:93-104`, `:119-130` |
 | Death drops | No item drops for a player kill inside a PvP zone, nor for any karma-free player killed by a player. A karma player with at least the PK limit (`MinimumPKRequiredToDrop`, 5) rolls the karma drop rates whoever kills it. | `character_death_drop.go:24-68`; `players.properties:141` |
 | A karma player | Anyone may attack a player with karma without force, and a hit on it raises no PvP flag on the attacker, so a clean player who attacks a karma player stays clean; a karma player who kills that clean, unflagged attacker gains a PK kill and more karma. A karma player's restart to the village lands at a random chaotic point (`chaoPoint`) of its nearest restart area, outside the town. Its karma falls with the experience it gains from kills and with the experience a death costs it (each through the karma-loss formula). | `character_attack.go:937-948`; `character_pvpflag.go:122-125` (`c.Karma() != 0` returns before flagging); `character_karma.go:44-56`; `network/restart_selection.go:101-111` (`townRestart`), `network/restartpoint.go:179-198` (`restartDestination`), `model/restart/restart.go:148-160` (`ChaoPoints` when karma > 0); `restartPointAreas.xml` (`chaoPoint`); `character_death_exp_karma.go:108-138` (`updateKarmaLoss` with the lost experience), `:186-212`; `data/manager/npcs_rewards.go:300` (`UpdateKarmaLoss` on a kill) |
-| Guards | Guards attack a karma player on sight. | `model/actor/npc/hostile_target.go:45-46` |
+| Guards | Guards (`Guard` NPCs, in and around towns) attack a karma player on sight, within an NPC's see range (450 by default). A death to them is a death with karma: the level's loss × `RateKarmaExpLost` (1 in the shipped `server.properties:134`). | `model/actor/npc/hostile_target.go:45-46`; `model/actor/npc/ai_config.go:14-22` (`SeeRange`, 450); `character_death_exp_karma.go:119-130` |
+| Karma and NPC services | Under the shipped `players.properties:119-121` (`KarmaPlayerCanShop = False`, `KarmaPlayerCanTeleport = True`, `KarmaPlayerCanUseGK = False`), a gatekeeper, merchant, fisherman, manor manager, castle chamberlain or wyvern manager answers a player with karma with its refusal page (`<npcId>-pk.htm`) where that page exists, on the first chat and on every bypass command, instead of serving it: no gatekeeper teleport and no shop for a karma player. | `players.properties:119-121`; `network/folk.go:256-262` (`chatRules`); `model/actor/npc/folk_chat.go:86-88`, `:97-100`, `:118-119` (the `pk` gates), `:156` (the first chat), `:173-181` (`pkRefusal`); `model/actor/npc/folk_bypass.go:296-300`, `:389-393` (the gate on every command); `data/html/gatekeeper/*-pk.htm` (25 pages), `data/html/merchant/*-pk.htm` (149) |
 | CP | Damage from a playable takes CP first, then HP. Only the player itself gets its CP in `StatusUpdate`. | `character_stats.go:574-588`; `network/targeting.go:1204-1220` |
 | Another player's HP | Selecting a player sends one `StatusUpdate` with its max HP and HP; re-selecting the same target sends nothing, and no later update follows ("Other players see a player's health only through the one-off update sent when they select it"). A duel opponent's vitals come in `ExDuelUpdateUserInfo`, a party member's in the party window. | `network/targeting.go:856-891`, `:1204-1207`, `:1277-1296` |
 | Damage feedback | Each skill or auto-attack hit sends the attacker SystemMessage 35 with the damage (and 44 or the magic critical first); the victim gets 36 with the attacker's name and the damage. A resisted effect sends the caster 139. | `network/magic_skill.go:1171-1200`; `network/live_player_events.go:442-447` |
@@ -280,7 +307,7 @@ Read in the Go server and the datapack on 2026-11-24; every design choice below 
 | `addMul` | An `addMul` of `v` multiplies the stat by `1 − v/100`: a jewel's `stunVuln` 60 leaves 40 % of the stun rate. | `skill/effect/mod.go:158-159` |
 | Cast break | Damage interrupts a magic cast with `15 + sqrt(13 × damage) − (MEN bonus × 100 − 100)` %, clamped 1-99, rolled on every hit. Stun and sleep abort the cast outright; root does not. | `skill/formulas/cast.go:9-30`; `model/actor/player/character_cast.go:80-97`; `skill/effect/hooks_cc.go:10-27` |
 | Waking | Every hit or DOT tick ends sleep; a non-DOT hit ends a stun one time in ten. | `character_stats.go:856-875` |
-| Cast time | A skill's hit time is scaled by `333 / speed` (cast speed for magic, attack speed otherwise); the `MagicSkillUse` the bot sees carries the scaled time. | `skill/formulas/speed.go:16-30`; bot `combat_world.go` `applyMagicSkillUse` |
+| Cast time | A skill's hit time is scaled by `333 / speed` (cast speed for magic, attack speed otherwise, integer division). Then, for a magic skill (`isMagic`) cast while a spiritshot or blessed spiritshot is charged, the scaled hit time and cool time are multiplied by 0.70. Last, a skill whose template hit time is at least 500 ms is floored at 500 ms. A static hit time and the fusion and signet casts skip all three. The `MagicSkillUse` the bot sees, its own included, carries the final time. | `skill/formulas/speed.go:16-30`; `model/actor/cast/controller.go:966-970` (`spiritshotCastRate` 0.70, `minScaledHitTime` 500), `:985-1000` (`buildPlan`); `network/magic_skill.go:228` (`plan.HitTime` in the packet); bot `combat_world.go` `applyMagicSkillUse` |
 | Taunt and confusion | Aggression's `TargetMe` works only on players: it makes the opponent target the caster. `RandomizeHate` (Confusion) works only on NPCs. Spoil skips anything not an NPC. | `skill/effect/hooks_buff.go:27-42`; `skill/effect/hooks_status.go:109-119`; `handler/skill/spoil.go:41-46` |
 | Flood gates | No per-client gate covers duel requests; the per-connection frame limits do. | `network/floodprotector.go:6-24` |
 | CP potions | CP Potion 5591 and Greater CP Potion 5592 cast skill 2166 (50 and 200 CP), item reuse 500 ms. Sold only by buy list 3001, whose `npcId` is -1 (no spawned merchant), and by multisell 500 for Ancient Adena at the Seven Signs priests. | `items/5500-5599.xml:655-677`; `skills/2100-2199.xml:669-681`; `buyLists.xml:10520`, `:10566-10567`; `multisell/500.xml:58-68`; `html/seven_signs/dawn_priest_2a.htm` |
@@ -356,7 +383,9 @@ New decoders and encoders, each with a recorded or server-built fixture and an e
   ally id, the abnormal mask, max CP and CP, and the duel team byte; `NPCInfo` keeps its collision
   radius and its title (a summon's owner name, for section 3's arena summon rule); `UserInfo`
   keeps the bot's own collision radius, ally id, PK kills and PvP kills (all skipped or discarded
-  today: `inworld.go:53`, `:134`, `:168`, `:176`, `:181`). Section 3's area rule adds them to its
+  today: `UserInfo` at `inworld.go:56`, `:62`, `:66`; `CharInfo` at `:130`, `:137`, `:140`, `:148`,
+  `:150-151`; `NPCInfo` at `:171`, `:183`, and its title read at `:178` but not kept by
+  `applyNPCInfo`, `world.go:888-900`). Section 3's area rule adds them to its
   reaches, as the server does.
 - SystemMessages read by id: 35 (damage dealt, a number), 36 (damage taken, name and number), 139
   (resisted), 283 and 284 (arena in and out), 84 and 85 (peace zone refusals), 692 (frozen duel
@@ -383,6 +412,9 @@ type Opponent struct {
 	// LastCast is the opponent's cast in flight: skill, target, when it lands (MagicSkillUse
 	// hit time from its arrival).
 	LastCast Cast
+	// Kind is the fight kind section 14 counts by, set by the rule that allowed the fight
+	// (duel, fight_back, arena, flagged, pk), or unfought for an attacker MayFight refuses.
+	Kind FightKind
 }
 ```
 
@@ -408,8 +440,8 @@ Two states the server never announces with `RelationChanged` are the bot's to co
 
 Five behaviors of today's code change with these states (X4):
 
-- **Forced attacks.** `forced()` (`combat_rules.go:243-246`) makes the bot send ctrl-held casts
-  (`:209`) and `AttackRequest` (`:220-222`) for every player who is neither flagged nor has karma.
+- **Forced attacks.** `forced()` (`combat_rules.go:251-254`) makes the bot send ctrl-held casts
+  (`:214`) and `AttackRequest` (`:228-230`) for every player who is neither flagged nor has karma.
   It becomes "a player the server would not let the bot attack without force": not its duel
   opponent in the fighting state (the countdown does not count), not a player in the same arena,
   and not one flagged or with karma. A duel opponent in the fighting state or an arena opponent
@@ -439,7 +471,7 @@ Five behaviors of today's code change with these states (X4):
   target. A summon's or pet's offensive cast at the bot enters the table the same way;
   whether the bot fights that summon is section 3's "Summons and pets" rule.
 - **Blink seen on arrival.** `CharInfo` carries the PvP flag state 0, 1 or 2
-  (`serverpackets/charinfo.go:81`, `:85`), and the bot already decodes it (`inworld.go:128`), but
+  (`serverpackets/charinfo.go:81`, `:85`), and the bot already decodes it (`inworld.go:131`), but
   only `RelationChanged` would set `FlagBlinkAt`. A player first seen already blinking, or whose
   `CharInfo` refresh shows 2, sets it too, so the no-karma guard trips on it.
 - **Support gate.** `MaySupport` (`combat_rules.go:71-73`) passes any player whose PvP flag is 0,
@@ -451,12 +483,12 @@ Five behaviors of today's code change with these states (X4):
   PvP zone (an arena) the server flags it for nothing (`skillTargetFlagsPvP` returns false for a
   caster in a PvP zone), so there the gate passes everyone.
 - **Summons and pets.** A summon or pet is a `KindNPC` object (`NPCInfo` with `Summon` set,
-  `world.go:884-896`), so `MayFight` and `hostileCaster` take it "as today", by `o.Attackable`
+  `world.go:888-900`), so `MayFight` and `hostileCaster` take it "as today", by `o.Attackable`
   (`combat_rules.go:60-68`, `combat_world.go:115-120`). That value is the `NPCInfo` snapshot of the
   server's `AttackableWithoutForceBy` for the bot (`network/visibility.go:441`;
   `summon/target_actor.go:151-164`: the owner's karma or PvP flag, or both in a PvP zone), and
   `RelationChanged` refreshes only the summon's karma and PvP flag, never its `Attackable`
-  (`world.go:763-769`, `if o.Kind == KindPlayer`). So a summon that hit the bot while its owner was
+  (`world.go:766-771`, `if o.Kind == KindPlayer`). So a summon that hit the bot while its owner was
   flagged still reads attackable after that flag has ended (being hit never refreshes the owner's
   flag, `character_pvpflag.go:122-136`), and its death to the bot's hit then gives the bot karma
   (`AwardSummonKillKarma`, `character_karma.go:84-87`, with the owner's flag and karma read at the
@@ -618,8 +650,9 @@ opponent (the flag guard's step classes: direct damage, `nextActionAttack`, swin
 
 - such a step starts only while the opponent's distance to the arena polygon's edge (section 2)
   is more than its run speed (`CharInfo`) × (its **free time** + `EdgeSlack`, 0.5 s of latency).
-  The free time is the time until the step lands (the step's scaled hit time, or the bot's attack
-  interval for a swing) minus the time the opponent is still **held** by a root the bot itself
+  The free time is the time until the step lands (the step's scaled hit time as section 7
+  predicts it, the spiritshot factor included, or the bot's attack interval for a swing; once the
+  bot's own `MagicSkillUse` for the step arrives, the hit time that packet carries) minus the time the opponent is still **held** by a root the bot itself
   landed on it, floored at 0. A root counts as held from the bot's own root cast landing with no
   139 and the root bit (0x200) in the opponent's `CharInfo` mask, for the root's datapack
   duration from that landing (Dryad Root 1201, Seal of Binding 1208); a `CharInfo` that clears the
@@ -629,23 +662,35 @@ opponent (the flag guard's step classes: direct damage, `nextActionAttack`, swin
   bot's own distance to the edge must be more than `ArenaEdge` (150);
 - **what this costs.** An unheld opponent runs 121-144 ("Server behavior", Run speed), and no point
   of the Dion, Gludin or Giran arena is more than about 490 from an edge, so there a step starts
-  only when its scaled hit time is under about 2.9-3.5 s at the arena's middle and less anywhere
-  else. The 4-5 s nukes and drains (Wind Strike, Blaze, Aqua Swirl, Twister, Solar Spark, Shadow
-  Spark, Life Drain, Vampiric Touch), Ice Bolt, Drain Health and the two bow skills, Power Shot
-  (3200 ms) and Stunning Shot (3000 ms), both scaled by a bow's low attack speed to about 3.4-3.6 s
-  ("Server behavior", Long hit times), therefore almost never start there against a karma-free
-  opponent unless the bot rooted it first: the mystic and bow rows fight a square arena with roots
-  (CL, EO, SO, OS), DOTs and other non-damage control, their short steps (Energy Bolt 2 s, Aura
-  Burn 1.5 s), their plain bow shots (one attack interval each) and melee. The bow rows' Stunning
-  Shot `Hold` and `Int` steps (RO, ES, AS) are damage steps too, so they wait with Power Shot. A row with no root
-  and no short damage step (the base mystics HM, EM, DM, OM) does little more than its DOTs and
-  melee there. The Colosseum (up to about 1370 from an edge,
+  only when its scaled hit time is under about 2.9-3.5 s at the arena's middle (490 / run speed −
+  0.5) and less anywhere else. With a spiritshot charged ("Server behavior", Cast time and Long hit
+  times), the 4000 ms nukes and drains (Wind Strike, Blaze, Aqua Swirl, Twister, Life Drain,
+  Vampiric Touch) take about 2.4 s for an Elven Mystic, 2.8 s for a Human Mystic, 3.0 s for a Dark
+  Mystic and 3.6 s for an Orc Mystic. So an Elven or Human Mystic starts them against any base
+  runner in the middle part of a small arena (Human Mystic: from 400-475 from the edge, 121-144 ×
+  (2.8 + 0.5); Elven Mystic: from 350-420, 121-144 × (2.4 + 0.5)), a Dark Mystic only at the middle and not against the
+  fastest runners (it needs 420-500), and an Orc Mystic never (it needs 495-590). Ice Bolt (3100
+  ms, about 2.2 s for a Human Mystic with a spiritshot) starts there too. The 5000 ms Solar Spark
+  and Shadow Spark (3.0-4.5 s with a spiritshot) start only for the fastest casters at the very
+  middle. Without a spiritshot (auto-use off or no shot carried) every 4-5 s step is 3.4-6.4 s and
+  almost never starts. Drain Health (a fighter's magic skill, no spiritshot) and the two bow
+  skills, Power Shot (3200 ms) and Stunning Shot (3000 ms), both scaled by a bow's low attack
+  speed to about 3.4-3.6 s and never shortened by a shot, almost never start there against a
+  karma-free opponent unless the bot rooted it first. The bow rows and the Orc Mystic therefore
+  fight a square arena with roots (CL, EO, SO, OS), DOTs and other non-damage control, their short
+  steps (Energy Bolt 2 s, Aura Burn 1.5 s), their plain bow shots (one attack interval each) and
+  melee. The bow rows' Stunning Shot `Hold` and `Int` steps (RO, ES, AS) are damage steps too, so
+  they wait with Power Shot. The Orc Mystic (and any mystic out of spiritshots) does little more
+  than its DOTs and melee there; the other base mystics keep their nukes near the middle and lose
+  them near the edges. The Colosseum (up to about 1370 from an edge,
   room for about 9 s) lets every step start near its middle. This is a stated limit for the owner
   (D39, "Risks"); a preference for the Colosseum for those rows is a backlog item ("Gaps");
 - when the opponent comes nearer the edge than its run speed × (the bot's attack interval +
   `EdgeSlack`), or is seen outside, or a root the bot counted on ends while its own step is in
   flight and the opponent's distance to the edge is now under its run speed × (the time until
-  that step lands + `EdgeSlack`), the bot acts as at a
+  that step lands + `EdgeSlack`), or the bot's own `MagicSkillUse` for the step carries a longer
+  hit time than it predicted (no spiritshot was charged) and the opponent's distance to the edge
+  is under its run speed × (the time left by that hit time + `EdgeSlack`), the bot acts as at a
   blink: it starts no such step, Esc-cancels its own such cast in flight (`RequestTargetCancel`,
   `unselect` 0, inside the cancel window), and drops its auto-attack and the follow-up swing with
   a move to a point inside the polygon at least `ArenaEdge` from its edge; it attacks again once
@@ -709,7 +754,7 @@ ally ("Server behavior", Area skills). So:
   `skills/0300-0399.xml:508`; `character_attack.go:620-627`), is learned at 40
   (`classes/humanFighter.xml:1289`), past the first-profession rows. So with a pole equipped a
   `nextActionAttack` step counts as a swing, and the moment a bystander is in the pole's reach
-  the bot sends its disengage move (today's `disengage`, `combat_rules.go:316`: a move replaces
+  the bot sends its disengage move (today's `disengage`, `combat_rules.go:324`: a move replaces
   the attack intention, so the server swings no more after the swing under way), then
   **repositions**: it walks to a stand point within its attack range of the target from which no
   such bystander is in the pole's reach inside the 120° cone facing the target (the server turns
@@ -768,8 +813,8 @@ ally ("Server behavior", Area skills). So:
 | --- | --- | --- |
 | A player attacks it | Fights back (today). | — |
 | A duel challenge (`ExDuelAskStart`) | Accepts after the reaction delay when it can duel (out of combat, HP and MP at least half, no flag, no karma, not in a store, not in a party duel, standing where a duel is allowed, and clear of monsters: see below); else declines at once. A one-on-one challenge from a clan mate, an ally or a party member is taken like any other: the server lets them duel and lets the duellists attack each other (section 3, rule 1). A bot-marked challenger is declined at once (D38). Party duels are declined (out of scope). | one answer per challenge |
-| A whispered `duel` from a player | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did for the crafter's (M11's `join`, D28, would do the same but is still proposed). The challenge takes the same per-bot budget as its own challenges: a whispered `duel` that arrives within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered, is dropped (the player may whisper again later). | one per `ChallengeEvery` (3 min) per bot, shared with its own challenges, and once per player per `ChallengeSameEvery` (30 min) |
-| Its own challenge | Out of combat and clear of monsters (below), at its spot or on the road, it challenges at most one non-bot player in sight within 2000 who is out of combat, not flagged, without karma, not in a store, of its class tier, both standing where a duel is allowed (below), and only when the engage estimate (section 8) passes against that player's row. The same player is challenged at most once per `ChallengeSameEvery` (30 min). A decline (1931) or a refusal (153, 1926, 2017-2028) holds that player for `DeclineHold` (2 h). The holds are per bot (bots share no hold table). | one per `ChallengeEvery` (3 min) per bot, shared with whispered challenges; once per player per `ChallengeSameEvery` (30 min); `DeclineHold` (2 h) after a decline or refusal |
+| A whispered `duel` from a player | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did for the crafter's (M11's `join`, D28, would do the same but is still proposed). The challenge takes the same per-bot budget as its own challenges: a whispered `duel` that arrives within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered, is dropped (the player may whisper again later). `DeclineHold` does not apply to a whisper: the player asks for this duel, so a hold from an earlier decline or refusal does not drop it. A decline (1931) or refusal (153, 1926, 2017-2028) of the whispered challenge starts `DeclineHold` for the bot's own challenges of that player, as in the next row, and holds nothing for the player's later whispers but `ChallengeSameEvery`. | one per `ChallengeEvery` (3 min) per bot, shared with its own challenges, and once per player per `ChallengeSameEvery` (30 min); never held by `DeclineHold` |
+| Its own challenge | Out of combat and clear of monsters (below), at its spot or on the road, it challenges at most one non-bot player in sight within 2000 who is out of combat, not flagged, without karma, not in a store, of its class tier, both standing where a duel is allowed (below), and only when the engage estimate (section 8) passes against that player's row. The same player is challenged at most once per `ChallengeSameEvery` (30 min). A decline (1931) or a refusal (153, 1926, 2017-2028) of any challenge to that player, its own or a whispered one, holds that player from its own challenges for `DeclineHold` (2 h). The holds are per bot (bots share no hold table). | one per `ChallengeEvery` (3 min) per bot, shared with whispered challenges; once per player per `ChallengeSameEvery` (30 min); `DeclineHold` (2 h) after a decline or refusal |
 | Flagged and karma players in sight | Attacks per section 3 ("hunting"). | the fight rules |
 | Arenas | Every `ArenaEvery` (90 min, ± jitter) it travels to the nearest arena reachable in its SCC or by gatekeeper (M7 trips), and stays while any other player is inside, attacking the players section 3's "Arena targets" picks (its class tier, its own HP and MP above `StandHP` and `StandMP`, the nearest one at least `ArenaEdge` inside); it leaves after `ArenaAlone` (5 min) alone or `ArenaStay` (20 min), always by section 3's arena-edge rule: no attack started, its own damage cast cancelled or landed, its auto-attack dropped with a move inside, one attack interval waited, then out. Its spot is released as for a supply trip (D16). | one trip per `ArenaEvery` |
 
@@ -787,7 +832,7 @@ cannot see. The server sends 1940 for any reason the bot's own side cannot duel
 (`network/duel.go:37-40`, `:170-173`), passing ones among them: its server-side combat stance and HP
 or MP under half (`:202-205`). So every 1940 sets the duel state back to idle, and only an
 **unexplained** 1940, one that comes while the bot's own pre-checks pass (no combat stance by its
-`AutoAttackStart` and `AutoAttackStop`, `world.go:747-750`, `setCombat` at `:984`; HP and MP at
+`AutoAttackStart` and `AutoAttackStop`, `world.go:749-752`, `setCombat` at `:988`; HP and MP at
 least half by its `StatusUpdate`; no flag, no karma, no store, no known blocked polygon), also holds
 the bot's answers (it declines) and its own challenges, until it has moved more than 2000 from where
 the 1940 came or `DuelBlockHold` (10 min) has passed, whichever comes first. A 1940 with a failed
@@ -814,20 +859,34 @@ raise the peace flag ("Server behavior", Peace flag), and every arena is a PvP z
 itself is checked before it is sent: the clearance moves above, section 5's kite stand points,
 section 3's pole reposition and its disengage moves. Its destination and every point of its
 checked path (the M7 segments) must lie at least `DuelEdge` (100) outside every peace, town, Derby
-track and arena polygon (X2) and outside every castle siege polygon (`zones/SiegeZone.xml`, 15
-`NPoly` zones, X2) the bot is not already standing in, since it cannot see whether a siege runs
+track and arena polygon (X2) and outside every siege polygon (`zones/SiegeZone.xml`, 15
+`NPoly` zones: 9 castle battlefields and 6 clan hall battlefields, `partisan_agit001`,
+`devastated_castle`, `bandits_stronghold`, `rainbow_spring`, `beast_farm_guildhall` and
+`fortress_of_dead`, X2) the bot is not already standing in, since it cannot see whether a siege runs
 (`model/zone/siege.go:38-42`, `setBattlefieldHolds`, raised only by a running siege); and its
 destination must lie within `DuelLeash` (1800) of the opponent's last known position. A stand
 point that fails is skipped like one the geodata blocks; with none left the bot does not kite or
 reposition and fights from where it stands, and a pole wielder holds as with bystanders on both
 sides (section 3). A disengage move takes the first of its headings (`turnAround`,
-`internal/botclient/combat_rules.go:356`) whose step passes the check, else a move to where the
-bot stands, which goes nowhere and still ends the attack intention (`orStay`, `:344`). The bot's
-chase is the server's walk toward the opponent after its `Action` or cast; while the straight
-segment from the bot to the opponent passes within `DuelEdge` of such a polygon, it sends no
-`Action` and no skill out of its range, uses only the steps it can cast from where it stands, and
-waits. Otherwise a chase only shortens the distance to the opponent, so an opponent beyond
-`DuelLeash` is chased at once, even by a row that would rather keep its range. A duel that runs
+`internal/botclient/combat_rules.go:364`) whose step passes the check, else a move to where the
+bot stands, which goes nowhere and still ends the attack intention (`orStay`, `:352`). The bot's
+chase is the server's walk toward the opponent after its `Action` or cast, and that walk goes on
+without any new packet from the bot: once the bot attacks, the server keeps an attack intention
+and re-follows the moving opponent on every think (`model/actor/ai/player.go:358-394`,
+`MaybeStartOffensiveFollow` at `:376`), on a path of its own, until a move replaces the intention
+(`orStay`'s comment, `combat_rules.go:347-351`). So the check does not stop at what the bot sends.
+While the bot has an attack or cast intention on its duel opponent, on every decision and on
+every `MoveToLocation` or `MoveToPawn` of its own (`world.go:682-694`, the server's follow legs),
+it checks the straight segment from itself to the opponent's current position and the
+destination of its own current leg. When the opponent is out of the bot's attack or cast range
+(so the server would walk it) and that segment or that destination passes within `DuelEdge` of
+such a polygon, or the bot's own position is already within `DuelEdge` of one, the bot sends the
+checked disengage move above (the first heading whose step passes the check, else `orStay`),
+which drops the intention and stops the server's follow. Then, and whenever that segment fails
+before an attack, it sends no `Action` and no skill out of its range, uses only the steps it
+can cast from where it stands, and waits. Otherwise a chase only shortens the distance to the
+opponent, so an opponent beyond `DuelLeash` is chased at once, even by a row that would rather
+keep its range. A duel that runs
 out its 2 minutes this way ends in a timeout, which gives everything back (`duel/duel.go:183-184`; only `Canceled` is abnormal,
 `network/duel.go:445`). An opponent who walks into such a zone or past 2000 cancels the duel by
 its own move ("Risks").
@@ -859,7 +918,7 @@ Against a player the rotation runs in this order, each group under the M10 gates
 1. sustain under its HP gate, the **long-cast rule** applied: a heal or HOT with a template hit
    time of 4000 ms or more, on itself or on its party (Self Heal, Elemental Heal, Divine Heal,
    Heal, and 1229 Chant of Life: `skillType` HOT, `target` PARTY, `hitTime` 7000,
-   `skills/1200-1299.xml`, about 9 s at an Orc Shaman's cast ×0.78), is cast only while no melee
+   `skills/1200-1299.xml`, about 9 s at an Orc Shaman's cast ×0.78, 6.3 s with a spiritshot), is cast only while no melee
    opponent is within its attack range plus 150, or the opponent is stunned, asleep or rooted
    (`CharInfo` abnormal mask);
 2. interrupts (section 7);
@@ -943,9 +1002,16 @@ HEAL_PERCENT, RESURRECT, SLEEP, ROOT, FEAR or MUTE, or an MDAM with a template h
 more, and its target is the opponent itself, one of its allies, the bot or a member of the bot's
 party. It lands at `arrival + HitTime` (the scaled time the packet carries).
 
-The bot answers with its row's `Interrupt` step when the step's own scaled hit time (its
-template hit time × 333 / the bot's cast or attack speed from `UserInfo`) plus the reaction delay
-and the walk to its cast range end before the opponent's cast lands:
+The bot answers with its row's `Interrupt` step when the step's own scaled hit time plus the
+reaction delay and the walk to its cast range end before the opponent's cast lands. The bot
+predicts its own scaled hit time as the server computes it ("Server behavior", Cast time): the
+template hit time × 333 / the bot's cast speed (a magic step) or attack speed (`UserInfo`),
+truncated; × 0.70 for a magic step (`isMagic`, X2) while a spiritshot or blessed spiritshot is
+expected charged, that is while the server reports the auto-use of one on (`Inventory.AutoShots`
+from `ExAutoSoulShot`, `items.go:178-181`, `:224-227`) and a stack of it is carried; then floored
+at 500 ms when the template time is at least 500. A prediction that is too short (the shot ran
+out between casts) costs one late interrupt; the arena-edge rule, where a late landing matters,
+re-checks against the hit time of the bot's own `MagicSkillUse` (section 3).
 
 - a stun (Shield Stun, Stun Attack, Stunning Fist, Stunning Shot) or a sleep that lands aborts the
   cast;
@@ -1083,7 +1149,7 @@ does.
 | HM | vs M, A: 1184 Ice Bolt @7 (slow) from 600; vs C, H, B: 1177 Wind Strike. | vs M: 1164 Curse: Weakness @14 (P.Atk down, base 80); 1184 Ice Bolt @7 (kite); vs H: 1168 Curse: Poison @7; 1177 Wind Strike. | None: Ice Bolt (power 8-16) never reaches `MinBreak` against a mystic's MEN, and mystics cast the Heals and Sleeps worth breaking (section 7). |
 | EM | vs M, A: 1206 Wind Shackle @14 (attack speed down, base 80); else 1184 Ice Bolt. | vs M: 1206 Wind Shackle, 1164 Curse: Weakness @14, 1184 Ice Bolt (kite); 1177 Wind Strike. | As HM. |
 | DM | vs M, A: 1206 Wind Shackle @14; vs C, H: 1168 Curse: Poison @7. | vs M: 1206 Wind Shackle, 1184 Ice Bolt (kite); vs C, H: 1168 Curse: Poison; 1177 Wind Strike. | As HM. |
-| OM | 1100 Chill Flame @7 from 600. | vs C, H: 1095 Venom @7; 1100 Chill Flame; 1090 Life Drain @7. Break: 1097 Dreaming Spirit @7 (sleep, base 80) only on an opponent carrying no DOT (section 5, "Sleep and damage"), else 1092 Fear @14 (base 40); with its own Venom or Chill Flame on the opponent (the usual case) that means Fear, and below 14 no `Break` step: it flees at once. | 1097 Dreaming Spirit Int, under section 7's timing rule: its own scaled hit time (4000 ms at an Orc Mystic's cast ×0.78, about 5.1 s) plus the reaction delay (0.2-0.6 s) must end before the cast lands, so only casts landing more than about 5.3-5.7 s after their `MagicSkillUse` (a Sleep 1069, 10000 ms); a Human Cleric's 1011 Heal (5000 ms, 5.0 s at cast ×1.00) lands first, so against heals this interrupt almost never fires. |
+| OM | 1100 Chill Flame @7 from 600. | vs C, H: 1095 Venom @7; 1100 Chill Flame; 1090 Life Drain @7. Break: 1097 Dreaming Spirit @7 (sleep, base 80) only on an opponent carrying no DOT (section 5, "Sleep and damage"), else 1092 Fear @14 (base 40); with its own Venom or Chill Flame on the opponent (the usual case) that means Fear, and below 14 no `Break` step: it flees at once. | 1097 Dreaming Spirit Int, under section 7's timing rule: its own scaled hit time (4000 ms at an Orc Mystic's cast ×0.78 and a spiritshot's ×0.70, about 3.6 s; about 5.1 s with no spiritshot charged) plus the reaction delay (0.2-0.6 s) must end before the cast lands, so with a spiritshot only casts landing more than about 3.8-4.2 s after their `MagicSkillUse`: a Sleep 1069 (10000 ms), and a Human Cleric's 1011 Heal cast without a spiritshot (5000 ms, 5.0 s at cast ×1.00); the same Heal cast with one (3.5 s) lands first. Without its own spiritshot only casts landing after about 5.3-5.7 s, so no heal. |
 | KN | vs C, A: 70 Drain Health @20 from 600. Else walks in. | 92 Shield Stun [SHIELD] @20 (base 80) Hold vs C, H, else at reuse; 3 Power Strike; melee. Peel: 28 Aggression @24 (TargetMe). | 92 Shield Stun Int. |
 | WA | Walks in; 78 War Cry @20 at engage. | vs C, H, B: 287 Lionheart @36 at engage; 100 Stun Attack [BLUNT, BIGBLUNT] @20 (base 50) Hold vs C, H; 255 Power Smash @20; 245 Wild Sweep [POLE] A≥2 (area rule, section 3). | 100 Stun Attack Int. |
 | RO | Dagger: walks in, 4 Dash @20 from beyond 400 vs C, A. Bow: 56 Power Shot from 700; 101 Stunning Shot @36 from 900. | Dagger: 96 Bleed [DAGGER] @24 T≥50, 16 Mortal Blow. Bow: 101 Stunning Shot [BOW] @36 (stun and target drop, base 50) Hold vs C, H; 56 Power Shot. Break: 4 Dash. | Bow: 101 Stunning Shot Int, under section 7's timing rule: its own scaled time with a bow (about 3.4 s before DEX and buffs, "Server behavior", Long hit times) plus the reaction delay must end before the cast lands, so only casts landing more than about 3.6-4.0 s after their `MagicSkillUse` (a Heal, a Sleep, the 4-5 s nukes of a slow caster), never a Battle Heal (2000 ms). Dagger: damage only. |
@@ -1100,7 +1166,7 @@ does.
 | EW | vs M, A: 1206 Wind Shackle; else 1264 Solar Spark @25 from 750, before 25 1175 Aqua Swirl. | vs M: 1206 Wind Shackle, 1184 Ice Bolt (kite); 1264 Solar Spark; 1175 Aqua Swirl; 1274 Energy Bolt ≤400; 1172 Aura Burn ≤150. Break: 1184 Ice Bolt (slow, hit 3100) unless the opponent is still slowed, then flee. | As HW. |
 | SO | vs M: 1206 Wind Shackle, then 1201 Dryad Root @25; vs C, H: 1168 Curse: Poison. | As CL, with 1206 Wind Shackle vs M and 1168 Curse: Poison vs C, H. | As CL. |
 | DW | vs M, A: 1206 Wind Shackle; vs C, H: 1168 Curse: Poison; else 1266 Shadow Spark @25 from 750. | vs M: 1206 Wind Shackle, 1160 Slow @35, 1184 Ice Bolt (kite); 1266 Shadow Spark; 1178 Twister; 1172 Aura Burn ≤150. Break: 1184 Ice Bolt (slow, hit 3100) unless the opponent is still slowed, then flee. | 1172 Aura Burn Int ≤150, when the break chance passes `MinBreak`. |
-| OS | 1107 Frost Flame @20 from 750. | vs C, H: 1102 Aura Sink @25 (MP drain over time); 1107 Frost Flame; 1090 Life Drain; 100 Stun Attack [BLUNT, BIGBLUNT] ≤40 Hold vs C, H. Break: 1208 Seal of Binding @25 (root around itself) on a melee opponent next to it, 1097 Dreaming Spirit only on an opponent carrying no DOT (its own Frost Flame included: section 5, "Sleep and damage"), 1092 Fear (all hit 4000, so under the break-cast gate: an orc mystic's MEN keeps the break chance low). | 100 Stun Attack Int ≤40; 1097 Dreaming Spirit Int timed as OM's (about 5.1 s scaled, so only casts landing after about 5.3-5.7 s, such as a Sleep 1069; almost never a heal). |
+| OS | 1107 Frost Flame @20 from 750. | vs C, H: 1102 Aura Sink @25 (MP drain over time); 1107 Frost Flame; 1090 Life Drain; 100 Stun Attack [BLUNT, BIGBLUNT] ≤40 Hold vs C, H. Break: 1208 Seal of Binding @25 (root around itself) on a melee opponent next to it, 1097 Dreaming Spirit only on an opponent carrying no DOT (its own Frost Flame included: section 5, "Sleep and damage"), 1092 Fear (all hit 4000, so under the break-cast gate: an orc mystic's MEN keeps the break chance low). | 100 Stun Attack Int ≤40; 1097 Dreaming Spirit Int timed as OM's (about 3.6 s scaled with a spiritshot, so casts landing after about 3.8-4.2 s, such as a Sleep 1069 or a Heal cast without a spiritshot; 5.1 s without one, so no heal). |
 
 #### Matchup, CP and break-off
 
@@ -1131,7 +1197,7 @@ does.
 | EW | Shackles, kites. | Solar Spark race; Energy Bolt interrupts. | 1216 Self Heal S<40 (long-cast rule). | glass 40 |
 | SO | Shackles, roots, kites. | Poisons, out-heals. | As CL; 1147 Vampiric Touch S<60. | glass 40 |
 | DW | Shackles, slows, kites. | Poisons, Shadow Spark burst. | 1147 Vampiric Touch S<70; 1157 Body To Mind. | glass 40 |
-| OS | Stuns at reach; Seal of Binding to break off. | Aura Sink drains a caster's MP; holds Stun Attack. | 1090 Life Drain S<70; 1229 Chant of Life (party HOT, 7000 ms, about 9 s at cast ×0.78) under the long-cast rule; 1006 Chant of Fire @20 (M.Def) vs C, B before the fight. | normal 30 |
+| OS | Stuns at reach; Seal of Binding to break off. | Aura Sink drains a caster's MP; holds Stun Attack. | 1090 Life Drain S<70; 1229 Chant of Life (party HOT, 7000 ms, about 9 s at cast ×0.78, 6.3 s with a spiritshot) under the long-cast rule; 1006 Chant of Fire @20 (M.Def) vs C, B before the fight. | normal 30 |
 
 Second professions play their first profession's PvP row until the M10 backlog (#332) adds their
 kits; this plan's backlog issue adds their PvP rows then ("Gaps").
@@ -1298,7 +1364,7 @@ accidents in "Risks". While its karma (`UserInfo`) is above 0:
   would be another PK: more karma, one more PK kill. The bot fights such an attacker back only
   when PK mode is on and the D39 limits pass at that moment (`PKEvery` since its last PK, PK kills
   under `PKCap`); the kill then counts as that PK, with PK mode's non-debuff damage only. Otherwise
-  it flees through `ruleAttacked`'s flee branch (`rules.go:724-726`, `unfought`, then `flee`),
+  it flees through `ruleAttacked`'s flee branch (`rules.go:744-746`, `unfought`, then `flee`),
   with its `Flee` skill (Dash, Sprint) and no `Break` control step: the server refuses an
   `isDebuff` skill on a clean player even with ctrl ("Server behavior", Forcing). Today `unfought`
   returns only a blacklisted attacker and holds against a player the policy leaves alone
@@ -1315,9 +1381,17 @@ accidents in "Risks". While its karma (`UserInfo`) is above 0:
   flagged or karma player is no PK whatever the killer's karma (`character_karma.go:44-56`).
 - **Death and restart.** It accepts a resurrection as today. A restart to the village lands at a
   chaotic point outside the town ("Server behavior", A karma player), not in a town, so the death
-  policy expects that: no town trip and no M8 death penalty or supply trip until its karma is 0
-  (guards attack it on sight); it walks back from the chaotic point to its spot (M7 walker) and
-  farms on.
+  policy expects that: no town trip and no M8 death penalty or supply trip until its karma is 0.
+  It walks back from the chaotic point to its spot (M7 walker) on a **karma route**: on foot inside
+  its SCC, with no gatekeeper hop (a gatekeeper, like a shop, refuses a karma player under the
+  shipped config: "Server behavior", Karma and NPC services), and with every segment at least
+  `KarmaClear` (600, the guards' 450 see range and a margin) outside every town polygon (X2) and
+  from every guard spawn (the spawn list's NPCs whose template type is `Guard`,
+  `internal/datapack/npc.go:13-15`), since guards attack it on sight and a guard death is a death
+  with karma ("Server behavior", Guards). When its spot has no such route, it farms the nearest
+  spot of its level band that has one and returns to its own spot once its karma is 0. The flee
+  of "Clean attackers" picks its walker segments under the same rule (a heading whose segment
+  enters that margin is skipped like one the geodata blocks).
 - **Work-off.** It farms monsters at its spot (each kill's experience lowers its karma) and starts
   no hunt, challenge or arena trip (a karma player cannot duel, and a karma bot in an arena is
   everyone's target). When its karma reaches 0 it resumes its modes and its town trips.
@@ -1347,12 +1421,16 @@ counters:
   its opponent record carries, set by the rule that allowed the fight: `duel` (the duel opponent,
   section 3 rule 1, X4), `fight_back` (an attacker `MayFight` allows, X4), `arena` (an arena
   target, X5), `flagged` (a hunted flagged or karma player, X5), `pk` (the PK-mode victim, X11);
-- `bot_pvp_deaths_total{kind}`: one per death to a player or its summon, under the kind of the
-  fight the bot was in (`fight_back`, `arena`, `flagged`, `pk`; a duel defeat leaves 1 HP and is
-  counted in `bot_duels_total`);
-- `bot_duels_total{result}` (won, lost, tie), from X5's duel results; the bot cannot tell a
-  cancel from a timeout, since both end in the same tie message (`network/duel.go:515-539`,
-  `duelEndMessages`);
+- `bot_pvp_deaths_total{kind}`: one per death to a player or its summon, under the kind on the
+  killer's opponent record (`fight_back`, `arena`, `flagged`, `pk`, or `unfought`: an attacker
+  `MayFight` refused, such as a clean attacker the bot fled from with karma (section 13) or one it
+  held against; X4 sets `unfought` on such an attacker's record); a duel defeat leaves 1 HP and is
+  counted in `bot_duels_total`;
+- `bot_duels_total{result}` (won, lost, tie), from the duel state's result, which X4 reads from
+  the end messages before `ExDuelEnd`: 1950 (S1 won the duel) with the bot's own name → won,
+  with the opponent's → lost (a 1955 withdrawal comes before the 1950, which decides), 1952 (a
+  tie) → tie. The bot cannot tell a cancel from a timeout, since both end in the same tie message
+  (`network/duel.go:513-539`, `duelEndMessages`; `serverpackets/systemmessage_duel.go:22-25`);
 - `bot_pvp_interrupts_total{result}` (cast, landed, too late), from X6's interrupts.
 
 ## Pacing
@@ -1360,7 +1438,7 @@ counters:
 | New sender | What bounds it |
 | --- | --- |
 | `RequestDuelAnswerStart` | One answer per `ExDuelAskStart`: an acceptance after the PvP reaction delay, inside the server's 15 s request window; a decline (another preset, a bot-marked challenger, a party duel, a failed pre-check) at once. No answer is ever repeated for one challenge. |
-| `RequestDuelStart` | One per `ChallengeEvery` (3 min) per bot, own and whispered challenges together, and one per player per `ChallengeSameEvery` (30 min) or `DeclineHold` (2 h); the server keeps one open request per target. No server gate covers it, so these persona bounds and the frame bucket do. |
+| `RequestDuelStart` | One per `ChallengeEvery` (3 min) per bot, own and whispered challenges together, and one per player per `ChallengeSameEvery` (30 min), or per `DeclineHold` (2 h) for its own challenges; the server keeps one open request per target. No server gate covers it, so these persona bounds and the frame bucket do. |
 | Hunting attacks, control, interrupts | Casts as today: one in flight, the next only after its `MagicSkillUse` or `castTimeout`, then the skill's reuse; an interrupt is a cast like any other, at most one per opponent cast. Melee clicks once per target. |
 | Kite moves | Walker segments as today (one checked segment at a time, from standstill). |
 | CP potions | `UseItem` at most once per 500 ms item reuse, under the bot's potion reuse. |
@@ -1372,8 +1450,9 @@ counters:
 | Disengage after a `nextActionAttack` cast | One move per such cast in flight at the blink or the arena-edge stop, sent once the cast ends (a walker segment as today). |
 | Arena-edge stop and leaving | One move inside the polygon per stop (the bot then waits for the opponent to come back inside or for one attack interval before walking out), a walker segment as today; a new stop only after the opponent was back inside by the margin. |
 | Cure items | `UseItem` at most once per poison or bleed effect seen on itself, under the 500 ms item reuse and the bot's potion reuse. |
+| Duel-ground disengage | One move (a checked step or `orStay`) when the duel-ground check first fails while the bot has an attack or cast intention on its opponent; the next only after a new `Action` or cast re-created the intention, which the bot sends only once the check passes again, so at most one per crossing; the frame bucket bounds the rest. |
 | Target refresh | None: the bot never re-selects a target to read its HP. |
-| Fleeing with karma | Today's `flee` (one walker segment at a time) and the `Flee` skill under its reuse; a fight back as a PK only under `PKEvery` (1 h) and `PKCap`. |
+| Fleeing with karma | Today's `flee` (one walker segment at a time) and the `Flee` skill under its reuse; a fight back as a PK only under `PKEvery` (1 h) and `PKCap`. The walk-back on the karma route sends walker segments as today and no gatekeeper bypass. |
 
 All of it goes through the per-connection frame bucket (`pacing.go` `frameRate` 5 a second,
 `frameBurst` 10: at most 15 frames in any second and 35 in any 5 s, against the server's flood
@@ -1389,10 +1468,10 @@ Proposed, awaiting the owner:
 | # | Question | Proposal |
 | --- | --- | --- |
 | D35 | Which PvP modes exist, and which are on by default? | A new `pvp` preset (M10 Damage role, farms between fights) with duels, flagged and karma players, and arenas on, and open-world PK off (opt-in per bot on the panel). Other presets keep today's modes (fight back only, `SupportFlagged` off) and now decline duels at once, but every preset fights a player with the PvP layer (sections 3, 5-11 and its own row), so the KN, CL, EO and SO rows, which only the Support role picks, are played by `support` bots fighting back, and party PvP runs in any party a bot is in, whoever leads it: a `support` or `pvp` bot in a player's party now, and M11 bot parties of `farmer` and `support` bots once M11 lands. A `support` healer keeps `SupportFlagged` off, so in the open world it stops healing a member flagged by fighting back unless the owner switches it on per bot. All persona defaults under D6. |
-| D36 | How does a `pvp` bot find fights? | It takes any duel it can take (clear of monsters, since any hit between a duellist and an NPC cancels the duel; during the duel its own moves stay off the ground that cancels one: peace, town, Derby track, arena and siege polygons, and past 1800 from the opponent); challenges a player who whispers `duel` (extends D3 for this whisper, as the approved D20 did); challenges by itself at most one non-bot player of its class tier in sight every 3 minutes, only when the engage estimate passes against that player, never the same player within 30 minutes or within 2 hours of a decline; hunts flagged and karma players of its class tier when the engage estimate passes; visits the nearest arena every 90 minutes and stays while others are there (20 minutes at most). |
+| D36 | How does a `pvp` bot find fights? | It takes any duel it can take (clear of monsters, since any hit between a duellist and an NPC cancels the duel; during the duel its own moves stay off the ground that cancels one: peace, town, Derby track, arena and siege polygons, and past 1800 from the opponent, and a move stops the server's follow of the opponent before it would lead there); challenges a player who whispers `duel` (extends D3 for this whisper, as the approved D20 did; at most once per 30 minutes per player, an earlier decline not counted); challenges by itself at most one non-bot player of its class tier in sight every 3 minutes, only when the engage estimate passes against that player, never the same player within 30 minutes or within 2 hours of a decline or refusal of any challenge to it; hunts flagged and karma players of its class tier when the engage estimate passes; visits the nearest arena every 90 minutes and stays while others are there (20 minutes at most). |
 | D37 | How does PvP change the bot's items? | One loadout scored by a blend of PvE and PvP value: the relative gains of M10's `Value` and of `PvPValue` (the expected share of won fights over the seen class mix), weighted 50 % each for the `pvp` preset and expressed in M10's kills per minute (others 0 % PvP, so exactly M10's score); no PvP set swap. PvP sets and boss jewels are worn when owned and within grade, never bought. The `pvp` preset buys poison and bleed cures (Antidote, Bandage, and their greater kinds from level 20) on its M8 supply trips and uses them in PvP fights. CP potions are kept for PvP and never sold; none are bought (their only shop takes Ancient Adena). |
 | D38 | May bots fight bots? | Outside an arena a bot never attacks, hunts or challenges another bot, and fights one back only when it was attacked by it (an `Attack` hit or an offensive skill cast at the bot, section 2). Inside an arena it fights anyone there but its party members (bots, clan mates and allies included, as the server's arena rule allows), so two `pvp` bots in an arena make a fight for players to watch. Bots never duel each other: a bot declines a bot-marked challenger and never challenges a bot. |
-| D39 | How does the bot treat death and karma? | Duels: fight to the end, never surrender. Arenas: fight to the death; after each of the first 4 deaths in an hour walk back, after the 5th go back to its spot; start a damaging step on a karma-free arena opponent only when it cannot reach the arena's edge before the step lands (a root the bot landed counts as holding it), stop as at a blink when it nears the edge, and leave only with nothing of its own in flight (an arena opponent who steps out is a clean player). The cost, stated for the owner: in the Dion, Gludin and Giran arenas (about 1000 × 1000) steps with a scaled hit time above about 3 s (the 4-5 s mystic nukes and drains, Ice Bolt, Drain Health, Power Shot, Stunning Shot) almost never start against an unrooted karma-free opponent, so the base mystic rows do little there but DOTs and melee; the Colosseum allows them near its middle. Open world: break off by the row's threshold; avoid hunting a player who killed it for 30 minutes. Outside PK mode, never karma by accident: every damaging attack and every skill that hands over to an auto-attack (`nextActionAttack`) on a flagged karma-free opponent stops when its flag blinks, such a cast in flight is cancelled and its follow-up swing dropped with a move, and no area damage or pole swing is used while a flagged karma-free bystander, or a summon showing a flag and no karma, is in its reach (the server's reach: radius plus both collision radii; in an arena, any karma-free player but its target not at least 150 inside, and any summon whose owner is not seen inside); a pole wielder, which has no single-target step, then moves to a stand point clear of the bystander or holds; a summon is fought only while its own flag or karma, kept current by `RelationChanged`, allows it, under the same flag guard, and never in a duel. In a duel, no attack at all during the countdown (any hit before both duellists fight cancels the duel), then no area skill or pole swing near a third player, a summon or an NPC (their collision radii counted), no hit on an NPC, and no support on a flagged player, each of which would cancel the duel; duels are taken and offered only clear of monsters. PK mode (opt-in): one PK an hour at most, only a clean player of its tier, chosen on the hunting preconditions (its HP and MP above its stand levels, neither in a peace zone, town or Derby track, the engage estimate passing), with plain and ctrl-held non-debuff damage only until the victim flags, never at 4 PK kills or more (one under the server's item-drop limit). With karma (after a PK, or an accident outside PK mode): it farms monsters until karma is 0 and keeps out of towns; a clean player who attacks it stays clean and killing it would be another PK, so the bot fights it back only when PK mode is on and the PK limits pass (that kill is its next PK), else flees and, if it cannot outrun the attacker, takes the death (karma loss, no item drop under the cap) rather than a PK past the limits; it restarts at the server's chaotic point outside town and walks back to its spot; no hunt, duel, arena or town trip until karma is 0. |
+| D39 | How does the bot treat death and karma? | Duels: fight to the end, never surrender. Arenas: fight to the death; after each of the first 4 deaths in an hour walk back, after the 5th go back to its spot; start a damaging step on a karma-free arena opponent only when it cannot reach the arena's edge before the step lands (a root the bot landed counts as holding it), stop as at a blink when it nears the edge, and leave only with nothing of its own in flight (an arena opponent who steps out is a clean player). The cost, stated for the owner: in the Dion, Gludin and Giran arenas (about 1000 × 1000) steps with a scaled hit time above about 3 s almost never start against an unrooted karma-free opponent. With a spiritshot charged (which multiplies a magic cast's time by 0.70) the Elven and Human Mystics' 4000 ms nukes and drains take 2.4-2.8 s and still start in the middle part of those arenas, the Dark Mystic's 3.0 s ones only at the middle; the Orc Mystic's (3.6 s), any mystic's without a spiritshot, Drain Health, Power Shot and Stunning Shot do not, so the Orc Mystic row does little there but DOTs and melee and the bow rows lose their skill shots; the Colosseum allows them near its middle. Open world: break off by the row's threshold; avoid hunting a player who killed it for 30 minutes. Outside PK mode, never karma by accident: every damaging attack and every skill that hands over to an auto-attack (`nextActionAttack`) on a flagged karma-free opponent stops when its flag blinks, such a cast in flight is cancelled and its follow-up swing dropped with a move, and no area damage or pole swing is used while a flagged karma-free bystander, or a summon showing a flag and no karma, is in its reach (the server's reach: radius plus both collision radii; in an arena, any karma-free player but its target not at least 150 inside, and any summon whose owner is not seen inside); a pole wielder, which has no single-target step, then moves to a stand point clear of the bystander or holds; a summon is fought only while its own flag or karma, kept current by `RelationChanged`, allows it, under the same flag guard, and never in a duel. In a duel, no attack at all during the countdown (any hit before both duellists fight cancels the duel), then no area skill or pole swing near a third player, a summon or an NPC (their collision radii counted), no hit on an NPC, and no support on a flagged player, each of which would cancel the duel; duels are taken and offered only clear of monsters. PK mode (opt-in): one PK an hour at most, only a clean player of its tier, chosen on the hunting preconditions (its HP and MP above its stand levels, neither in a peace zone, town or Derby track, the engage estimate passing), with plain and ctrl-held non-debuff damage only until the victim flags, never at 4 PK kills or more (one under the server's item-drop limit). With karma (after a PK, or an accident outside PK mode): it farms monsters until karma is 0 and keeps out of towns; a clean player who attacks it stays clean and killing it would be another PK, so the bot fights it back only when PK mode is on and the PK limits pass (that kill is its next PK), else flees and, if it cannot outrun the attacker, takes the death (karma loss, no item drop under the cap) rather than a PK past the limits; it restarts at the server's chaotic point outside town and walks back to its spot on foot, using no gatekeeper or shop (both refuse a karma player under the shipped config) and keeping 600 from towns and guard spawns (a guard death costs the same loss), and farms a nearer spot when its own has no such route; its flee keeps the same distance; no hunt, duel, arena or town trip until karma is 0. |
 
 ## Testing
 
@@ -1402,12 +1481,12 @@ Proposed, awaiting the owner:
   exactly `len(payload)`; `RequestDuelStart` and `RequestDuelAnswerStart` encode the server's field order;
   `CharInfo`, `NPCInfo` and `UserInfo` keep their new fields (the collision radii among them) over
   the recorded fixtures, still consuming exactly `len(payload)`.
-- **Datapack (unit):** the zone reader for the arena, peace, town, Derby track, castle siege
-  (`SiegeZone.xml`) and no-restart files on fixture files, a position in and out of each: an `NPoly` zone with `minZ`/`maxZ`, a
+- **Datapack (unit):** the zone reader for the arena, peace, town, Derby track, siege
+  (`SiegeZone.xml`, castles and clan halls) and no-restart files on fixture files, a position in and out of each: an `NPoly` zone with `minZ`/`maxZ`, a
   `Cuboid` zone given with its corners reversed (as Rune Castle Town is, `zones/TownZone.xml:445-449`:
   x 47150 then 32531, y -44815 then -52045) contains a point between them, any other shape fails
   the load; over the shipped `TownZone.xml`, 18 towns with Rune among them; over the shipped
-  `SiegeZone.xml`, 15 siege polygons; the water zones stay
+  `SiegeZone.xml`, 15 siege polygons (9 castles, 6 clan halls); the water zones stay
   on today's `LoadWaterZones` and its tests; the skill landing fields
   (`isDebuff`, `isMagic`, `lvlDepend`, `magicLvl`, effect powers and types, `abnormalLvl`,
   `effectAbnormalLvl` (Sting 223 read with level 3 at skill level 1 and 8 at 45, and `abnormalLvl`
@@ -1466,7 +1545,9 @@ Proposed, awaiting the owner:
     the opponent's first `ExDuelUpdateUserInfo` and the reaction delay → the unflagged opponent
     gets a plain `Action` and plain casts (never `AttackRequest` or a ctrl-held cast); its `MagicSkillUse` at the bot enters the attackers table; an opponent who is
     a clan mate or a party member is attacked the same way; 692 or `ExDuelEnd` stops the attack;
-    no surrender is ever sent. During the duel a monster in sight is never targeted, a monster
+    no surrender is ever sent; the duel result: 1950 with the bot's own name, then `ExDuelEnd` →
+    won, with the opponent's name → lost, 1955 then 1950 with the bot's name → won, 1952 → tie;
+    an attacker `MayFight` refuses → its record's kind `unfought`. During the duel a monster in sight is never targeted, a monster
     that attacks the bot is not fought until 1952 and `ExDuelEnd` arrive and is fought after; a
     test-built area step and a pole with an attackable monster in reach → neither is used.
     Duel ground: a pole wielder repositioning around a third player, whose nearest stand points
@@ -1477,11 +1558,20 @@ Proposed, awaiting the owner:
     does, then the hold; the opponent standing 30 beyond the edge of a peace polygon, its
     straight segment from the bot crossing within 100 of that polygon → no `Action` and no cast
     out of range, the bot's in-range steps only, then the opponent back 200 from the polygon →
-    `Action`; a kiting caster whose opponent stands 1900 away → `Action` (the chase), no kite.
+    `Action`; the bot already attacking (attack intention on, the opponent out of reach and
+    walking), the opponent's moves then taking the straight segment within 100 of a town polygon →
+    the checked disengage move at once, no `Action` while the segment fails, then `Action` once it
+    clears; the same with the segment clear but its own `MoveToLocation` leg (the server's follow)
+    ending 60 from an arena polygon → the disengage move; the bot's own position seen within 100
+    of a peace polygon while it attacks → the disengage move to the first heading leading out.
   - `TestPvPChallengeWhisper` (X5): a player's whispered `duel` → `RequestDuelStart` with its name;
     the same within 30 minutes → nothing; a bot-marked name → nothing; the target flagged → nothing;
     a second player's whisper within 3 minutes of the bot's own challenge, or of the first
-    whispered one → nothing, the same whisper after 3 minutes → `RequestDuelStart`.
+    whispered one → nothing, the same whisper after 3 minutes → `RequestDuelStart`; a player who
+    declined the bot's own challenge (1931) whispers `duel` 31 minutes later, inside its 2-hour
+    `DeclineHold` → `RequestDuelStart`; the bot's whispered challenge refused with 2019 (the
+    target's HP or MP under half) → no own challenge of that player for 2 hours, and the player's next
+    whisper 31 minutes later → `RequestDuelStart`.
   - `TestPvPChallengeCooldown` (X5): one self challenge per 3 minutes; after 1931, 153 or 1926 that
     player waits 2 hours and the duel state is back to idle at once; on a `charmodel.RowTable`
     built in the test, a candidate whose row the engage estimate says the bot loses to → no
@@ -1494,8 +1584,14 @@ Proposed, awaiting the owner:
   - `TestPvPArenaAttackable` (X4): both positions in the Gludin arena polygon with a stale
     `RelationChanged` → plain attack; the player walks out → disengage; the karma-free opponent
     100 from the edge with run speed 120 → no Wind Strike (hit 4000) started, a pure DOT still
-    cast; the opponent at the Gludin arena's middle (about 490 from the edge) with run speed 124
-    → no Wind Strike, a test-built 2000 ms damage step started; the same opponent under the bot's
+    cast; the bot a Human Mystic (cast speed 333 in `UserInfo`) with no spiritshot auto-use
+    reported, the opponent at the Gludin arena's middle (about 490 from the edge) with run speed
+    124 → no Wind Strike (4.0 s: 124 × 4.5 = 558 > 490), a test-built 2000 ms damage step started;
+    the same with the auto-use of its blessed spiritshot reported on (`ExAutoSoulShot`) and a stack
+    carried → Wind Strike started (2.8 s: 124 × 3.3 ≈ 409 < 490), and at 380 from the edge → not
+    started; that Wind Strike started at 490 whose own `MagicSkillUse` carries 4000 ms (no shot
+    was charged), arriving 0.1 s after the send while the opponent is 450 from the edge →
+    `RequestTargetCancel` at once (3.9 s left: 450 < 124 × (3.9 + 0.5) ≈ 546); the shot-less bot with the opponent under its
     own Dryad Root (landed, no 139, mask bit 0x200, 20 s left) → Wind Strike started; a `CharInfo`
     clearing the root bit while that Wind Strike has 2.5 s left until it lands and the opponent,
     run speed 124, is 300 from the edge (300 < 124 × (2.5 + 0.5) = 372) → `RequestTargetCancel`;
@@ -1587,7 +1683,11 @@ Proposed, awaiting the owner:
     against a Cleric casting 1011 Heal (hit 5000) on itself → Shield Stun before it lands; Shield
     Stun not cast at reuse against the Cleric, cast at reuse against a Warrior.
   - `TestPvPInterruptTooLate` (X6): a cast landing before the bot's own scaled hit time plus delay →
-    no interrupt; a damage interrupt under `MinBreak` → none.
+    no interrupt; a damage interrupt under `MinBreak` → none; a test-built magic sleep step (hit
+    4000) at cast speed 260 against a cast landing 4.5 s after its `MagicSkillUse`: with no
+    spiritshot auto-use reported → no interrupt (5.1 s), with the auto-use of a spiritshot on and a
+    stack carried → the interrupt (3.6 s plus a delay of at most 0.6 s), with the auto-use on but
+    no stack left → no interrupt.
   - `TestPvPLongCastRule` (X6 on a test-built heal step; the EF case below in X7): EF under 50 % HP
     with a melee opponent in reach → no Elemental Heal; the opponent's `CharInfo` abnormal mask
     shows a stun → Elemental Heal.
@@ -1598,7 +1698,8 @@ Proposed, awaiting the owner:
     fighting back): CL's Dryad Root lands on
     a melee opponent → a walk to a stand point at 600, then the next cast; the same in a duel with
     the stand points at 600 inside or within 100 of a town polygon → those skipped, the first
-    point that passes; none passes → no walk, the next cast from where it stands.
+    point that passes; none passes → no walk, the next cast from where it stands; a kiting caster
+    in a duel whose opponent stands 1900 away → `Action` (the chase), no kite.
   - `TestPvPCPPotion` (X6; the junk-set case in X10): CP under 50 % in a PvP fight with 5592 carried
     → `UseItem`; in a PvE fight → none; in a duel → none, while a Poison 129 on it in the same duel
     → the cure `UseItem`; CP potions are not in the junk set.
@@ -1651,7 +1752,12 @@ Proposed, awaiting the owner:
     and the PK clock restarts; PK mode on, last PK 30 minutes ago, or 4 PK kills → flee; a flagged
     attacker → fought, the flag guard included; a karma attacker → fought. Dead with karma → the
     village restart sent, then a position outside any town polygon expected: no town trip, a walk
-    to its spot, farming; no hunt, challenge (declined at once) or arena trip until a `UserInfo`
+    to its spot, farming; that walk on a test map where a gatekeeper hop is shorter and the
+    straight way crosses a town polygon → a walk-only route, no `Action` or bypass on the
+    gatekeeper, every segment at least 600 outside the town polygon and from the guard spawns; a
+    spot with no such route → the nearest spot of its band that has one, and its own spot again
+    after a `UserInfo` with karma 0; a flee from a clean attacker whose away heading enters a town
+    polygon's margin → the first heading that keeps out of it; no hunt, challenge (declined at once) or arena trip until a `UserInfo`
     with karma 0, then its modes and town trips resume.
   - `TestPvPCure` (X6; the supply-list case in X10): in a PvP fight, the bot's
     `AbnormalStatusUpdate` shows Poison 129 at abnormal level 3 with most ticks left → `UseItem`
@@ -1682,17 +1788,17 @@ Each PR is one reviewable change; dependencies name M10 issues by number where t
 | PR | Scope | Plan sections | Depends on |
 | --- | --- | --- | --- |
 | X1 | Wire: duel packets (decode and encode), `RequestTargetCancel`, the `MagicSkillCanceled` decoder and event (the bot's own cast ended, another caster's cast cleared), `CharInfo` paperdoll hands, collision radius, clan and ally ids, abnormal mask, max CP and CP, and duel team byte, the `NPCInfo` collision radius and title, the `UserInfo` collision radius, ally id, PK kills and PvP kills, the SystemMessage ids; codec tests. | 2 | S1 (#320), which changes the same `UserInfo` decoder |
-| X2 | Datapack: a zone reader for the arena, peace, town, Derby track, castle siege and no-restart zones that takes both shapes they use, `NPoly` (all of them but one) and `Cuboid` (Rune Castle Town, `zones/TownZone.xml:445`, its corners and Z band normalized as `NewCuboid` does) and fails the load on any other shape; the water zones reuse today's `LoadWaterZones` (every shipped water zone a `Cuboid`); skill landing fields (`isDebuff`, `isMagic`, `lvlDepend`, `magicLvl`, effect powers and types, `abnormalLvl`, `effectAbnormalLvl` (both default -1) and stack types), `nextActionAttack` and the `offensive` flag, skill target types and `skillRadius` (the area rule), the cure items' negate fields, jewel item skills' stat functions, the weapon Special Abilities' `pvp*Dmg` multipliers, `cpTable`. | 2, 3, 4, 6, 9, 12 | S2 (#321) |
+| X2 | Datapack: a zone reader for the arena, peace, town, Derby track, siege (castles and clan halls) and no-restart zones that takes both shapes they use, `NPoly` (all of them but one) and `Cuboid` (Rune Castle Town, `zones/TownZone.xml:445`, its corners and Z band normalized as `NewCuboid` does) and fails the load on any other shape; the water zones reuse today's `LoadWaterZones` (every shipped water zone a `Cuboid`); skill landing fields (`isDebuff`, `isMagic`, `lvlDepend`, `magicLvl`, effect powers and types, `abnormalLvl`, `effectAbnormalLvl` (both default -1) and stack types), `nextActionAttack` and the `offensive` flag, skill target types and `skillRadius` (the area rule), the cure items' negate fields, jewel item skills' stat functions, the weapon Special Abilities' `pvp*Dmg` multipliers, `cpTable`. | 2, 3, 4, 6, 9, 12 | S2 (#321) |
 | X3 | `charmodel` PvP: `LandRate`, cast-break chance, the `Archetype` type and class archetypes, the class-to-PvP-row map, the `RowTable` input (`RefStep` with its `Vs` gate) and a reference opponent per row built from it (plain attacks for a row the table lacks), `PvPValue` over a row mix and a `RowTable`, the engage estimate (with the row's spot margin); its tests on tables built in the test. No row data: the rows stay in `internal/botclient` (section 12). | 6, 8, 12 | S3 (#322), S11 (#330), X2 |
-| X4 | World and policy: the opponent record (with the fight kind section 14 counts by), the duel and arena states, `MayFight` per section 3 (bots, clan, ally, tier, peace flag, duel opponent only and no NPC in a duel, the no-karma guard with its Esc cancel and the follow-up swing rule, the arena-edge rule with the arena edge distances, the area and duel-support rules with NPCs in reach, the duel-ground check of section 4 on every move it sends in a duel and its hold on the chase), the `PvPPolicy` modes, the `pvp` preset (D35, D38); the five changes to today's code of section 2 (`forced`, `hostileCaster` with the offensive-skill test, `FlagBlinkAt` from `CharInfo`, `MaySupport` with karma and without the duel opponent, summons by their own flag and karma instead of `Attackable`), the pole reposition and hold. | 1, 2, 3 | X1, X2, X3 (the class-to-archetype and tier map the opponent record and the tier rule read), S4 (#323, the `Step` type), S6 (#325, the rotation runner whose step in flight the guard and the arena-edge rule cancel, scale and classify), S9 (#331) |
+| X4 | World and policy: the opponent record (with the fight kind section 14 counts by, `unfought` for a refused attacker), the duel and arena states (the duel result, won, lost or tie, read from 1950 and 1952), `MayFight` per section 3 (bots, clan, ally, tier, peace flag, duel opponent only and no NPC in a duel, the no-karma guard with its Esc cancel and the follow-up swing rule, the arena-edge rule with the arena edge distances, the area and duel-support rules with NPCs in reach, the duel-ground check of section 4 on every move it sends in a duel, its hold on the chase and the disengage that stops the server's follow), the `PvPPolicy` modes, the `pvp` preset (D35, D38); the five changes to today's code of section 2 (`forced`, `hostileCaster` with the offensive-skill test, `FlagBlinkAt` from `CharInfo`, `MaySupport` with karma and without the duel opponent, summons by their own flag and karma instead of `Attackable`), the pole reposition and hold. | 1, 2, 3 | X1, X2, X3 (the class-to-archetype and tier map the opponent record and the tier rule read), S4 (#323, the `Step` type), S6 (#325, the rotation runner whose step in flight the guard and the arena-edge rule cancel, scale and classify), S9 (#331) |
 | X5 | Finding fights: duel answer, whispered `duel`, own challenges with their holds (the unexplained-1940 hold among them), the clear-of-monsters check, hunting with the engage estimate (given an empty `charmodel.RowTable` until X6 passes `pvpRowTable`), arena trips with the arena target choice (section 3, "Arena targets") and the arena-edge leave after `ArenaAlone` or `ArenaStay` (D36); `TestPvPArenaTarget`. | 4 | X3, X4 |
 | X6 | The PvP layer: the new `Step` fields, the PvP order, the long-cast rule, the sleep-and-damage rule, interrupts, control by land rate, kite (its stand points under section 4's duel-ground check), the pool estimate, CP potions, cures, break-off with the break-cast gate and `PvPBreakHP` by the row's spot margin; `pvpRowTable` (the shipped rows as a `charmodel.RowTable`, empty until X7 and X8), passed to X5's engage estimate in place of the empty table X5 ships with; `TestPvPRowsShipped` with no row yet, which X7 and X8 extend; its brain tests on `Step` lists built in the test (Testing). | 5, 7, 8, 9 | X3, X4, X5 (the engage estimate it wires to `pvpRowTable`), S6 (#325), S11 (#330) |
 | X7 | PvP rows for the fighters: HF, EF, DF, OF, WF and KN, WA, RO, EK, ES, PK, AS, OR, MO, SC; their `TestPvPRowsShipped` cases. | 10 | X6, S6b (#326) |
 | X8 | PvP rows for the mystics: HM, EM, DM, OM and CL, HW, EO, EW, SO, DW, OS; their `TestPvPRowsShipped` cases. | 10 | X6, S7 (#327) |
 | X9 | Party PvP for every preset in any party, whoever leads it: enemy set (the healer of an enemy included, as fighting back), healer marking and priority, peel, the healer's PvP buffs under its own `SupportFlagged`. | 11 | X6, X7 (the KN peel), X8 (the healer's Mental Shield); works at once for `support` and `pvp` bots in a player's party; `farmer` bots in a party, bot parties (and `TestLivePvPHealer`) need M11 |
 | X10 | PvP gear and consumables: the seen-class mix table, `PvPValue` over it and `pvpRowTable` in the gear, set, jewel and dye scores for the `pvp` preset, the model tests over the shipped rows (the Mithril test), the cures on its supply list, the CP potion and cure keep rule (D37). | 12 | X3, X6 (the cure and CP potion use, `pvpRowTable`), X7 and X8 (the rows the value reads), S5 (#324), M8 I3 (#170: the supply list and trip targets) and I4 (#171: `keeps` and the keep hook) |
-| X11 | Death and karma: the arena return loop and its cap, the avoid list, PK mode with its limits, its non-debuff damage until the victim flags, and the karma state (section 13, "With karma": clean attackers fled from (`unfought` returns a refused player attacker while karma is above 0) or fought as a PK under the limits, the chaotic-point restart, no town trip, no hunt, duel or arena trip, work-off) (D39). | 13 | X4, X5, X6, X7 and X8 (`TestPvPPKCap` checks the WA and HM rows) |
-| X12 | Panel switches, PvP counts, and the four counters of section 14: `bot_pvp_fights_total` and `bot_pvp_deaths_total` by the kind on the opponent record (`duel` and `fight_back` set by X4, `arena` and `flagged` by X5, `pk` by X11), `bot_duels_total` from X5's duel results, `bot_pvp_interrupts_total` from X6's interrupts. | 14 | X4, X5, X6, X11, S9 (#331) |
+| X11 | Death and karma: the arena return loop and its cap, the avoid list, PK mode with its limits, its non-debuff damage until the victim flags, and the karma state (section 13, "With karma": clean attackers fled from (`unfought` returns a refused player attacker while karma is above 0) or fought as a PK under the limits, the chaotic-point restart, the karma route for the walk-back and the flee (on foot, no gatekeeper or shop, `KarmaClear` from town polygons and guard spawns, a nearer spot when its own has none), no town trip, no hunt, duel or arena trip, work-off) (D39). | 13 | X4, X5, X6, X7 and X8 (`TestPvPPKCap` checks the WA and HM rows) |
+| X12 | Panel switches, PvP counts, and the four counters of section 14: `bot_pvp_fights_total` and `bot_pvp_deaths_total` by the kind on the opponent record (`duel`, `fight_back` and `unfought` set by X4, `arena` and `flagged` by X5, `pk` by X11), `bot_duels_total` from X4's duel result, `bot_pvp_interrupts_total` from X6's interrupts. | 14 | X4, X5, X6, X11, S9 (#331) |
 | X13 | e2e live scenarios for X5-X11, at most 4 characters each. | Testing | each; M11 for `TestLivePvPHealer` |
 | Backlog | PvP rows for second professions (with M10 #332), party duels (with M11), the gaps below. | Gaps | X7, X8 |
 
@@ -1724,12 +1830,15 @@ X6 with X7 and X8 make it fight like its class.
   delayed past the arena margin, and an arena opponent that speeds up (Dash, Sprint) or loses the
   bot's root to a cure inside the last 200 ms of the bot's cast.
 - **Mystics and archers in the small arenas.** The arena-edge rule keeps a step whose scaled hit
-  time is above about 3 s (the 4-5 s mystic nukes and drains, Ice Bolt, Drain Health, Power Shot, Stunning Shot)
-  from starting against an unrooted karma-free opponent in the Dion, Gludin and Giran arenas,
-  which are about 1000 × 1000 (no point more than about 490 from an edge, against run speeds of
-  121-144). Rows with a root (CL, EO, SO, OS) root first; the base mystic rows HM, EM, DM and OM
-  fight there with DOTs, control and melee and lose most of their damage, and the bow branches
-  lose Power Shot and Stunning Shot (their interrupt) but keep their plain shots. The Colosseum allows those steps near its middle.
+  time is above about 3 s from starting against an unrooted karma-free opponent in the Dion,
+  Gludin and Giran arenas, which are about 1000 × 1000 (no point more than about 490 from an
+  edge, against run speeds of 121-144). With a spiritshot charged the Elven and Human Mystics'
+  4000 ms nukes and drains (2.4-2.8 s) and Ice Bolt still start in the middle part of the arena,
+  and the Dark Mystic's (3.0 s) only at the middle; near the edges they wait. The Orc Mystic's
+  (3.6 s), any mystic's without a spiritshot, Drain Health, Power Shot and Stunning Shot almost
+  never start. Rows with a root (CL, EO, SO, OS) root first; the OM row fights there with DOTs,
+  control and melee and loses most of its damage, and the bow branches lose Power Shot and
+  Stunning Shot (their interrupt) but keep their plain shots. The Colosseum allows those steps near its middle.
   This is the price of never killing an opponent who steps out; the owner sees it in D39, and a
   Colosseum preference for those rows is a backlog item ("Gaps").
 - **A late Esc.** An Esc sent near the end of the bot's estimated cancel window can reach the
@@ -1745,9 +1854,13 @@ X6 with X7 and X8 make it fight like its class.
 - **Duels cancelled by ground.** A duellist in a peace, town, Derby track, arena or running siege
   zone, or more than 2000 from its opponent, cancels the duel, and nothing is given back. The
   bot's own moves in a duel keep `DuelEdge` (100) outside those polygons and within 1800 of the
-  opponent, and it does not chase across one (section 4, "Duel ground"), so only the opponent's
-  own move, a siege that starts mid-duel in a siege polygon the bot already stood in, or a
-  position error past the margin cancels it. Against an opponent who keeps near a town edge the
+  opponent, and the server's own follow, which walks the bot after the opponent with no new
+  packet, is stopped by a checked disengage move as soon as the line to the opponent or the
+  bot's current follow leg comes within `DuelEdge` of one (section 4, "Duel ground"). What can
+  still cancel it: the opponent's own move, a siege that starts mid-duel in a siege polygon the
+  bot already stood in, a server follow leg that bends into a polygon inside the margin between
+  two of the bot's checks (the bot sees each leg's destination, not the path the server plans to
+  it), and a position error past the margin. Against an opponent who keeps near a town edge the
   bot fights only with what it can cast from where it stands, and the duel may run out its
   2 minutes (a timeout gives everything back).
 - **Several bots, one player.** The challenge holds are per bot, so N `pvp` bots near one player
@@ -1771,8 +1884,9 @@ X6 with X7 and X8 make it fight like its class.
 To be filed with the milestone's issues, in the M13 backlog unless noted:
 
 - PvP rows for second professions (40+): with the M10 backlog #332.
-- An arena preference: the base mystic rows (and bow rows for Power Shot and Stunning Shot) choosing the Colosseum,
-  where the arena-edge rule lets their long steps start, when a gatekeeper reaches it ("Risks").
+- An arena preference: the OM row, the other base mystic rows when out of spiritshots, and the bow
+  rows (for Power Shot and Stunning Shot) choosing the Colosseum, where the arena-edge rule lets
+  their long steps start, when a gatekeeper reaches it ("Risks").
 - Party PvP with a `farmer` bot in a bot-led party: its `TestPvPTargetHealer` cases and
   `TestLivePvPHealer` land with M11 bot parties.
 - Party duels: need a bot party leader that can answer for its party (M11).

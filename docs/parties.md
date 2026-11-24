@@ -1,6 +1,6 @@
 # Bot parties: bots form parties with each other and farm as a group
 
-Status: draft for owner review. The review-fix loop ran 10 rounds; round 10's fixes are not
+Status: draft for owner review. The review-fix loop ran 12 rounds; round 12's fixes are not
 re-reviewed. Proposed decisions D25-D29 are open (see "Owner decisions").
 Milestone M11 ("Bot parties"): epic and issues to be filed after the owner's answers ("Delivery").
 
@@ -201,6 +201,45 @@ before they are applied):
   (`docs/plan.md:527-537,563`) (section 11); grouping takes a third member Support first and a
   Damage candidate only when it has no healer to lead with, in two steps (section 2, D26,
   `TestPlanThirdMember`).
+- Round 11 (3 findings; all confirmed and applied, one in part): section 6 now describes the spot
+  code after #142 (#353): `claimSpot` keeps a held spot, then tries `claimOver` when `Overflow` is
+  on, then makes a bot holding no claim farm beside a full spot (`spots.go:524-534`), counted in
+  the registry's `beside`, apart from `held` (`spotregistry.go:152-176`). A leader that finds no
+  room for `n` below any limit farms beside with its whole weight (`farmBesideN`), so other bots'
+  crowd checks do not count its members as strangers; `spot.weight` covers a claim or a beside
+  count, `leaveBesideN` and a `reweigh` of either count give it back or change it in one step, and
+  `leaveSpot`'s callers are listed as they are now (five in `spots.go`). `claimOverN` takes only a
+  spot whose held count plus `n` stays within its limit, the `go` claim weighs 1, and the crowd
+  check subtracts `Held + Beside - spot.weight`, keeping the beside term. A misfit leader with no
+  band-fitting room keeps its held spot as an outlevelled bot does, and a beside spot that leaves
+  the band's fit is left at the next re-pick. A leader farming beside has a `Spot` in its snapshot
+  (`status.go:139-141`), so it starts no `NoSpotSince`, by design (sections 1, 4 "Trips", 5, 6, 9,
+  Problem table, `TestPartyClaimN`, `TestPartyCrowdOwnWeight`, `TestPartyJoinReleasesSpot`,
+  `TestPlanBreaks`, P2). Line citations moved by #346, #353, #356 and #359 are updated in
+  `docs/plan.md`, `rules.go`, `death.go`, `brain.go`, `spots.go`, `spotregistry.go`,
+  `supervisor.go` and `helpers_live_test.go`, and the header records D21-D24 as merged
+  (`docs/plan.md:68-71`). The `status.go` citations were not changed: `Spot` is at
+  `status.go:73-75` and the offline reset at `status.go:119`, as cited. `TestPartyHeldSpotMisfit`
+  now builds the fits-again case: a held spot of top monster 15 misfits `[12, 14]`, is kept while
+  no band-fitting spot has room, and fits `[12, 15]` after the member's level-up to 13.
+- Round 12 (4 findings, all confirmed and applied): a leader that outlevelled the spot it holds,
+  or whose spot misfits the band, with no candidate in walking reach, kept that spot for good:
+  `spotCands` lists neither the held spot nor any that fails the fit (`spots.go:466-491`), the
+  keep is skipped but `claimOver` gets an empty order and a holder skips `farmBeside`
+  (`spots.go:513-535`), so its `Spot` stayed set (`status.go:139-141`) and `NoSpotSince` never
+  started; P2 adds the gated trip's give-back, which returns such a spot at the step where a solo
+  bot plans its trip, so the party idles and `NoSpotFor` frees the leader, and section 6 no longer
+  says a solo outlevelled bot keeps its spot when it has a trip (sections 4, 6, 9, Risks, Gaps,
+  `TestPartyNoGatekeeperTrip`, `TestPartyHeldSpotMisfit`, P2); the spot weight is the window's
+  size only while the bot leads its bot party, and a leader whose party ends under it
+  (`PartySmallWindowDeleteAll` zeroes `World.Party`, `party.go:259-260`) or whose slot clears
+  re-weighs to 1 and keeps its spot, so a freed leader no longer holds `n` of the cap, which a
+  `go` to its own spot would keep (`command.go:235-236`) (section 6, `TestPartyClaimN`, P2); the
+  own-level fallback is map-wide and by level only, so band-fitting spots out of walking reach
+  leave the party idle until `NoSpotFor` rather than at spots too strong for its lowest member,
+  and sections 4 and 9 say so (sections 4, 6, 9, `TestPartyHeldSpotMisfit`); section 8's two
+  supply rows describe `supplyDue` after #142, a spot farmed, held or beside, and reached
+  (`supplytrip.go:324`, `spots.go:229`).
 
 Server paths (`internal/gameserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang); `cmd/gameserver/...` too.
@@ -208,7 +247,7 @@ Datapack paths (`classes/...`, `skills/...`) refer to `aCis_datapack/data/xml`. 
 file named is `aCis_gameserver/config/players.properties`, whose values the Go server reads with
 the same defaults. Bot paths name this repository. M10 is `docs/strategy.md` (epic #319); its
 roles Support, Damage and Crafter, the `charmodel` package and the `farmer` preset are assumed
-(D21-D24, approved in open PR #346).
+(D21-D24, recorded in `docs/plan.md:68-71` by PR #346, now merged).
 
 The owner asked: "Bots party - organize bots in parties, by location or by the bot manager, what is
 easier."
@@ -228,7 +267,7 @@ invites them, but no bot ever leads, so bots never party with each other.
 | Playing as a member | Follows at a slot 150-350 behind the leader, assists the leader's target 0.5-1.5 s after the leader's hit, heals and buffs the members in sight (leader, self, others). | `follow.go` `ruleFollow`, `defaultFollowPolicy`; `support.go` `leaderHit`, `ruleAssist`, `ruleHeal`, `ruleRebuff` |
 | Leader edge cases | Sits by a dead leader's body; a leader that left, logged out or teleported away is waited for 5 minutes, whispered "where did you go?", then the bot casts `/unstuck` and waits in town. | `death.go` `defaultRecoverPolicy`, `ruleLeader`, `byLeaderBody` |
 | Leading | A bot leads only when the server hands it a party (its leader disconnected); `watchLeader` then counts its leader as lost. | `death.go` `watchLeader` |
-| Spot while a member | A bot keeps the spot it held before it joined: `ruleFollow` runs before `ruleSpot`, so it never uses it, and nothing releases it. | `rules.go:492-495`; `leaveSpot` callers in `brain.go`, `command.go`, `spots.go`, `supplytrip.go` |
+| Spot while a member | A bot keeps the spot it held, or the beside count it farmed with, before it joined: `ruleFollow` runs before `ruleSpot`, so it never uses it, and nothing releases it. | `rules.go:507-510`; `leaveSpot` (`spots.go:601-610`) callers in `brain.go`, `command.go`, `spots.go`, `supplytrip.go` |
 | Errands while in a party | A bot in any party, its leader included, never walks to a trainer, class master or dye maker out of sight ("a party member stays with its party"); it visits one only when the NPC is already in sight. | `trainer.go:469-477` `startTrainerWalk`, `visit.go:89-106` `pickVisit` (called from `classchange.go:212`, `dyes.go:217`) |
 | Loot | Under finders keepers a member, not the leader, leaves the loot alone. | `loot.go:47`, `loot.go:306` |
 | What the manager knows | The registry holds each bot's preset, class, level, online flag and position; each live run's snapshot adds class, level, HP, position, nearest town, preset, current rule, the party leader's and members' names, and the panel's standing order. | `internal/botregistry/registry.go` `Bot`, `internal/botclient/status.go` `Status` (`Town`, `Leader`, `Members`, `Order`) |
@@ -318,8 +357,11 @@ func Plan(s State, cands []Candidate, p Policy, now time.Time) (State, []Order)
 - **Party** (one record): an id, the leader's account, the members' accounts, when it formed, its
   state (`forming`, `active`, `broken`) and why, whether the panel pinned it, and its break timers:
   `NoHealerSince` (no living healer member online since), `NoSpotSince` (the leader online in the
-  world and holding no spot since: its snapshot's `Spot` reads empty, `status.go:73-75`; an
-  offline run's `Spot` is reset too, `status.go:119`, so a gone leader is timed by
+  world with no spot to farm since: its snapshot's `Spot` reads empty, `status.go:73-75`; an
+  online snapshot names the spot while the bot holds it or farms beside it, `status.go:139-141`
+  `farming()`, so a leader farming beside a full spot that fits starts no timer, by design: it
+  farms, and the break is for a leader with no fitting spot in walking reach at all, section 4;
+  an offline run's `Spot` is reset too, `status.go:119`, so a gone leader is timed by
   `LeaderGoneSince` instead), `LeaderGoneSince` (below),
   `GoneSince map[account]time.Time` (a member not online in the world since: reconnecting, or no
   candidate at all because its run ended or cools down) and
@@ -354,8 +396,8 @@ func Plan(s State, cands []Candidate, p Policy, now time.Time) (State, []Order)
 - **Order:** `lead <names>`, `join <leader> <members>` or `unparty` for one account (section 3).
 
 The supervisor owns the organizer's `State` on its own goroutine, like the registry and the runs.
-Its timers today are the cool-down `arm` (`supervisor.go:572-590`) and the registry flush timer
-(`armFlush`, `supervisor.go:305-321`); `Run` selects on both (`supervisor.go:253-271`). The
+Its timers today are the cool-down `arm` (`supervisor.go:572-589`) and the registry flush timer
+(`armFlush`, `supervisor.go:310-321`); `Run` selects on both (`supervisor.go:252-274`). The
 organizer brings its state with it: the supervisor keeps the `State` the last pass returned and
 hands it to the next. It calls `Plan` every `PartyTick` (30 s) on its injected clock, a third timer
 in the same `select` beside the cool-down tick and the flush, and hands each order to the bot
@@ -482,8 +524,8 @@ party").
 - **Level band:** a party forms only with every bot member within `Band` (3) levels of every
   other, and breaks once its bot members' spread exceeds `MaxSpread` (5, section 9). Two server
   facts set `MaxSpread`: the pool's exp falls once the party level is more than 5 above the
-  monster (table above), and under today's `SpotPolicy` (`Below` 2, `Above` 3, `spots.go:101-108`,
-  `fits` at `spots.go:116`) a spot fits a lowest member at `Lmin` and a highest at `Lmax` only
+  monster (table above), and under today's `SpotPolicy` (`Below` 2, `Above` 3, `spots.go:110-117`,
+  `fits` at `spots.go:120-125`) a spot fits a lowest member at `Lmin` and a highest at `Lmax` only
   while its top monster lies in `[Lmax-3, Lmin+2]`, which is empty once `Lmax - Lmin > 5`. The 2
   levels between `Band` and `MaxSpread` are the hysteresis, so a level-up does not break a party,
   and they lie inside the range a spot can hold. The server's own cutoff (20 levels) never bites
@@ -541,7 +583,7 @@ the panel's choice, the latest panel order winning as between panel orders today
 While a GM's whispered `follow`, `assist`, `stay` or `go` holds this session, the brain answers
 `lead` and `join` with a new `ErrWhispered` and keeps no slot: a bot that follows a GM would
 otherwise accept its bot leader's invitation and go on following the GM, since `ruleLeader` and
-`followed` give a whispered `follow` precedence (`death.go:274` `b.orders.follow != 0`). The
+`followed` give a whispered `follow` precedence (`death.go:293` `b.orders.follow != 0`). The
 snapshot reports the same state (`Status.Whispered`, section 12), so the organizer does not pick
 such a bot (section 1); the error covers a whisper that lands between the snapshot and the order,
 and as an error answer it is planned again only once the bot is eligible again.
@@ -593,15 +635,15 @@ whisper; a whispered `go <spot>` that fails the withdrawal, then the error whisp
 slot-clearing step sets it only while the bot sits in a party, and `ruleCommand` sends
 `RequestWithdrawParty` while it is set and the bot is still in a party, and only then the reply.
 The withdrawal is an `actLeaveParty`, whose send clears the flag and, as today, resets the leader
-watch (`brain.go:798-800`). The flag never outlives the party it was set in, since today's reply
-slot clears only when an action of its own kind is sent (`brain.go:823-825`) and nothing would
+watch (`brain.go:815-817`). The flag never outlives the party it was set in, since today's reply
+slot clears only when an action of its own kind is sent (`brain.go:840-842`) and nothing would
 clear it otherwise. `ruleCommand` drops it unsent, resetting the leader watch as the send would, at
 the first decision that finds the bot in no party: the bot party dispersed between the order and
 that decision (a disband sends every member `PartySmallWindowDeleteAll`,
 `party/party.go:381-386`). The bot's own `RequestAnswerJoinParty` drops it too, when that answer is
-sent (`brain.go:801-803`): a bot enters another party only by answering an invitation, and
-`rulePrompt`, which answers it (`rules.go:570-572`), runs ahead of `ruleCommand`
-(`rules.go:462-463`), so an invitation answered in the very decision that first finds the bot
+sent (`brain.go:818-820`): a bot enters another party only by answering an invitation, and
+`rulePrompt`, which answers it (`rules.go:585-587`), runs ahead of `ruleCommand`
+(`rules.go:476-477`), so an invitation answered in the very decision that first finds the bot
 partyless cannot carry the flag into the new party (the GM's party that the "invite me" whisper
 asks for, for one). A leader change keeps the flag: the bot stays in the same party
 (`PartySmallWindowDeleteAll` then `PartySmallWindowAll`, `party/party.go:418-427`) and answers no
@@ -633,7 +675,7 @@ leader, `party/party.go:418-427`), the slot names neither itself nor any player,
 belongs to the handover (section 4), which withdraws it or hands the party on at once. Without
 this exception the slot would clear before the handover ran, and the bot would keep the party and
 fall back to today's lost-leader wait (`watchLeader` reads a party the bot leads as no leader,
-`death.go:198-200`). P1b ships the rule with the exception, so a `join` bot made leader keeps its
+`death.go:199-204`). P1b ships the rule with the exception, so a `join` bot made leader keeps its
 slot there and P1d adds what it then does. The `party` rule (section 4) invites only while the bot
 is in no party or leads its own, so a `lead` slot never sends `RequestJoinParty` from inside
 someone else's party (the server would answer 154, `party/party.go:215-216`,
@@ -677,7 +719,7 @@ organizer orders it again (section 1).
   a member that declined: the server sends the inviter `JoinParty` with the invitee's answer for a
   decline too (`network/party.go:126`, in `requestAnswerJoinParty` before the answer is applied),
   and a member whose slot no longer names this leader declines at
-  once in `rulePrompt` (`rules.go:569-573`, section 5), so a `JoinParty` with `Response` 0 starts
+  once in `rulePrompt` (`rules.go:584-587`, section 5), so a `JoinParty` with `Response` 0 starts
   `InviteRetry` for that member like a refusal; otherwise the leader would re-invite it at its
   reaction delay, bounded only by the frame bucket, until the organizer's next pass. A listed
   member that left the party waits `InviteRetry` too: the server tells the members a withdrawal
@@ -718,7 +760,7 @@ organizer orders it again (section 1).
   `InDuel()` and sends no notice (`party/party.go:403-405`), so no new `PartySmallWindowAll` comes.
   Without a fallback the bot would stay leader of a player's party, holding its `join` slot by the
   exception, and since `followed()` returns the party's leader (`command.go:282-285`), the bot
-  itself, `ruleFollow` passes (`follow.go:99-102`) and `ruleSpot` after it (`rules.go:495`) would
+  itself, `ruleFollow` passes (`follow.go:99-102`) and `ruleSpot` after it (`rules.go:510`) would
   claim a spot, against "members never claim"; the organizer's `unparty` would not withdraw it
   either, since the bot sits in no party its slot names (section 3). So the handover is a small
   state of its own, `handover` (the players tried, when the last request went out), owned by the
@@ -741,17 +783,40 @@ organizer orders it again (section 1).
   follow by walking only (`follow.go`, the walker within the SCC). Its supply trip (D16) still
   runs; the members' answer is in section 8. Today a farmer reaches a new spot by gatekeeper once
   none fits with room in walking reach: `claimSpot` calls `planTrip` when no candidate can be
-  claimed (`spots.go:492-496`, `travel.go:416-431`) and picks again only `spotRetry` (1 minute,
-  `spots.go:188`) later. A leader denied the trip so stands idle with its members whenever its
-  band (or, failing that, its own level, section 6) has outgrown the spots in walking reach of its
-  town, which levelling makes likely and `claimN`'s larger claim likelier, and no other break
-  reason fires (the leader is online, the healer alive, the members in range and the spread under
-  `MaxSpread`). The organizer therefore breaks a party whose leader has held no spot for
-  `NoSpotFor` (section 9); freed, the leader plans its trip alone as today.
+  claimed (`spots.go:509-517`, `travel.go:416-431`), gives its spot back for an active trip
+  (`spots.go:518-523`) and picks again only `spotRetry` (1 minute, `spots.go:197`) later. A
+  leader denied the trip goes on down `claimSpot` instead: it keeps a held spot it is not
+  outlevelled for and that fits the band (section 6), else claims past the cap (`claimOverN`),
+  else farms beside a full spot (`farmBesideN`, section 6, `spots.go:524-534`).
+  One branch of that path needs a change. A holder that outlevelled its spot, or whose spot
+  misfits the band (section 6), and that finds no candidate at all in walking reach falls through
+  the keep (`spots.go:524`), finds nothing for `claimOver` on an empty order (`spots.go:527-529`)
+  and, holding a claim, skips `farmBeside` (`spots.go:530-532`): it returns and keeps the spot.
+  `spotCands` never lists the held spot nor one that fails `spotFits` (`spots.go:466-491`), so
+  every re-pick, one `spotRetry` apart (`spots.go:254`), ends the same way. A solo bot leaves this
+  state through its trip, which gives the spot back (`spots.go:518-523`); a leader without the trip
+  would farm the spot it outgrew, its snapshot's `Spot` set (`status.go:139-141`), with no
+  `NoSpotSince` ever starting. This is how a party most often outgrows its town: the leader
+  levels at its spot until it outlevels it. So P2 adds the gated trip's give-back: at the step
+  where a solo bot calls `planTrip` (`spots.go:515-517`, a located bot, `here != nil`), a leader
+  with members that holds a spot it is outlevelled for (`outleveled`) or that misfits the band
+  (`misfit`, section 6), and finds no candidate (`len(cands) == 0`), gives that spot back
+  (`leaveSpot`, its whole `spot.weight`) as a solo bot does for its trip. Holding no claim, it then
+  farms beside nothing (`farmBesideN` on an empty order), its snapshot's `Spot` reads empty and
+  `NoSpotSince` starts. The given-up spot is no candidate at the next re-pick (it fails the fit
+  that made it outlevelled or misfit, `spots.go:120-125`), so the leader does not claim it back.
+  With at least one candidate, every one of them too near its limit for `n`, it keeps the spot and
+  re-picks every `spotRetry` (section 6): room may free in walking reach, and no trip would help.
+  It so stands idle with its members only when no spot in walking reach fits its band (its own
+  level when no spot of the map fits the band, section 6), or with `Beside` turned off when every
+  fitting one is at its limit, which levelling past its town's spots makes likely, while no other
+  break reason fires (the leader is online, the healer alive, the members in range and the spread
+  under `MaxSpread`). The organizer therefore breaks a party whose leader has had no spot to farm,
+  held or beside, for `NoSpotFor` (section 9); freed, the leader plans its trip alone as today.
 
 ### 5. The members
 
-- **Joining:** `rulePrompt` (`rules.go:569-573`) accepts an invitation from the leader its `join`
+- **Joining:** `rulePrompt` (`rules.go:584-587`) accepts an invitation from the leader its `join`
   slot names before the persona's `JoinParty`, so the claim table neither limits nor records it
   (D29). It declines an invitation from a bot leader it knows by exact name: any leader a `join`
   slot of this run named other than the one its current slot names, whether a slot is set or not.
@@ -767,86 +832,163 @@ organizer orders it again (section 1).
   (`names.go:51`), fit for skipping a chat reply ("costs a reply, never a loop") but not for
   refusing a player's invitation. So a player whose name ends in the marker keeps the bots'
   acceptance, and so do the e2e harness's players, which are named with `DefaultMarker`
-  (`internal/e2e/helpers_live_test.go:35`) and invite bots expecting 1
+  (`internal/e2e/helpers_live_test.go:34`) and invite bots expecting 1
   (`party_live_test.go:56`, `support_live_test.go:304`, `recover_live_test.go:122`). Every other
   invitation still goes to the persona and the claim table as today, and accepting it clears the
   slot, whether a `join` or a `lead` slot (players first, D28; section 3): every persona accepts
-  invitations (`rules.go:210` `JoinParty: acceptParty`, `party.go:181`), so a partyless leader can
+  invitations (`rules.go:228` `JoinParty: acceptParty`, `party.go:181`), so a partyless leader can
   end up in a player's party too, and with its slot cleared it neither invites from inside it nor
   is pulled out of it by a later `unparty`.
-- **Spot:** on joining any party it does not lead, a bot releases the spot it holds (`leaveSpot`).
-  This also fixes today's member that keeps a spot it never uses.
+- **Spot:** on joining any party it does not lead, a bot gives back the spot it holds or the
+  beside count it farms with (`leaveSpot`, `spots.go:601-610`). This also fixes today's member
+  that keeps a spot it never uses.
 - **Play:** today's follow slot, assist, heals and buffs, unchanged; under rule 3 every member may
   pick up loot, since the server hands each item to the member in turn.
 
 ### 6. Spots for a party
 
 - **Claim weight:** the leader claims room for the whole party: `SpotRegistry.claimN(order, n)`
-  takes `n` of a spot's cap (empty spots first, as `claim` does), `claimOverN` likewise past the
-  cap, and the leader re-claims when the party's size changes. `n` is the party's size in the
-  leader's party window: every member in the party, players too, since each takes room at the
-  spot, whether it stands there, is dead or is away on a trip. It changes only when a member joins
+  takes `n` of a spot's cap (empty spots first, as `claim` does, `spotregistry.go:103-119`),
+  `claimOverN` takes it past the cap from the spots whose held count plus `n` stays within their
+  limit (`claimOver` takes a spot only below its limit, `spotregistry.go:126-144`), `farmBesideN`
+  counts `n` beside a spot (below), and the leader re-weighs when the party's size changes. `n` is
+  the party's size in the leader's party window: every member in the party, players too, since
+  each takes room at the spot, whether it stands there, is dead or is away on a trip. It changes only when a member joins
   or leaves the party (the window's add and delete), never on a death, a raise or a trip, so a
-  death frees no room another bot could claim and a raise takes none back. Members never claim.
-  The "members present" of the party model (section 7) is a different count, for the model only.
+  death frees no room another bot could claim and a raise takes none back. Members never claim
+  and never farm beside.
+  The weight is the window's size only while the bot leads its bot party: its `lead` slot set and
+  its party window naming it leader. Any other bot weighs 1, as a solo bot does, and a leader that
+  stops leading re-weighs to 1 at once, keeping the spot it farms. That covers the party ending
+  under it, which resets `World.Party` to the zero `Party` (`PartySmallWindowDeleteAll`,
+  `party.go:259-260`, a window of size 0): a party of two whose member logged out (section 8), its
+  own withdrawal on `unparty`, a panel or GM order, or a break; and its slot clearing while it
+  still leads. Without this, a freed leader would keep `n` of the spot's cap: other bots would find
+  the spot full (`overCap`, `spotregistry.go:179-183`), and its own crowd check would subtract `n`
+  (`crowded`, `spots.go:416-418`), until it next left the spot. That can take long, since a
+  whispered or panel `go` to the spot it already holds keeps the claim as it is
+  (`command.go:235-236`). So the brain re-weighs whenever this target weight changes: on every
+  party window event (an add, a delete, the dispersal) and every change of its slot. A member's
+  return and the leader's re-invitation then re-weigh from 1 to the new size, as at formation. The "members present" of the party model (section 7) is a different
+  count, for the model only.
+- **Farming beside:** since #142 a bot that finds every fitting spot full farms beside one with no
+  claim. `claimSpot` (`spots.go:495-541`) tries `claim` on the spots within `MaxTravel`, then on
+  those beyond (`spots.go:509-512`); with neither it sets `retryAt` (`spots.go:514`), plans a trip
+  (`spots.go:515-517`), gives its spot back when a trip is active (`spots.go:518-523`), keeps a held
+  spot it is not outlevelled for (`spots.go:524-526`), tries `claimOver` when `Overflow` is on
+  (`spots.go:527-529`), and, failing that too, a bot holding no claim calls `farmBeside`
+  (`spots.go:530-534`). The registry counts those bots in `beside`, apart from `held` and toward
+  neither the cap nor the limit (`spotregistry.go:23-27,152-167`), and `Beside` and `Overflow` are
+  on by default (`spots.go:113`). A leader that holds no claim and finds no spot with room for `n`
+  below its limit lands on that same step, and it farms beside with its whole weight:
+  `farmBesideN(order, n)` picks the spot as `farmBeside` does (the fewest beside per monster,
+  `spotregistry.go:152-167`) and adds `n` to its beside count. Counted 1, as today's `farmBeside`
+  would count it, the party would look to every other bot at the spot like `n - 1` strangers,
+  since their crowd check subtracts the beside count (below), and they would move on from a spot
+  the party only shares. A leader farming beside re-picks as a solo bot does: holding no claim,
+  `ruleSpot` calls `pickSpot` at every decision past `retryAt` (`spots.go:254`, `!v.held`), so it
+  claims `n` (`claimN`, else `claimOverN`) the first time a fitting spot has room for them, and
+  meanwhile `farmBeside` keeps the spot it farms beside while that spot is still a candidate
+  (`spots.go:550-552`). Candidates are the spots that fit the band (below), so a band change that
+  puts the beside spot out of fit moves the party at the next re-pick, within one `spotRetry`.
+  The beside spot is the leader's spot in every other respect: the members follow the leader there,
+  the gather gate applies at it, and the snapshot's `Spot` names it (`status.go:139-141`, set while
+  `farming()`, held or beside, `spots.go:229`), so a leader farming beside starts no
+  `NoSpotSince` (sections 1, 9).
 - **Weighted release:** today's `release(i)` takes 1 off a spot's held count
-  (`spotregistry.go:149-156`) and `leaveSpot` calls it once (`spots.go:550-556`). The brain records
-  the weight it holds (`spot.weight`, 1 for a solo bot), `SpotRegistry.releaseN(i, n)` takes `n`
-  off (never below 0), and `leaveSpot` releases `spot.weight`, so every caller that gives a spot
-  up (the supply trip `supplytrip.go:121`, death and moves `spots.go:501,512,533,545`, a command
-  `command.go:241`, the brain's stop `brain.go:349`) returns the whole weight. A re-claim on a size
-  change is one `reweigh(i, old, new)` under the registry's lock (held changes by `new - old`), so
-  no other bot sees the spot half released, and it sets `spot.weight` to `new`. A `reweigh` down
-  needs no check. A `reweigh` up (a member or a player joined) may take the spot past its cap, as
-  `claimOver` does for a solo bot (`spotregistry.go:109-132`); today's re-pick then applies:
-  `ruleSpot` calls `pickSpot` when `overCap` holds (`spots.go:237`,
-  `spotregistry.go:134-139`). When another spot has room for `n` (within `MaxTravel` first, as
-  `claimSpot` orders them, `spots.go:476-491`), it gives the spot up and claims `n` there. When
+  (`spotregistry.go:193-199`), `leaveBeside(i)` 1 off its beside count
+  (`spotregistry.go:169-176`), and `leaveSpot` calls the one that matches what the bot farms, once
+  (`spots.go:601-610`). The brain records the weight it farms with (`spot.weight`, 1 for a solo
+  bot, `n` for a leader's claim or beside count), `SpotRegistry.releaseN(i, n)` and
+  `leaveBesideN(i, n)` take `n` off (never below 0), and `leaveSpot` gives back `spot.weight` from
+  the count the bot sits in, so every caller that gives a spot up returns the whole weight. In
+  `spots.go` those are five: the give-back for an active trip in `claimSpot` (`:522`), the old spot
+  on a new claim (`:539`), `farmBeside` moving to another beside spot or none (`:553`), `moveOn`
+  (`:584`, on an unreachable walk `:274`, a crowded spot `:283` and a death with `DeathAvoid`
+  `:593`) and a death without it in `diedAtSpot` (`:596`); outside it, the supply trip
+  `supplytrip.go:121`, a command `command.go:241` and the brain's stop `brain.go:359`. P2 adds a
+  sixth in `claimSpot`, the gated trip's give-back of an outlevelled or misfit spot (section 4,
+  "Trips"). Every new
+  claim or beside count sets `spot.weight` to what it took: `n` for `claimN`, `claimOverN` and
+  `farmBesideN`, and 1 for the `go` command's claim (`command.go:238-242`), whose order clears the
+  party slot first (section 3). A re-weigh on a size change (formation included, from 1 to `n`,
+  and the end of leading, from `n` back to 1, "Claim weight" above) is
+  one `reweigh(i, beside, old, new)` under the registry's lock on the count the leader sits in
+  (held or beside changes by `new - old`), so no other bot sees the spot half released, and it
+  sets `spot.weight` to `new`. A re-weigh down, or of a beside count, needs no check: beside counts
+  toward neither cap nor limit. A held re-weigh up (a member or a player joined) may take the spot
+  past its cap, as `claimOver` does for a solo bot (`spotregistry.go:126-144`); today's re-pick
+  then applies: `ruleSpot` calls `pickSpot` when `overCap` holds (`spots.go:254`,
+  `spotregistry.go:179-183`). When another spot has room for `n` (within `MaxTravel` first, as
+  `claimSpot` orders them, `spots.go:497-512`), it gives the spot up and claims `n` there. When
   none has, a bot that holds a spot it is not outlevelled for keeps it: `claimSpot` sets
-  `retryAt` to `spotRetry` (1 minute, `spots.go:188`) and returns before `claimOver`
-  (`spots.go:493,503-505`, `if !p.Overflow || b.trip.v.active() || (v.held && !b.outleveled())`).
-  The `planTrip` call on that path (`spots.go:494-496`) is the gatekeeper trip a leader with
-  members does not take (section 4, P2 gates it). So a party a player joined stays at its spot
-  past the cap until a spot with room for `n` frees within walking reach, re-picking every
-  minute, as a solo bot shared past its cap does today; it never travels for it. `claimOverN`
-  serves only a leader that holds no spot (after a death, a trip or a move) when nothing has room,
-  as `claimOver` does today.
-- **Crowd check:** `crowded` (`spots.go:384-400`) skips party members and then subtracts
-  `Held - 1`, taking every other holder of the spot for a counted stranger. With `claimN` the
-  leader's own weight is `n`, so it subtracts `Held - n` instead (`n` 1 alone): the other bots'
-  claims only, never the party's own members, who are not counted. Without this a party of 3 would
-  need `Crowd + 2` strangers before it judged a spot crowded.
+  `retryAt` to `spotRetry` (1 minute, `spots.go:197,514`) and returns before `claimOver` and
+  `farmBeside` (`spots.go:524-526`, `if b.trip.v.active() || (v.held && !b.outleveled())`). No
+  trip is active for it: the `planTrip` call on that path (`spots.go:515-517`) is the gatekeeper
+  trip a leader with members does not take (section 4, P2 gates it), so the trip's give-back
+  (`spots.go:518-523`) does not run either. So a party a player joined stays at its spot past the
+  cap until a spot with room for `n` frees within walking reach, re-picking every minute, as a solo
+  bot shared past its cap does today; it never travels for it. `claimOverN` serves only a leader
+  that holds no claim (after a death, a trip or a move, or while it farms beside) when no spot has
+  room for `n` below its cap, as `claimOver` does today (`spots.go:527-529`), and `farmBesideN`
+  only one that `claimOverN` found no room for either (`spots.go:530-534`).
+- **Crowd check:** `crowded` (`spots.go:402-418`) skips party members and then subtracts
+  `Held + Beside - 1` (`spots.go:418`), the other bots holding the spot or farming beside it, the
+  bot's own 1 aside. With a leader's weight `n` in one of those counts, it subtracts
+  `Held + Beside - spot.weight` instead (`spot.weight` 1 alone, so a solo bot's check is today's):
+  the other bots' claims and beside counts only, never the party's own members, who are not
+  counted. Without this a party of 3 would need `Crowd + 2` strangers before it judged a spot
+  crowded. The other side is `farmBesideN`'s weight: a solo bot at a spot the party farms beside
+  counts the party's members as players and subtracts the party's whole beside weight, so the
+  party costs it nothing, as `n` bots beside it would.
 - **Bot members:** the leader tells its bot members from players by its `lead` list: a party
   window row whose name the list holds is a bot member. Spot fit and the party model (section 7)
   use only bot members; a player in the party is ignored for both (section 10).
 - **Fit by level:** a spot fits the party when `Below` and `AggroAbove` hold against its lowest
   bot member's level and `Above` and `Outlevel` against its highest (section 2), from the party
-  window's levels (`PartyMember.Level`). When no spot fits that band, the leader fits spots by its
-  own level alone. The brain needs no pin flag for this: the `lead` order carries only names and
-  `MaxSpread` is the organizer's policy, so the leader only sees that no spot fits. That happens to
-  a pinned party (section 12) whose spread exceeds `MaxSpread`, the panel's choice, and to an auto
-  party for up to one `PartyTick` after a level-up past `MaxSpread`, until the organizer breaks it
-  (section 9).
+  window's levels (`PartyMember.Level`). When no spot of the map fits that band, the leader fits
+  spots by its own level alone. The test is map-wide and by levels only (the band fit above, in
+  `SpotPolicy.fits`' terms, `spots.go:120-125`), not limited to walking reach, avoidance or pack risk as the
+  candidates are (`spotCands`, `spots.go:466-491`): the fallback is for a band no spot can hold,
+  not for one whose spots lie out of walking reach. When band-fitting spots exist only beyond
+  walking reach, the candidate list is empty even if a spot in reach fits the leader's own level:
+  the leader claims nothing, gives back a held spot that misfits the band (section 4, "Trips"),
+  and the party stands idle until `NoSpotFor` breaks it (section 9) and the freed leader travels.
+  A reach-wide fallback would instead keep the party at spots too strong for its lowest member for
+  as long as it lasts, with no break ever firing. The brain needs no pin flag for this: the `lead`
+  order carries only names and `MaxSpread` is the organizer's policy, so the leader only sees that
+  no spot fits. That happens to a pinned party (section 12) whose spread exceeds `MaxSpread`, the
+  panel's choice, and to an auto party for up to one `PartyTick` after a level-up past
+  `MaxSpread`, until the organizer breaks it (section 9).
 - **A held spot that no longer fits the band:** band fit would otherwise apply only when a spot is
   picked. Today `ruleSpot` re-picks a held spot only when the bot is outlevelled for it, it is over
-  its pack risk or the spot is over cap (`spots.go:237`), `outleveled` compares only the bot's own
-  level with the spot's `MaxLevel + Outlevel` (`spots.go:404-407`), and `claimSpot` keeps a held
-  spot while `v.held && !b.outleveled()` (`spots.go:503`). At formation the leader is the highest
+  its pack risk or the spot is over cap (`spots.go:254`), `outleveled` compares only the bot's own
+  level with the spot's `MaxLevel + Outlevel` (`spots.go:423-426`), and `claimSpot` keeps a held
+  spot while `v.held && !b.outleveled()` (`spots.go:524`). At formation the leader is the highest
   Damage bot of its group and already holds a solo spot fitted to its own level (`fits`, `Below` 2,
-  `Above` 3, `AggroAbove` 0, `spots.go:101-116`); members up to `Band` 3 levels lower join, and the
+  `Above` 3, `AggroAbove` 0, `spots.go:110-125`); members up to `Band` 3 levels lower join, and the
   party would keep a spot whose top monster stands up to `Lmin + 5` and whose aggressive monsters
   up to `Lmin + 3`, against the band's `Lmin + 2` and `Lmin`. A member's level-up that moves `Lmin`
   or `Lmax`, or a member joining or leaving, does the same. So P2 adds `misfit`: true while the
   bot leads bot members, holds a spot, and that spot fails the band fit above while at least one
-  spot of the map fits the band (when none does, the leader fits by its own level, and the spot it
-  holds was chosen so). `misfit` counts as `outleveled` does in both places: `ruleSpot` re-picks on
+  spot of the map fits the band, in walking reach or not (when none does, the leader fits by its
+  own level, and the spot it holds was chosen so; "Fit by level" above). `misfit` counts as `outleveled` does in both places: `ruleSpot` re-picks on
   it (`!v.held || b.outleveled() || b.misfit() || ...`), and `claimSpot` keeps the held spot only
   while `!b.outleveled() && !b.misfit()`, so with no band-fitting spot free the leader gives up the
   misfit spot and claims a band-fitting one past its cap (`claimOverN`, as `claimOver` serves an
-  outlevelled bot today, `spots.go:506-508`) rather than keep its members at a spot too strong for
-  the lowest of them. The check runs at every decision past `retryAt`, so the party's levels and
-  size, which the party window updates (`PartyMember.Level`), are re-read within one decision of a
-  change, or within `spotRetry` (1 minute) after a fruitless search.
+  outlevelled bot today, `spots.go:527-529`) rather than keep its members at a spot too strong for
+  the lowest of them. Only when every band-fitting candidate is too near its limit for `n` as well
+  does it keep the misfit spot, as a solo outlevelled bot keeps its own today when it finds no trip
+  (`spots.go:513-535`: a solo bot with a trip gives the spot back first, `spots.go:518-523`; the
+  beside step serves only a bot holding no claim, `spots.go:530-534`): a held spot that fits its
+  own level rather than a beside one, and it re-picks every `spotRetry`, moving the first time a
+  band-fitting spot has room for `n`. With no band-fitting candidate at all in walking reach, it
+  keeps nothing: the gated trip's give-back (section 4, "Trips") returns the misfit spot, as it
+  returns an outlevelled one, so `NoSpotSince` starts. `misfit`, like `outleveled` (`spots.go:425`), reads only a held claim: a beside
+  spot that leaves the band's fit is no candidate at the next re-pick, and `farmBeside` leaves it
+  then (`spots.go:550-553`, above). The check runs at every decision past `retryAt`, so the
+  party's levels and size, which the party window updates (`PartyMember.Level`), are re-read
+  within one decision of a change, or within `spotRetry` (1 minute) after a fruitless search.
 - **Gather gate:** at its spot the leader picks no new target while a living bot member stands
   farther than `GatherRange` (1200, inside the 1500 party range that pays exp) from it, for at most
   `GatherWait` (60 s); then it fights anyway. A member beyond `FarAway` (10000) does not hold it.
@@ -880,8 +1022,8 @@ the party's size (section 6).
 | --- | --- |
 | A member dies | A Support member whose kit has Resurrection (Cleric, Elven Oracle, Shillien Oracle, from 20) casts it out of combat on a dead member in sight, the leader first (a new rule `raise` after `heal`; 1016 joins their learn tables). The dead bot accepts (`AcceptResurrection`) within its `ResurrectWait` (2 min in a party). Unraised, it restarts in the village and follows the leader's reported position back. |
 | The leader dies | Members sit by the body as today, and a raiser raises it. Unraised, the leader restarts in the village (a teleport the members see). |
-| The leader teleports away (a restart, its supply trip) | A member of a bot leader skips the wait, the whisper and `/unstuck` of `ruleLeader`. It starts its own supply trip when it carries a Scroll of Escape and nothing attacks it, so it lands in town too and restocks; else it walks to the leader's last reported position. Today's trip cannot start for a member: `ruleSupply` starts only from `supplyDue` (`supplytrip.go:113-122`), which needs a held and reached spot (`supplytrip.go:322-324`), and a member gives its spot up on joining (section 5). So P2 adds a trip cause of its own, the leader's teleport, which `ruleSupply` takes for a member with a `join` slot whose bot leader teleported, with no spot held, and which skips `supplyDue`'s spot test; the trip itself (the scroll, the town, the restock) is today's. The gather gate holds the leader at its next spot until they arrive. |
-| A member runs low on its own | `supplyDue` reads the bot's own causes (`supplytrip.go:19-33`: a consumable running out, potions gone, load, gear) only at a held and reached spot (`supplytrip.go:322-324`), which a member never has (section 5). Without a change a Damage member (section 2's optional third) would lose its D16 trips altogether, and a Support member that runs out of potions or shots before its leader does would have none. So P2 gives a bot with a `join` slot, in its bot party, another place to read them: within `GatherRange` (1200) of its leader's reported position (`Party.Members`, `follow.go:154-161`) instead of at a held and reached spot. The rest of `supplyDue` (the `supplyCheck` cadence, `supplyTripGap` after the last trip) and the trip itself (the scroll home when nothing attacks it, the restock) are today's. It stays in the party throughout and keeps its slot; back from town it follows its leader as any member does, by the position the party window reports every 12 s at any distance. The gather gate holds the leader for it at most `GatherWait`, and not while it is beyond `FarAway`; a trip and walk back that keep it out of party range past `BehindFor` drop it as fallen behind (below). |
+| The leader teleports away (a restart, its supply trip) | A member of a bot leader skips the wait, the whisper and `/unstuck` of `ruleLeader`. It starts its own supply trip when it carries a Scroll of Escape and nothing attacks it, so it lands in town too and restocks; else it walks to the leader's last reported position. Today's trip cannot start for a member: `ruleSupply` starts only from `supplyDue` (`supplytrip.go:113-122`), which needs a spot the bot farms, held or beside (`farming()`, `spots.go:229`), and has reached (`supplytrip.go:322-324`), and a member gives up both its claim and its beside count on joining (section 5). So P2 adds a trip cause of its own, the leader's teleport, which `ruleSupply` takes for a member with a `join` slot whose bot leader teleported, with no spot held or farmed beside, and which skips `supplyDue`'s spot test; the trip itself (the scroll, the town, the restock) is today's. The gather gate holds the leader at its next spot until they arrive. |
+| A member runs low on its own | `supplyDue` reads the bot's own causes (`supplytrip.go:19-33`: a consumable running out, potions gone, load, gear) only at a spot the bot farms, held or beside (`farming()`, `spots.go:229`), and has reached (`supplytrip.go:322-324`), which a member never has (section 5). Without a change a Damage member (section 2's optional third) would lose its D16 trips altogether, and a Support member that runs out of potions or shots before its leader does would have none. So P2 gives a bot with a `join` slot, in its bot party, another place to read them: within `GatherRange` (1200) of its leader's reported position (`Party.Members`, `follow.go:154-161`) instead of at a farmed and reached spot. The rest of `supplyDue` (the `supplyCheck` cadence, `supplyTripGap` after the last trip) and the trip itself (the scroll home when nothing attacks it, the restock) are today's. It stays in the party throughout and keeps its slot; back from town it follows its leader as any member does, by the position the party window reports every 12 s at any distance. The gather gate holds the leader for it at most `GatherWait`, and not while it is beyond `FarAway`; a trip and walk back that keep it out of party range past `BehindFor` drop it as fallen behind (below). |
 | A member falls behind | Online in the world and not within the 1500 party range of the leader for `BehindFor` (10 min) by the snapshots' positions (`Party.BehindSince`, section 1): the organizer drops it (`unparty`, and the leader's oust), and pairs the two no more for `RePairAfter` (30 min, `State.PairBans`). |
 | A member logs out | The server takes it out (a party of two disperses). Its `join` slot stays with its `Bot` while the run lasts; the leader re-invites it when it is back, `InviteRetry` after it left at the earliest (section 4). A new run (despawn, cool-down restart) gets the slot again from the organizer (section 1). While it is away (reconnecting, or between runs) the organizer keeps its place and times it (`Party.GoneSince`, section 1); back within `LeaderGone` (5 min, the plan's leader wait) it is re-invited, and past `LeaderGone` the organizer drops it and fills its place (section 9). In a party of two the leader is left leading no party, but its `LeaderGoneSince` does not start while its only member is gone (section 1), so the two timers never run together; the leader's starts only once the member is back, with a full `LeaderGone` for the re-invitation. |
 | The leader logs out | The server hands the party to the first other member. A bot made leader of bots only leaves, dispersing it; the members keep their `join` slot, stand in the join hold where the party dispersed (below) and the leader re-invites them when it is back. A party that a player now leads (the server made the player leader, or the bot made leader handed it on, section 4) is the player's: every bot in it clears its slot (section 3), and the organizer drops those bots from the bot party on its next pass (section 1), so the returning leader does not invite them. After `LeaderGone` the organizer frees the members that kept their slot; its `unparty` never takes a bot out of the player's party (section 3). |
@@ -901,14 +1043,14 @@ slot and leading, or a `join` slot and sitting in the party of the leader the sl
 gates read `b.world.Party.In() && !b.inBotParty()` instead; the `orders.follow` gate stays, and a
 bot in a player's party (no slot, or a slot cleared by the player-led-party rule, section 3) keeps
 today's behavior. The errand rules (`classchange`, `train`, `dyes`) run before `leader` and
-`follow` (`rules.go:461-496`), so a bot walking an errand is not pulled back by its follow slot
+`follow` (`rules.go:494-507`), so a bot walking an errand is not pulled back by its follow slot
 until the errand ends:
 
 - **The leader** walks its errand as a solo farmer does. Its members follow it by the party
   window's positions at any distance (`follow.go:154-161`), so the party goes to town together;
   each member then takes its own errand there when its NPC comes in sight, or walks to it under
   the lifted gate, and follows its leader again once done.
-- **A member** walks its own errand within the rule's `Reach` (8000, `rules.go:230`,
+- **A member** walks its own errand within the rule's reach (8000: `TrainerReach`, `rules.go:239`; `Reach`,
   `classchange.go:83`, `dyes.go:77`) and back by the party window's positions. While it is away
   the gather gate holds the leader's next target at most `GatherWait` (section 6), and an errand
   that keeps it out of party range past `BehindFor` drops it as fallen behind (table above).
@@ -917,30 +1059,30 @@ No new sender: the walks are today's errand legs through the frame pacer and the
 through the bypass gate (Pacing).
 
 No bot of a bot party whispers another, as the plan's no-bot-to-bot-chat rule wants
-(`docs/plan.md:329-330`): while the slot is set, `ruleLeader` skips its lost-leader branch for the bot
+(`docs/plan.md:343-344`): while the slot is set, `ruleLeader` skips its lost-leader branch for the bot
 leader the slot names (below), and the moment the slot clears the watch can no longer hold a bot
 leader. A clear from inside the bot party ends with the bot's withdrawal, whose send resets the
-watch today (`actLeaveParty`, `brain.go:798-800`), or with the `withdraw` flag dropped unsent
+watch today (`actLeaveParty`, `brain.go:815-817`), or with the `withdraw` flag dropped unsent
 because the party dispersed first, which resets it too (section 3); a clear by the player-led-party
 rule leaves the bot under a player, whom the watch then follows as today; and every clear from no
 party resets the watch itself (end of this section). So the bot never needs to tell a bot leader
 from a player once its slot is gone: the lost-leader branch (the whisper after `LeaderWait`, then
-`/unstuck`, `death.go:274-297`) has no bot leader left to fire for.
+`/unstuck`, `death.go:287-317`) has no bot leader left to fire for.
 
 **A dispersed bot party.** When a bot party disperses under its members (a party of two whose
 leader logged out, or a bot made leader that withdrew, section 4), the members are partyless, and
-today's `watchLeader` marks their leader lost (`death.go:195-218`): `ruleLeader` then holds 5
+today's `watchLeader` marks their leader lost (`death.go:199-223`): `ruleLeader` then holds 5
 minutes (`LeaderWait`, `death.go:164`), whispers and casts `/unstuck` to town
-(`death.go:268-297`). That would recall every member to town before its leader is back to
+(`death.go:287-317`). That would recall every member to town before its leader is back to
 re-invite it. So a bot with a `join` slot skips `ruleLeader`'s lost-leader hold, whisper and
 `/unstuck` for any loss of its bot leader, not only a teleport, while sitting by a dead leader's
 body stays as today (`byLeaderBody`).
 
 Skipping that hold alone would not keep the member in place: today's hold (`ruleLeader` returning
-`Action{}, true` until `LeaderWait`, `death.go:274-279`) is the only thing that stops a partyless
+`Action{}, true` until `LeaderWait`, `death.go:293-298`) is the only thing that stops a partyless
 bot, since `ruleFollow` passes when `followed()` is 0 (`follow.go:97-103`), which it is outside a
 party (`command.go:277-286`), and the rules after it are `newbie`, `travel`, `spot` and `farm`
-(`rules.go:491-496`): the member would claim a spot and walk off to farm, against "members never
+(`rules.go:506-511`): the member would claim a spot and walk off to farm, against "members never
 claim" (section 6). Nor can it walk to its leader's last position: `PartySmallWindowDeleteAll`
 resets the bot's `Party` (`party.go:259-260`), member positions included, and the leader's
 position comes only from sight or `Party.Members` (`follow.go:154-161`). So P1c adds a hold of its
@@ -948,7 +1090,7 @@ own, the **join hold**, in `ruleLeader` after `byLeaderBody`: while the bot hold
 is in no party (or, from P1d, leads a party while its handover to a player runs, section 4),
 `ruleLeader` returns `Action{}, true`, so the bot stands where the party dispersed
 and waits for its leader's invitation, claiming no spot. The rules before `leader` still run
-(`rules.go:461-490`: `attacked`, `heal`, `rest`, `rebuff` among them), so it still defends itself
+(`rules.go:474-505`: `attacked`, `heal`, `rest`, `rebuff` among them), so it still defends itself
 and rests. The hold is bounded twice: the organizer ends it with `unparty` (the leader gone past
 `LeaderGone`, or the member dropped, section 9), and the brain ends it itself after `JoinWait`
 (6 minutes: `LeaderGone` plus two `PartyTick`s, a persona default) from when it found itself
@@ -959,7 +1101,7 @@ otherwise a defensive bound. The real case is a pinned party whose leader is gon
 despawned, cooling down): the organizer breaks a pinned party for none of section 9's timers, so no
 `unparty` comes, and `JoinWait` lets each member play its persona instead of standing until the
 leader is back. For an auto party no known path leaves a member waiting with no `unparty` coming:
-a supervisor restart cancels and joins every run (`supervisor.go:276-292` `shutdown`) and the slot
+a supervisor restart cancels and joins every run (`supervisor.go:279-298` `shutdown`) and the slot
 lives in the run's `Bot` (section 1), so it cannot outlive its organizer; an `unparty` lost to a
 busy mailbox or a reconnect is resent by the `Sent` rule (section 1); and switching the panel's
 auto mode off dissolves every auto party with `unparty` orders (section 12). There `JoinWait` only
@@ -970,12 +1112,12 @@ Every clear of a slot while the bot is in no party ends the join hold and resets
 (`leaderWatch{}`): an `unparty`, the brain's own clear at `JoinWait`, a panel `leave` (which then
 answers nil, section 3), a panel standing order, a GM's whispered `follow`, `assist`, `stay`,
 `go`, `leave` or `invite me`, and a player's `invite me` (section 10). The dispersal that put the
-bot in the join hold also set the watch's `lost` time (`death.go:195-218`), and `JoinWait` (6
+bot in the join hold also set the watch's `lost` time (`death.go:199-223`), and `JoinWait` (6
 minutes) is counted from that same dispersal, past `LeaderWait` (5 minutes, `death.go:164`).
 Without the reset the `join` slot's skip of `ruleLeader` would stop applying the moment the slot
 cleared and the lost-leader branch would fire at once: the bot would whisper "where did you go?" to
 its old bot leader, bot-to-bot chat the plan forbids, and cast `/unstuck` to town
-(`death.go:274-297`). With it, the freed bot plays its persona's own rules from where it stands. A
+(`death.go:287-317`). With it, the freed bot plays its persona's own rules from where it stands. A
 bot with no slot keeps today's behavior.
 
 ### 9. Dissolving and re-forming
@@ -987,9 +1129,12 @@ The organizer breaks a party (an `unparty` to every member, the leader first) wh
   party or another while at least one bot member is online, its members never having accepted
   included;
 - it has had no living healer member online for 10 minutes (`Party.NoHealerSince`);
-- its leader, online in the world, has held no spot for `NoSpotFor` (15 minutes,
-  `Party.NoSpotSince`): no spot within walking reach fits the band or its own level with room for
-  the party (section 4, "Trips"). The span is longer than a death and restart, a supply trip or the
+- its leader, online in the world, has had no spot to farm for `NoSpotFor` (15 minutes,
+  `Party.NoSpotSince`): no spot within walking reach fits the band (its own level only when no
+  spot of the map fits the band, section 6, "Fit by level"), so it neither claims one nor farms
+  beside one, and a held spot it outlevelled or that misfits the band it has given back through
+  the gated trip's give-back (section 4, "Trips"; a leader farming beside a full spot has a
+  spot, its snapshot's `Spot` names it, section 6). The span is longer than a death and restart, a supply trip or the
   town errands that run without a spot, each of which ends with a new claim. The leader and each
   member are then paired no more for `RePairAfter` (30 minutes, `State.PairBans`), so the group
   does not re-form in the same town and idle again while the freed leader takes its gatekeeper
@@ -1064,7 +1209,7 @@ registry.
   (`command.go:252-258` checks only `pace.allow`), not through `chatHeard`, so
   `ChatPolicy.PerSender` (10 minutes, `chat.go:23-24,37`, shared with chat replies) does not apply:
   a player answered with chat a minute earlier still gets its `join` answered. The per-bot total
-  that plan section 4 asks of every whisper reply ("capped per bot in total", `docs/plan.md:329`)
+  that plan section 4 asks of every whisper reply ("capped per bot in total", `docs/plan.md:343`)
   still applies, with a count of its own: a bot sends at most `JoinReplies` (10, persona default)
   `join` reply whispers within any hour, kept in a log that outlives a session as `chatLog` does
   (`chat.go:43-46`, owned by the current session's brain goroutine), apart from
@@ -1125,7 +1270,7 @@ registry.
   claim must outlive the bot's own withdrawal: the server answers the leaver with
   `PartySmallWindowDeleteAll` (`party/party.go:361`; a disband sends it to every member, `:382`),
   and today's `partyClaimEvent` releases every claim on that packet (`partyclaim.go:117-121`,
-  called from `brain.go:414`), so a second member that hears the same player a moment later
+  called from `brain.go:424`), so a second member that hears the same player a moment later
   would find no holder and leave too. The brain therefore marks this claim pending (the player's
   name, beside the claim): `partyClaimEvent` keeps a pending claim on the `DeleteAll` that answers
   the bot's own withdrawal and only drops the mark. From then on it is an ordinary claim out of a
@@ -1147,12 +1292,12 @@ registry.
 `docs/plan.md` ranks above the code (`CLAUDE.md` section 2, precedence item 2), so a rule change
 lands in the same PR as the behavior it describes; otherwise a review of that PR would have to
 flag it against `docs/plan.md` section 3 ("at most one support bot per non-GM leader",
-`docs/plan.md:251`) or section 6 ("the bot invites nobody", `docs/plan.md:417`).
+`docs/plan.md:257`) or section 6 ("the bot invites nobody", `docs/plan.md:431`).
 
 | Rule change | `docs/plan.md` section | PR |
 | --- | --- | --- |
 | "at most one support bot per non-GM leader" gains "a bot party's members are not counted: they join their assigned bot leader outside the claim table" | 3, support | P1a (members accept their leader outside the claim table) |
-| the `lead`, `join` and `unparty` commands | 8, operator commands and standing orders (`docs/plan.md:527-537`: `lead` and `join` kept by the `Bot` like `stay` and `go`, `unparty` one-off like `leave`) and the mailbox's Commands bullet (`docs/plan.md:563`) | P1a |
+| the `lead`, `join` and `unparty` commands | 8, operator commands and standing orders (`docs/plan.md:541-554`: `lead` and `join` kept by the `Bot` like `stay` and `go`, `unparty` one-off like `leave`) and the mailbox's Commands bullet (`docs/plan.md:577`) | P1a |
 | `invite me` and `leave` from a GM taking the bot out of a bot party and clearing its slot first | 6, commands | P1b |
 | "`invite me` (the bot invites nobody ...)" becomes "a bot invites only the bots the organizer or the panel assigned to its party; it never invites unasked" | 6, commands | P1d (the leader invites) |
 | the organizer and the party mode per bot | 8, presets | P5 |
@@ -1280,7 +1425,7 @@ Proposed, awaiting the owner:
     its timer handed in through `State` (`NoHealerSince`, `NoSpotSince`, `LeaderGoneSince`,
     `BehindSince` set 10 minutes, 15 minutes or `LeaderGone` before `now`, and one minute short of
     it breaks nothing); a leader whose snapshot `Spot` reads empty while online starts
-    `NoSpotSince`, one that claims a spot clears it, one offline starts none, and the no-spot break
+    `NoSpotSince`, one that claims a spot or farms beside one (`Spot` set either way) clears it, one offline starts none, and the no-spot break
     sets a `State.PairBans` entry for the leader and each member; a bot
     spread of 5 (`MaxSpread`) does not break, 6 does; a player member far above does not count; a
     party of two whose one member cleared its slot gives the leader `unparty` and no order is a
@@ -1384,6 +1529,7 @@ Proposed, awaiting the owner:
     its slot on the party window that follows (the snapshot's `Party` reads empty, `PartyLeft`
     `left`);
   - `TestPartyJoinReleasesSpot`: a member holding a spot joins: the registry's held count drops;
+    one farming beside a spot joins: its beside count drops;
   - `TestPartyMemberLeaderLost` (P1c, on P1a's `unparty` and P1b's clears): a member with a `join`
     slot whose party dispersed (its leader logged out), holding no spot, with a fitting spot free in the registry and a monster in
     sight, sends no whisper and no `/unstuck`, claims no spot (the registry's held count is
@@ -1404,21 +1550,55 @@ Proposed, awaiting the owner:
     reach; with none, it keeps its spot over cap (held 4), plans no gatekeeper trip and picks again
     `spotRetry` (1 minute) later; the
     leader's supply trip, its death and its brain's stop each return the spot's held count to its
-    value before the claim;
+    value before the claim; with every fitting spot at its cap, a leader of 3 holding no claim
+    takes the one whose held count plus 3 stays within its limit (`claimOverN`) and skips one with
+    room for 2 only; with every one too near its limit, it farms beside one (its beside count rises
+    by 3, its held count is unchanged, the snapshot's `Spot` names it), a member leaving re-weighs
+    the beside count to 2 in one step, the next re-pick after a spot frees room for 2 below its cap
+    claims 2 there and drops the beside count by 2, and the leader's stop while beside returns the
+    beside count to its value before; a solo bot's `go` claim after a leader's slot cleared takes 1
+    and its later release gives back 1; a leader of 2 whose member logs out
+    (`PartySmallWindowDeleteAll`) re-weighs its held count from 2 to 1 in one step and keeps the
+    spot, and the member's re-invitation re-weighs it back to 2; a leader of 3 that withdraws on
+    `unparty` keeps its spot at weight 1 (held drops by 2 in one step), and a whispered `go` to that
+    same spot afterwards leaves the held count at 1 and its later release gives back 1; a leader of 3
+    farming beside whose party disperses drops its beside count by 2 the same way; a leader whose
+    slot clears while it still leads re-weighs to 1 at once;
   - `TestPartyCrowdOwnWeight`: a leader of 3 holding a spot alone (`Held` 3) counts 4 strangers as
-    crowded (`Crowd` 4); with another bot's claim on it (`Held` 4), 5 strangers;
+    crowded (`Crowd` 4); with another bot's claim on it (`Held` 4), 5 strangers; a leader of 3
+    farming beside a spot (`Beside` 3) that one bot holds (`Held` 1), 5 strangers; a solo bot
+    holding a spot (`Held` 1) where a party of 3 farms beside (`Beside` 3) is not crowded by the
+    party's 3 players and 3 others, and is by the party and 4 others (counted 1 beside, as today's
+    `farmBeside` would count it, the party and 3 others would already crowd it); a solo bot's
+    check is today's (`Held + Beside - 1`);
   - `TestPartySpotFitByLevels`: bot members at 10 and 15 fit only spots whose top monster is 12; at
     10 and 16 none fits; a player member at 30 changes nothing;
   - `TestPartyHeldSpotMisfit` (P2): a leader at 15 holding a solo spot whose top monster is 17
-    gets a member at 12 (band `[12, 14]`): with a spot of top monster 13 free in walking reach it
-    gives up its spot and claims that one; with that spot full it still gives its own up and claims
-    it past the cap; with no spot of the map fitting the band it keeps its own; a member's
-    level-up from 12 to 13 that makes the held spot fit again moves nothing, and a party window
-    that puts the held spot out of the band's fit (a new member at 12 joining a band of 14 and 15
-    at a spot of top monster 16) re-picks on the next decision; a solo bot's held spot is kept as today;
+    gets a member at 12 (band `[12, 14]`): with a spot of top monster 13 (no aggressive monster
+    above 12) free in walking reach it gives up its spot and claims that one; with that spot at its
+    cap but room for 2 within its limit it still gives its own up and claims it past the cap; with
+    no spot of the map fitting the band it keeps its own (its own level fits it); with band-fitting
+    spots only beyond walking reach and a spot fitting its own level in reach, it claims neither,
+    gives its misfit spot back (the gated trip's give-back, its held count drops by 2) and its
+    snapshot's `Spot` reads empty. A leader at 15 holding a spot of top
+    monster 15 (no aggressive monster above 12, so it fits the leader alone) gets a member at 12
+    while the spot of top monster 13 is too near its limit for 2: the held spot misfits `[12, 14]`,
+    the leader finds no room and keeps it, re-picking every `spotRetry`; the member's level-up from
+    12 to 13 (band `[12, 15]`) makes the held spot fit again, so `misfit` clears, and when the
+    spot of top monster 13 then frees room the leader stays where it is. A party window that puts
+    the held spot out of the band's fit (a new member at 12 joining a band of 14 and 15 at a spot
+    of top monster 16) re-picks on the next decision; a leader farming beside a spot that leaves
+    the band's fit leaves it at its next re-pick; a solo bot's held spot is kept as today;
   - `TestPartyGatherGate`: a member at 2000 holds the leader's next target until it is within 1200
     or 60 s passed; a member at 12000 does not hold it;
-  - `TestPartyNoGatekeeperTrip`: a leader with members plans no trip; alone it does;
+  - `TestPartyNoGatekeeperTrip`: a leader with members plans no trip; alone it does; a leader of 3
+    at 21 holding a spot of top monster 15 (outlevelled past `Outlevel` 5) with no spot in walking
+    reach fitting its band or its level plans no trip, gives the spot back on its next re-pick (held
+    drops by 3), farms beside nothing, and its snapshot's `Spot` reads empty, so `NoSpotSince`
+    starts; it does not claim the spot back at the following re-pick; with one candidate in walking
+    reach too near its limit for 3 it keeps the outlevelled spot instead and re-picks every
+    `spotRetry`; a solo bot in the first case plans its trip and gives the spot back as today, and
+    with no trip keeps it as today;
   - `TestPartyRaise`: a level-20 Cleric member, out of combat, with the leader dead in sight,
     selects it and casts 1016; not in combat; a level-19 Elven Mystic never (it has no 1016: the
     Elven Oracle, `baseLvl` 20, learns it at 20, `classes/elvenMystic.xml:266-267,362`);
@@ -1530,7 +1710,7 @@ Proposed, awaiting the owner:
   `lead <members>` to the leader, the organizer's own order (section 1), as the scenarios already
   hand panel orders (`arrows_live_test.go:125`). The organizer itself is covered by the planner
   and supervisor unit tests above. The harness keeps naming its players with `DefaultMarker`
-  (`helpers_live_test.go:35`): no party rule reads the marker (section 5), so the existing
+  (`helpers_live_test.go:34`): no party rule reads the marker (section 5), so the existing
   scenarios where such a player invites a bot and expects 1 (`party_live_test.go:56`,
   `support_live_test.go:304`, `recover_live_test.go:116-122`) pass unchanged after P1a, and P1a
   runs them as its regression check.
@@ -1560,7 +1740,7 @@ Proposed, awaiting the owner:
 | P1b | Slot clearing (section 3): the `withdraw` step sent before the reply, kept by every reset of `orders` and dropped unsent from no party or on the bot's own invitation answer; the panel `leave` (a slot cleared from no party answers nil), a panel standing order (in a party or between invitations), a whispered `follow`, `assist`, `stay` or `go`, a GM's whispered `leave` and a GM's `invite me`, each clearing the slot before the withdrawal; a party led by a name the slot does not hold clearing the slot, except a `join` member leading its own party; `Status.PartyLeft` `left`; every clear from no party resetting the leader watch (section 8); its `docs/plan.md` rule change (section 11). Unit tests only. | P1a |
 | P1c | The member's hold (sections 5, 8): a `join` member skipping `ruleLeader`'s lost-leader hold, whisper and `/unstuck`; the join hold with its `JoinWait` bound, `Status.PartyLeft` `timeout` and the leader-watch reset at that clear; releasing the spot on joining. Unit tests only. | P1a, P1b (its test's clears from no party: the panel `leave`, a panel `follow` and a GM's whispered `leave` in the join hold, each resetting the leader watch) |
 | P1d | The leader: the `party` rule with its refusals, declines, `InviteWait` timeout, 164 handling and rejoin wait; the five loot rules; `RequestOustPartyMember` and `RequestChangePartyLeader` (encoders) with the oust of a dropped member; the handover by exact names, which `watchLeader` no longer counts as a lost leader, with its `HandoverWait` retry over the players, the join hold while it runs, the withdrawal at `HandoverFor` and `unparty` withdrawing it (sections 3, 4); its `docs/plan.md` rule change (section 11). | P1a, P1b (the handover's exception to the player-led-party rule), P1c (members hold between invitations) |
-| P2 | Party play: `claimN`, `releaseN` with the brain's held weight and re-claims, the crowd check's own weight, fit by the bot members' levels, `misfit` re-picking a held spot the band no longer fits (section 6), errand walks for bots of their bot party (section 8), the gather gate, no gatekeeper trips while leading, the member's answer to its leader's teleport with a new supply-trip cause that needs no held spot, a member's own supply causes read at its leader's side (sections 6, 8; the whisper skip ships in P1c). | P1d |
+| P2 | Party play: `claimN`, `claimOverN` within the limit, `farmBesideN`, `releaseN` and `leaveBesideN` with the brain's weight for a claim or a beside count, `leaveSpot` giving back that weight from either, `reweigh` of a held or beside count on a size change, the crowd check's own weight (`Held + Beside - spot.weight`), fit by the bot members' levels, `misfit` re-picking a held spot the band no longer fits (section 6), the gated trip's give-back of an outlevelled or misfit held spot with no candidate in walking reach (section 4), the weight back to 1 when a leader stops leading (section 6), errand walks for bots of their bot party (section 8), the gather gate, no gatekeeper trips while leading, the member's answer to its leader's teleport with a new supply-trip cause that needs no held spot, a member's own supply causes read at its leader's side (sections 6, 8; the whisper skip ships in P1c). | P1d |
 | P3 | Resurrection: 1016 in the Cleric, Elven Oracle and Shillien Oracle learn tables and the `raise` rule (section 8). | P1a, S7 (#327) |
 | P4 | Party danger through the model: party `TimeToKill` and `TimeToDie` with heals; the spot fit for a party (section 7). | P2, S3 (#322), S11 (#330) |
 | P5 | The organizer: `internal/botparty` planner, the supervisor's tick and orders (`TestSupervisorPartyTick`), the registry's party mode and pins, roles and the healer flag per candidate with `Status.Heals` (the learned heal, section 2), `NewRun`, the `State` it returns (parties, freed times, pair bans, break timers with the per-member `GoneSince` and the online-only `LeaderGoneSince`, which does not run while every bot member is gone), dropping a gone or ineligible member (its `unparty` held back while an order is pending, then sent to a candidate in no record whose slot is set), the `Sent` record of each order's answer and the slot re-send, `join` before `lead`, breaks (no bot member left and the leader's `NoSpotFor` among them) and cool-downs, pinned parties kept through every timer, their `join` orders held back while the pinned leader is not online in the world, and a bot leaving its pin by `Status.PartyLeft`, with the registry's pin rows written from the pinned records (sections 1, 2, 9, 12); its `docs/plan.md` rule change (section 11). | P1a-P1d, S4 (#323), S7 (#327, the healer flag), S9 (#331, the `farmer` preset) |
@@ -1584,8 +1764,9 @@ Most urgent: P1a-P1d and P5 give parties at all; P2 makes them play as a group.
   invitation at a time and `FormPerPass` bound it.
 - **Walking members.** Members follow by walking only, so a leader that strays far (a trip, a long
   route) strands them; the no-gatekeeper rule and the fall-behind break bound it. The other side
-  of the no-gatekeeper rule is a party with no spot in walking reach of its town: the no-spot
-  break (`NoSpotFor`, section 9) frees it, so the leader travels alone and the party re-forms only
+  of the no-gatekeeper rule is a party with no spot in walking reach of its town, most often
+  because its leader levelled at its spot until it outlevelled it: the leader gives that spot back
+  (the gated trip's give-back, section 4) and the no-spot break (`NoSpotFor`, section 9) frees it, so the leader travels alone and the party re-forms only
   where its bots meet again, at the cost of party play for a band that outgrew its town.
 - **Model error.** The party model inherits the M10 model's approximations and adds the
   uncalibrated member profiles; it only compares spots, and the leader's row margin applies.
@@ -1597,7 +1778,8 @@ To be filed in M11 with the epic:
 - `bots swarm` has no organizer (D25); headless runs keep today's party behavior.
 - A party travelling together by gatekeeper or recalling together on purpose (the leader's trip
   ends gatekeeper travel while leading; P2 covers only the teleport answer). Until then a party
-  with no spot in walking reach is broken after `NoSpotFor` (section 9, P5), which ships with the
+  with no spot in walking reach, an outlevelled or misfit held spot given back included
+  (section 4, "Trips", P2), is broken after `NoSpotFor` (section 9, P5), which ships with the
   organizer.
 - Party matching rooms (`network/partymatch.go`) to list bot parties for players: backlog.
 - Command channels: out of scope.
