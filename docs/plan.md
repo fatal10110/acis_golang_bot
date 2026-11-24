@@ -24,6 +24,7 @@ repository.
 | M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
 | M8 - Items and loadout | #166 | #167-#182 (`docs/items.md`, PRs I0-I13 with I8b, and the enchant backlog issue) |
 | M9 - Clan crafter | #184 | #185-#194 (`docs/crafting.md`, PRs C1-C10) |
+| M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
@@ -224,6 +225,14 @@ Shared behavior in every persona:
 
 ### 3. Personas
 
+**Builds, every persona** (M10, `docs/strategy.md`, proposed): a bot plays a build compiled from
+its race, its class and its persona's role: its class's skills gated by its weapon, the armor
+kinds and sets that pay off for its race, a profession fitting its race and role, and thresholds
+and spots from a character model fed by its own `UserInfo` stats. It replaces the support
+persona's role by class (below) and the M8 build table (`docs/items.md` section 2); its spec is
+`docs/strategy.md` "Behavior per class". A new `farmer` preset would become the default (D21,
+proposed).
+
 **Walking, every persona** (D13, M7, `docs/navigation.md`): a bot finds its own routes on its copy
 of the server's geodata and sends only segments it checked with the copied `CanMove` and step
 chain, from standstill. Reachability is the nav hierarchy's: a destination in the bot's SCC is
@@ -254,7 +263,9 @@ sidesteps, detours, hops and the hour-long spot avoid are gone. The live scenari
 - loot follows the leader's party loot rule; under finders-keepers the support never loots;
 - role by class: human, elven or dark elven mystic heals and buffs (Heal, Might, Shield from level 7,
   Battle Heal from 14); orc mystic buffs only; fighters assist only. Skills are learned at the
-  trainer with SP (`AutoLearnSkills` is off), from PR2b.
+  trainer with SP (`AutoLearnSkills` is off), from PR2b. M10 (`docs/strategy.md`, proposed)
+  replaces this list with the Support rows of "Behavior per class": fighters fight with their own
+  skills and take a tank line, and the orc mystic also burns and drains.
 
 **farmer** (PR3): spot choice from spawnlist territories (polygons with minZ/maxZ) and NPC levels,
 excluding makers with `event=` or `ban=`, raid and grand bosses, non-monsters, aggressive mobs
