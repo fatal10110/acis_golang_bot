@@ -46,17 +46,17 @@ var (
 )
 
 // squire is a human fighter (class 0) of level in Squire's Sword, Shirt
-// and Pants, as its UserInfo carries it: squire14 is the one
-// TestLivePackSpot logs, unbuffed; squire6 the same at level 6 (P.Atk and
-// P.Def by the level factors 0.95 over 1.03, evasion and accuracy 8 lower,
-// max HP the class's level 6 HP by CON 43).
+// and Pants, as its UserInfo carries it, unbuffed: squire14 is the fresh
+// one TestLivePackRisk logs, squire6 TestLiveSupplyTrip's once without its
+// death penalty, and weak6 the same with it.
 type squire struct {
 	level, pAtk, pDef, evasion, accuracy, atkSpd, maxHP int32
 }
 
 var (
-	squire14 = squire{level: 14, pAtk: 6, pDef: 78, evasion: 41, accuracy: 41, atkSpd: 375, maxHP: 385}
-	squire6  = squire{level: 6, pAtk: 5, pDef: 71, evasion: 33, accuracy: 33, atkSpd: 375, maxHP: 221}
+	squire14 = squire{level: 14, pAtk: 7, pDef: 86, evasion: 46, accuracy: 46, atkSpd: 416, maxHP: 385}
+	squire6  = squire{level: 6, pAtk: 6, pDef: 79, evasion: 38, accuracy: 38, atkSpd: 416, maxHP: 221}
+	weak6    = squire{level: 6, pAtk: 2, pDef: 42, evasion: -1, accuracy: -1, atkSpd: 170, maxHP: 221}
 )
 
 // newSquireBrain is a brain of the default persona playing s, carrying
@@ -84,9 +84,9 @@ func setSquire(b *Brain, s squire, potions int32) {
 // TestMobFight checks one monster's fight against a squire. A Werewolf
 // Chieftain (level 12) has 314 HP (199 by CON 43's 1.58), P.Atk 30.5 (25.2
 // by STR 40's 1.20 and level 12's 1.01) and P.Def 60.6, swings at 272
-// (247.42 by DEX 30's 1.10) and lands 97.7% of its swings on evasion 41,
-// 1.1% of them critical: 30.2 a hit on P.Def 78. The level 14 squire's 6
-// P.Atk hits it for 7.6, 82.3% of the time, every 1.33 s.
+// (247.42 by DEX 30's 1.10) and lands 87.7% of its swings on evasion 46,
+// 1.1% of them critical: 27.3 a hit on P.Def 86. The level 14 squire's 7
+// P.Atk hits it for 8.9, 92.3% of the time, every 1.2 s.
 func TestMobFight(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -94,8 +94,8 @@ func TestMobFight(t *testing.T) {
 		mob       datapack.Mob
 		kill, dps float64
 	}{
-		{"werewolf chieftain", squire14, datapack.Mob{Level: 12, Combat: werewolfChieftain}, 66.84, 16.21},
-		{"giant toad", squire6, datapack.Mob{Level: 5, Combat: giantToad}, 24.60, 7.75},
+		{"werewolf chieftain", squire14, datapack.Mob{Level: 12, Combat: werewolfChieftain}, 46.05, 13.20},
+		{"giant toad", squire6, datapack.Mob{Level: 5, Combat: giantToad}, 16.44, 6.38},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,8 +109,9 @@ func TestMobFight(t *testing.T) {
 }
 
 // TestPackRisk checks SpotPolicy.PackRisk passes over the werewolf pack a
-// level 14 squire died at before any death there, and its orcs too, and
-// keeps the toad spots for a level 6 one with potions (#294).
+// level 14 squire died at before any death there, and its orcs once its
+// potions run out, and keeps the toad spots for a level 6 one without a
+// potion (#294).
 func TestPackRisk(t *testing.T) {
 	with := func(s squire, f func(*squire)) squire { f(&s); return s }
 	tests := []struct {
@@ -122,13 +123,15 @@ func TestPackRisk(t *testing.T) {
 		risk float64
 		fit  bool
 	}{
-		{"level 14 at the werewolves, 13 potions", squire14, 13, tiWolves, 4.91, false},
-		{"level 14 at the orcs, 13 potions", squire14, 13, tiOrcs01, 3.40, false},
-		{"level 14 at the orcs, no potion", squire14, 0, tiOrcs01, 7.18, false},
-		{"level 14 at the orcs in better gear", with(squire14, func(s *squire) { s.pAtk, s.pDef = 12, 110 }), 13, tiOrcs01, 1.64, true},
-		{"level 6 at five toads, 12 potions", squire6, 12, tiToads27, 2.29, true},
-		{"level 6 at four toads, 12 potions", squire6, 12, tiToads28, 1.83, true},
-		{"level 6 at five toads, no potion", squire6, 0, tiToads27, 4.31, false},
+		{"level 14 at the werewolves, 13 potions", squire14, 13, tiWolves, 3.31, false},
+		{"level 14 at the werewolves in better armour", with(squire14, func(s *squire) { s.pDef = 120 }), 13, tiWolves, 2.37, true},
+		{"level 14 at the orcs, 13 potions", squire14, 13, tiOrcs01, 2.28, true},
+		{"level 14 at the orcs, 3 potions", squire14, 3, tiOrcs01, 2.28, true},
+		{"level 14 at the orcs, potions run out", squire14, 0, tiOrcs01, 4.04, false},
+		{"level 6 at five toads, no potion", squire6, 0, tiToads27, 2.37, true},
+		{"level 6 at four toads, no potion", squire6, 0, tiToads28, 1.90, true},
+		{"level 6 at four toads, 12 potions", squire6, 12, tiToads28, 1.19, true},
+		{"level 6 with its death penalty at five toads, 12 potions", weak6, 12, tiToads27, 15.19, false},
 		{"stats not in yet", with(squire14, func(s *squire) { s.pAtk = 0 }), 0, tiWolves, 0, true},
 		{"no aggressive monster", squire14, 0, datapack.Spot{MinLevel: 11, MaxLevel: 13}, 0, true},
 	}
@@ -159,10 +162,9 @@ func TestPackRisk(t *testing.T) {
 	})
 }
 
-// TestPackRiskPick checks which spot a level 14 squire with 13 potions
-// claims, the werewolves the nearest: a calm spot that fits over them, and
-// none over the orcs, whose pack is too much for it too; at PackRisk 0 the
-// nearest.
+// TestPackRiskPick checks which spot a level 14 squire claims, the
+// werewolves the nearest: the orcs while its potions last, none once they
+// run out, and at PackRisk 0 the nearest.
 func TestPackRiskPick(t *testing.T) {
 	place := func(s datapack.Spot, name string, x, y int32) datapack.Spot {
 		s.Maker, s.Center, s.MaximumNPCs = name, datapack.Point{X: x, Y: y}, 11
@@ -172,20 +174,20 @@ func TestPackRiskPick(t *testing.T) {
 	tests := []struct {
 		name     string
 		packRisk float64
-		other    datapack.Spot
+		potions  int32
 		// want is the spot held, -1 for none.
 		want int
 	}{
-		{"a calm spot", 3, testSpot("calm", 0, 3000, 11, 13, 9), 1},
-		{"the orcs: none", 3, orcs, -1},
-		{"PackRisk 0: the nearest", 0, orcs, 0},
+		{"13 potions: the orcs", 3, 13, 1},
+		{"no potion: none", 3, 0, -1},
+		{"PackRisk 0: the nearest", 0, 13, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newSpotBrain(t, 14, wolves, tt.other)
+			b := newSpotBrain(t, 14, wolves, orcs)
 			b.persona.Potions = []int32{lesserHealingPotion}
 			b.persona.Spots.PackRisk = tt.packRisk
-			setSquire(b, squire14, 13)
+			setSquire(b, squire14, tt.potions)
 			b.decide(at(time.Second))
 			got := -1
 			if b.spot.held {
@@ -218,7 +220,7 @@ func TestIndexPotionHeals(t *testing.T) {
 // TestPackRiskShipped checks the fit on the shipped datapack, when
 // BOT_DATAPACK_XML names its data/xml directory: a level 14 squire with 13
 // Lesser Healing Potions passes over gludio31_1625_10m1, and a level 6 one
-// with 12 keeps every toad spot of Talking Island.
+// without a potion keeps every toad spot of Talking Island.
 func TestPackRiskShipped(t *testing.T) {
 	dir := os.Getenv("BOT_DATAPACK_XML")
 	if dir == "" {
@@ -236,10 +238,10 @@ func TestPackRiskShipped(t *testing.T) {
 		fit     bool
 	}{
 		{"gludio31_1625_10m1", squire14, 13, false},
-		{"gludio32_1725_27m1", squire6, 12, true},
-		{"gludio32_1725_28m1", squire6, 12, true},
-		{"gludio32_1725_29m1", squire6, 12, true},
-		{"gludio32_1725_30m1", squire6, 12, true},
+		{"gludio32_1725_27m1", squire6, 0, true},
+		{"gludio32_1725_28m1", squire6, 0, true},
+		{"gludio32_1725_29m1", squire6, 0, true},
+		{"gludio32_1725_30m1", squire6, 0, true},
 	}
 	spots := make(map[string]datapack.Spot)
 	for _, s := range dp.Spots() {
@@ -267,8 +269,6 @@ func TestPackRiskRepick(t *testing.T) {
 	wolves, orcs := tiWolves, tiOrcs01
 	wolves.Maker, wolves.Center, wolves.MaximumNPCs = "wolves", datapack.Point{X: 1000}, 10
 	orcs.Maker, orcs.Center, orcs.MaximumNPCs = "orcs", datapack.Point{X: 1000}, 11
-	better := squire14
-	better.pAtk, better.pDef = 12, 110
 	type step struct {
 		name    string
 		self    squire
@@ -293,8 +293,8 @@ func TestPackRiskRepick(t *testing.T) {
 			name:  "potions run out",
 			spots: []datapack.Spot{orcs},
 			steps: []step{
-				{name: "the orcs fit", self: better, potions: 13, want: 0},
-				{name: "none left: kept", self: better, want: 0},
+				{name: "the orcs fit", self: squire14, potions: 13, want: 0},
+				{name: "none left: kept", self: squire14, want: 0},
 			},
 		},
 	}

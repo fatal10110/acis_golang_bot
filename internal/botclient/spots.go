@@ -75,20 +75,20 @@ type SpotPolicy struct {
 	// PackRisk times what it can take while it kills one of them: its max
 	// HP plus what the healing potions it carries restore in that time
 	// (packRisk, from the bot's own stats against the monsters'). It judges
-	// a pack before a death there (#294): to the level 14 fighter in
-	// Squire's gear of TestLivePackSpot, with 13 Lesser Healing Potions,
-	// Talking Island's werewolf pack that killed it is about 4.9 and the
-	// orc pack it farmed until its potions ran out about 3.4; to a level 6
-	// one with 12 its toad spots are 1.8 to 2.3. Regeneration, shots, the
+	// a pack before a death there (#294): to a level 14 fighter in Squire's
+	// gear with Lesser Healing Potions, Talking Island's werewolf pack that
+	// killed it (TestLivePackSpot) is about 3.3, its orc packs about 2.3
+	// while three potions last and 4 after; to a level 6 one without a
+	// potion its toad spots are 1.9 to 2.9. Regeneration, shots, the
 	// fight's lulls and a pack drawn in turn are left out, so it is a ratio
 	// against the worst case rather than a death line. Holding a spot over
 	// it, the bot moves to one that fits (overRisk). A mystic's spells are
-	// left out too, so a mystic is not judged. 0, the default, never passes
-	// one over: on the worst case, a healthy level 6 squire with no potion
-	// is over 3 at the toads too (3.5 to 4.3), and a character weakened by
-	// its death penalty fits nothing (TestLiveSupplyTrip's, at level 6 with
-	// P.Atk 2, is over 12 at the toads with 12 potions); 3 is the value the
-	// cases above are judged at. The per-build margins of #330 replace it.
+	// left out too, so a mystic is not judged. 3 is the value the cases
+	// above are judged at; 0, the default, never passes one over: a
+	// character weakened by its death penalty fits nothing on the worst
+	// case (TestLiveSupplyTrip's level 6 one, with P.Atk 2, is over 12 at
+	// the toads with 12 potions), so it would stand idle where it farms
+	// today. The per-build margins of #330 replace it.
 	PackRisk float64
 }
 
