@@ -137,9 +137,10 @@ func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 	return rows
 }
 
-// TestBehaviorRowsShipped checks the build's rows against the shipped
-// datapack when BOT_DATAPACK_XML names its data/xml directory, and skips
-// otherwise (docs/strategy.md, "Testing").
+// TestBehaviorRowsShipped checks the build's rows, their sets and dyes
+// (gearRows) included, against the shipped datapack when BOT_DATAPACK_XML
+// names its data/xml directory, and skips otherwise (docs/strategy.md,
+// "Testing").
 func TestBehaviorRowsShipped(t *testing.T) {
 	dir := os.Getenv("BOT_DATAPACK_XML")
 	if dir == "" {
@@ -159,6 +160,23 @@ func TestBehaviorRowsShipped(t *testing.T) {
 	}
 	for _, r := range rows {
 		for _, e := range checkRow(r, classes, skills) {
+			t.Error(e)
+		}
+	}
+	items, _, _, err := datapack.LoadItems(filepath.Join(dir, "items"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sets, err := datapack.LoadArmorSets(filepath.Join(dir, "armorSets.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hennas, err := datapack.LoadHennas(filepath.Join(dir, "hennas.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for class, r := range gearRows {
+		for _, e := range checkGearRow(class, r, classes, items, sets, hennas) {
 			t.Error(e)
 		}
 	}

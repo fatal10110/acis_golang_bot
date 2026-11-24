@@ -10,10 +10,10 @@ import (
 
 func TestLoadHennasSample(t *testing.T) {
 	want := map[int32]Henna{
-		1:  {SymbolID: 1, DyeID: 4445, Price: 37000, Classes: []int32{1, 4, 7, 11, 15, 19, 22, 26, 29, 32, 35, 39, 42, 45, 47, 50, 54, 56}},
-		8:  {SymbolID: 8, DyeID: 4452, Price: 37000, Classes: []int32{1, 4, 7, 11, 19, 22, 26, 32, 35, 39, 45, 47, 54, 56}},
-		10: {SymbolID: 10, DyeID: 4454, Price: 37000, Classes: []int32{11, 15, 26, 29, 39, 42, 50}},
-		// No price: a free draw, as on the server.
+		1:  {SymbolID: 1, DyeID: 4445, Price: 37000, STR: 1, CON: -3, Classes: []int32{1, 4, 7, 11, 15, 19, 22, 26, 29, 32, 35, 39, 42, 45, 47, 50, 54, 56}},
+		8:  {SymbolID: 8, DyeID: 4452, Price: 37000, INT: 1, WIT: -3, Classes: []int32{1, 4, 7, 11, 19, 22, 26, 32, 35, 39, 45, 47, 54, 56}},
+		10: {SymbolID: 10, DyeID: 4454, Price: 37000, MEN: 1, WIT: -3, Classes: []int32{11, 15, 26, 29, 39, 42, 50}},
+		// No price: a free draw, as on the server; a stat of 0 changes nothing.
 		46: {SymbolID: 46, DyeID: 4490, Classes: []int32{16, 30}},
 	}
 	got, err := LoadHennas(filepath.Join("testdata", "xml", "hennas.xml"))
@@ -61,6 +61,7 @@ func TestLoadHennasErrors(t *testing.T) {
 		{"trailing separator", `symbolId="1" dyeId="2" classes="3;"`, `"classes"`},
 		{"bad class", `symbolId="1" dyeId="2" classes="3;x"`, `"classes"`},
 		{"bad price", `symbolId="1" dyeId="2" price="x" classes="3"`, `"price"`},
+		{"bad stat", `symbolId="1" dyeId="2" INT="x" classes="3"`, `"INT"`},
 		{"symbolId past int32", `symbolId="2147483648" dyeId="2" classes="3"`, `"symbolId"`},
 	}
 	for _, tt := range tests {

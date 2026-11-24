@@ -50,6 +50,12 @@ func TestLiveClassChangeDyes(t *testing.T) {
 			errandsOff(&p)
 			p.ClassChange = botclient.DefaultPersona().ClassChange
 			p.Dyes = botclient.DefaultPersona().Dyes
+			// The flow under test, not the model's choice of symbols
+			// (dyeDraws): the persona table pins them.
+			p.Dyes.Symbols = map[int32][]int32{
+				classWarrior:   {symbolStr1, symbolDex1},
+				classGladiator: {symbolStr3, symbolDex3, symbolStr3},
+			}
 			return p
 		},
 		brain: withTravel(travel),

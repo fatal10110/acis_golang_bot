@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -84,6 +85,15 @@ type TravelMap struct {
 	// hennas are the dye symbols by id (datapack.Datapack.Hennas): what
 	// the dye errand checks prices, dyes and class lists with.
 	hennas map[int32]datapack.Henna
+	// classes are the class templates (datapack.Datapack.Classes), skills
+	// every skill level (datapack.Datapack.Skills), setSkills the skills
+	// armor sets grant and refMobs the reference monster of each level
+	// (indexRefMobs): what the gear and dye errands value gear with through
+	// the character model (gearModel).
+	classes   map[int32]datapack.Class
+	skills    map[datapack.SkillRef]datapack.Skill
+	setSkills map[int32]bool
+	refMobs   map[int]charmodel.Profile
 	// products maps the lower-case name of each recipe product to its
 	// template, and itemNames each such product to its name: what a craft
 	// order names (indexProductNames).
@@ -135,6 +145,9 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
 	m.crystals = indexCrystals(dp.Items)
 	m.hennas = dp.Hennas
+	m.classes, m.skills = dp.Classes, dp.Skills
+	m.setSkills = indexSetSkills(dp.ArmorSets)
+	m.refMobs = indexRefMobs(dp.NPCs)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {

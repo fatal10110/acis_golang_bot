@@ -7,13 +7,15 @@ import (
 )
 
 // Henna is one dye symbol (hennas.xml <henna>): the dye a draw takes, the
-// draw price and the classes that may wear it. The stat changes are not
-// read: the bot's persona table picks the symbols.
+// draw price, the base stats it changes and the classes that may wear it.
 type Henna struct {
 	SymbolID, DyeID int32
 	// Price is the draw price in adena; a removal costs a fifth of it
 	// (model/henna/henna.go RemovePrice).
 	Price int32
+	// STR to MEN are the base stat changes (attributes STR, CON, DEX, INT,
+	// WIT and MEN, 0 when absent, as the server's economy.go reads them).
+	STR, CON, DEX, INT, WIT, MEN int
 	// Classes are the class ids that may draw and use the symbol.
 	Classes []int32
 }
@@ -51,6 +53,12 @@ func buildHenna(e attrsElement) (Henna, error) {
 		SymbolID: a.int32("symbolId"),
 		DyeID:    a.int32("dyeId"),
 		Price:    a.int32Default("price", 0),
+		STR:      int(a.int32Default("STR", 0)),
+		CON:      int(a.int32Default("CON", 0)),
+		DEX:      int(a.int32Default("DEX", 0)),
+		INT:      int(a.int32Default("INT", 0)),
+		WIT:      int(a.int32Default("WIT", 0)),
+		MEN:      int(a.int32Default("MEN", 0)),
 	}
 	if raw := a.str("classes"); a.err == nil {
 		for part := range strings.SplitSeq(raw, ";") {
