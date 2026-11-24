@@ -314,7 +314,11 @@ of `TestLiveClanMember` (the walk to town and the supply-trip gap), the gear pur
 `TestLiveTrainer` and the follow and nav scenarios. `TestLiveSupport` bounds each of its steps:
 the leader's buffs are overdue two minutes after the invitation. Observation windows
 (`TestLivePackSpot`, `TestLivePackRisk`, `TestLiveSoak`) wait out their window on purpose, and a
-scenario whose own deadline is within `stepBound` needs no step deadline.
+scenario whose own deadline is within `stepBound` needs no step deadline. A raw `Watch.Await` on the
+scenario's context gets a sub-context of its own (`awaitDeath`, the login `UserInfo` of `runWatched`,
+the guide's buff of `TestLiveNewbieGuideBuffs`, the restart teleport of
+`TestLiveRecoverVillageRestart`), and each leg of `TestLiveNavFacts` is overdue once its walk at speed
+plus `EntryTimeout` has passed.
 
 No scenario covers #28, a monster another player fights skipped: #138 dropped that rule, and a
 farmer may take such a monster.

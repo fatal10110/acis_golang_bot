@@ -143,10 +143,15 @@ func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, s
 		}
 	})
 	b, stop := startBot(t, ctx, tg, account, setup)
-	_, seen, err := w.Await(ctx, 0, func(ev botclient.Event) bool {
+	// Entering the world is a step of its own (#366): stepBound leaves room
+	// for the login pacing to queue the logins of parallel scenarios, and a
+	// bot that never enters fails here, not at the end of the scenario.
+	enter, cancel := context.WithTimeout(ctx, stepBound)
+	_, seen, err := w.Await(enter, 0, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.UserInfo)
 		return ok
 	})
+	cancel()
 	if err != nil {
 		t.Fatalf("bot %s in the world: %v", account, err)
 	}

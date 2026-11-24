@@ -105,7 +105,16 @@ func TestLiveNavFacts(t *testing.T) {
 			Z: from.Z,
 		}
 		var ts, ds []float64 // seconds since the click, distance from the origin
+		// The leg is overdue once the walk at speed plus an entry timeout has
+		// passed (#366): a leg that stops short fails here, not at the end
+		// of the scenario.
+		due := sent.Add(time.Duration(length/speed*float64(time.Second)) + EntryTimeout)
+		var lastAt botclient.Point
+		var lastD float64
 		for {
+			if now := time.Now(); now.After(due) {
+				t.Fatalf("leg %d overdue after %v: last at %v, %.0f of %.0f from %v toward %v", tried, now.Sub(sent).Round(time.Second), lastAt, lastD, length, m.Origin, m.Dest)
+			}
 			// A random delay spreads the polls over the update phase: the
 			// pacer alone would send them every 200 ms, locked to the 100 ms
 			// updates, and every reply would show the same age.
@@ -124,6 +133,7 @@ func TestLiveNavFacts(t *testing.T) {
 			}
 			at := ev.(botclient.ValidateLocation).Pos
 			d := math.Hypot(float64(at.X-m.Origin.X), float64(at.Y-m.Origin.Y))
+			lastAt, lastD = at, d
 			if at.X == m.Dest.X && at.Y == m.Dest.Y || d >= length-speed/5 {
 				break
 			}
