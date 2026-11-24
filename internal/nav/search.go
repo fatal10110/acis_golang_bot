@@ -33,8 +33,13 @@ type scratch struct {
 	queue []chainState
 	// work counts the corridor cells filled and the CanMove calls of exact
 	// checks and farther candidates; farEnd is where the route's farWork
-	// ends (pull).
+	// ends (pull). failAt is where an exact check failed, set with failed
+	// (never for the step onto the segment's end); misses holds those of
+	// the current waypoint's farther candidates.
 	work, farEnd int
+	failAt       [2]int
+	failed       bool
+	misses       [][2]int
 	// Stand points.
 	stands []standCandidate
 	layers [block.MaxLayers]block.Cell

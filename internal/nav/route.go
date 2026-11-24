@@ -47,6 +47,14 @@ const (
 	// filled and CanMove calls (s.work): once it is spent, the rest of the
 	// route takes exactCells candidates only.
 	farWork = 150_000
+	// farShort is how long a corridor segment must be for the pull to take
+	// it without trying farther candidates: the budget goes where segments
+	// are short.
+	farShort = 600
+	// farMiss is how near a farther candidate's line may pass a point where
+	// the exact check of a candidate from the same waypoint failed before
+	// the candidate is skipped untried.
+	farMiss = 2 * block.CellSize
 	// maxReplans caps how many times a route searches again after a step of
 	// its cell path failed the step-chain check, the failing edge avoided.
 	maxReplans = 8
@@ -125,10 +133,12 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 // waypoint it takes the farthest cell ahead, within the segment cap, that is a
 // click target and passes CanMove and the corridor test. When none does, a
 // swimming planner at a waypoint in water takes the farthest its swim line
-// reaches (swimLeg). Past that, while the route's farWork lasts, it tries
-// the cells farther along the path, farthest first: one passing CanMove
-// whose stretches failing the corridor test total at most farStretch and
-// that passes the exact check over them is taken. With nothing yet, it
+// reaches (swimLeg). With nothing, or a segment shorter than farShort, it
+// tries the cells farther along the path while the route's farWork lasts,
+// farthest first: one passing CanMove whose stretches failing the corridor
+// test total at most farStretch and that passes the exact check over them is
+// taken; a candidate passing within farMiss of where an earlier one's exact
+// check failed is skipped. With nothing yet, it
 // takes the farthest not yet tried within exactCells that passes CanMove
 // and the full step-chain check. None crosses a column of p.Avoid but the
 // route's endpoints'. When even the next cell fails, it reports that edge.
@@ -174,20 +184,28 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 			}
 		}
 		tried := i + exactCells + 1 // the nearest farther candidate tried
-		if p.Lmax > 0 && !(p.swims() && p.inWater(s.points[i])) {
+		if p.Lmax > 0 && !(p.swims() && p.inWater(s.points[i])) && (next < 0 || segLen(s.points[i], s.points[next]) < farShort) {
 			far := -1
+			s.misses = s.misses[:0]
 			for j := n; j > max(next, i) && far < 0 && s.work < s.farEnd; j-- {
 				tried = j
 				a, b := s.points[i], s.points[j]
-				if !p.inReach(s, cells, i, j, n) || p.avoided(s, a, b, from, to) {
+				if !p.inReach(s, cells, i, j, n) || p.avoided(s, a, b, from, to) || s.missed(a, b) {
 					continue
 				}
 				s.work++
 				if !p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
 					continue
 				}
-				if st := p.corridorStretches(s, a, b); failing(st) <= farStretch && p.exactStretches(s, a, b, st) {
+				st := p.corridorStretches(s, a, b)
+				if failing(st) > farStretch {
+					continue
+				}
+				s.failed = false
+				if p.exactStretches(s, a, b, st) {
 					far = j
+				} else if s.failed {
+					s.misses = append(s.misses, s.failAt)
 				}
 			}
 			next = max(next, far)
@@ -205,6 +223,20 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		i = next
 	}
 	return edgeKey{}, true
+}
+
+// segLen is the ground length of the segment from a to b.
+func segLen(a, b location.Location) float64 { return hypot(b.X-a.X, b.Y-a.Y) }
+
+// missed reports whether the segment from a to b passes within farMiss of a
+// point where an exact check of the current waypoint's candidates failed.
+func (s *scratch) missed(a, b location.Location) bool {
+	for _, m := range s.misses {
+		if newSegment(a, b).dist(m) <= farMiss {
+			return true
+		}
+	}
+	return false
 }
 
 // failing is the length of line the stretches cover.

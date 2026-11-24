@@ -232,6 +232,16 @@ func newSegment(a, b location.Location) segment {
 	return sg
 }
 
+// dist is the distance from point m to the segment.
+func (sg segment) dist(m [2]int) float64 {
+	px, py := float64(m[0])-sg.ax, float64(m[1])-sg.ay
+	t := 0.0
+	if sg.len2 > 0 {
+		t = min(max((px*sg.dx+py*sg.dy)/sg.len2, 0), 1)
+	}
+	return math.Hypot(px-t*sg.dx, py-t*sg.dy)
+}
+
 // nearCell reports whether geodata cell (gx, gy), a closed square, comes
 // within corridorReach of the segment. The cell is one the segment does not
 // cross, so the nearest points are a segment end or a corner of the cell.

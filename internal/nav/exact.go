@@ -135,7 +135,7 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 			if bp.t >= lo && bp.t <= t0 {
 				z, ok := s.grid.floorAt(engine.GeoX(bp.x), engine.GeoY(bp.y))
 				if !ok {
-					return false
+					return s.failedAt(bp.x, bp.y)
 				}
 				s.addState(chainState{int32(bp.x), int32(bp.y), z})
 			}
@@ -143,15 +143,15 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 	}
 
 	for head := 0; head < len(s.queue); head++ {
-		if len(s.queue) > maxChainStates {
-			return false
-		}
 		cur := s.queue[head]
 		cx, cy, cz := int(cur.x), int(cur.y), int(cur.z)
+		if len(s.queue) > maxChainStates {
+			return s.failedAt(cx, cy)
+		}
 		ct := (float64(cx-a.X)*dx + float64(cy-a.Y)*dy) / length
 		if p.Water.Contains(cx, cy, cz) {
 			if !p.swims() {
-				return false
+				return s.failedAt(cx, cy)
 			}
 			if ct <= t1 {
 				p.swimStates(s, cur, b, bz, ct, reach)
@@ -162,7 +162,7 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 			// Past the stretch the corridor test holds from here, on its
 			// walking layers.
 			if z, ok := s.grid.floorAt(engine.GeoX(cx), engine.GeoY(cy)); !ok || p.Engine.Height(cx, cy, cz) != z {
-				return false
+				return s.failedAt(cx, cy)
 			}
 			continue
 		}
@@ -173,7 +173,7 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 		// A short update rounds back onto cur itself, and the chain re-floors
 		// it like any other step: a layer just above cz wins and blocks.
 		if sz := p.Engine.Height(cx, cy, cz+2*block.CellHeight); !p.Engine.CanMove(cx, cy, cz, cx, cy, int(sz)) {
-			return false
+			return s.failedAt(cx, cy)
 		}
 		first := sort.Search(len(s.band), func(i int) bool { return s.band[i].t >= ct-stepSlack })
 		for _, bp := range s.band[first:] {
@@ -187,12 +187,19 @@ func (p *Planner) exactStretch(s *scratch, a, b location.Location, st stretch) b
 			nz := p.Engine.Height(bp.x, bp.y, cz+2*block.CellHeight)
 			s.work++
 			if !p.Engine.CanMove(cx, cy, cz, bp.x, bp.y, int(nz)) {
-				return false
+				return s.failedAt(cx, cy)
 			}
 			s.addState(chainState{int32(bp.x), int32(bp.y), nz})
 		}
 	}
 	return true
+}
+
+// failedAt records (x, y) as where the exact check failed and returns
+// false.
+func (s *scratch) failedAt(x, y int) bool {
+	s.failAt, s.failed = [2]int{x, y}, true
+	return false
 }
 
 func (s *scratch) addState(st chainState) {
