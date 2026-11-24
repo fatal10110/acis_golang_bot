@@ -59,7 +59,18 @@ var (
 	hurt14   = squire{level: 14, pAtk: 7, pDef: 86, evasion: 46, accuracy: 46, atkSpd: 416, maxHP: 385}
 	squire6  = squire{level: 6, pAtk: 6, pDef: 79, evasion: 38, accuracy: 38, atkSpd: 416, maxHP: 221}
 	weak6    = squire{level: 6, pAtk: 2, pDef: 42, evasion: -1, accuracy: -1, atkSpd: 170, maxHP: 221}
+	// mystic1 is a level 1 mystic with a wand, TestLiveFarmMage's dark
+	// mystic: its melee kills nothing in time.
+	mystic1 = squire{level: 1, pAtk: 3, pDef: 54, evasion: 29, accuracy: 29, atkSpd: 333, maxHP: 98}
 )
+
+// tiToadsLow is a level 1 spot of the toads, mystic1's.
+var tiToadsLow = func() datapack.Spot {
+	s := tiToads27
+	s.MinLevel, s.MaxLevel, s.AggroLevel, s.Aggressive = 1, 2, 2, 2
+	s.Mobs = []datapack.Mob{{Level: 2, Count: 5, Combat: giantToad}}
+	return s
+}()
 
 // newSquireBrain is a brain of the default persona playing s, carrying
 // potions Lesser Healing Potions (skill 2031: 16 HP every 2 seconds, 7
@@ -140,6 +151,11 @@ func TestPackFit(t *testing.T) {
 		{"SpotPolicy.Margin below 0 turns it off", squire14, tiWolves, func(b *Brain) { b.persona.Spots.Margin = -1 }, true},
 		{"SpotPolicy.Margin replaces the row's", squire14, tiWolves, func(b *Brain) { b.persona.Spots.Margin = 1.25 }, true},
 		{"SpotPolicy.Margin replaces a mystic row's", squire14, tiWolves, func(b *Brain) { b.world.Self.ClassID, b.persona.Spots.Margin = 10, 1.25 }, true},
+		{"a level 1 dark mystic's melee, no travel map", mystic1, tiToadsLow, func(b *Brain) { b.world.Self.ClassID, b.cfg.Travel = classDarkMystic, nil }, false},
+		{"a level 1 dark mystic's Wind Strike, no travel map: the level only", mystic1, tiToadsLow, func(b *Brain) {
+			b.world.Self.ClassID, b.cfg.Travel = classDarkMystic, nil
+			b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillWindStrike, Level: 1}}}, t0)
+		}, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newSquireBrain(t, tt.self, 0)

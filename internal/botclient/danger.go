@@ -44,15 +44,19 @@ func (b *Brain) packFits(s *datapack.Spot) bool {
 // (charmodel.Monster), its own stats as its UserInfo reports them, with the
 // HP its healing potions restore over margin kills added (potionsHeal). The
 // pack is fought one monster after another, so the potions spread over its
-// spotPack fights. Not ok when the bot's stats are not in yet or s has no
-// monster with HP and P.Def. Regeneration, shots and its own buffs beyond
+// spotPack fights. Not ok when the bot's stats are not in yet, s has no
+// monster with HP and P.Def, or the bot casts on its target what it has no
+// travel map to price (spotAttack). Regeneration, shots and its own buffs beyond
 // what UserInfo carries are left out.
 func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64) (kill, die float64, ok bool) {
 	self := b.reported()
 	if self.PAtk <= 0 || self.PDef <= 0 || self.PAtkSpd <= 0 || self.MaxHP <= 0 {
 		return 0, 0, false
 	}
-	attack, skill := b.spotAttack(bd)
+	attack, skill, priced := b.spotAttack(bd)
+	if !priced {
+		return 0, 0, false
+	}
 	var n, k, dps float64
 	for i := range s.Mobs {
 		m := &s.Mobs[i]
@@ -77,25 +81,28 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64) (kill, di
 }
 
 // spotAttack is the first step of bd's rotation the bot knows that deals
-// its target damage, as a charmodel.Attack; not ok without one or a travel
-// map. Its weapon gate is left out: the fit takes the faster of it and the
-// melee.
-func (b *Brain) spotAttack(bd *Build) (charmodel.Attack, bool) {
+// its target damage, as a charmodel.Attack; not ok without one. Its weapon
+// gate is left out: the fit takes the faster of it and the melee. priced is
+// false when the bot knows a step of its rotation it casts on its target
+// but has no travel map to read the skill from: its melee is no measure of
+// a caster's kills, so the fit falls back to the level (a brain given spots
+// without a travel map, as TestLiveFarmMage's).
+func (b *Brain) spotAttack(bd *Build) (a charmodel.Attack, ok, priced bool) {
 	m := b.cfg.Travel
-	if m == nil {
-		return charmodel.Attack{}, false
-	}
 	for _, st := range bd.Kit.Rotation {
-		k, ok := b.world.Skills[st.Skill]
-		if st.Target != TargetEnemy || !ok || k.Disabled {
+		k, known := b.world.Skills[st.Skill]
+		if st.Target != TargetEnemy || !known || k.Disabled {
 			continue
 		}
-		sk, ok := m.skills[datapack.SkillRef{ID: st.Skill, Level: k.Level}]
-		if ok && sk.Power > 0 && slices.Contains(damageSkillTypes, sk.Type) {
-			return charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPConsume)}, true
+		if m == nil {
+			return charmodel.Attack{}, false, false
+		}
+		sk, found := m.skills[datapack.SkillRef{ID: st.Skill, Level: k.Level}]
+		if found && sk.Power > 0 && slices.Contains(damageSkillTypes, sk.Type) {
+			return charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPConsume)}, true, true
 		}
 	}
-	return charmodel.Attack{}, false
+	return charmodel.Attack{}, false, true
 }
 
 // potionHeal is what one healing potion restores: its HealOverTime's val

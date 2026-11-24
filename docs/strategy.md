@@ -314,8 +314,8 @@ higher the CON, the later the bot drinks, flees from a crowd or sits; the faster
 a flee works (`FleeOutrun` on for every row, so a slow bot fights on against a faster attacker
 rather than run, #281). `MPReserve` gates attack steps only; sustain and heals run down to their
 own cost. Where a row has both roles, values are Support / Damage. Spot margin: a spot fits while
-`TimeToDie ≥ margin × TimeToKill` against its likely pack (Design section 11); tank 1.5, normal
-2.0, glass cannon 3.0.
+`TimeToDie ≥ margin × TimeToKill` against one of its monsters at a time, the potions shared over
+its likely pack (Design section 11); tank 1.5, normal 2.0, glass cannon 3.0.
 
 | Row | 8. MPReserve | Sit HP / MP | Stand HP / MP | Critical | Crowded | Outmatched | 10. Spot | 12. Plays like |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -705,10 +705,20 @@ Toggle tracking, the `ruleRest` change and Relax ship in S6; S7 adds Soul Cry.
 
 ### 11. Spot choice through the model
 
-`SpotPolicy.fits` gains a model bound: a spot fits only while the model's `TimeToDie` against its
-likely pack (`spotPack`) stays above `TimeToKill` times a persona margin, with the bot's potions
-counted. A tank kit takes spots a glass cannon passes over, before any death there. This absorbs
-#294.
+`SpotPolicy.fits` gains a model bound: a spot fits only while the model's `TimeToDie` stays above
+`TimeToKill` times the row's margin (`ClassKit.SpotMargin`, column 10; `SpotPolicy.Margin`
+replaces it), with the bot's potions counted. A tank kit takes spots a glass cannon passes over,
+before any death there. This absorbs #294.
+
+As shipped (#330), both times are averaged over the spot's monsters by their spawn totals, each
+against one monster at a time: the likely pack (`spotPack`) enters only as the number of fights the
+carried potions are shared over, since the pack is fought one monster after another. With every
+monster of the pack hitting at once no margin of at least 1.5 would keep a level 6 squire at the
+toads it farms live. The known limit is the simultaneous case: a bot that pulls more monsters than
+it kills one at a time can still die at a spot the bound keeps (`TestLivePackSpot` died once at
+the werewolves after pulling a third wolf); a death there still teaches the bot to pass over that pack (`learnPack`).
+With no stats yet, no monster with stats, or a cast on the target it has no travel map to price,
+only the level bounds the spot.
 
 ## Pacing
 
