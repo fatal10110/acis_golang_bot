@@ -154,6 +154,13 @@ type Brain struct {
 	// is its skill.
 	castAt    time.Time
 	castSkill int32
+	// spoilTarget is the monster of the Spoil or Sweeper cast last sent
+	// (castSkill), 0 once the server answered it or another cast went
+	// out: what a spoil or sweep system message is about (spoilEvent).
+	// spoils is what the bot knows of the spoil of each monster it cast
+	// Spoil on, until the monster dies, its sweep ends or it leaves sight.
+	spoilTarget int32
+	spoils      map[int32]spoilMark
 	// opened is the last target an attack of the bot went out on: a melee
 	// click or an attack step's cast (Action.opens). An Opener step casts
 	// only on another (stepState.fresh).
@@ -457,6 +464,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case SystemMessage:
 			b.castRefused(e.ID, now)
+			b.spoilEvent(ev, now)
 			b.warehouseEvent(ev, now)
 			b.recipeEvent(ev, now)
 			b.craftEvent(ev, now)
@@ -537,6 +545,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.standCaster(e)
 				b.castAt = time.Time{}
 				b.landed(e.TargetID, now.Add(e.HitTime))
+				b.spoilEvent(ev, now)
 			}
 			b.leaderHit(e.CasterID, e.TargetID, now)
 			b.lootEvent(ev, now)
@@ -553,6 +562,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.spoilEvent(ev, now)
 			// A dead bot frees its spot for another and avoids it for a
 			// while; it picks again once back on its feet.
 			if e.ObjectID == self {
@@ -563,6 +573,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 		case DeleteObject:
 			delete(b.tries, e.ObjectID)
+			delete(b.spoils, e.ObjectID)
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
@@ -806,6 +817,10 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.attempt(a.object, now)
 	case actCast:
 		b.castAt, b.castSkill = now, a.skill
+		b.spoilTarget = 0
+		if a.skill == skillSpoil || a.skill == skillSweeper {
+			b.spoilTarget = a.object
+		}
 		if a.opens {
 			b.opened = a.object
 		}

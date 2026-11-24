@@ -115,7 +115,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			fail("skill %d tagged (base) is first granted at %d, not by the base class", id, lvl)
 		}
 	}
-	for _, id := range []int32{r.kit.Flee, r.kit.Relax} {
+	for _, id := range []int32{r.kit.Flee, r.kit.Relax, r.kit.Sweep} {
 		if id != 0 {
 			known(id)
 		}
