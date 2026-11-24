@@ -445,8 +445,8 @@ crash never blocks a restart) on its data directory (`-data-dir`) for its whole 
 never share a registry. Running a swarm on a prefix the panel's registry holds is the owner's call
 to avoid: both would log in the same accounts and kick each other.
 
-- Personas are presets in one catalog: `support`, `town`, and `merchant` (`support` with a store
-  budget: it farms the datapack's spots for loot and sells it in a town store; a `town` bot loots
+- Personas are presets in one catalog: `support`, `town`, and `merchant` (the `damage` role with a
+  store budget, D21: it farms the datapack's spots for loot and sells it in a town store; a `town` bot loots
   nothing, so it has nothing to sell), extended as personas land. A preset is a persona plus its
   options. Presets that need the datapack (`town`, `merchant`, farming spots) are offered only when
   the panel started with one. `bots swarm -persona` takes one preset name from the same catalog.

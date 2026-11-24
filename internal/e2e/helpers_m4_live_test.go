@@ -165,7 +165,8 @@ func openStore(mode uint8) bool { return mode == 1 || mode == 8 }
 // storeSetup is how storeBot runs its merchant.
 type storeSetup struct {
 	// merchant runs the merchant preset (cmd/bots -persona merchant):
-	// DefaultPersona farming the datapack's spots; otherwise partyPersona,
+	// DefaultPersona with the Damage role (D21) farming the datapack's
+	// spots; otherwise partyPersona,
 	// a bot that moves only for what the scenario asserts.
 	merchant bool
 	// brain, when set, adjusts the brain config last (commandedBy).
@@ -191,6 +192,9 @@ func storeBot(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, accou
 		class: &botclient.HumanFighter,
 		persona: func() botclient.Persona {
 			p := persona()
+			if s.merchant {
+				p.Role = botclient.RoleDamage
+			}
 			p.Store.Budget = storeBudget
 			return p
 		},

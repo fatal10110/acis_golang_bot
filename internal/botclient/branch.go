@@ -154,7 +154,7 @@ func chooseLine(class int32, role Role, c BranchChoice) (line, bool) {
 					firsts = append(firsts, line{first: l.first, weight: l.weight})
 				}
 			}
-			f, ok := drawLine(firsts, h)
+			f, ok := drawLine(firsts, uint64(uint32(h)))
 			if !ok {
 				return line{}, false
 			}
