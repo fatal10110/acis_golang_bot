@@ -275,9 +275,12 @@ All of it stays far below 80 frames/s average.
   0xd7 outcome, the combat refusal, the breaker, `MinOpenGap`, an empty warehouse.
 - e2e on the stack, asserting on packets (`WareHouseWithdrawalList` contents), not on the DB: a GM
   invites the crafter; steel materials deposited; steel appears in the warehouse list; a member bot
-  deposits and withdraws its product. Prerequisites: `MembersCanWithdrawFromClanWH=True` on the
-  stack, `//pledge create` and the clan level command added to the e2e GM filter
-  (`internal/e2e/gm.go`), fresh characters per run (rejoin penalties).
+  deposits and withdraws its product (`TestLiveClanMember`: a scripted leader gives rank 6
+  privilege 8 with a test-only `RequestPledgePower`, the member deposits and orders on one supply
+  trip and withdraws the shots on the next). Prerequisites: `MembersCanWithdrawFromClanWH=True` on
+  the stack, `//pledge create` and the clan level command added to the e2e GM filter
+  (`internal/e2e/gm.go`), and no rejoin penalty: a clan the GM dissolves leaves none
+  (`//pledge dismiss`), so the scenarios keep their characters and dissolve a clan a run left.
 
 ## Delivery (milestone M9, "Clan crafter", epic #184)
 

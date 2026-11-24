@@ -34,6 +34,11 @@ type RefusalCheck struct {
 	ActionFailed bool
 	// Messages are the SystemMessage ids that refuse the packet.
 	Messages []int32
+	// MessageOps ties a message to the opcodes it answers: a message listed
+	// here refuses only a packet of one of its opcodes, so a step that sends
+	// several kinds of packet blames the one the server answered. A message
+	// not listed refuses any packet under test.
+	MessageOps map[int32][]byte
 }
 
 // refuses reports whether ev is one of c's refusals.
@@ -45,6 +50,16 @@ func (c RefusalCheck) refuses(ev botclient.Event) bool {
 		return slices.Contains(c.Messages, e.ID)
 	}
 	return false
+}
+
+// answers reports whether ev, one of c's refusals, may answer packet s.
+func (c RefusalCheck) answers(ev botclient.Event, s Sent) bool {
+	msg, ok := ev.(botclient.SystemMessage)
+	if !ok {
+		return true
+	}
+	ops, tied := c.MessageOps[msg.ID]
+	return !tied || slices.Contains(ops, s.Op)
 }
 
 // Refusal is the server's refusal of a step's packet, with the last packets
@@ -106,7 +121,7 @@ func (r *refusalScan) scan(sent []Sent, seen []Seen) *Refusal {
 			continue
 		}
 		for _, i := range r.packets {
-			if i < ev.SentBefore && ev.At.Sub(sent[i].At) <= refusalWindow {
+			if i < ev.SentBefore && ev.At.Sub(sent[i].At) <= refusalWindow && r.check.answers(ev.Event, sent[i]) {
 				return &Refusal{
 					Packet: sent[i],
 					Answer: ev,
