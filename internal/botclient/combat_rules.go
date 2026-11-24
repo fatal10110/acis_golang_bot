@@ -174,6 +174,17 @@ func (b *Brain) knowsAttackSkill() bool {
 	return false
 }
 
+// knowsNuke reports whether the character knows the skill of one of rot's
+// attack steps as an active skill: a caster that knows none melees
+// whatever its Melee policy, as before its row (a mystic seeded or trained
+// without its nukes would otherwise stand by while its leader fights).
+func (b *Brain) knowsNuke(rot []Step) bool {
+	return slices.ContainsFunc(rot, func(st Step) bool {
+		s, ok := b.world.Skills[st.Skill]
+		return ok && !s.Passive && st.rank() == rankAttack
+	})
+}
+
 // fight attacks id: cast a side cast due on the selected attacker
 // (sideCasting) or select id, switch a combat toggle that is due
 // (toggleCast), then cast the first ready step of the build's rotation
@@ -207,7 +218,7 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	if a, ok := b.rotationCast(id, bd.Kit.Rotation, underReserve, now); ok {
 		return a
 	}
-	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) {
+	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) && b.knowsNuke(bd.Kit.Rotation) {
 		return Action{}
 	}
 	r := b.attackReach()

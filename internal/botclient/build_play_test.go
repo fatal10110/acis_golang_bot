@@ -61,27 +61,36 @@ func TestFleeCastsKitFlee(t *testing.T) {
 	}
 }
 
-// TestFightMeleePolicy checks the kit's melee policy once no step passes: a
-// caster melees only under its MP reserve, a healer only under it and out
-// of a party, a fighter always.
+// TestFightMeleePolicy checks the kit's melee policy once no step passes
+// (its Wind Strike cooling): a caster melees only under its MP reserve, a
+// healer only under it and out of a party, a fighter always; a bot that
+// knows none of its attack steps melees whatever the policy.
 func TestFightMeleePolicy(t *testing.T) {
 	for _, tt := range []struct {
-		name  string
-		melee MeleePolicy
-		mp    int32
-		party bool
-		want  actionKind
+		name    string
+		melee   MeleePolicy
+		mp      int32
+		party   bool
+		noNukes bool
+		want    actionKind
 	}{
-		{"always above reserve", MeleeAlways, 80, false, actAttack},
-		{"under reserve above it", MeleeUnderReserve, 80, false, 0},
-		{"under reserve under it", MeleeUnderReserve, 20, false, actAttack},
-		{"under reserve in a party", MeleeUnderReserve, 20, true, actAttack},
-		{"alone above reserve", MeleeAloneUnderReserve, 80, false, 0},
-		{"alone under reserve", MeleeAloneUnderReserve, 20, false, actAttack},
-		{"alone under reserve in a party", MeleeAloneUnderReserve, 20, true, 0},
+		{"always above reserve", MeleeAlways, 80, false, false, actAttack},
+		{"under reserve above it", MeleeUnderReserve, 80, false, false, 0},
+		{"under reserve under it", MeleeUnderReserve, 20, false, false, actAttack},
+		{"under reserve in a party", MeleeUnderReserve, 20, true, false, actAttack},
+		{"alone above reserve", MeleeAloneUnderReserve, 80, false, false, 0},
+		{"alone under reserve", MeleeAloneUnderReserve, 20, false, false, actAttack},
+		{"alone under reserve in a party", MeleeAloneUnderReserve, 20, true, false, 0},
+		{"under reserve above it knowing no nuke", MeleeUnderReserve, 80, false, true, actAttack},
+		{"alone under reserve in a party knowing no nuke", MeleeAloneUnderReserve, 20, true, true, actAttack},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			b := kitBrain(t, ClassKit{Melee: tt.melee}, tt.mp)
+			var known []int32
+			if !tt.noNukes {
+				known = []int32{skillWindStrike}
+			}
+			b := kitBrain(t, ClassKit{Melee: tt.melee, Rotation: []Step{{Skill: skillWindStrike}}}, tt.mp, known...)
+			b.world.holdSkill(skillWindStrike, at(time.Minute))
 			if tt.party {
 				b.world.Apply(PartySmallWindowAll{LeaderID: pcID, Members: []PartyMember{{ObjectID: pcID}}}, t0)
 			}

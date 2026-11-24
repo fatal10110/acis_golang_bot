@@ -124,6 +124,14 @@ func TestRowHM(t *testing.T) {
 		hm("self heal under 40 % HP", 7, RoleDamage, hp(30), skillSelfHeal, selfID),
 		hm("vampiric touch under 60 % HP", 14, RoleDamage, hp(50), skillVampiricTouch, npcID),
 		hm("no vampiric touch before 14", 13, RoleDamage, hp(50), skillIceBolt, npcID),
+		{
+			name: "support above 50 % MP with its nukes cooling sends nothing", class: classHumanMystic, level: 7, role: RoleSupport, skills: all,
+			setup: func(b *Brain, now time.Time) { hold(b, now, skillIceBolt, skillWindStrike) }, none: true,
+		},
+		// TestLiveSupport: a level 15 mystic seeded only its heals and
+		// buffs knows no nuke, and melees its leader's target.
+		{name: "support knowing no nuke melees", class: classHumanMystic, level: 15, role: RoleSupport, skills: []int32{skillHeal, skillBattleHeal}},
+		{name: "damage knowing only self heal melees", class: classHumanMystic, level: 15, role: RoleDamage, skills: []int32{skillSelfHeal}},
 	})
 	now := at(time.Second)
 	for _, tt := range []struct {
