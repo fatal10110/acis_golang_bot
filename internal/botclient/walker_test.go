@@ -283,8 +283,9 @@ func TestWalkerRecovery(t *testing.T) {
 		if st != walkWalking || a.kind != actMove {
 			t.Fatalf("status %v kind %v (%s), want the drop", st, a.kind, b.walk.reason)
 		}
-		// The deck's stacked tops pass the corridor test up to its edge,
-		// so the route may walk to the edge before the drop (#256): its
+		// The deck's walking layer passes the corridor test up to its
+		// edge, so the route may walk to the edge before the drop (#256,
+		// #307): its
 		// end, not its first segment, lands on InSCC ground.
 		route := b.walk.route
 		if len(route) == 0 || moveTarget(a.payload) != route[0] {
