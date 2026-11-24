@@ -187,6 +187,14 @@ func (b *Brain) enchantChosen(ev ChooseInventoryItem) {
 // RetryAfter.
 func (b *Brain) enchantResult(ev EnchantResult, now time.Time) {
 	e := &b.ench
+	if e.step == enchantChosen && ev.Code == EnchantCancelled {
+		// A move, bypass, trade or warehouse of a higher rule cancelled
+		// the selection (network/movement.go cancelActiveEnchant): a
+		// request now would go unanswered. A cancel while enchantUsed
+		// belongs to an older selection.
+		e.backOff(now, b.persona.Enchant.RetryAfter)
+		return
+	}
 	if e.step != enchantRequested {
 		return
 	}
@@ -222,10 +230,17 @@ func (b *Brain) ruleEnchant(now time.Time) (Action, bool) {
 		return Action{}, false
 	case enchantChosen:
 		// The server holds the scroll selected until a request comes (it
-		// refuses a logout meanwhile): send it while the target is still
-		// the one planned, at the level planned.
+		// refuses a logout meanwhile, network/exitguard.go): send it while
+		// the target is the one planned, at the level planned. With the
+		// target gone, send it anyway: the server cancels the selection
+		// and answers EnchantResult(2) (enchant/service.go EnchantItem,
+		// Cancel). With the level changed, send nothing, since the scroll
+		// would go past the plan; a later move cancels the selection.
 		it, ok := b.world.Inventory.Items[e.target]
-		if !ok || it.Enchant != e.level {
+		if !ok {
+			return enchantAction(Item{ObjectID: e.target}), true
+		}
+		if it.Enchant != e.level {
 			e.backOff(now, b.persona.Enchant.RetryAfter)
 			return Action{}, false
 		}

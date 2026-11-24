@@ -112,6 +112,15 @@ func TestEnchantFree(t *testing.T) {
 		{name: "in combat", edit: func(b *Brain) { b.world.Self.InCombat = true }},
 		{name: "sitting", edit: func(b *Brain) { b.world.Self.Sitting = true }},
 		{name: "trade open", edit: func(b *Brain) { b.world.Trade.PartnerID = 7 }},
+		{name: "dead", edit: func(b *Brain) { b.world.Self.HP = 0 }},
+		{name: "private store", edit: func(b *Brain) { b.store.step = storeOpen }},
+		{
+			name: "attacked",
+			edit: func(b *Brain) {
+				b.world.Apply(NPCInfo{ObjectID: mobObj, NPCID: mob, Attackable: true, Pos: Point{X: 100}}, at(0))
+				b.world.Attackers = map[int32]*Attacker{mobObj: {Damage: 5, Last: at(time.Second)}}
+			},
+		},
 		{name: "gear UseItem awaited", edit: func(b *Brain) { b.gear.until = at(time.Minute) }},
 	}
 	for _, tt := range tests {
@@ -211,9 +220,12 @@ func TestBrainEnchantToSafe(t *testing.T) {
 func TestBrainEnchantBacksOff(t *testing.T) {
 	use, req := encodeUseItem(enchScrollObj), encodeRequestEnchantItem(enchWeaponObj)
 	choose := []Event{ChooseInventoryItem{ScrollItemID: scrollWD}}
+	gone := InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: enchanted(enchWeaponObj, artisansSword, partRHand, 0)}}}
 	tests := []struct {
 		name  string
 		steps []enchantTestStep
+		// gone is set when the target is gone, so no scroll is used again.
+		gone bool
 	}{
 		{
 			name: "no window",
@@ -240,6 +252,43 @@ func TestBrainEnchantBacksOff(t *testing.T) {
 			},
 		},
 		{
+			// A higher rule's move cancelled the selection before the
+			// request went: the request would go unanswered.
+			name: "cancelled before the request",
+			steps: []enchantTestStep{
+				{name: "use", at: time.Second, want: actUseItem, payload: use},
+				{name: "cancelled", at: 2 * time.Second, events: []Event{ChooseInventoryItem{ScrollItemID: scrollWD}, EnchantResult{Code: EnchantCancelled}}, none: true},
+			},
+		},
+		{
+			// An older selection's cancel does not end this exchange.
+			name: "an older cancel before the window",
+			steps: []enchantTestStep{
+				{name: "use", at: time.Second, want: actUseItem, payload: use},
+				{name: "older cancel", at: 2 * time.Second, events: []Event{EnchantResult{Code: EnchantCancelled}}, want: actHold},
+				{name: "request", at: 3 * time.Second, events: choose, want: actEnchant, payload: req},
+				{name: "cancelled", at: 4 * time.Second, events: []Event{EnchantResult{Code: EnchantCancelled}}, none: true},
+			},
+		},
+		{
+			// The request still goes, so the server clears the selection.
+			name: "target gone",
+			gone: true,
+			steps: []enchantTestStep{
+				{name: "use", at: time.Second, want: actUseItem, payload: use},
+				{name: "request on the gone target", at: 2 * time.Second, events: []Event{ChooseInventoryItem{ScrollItemID: scrollWD}, gone}, want: actEnchant, payload: req},
+				{name: "cancelled", at: 3 * time.Second, events: []Event{EnchantResult{Code: EnchantCancelled}}, none: true},
+			},
+		},
+		{
+			// No request: the scroll would go past the planned level.
+			name: "target level changed",
+			steps: []enchantTestStep{
+				{name: "use", at: time.Second, want: actUseItem, payload: use},
+				{name: "no request", at: 2 * time.Second, events: []Event{ChooseInventoryItem{ScrollItemID: scrollWD}, weaponAt(1, 4)}, none: true},
+			},
+		},
+		{
 			name: "no inventory update",
 			steps: []enchantTestStep{
 				{name: "use", at: time.Second, want: actUseItem, payload: use},
@@ -259,6 +308,12 @@ func TestBrainEnchantBacksOff(t *testing.T) {
 			}
 			if _, ok := b.ruleEnchant(last.Add(b.persona.Enchant.RetryAfter - time.Second)); ok {
 				t.Fatal("ruleEnchant matched before RetryAfter")
+			}
+			if tt.gone {
+				if _, ok := b.ruleEnchant(last.Add(b.persona.Enchant.RetryAfter)); ok {
+					t.Fatal("ruleEnchant matched with the target gone")
+				}
+				return
 			}
 			if a, ok := b.ruleEnchant(last.Add(b.persona.Enchant.RetryAfter)); !ok || a.kind != actUseItem {
 				t.Fatalf("ruleEnchant after RetryAfter = %d, %v; want the scroll used again", a.kind, ok)
