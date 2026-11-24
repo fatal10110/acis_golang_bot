@@ -81,7 +81,11 @@ issue requires has a gap, and the gap is a finding.
 Run the checks yourself in the review worktree; they are evidence, not the author's word:
 `go build ./...`, `go vet ./...`, and the scoped tests of the changed packages without `-race`
 (through `scripts/agent-tools/heavy` when running inside a wave). Run the related e2e scenarios
-when the stack is reachable. Record exactly what ran, what passed and what you skipped and why.
+when the stack is reachable, except one the author's full `go test -v` log at the reviewed head
+shows passing (in a wave, the lane's `logs/e2e-<head>*.log`): cite that log instead. Still rerun a
+scenario that failed, timed out or was flaky in an earlier round, and one the change reaches that
+the author did not run. Record exactly what ran, what passed, which logs you accepted, and what
+you skipped and why.
 
 ## 4. Gate every finding before posting
 
