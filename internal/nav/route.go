@@ -46,7 +46,7 @@ const (
 	// farWork is a route's budget for farther candidates, in corridor cells
 	// filled and CanMove calls (s.work): once it is spent, the rest of the
 	// route takes exactCells candidates only.
-	farWork = 150_000
+	farWork = 800_000
 	// farShort is how long a corridor segment must be for the pull to take
 	// it without trying farther candidates: the budget goes where segments
 	// are short.
