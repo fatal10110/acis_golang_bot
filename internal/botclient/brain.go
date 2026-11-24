@@ -574,6 +574,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.forgetSide(e.ObjectID)
 			b.spoilEvent(ev, now)
 			// A dead bot frees its spot for another and avoids it for a
 			// while; it picks again once back on its feet.
@@ -589,6 +590,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.forgetSide(e.ObjectID)
 		case NpcHtmlMessage:
 			b.trainEvent(ev, now)
 			b.tripPage(e, now)

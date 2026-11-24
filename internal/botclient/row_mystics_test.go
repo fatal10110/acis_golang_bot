@@ -333,6 +333,21 @@ func TestRowEO(t *testing.T) {
 	b.world.Target = npcID
 	fightCast(t, b, now, skillWindStrike, npcID)
 
+	// The rooted attacker dies; the server gives its object id to the
+	// respawn, which attacks as a fresh second attacker and is rooted too.
+	b = mysticBrain(t, classElvenOracle, 25, RoleSupport, "", skillDryadRoot, skillWindStrike)
+	fightCast(t, b, now, skillWindStrike, npcID)
+	hitByTwo(b)
+	b.fight(npcID, now)
+	b.world.Target = rowNPC2
+	wantCast(t, b.fight(npcID, now), skillDryadRoot, rowNPC2)
+	mustHandle(t, b, now, Die{ObjectID: rowNPC2})
+	b.world.Target = npcID
+	hitByTwo(b)
+	if a := b.fight(npcID, now); a.kind != actSelect || a.object != rowNPC2 {
+		t.Fatalf("after the respawn: fight = kind %d object %#x, want a select of the second attacker", a.kind, a.object)
+	}
+
 	b = mysticBrain(t, classElvenOracle, 24, RoleSupport, "", skillDryadRoot, skillWindStrike)
 	hitByTwo(b)
 	fightCast(t, b, now, skillWindStrike, npcID)
@@ -392,7 +407,8 @@ func TestRowDW(t *testing.T) {
 }
 
 // TestRowOS checks the orc shaman: Frost Flame opens from 750, then Life
-// Drain; Stun Attack only within 40 with a blunt, else melee; Chant of Life
+// Drain; Stun Attack with a blunt at any distance (it melees anyway), else
+// melee; Chant of Life
 // on the bot with a member under 50 %; holding Soul Shield level 2 it casts
 // no Chant of Shielding while no member qualifies.
 func TestRowOS(t *testing.T) {
@@ -403,8 +419,8 @@ func TestRowOS(t *testing.T) {
 	runMysticCases(t, "BLUNT", []mysticCase{
 		osc("frost flame from 700", func(b *Brain, _ time.Time) { moveNPC(b, 700); castRange(b, skillFrostFlame, 750) }, skillFrostFlame, npcID),
 		osc("life drain once opened", func(b *Brain, _ time.Time) { b.opened = npcID }, skillLifeDrain, npcID),
-		osc("stun attack within 40", func(b *Brain, now time.Time) { b.opened = npcID; hold(b, now, skillLifeDrain) }, skillStunAttack, npcID),
-		osc("melee beyond 40", func(b *Brain, now time.Time) { b.opened = npcID; moveNPC(b, 60); hold(b, now, skillLifeDrain) }, 0, 0),
+		osc("stun attack in melee", func(b *Brain, now time.Time) { b.opened = npcID; hold(b, now, skillLifeDrain) }, skillStunAttack, npcID),
+		osc("stun attack beyond 40", func(b *Brain, now time.Time) { b.opened = npcID; moveNPC(b, 60); hold(b, now, skillLifeDrain) }, skillStunAttack, npcID),
 		osc("melee under 30 % MP", func(b *Brain, _ time.Time) { b.opened = npcID; b.world.Self.MP = 20 }, 0, 0),
 	})
 	runMysticCases(t, "", []mysticCase{{

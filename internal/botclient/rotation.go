@@ -112,6 +112,18 @@ func (b *Brain) otherCast(id, skill int32, now time.Time) (Action, bool) {
 	return selectAction(o, b.world.Self.Position(now)), true
 }
 
+// forgetSide drops the side cast due on id and forgets that the last one
+// went to id, which died or left: the server gives a dead NPC's object id
+// to its respawn (data/manager/npcs_respawn.go), a fresh attacker.
+func (b *Brain) forgetSide(id int32) {
+	if b.side.target == id {
+		b.side = sideCast{}
+	}
+	if b.sided == id {
+		b.sided = 0
+	}
+}
+
 // sideCasting is the side cast due on target t, the bot's target, at now,
 // which fight sends before it selects its own target again: a hold while a
 // cast is in flight. ok is false when none is due on t, or its skill is

@@ -345,8 +345,10 @@ var (
 		},
 	}
 	// orcShamanKit (OS): Frost Flame opens from 750, Life Drain (also under
-	// 70 % HP), Stun Attack with a blunt within 40, else melee; Chant of
-	// Life with a member under 50 %; Soul Cry on in combat above 30 % MP;
+	// 70 % HP), Stun Attack with a blunt, else melee; Chant of Life with a
+	// member under 50 %. Stun Attack has no Within 40: the server pads its
+	// cast range with both collision radii, which a centre distance cannot
+	// see, and the row melees anyway; Soul Cry on in combat above 30 % MP;
 	// the party chants (Flame Chant from 30) and Soul Shield. Both roles
 	// learn the armor masteries; the Support role stops nuking at 50 % MP.
 	orcShamanKit = ClassKit{
@@ -359,7 +361,7 @@ var (
 			{Skill: skillLifeDrain, SelfHPBelow: 70},
 			{Skill: skillFrostFlame, Opener: true},
 			{Skill: skillLifeDrain},
-			{Skill: skillStunAttack, Weapons: stunWeapons, Within: 40},
+			{Skill: skillStunAttack, Weapons: stunWeapons},
 		},
 		Toggles: []Toggle{{Skill: skillSoulCry, MPAbove: 30}},
 		Heals:   []Heal{{Skill: skillChantLife, HP: 50, Members: 1}},
