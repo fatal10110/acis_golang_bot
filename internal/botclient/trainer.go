@@ -58,7 +58,7 @@ const (
 )
 
 // Class ids of the healer and buffer professions of the support build
-// (supportBuilds; data/xml/classes).
+// (branchTables; data/xml/classes).
 const (
 	classCleric         int32 = 15
 	classBishop         int32 = 16

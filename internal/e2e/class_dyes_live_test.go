@@ -49,6 +49,9 @@ func TestLiveClassChangeDyes(t *testing.T) {
 			p.IdleChance = 0
 			errandsOff(&p)
 			p.ClassChange = botclient.DefaultPersona().ClassChange
+			// The flow under test, not the branch choice (#328): the
+			// persona pins the line, Warrior then Gladiator.
+			p.ClassChange.Builds = map[int32]int32{botclient.HumanFighter.ID: classWarrior, classWarrior: classGladiator}
 			p.Dyes = botclient.DefaultPersona().Dyes
 			// The flow under test, not the model's choice of symbols
 			// (dyeDraws): the persona table pins them.

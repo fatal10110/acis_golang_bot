@@ -501,7 +501,7 @@ func TestCompileMysticBuild(t *testing.T) {
 		if tt.class == classOrcShaman {
 			level = 25
 		}
-		bd := CompileBuild(tt.race, tt.class, level, tt.role)
+		bd := CompileBuild(tt.race, tt.class, level, tt.role, BranchChoice{})
 		k := bd.Kit
 		opener := int32(0)
 		if i := slices.IndexFunc(k.Rotation, func(s Step) bool { return s.Opener }); i >= 0 {
@@ -521,13 +521,13 @@ func TestCompileMysticBuild(t *testing.T) {
 			}
 		}
 	}
-	if k := CompileBuild(RaceOrc, classOrcMystic, 19, RoleDamage).Kit; slices.Contains(k.Skills, skillHeavyArmorMastery) {
+	if k := CompileBuild(RaceOrc, classOrcMystic, 19, RoleDamage, BranchChoice{}).Kit; slices.Contains(k.Skills, skillHeavyArmorMastery) {
 		t.Errorf("orc mystic Damage learns %v, want no armor mastery but the robe's", k.Skills)
 	}
 	// Second professions play their first profession's row (#332).
 	for _, tt := range []struct{ class, first int32 }{{16, classCleric}, {12, classHumanWizard}, {30, classElvenOracle}, {41, classDarkWizard}, {52, classOrcShaman}} {
 		race, _ := datapack.ClassRace(tt.class)
-		bd, want := CompileBuild(race, tt.class, 45, RoleSupport), CompileBuild(race, tt.first, 45, RoleSupport)
+		bd, want := CompileBuild(race, tt.class, 45, RoleSupport, BranchChoice{}), CompileBuild(race, tt.first, 45, RoleSupport, BranchChoice{})
 		if !slices.Equal(stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation)) || bd.Thresholds != want.Thresholds {
 			t.Errorf("class %d rotation %v, want class %d's %v", tt.class, stepSkills(bd.Kit.Rotation), tt.first, stepSkills(want.Kit.Rotation))
 		}

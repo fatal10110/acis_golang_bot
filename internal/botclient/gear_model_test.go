@@ -300,7 +300,7 @@ func TestBuildMysticArmor(t *testing.T) {
 		{0, classHumanMystic, 14, RoleSupport, nil},
 	}
 	for _, tt := range tests {
-		if got := kinds(CompileBuild(tt.race, tt.class, tt.level, tt.role)); !slices.Equal(got, tt.want) {
+		if got := kinds(CompileBuild(tt.race, tt.class, tt.level, tt.role, BranchChoice{})); !slices.Equal(got, tt.want) {
 			t.Errorf("CompileBuild(%d, %d, %d, %v) armor = %v, want %v", tt.race, tt.class, tt.level, tt.role, got, tt.want)
 		}
 	}

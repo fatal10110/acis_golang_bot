@@ -96,8 +96,9 @@ func TestLiveStoreClosesOnFollow(t *testing.T) {
 }
 
 // TestLiveMerchantSwarm runs one bot of the merchant preset (cmd/bots
-// -persona merchant: DefaultPersona farming the datapack's spots, with the
-// travel map, a store registry and the store budget) on the run's gate and
+// -persona merchant: DefaultPersona with the Damage role farming the
+// datapack's spots, with the travel map, a store registry and the store
+// budget) on the run's gate and
 // cap: with loot in a town it opens its store, which the GM sees (#111).
 // GM-given steel powder stands in for the loot of a farming run, which takes tens
 // of minutes on live spawns. Cleanup logs it out, which closes the store.

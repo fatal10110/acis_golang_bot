@@ -344,8 +344,8 @@ type Build struct {
 	Race RaceProfile
 	Kit  ClassKit
 	Role Role
-	// Branch is the first profession's class id the bot heads for; 0 until
-	// the branch choice (S8, #328).
+	// Branch is the first profession's class id the bot heads for or plays
+	// (chooseLine); 0 for a class no branch table goes on from.
 	Branch     int32
 	Thresholds Thresholds
 }
@@ -392,22 +392,33 @@ func professionKit(class int32) (ClassKit, bool) {
 // the level reached (a buff another one of the level Replaces left out),
 // the role's part of the row (ClassKit.Roles) over the row's learn table,
 // melee policy and thresholds (defaultThresholds for a row without its
-// own), its spot margin, its class's gear and dyes and its race's professions. The trainers come from the
+// own), its spot margin, its class's gear and dyes, and its line: the
+// branch choice reads choice (chooseLine) for Branch and the professions,
+// and a base class or first profession wields its line's weapon
+// (branchWeapons). The trainers come from the
 // datapack (Brain.build). RoleNone compiles the zero Build. The tables are
 // Go tables, checked against the shipped datapack by
 // TestBehaviorRowsShipped.
-func CompileBuild(race, class, level int32, role Role) Build {
+func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Build {
 	if role == RoleNone {
 		return Build{}
 	}
 	bd := Build{Role: role, Thresholds: defaultThresholds, Race: RaceProfile{Race: race, Professions: make(map[int32]int32)}}
-	for from, to := range supportBuilds {
-		if r, ok := datapack.ClassRace(from); ok && r == race {
-			bd.Race.Professions[from] = to
-		}
-	}
 	k := &bd.Kit
 	k.Gear, k.Dyes, k.DyeStats = gearClassOf(defaultGearClasses(), class), defaultDyeTable()[class], dyeStats[class]
+	if l, ok := chooseLine(class, role, choice); ok {
+		bd.Branch = l.first
+		parent, _ := datapack.ParentClass(class)
+		if parent < 0 {
+			bd.Race.Professions[class] = l.first
+		}
+		if parent < 0 || class == l.first {
+			bd.Race.Professions[l.first] = l.second
+			if w := branchWeapons[l.second]; w != nil {
+				k.Gear.Weapons, k.Gear.Shield = w, false
+			}
+		}
+	}
 	line, ok := professionKit(class)
 	base, isBase := datapack.BaseClass(class)
 	if !ok && isBase {
@@ -508,7 +519,8 @@ type buildKey struct {
 // build is the bot's build now, with the class's trainers from the travel
 // map (TravelMap.trainers) and the persona's overrides: CompileBuild
 // runs again whenever the bot's class, level or role differs from the last
-// compile's, so at entry and on every UserInfo that changed its class or
+// compile's (the account and the pinned branch it draws the line from are
+// the brain's, fixed for its life), so at entry and on every UserInfo that changed its class or
 // level. The overrides are applied at each call, so a persona edited between
 // compiles still wins.
 func (b *Brain) build() Build {
@@ -516,7 +528,8 @@ func (b *Brain) build() Build {
 	k := buildKey{s.ClassID, s.Level, b.persona.Role}
 	if !b.builtOK || b.builtFor != k {
 		race, _ := datapack.ClassRace(s.ClassID)
-		b.built, b.builtFor, b.builtOK = CompileBuild(race, s.ClassID, s.Level, k.role), k, true
+		choice := BranchChoice{Account: b.cfg.account, Pin: b.cfg.Branch}
+		b.built, b.builtFor, b.builtOK = CompileBuild(race, s.ClassID, s.Level, k.role, choice), k, true
 	}
 	bd := b.built
 	if m := b.cfg.Travel; m != nil && k.role != RoleNone {

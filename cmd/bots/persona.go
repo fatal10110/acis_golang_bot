@@ -43,11 +43,20 @@ type preset struct {
 var presets = []preset{
 	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true, member: true},
 	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
-	{name: "merchant", help: "support that farms the datapack's spots for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: botclient.DefaultPersona, farms: true, store: true, walks: true, member: true},
+	{name: "merchant", help: "damage dealer that farms the datapack's spots alone for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: merchantPersona, farms: true, store: true, walks: true, member: true},
 	{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
 		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
 	},
+}
+
+// merchantPersona is the merchant preset's persona: the default one in the
+// Damage role, which farms alone and takes its race's damage lines
+// (docs/strategy.md, Design section 6).
+func merchantPersona() botclient.Persona {
+	p := botclient.DefaultPersona()
+	p.Role = botclient.RoleDamage
+	return p
 }
 
 // crafterPersona is the crafter preset's persona: botclient.CrafterPersona

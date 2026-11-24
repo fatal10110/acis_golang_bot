@@ -105,7 +105,15 @@ type BrainConfig struct {
 	// the brain reads it on its tick and gives back what it holds when it
 	// stops. Nil crafts and orders nothing.
 	CraftBoard *CraftBoard
+	// Branch, when set, pins the first profession's class id the bot takes
+	// while a base class (BranchChoice.Pin, D22); one the branch tables do
+	// not name for the bot's base class is ignored. Zero draws it from the
+	// hash of the account name and role.
+	Branch int32
 
+	// account is the bot's account name the branch draw hashes
+	// (BranchChoice.Account); a Bot sets it.
+	account string
 	// markers mark the bots' names: the brain answers no whisper from a
 	// name any of them marks. A Bot sets its SessionConfig.Markers; none
 	// takes botnames.DefaultMarker.

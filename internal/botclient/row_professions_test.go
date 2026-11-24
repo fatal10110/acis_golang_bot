@@ -441,7 +441,7 @@ func TestCompileProfessionBuild(t *testing.T) {
 		level int32
 		want  []int32
 	}{{27, []int32{skillWolfTotem}}, {28, []int32{skillBearTotem}}} {
-		if got := buffs(CompileBuild(RaceOrc, classMonk, tt.level, RoleDamage)); !slices.Equal(got, tt.want) {
+		if got := buffs(CompileBuild(RaceOrc, classMonk, tt.level, RoleDamage, BranchChoice{})); !slices.Equal(got, tt.want) {
 			t.Errorf("monk at %d buffs %v, want %v", tt.level, got, tt.want)
 		}
 	}
@@ -449,7 +449,7 @@ func TestCompileProfessionBuild(t *testing.T) {
 		role Role
 		want bool
 	}{{RoleSupport, true}, {RoleDamage, false}} {
-		bd := CompileBuild(RaceDarkElf, classPalusKnight, 24, tt.role)
+		bd := CompileBuild(RaceDarkElf, classPalusKnight, 24, tt.role, BranchChoice{})
 		if got := slices.Contains(stepSkills(bd.Kit.Rotation), skillAggression); got != tt.want {
 			t.Errorf("palus knight %v rotation %v, want Aggression %v", tt.role, stepSkills(bd.Kit.Rotation), tt.want)
 		}
@@ -457,7 +457,7 @@ func TestCompileProfessionBuild(t *testing.T) {
 			t.Errorf("palus knight %v thresholds %+v, want the row's", tt.role, bd.Thresholds)
 		}
 	}
-	if bd := CompileBuild(RaceHuman, classCleric, 25, RoleSupport); !slices.Equal(stepSkills(bd.Kit.Rotation), []int32{skillWindStrike}) {
+	if bd := CompileBuild(RaceHuman, classCleric, 25, RoleSupport, BranchChoice{}); !slices.Equal(stepSkills(bd.Kit.Rotation), []int32{skillWindStrike}) {
 		t.Errorf("cleric rotation %v, want the cleric row's", stepSkills(bd.Kit.Rotation))
 	}
 	// A second profession plays its first profession's row until it has
@@ -465,13 +465,13 @@ func TestCompileProfessionBuild(t *testing.T) {
 	for _, tt := range []struct {
 		race, class, first int32
 	}{{RaceOrc, 46, classOrcRaider}, {RaceHuman, 2, classWarrior}, {RaceDwarf, 55, classScavenger}} {
-		bd, want := CompileBuild(tt.race, tt.class, 45, RoleDamage), CompileBuild(tt.race, tt.first, 45, RoleDamage)
+		bd, want := CompileBuild(tt.race, tt.class, 45, RoleDamage, BranchChoice{}), CompileBuild(tt.race, tt.first, 45, RoleDamage, BranchChoice{})
 		if !slices.Equal(stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation)) || bd.Thresholds != professionKits[tt.first].Thresholds {
 			t.Errorf("class %d at 45 rotation %v thresholds %+v, want class %d's %v %+v",
 				tt.class, stepSkills(bd.Kit.Rotation), bd.Thresholds, tt.first, stepSkills(want.Kit.Rotation), professionKits[tt.first].Thresholds)
 		}
 	}
-	if bd, want := CompileBuild(RaceHuman, 16, 45, RoleSupport), CompileBuild(RaceHuman, classCleric, 45, RoleSupport); !slices.Equal(stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation)) {
+	if bd, want := CompileBuild(RaceHuman, 16, 45, RoleSupport, BranchChoice{}), CompileBuild(RaceHuman, classCleric, 45, RoleSupport, BranchChoice{}); !slices.Equal(stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation)) {
 		t.Errorf("bishop rotation %v, want the cleric row's %v", stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation))
 	}
 }

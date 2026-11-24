@@ -13,7 +13,7 @@ import (
 // brain plays it.
 func compileFor(p Persona, class, level int32) Build {
 	race, _ := datapack.ClassRace(class)
-	return p.override(CompileBuild(race, class, level, p.Role), class)
+	return p.override(CompileBuild(race, class, level, p.Role, BranchChoice{}), class)
 }
 
 func stepSkills(steps []Step) []int32 {
@@ -31,7 +31,7 @@ func stepSkills(steps []Step) []int32 {
 // dyes and its race's professions only, and no trainers (they come from the
 // travel map). RoleNone compiles nothing.
 func TestCompileBuild(t *testing.T) {
-	if bd := CompileBuild(RaceHuman, classHumanMystic, 20, RoleNone); !reflect.DeepEqual(bd, Build{}) {
+	if bd := CompileBuild(RaceHuman, classHumanMystic, 20, RoleNone, BranchChoice{}); !reflect.DeepEqual(bd, Build{}) {
 		t.Errorf("RoleNone build = %+v, want the zero Build", bd)
 	}
 	attacks := []int32{skillPowerShot, skillMortalBlow, skillPowerStrike}
@@ -54,21 +54,26 @@ func TestCompileBuild(t *testing.T) {
 	for _, tt := range tests {
 		race, _ := datapack.ClassRace(tt.class)
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
-			bd := CompileBuild(race, tt.class, tt.level, role)
+			bd := CompileBuild(race, tt.class, tt.level, role, BranchChoice{})
 			k := bd.Kit
 			wantTh, wantSkills := tt.kit.Thresholds, tt.kit.Skills
-			if bd.Role != role || bd.Branch != 0 || bd.Thresholds != wantTh || k.Relax != tt.kit.Relax || k.Sweep != tt.kit.Sweep {
+			l, _ := chooseLine(tt.class, role, BranchChoice{})
+			wantGear := gearClassOf(defaultGearClasses(), tt.class)
+			if w := branchWeapons[l.second]; w != nil {
+				wantGear.Weapons, wantGear.Shield = w, false
+			}
+			if bd.Role != role || bd.Branch == 0 || bd.Branch != l.first || bd.Thresholds != wantTh || k.Relax != tt.kit.Relax || k.Sweep != tt.kit.Sweep {
 				t.Errorf("class %d %v: role %v branch %d thresholds %+v", tt.class, role, bd.Role, bd.Branch, bd.Thresholds)
 			}
 			if got := stepSkills(k.Rotation); !slices.Equal(got, tt.rotation) || len(k.Heals) != tt.heals || len(k.Buffs) != tt.buffs {
 				t.Errorf("class %d level %d %v: rotation %v heals %d buffs %d, want %v %d %d", tt.class, tt.level, role, got, len(k.Heals), len(k.Buffs), tt.rotation, tt.heals, tt.buffs)
 			}
 			if !slices.Equal(k.Skills, wantSkills) || k.Trainers != nil ||
-				!reflect.DeepEqual(k.Gear, gearClassOf(defaultGearClasses(), tt.class)) || !slices.Equal(k.Dyes, defaultDyeTable()[tt.class]) ||
+				!reflect.DeepEqual(k.Gear, wantGear) || !slices.Equal(k.Dyes, defaultDyeTable()[tt.class]) ||
 				k.Flee != 0 || k.Melee != MeleeAlways {
 				t.Errorf("class %d %v: kit %+v, want the class's tables", tt.class, role, k)
 			}
-			if bd.Race.Race != race || bd.Race.Professions[tt.class] != supportBuilds[tt.class] {
+			if bd.Race.Race != race || bd.Race.Professions[tt.class] != l.first || bd.Race.Professions[l.first] != l.second {
 				t.Errorf("class %d %v: race %d professions %v", tt.class, role, bd.Race.Race, bd.Race.Professions)
 			}
 			for from := range bd.Race.Professions {
@@ -95,7 +100,7 @@ func TestCompileBuildStepRole(t *testing.T) {
 		{RoleSupport, 14, []int32{2, 3, 4}},
 		{RoleCrafter, 20, []int32{2, 4}},
 	} {
-		if got := stepSkills(CompileBuild(RaceHuman, classHumanMystic, tt.level, tt.role).Kit.Rotation); !slices.Equal(got, tt.want) {
+		if got := stepSkills(CompileBuild(RaceHuman, classHumanMystic, tt.level, tt.role, BranchChoice{}).Kit.Rotation); !slices.Equal(got, tt.want) {
 			t.Errorf("%v at %d: rotation %v, want %v", tt.role, tt.level, got, tt.want)
 		}
 	}
@@ -106,7 +111,7 @@ func TestCompileBuildStepRole(t *testing.T) {
 func TestBuildRecompiles(t *testing.T) {
 	b, _ := newTestBrain(t, DefaultPersona())
 	b.builtOK = false // the entry compile, not newTestBrain's fixture kit
-	if got := b.build(); got.Role != RoleSupport || got.Race.Professions[HumanFighter.ID] != supportBuilds[HumanFighter.ID] {
+	if got := b.build(); got.Role != RoleSupport || got.Race.Professions[HumanFighter.ID] != classKnight {
 		t.Fatalf("entry build = %+v, want the human fighter's support build", got)
 	}
 	steps := []struct {
@@ -144,7 +149,7 @@ func TestOverrides(t *testing.T) {
 		check func(bd Build) bool
 	}{
 		{"none", func(*Persona) {}, classCleric, func(bd Build) bool {
-			return reflect.DeepEqual(bd, CompileBuild(RaceHuman, classCleric, 20, RoleSupport))
+			return reflect.DeepEqual(bd, CompileBuild(RaceHuman, classCleric, 20, RoleSupport, BranchChoice{}))
 		}},
 		{"learn skills", func(p *Persona) { p.LearnSkills = map[int32][]int32{classCleric: {7}} }, classCleric, func(bd Build) bool { return slices.Equal(bd.Kit.Skills, []int32{7}) }},
 		{"learn skills of another class", func(p *Persona) { p.LearnSkills = map[int32][]int32{classBishop: {7}} }, classCleric, func(bd Build) bool { return bd.Kit.Skills == nil }},

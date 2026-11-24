@@ -48,34 +48,14 @@ type ClassChangePolicy struct {
 	RetryAfter time.Duration
 }
 
-// supportBuilds is the professions table builds compile per race
-// (CompileBuild), over each race's own
-// tree (data/xml/classes, classParent): mystics take the healer and buffer
-// line (Cleric and Bishop, Elven Oracle and Elven Elder, Shillien Oracle and
-// Shillien Elder, Orc Shaman and Warcryer) whose heals and buffs the persona
-// casts; fighters a melee line (Warrior and Gladiator, Elven Knight and
-// Sword Singer, Palus Knight and Bladedancer, Orc Raider and Destroyer,
-// Scavenger and Bounty Hunter).
-var supportBuilds = map[int32]int32{
-	0: 1, 1: 2, // Human Fighter: Warrior, Gladiator
-	10: 15, 15: 16, // Human Mystic: Cleric, Bishop
-	18: 19, 19: 21, // Elven Fighter: Elven Knight, Sword Singer
-	25: 29, 29: 30, // Elven Mystic: Elven Oracle, Elven Elder
-	31: 32, 32: 34, // Dark Fighter: Palus Knight, Bladedancer
-	38: 42, 42: 43, // Dark Mystic: Shillien Oracle, Shillien Elder
-	44: 45, 45: 46, // Orc Fighter: Orc Raider, Destroyer
-	49: 50, 50: 52, // Orc Mystic: Orc Shaman, Warcryer
-	53: 54, 54: 55, // Dwarven Fighter: Scavenger, Bounty Hunter
-}
-
 // Class ids of the dwarven crafter line (D18, docs/crafting.md).
 const (
 	classArtisan  int32 = 56
 	classWarsmith int32 = 57
 )
 
-// defaultClassChangePolicy changes class at the class master with the
-// support build table, walking to a master nearby; a visit that changed
+// defaultClassChangePolicy changes class at the class master to the
+// build's professions (chooseLine), walking to a master nearby; a visit that changed
 // nothing waits visitShunFor before the next.
 func defaultClassChangePolicy() ClassChangePolicy {
 	return ClassChangePolicy{

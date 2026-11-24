@@ -36,8 +36,8 @@ const (
 	skillHaste int32 = 1086
 	// classMaster is Hasha, the class master (D15, acis_golang#5419).
 	classMaster int32 = 50000
-	// The Human Fighter's first and second professions of the default
-	// build table (supportBuilds): Warrior, then Gladiator.
+	// The Human Fighter's first and second professions the class change
+	// scenario pins (Persona.ClassChange.Builds): Warrior, then Gladiator.
 	classWarrior   int32 = 1
 	classGladiator int32 = 2
 	// The dye table the dye scenario pins for a Warrior (1 STR+1 CON-3, 6
