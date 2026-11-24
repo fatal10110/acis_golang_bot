@@ -10,11 +10,16 @@ import (
 )
 
 // stepBound is how long a waiting step of a live scenario may take when it
-// names no bound of its own: no step of a recorded passing run took that
-// long, so an overdue step fails minutes before its scenario's deadline. A
-// step that may take longer (a farm fight, a supply trip, a buff's
-// renewal) names its own deadline, with the reason, at its call site.
-const stepBound = 5 * time.Minute
+// names no bound of its own. A bot holds its next merchant visit off for
+// five minutes after one (botclient's shopRetry), so a step that follows
+// one waits that out: two minutes more cover the walk and the visit. No
+// other step of a recorded passing run took that long, and an overdue step
+// fails minutes before its scenario's deadline. A bot that shuns an NPC
+// after a failed visit (visitShunFor, ten minutes) fails the step instead:
+// a passing run has no failed visit. A step that may take longer (a farm fight, a supply trip, a
+// buff's renewal) names its own deadline, with the reason, at its call
+// site.
+const stepBound = 7 * time.Minute
 
 // stepNote is how long a step waits before its served time is logged: a
 // run's log then shows each slow step's margin under its bound.

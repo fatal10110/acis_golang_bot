@@ -298,7 +298,8 @@ that is overdue fails at once, naming the step, how long it waited, what it stil
 last packets it saw, instead of waiting out the scenario's context (#366: a support bot that never
 buffed its leader waited out 12 minutes). The wait helpers (`until`, `untilServed`, `waitFor`,
 `watchUntil`) all run through `runStep` (`internal/e2e/helpers_refusal_live_test.go`, over
-`awaitStep` in `internal/e2e/step.go`) and give a step `stepBound`, five minutes, unless it names its
+`awaitStep` in `internal/e2e/step.go`) and give a step `stepBound`, seven minutes (the five a bot holds its next merchant visit off after one,
+`shopRetry`, plus the walk and the visit), unless it names its
 own deadline through the `...By` form of the helper (`untilBy`, `untilServedBy`, `waitForBy`,
 `watchUntilBy`). A deadline is a time, so a step may count it from an event of the run (the support
 bot's renewal is due a minute past four minutes after its first Might on the leader) rather than
