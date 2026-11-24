@@ -33,8 +33,11 @@ func TestLiveArrows(t *testing.T) {
 	minArrows := botclient.DefaultPersona().Shop.ArrowsMin
 	f = runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		p.Gear.Classes = []botclient.GearClass{{Weapons: []string{"BOW"}, Armor: "LIGHT"}}
-		// Bow and arrows only.
+		// Bow and arrows only: no jewelry, whose merchant stands nearer
+		// the trainer than the weapon merchant does and would take the
+		// first visit and the bow's adena (it did on main too).
 		p.Shop.Restock = nil
+		p.Gear.Jewelry = false
 	})
 	t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 
