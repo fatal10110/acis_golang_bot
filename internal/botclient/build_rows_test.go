@@ -35,11 +35,12 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 // checkRow checks a row against the class trees and skill templates: every
 // skill is in the class's merged tree by the row's end, every step and
 // toggle starts at max(row start, the skill's first merged minLvl) (its
-// "@N"), every bracket gate equals the skill's weaponsAllowed and every
-// branch gate (Step.Branch) fits it at each level the row reaches, a skill
-// with weaponsAllowed has a gate, every charge gate equals the skill's
-// charge condition, and the next profession is a direct child of the
-// class.
+// "@N"), as does every buff with a From, every bracket gate equals the
+// skill's weaponsAllowed and every branch gate (Step.Branch) fits it at each
+// level the row reaches, a skill with weaponsAllowed has a gate, every
+// charge gate equals the skill's charge condition, every skill tagged
+// (base) (ClassKit.Base) is first granted under 20, and the next profession
+// is a direct child of the class.
 func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapack.SkillRef]datapack.Skill) []string {
 	var errs []string
 	fail := func(format string, args ...any) { errs = append(errs, r.name+": "+fmt.Sprintf(format, args...)) }
@@ -103,7 +104,16 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 		known(h.Skill)
 	}
 	for _, bf := range r.kit.Buffs {
-		known(bf.Skill)
+		if bf.From != 0 {
+			starts(bf.Skill, bf.From)
+		} else {
+			known(bf.Skill)
+		}
+	}
+	for _, id := range r.kit.Base {
+		if lvl, ok := known(id); ok && lvl >= 20 {
+			fail("skill %d tagged (base) is first granted at %d, not by the base class", id, lvl)
+		}
 	}
 	for _, id := range []int32{r.kit.Flee, r.kit.Relax} {
 		if id != 0 {
@@ -184,16 +194,18 @@ func TestBehaviorRowsShipped(t *testing.T) {
 // TestBehaviorRowsCheck checks checkRow on a fixture tree: a right row
 // passes, a branch gate inside weaponsAllowed too; a wrong weapon gate, a
 // missing one, a bracket gate narrower than weaponsAllowed, a wrong level of
-// a step or a toggle, a skill out of the tree (a heal's, Relax), a wrong
-// charge gate and a profession that is not a direct child each fail.
+// a step, a toggle or a buff, a skill out of the tree (a heal's, Relax), a
+// wrong charge gate, a (base) tag on a skill first granted from 20 and a
+// profession that is not a direct child each fail.
 func TestBehaviorRowsCheck(t *testing.T) {
-	const sword, plain, charged = int32(100), int32(101), int32(102)
+	const sword, plain, charged, late = int32(100), int32(101), int32(102), int32(103)
 	classes := map[int32]datapack.Class{
 		10: {ID: 10, Parent: -1, Skills: []datapack.SkillGrant{
 			{ID: sword, Level: 1, MinLevel: 1},
 			{ID: plain, Level: 1, MinLevel: 7},
 			{ID: plain, Level: 2, MinLevel: 14},
 			{ID: charged, Level: 1, MinLevel: 5},
+			{ID: late, Level: 1, MinLevel: 20},
 		}},
 		11: {ID: 11, Parent: 10},
 		12: {ID: 12, Parent: 11},
@@ -203,6 +215,7 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{ID: plain, Level: 1}:   {},
 		{ID: plain, Level: 2}:   {},
 		{ID: charged, Level: 1}: {Charges: datapack.ChargeCond{Min: 2}},
+		{ID: late, Level: 1}:    {},
 	}
 	row := func(next int32, steps ...Step) behaviorRow {
 		return behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Rotation: steps, Heals: []Heal{{Skill: plain, HP: 50}}}, next: next}
@@ -226,6 +239,10 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{"heal not in the tree", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: 999}}}}, true},
 		{"wrong charge gate", row(11, Step{Skill: charged, From: 5, Charges: 1}), true},
 		{"not a direct child", row(12), true},
+		{"buff level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: plain, From: 7}}}}, false},
+		{"wrong buff level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: plain, From: 9}}}}, true},
+		{"base skill", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Relax: plain, Base: []int32{plain}}}, false},
+		{"base tag from 20", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Buffs: []Buff{{Skill: late}}, Base: []int32{late}}}, true},
 		{"profession row starts at 20", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Rotation: []Step{{Skill: plain}}}}, false},
 	}
 	for _, tt := range tests {

@@ -88,7 +88,8 @@ type SelfState struct {
 	// server sends the bot's own on every change (event.ChargesChanged,
 	// network/live_player_events.go), and another player's only when its
 	// Charm of Courage starts or ends, which the bot's next change of its
-	// own corrects.
+	// own corrects, or the refusal of a cast it gated on the wrong count
+	// (Brain.chargesRefused).
 	Charges int32
 	PvPFlag uint8
 	Karma   int32

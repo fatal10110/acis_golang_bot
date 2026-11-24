@@ -12,10 +12,7 @@ import (
 // the pinch stack at one order; Might, Soul Shield, Chant of Shielding and
 // Accuracy as named.
 const (
-	skillFrenzy         = int32(176)
-	skillGuts           = int32(139)
 	skillChantShielding = int32(1009)
-	skillAccuracy       = int32(256)
 )
 
 // stackTravel is a travel map with the tests' stack effects: Frenzy and

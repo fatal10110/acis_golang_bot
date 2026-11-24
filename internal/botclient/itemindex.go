@@ -178,6 +178,27 @@ func (m *TravelMap) skillStackOf(skill, level int32) (stackEffect, bool) {
 	return stackAt(m.skillStacks[skill], level)
 }
 
+// indexMaxCharges indexes the maxCharges of every skill level with one
+// (datapack.Skill.MaxCharges: Focused Force's 1 to 7 by level).
+func indexMaxCharges(skills map[datapack.SkillRef]datapack.Skill) map[datapack.SkillRef]int {
+	out := make(map[datapack.SkillRef]int)
+	for ref, sk := range skills {
+		if sk.MaxCharges > 0 {
+			out[ref] = sk.MaxCharges
+		}
+	}
+	return out
+}
+
+// maxChargesOf is the most force charges skill holds at level
+// (indexMaxCharges); 0 for a skill level without, or with no travel map.
+func (m *TravelMap) maxChargesOf(skill, level int32) int {
+	if m == nil {
+		return 0
+	}
+	return m.maxCharges[datapack.SkillRef{ID: skill, Level: level}]
+}
+
 // stackAt is the stack effect of levels at level, an enchanted level's
 // that of the top plain level.
 func stackAt(levels map[int32]stackEffect, level int32) (stackEffect, bool) {
