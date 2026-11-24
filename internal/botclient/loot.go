@@ -327,7 +327,7 @@ func (b *Brain) nextLoot(now time.Time) int32 {
 	}
 }
 
-// lootFits reports whether picking up it keeps the load under
+// lootFits reports whether picking it up keeps the load under
 // Loot.StopAbove percent of the weight limit. Its weight is its count
 // times its template's (TravelMap.weights); with no weights known, it
 // counts as nothing and the load alone must be under the cap.

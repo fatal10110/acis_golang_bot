@@ -60,27 +60,28 @@ func TestSupplyCauseHalfSpeed(t *testing.T) {
 
 // TestLootStopAbove checks the pickup cap: a farmer whose load the trip
 // cannot shed gives up a drop that would bring it to Loot.StopAbove (65 %),
-// and stops waiting on it, but still picks up what weighs nothing; under
-// the cap, or with no cap, it picks up. With no item weights known, the
-// load alone decides.
+// and stops waiting on it, but still picks up what weighs nothing, also
+// when it was queued behind a given-up drop; under the cap, or with no
+// cap, it picks up. With no item weights known, the load alone decides.
 func TestLootStopAbove(t *testing.T) {
 	kept := GroundItem{ObjectID: junkDrop, TemplateID: keptMat, Pos: Point{X: 900}, Stackable: true, Count: 5}
 	adena := GroundItem{ObjectID: adenaDrop, TemplateID: 57, Pos: Point{X: 900}, Stackable: true, Count: 120}
 	tests := []struct {
-		name string
-		item GroundItem
-		load int32
-		edit func(b *Brain)
-		want bool
+		name  string
+		items []GroundItem
+		load  int32
+		edit  func(b *Brain)
+		want  int32 // the object picked up, 0 for none
 	}{
-		{name: "67 % with nothing to shed", item: kept, load: 67000},
-		{name: "under the cap", item: kept, load: 60000, want: true},
-		{name: "the drop would reach the cap", item: kept, load: 64950},
-		{name: "the drop stays under the cap", item: kept, load: 64949, want: true},
-		{name: "adena past the cap", item: adena, load: 67000, want: true},
-		{name: "StopAbove 0", item: kept, load: 99000, edit: func(b *Brain) { b.persona.Loot.StopAbove = 0 }, want: true},
-		{name: "no weights, under the cap", item: kept, load: 64999, edit: func(b *Brain) { b.cfg.Travel.weights = nil }, want: true},
-		{name: "no weights, at the cap", item: adena, load: 65000, edit: func(b *Brain) { b.cfg.Travel.weights = nil }},
+		{name: "67 % with nothing to shed", items: []GroundItem{kept}, load: 67000},
+		{name: "under the cap", items: []GroundItem{kept}, load: 60000, want: junkDrop},
+		{name: "the drop would reach the cap", items: []GroundItem{kept}, load: 64950},
+		{name: "the drop stays under the cap", items: []GroundItem{kept}, load: 64949, want: junkDrop},
+		{name: "adena past the cap", items: []GroundItem{adena}, load: 67000, want: adenaDrop},
+		{name: "adena behind a too-heavy drop", items: []GroundItem{kept, adena}, load: 67000, want: adenaDrop},
+		{name: "StopAbove 0", items: []GroundItem{kept}, load: 99000, edit: func(b *Brain) { b.persona.Loot.StopAbove = 0 }, want: junkDrop},
+		{name: "no weights, under the cap", items: []GroundItem{kept}, load: 64999, edit: func(b *Brain) { b.cfg.Travel.weights = nil }, want: junkDrop},
+		{name: "no weights, at the cap", items: []GroundItem{adena}, load: 65000, edit: func(b *Brain) { b.cfg.Travel.weights = nil }},
 	}
 	now := at(time.Second)
 	for _, tt := range tests {
@@ -92,17 +93,24 @@ func TestLootStopAbove(t *testing.T) {
 			if tt.edit != nil {
 				tt.edit(b)
 			}
-			b.world.Ground = map[int32]GroundItem{tt.item.ObjectID: tt.item}
-			b.loot.items = []int32{tt.item.ObjectID}
+			b.world.Ground = map[int32]GroundItem{}
+			b.loot.items = nil
+			for _, it := range tt.items {
+				b.world.Ground[it.ObjectID] = it
+				b.loot.items = append(b.loot.items, it.ObjectID)
+			}
 			if c := b.supplyCause(); c != causeNone {
 				t.Fatalf("supplyCause = %d, want none", c)
 			}
-			a, ok := b.ruleLoot(now)
-			if got := ok && a.kind == actPickup && a.object == tt.item.ObjectID; got != tt.want {
-				t.Fatalf("ruleLoot = %v kind %d object %d, want pickup %v", ok, a.kind, a.object, tt.want)
+			var got int32
+			if a, ok := b.ruleLoot(now); ok && a.kind == actPickup {
+				got = a.object
 			}
-			if q := b.lootQueued(now); q != tt.want {
-				t.Fatalf("lootQueued = %v, want %v", q, tt.want)
+			if got != tt.want {
+				t.Fatalf("ruleLoot picks up %d, want %d", got, tt.want)
+			}
+			if q := b.lootQueued(now); q != (tt.want != 0) {
+				t.Fatalf("lootQueued = %v, want %v", q, tt.want != 0)
 			}
 		})
 	}
