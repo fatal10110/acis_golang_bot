@@ -558,6 +558,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.craftEvent(ev, now)
 			b.crystallizeEvent(e.ID, now)
 			b.dyeRefused(e.ID, now)
+			b.lootRefused(e.ID, now)
 		case ExAutoSoulShot:
 			if e.Enabled {
 				delete(b.shotOff, e.TemplateID)

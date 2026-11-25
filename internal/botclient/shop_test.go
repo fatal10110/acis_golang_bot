@@ -274,6 +274,15 @@ func TestShopDue(t *testing.T) {
 		{name: "junk at SellAt", items: append(stocked, junk(5)...), wantKind: actMove},
 		{name: "junk under SellAt", items: append(stocked, junk(4)...)},
 		{
+			name: "junk under SellAt, the bag near its slot limit", items: append(stocked, junk(1)...), wantKind: actMove,
+			setup: func(b *Brain) { b.world.Self.InvLimit = int32(len(b.world.Inventory.Items) + bagNear) },
+		},
+		{
+			name: "junk under SellAt, the bag short of bagNear", items: append(stocked, junk(1)...),
+			setup: func(b *Brain) { b.world.Self.InvLimit = int32(len(b.world.Inventory.Items) + bagNear + 1) },
+		},
+		{name: "no junk, the bag full", items: stocked, setup: func(b *Brain) { b.world.Self.InvLimit = int32(len(b.world.Inventory.Items)) }},
+		{
 			name: "junk at SellAt, wants no merchant sells", items: append([]Item{adenaStack(5000), potionsOf(20), spiritsOf(100)}, junk(5)...), wantKind: actMove,
 			setup: func(b *Brain) { b.shop.wantBook(9999) },
 		},

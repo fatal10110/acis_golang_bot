@@ -179,6 +179,10 @@ type ItemTables struct {
 	// Stackable are the templates in Prices that stack (is_stackable): the
 	// server stores one row of each, not one per unit.
 	Stackable map[int32]bool
+	// Herbs are the herb templates (etcitem_type HERB): the server uses
+	// one at pickup, so it takes no inventory slot
+	// (itemcontainer.Inventory.SlotsNeededFor).
+	Herbs map[int32]bool
 }
 
 // LoadItems reads every *.xml item template file directly under dir, in
@@ -195,6 +199,7 @@ func LoadItems(dir string) (ItemTables, error) {
 	t := ItemTables{
 		Items: make(map[int32]Item), Etc: make(map[int32]EtcItem),
 		Prices: make(map[int32]int32), Names: make(map[int32]string), Stackable: make(map[int32]bool),
+		Herbs: make(map[int32]bool),
 	}
 	for _, path := range paths {
 		var f itemFile
@@ -219,6 +224,7 @@ func (t ItemTables) add(el itemElement) error {
 	delete(t.Prices, id)
 	delete(t.Names, id)
 	delete(t.Stackable, id)
+	delete(t.Herbs, id)
 	delete(t.Items, id)
 	delete(t.Etc, id)
 	if priced {
@@ -226,6 +232,9 @@ func (t ItemTables) add(el itemElement) error {
 		if itemAttrs(el).boolDefault("is_stackable", false) {
 			t.Stackable[id] = true
 		}
+	}
+	if a := itemAttrs(el); a.strDefault("type", "") == "EtcItem" && a.strDefault("etcitem_type", "") == "HERB" {
+		t.Herbs[id] = true
 	}
 	it, ok, err := buildItem(el)
 	if err != nil {
