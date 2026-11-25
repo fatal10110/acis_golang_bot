@@ -465,21 +465,30 @@ func (b *Brain) nextLoot(now time.Time) int32 {
 }
 
 // lootFits reports whether picking it up keeps the load under
-// Loot.StopAbove percent of the weight limit. Its weight is its count
-// times its template's (TravelMap.weights); with no weights known, it
-// counts as nothing and the load alone must be under the cap.
+// Loot.StopAbove percent of the weight limit and, whatever the persona
+// sets, under the limit itself: the server's pickup never checks weight
+// (network/pickup.go) and from the limit the bot cannot move (#488). Its
+// weight is its count times its template's (TravelMap.weights); with the
+// weights known, adena and an item that weighs nothing always fit, and one
+// the table lacks weighs an unknown amount and never does. With no weights known,
+// it counts as nothing and the load alone must be under the caps.
 func (b *Brain) lootFits(it GroundItem) bool {
 	s, pct := &b.world.Self, b.persona.Loot.StopAbove
-	if pct <= 0 || s.MaxLoad <= 0 {
+	if s.MaxLoad <= 0 {
 		return true
 	}
 	var w int64
 	if t := b.cfg.Travel; t != nil && len(t.weights) > 0 {
-		if w = int64(t.weights[it.TemplateID]) * int64(max(it.Count, 1)); w == 0 {
+		unit, ok := t.weights[it.TemplateID]
+		if !ok && it.TemplateID != adenaID {
+			return false
+		}
+		if w = int64(unit) * int64(max(it.Count, 1)); w == 0 {
 			return true
 		}
 	}
-	return (int64(s.Load)+w)*100 < int64(s.MaxLoad)*int64(pct)
+	load := int64(s.Load) + w
+	return load < int64(s.MaxLoad) && (pct <= 0 || load*100 < int64(s.MaxLoad)*int64(pct))
 }
 
 // ruleLoot is rule 8: with no attacker left, drop a stack of junk when

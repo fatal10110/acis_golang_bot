@@ -273,6 +273,9 @@ type Brain struct {
 	prep townPrep
 	// loot is the loot queue (rule 8).
 	loot lootQueue
+	// shedding is set while rule "overweight" drops what the bot carries:
+	// from the immobile band until the load is under the half-speed band.
+	shedding bool
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
 	// market is the visit to another player's sell store (rule 9 errand

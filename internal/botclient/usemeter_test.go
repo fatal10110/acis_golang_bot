@@ -248,7 +248,8 @@ func TestKeepsEscapes(t *testing.T) {
 }
 
 // TestIndexWeights checks the weights the travel map keeps: every item's
-// and etc item's that weighs anything, and the weapons' attack speed.
+// and etc item's, 0 for one that weighs nothing, and the weapons' attack
+// speed.
 func TestIndexWeights(t *testing.T) {
 	got := indexWeights(map[int32]datapack.Item{
 		ngSword: {ID: ngSword, Weight: 1600},
@@ -258,7 +259,7 @@ func TestIndexWeights(t *testing.T) {
 		scrollOfEscape:  {ID: scrollOfEscape, Weight: 120},
 		dSoulshot:       {ID: dSoulshot},
 	})
-	if want := map[int32]int32{ngSword: 1600, soulshotNoGrade: 4, scrollOfEscape: 120}; !maps.Equal(got, want) {
+	if want := map[int32]int32{ngSword: 1600, dSword: 0, soulshotNoGrade: 4, scrollOfEscape: 120, dSoulshot: 0}; !maps.Equal(got, want) {
 		t.Fatalf("indexWeights = %v, want %v", got, want)
 	}
 	w := indexWeapons(map[int32]datapack.Item{ngSword: {ID: ngSword, Type: "Weapon", Soulshots: 1, Stats: datapack.Stats{PAtkSpd: 379}}})
