@@ -158,16 +158,25 @@ func (p walkPurpose) segmentCap() float64 {
 }
 
 // segment is one move the walker sent: from the server-confirmed standstill
-// from to to, both on their floor.
+// from to to, both on their floor. A click-ahead's from is the previous
+// segment's end until its answer, then the answer's origin.
 type segment struct {
 	from, to Point
 	sentAt   time.Time
 	// answered is set by the server's MoveToLocation for it; deadline is
-	// the watchdog's limit from then. Its arrival is the bot's own move's
-	// modeled end (SelfState.arrival).
+	// the watchdog's limit from then; origin is that answer's origin, where
+	// the server's line starts. Its arrival is the bot's own move's modeled
+	// end (SelfState.arrival).
 	answered bool
 	deadline time.Time
+	origin   Point
 	door     bool
+	// ahead marks a click-ahead (walker_ahead.go): sent while the previous
+	// segment still walked, from a point of the stretch fan0 to fan1 of
+	// that segment. noAhead is set once no click-ahead may follow this
+	// segment: its fan failed or its own answer missed its fan.
+	ahead, noAhead bool
+	fan0, fan1     Point
 }
 
 // walkLags is how many recent segments' answer latencies A is the
@@ -195,8 +204,9 @@ type walker struct {
 	// route is the rest of the route: route[0] is the next segment's end.
 	route []Point
 	// next is the segment the last decision returned, seg the one in
-	// flight (seg.sentAt zero for none).
-	next, seg segment
+	// flight (seg.sentAt zero for none), prev the one a click-ahead in
+	// flight followed, until the click's answer.
+	next, seg, prev segment
 	// floor is the standstill the last segment arrived at, on its floor:
 	// the server's answer carries the click's height plus the collision
 	// height (network/movement.go moveLivePlayer).
@@ -267,13 +277,16 @@ func (w *walker) failed() string {
 // segment goes out from standstill, one position tick after the previous
 // one's modeled arrival (SelfState.arrival; the walk wake runs the decision
 // then, Brain.walkWake), never during the bot's own swing or cast, and only
-// after CanMove and the step-chain check pass from where the bot stands. No
-// click-ahead (#308): a click while moving retargets the server's walk from
-// its catch-up point. The bot stands up first.
+// after CanMove and the step-chain check pass from where the bot stands;
+// or, at a checked corner, as a click-ahead before the previous one's end
+// (#308, Brain.clickAhead): only when every line from the stretch the server
+// can take the click on to the next waypoint passes the checks. The bot
+// stands up first.
 //
 // Pacing: one MoveBackwardToLocation per segment through the frame pacer
 // (gateNone); a segment waits for the previous one's answer plus its arrival
-// and one tick, so at most 10 walker moves a second (16-unit segments) and
+// and one tick, or its answer and its arrival less A and one tick for a
+// click-ahead, so at most 10 walker moves a second (16-unit segments) and
 // about one a second typically, far below the server's 80 frames/s.
 // /unstuck (RequestUserCommand) has no server gate (client_ingame.go
 // handleRequestUserCommand): on isolated ground the walker asks it at least
@@ -308,6 +321,9 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 	}
 	s := &b.world.Self
 	if w.seg.sentAt != (time.Time{}) {
+		if a, ok := b.clickAhead(now); ok {
+			return a, walkWalking
+		}
 		if !w.segmentDone(now, s.arrival()) {
 			return Action{}, w.status
 		}
@@ -375,7 +391,9 @@ func (b *Brain) walker() *walker {
 
 // standing is where the bot stands at now, on its floor: the end of the
 // last segment it arrived at when the server's position agrees, else the
-// server's position snapped to the layer nearest it.
+// server's position snapped to the layer nearest it. It is the origin of a
+// segment sent from standstill only (walkStep sends none while the bot
+// moves); a click-ahead's origin is its fan (Brain.clickAhead).
 func (b *Brain) standing(now time.Time) Point {
 	w, pos := &b.walk, b.world.Self.Position(now)
 	if w.floor.X == pos.X && w.floor.Y == pos.Y {
@@ -658,6 +676,13 @@ func (w *walker) sent(a Action, now time.Time) {
 	}
 	switch {
 	case a.kind == actMove && a.walk:
+		w.prev = segment{}
+		if w.next.ahead {
+			// The segment in flight runs on until the server takes the
+			// click; the route goes on from its end.
+			w.prev = w.seg
+			w.route = w.route[1:]
+		}
 		w.seg = w.next
 		w.seg.sentAt = now
 		w.seg.door = w.nav.Doors != nil && w.nav.Doors.Crosses(w.seg.from, w.seg.to)
@@ -685,6 +710,14 @@ func (w *walker) sent(a Action, now time.Time) {
 // did not send, a StopMove mid-segment (a stun, a stop) and a teleport drop
 // the route; a teleport also starts the next walk afresh. ActionFailed is no
 // navigation signal.
+//
+// While a click-ahead is unanswered, a blocked correction or StopMove is the
+// previous segment's (Brain.staleStop), and the click's answer is checked
+// against its fan (Brain.aheadAnswered). A blocked correction at the end of
+// an answered segment is its arrival: after a catch-up into a closed line
+// the server's block stays set through the retarget and ends the walk as
+// blocked where it arrives (creature.go moveToLocationLocked,
+// arrivalHookLocked).
 func (b *Brain) observeWalk(ev Event, now time.Time) {
 	w, s := &b.walk, &b.world.Self
 	if !w.talkAt.IsZero() && now.Sub(w.talkAt) > talkWait {
@@ -698,8 +731,12 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 		still := e.Origin.X == e.Dest.X && e.Origin.Y == e.Dest.Y
 		seg := &w.seg
 		switch {
+		case seg.ahead && !seg.answered && still:
+			b.staleStop(e.Dest)
 		case !seg.sentAt.IsZero() && !seg.answered:
 			seg.answered = true
+			seg.origin = e.Origin
+			w.prev = segment{}
 			w.answered(now.Sub(seg.sentAt), s)
 			switch {
 			case still:
@@ -707,6 +744,9 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			case horizontal2(e.Dest, seg.to) > walkSlop*walkSlop:
 				b.walkDesync(e)
 			default:
+				if seg.ahead {
+					b.aheadAnswered(e.Origin)
+				}
 				// The arrival model Apply builds from this answer next.
 				end := s.moved(now, e.Origin, e.Dest).end()
 				seg.deadline = end.Add(end.Sub(now)/2 + walkSlack)
@@ -734,7 +774,13 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 		}
 		// A talk click's approach in range: the page follows.
 		w.talkAt = time.Time{}
-		if !w.seg.sentAt.IsZero() && horizontal2(e.Pos, w.seg.to) > walkSlop*walkSlop {
+		end := w.seg.to
+		if w.seg.ahead && !w.seg.answered {
+			// The previous segment's stop, sent before the server took the
+			// click: at its end it arrived.
+			end = w.prev.to
+		}
+		if !w.seg.sentAt.IsZero() && horizontal2(e.Pos, end) > walkSlop*walkSlop {
 			w.seg, w.route = segment{}, nil
 		}
 	case NpcHtmlMessage:
@@ -772,10 +818,17 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 // segment's end from a stop inside one (nav.Planner.BlockedEnd;
 // docs/navigation.md, "Server answers to its own moves").
 func (b *Brain) walkBlocked(stop Point) {
+	b.chargeBlocked(b.walk.seg, stop)
+	b.walk.seg = segment{}
+}
+
+// chargeBlocked takes a blocked stop at stop of seg (walkBlocked): it counts
+// it, avoids the refused part of seg and drops the route.
+func (b *Brain) chargeBlocked(seg segment, stop Point) {
 	w := &b.walk
 	b.metrics.NavBlocked()
-	w.plan.Avoid.AddLine(toLoc(stop), w.plan.BlockedEnd(toLoc(w.seg.from), toLoc(w.seg.to), toLoc(stop)))
-	w.seg, w.route = segment{}, nil
+	w.plan.Avoid.AddLine(toLoc(stop), w.plan.BlockedEnd(toLoc(seg.from), toLoc(seg.to), toLoc(stop)))
+	w.route = nil
 	if w.blocked++; w.blocked >= walkMaxBlocked {
 		w.unreachable(reasonBlocked)
 	}

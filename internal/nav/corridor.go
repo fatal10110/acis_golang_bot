@@ -155,14 +155,21 @@ func (p *Planner) corridorClear(s *scratch, a, b location.Location) bool {
 // in s.stretches as their verdicts become final (lineCellLag), and reports
 // whether it passed.
 func (p *Planner) corridorFill(s *scratch, a, b location.Location, stop bool) bool {
+	return p.corridorFillWith(s, a, b, quadrant(a, b), corridorReach, stop)
+}
+
+// corridorFillWith is corridorFill with the NSWE directions req every
+// corridor cell must allow and the reach of the cells next to the line
+// cells: FanOpen widens both to cover every line of its fan.
+func (p *Planner) corridorFillWith(s *scratch, a, b location.Location, req block.NSWE, reach float64, stop bool) bool {
 	s.line = appendLineCells(s.line[:0], a, b)
 	s.stretches = s.stretches[:0]
 	s.grid.begin()
 	s.grid.ends = [2]gridEnd{{engine.GeoX(a.X), engine.GeoY(a.Y), a.Z}, {engine.GeoX(b.X), engine.GeoY(b.Y), b.Z}}
-	req := quadrant(a, b)
 	lag := p.lineCellLag()
 	open := true
 	seg := newSegment(a, b)
+	seg.reach = reach
 	for i, lc := range s.line {
 		s.grid.line = i
 		for k := range 9 {
@@ -220,11 +227,14 @@ type segment struct {
 	// nx, ny is the line's unit normal, and half a cell's half extent
 	// along it; zero for a point.
 	nx, ny, half float64
+	// reach is how far from the segment a cell next to a line cell joins
+	// its corridor: corridorReach unless FanOpen widens it.
+	reach float64
 }
 
 func newSegment(a, b location.Location) segment {
 	dx, dy := float64(b.X-a.X), float64(b.Y-a.Y)
-	sg := segment{ax: float64(a.X), ay: float64(a.Y), dx: dx, dy: dy, len2: dx*dx + dy*dy}
+	sg := segment{ax: float64(a.X), ay: float64(a.Y), dx: dx, dy: dy, len2: dx*dx + dy*dy, reach: corridorReach}
 	if l := math.Sqrt(sg.len2); l > 0 {
 		sg.nx, sg.ny = -dy/l, dx/l
 		sg.half = block.CellSize / 2 * (math.Abs(sg.nx) + math.Abs(sg.ny))
@@ -243,7 +253,7 @@ func (sg segment) dist(m [2]int) float64 {
 }
 
 // nearCell reports whether geodata cell (gx, gy), a closed square, comes
-// within corridorReach of the segment. The cell is one the segment does not
+// within the segment's reach of it. The cell is one the segment does not
 // cross, so the nearest points are a segment end or a corner of the cell.
 func (sg segment) nearCell(gx, gy int) bool {
 	x0 := float64(gx*block.CellSize + engine.WorldXMin)
@@ -251,10 +261,10 @@ func (sg segment) nearCell(gx, gy int) bool {
 	x1, y1 := x0+block.CellSize, y0+block.CellSize
 	// The line through the segment is no farther from the cell than the
 	// segment: a cell well clear of the line is out of reach.
-	if sg.half > 0 && math.Abs((x0+block.CellSize/2-sg.ax)*sg.nx+(y0+block.CellSize/2-sg.ay)*sg.ny)-sg.half > corridorReach+1e-6 {
+	if sg.half > 0 && math.Abs((x0+block.CellSize/2-sg.ax)*sg.nx+(y0+block.CellSize/2-sg.ay)*sg.ny)-sg.half > sg.reach+1e-6 {
 		return false
 	}
-	const r2 = corridorReach * corridorReach
+	r2 := sg.reach * sg.reach
 	for _, e := range [2][2]float64{{sg.ax, sg.ay}, {sg.ax + sg.dx, sg.ay + sg.dy}} {
 		ex := max(x0-e[0], 0, e[0]-x1)
 		ey := max(y0-e[1], 0, e[1]-y1)

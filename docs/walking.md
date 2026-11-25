@@ -13,7 +13,7 @@ Tracked in milestone M7 (epic #151):
 | #305 | Walker sends the next segment when the move ends | none |
 | #306 | Follower keeps walking through the follow delay; segment cap for moving destinations | #305 |
 | #307 | Longer checked segments in `internal/nav` | #306 first or together |
-| #308 | Click-ahead at checked corners (deferred design; needs the owner's sign-off) | #304's numbers after #305-#307 |
+| #308 | Click-ahead at checked corners (owner's sign-off 2026-11-25) | #304's numbers after #305-#307 |
 
 The plan went through four rounds of independent review against the bot code and the server
 reference. The last round left no blocker or major finding.
@@ -295,12 +295,13 @@ Table-driven, with an injected clock:
 - Run it on `main` before #305, after #305 and #306, and after #307. The scenario is
   `TestLiveWalkEfficiency`; its numbers are in `docs/navigation.md`, "Walking efficiency".
 
-## Click-ahead at checked corners (#308, deferred)
+## Click-ahead at checked corners (#308)
 
-Not part of this delivery. After #305-#307 it saves only the walk-speed restart, the answer latency
-and one position tick per waypoint: about 5-7% at a 600-unit median segment. It also reverses the
-"No click-ahead" rule of `docs/navigation.md` (Walker, Sending), which needs the owner's decision,
-made with #304's numbers.
+Deferred until #304's numbers after #305-#307, then approved by the owner (2026-11-25): it replaced
+the "No click-ahead" rule of `docs/navigation.md` (Walker, Sending). It saves only the walk-speed
+restart, the answer latency and one position tick per waypoint: about 5-7% at a 600-unit median
+segment. The design is in `docs/navigation.md`, Walker, "Click-ahead at checked corners" and
+"Answers around a click-ahead"; the measured numbers in "Walking efficiency".
 
 Server facts, checked:
 - retargeting a move in flight keeps the start-speed update count;
@@ -325,3 +326,17 @@ Requirements any click-ahead design must meet:
   an arrival.
 - Rework `standing()` and the `!Moving` gate in `walkStep`. `standing()` snaps a mid-move estimate to
   a layer, and both assume a standstill origin.
+
+How the design meets them, in order:
+- `nav.Planner.FanOpen` checks the fan: lines from points at most half a cell apart along the last
+  stretch, widened by the timing uncertainty (the click's lead plus twice `Emax`), each with
+  `CanMove` at head height and the corridor test with the union of the quadrants and a reach widened
+  to the lines between two checked ones.
+- The answer's origin must lie within 2 units of the fan's stretch; a miss stops the route, and the
+  walker replans once the server's move ends.
+- While the click is unanswered, a blocked correction or `StopMove` is judged against the previous
+  segment (the connection keeps the server's order): its blocked stop builds its Avoid line on its
+  own line.
+- A click after a blocked stop starts from the stop point: its answer misses the fan, see above.
+- A blocked correction at the end of a segment, previous or clicked ahead, is its arrival.
+- `standing()` and the `!Moving` gate stay the standstill send's; a click-ahead's origin is its fan.

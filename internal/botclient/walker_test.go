@@ -66,7 +66,7 @@ func TestWalkerSegmentsFromStandstill(t *testing.T) {
 		b.handle([]Event{segAnswer(origin, to)}, now)
 		run := segRun(b, now)
 		if a, _ := b.goTo(dest, 0, walkPlace, now.Add(run-50*time.Millisecond)); a.kind != actHold {
-			t.Fatalf("segment %d: %v sent before the arrival plus a tick (click-ahead)", segs, a.kind)
+			t.Fatalf("segment %d: %v sent before the arrival plus a tick: no fan holds at the U's wall-hugging corners (TestClickAheadUCorners)", segs, a.kind)
 		}
 		now, prev = now.Add(run+time.Millisecond), to
 	}

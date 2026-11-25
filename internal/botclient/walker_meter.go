@@ -22,12 +22,17 @@ type walkMeter struct {
 // meterSegment records the walker's segment going out at now: the idle
 // since the previous segment of the walk arrived, and the walk's length so
 // far. The first segment of a walk, and one after a segment that did not
-// arrive (blocked, desync, watchdog), has no idle.
+// arrive (blocked, desync, watchdog), has no idle; a click-ahead, sent
+// before the previous one's end, idles zero. A click-ahead's length runs
+// from the previous segment's end, so the length is the route's.
 func (b *Brain) meterSegment(now time.Time) {
 	m, seg := &b.walk.meter, &b.walk.next
-	if !m.arrivedAt.IsZero() {
+	switch {
+	case !m.arrivedAt.IsZero():
 		b.metrics.NavWalkIdle(now.Sub(m.arrivedAt))
 		m.arrivedAt = time.Time{}
+	case seg.ahead:
+		b.metrics.NavWalkIdle(0)
 	}
 	if m.segs == 0 {
 		m.start = now
