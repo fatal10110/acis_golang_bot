@@ -228,6 +228,13 @@ type Trade struct {
 	// trade.
 	added, confirmed bool
 	cancelAt         time.Time
+	// valuable is set while the bot's goods are a unit of the valuable
+	// entry key (Brain.valuableGoods); sale is then the trade's price,
+	// fixed when the bot confirms, which a SendTradeDone with success
+	// counts in the session's valuables budget (Brain.valuableSaleEvent).
+	valuable bool
+	key      valuableKey
+	sale     int64
 }
 
 // Open reports whether a trade window is open.
@@ -345,7 +352,8 @@ func (b *Brain) ruleTrade(now time.Time) (Action, bool) {
 // acceptTrade decides a request of the player partner: declined in store
 // mode, an opening included (the server forbids it), in combat, from a player out of sight, and
 // unless the partner is exempt, within Every of its last accepted request
-// or with no goods for sale.
+// (but for a partner with an agreed price in a valuables round) or with no
+// goods for sale, a valuable counting as goods in a round (valuableGoods).
 func (b *Brain) acceptTrade(partner int32, now time.Time) bool {
 	w, p := b.world, &b.persona.Trade
 	if b.store.active() || w.Self.StoreType != 0 || w.Self.InCombat {
@@ -357,15 +365,19 @@ func (b *Brain) acceptTrade(partner int32, now time.Time) bool {
 	if p.exempt(w, partner) {
 		return true
 	}
-	if last, ok := b.tradedAt[partner]; ok && now.Sub(last) < p.Every {
+	if last, ok := b.tradedAt[partner]; ok && now.Sub(last) < p.Every && !b.agreedDeal(partner) {
 		return false
 	}
-	_, ok := b.tradeGoods(b.inventoryRows())
+	rows := b.inventoryRows()
+	if _, ok := b.tradeGoods(rows); ok {
+		return true
+	}
+	_, _, ok := b.valuableGoods(partner, rows)
 	return ok
 }
 
 // tradeStep is the bot's next move in its open trade. It offers its goods,
-// confirms once the partner's adena covers their price and the partner
+// in a valuables round a valuable first (valuableGoods), confirms once the partner's adena covers their price and the partner
 // stands within range, and cancels a trade that cannot settle: timed out,
 // the bot in combat, an item refused, or the offers locked before the bot
 // offered or short of the price.
@@ -401,7 +413,11 @@ func (b *Brain) tradeStep(now time.Time) Action {
 			if t.added {
 				return Action{}
 			}
-			goods, ok := b.tradeGoods(t.Offerable)
+			goods, k, ok := b.valuableGoods(t.PartnerID, t.Offerable)
+			t.valuable, t.key = ok, k
+			if !ok {
+				goods, ok = b.tradeGoods(t.Offerable)
+			}
 			if !ok {
 				return tradeCancelAction()
 			}
@@ -469,10 +485,31 @@ func (b *Brain) tradePrice(it Item) (int32, bool) {
 }
 
 // tradePaid reports whether the partner's adena covers the price of the
-// bot's offer.
+// bot's offer (tradeDue).
 func (b *Brain) tradePaid() bool {
+	var paid int64
+	for _, it := range b.world.Trade.Other {
+		if it.TemplateID == adenaID {
+			paid += int64(it.Count)
+		}
+	}
+	price := b.tradeDue()
+	return price > 0 && paid >= price
+}
+
+// tradeDue is the price of the bot's offer: of a valuable its unit price
+// to the partner (valuableUnit) times the units offered, of other goods
+// their trade prices (tradePrice).
+func (b *Brain) tradeDue() int64 {
 	t := &b.world.Trade
-	var price, paid int64
+	var price int64
+	if t.valuable {
+		var units int64
+		for _, own := range t.Own {
+			units += int64(own.Count)
+		}
+		return b.valuableUnit(t.PartnerID, t.key) * units
+	}
 	for _, own := range t.Own {
 		it, ok := b.world.Inventory.Items[own.ObjectID]
 		if !ok {
@@ -481,12 +518,7 @@ func (b *Brain) tradePaid() bool {
 		unit, _ := b.tradePrice(it)
 		price += int64(unit) * int64(own.Count)
 	}
-	for _, it := range t.Other {
-		if it.TemplateID == adenaID {
-			paid += int64(it.Count)
-		}
-	}
-	return price > 0 && paid >= price
+	return price
 }
 
 // inTradeRange reports whether the player partner is in sight and within
@@ -521,7 +553,12 @@ func (b *Brain) tradeSent(a Action, now time.Time) {
 		t.added = true
 	case actTradeConfirm:
 		t.confirmed = true
+		if t.valuable {
+			t.sale = b.tradeDue()
+		}
 	case actTradeCancel:
 		t.cancelAt = now
+	case actTradeRequest:
+		b.inviteSent(a.object, now)
 	}
 }

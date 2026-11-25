@@ -11,7 +11,7 @@ The trade rule (`trade.go`) learns valuables:
   rule;
 - `tradePrice` of a valuable is the agreed price, else the partner's current price, else the ask;
   `tradePaid` confirms only once the partner's adena covers it, so the window is a haggle too. As
-  today (`tradeStep`, `trade.go:409-413`) a partner who stays short gets the cancel at `Timeout`, one
+  today (`tradeStep`, `trade.go:426-431`) a partner who stays short gets the cancel at `Timeout`, one
   who confirms short gets it at once (the confirm locks the offers below the price).
 
 ## Asking for a trade

@@ -348,11 +348,14 @@ visits the Newbie Helper for buffs (levels 8-24).
 
 **trade defaults** (every persona, configurable):
 
-- trades are fixed-price sales of the bot's own goods for adena; a GM is exempt;
+- trades are fixed-price sales of the bot's own goods for adena, but a valuable in the merchant's
+  round, haggled between ask and floor (D32, `docs/valuables/trades.md`); a GM is exempt;
 - confirm only after `TradeOtherAdd` shows enough adena, and only within 150 units of the partner
   (the server requires it); offers lock at the first confirm and requests expire after 15 s;
 - never offer equipped or quest items; refuse incoming items that push weight above 50 %;
-- rate-limit trade requests per partner; no trading while in store mode (the server forbids it).
+- rate-limit trade requests per partner; the bot sends none but the merchant's valuables round, one
+  per whisperer a round, one open at a time (D32, `docs/valuables/trades.md#asking-for-a-trade`); no
+  trading while in store mode (the server forbids it).
 
 Tunables are flags until a persona needs a file.
 
