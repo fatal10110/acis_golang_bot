@@ -139,7 +139,7 @@ func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
 // members (fitBand): the pack bounds stay the bot's own.
 func (b *Brain) spotFitsBand(s *datapack.Spot, lo, hi int, now time.Time) bool {
 	self := &b.world.Self
-	return b.persona.Spots.fitsBand(s, lo, hi) && !b.spot.pack.covers(s, int(self.Level), self.RunSpeed, now) && b.packFits(s)
+	return b.persona.Spots.fitsBand(s, lo, hi) && !b.spot.pack.covers(s, int(self.Level), self.RunSpeed, now) && b.packFits(s, now)
 }
 
 // lowerFits reports whether s fits the bot at now as a fallback (claimLower):
@@ -150,7 +150,7 @@ func (b *Brain) spotFitsBand(s *datapack.Spot, lo, hi int, now time.Time) bool {
 func (b *Brain) lowerFits(s *datapack.Spot, now time.Time) bool {
 	self := &b.world.Self
 	level := int(self.Level)
-	return s.MaxLevel < level-b.persona.Spots.Above && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s)
+	return s.MaxLevel < level-b.persona.Spots.Above && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s, now)
 }
 
 // packBound is the pack a death at one taught the bot to pass over
@@ -272,7 +272,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || v.lower || b.outleveled() || b.misfit() || b.overRisk() || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || v.lower || b.outleveled() || b.misfit() || b.overRisk(now) || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.farming() {
@@ -453,9 +453,9 @@ func (b *Brain) outleveled() bool {
 // in or its potions ran out: it looks for one that fits, of its level, else
 // a trip, else the highest under its level window (claimLower), and keeps
 // the one it holds with none.
-func (b *Brain) overRisk() bool {
+func (b *Brain) overRisk(now time.Time) bool {
 	v := &b.spot
-	return v.held && !b.packFits(&b.cfg.Spots.spots[v.idx])
+	return v.held && !b.packFits(&b.cfg.Spots.spots[v.idx], now)
 }
 
 // pickSpot claims a spot that fits the bot's level, is not avoided and that
