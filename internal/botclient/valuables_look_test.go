@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -83,6 +84,7 @@ func TestValuablesLedgerLook(t *testing.T) {
 	t.Run("reconnect", testLookReconnect)
 	t.Run("marks", testLookMarks)
 	t.Run("follow", testLookFollow)
+	t.Run("combat", testLookCombat)
 }
 
 // testLookLooks: a fresh session's first town visit looks with nothing
@@ -312,5 +314,27 @@ func testLookFollow(t *testing.T) {
 	}
 	if rule, a := b.decide(now.Add(time.Second)); rule != "valuables" || a.kind != actMove || !b.wh.req.Look {
 		t.Errorf("next town visit: rule %q action %d request %+v, want the look walking to the keeper", rule, a.kind, b.wh.req)
+	}
+}
+
+// testLookCombat: in combat on the way to the keeper the look holds, its
+// request kept, and lets rule valuables go; out of combat it steps the
+// same request again.
+func testLookCombat(t *testing.T) {
+	b := newLookBrain(t, map[int32][]Point{keeperNPC: {{X: 2000}}}, nil)
+	runTrainerSteps(t, b, []trainerStep{{name: "walk to the keeper", wantRule: "valuables", wantKind: actMove}})
+	req, keeper, anchor := b.wh.req, b.wh.v, b.look.anchor
+	b.world.Self.InCombat = true
+	if _, ok := b.ruleValuables(at(time.Second)); ok {
+		t.Fatal("rule valuables matched in combat")
+	}
+	if !b.wh.running || b.look.phase != lookRunning || !reflect.DeepEqual(b.wh.req, req) {
+		t.Fatalf("in combat: errand running %v phase %d request %+v; want the look held, request %+v", b.wh.running, b.look.phase, b.wh.req, req)
+	}
+	b.world.Self.InCombat = false
+	rule, _ := b.decide(at(2 * time.Second))
+	if rule != "valuables" || !b.wh.running || !reflect.DeepEqual(b.wh.req, req) || b.wh.v.npcID != keeper.npcID || b.wh.v.at != keeper.at || b.look.anchor != anchor {
+		t.Errorf("out of combat: rule %q running %v request %+v keeper %d at %v anchor %v; want rule valuables stepping request %+v at keeper %d at %v, anchor %v",
+			rule, b.wh.running, b.wh.req, b.wh.v.npcID, b.wh.v.at, b.look.anchor, req, keeper.npcID, keeper.at, anchor)
 	}
 }
