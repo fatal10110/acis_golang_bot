@@ -62,13 +62,19 @@ type SpotPolicy struct {
 	// never finds one crowded.
 	Crowd    int
 	AvoidFor time.Duration
+	// Idle is how long a bot at its spot may go out of combat with no farm
+	// target before it moves on and avoids the spot for AvoidFor: other
+	// players take every monster there, or none comes within reach (#360).
+	// 0 never moves on.
+	Idle time.Duration
 	// DeathAvoid is how long a bot that died holding a spot, at it or on
 	// its way there, avoids that spot: one whose packs killed it once
 	// likely kill it again, and it would walk straight back after the
 	// respawn (#258). 0 never avoids one.
 	DeathAvoid time.Duration
 	// Leash is how far from the spot's centre the bot may end a fight
-	// before it walks back.
+	// before it walks back, and how far from it a monster is a farm target;
+	// inside the spot's territory both hold however far it reaches (#447).
 	Leash int32
 	// PackShare widens a death's DeathAvoid to the spots like the one the
 	// bot died holding, when that one's aggressive monsters run in a pack
@@ -93,13 +99,14 @@ type SpotPolicy struct {
 // past level 5, leaving at five levels over; spread over every spot that
 // fits within twice the newbie zone's reach, sharing full ones rather than
 // waiting (#137) and farming beside them past their limit (#142); a death
-// at a pack passes over its like (#281). The model bound takes the build's
+// at a pack passes over its like (#281); five minutes at a spot with
+// nothing to fight moves it on (#360). The model bound takes the build's
 // margin (Margin 0).
 func defaultSpotPolicy() SpotPolicy {
 	return SpotPolicy{
 		Below: 2, AggroAbove: 0, Above: 3, Newbie: 5, Outlevel: 5,
 		MaxTravel: 20000, Wander: 40000, Overflow: true, Beside: true,
-		Crowd: 4, AvoidFor: 10 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
+		Crowd: 4, AvoidFor: 10 * time.Minute, Idle: 5 * time.Minute, DeathAvoid: 30 * time.Minute, Leash: 1500,
 		PackShare: 0.8,
 	}
 }
@@ -198,6 +205,9 @@ type spotVisit struct {
 	at     Point
 	// arrived is set once the bot reached the spot's centre.
 	arrived bool
+	// idleSince is when the bot's idle stretch at the spot began, zero
+	// outside one, and idleSeen the last decision in it (idleOut).
+	idleSince, idleSeen time.Time
 	// retryAt is when the bot may look for a spot again after finding none.
 	retryAt time.Time
 	// avoid are the spots the bot moved on from, until a time.
@@ -213,11 +223,12 @@ func (v *spotVisit) farming() bool { return v.held || v.beside }
 // ruleSpot is a rule 9 errand ahead of the persona's goal: with a spot
 // registry, the bot claims a fitting spot it can walk to (pickSpot), walks
 // there through the walker, moves on when it finds the spot crowded, walks
-// back when a fight left it beyond the leash (not while it walks around to
-// a farm target, farmWalking), and picks a new spot once it
-// outlevels its own or, sharing one past its cap, every spotRetry. At its
-// spot it leaves the turn to rule "farm". A bot holding none claims none
-// while the town preparation gate holds it (preparing).
+// back when a fight left it beyond the leash and outside the spot's
+// territory (not while it walks around to a farm target, farmWalking), and
+// picks a new spot once it outlevels its own or, sharing one past its cap,
+// every spotRetry. At its spot it leaves the turn to rule "farm", which
+// moves it on after Idle with nothing to fight. A bot holding none claims
+// none while the town preparation gate holds it (preparing).
 //
 // Every move is the walker's (goTo): one MoveBackwardToLocation per checked
 // segment through the frame pacer (gateNone). A walk that ends unreachable
@@ -240,8 +251,8 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	if v.arrived {
-		leash := int64(b.persona.Spots.Leash)
-		if horizontal2(s.Position(now), v.at) <= leash*leash || s.Moving(now) || b.farmWalking(now) {
+		leash, pos := int64(b.persona.Spots.Leash), s.Position(now)
+		if horizontal2(pos, v.at) <= leash*leash || inTerritory(&r.spots[v.idx], pos) || s.Moving(now) || b.farmWalking(now) {
 			return Action{}, false
 		}
 	}
@@ -259,7 +270,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	if v.arrived {
 		return Action{}, false
 	}
-	v.arrived = true
+	v.arrived, v.idleSince = true, time.Time{}
 	b.anchor = s.Position(now)
 	if b.crowded(v.at, now) {
 		b.moveOn(now, b.persona.Spots.AvoidFor)
@@ -589,4 +600,5 @@ func (b *Brain) leaveSpot() {
 		b.cfg.Spots.leaveBeside(v.idx)
 	}
 	v.idx, v.held, v.beside, v.at, v.arrived = 0, false, false, Point{}, false
+	v.idleSince, v.idleSeen = time.Time{}, time.Time{}
 }

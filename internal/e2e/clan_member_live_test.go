@@ -91,9 +91,9 @@ func TestLiveClanMember(t *testing.T) {
 		t.Fatal(err)
 	}
 	spots := botclient.NewSpotRegistry(dp.Spots(), 1)
-	centres := map[string]botclient.Point{}
+	byName := map[string]datapack.Spot{}
 	for _, s := range dp.Spots() {
-		centres[s.Maker] = botclient.Point{X: s.Center.X, Y: s.Center.Y, Z: s.Z}
+		byName[s.Maker] = s
 	}
 	gm := enterGM(t, ctx, tg)
 	board := botclient.NewCraftBoard()
@@ -185,7 +185,7 @@ func TestLiveClanMember(t *testing.T) {
 
 	// First trip: the visit deposits the spare Saber and the ore and posts
 	// the order; the board credits the member nothing yet.
-	gave := spareSaber(t, ctx, gm, member, centres, func() { noteMember(); awake() })
+	gave := spareSaber(t, ctx, gm, member, byName, func() { noteMember(); awake() })
 	untilServedBy(t, ctx, "the member's first visit: a deposit and a Soulshot D order", time.Now().Add(visitBound), member.watch, memberRefused(member.watch), func() string {
 		noteMember()
 		awake()
@@ -220,7 +220,7 @@ func TestLiveClanMember(t *testing.T) {
 	}
 
 	// Second trip: the visit withdraws the credited shots.
-	gave = spareSaber(t, ctx, gm, member, centres, func() { noteMember(); awake() })
+	gave = spareSaber(t, ctx, gm, member, byName, func() { noteMember(); awake() })
 	var took time.Time
 	untilServedBy(t, ctx, "the member's second visit withdrawing its shots", time.Now().Add(tripGap+visitBound), member.watch, memberRefused(member.watch), func() string {
 		noteMember()
@@ -424,18 +424,20 @@ func noteChanges(t *testing.T, who string, line func() string) func() {
 }
 
 // spareSaber waits up to spotArrival for the member at its spot, within its
-// leash of the centre (centres, by spot name), calling note on every poll,
-// has the GM give it a spare Saber there, and brings the GM back to the
-// village; it returns when the GM gave it. The member need not be farming:
-// on a spot other players farm bare it idles there (#360), and the gift's
-// weight starts its trip all the same (rule "supply" runs ahead of "farm").
-func spareSaber(t *testing.T, ctx context.Context, gm *GMClient, member *farmer, centres map[string]botclient.Point, note func()) time.Time {
+// leash of the centre or inside its territory (atSpot; byName holds the
+// spots by name), calling note on every poll, has the GM give it a spare
+// Saber there, and brings the GM back to the village; it returns when the
+// GM gave it. The member need not be farming: on a spot other players farm
+// bare it idles there up to SpotPolicy.Idle before it moves on (#360), and
+// the gift's weight starts its trip all the same (rule "supply" runs ahead
+// of "farm").
+func spareSaber(t *testing.T, ctx context.Context, gm *GMClient, member *farmer, byName map[string]datapack.Spot, note func()) time.Time {
 	t.Helper()
 	leash := int64(memberPersona().Spots.Leash)
 	untilBy(t, ctx, member.name+" at its spot", time.Now().Add(spotArrival), func() string {
 		note()
 		st := member.bot.Status()
-		if c, ok := centres[st.Spot]; ok && within(st.Position, c, leash) {
+		if sp, ok := byName[st.Spot]; ok && atSpot(st.Position, sp, leash) {
 			return ""
 		}
 		return fmt.Sprintf("rule %q, spot %q, walk %q at %v", st.Rule, st.Spot, st.Walk, st.Position)
