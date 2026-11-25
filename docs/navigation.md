@@ -987,6 +987,10 @@ unreachable (with a reason).
     destination at warn level (`nav desync`), so a run names the leg its check got wrong, and
     replans from the server's origin. If the segment crosses a door cell, it counts
     `nav_door_replan_total` instead, which does not count toward unreachable.
+  - A segment starts where the server holds the bot. A talk click in reach answers with a
+    `MoveToPawn` from the player's current location (`targeting.go` `thinkInteract`), and the bot
+    stands exactly there, not on its own estimate of the approach's end: a cell off on a long
+    segment, the bot's line and the server's cross other cells (#434).
   - After repeated blocked stops or desyncs on one route, the walker ends with status
     `unreachable: blocked` or `unreachable: desync` and shows it in the status snapshot, instead
     of looping.
