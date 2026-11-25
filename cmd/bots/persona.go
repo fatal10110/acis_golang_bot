@@ -54,10 +54,12 @@ var presets = []preset{
 
 // damagePersona is the farmer and merchant presets' persona: the default
 // one in the Damage role, which farms alone and takes its race's damage
-// lines (docs/strategy.md, Design sections 6 and 10, D21).
+// lines (docs/strategy.md, Design sections 6 and 10, D21), and picks up
+// any ground item, not only what fits it (#435).
 func damagePersona() botclient.Persona {
 	p := botclient.DefaultPersona()
 	p.Role = botclient.RoleDamage
+	p.Loot.Ground = botclient.GroundAny
 	return p
 }
 
@@ -112,6 +114,8 @@ type shared struct {
 	claims *botclient.PartyClaims
 	auth   *botclient.Authority
 	board  *botclient.CraftBoard
+	// ground are the ground items the bots are after (#435).
+	ground *botclient.GroundClaims
 	// nav is the navigation the walking presets walk on.
 	nav *botclient.Nav
 	// storeBudget is a merchant's store budget per session.
@@ -124,12 +128,13 @@ type shared struct {
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
 // presets get the spot registry, only merchants the store registry; every
-// preset gets the craft board, and the farmer, support and merchant presets the
+// preset gets the craft board and the ground item claims, and the farmer,
+// support and merchant presets the
 // clan member option that orders from it (preset.member). With
 // the travel map the persona drinks and shoots the datapack's healing
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
-	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board}
+	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board, Ground: s.ground}
 	cfg.Persona.ClanMember = p.member
 	if p.walks {
 		cfg.Nav = s.nav

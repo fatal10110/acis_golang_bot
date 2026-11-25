@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"cmp"
 	"maps"
 	"slices"
 	"time"
@@ -25,6 +26,30 @@ const (
 	// stack it already asked to drop: a refused drop answers a message or
 	// nothing (the server's config_gates.go and inventory.go).
 	dropRetry = 30 * time.Second
+	// lootGrace is how long after the bot first sees a ground item it did
+	// not fight for it leaves the item alone (LootPolicy.Ground). The server
+	// locks a kill's drops to the killer and their party for 15 s
+	// (regularLootProtection, data/manager/killrewards.go) and announces
+	// neither the owner nor the lift, so an item the bot did not see fall
+	// may still be locked; a player who dropped an item has as long to take
+	// it back. A raid boss's drops stay locked for 300 s: a click on one
+	// costs the item's Timeout before the bot gives it up.
+	lootGrace = 15 * time.Second
+)
+
+// GroundLoot is which ground items the bot did not fight for it picks up
+// (LootPolicy.Ground).
+type GroundLoot uint8
+
+const (
+	// GroundNone takes only the drops of the creatures the bot fought.
+	GroundNone GroundLoot = iota
+	// GroundFit takes the items the bot would keep rather than sell
+	// (Brain.keeps: adena, its potions, shots and arrows, its supplies and
+	// keep set) and the gear that beats what it wears (Brain.beats).
+	GroundFit
+	// GroundAny takes any item: the farmer's loot.
+	GroundAny
 )
 
 // partyLootFindersKeepers is the party loot rule under which the picker
@@ -58,6 +83,11 @@ type LootPolicy struct {
 	// items are never dropped.
 	DropAbove int
 	Junk      []int32
+	// Ground queues, besides the drops of the creatures the bot fought, the
+	// other ground items in Radius the bot picks up (#435), lootGrace after
+	// it first sees them: none, those that fit the bot, or any. Its own
+	// drops and Junk are never taken.
+	Ground GroundLoot
 }
 
 // defaultLootPolicy keeps the load under the server's half-speed band at
@@ -66,7 +96,7 @@ type LootPolicy struct {
 func defaultLootPolicy() LootPolicy {
 	return LootPolicy{
 		Pickup: true, Radius: 1000, Timeout: 15 * time.Second, LeaveFindersKeepers: true,
-		StopAbove: 65, DropAbove: 65,
+		StopAbove: 65, DropAbove: 65, Ground: GroundFit,
 	}
 }
 
@@ -181,6 +211,11 @@ type lootQueue struct {
 	// standFor (0 for none).
 	stand    Point
 	standFor int32
+	// ground are the ground items in sight the bot did not fight for, not
+	// queued yet, and when each may be (lootGrace).
+	ground map[int32]time.Time
+	// claimed is the item the bot holds a GroundClaims claim on, 0 for none.
+	claimed int32
 }
 
 // next drops the head items that left the ground or ran out of time and
@@ -246,8 +281,16 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 		case e.TargetID:
 			b.fought(e.CasterID, now)
 		}
+	case SpawnItem:
+		b.groundSeen(e.Item.ObjectID, now)
+	case GetItem:
+		delete(b.loot.ground, e.ObjectID)
+		b.cfg.Ground.drop(e.ObjectID)
 	case DropItem:
 		if !b.lootable(e, now) {
+			if e.DropperID != b.world.Self.ObjectID {
+				b.groundSeen(e.Item.ObjectID, now)
+			}
 			return
 		}
 		// Items gone from the ground leave the queue, which bounds it by
@@ -303,11 +346,93 @@ func (b *Brain) lootable(e DropItem, now time.Time) bool {
 	if t, ok := b.loot.fought[e.DropperID]; !ok || now.Sub(t) > lootFoughtFor {
 		return false
 	}
-	if pt := &w.Party; p.LeaveFindersKeepers && pt.In() && pt.LeaderID != w.Self.ObjectID && pt.Loot == partyLootFindersKeepers {
+	if b.leavesLoot() {
 		return false
 	}
 	r := int64(p.Radius)
 	return dist2(w.Self.Position(now), e.Item.Pos) <= r*r
+}
+
+// leavesLoot reports whether the policy leaves the loot alone: the bot is
+// a member, not the leader, of a finders keepers party.
+func (b *Brain) leavesLoot() bool {
+	pt := &b.world.Party
+	return b.persona.Loot.LeaveFindersKeepers && pt.In() && pt.LeaderID != b.world.Self.ObjectID && pt.Loot == partyLootFindersKeepers
+}
+
+// groundSeen records ground item id, which the bot did not fight for, in
+// sight at now: lootGrace on, groundScan may queue it. Items that left the
+// ground leave the record, which bounds it by what lies in sight.
+func (b *Brain) groundSeen(id int32, now time.Time) {
+	if p := &b.persona.Loot; !p.Pickup || p.Ground == GroundNone {
+		return
+	}
+	l := &b.loot
+	if l.ground == nil {
+		l.ground = make(map[int32]time.Time)
+	}
+	maps.DeleteFunc(l.ground, func(id int32, _ time.Time) bool {
+		_, ok := b.world.Ground[id]
+		return !ok
+	})
+	if _, ok := l.ground[id]; !ok {
+		l.ground[id] = now.Add(lootGrace)
+	}
+}
+
+// groundScan queues the recorded ground items (groundSeen) whose grace is
+// over and that lie within the loot radius, those the policy takes
+// (groundTakes) in the order their grace ended; the others leave the
+// record. One out of the radius stays recorded while it is in sight.
+func (b *Brain) groundScan(now time.Time) {
+	p, w, l := &b.persona.Loot, b.world, &b.loot
+	if len(l.ground) == 0 || !p.Pickup || p.Ground == GroundNone || b.leavesLoot() {
+		return
+	}
+	var due []int32
+	from, r := w.Self.Position(now), int64(p.Radius)
+	for id, at := range l.ground {
+		it, ok := w.Ground[id]
+		switch {
+		case !ok:
+			delete(l.ground, id)
+		case now.Before(at) || dist2(from, it.Pos) > r*r:
+		default:
+			due = append(due, id)
+		}
+	}
+	slices.SortFunc(due, func(x, y int32) int {
+		if c := l.ground[x].Compare(l.ground[y]); c != 0 {
+			return c
+		}
+		return cmp.Compare(x, y)
+	})
+	for _, id := range due {
+		delete(l.ground, id)
+		if !slices.Contains(l.items, id) && b.groundTakes(w.Ground[id]) {
+			l.items = append(l.items, id)
+		}
+	}
+}
+
+// groundTakes reports whether the policy takes ground item it, which the
+// bot did not fight for (LootPolicy.Ground): never its Junk.
+func (b *Brain) groundTakes(it GroundItem) bool {
+	p := &b.persona.Loot
+	if slices.Contains(p.Junk, it.TemplateID) {
+		return false
+	}
+	switch p.Ground {
+	case GroundAny:
+		return true
+	case GroundFit:
+		if b.keeps(it.TemplateID) {
+			return true
+		}
+		w := b.worn()
+		return b.beats(it.TemplateID, &w)
+	}
+	return false
 }
 
 // lootQueued reports whether a queued item is still waiting at now.
@@ -316,14 +441,24 @@ func (b *Brain) lootQueued(now time.Time) bool {
 }
 
 // nextLoot is the queued item to pick up at now, 0 for none: the head of
-// the queue, giving up the ones too heavy to carry (lootFits).
+// the queue, after the ground items due (groundScan), giving up the ones
+// too heavy to carry (lootFits) and those another bot of the process is
+// after (GroundClaims). The bot claims the item it returns and gives back
+// the one it held before.
 func (b *Brain) nextLoot(now time.Time) int32 {
+	b.groundScan(now)
+	l, self := &b.loot, b.world.Self.ObjectID
 	for {
-		id := b.loot.next(b.world.Ground, b.persona.Loot.Timeout, now)
-		if id == 0 || b.lootFits(b.world.Ground[id]) {
-			return id
+		id := l.next(b.world.Ground, b.persona.Loot.Timeout, now)
+		if id != 0 && (!b.lootFits(b.world.Ground[id]) || !b.cfg.Ground.claim(id, self, now)) {
+			l.skip()
+			continue
 		}
-		b.loot.skip()
+		if l.claimed != id {
+			b.cfg.Ground.release(l.claimed, self)
+			l.claimed = id
+		}
+		return id
 	}
 }
 

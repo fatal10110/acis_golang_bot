@@ -192,7 +192,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Log:        log,
 	}
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
-	sh := shared{claims: botclient.NewPartyClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters}
+	sh := shared{claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters}
 	// The navigation opens before the spots: the registry drops the spots in
 	// water (loadSpots).
 	if o.geo.set() {

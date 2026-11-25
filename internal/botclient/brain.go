@@ -96,6 +96,10 @@ type BrainConfig struct {
 	// brain gives its claim back when its party ends or its leader changes,
 	// and when it stops. Nil claims no leader.
 	PartyClaims *PartyClaims
+	// Ground, when set, are the ground items the bots of the process are
+	// after (GroundClaims), shared by every bot of the process, so no two
+	// chase one item. Nil leaves that to the server.
+	Ground *GroundClaims
 	// Nav, when set, is the navigation data the bot walks on, shared by
 	// every bot of the process (D13). Nil walks nowhere: only the
 	// non-walking personas run without it (D13a).
@@ -569,7 +573,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 			b.leaderHit(e.CasterID, e.TargetID, now)
 			b.lootEvent(ev, now)
-		case DropItem:
+		case DropItem, SpawnItem, GetItem:
 			b.lootEvent(ev, now)
 		case Die:
 			// A dead target ends the attack in flight: there is nothing
