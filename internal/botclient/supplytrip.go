@@ -23,13 +23,18 @@ const (
 	// causeRunOut: a consumable runs out within Supply.ReturnMinutes of
 	// fighting.
 	causeRunOut
-	// causePotions: the HP potions the bot carried at its spot are gone.
+	// causePotions: the HP potions the bot carried at its spot (a join
+	// member: by its leader) are gone.
 	causePotions
 	// causeLoad: the load is past Supply.ReturnLoad and a town visit
 	// sheds at least Supply.ShedMin of the limit.
 	causeLoad
 	// causeGear: the adena past the gear floor pays the gear goal.
 	causeGear
+	// causeLeader: the bot leader of a join member teleported away (a
+	// restart, its own supply trip), the member carrying a Scroll of Escape
+	// with nothing attacking it (docs/parties/members.md, "Events").
+	causeLeader
 )
 
 // supplyTrip is a farmer's trip home to restock (rule "supply", D16,
@@ -316,17 +321,63 @@ func (b *Brain) safeToEscape(now time.Time) bool {
 	return true
 }
 
-// supplyDue is the cause of a supply trip due at now, causeNone for none:
-// read every supplyCheck at the bot's spot, never within supplyTripGap of
-// the last trip.
+// supplyDue is the cause of a supply trip due at now, causeNone for none,
+// never within supplyTripGap of the last trip: the bot leader of a join
+// member with no spot teleported away (leaderTeleported); else the triggers
+// (supplyCause), read every supplyCheck at the bot's spot, or for a join
+// member of its bot party within GatherRange of its leader (nearSlotLeader).
 func (b *Brain) supplyDue(now time.Time) tripCause {
 	v := &b.supplyTrip
-	if b.cfg.Travel == nil || !b.spot.farming() || !b.spot.arrived || now.Before(v.checkAt) ||
-		!v.endedAt.IsZero() && now.Sub(v.endedAt) < supplyTripGap {
+	if b.cfg.Travel == nil || !v.endedAt.IsZero() && now.Sub(v.endedAt) < supplyTripGap {
+		return causeNone
+	}
+	if b.leaderTeleported(now) {
+		return causeLeader
+	}
+	if !(b.spot.farming() && b.spot.arrived) && !b.nearSlotLeader(now) || now.Before(v.checkAt) {
 		return causeNone
 	}
 	v.checkAt = now.Add(supplyCheck)
 	return b.supplyCause()
+}
+
+// slotMember reports whether the bot is a join member of its bot party
+// with no spot farmed: the party a member's supply trip answers for
+// (docs/parties/members.md, "Events").
+func (b *Brain) slotMember() bool {
+	l := b.cfg.link
+	return l != nil && l.party.Kind == CommandJoin && b.inBotParty() && !b.leading() && !b.spot.farming()
+}
+
+// leaderTeleported reports whether a join member's bot leader teleported
+// away (leaderWatch.teleported, not seen since, the bot not yet landed) and
+// the member can recall at now: it carries a Scroll of Escape and nothing
+// attacks it (safeToEscape). Without either it follows the leader's last
+// reported position instead (rule "follow").
+func (b *Brain) leaderTeleported(now time.Time) bool {
+	v := &b.lead
+	if !b.slotMember() || v.lost.IsZero() || !v.teleported || v.seen || v.home || v.name != slotLeader(b.cfg.link.party) {
+		return false
+	}
+	if _, ok := b.world.Inventory.ByTemplate(scrollOfEscape); !ok {
+		return false
+	}
+	return b.safeToEscape(now)
+}
+
+// nearSlotLeader reports whether a join member of its bot party is within
+// LeadPolicy.GatherRange of its leader, in sight or where last reported
+// (PartyMemberPosition): where its triggers are read in place of a spot.
+func (b *Brain) nearSlotLeader(now time.Time) bool {
+	if !b.slotMember() {
+		return false
+	}
+	lead, ok := b.leader(b.world.Party.LeaderID, now)
+	if !ok {
+		return false
+	}
+	r := int64(b.persona.Lead.withDefaults().GatherRange)
+	return dist2(b.world.Self.Position(now), lead.pos) <= r*r
 }
 
 // supplyCause is the first trigger of a supply trip that holds

@@ -88,9 +88,10 @@ func (v *npcVisit) page(ev NpcHtmlMessage) bool {
 
 // pickVisit is a visit to the nearest NPC of the templates npcs in sight,
 // else to the nearest of their spawns within reach (from the travel map),
-// reporting whether there is one. A party member stays with its party and
-// a bot told to follow stays with its commander: neither walks to an NPC
-// out of sight.
+// reporting whether there is one. A member of a party other than its own
+// bot party (inBotParty) stays with its party and a bot told to follow
+// stays with its commander: neither walks to an NPC out of sight
+// (docs/parties/members.md, "Errands in a bot party").
 func (b *Brain) pickVisit(npcs []int32, reach int32, now time.Time) (npcVisit, bool) {
 	from := b.world.Self.Position(now)
 	var best npcVisit
@@ -103,7 +104,7 @@ func (b *Brain) pickVisit(npcs []int32, reach int32, now time.Time) (npcVisit, b
 			}
 		}
 	}
-	if !best.active() && b.cfg.Travel != nil && !b.world.Party.In() && b.orders.follow == 0 {
+	if !best.active() && b.cfg.Travel != nil && (!b.world.Party.In() || b.inBotParty()) && b.orders.follow == 0 {
 		r := int64(reach) * int64(reach)
 		for _, npcID := range npcs {
 			for _, at := range b.cfg.Travel.spawns[npcID] {
