@@ -14,8 +14,9 @@ import (
 const defaultStoreBudget = 50000
 
 // defaultValuablesBudget is a merchant's -valuables-budget when none is
-// given (D34, docs/valuables/release.md "Valuables budget (D34)").
-const defaultValuablesBudget = 2000000
+// given (D34, docs/valuables/release.md "Valuables budget (D34)"): the
+// default valuable policy's budget, so the default has one source.
+var defaultValuablesBudget = botclient.DefaultValuablePolicy().Budget
 
 // storeOptions are the merchant flags of `bots swarm`: a bot of the
 // merchant preset opens a private sell store of its loot when it stands in

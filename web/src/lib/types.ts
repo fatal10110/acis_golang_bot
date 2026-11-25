@@ -177,6 +177,19 @@ export interface InspectEffect {
   no_end?: boolean;
 }
 
+/** A merchant's held valuable: where its units are, its unsold rounds and the ask of one unit. */
+export interface HeldValuable {
+  id: number;
+  name: string;
+  enchant?: number;
+  place: "carried" | "stored" | "carried, stored";
+  carried: number;
+  stored: number;
+  rounds: number;
+  ask: number;
+  released?: boolean;
+}
+
 export type InspectState = "fresh" | "stale" | "offline" | "unresponsive";
 
 /** An inspect of a bot (GET /api/bots/{account}/inspect): the state alone for an offline or unresponsive bot. */
@@ -187,6 +200,7 @@ export interface Inspection {
   equipment?: WornItem[];
   penalties?: Penalties;
   effects?: InspectEffect[];
+  valuables?: HeldValuable[];
 }
 
 export interface Answer {
