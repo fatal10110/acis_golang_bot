@@ -132,6 +132,14 @@ func (b *Brain) inSlotParty(slot Command) bool {
 	return false
 }
 
+// inBotParty reports whether the bot is in its own bot party: the party its
+// lead slot leads, or the named leader's under a join (inSlotParty). A bot
+// with no slot, or in a player's party, is not.
+func (b *Brain) inBotParty() bool {
+	l := b.cfg.link
+	return l != nil && b.inSlotParty(l.party)
+}
+
 // slotLeader is the leader a join names, its first name.
 func slotLeader(c Command) string {
 	name, _, _ := strings.Cut(c.Arg, " ")
