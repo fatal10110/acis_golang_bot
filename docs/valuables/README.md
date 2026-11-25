@@ -71,7 +71,7 @@ Proposed, awaiting the owner.
   2000000, and one unsold through 3 rounds alone (the only way for one asking more); the cap
   runs before the deposit. Released valuables list at their [floor](whispers.md#prices) (at least
   reference, twice the buy-back): amends the `docs/plan.md` merchant default "price between 1.2 and
-  1.5 times the NPC buy-back price" (line 321).
+  1.5 times the NPC buy-back price" (line 344, amended by V7c).
 - **D34, budget.** A per-session `-valuables-budget`, default 2000000, apart from `-store-budget`;
   valuables are offered and listed while sales are under it, so one sale may pass it by its own
   price.

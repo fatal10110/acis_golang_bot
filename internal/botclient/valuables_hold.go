@@ -50,21 +50,29 @@ func (b *Brain) trackHold(now time.Time) {
 	}
 }
 
-// roundPending reports whether a round is pending at now: roundDue's
-// conditions all hold but its short waits (the ad board, the open, the
-// errand checks, the look not done), and whether it waits on timers only,
-// no errand running. Within RoundGap of the latest start, with the budget
-// spent or no valuable carried none is.
+// roundPending reports whether a round or a release withdrawal is pending
+// at now, and whether it waits on timers only, no errand running
+// (docs/valuables/round.md "The store waits for a pending round"). A round
+// is when roundDue's conditions all hold but its short waits (the ad
+// board, the open, the errand checks, the look not done); none within
+// RoundGap of the latest start or with no valuable carried. A release
+// withdrawal is when releaseDue's hold but the open and the errand checks.
+// With the budget spent neither is.
 func (b *Brain) roundPending(now time.Time) (pending, timers bool) {
 	v, p := b.cfg.valuables, b.persona.Valuables
 	if p == (ValuablePolicy{}) || b.cfg.Travel == nil || v.round.open || b.round.phase != roundIdle {
 		return false, false
 	}
-	if !v.lastStart.IsZero() && now.Sub(v.lastStart) < p.RoundGap || b.valuablesLeft() <= 0 || !v.carried() || !b.tradeReady(now) {
+	if b.valuablesLeft() <= 0 || !b.tradeReady(now) {
 		return false, false
 	}
 	at := b.world.Self.Position(now)
-	if _, ok := b.cfg.Stores.town(at); !ok || !b.privateKeeper(at) || b.cfg.Travel.restartRegion(at.X, at.Y) < 0 {
+	if _, ok := b.cfg.Stores.town(at); !ok || !b.privateKeeper(at) {
+		return false, false
+	}
+	round := (v.lastStart.IsZero() || now.Sub(v.lastStart) >= p.RoundGap) && v.carried() && b.cfg.Travel.restartRegion(at.X, at.Y) >= 0
+	release := b.wh.private.Known && b.look.phase == lookIdle && v.releasedStored()
+	if !round && !release {
 		return false, false
 	}
 	return true, !b.errandRunning()
@@ -123,15 +131,29 @@ func (b *Brain) offRoundDue(now time.Time) bool {
 	return b.cfg.valuables.newFind(b.carriedRows()) && b.lookReady(now)
 }
 
-// startOffRound starts the off-round deposit of every carried valuable,
-// anchored where the bot stands, at the keeper a round's deposit takes.
-// It reports whether the request runs; tried or not, it waits for a new
-// find (queueRound marks the rows).
-func (b *Brain) startOffRound(now time.Time) bool {
-	b.round = sessionRound{anchor: b.world.Self.Position(now), request: b.round.request}
-	if !b.queueRound(roundDeposit, now) {
+// releaseDue reports whether the off-round release withdrawal runs at now
+// (docs/valuables/round-end.md "Off-round errands"): the policy enabled,
+// the session's look done, the valuables budget not spent, a released
+// entry stored, and the look's conditions (lookReady). The ad board never
+// holds it.
+func (b *Brain) releaseDue(now time.Time) bool {
+	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
 		return false
 	}
-	b.round.phase = roundDeposit
+	return b.valuablesLeft() > 0 && b.cfg.valuables.releasedStored() && b.lookReady(now)
+}
+
+// startOffRound starts the off-round errand of phase, anchored where the
+// bot stands, at the keeper a round's request takes: the deposit of every
+// carried valuable, which tried or not waits for a new find (queueRound
+// marks the rows), or the release withdrawal of the released stored ones.
+// It reports whether the request runs.
+func (b *Brain) startOffRound(phase roundPhase, now time.Time) bool {
+	b.round = sessionRound{anchor: b.world.Self.Position(now), request: b.round.request, offRound: true}
+	if !b.queueRound(phase, now) {
+		b.round = sessionRound{request: b.round.request}
+		return false
+	}
+	b.round.phase = phase
 	return true
 }

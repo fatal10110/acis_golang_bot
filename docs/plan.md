@@ -342,7 +342,9 @@ visits the Newbie Helper for buffs (levels 8-24).
   `PrivateSellStoreLimit`); the server seats the character. A teleport closes the store; a sold-out
   store closes on its own, seen as the store type in `UserInfo`;
 - sells loot only, never items NPC shops sell; price between 1.2 and 1.5 times the NPC buy-back price
-  and below the NPC shop price;
+  and below the NPC shop price; valuables the cap released list ahead of the loot at their floor (at
+  least the reference price, twice the buy-back) under the valuables budget (D33, D34,
+  `docs/valuables/release.md`);
 - a process-wide registry keeps spacing between bot stores and at most about 5 bot stores per town;
   a per-bot sales budget per session.
 

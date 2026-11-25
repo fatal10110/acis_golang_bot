@@ -23,13 +23,16 @@ type valuableKey struct {
 
 // valuableEntry is one entry of the valuables ledger
 // (docs/valuables/ledger.md "Entries and units"): what the bot cannot read
-// back (rounds advertised unsold, the current ask) and the units the last
-// decision derived. The release mark lands with the cap that sets it
-// (V7c).
+// back (rounds advertised unsold, the current ask, the release mark) and
+// the units the last decision derived.
 type valuableEntry struct {
 	rounds int
 	// ask is the current ask of one unit.
 	ask int64
+	// released is set by the cap (docs/valuables/release.md "The cap"):
+	// the entry is in no round, its rounds and ask do not step, and it goes
+	// to the store (docs/valuables/ledger.md "Released entries").
+	released bool
 	// carried are the units the bot carries and objects their objects, in
 	// object order; stored the units its private warehouse holds.
 	carried int64
@@ -88,6 +91,10 @@ type valuables struct {
 	// when a deposit of them was last tried, nil before any: the off-round
 	// deposit waits for a valuable picked up since (newFind).
 	deposited map[int32]int32
+	// capDue is set when a round an earlier session left open was cut
+	// after its first line: its cap runs once this session's look is done
+	// (endStaleRound).
+	capDue bool
 }
 
 func newValuables() *valuables {
@@ -109,14 +116,58 @@ func (v *valuables) endRound(now time.Time) {
 	v.talk.ended = now
 }
 
-// carried reports whether an entry has carried units.
+// carried reports whether an entry not released has carried units: what
+// a round starts for (docs/valuables/ledger.md "Released entries").
 func (v *valuables) carried() bool {
 	for _, e := range v.entries {
-		if e.carried > 0 {
+		if e.carried > 0 && !e.released {
 			return true
 		}
 	}
 	return false
+}
+
+// releasedStored reports whether a released entry has stored units: what
+// the release withdrawal takes out (docs/valuables/release.md "Release to
+// the store").
+func (v *valuables) releasedStored() bool {
+	for _, e := range v.entries {
+		if e.stored > 0 && e.released {
+			return true
+		}
+	}
+	return false
+}
+
+// released reports whether entry k is released.
+func (v *valuables) released(k valuableKey) bool {
+	e, ok := v.entries[k]
+	return ok && e.released
+}
+
+// capEntries runs the cap (docs/valuables/release.md "The cap", D33) over
+// every entry once, released or not, counting carried and stored units:
+// all are released when they take more than HoldRows rows; all that each
+// ask at most HoldValue when their asks times units pass HoldValue; and
+// each unsold through MaxRounds rounds, alone.
+func (v *valuables) capEntries(p ValuablePolicy, stackable map[int32]bool) {
+	if v.rows(stackable) > p.HoldRows {
+		for _, e := range v.entries {
+			e.released = true
+		}
+		return
+	}
+	var sum int64
+	for _, e := range v.entries {
+		if e.ask <= p.HoldValue {
+			sum += e.ask * (e.carried + e.stored)
+		}
+	}
+	for _, e := range v.entries {
+		if sum > p.HoldValue && e.ask <= p.HoldValue || e.rounds >= p.MaxRounds {
+			e.released = true
+		}
+	}
 }
 
 // markDeposited records rows, the carried valuables a deposit tries, as
@@ -343,11 +394,13 @@ func (p ValuablePolicy) lowered(ask int64, ref int32, floor int64) int64 {
 // valuables round. Once roundDue holds it opens a round anchored where the
 // bot stands and runs it (roundStep), holding the turn on every decision
 // while it runs, so no later rule walks the bot away. With the budget
-// spent it runs the off-round deposit instead (offRoundDue), holding the
-// turn while it and its walk back run. A round pending on timers only
-// holds the turn with a wait for StoreHold at most (holdTurn).
+// spent it runs the off-round deposit instead (offRoundDue); with no round
+// due and released valuables stored, the off-round release withdrawal
+// (releaseDue); each holds the turn while it and its walk back run. A
+// round or release withdrawal pending on timers only holds the turn with a
+// wait for StoreHold at most (holdTurn).
 //
-// Pacing: the look's, the round's and the off-round deposit's private
+// Pacing: the look's, the round's and the off-round errands' private
 // requests as rule "warehouse"'s (one open per warehouseOpenGap, openDue);
 // the walks' MoveBackwardToLocation segments as every goTo; the ad lines
 // as adTurn's; the trade requests as inviteTurn's; one round per RoundGap;
@@ -362,11 +415,15 @@ func (b *Brain) ruleValuables(now time.Time) (Action, bool) {
 	if b.round.phase == roundIdle && !b.cfg.valuables.round.open {
 		switch {
 		case b.offRoundDue(now):
-			if !b.startOffRound(now) {
+			if !b.startOffRound(roundDeposit, now) {
 				return Action{}, false
 			}
 		case b.roundDue(now):
 			b.startRound(now)
+		case b.releaseDue(now):
+			if !b.startOffRound(roundWithdraw, now) {
+				return Action{}, false
+			}
 		default:
 			return Action{}, b.holdTurn(now)
 		}
