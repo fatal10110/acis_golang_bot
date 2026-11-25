@@ -552,8 +552,9 @@ grocer lists).
   Besides the drops of the creatures it fought, a bot picks up other ground items within
   `Loot.Radius` (`Loot.Ground`, #435), through the same queue, weight cap and timeout. The
   farmer and merchant presets take any item (`GroundAny`); every other persona takes only what
-  it keeps rather than sells (adena, its potions, shots, arrows, supplies and keep set) and gear
-  that beats what it wears (`GroundFit`). None takes its own drops or its `Loot.Junk`. The wire
+  it keeps rather than sells (adena, its potions, shots, arrows, supplies and keep set, and what
+  its keep hook holds, such as a clan crafter's materials) and gear that beats what it wears
+  (`GroundFit`). None takes its own drops or its `Loot.Junk`. The wire
   names no loot owner, and the server lifts its 15 s lock of a kill's drops to the killer
   without a packet (`data/manager/killrewards.go`), so the bot leaves such an item alone for
   15 s after it first sees it. The bots of one process share a claim table (`GroundClaims`), so

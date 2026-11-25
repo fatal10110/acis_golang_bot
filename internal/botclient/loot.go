@@ -45,8 +45,10 @@ const (
 	// GroundNone takes only the drops of the creatures the bot fought.
 	GroundNone GroundLoot = iota
 	// GroundFit takes the items the bot would keep rather than sell
-	// (Brain.keeps: adena, its potions, shots and arrows, its supplies and
-	// keep set) and the gear that beats what it wears (Brain.beats).
+	// (Brain.keepsItem: adena, its potions, shots and arrows, its supplies
+	// and keep set, what the persona's keep hook holds, such as the clan
+	// crafter's materials) and the gear that beats what it wears
+	// (Brain.beats).
 	GroundFit
 	// GroundAny takes any item: the farmer's loot.
 	GroundAny
@@ -426,7 +428,7 @@ func (b *Brain) groundTakes(it GroundItem) bool {
 	case GroundAny:
 		return true
 	case GroundFit:
-		if b.keeps(it.TemplateID) {
+		if b.keepsItem(Item{TemplateID: it.TemplateID, Count: it.Count}) {
 			return true
 		}
 		w := b.worn()

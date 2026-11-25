@@ -51,6 +51,13 @@ func TestLootGround(t *testing.T) {
 		{name: "a fitting persona takes its potions", persona: func(p *Persona) { p.Potions = []int32{1060} }, evs: stray(potion), want: junkDrop},
 		{name: "a fitting persona leaves potions it does not drink", evs: stray(potion)},
 		{
+			name: "a fitting persona takes what its keep hook holds",
+			persona: func(p *Persona) {
+				p.Holds = func(_ *World, it Item) Hold { return Hold{Keep: it.TemplateID == junkTemplate} }
+			},
+			evs: stray(strayDrop), want: junkDrop,
+		},
+		{
 			name: "own kill's drop stays queued first", persona: anyLoot,
 			evs:  append(stray(strayDrop), kill(adenaOnGround)...),
 			want: adenaDrop,
