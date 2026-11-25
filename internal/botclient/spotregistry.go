@@ -118,6 +118,24 @@ func (r *SpotRegistry) claim(order []int) (int, bool) {
 	return 0, false
 }
 
+// claimTiers claims (claim) among the spots of order (sorted by MaxLevel,
+// highest first) one MaxLevel at a time, highest first, so an empty spot
+// outranks a shared one only among spots of one level: a bot under its
+// level window takes the highest spot with room (#446).
+func (r *SpotRegistry) claimTiers(order []int) (int, bool) {
+	for lo := 0; lo < len(order); {
+		hi := lo + 1
+		for hi < len(order) && r.spots[order[hi]].MaxLevel == r.spots[order[lo]].MaxLevel {
+			hi++
+		}
+		if i, ok := r.claim(order[lo:hi]); ok {
+			return i, true
+		}
+		lo = hi
+	}
+	return 0, false
+}
+
 // claimOver takes, past its cap, the spot of order below its limit that
 // its bots fill least for its cap, the first in order on a tie, and
 // reports which; none when every one is at its limit. It is for a bot

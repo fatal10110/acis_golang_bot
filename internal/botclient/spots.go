@@ -571,12 +571,14 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 // window that passes the model (lowerCands) with the highest monsters, the
 // nearest among those: a monster more than 5 levels under its killer cuts
 // its drop and spoil chances by 18 % a level (server item/drop.go
-// LevelPenaltyMultiplier), so the highest that fits gives up least. With
-// every such spot full it shares, past its cap, the one its bots fill least
+// LevelPenaltyMultiplier), so the highest that fits gives up least: it
+// claims level by level (SpotRegistry.claimTiers), so an empty spot is
+// taken before a shared one only among spots of one level. With every such
+// spot full it shares, past its cap, the one its bots fill least
 // (SpotPolicy.Overflow). A bot holding a spot of its level that fits keeps
 // it, and one holding a spot under its level window that fits (a fallback,
-// or the spot it outlevelled) keeps it while none above it fits. It reports
-// whether the bot holds a fallback.
+// or the spot it outlevelled) keeps it until a higher one that fits has
+// room under its cap. It reports whether the bot holds a fallback.
 func (b *Brain) claimLower(here navPoint, now time.Time) bool {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	if v.held && b.spotFits(&r.spots[v.idx], now) {
@@ -599,15 +601,22 @@ func (b *Brain) claimLower(here navPoint, now time.Time) bool {
 		}
 		return cmp.Compare(x.d, y.d)
 	})
-	if held := &r.spots[v.idx]; v.held && b.lowerFits(held, now) && held.MaxLevel >= r.spots[cands[0].i].MaxLevel {
+	// A held fallback that fits is left only for a higher one with room:
+	// never for one as high or lower, nor past a cap, so the bot does not
+	// hop between fallbacks.
+	held := &r.spots[v.idx]
+	keep := v.held && b.lowerFits(held, now)
+	order := make([]int, 0, len(cands))
+	for _, c := range cands {
+		if !keep || r.spots[c.i].MaxLevel > held.MaxLevel {
+			order = append(order, c.i)
+		}
+	}
+	i, ok := r.claimTiers(order)
+	if !ok && keep {
 		v.lower = true
 		return true
 	}
-	order := make([]int, len(cands))
-	for k, c := range cands {
-		order[k] = c.i
-	}
-	i, ok := r.claim(order)
 	if !ok && p.Overflow {
 		i, ok = r.claimOver(order)
 	}

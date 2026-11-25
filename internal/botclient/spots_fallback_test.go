@@ -10,7 +10,8 @@ import (
 // fallbackSpots are a level 14 squire's spots for the fallback (#446):
 // the werewolves and the orcs of its level window (MaxLevel 11 or more),
 // which no potion carries it through (TestPackFitPick), and under it toads
-// of level 9 and 5, which fit, and werewolves marked level 10, which do not.
+// of level 9, 7 and 5, which fit, and werewolves marked level 10, which do
+// not.
 func fallbackSpots() []datapack.Spot {
 	place := func(s datapack.Spot, name string, x, y int32) datapack.Spot {
 		s.Maker, s.Center, s.MaximumNPCs = name, datapack.Point{X: x, Y: y}, 11
@@ -30,6 +31,7 @@ func fallbackSpots() []datapack.Spot {
 		place(toads(5), "toads5", 2000, 0),
 		place(toads(9), "toads9", 0, 6000),
 		place(wolves10, "wolves10", 4000, 0),
+		place(toads(7), "toads7", 2000, 3000),
 	}
 }
 
@@ -127,5 +129,73 @@ func TestSpotFallbackRepick(t *testing.T) {
 		if n := b.cfg.Spots.Held(st.want); n != 1 {
 			t.Fatalf("%s: spot %d held by %d, want 1", st.name, st.want, n)
 		}
+	}
+}
+
+// TestSpotFallbackShared checks the fallback with other bots on the spots
+// (#446): a level 14 squire with no potion takes the highest spot under its
+// window with room, even one shared below its cap over an empty lower one,
+// shares past its cap the one its bots fill least when every one is full
+// (SpotPolicy.Overflow), and keeps a held fallback while the higher ones
+// are full rather than hop to an empty lower one, until one has room.
+func TestSpotFallbackShared(t *testing.T) {
+	const toads5, toads9, toads7 = 2, 3, 5
+	type step struct {
+		after   time.Duration
+		release int // a bot leaving this spot before the step, -1 for none
+		want    int
+	}
+	tests := []struct {
+		name  string
+		held  map[int]int // bots already on each spot
+		steps []step
+	}{
+		{
+			"toads 9 shared below its cap: toads 9",
+			map[int]int{toads9: 1},
+			[]step{{time.Second, -1, toads9}},
+		},
+		{
+			"every fallback at its cap: past the cap on the least filled",
+			map[int]int{toads9: 4, toads7: 3, toads5: 3},
+			[]step{{time.Second, -1, toads7}},
+		},
+		{
+			"toads 9 full: toads 7, kept, then toads 9 with room",
+			map[int]int{toads9: 3},
+			[]step{
+				{time.Second, -1, toads7},
+				{time.Second + spotRetry, -1, toads7},
+				{time.Second + 2*spotRetry, -1, toads7},
+				{time.Second + 3*spotRetry, toads9, toads9},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newSpotBrain(t, 14, fallbackSpots()...)
+			b.persona.Potions = []int32{lesserHealingPotion}
+			setSquire(b, squire14, 0)
+			r := b.cfg.Spots
+			for i, n := range tt.held {
+				for range n {
+					if _, ok := r.claimOver([]int{i}); !ok {
+						t.Fatalf("pre-claim spot %d: full", i)
+					}
+				}
+			}
+			for _, st := range tt.steps {
+				if st.release >= 0 {
+					r.release(st.release)
+				}
+				b.decide(at(st.after))
+				if got := heldSpot(b); got != st.want || !b.spot.lower {
+					t.Fatalf("at %v: spot %d (lower %v), want %d (lower true)", st.after, got, b.spot.lower, st.want)
+				}
+				if n, want := r.Held(st.want), tt.held[st.want]+1; st.release < 0 && n != want {
+					t.Fatalf("at %v: spot %d held by %d, want %d", st.after, st.want, n, want)
+				}
+			}
+		})
 	}
 }
