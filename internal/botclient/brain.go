@@ -315,6 +315,9 @@ type Brain struct {
 	towns []Point
 	// chat is the whisper reply waiting for its time (rule "chat").
 	chat chatReply
+	// whispers are the valuables responder's replies waiting for their
+	// time (rule "chat", whisperHeard).
+	whispers whisperQueue
 	// announce are the craft order lines still to say, in order (rule
 	// "announce"): orders' answers and finished GM orders' clan chat lines,
 	// at most craftCommandCap.
@@ -761,6 +764,7 @@ func (b *Brain) wake(now time.Time) error {
 		if !now.Before(b.chat.at) {
 			b.chat.wake = false
 		}
+		b.whispers.spendWake(now)
 		b.spendWalkWake(now)
 		if b.appearing {
 			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
@@ -821,6 +825,9 @@ func (b *Brain) decisionAt() time.Time {
 	}
 	if b.chat.wake && b.chat.at.Before(t) {
 		t = b.chat.at
+	}
+	if at, ok := b.whispers.wakeAt(); ok && at.Before(t) {
+		t = at
 	}
 	if at, ok := b.walkWake(); ok && at.Before(t) {
 		t = at

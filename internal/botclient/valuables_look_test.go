@@ -102,7 +102,7 @@ func testLookLooks(t *testing.T) {
 			b := newKeeperLookBrain(t)
 			b.persona.Valuables.RoundGap = 24 * time.Hour
 			b.cfg.valuables.openRound(Point{}, t0.Add(-time.Minute))
-			b.cfg.valuables.endRound()
+			b.cfg.valuables.endRound(t0)
 			steps := append(lookSteps(0), trainerStep{
 				name: "answer: walk back", at: 5 * time.Second,
 				events:   []Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}, tt.answer},

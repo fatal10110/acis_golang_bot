@@ -102,7 +102,14 @@ const (
 // line (docs/valuables/ads.md "Lines"). It names none, "", when the first
 // alone does not fit.
 func adText(labels []string) (string, int) {
-	n, units := 0, chatUnits(adHead)+chatUnits(adTail)
+	return listText(adHead, adTail, labels)
+}
+
+// listText is head, the first of labels that fit in chatMaxText UTF-16
+// units with tail, in order and comma-separated, then tail, and how many it
+// names: "" and 0 when the first alone does not fit.
+func listText(head, tail string, labels []string) (string, int) {
+	n, units := 0, chatUnits(head)+chatUnits(tail)
 	for i, l := range labels {
 		u := chatUnits(l)
 		if i > 0 {
@@ -117,7 +124,7 @@ func adText(labels []string) (string, int) {
 	if n == 0 {
 		return "", 0
 	}
-	return adHead + strings.Join(labels[:n], ", ") + adTail, n
+	return head + strings.Join(labels[:n], ", ") + tail, n
 }
 
 // chatUnits is the length of text in UTF-16 units, as the server counts it.
@@ -132,6 +139,12 @@ func chatUnits(text string) int {
 // adEntries are the entries with carried units an ad names, by score V
 // (then template and enchant), highest first.
 func (b *Brain) adEntries() []valuableKey {
+	return b.valuablesByScore(func(e *valuableEntry) bool { return e.carried > 0 })
+}
+
+// valuablesByScore are the entries keep keeps, by score V (then template
+// and enchant), highest first.
+func (b *Brain) valuablesByScore(keep func(*valuableEntry) bool) []valuableKey {
 	m, p := b.cfg.Travel, b.persona.Valuables
 	type scored struct {
 		k valuableKey
@@ -139,7 +152,7 @@ func (b *Brain) adEntries() []valuableKey {
 	}
 	var es []scored
 	for k, e := range b.cfg.valuables.entries {
-		if e.carried > 0 {
+		if keep(e) {
 			es = append(es, scored{k, m.valueScore(p, k.template, int(k.enchant)).v})
 		}
 	}
