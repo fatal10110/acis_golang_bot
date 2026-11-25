@@ -558,10 +558,10 @@ func (b *Brain) startShop(now time.Time) bool {
 		}
 	}
 	// A bag at or near its slot limit sells what junk it has (#528), and
-	// so does a load past Supply.ReturnLoad (overloaded): the load trip
-	// that brought it home sheds that junk (shed), and the half-speed
-	// stash leaves it to the visit (stashRows, #449).
-	sellDue := p.SellAt > 0 && (junk >= p.SellAt || junk > 0 && (b.bagFull() || b.overloaded()))
+	// so does a load that sends the bot home (loadSendsHome): the load
+	// trip sheds that junk (shed), and the half-speed stash leaves it to
+	// the visit (stashRows, #449).
+	sellDue := p.SellAt > 0 && (junk >= p.SellAt || junk > 0 && (b.bagFull() || b.loadSendsHome()))
 	sell := sellDue || (p.SellAt > 0 && len(want) > 0 && junk > 0)
 	if len(want) == 0 && !sell {
 		return false

@@ -245,6 +245,15 @@ func TestBrainShopVisit(t *testing.T) {
 	}
 }
 
+// loaded sets b's load to load of a 100000 limit under the default supply
+// policy (ReturnLoad 60 %, ShedMin 10 %), the junk template 1867 weighing
+// weight a piece.
+func loaded(b *Brain, load, weight int32) {
+	b.persona.Supply = defaultSupplyPolicy()
+	b.world.Self.Load, b.world.Self.MaxLoad = load, 100000
+	b.cfg.Travel.weights = map[int32]int32{1867: weight}
+}
+
 // TestShopDue checks when a visit starts.
 func TestShopDue(t *testing.T) {
 	junk := func(n int) []Item {
@@ -282,18 +291,20 @@ func TestShopDue(t *testing.T) {
 			setup: func(b *Brain) { b.world.Self.InvLimit = int32(len(b.world.Inventory.Items) + bagNear + 1) },
 		},
 		{
-			name: "junk under SellAt, the load past ReturnLoad", items: append(stocked, junk(1)...), wantKind: actMove,
-			setup: func(b *Brain) {
-				b.persona.Supply.ReturnLoad = 60
-				b.world.Self.Load, b.world.Self.MaxLoad = 67000, 100000
-			},
+			name: "junk under SellAt, the load in the half-speed band", items: append(stocked, junk(1)...), wantKind: actMove,
+			setup: func(b *Brain) { loaded(b, 67000, 10) },
+		},
+		{
+			name: "junk under SellAt, past ReturnLoad with ShedMin to shed", items: append(stocked, junk(1)...), wantKind: actMove,
+			setup: func(b *Brain) { loaded(b, 62000, 10000) },
+		},
+		{
+			name: "junk under SellAt, past ReturnLoad under the band, shed under ShedMin", items: append(stocked, junk(1)...),
+			setup: func(b *Brain) { loaded(b, 62000, 10) },
 		},
 		{
 			name: "junk under SellAt, the load under ReturnLoad", items: append(stocked, junk(1)...),
-			setup: func(b *Brain) {
-				b.persona.Supply.ReturnLoad = 60
-				b.world.Self.Load, b.world.Self.MaxLoad = 59000, 100000
-			},
+			setup: func(b *Brain) { loaded(b, 59000, 10000) },
 		},
 		{name: "no junk, the bag full", items: stocked, setup: func(b *Brain) { b.world.Self.InvLimit = int32(len(b.world.Inventory.Items)) }},
 		{
