@@ -34,22 +34,18 @@ func TestLiveArrows(t *testing.T) {
 	minArrows := botclient.DefaultPersona().Shop.ArrowsMin
 	f = runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		p.Gear.Classes = []botclient.GearClass{{Weapons: []string{"BOW"}, Armor: "LIGHT"}}
-		// Bow and arrows only: no jewelry, whose merchant stands nearer
-		// the trainer than the weapon merchant does and would take the
-		// first visit and the bow's adena (it did on main too).
+		// No potions to restock. Jewelry stays wanted and the Newbie
+		// Guide walk stays on: the arrows of the carried bow are a
+		// supplies want, and a visit goes to a merchant selling the first
+		// tier wanted, here the grocer past the nearer jewelry and armor
+		// merchants (#441, #370).
 		p.Shop.Restock = nil
-		p.Gear.Jewelry = false
-		// No Newbie Guide walk after the recall: from the guide the
-		// armor merchant's spawn is nearer than the grocer, and the
-		// visit, which takes the nearest merchant selling any want
-		// (#370), would go there instead.
-		p.Newbie.MaxLevel = 0
 	})
 	t.Logf("%s has its adena at %v", f.name, f.bot.Status().Position)
 
-	// The bow at the weapon merchant, then, five minutes on (shopRetry),
-	// the arrows next to the grocer: the village's merchants stand too
-	// far apart for the merchant in sight to be the right one.
+	// The bow at the weapon merchant, then the arrows at the grocer, whose
+	// visit follows the bow's at once (endShop): the recall next to the
+	// grocer saves the walk.
 	due := time.Now().Add(2 * gearBound)
 	untilBy(t, ctx, f.name+" buys a bow", due, func() string {
 		for _, it := range inventory(f.watch.Seen(0)) {
