@@ -107,7 +107,10 @@ func TestRowKN(t *testing.T) {
 // TestRowWA checks the warrior: War Cry in combat, then with a two-handed
 // blunt Stun Attack, then Power Smash while it cools; Wild Sweep only with
 // a pole and two attackers; Accuracy and Vicious Stance on at engage above
-// 30 % MP, off under it and before it sits.
+// 30 % MP, off under it and before it sits; its gear its line's weapon in
+// heavy armor without a shield, a two-handed blunt on the Gladiator line and
+// a pole on the Warlord line, while its human fighter row keeps a sword or
+// a blunt with a shield (column 1, rows WA and HF).
 func TestRowWA(t *testing.T) {
 	now := at(time.Second)
 	attacks := []int32{skillStunAttack, skillPowerSmash, skillWildSweep}
@@ -148,6 +151,27 @@ func TestRowWA(t *testing.T) {
 		t.Fatalf("decide = %q kind %d, want rest", rule, a.kind)
 	}
 	wantCast(t, a, skillAccuracy, selfID)
+
+	for _, tt := range []struct {
+		name    string
+		second  int32
+		weapons []string
+	}{
+		{"Gladiator line", classGladiator, []string{"BIGBLUNT"}},
+		{"Warlord line", classWarlord, []string{"POLE"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := BranchChoice{Account: accountFor(t, HumanFighter.ID, RoleDamage, line{first: classWarrior, second: tt.second})}
+			for _, level := range []int32{20, 39} {
+				if g := CompileBuild(RaceHuman, classWarrior, level, RoleDamage, c).Kit.Gear; !slices.Equal(g.Weapons, tt.weapons) || g.Shield || g.Armor != "HEAVY" {
+					t.Errorf("warrior gear at %d %+v, want %v in heavy armor without a shield", level, g, tt.weapons)
+				}
+			}
+			if g := CompileBuild(RaceHuman, HumanFighter.ID, 19, RoleDamage, c).Kit.Gear; !slices.Equal(g.Weapons, []string{"SWORD", "BLUNT"}) || !g.Shield {
+				t.Errorf("human fighter gear %+v, want a sword or a blunt with a shield", g)
+			}
+		})
+	}
 }
 
 // TestRowRO checks the rogue: with a dagger Bleed above 50 % target HP,

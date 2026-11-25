@@ -208,7 +208,9 @@ func TestBranchPin(t *testing.T) {
 
 // TestBranchWeapon checks a base row's weapon follows its line from level 1
 // (docs/strategy.md, column 1), and the first profession's too: the Rogue
-// line's dagger or bow, the Monk line's fists, a shield otherwise.
+// line's dagger or bow, the Monk line's fists, a shield otherwise; the
+// Warrior's own line's two-hander leaves its base row's one-hander and
+// shield as they are.
 func TestBranchWeapon(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -221,6 +223,7 @@ func TestBranchWeapon(t *testing.T) {
 		{"Treasure Hunter line", HumanFighter.ID, RoleDamage, line{first: classRogue, second: classTreasureHunter}, daggerBranch, false},
 		{"Hawkeye line", HumanFighter.ID, RoleDamage, line{first: classRogue, second: classHawkeye}, bowBranch, false},
 		{"Gladiator line", HumanFighter.ID, RoleDamage, line{first: classWarrior, second: classGladiator}, []string{"SWORD", "BLUNT"}, true},
+		{"Warlord line", HumanFighter.ID, RoleDamage, line{first: classWarrior, second: classWarlord}, []string{"SWORD", "BLUNT"}, true},
 		{"Knight line", HumanFighter.ID, RoleSupport, line{first: classKnight, second: classPaladin}, []string{"SWORD", "BLUNT"}, true},
 		{"Silver Ranger line", ElvenFighter.ID, RoleDamage, line{first: 22, second: 24}, bowBranch, false},
 		{"Abyss Walker line", DarkFighter.ID, RoleDamage, line{first: classAssassin, second: 36}, daggerBranch, false},
@@ -234,7 +237,11 @@ func TestBranchWeapon(t *testing.T) {
 			if !slices.Equal(g.Weapons, tt.weapons) || g.Shield != tt.shield || g.Armor != "LIGHT" {
 				t.Errorf("base row gear %+v, want %v shield %v in light armor", g, tt.weapons, tt.shield)
 			}
-			if w := branchWeapons[tt.line.second]; w != nil {
+			w := branchWeapons[tt.line.second]
+			if lw := lineWeapons[tt.line.second]; lw != nil {
+				w = lw
+			}
+			if w != nil {
 				if g := CompileBuild(race, tt.line.first, 20, tt.role, c).Kit.Gear; !slices.Equal(g.Weapons, w) || g.Shield {
 					t.Errorf("first profession gear %+v, want %v", g, w)
 				}
