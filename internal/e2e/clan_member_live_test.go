@@ -464,13 +464,19 @@ func clanCrafterPersona() botclient.Persona {
 // errandsOff) whose one supply trip cause is the weight its visit hands
 // off: its shots never run out within a trip (ReturnMinutes 0), it carries
 // no potion, sells nothing, and its ReturnLoad and ShedMin are handOffLoad.
-// Its ShotStock orders one craft of D shots.
+// Its ShotStock orders one craft of D shots. It loots only the drops of the
+// creatures it fought (GroundNone): the ground items other players leave
+// around the village (#470) held its visit for ten minutes of pickups
+// ahead of the warehouse errand, and the load they brought, which it sells
+// none of, left no room under Supply.BuyLoad for the shots it orders, so
+// the visit posted no order.
 func memberPersona() botclient.Persona {
 	p := botclient.DefaultPersona()
 	p.ClanMember = true
 	lowSpots(&p)
 	errandsOff(&p)
 	p.Potions = nil
+	p.Loot.Ground = botclient.GroundNone
 	p.Shop.SellAt = 0
 	p.Shop.Soulshots = botclient.ShotStock{Min: memberShotsMin, Max: soulshotsMade}
 	p.Supply.ReturnMinutes = 0
