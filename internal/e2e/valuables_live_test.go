@@ -210,7 +210,7 @@ func TestLiveValuablesRelease(t *testing.T) {
 		t.Errorf("%s lists the sword at %d, under its reference price %d", f.name, row.Price, row.ReferencePrice)
 	}
 	t.Logf("%s's store: %+v", f.name, list.Items)
-	b.buyFromStore(t, ctx, f.id, row)
+	b.buyFromStore(t, ctx, f.id, row, list.BuyerAdena)
 	waitFor(t, ctx, f.name+" is paid for the sword", func() bool {
 		run := f.counts(adena, from)
 		return run[len(run)-1]-run[0] == row.Price
@@ -278,7 +278,6 @@ type valuablesBuyer struct {
 	merchantID int32
 	ads, tells []string
 	requested  bool
-	inv        map[int32]botclient.Item
 }
 
 // enterBuyer enters the buyer (<prefix>vb1, buyerCharacter) next to the GM,
@@ -288,17 +287,15 @@ func enterBuyer(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, f *
 	account, _ := tg.Account("vb", 1)
 	c := enter(t, ctx, tg, account, buyerCharacter(t, account), nil)
 	recallClient(t, ctx, gm, c)
-	b := &valuablesBuyer{c: c, merchant: f.name, merchantID: f.id, inv: make(map[int32]botclient.Item)}
-	if have := b.carried(adena); have < valuablesBuyerAdena {
-		giveClient(t, ctx, gm, c, adena, valuablesBuyerAdena-have)
-	}
-	return b
+	// Its entry's ItemList is read already: the buyer counts its stock from
+	// the trade window and the store list, and gets the adena every run.
+	giveClient(t, ctx, gm, c, adena, valuablesBuyerAdena)
+	return &valuablesBuyer{c: c, merchant: f.name, merchantID: f.id}
 }
 
 // note records ev: the merchant's Trade lines, its whispers and trade
-// request, and the buyer's inventory.
+// request.
 func (b *valuablesBuyer) note(ev botclient.Event) {
-	applyInventory(b.inv, ev)
 	switch e := ev.(type) {
 	case botclient.CreatureSay:
 		if !strings.EqualFold(e.Name, b.merchant) {
@@ -314,9 +311,6 @@ func (b *valuablesBuyer) note(ev botclient.Event) {
 		b.requested = b.requested || e.SenderID == b.merchantID
 	}
 }
-
-// carried is the buyer's count of tmpl as far as it read.
-func (b *valuablesBuyer) carried(tmpl int32) int32 { return carriedOf(b.inv, tmpl) }
 
 // until reads the buyer's connection, noting what it hears, until cond
 // holds; the step fails once d passes.
@@ -451,11 +445,15 @@ func (b *valuablesBuyer) storeList(t *testing.T, ctx context.Context, owner int3
 }
 
 // buyFromStore buys one unit of row from owner's sell store at its listed
-// price and waits until the buyer carries it and paid.
-func (b *valuablesBuyer) buyFromStore(t *testing.T, ctx context.Context, owner int32, row botclient.StoreItem) {
+// price, the buyer holding coins adena (the list's BuyerAdena), and waits
+// until the buyer carries a new one and paid.
+func (b *valuablesBuyer) buyFromStore(t *testing.T, ctx context.Context, owner int32, row botclient.StoreItem, coins int32) {
 	t.Helper()
-	before := b.carried(row.TemplateID)
-	coins := b.carried(adena)
+	if coins < row.Price {
+		t.Fatalf("%s holds %d adena, under the listed %d", b.c.Self.Name, coins, row.Price)
+	}
+	var added bool
+	left := coins
 	if err := b.c.Send(ctx, botclient.EncodeRequestPrivateStoreBuy(owner, []botclient.StoreBuy{{ObjectID: row.ObjectID, Count: 1, Price: row.Price}})); err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +461,17 @@ func (b *valuablesBuyer) buyFromStore(t *testing.T, ctx context.Context, owner i
 		if sm, ok := ev.(botclient.SystemMessage); ok && (sm.ID == msgNotEnoughAdena || sm.ID == msgNotAuthorized) {
 			t.Fatalf("the store refused the buy: system message %d", sm.ID)
 		}
-		return b.carried(row.TemplateID) > before && b.carried(adena) == coins-row.Price
+		if u, ok := ev.(botclient.InventoryUpdate); ok {
+			for _, c := range u.Changes {
+				switch {
+				case c.Item.TemplateID == row.TemplateID && c.State == botclient.ItemAdded:
+					added = true
+				case c.Item.TemplateID == adena && c.State != botclient.ItemRemoved:
+					left = c.Item.Count
+				}
+			}
+		}
+		return added && left == coins-row.Price
 	})
 	t.Logf("%s bought the %s for %d", b.c.Self.Name, swordName, row.Price)
 }
