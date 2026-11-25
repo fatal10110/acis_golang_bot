@@ -2,13 +2,14 @@ package botclient
 
 import (
 	"testing"
+	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // TestGearRole checks what the model values a bot's gear for (gearRole): a
-// Support build that knows a heal, its heal per MP; a Support build without
+// Support build that knows a heal, its heals a minute; a Support build without
 // one, a tank; a Damage build, its first known damage rotation skill, else
 // its melee hits.
 func TestGearRole(t *testing.T) {
@@ -23,7 +24,10 @@ func TestGearRole(t *testing.T) {
 	}{
 		{
 			"support with a heal", classHumanMystic, RoleSupport, heal,
-			charmodel.Role{Kind: charmodel.Support, HealPower: 49, HealMP: 10, SurvivalFloor: charmodel.DefaultSurvivalFloor},
+			charmodel.Role{
+				Kind: charmodel.Support, RestTime: charmodel.DefaultRestTime, SurvivalFloor: charmodel.DefaultSurvivalFloor,
+				HealPower: 49, HealMP: 10, HealHitTime: 5 * time.Second, HealReuse: 10 * time.Second, HealMAtk: true,
+			},
 			false,
 		},
 		{
@@ -65,7 +69,7 @@ func TestGearRole(t *testing.T) {
 // stronger profile still ranks higher.
 func TestGearWorth(t *testing.T) {
 	melee := charmodel.Role{Kind: charmodel.Damage, RestTime: charmodel.DefaultRestTime}
-	support := charmodel.Role{Kind: charmodel.Support, HealPower: 49, HealMP: 10, SurvivalFloor: charmodel.DefaultSurvivalFloor}
+	support := charmodel.Role{Kind: charmodel.Support, RestTime: charmodel.DefaultRestTime, SurvivalFloor: charmodel.DefaultSurvivalFloor, HealPower: 49, HealMP: 10, HealHitTime: 5 * time.Second, HealReuse: 10 * time.Second, HealMAtk: true}
 	weak := charmodel.Profile{MaxHP: 30, MaxMP: 40, PAtk: 5, PAtkSpd: 250, MAtkSpd: 200, PDef: 20, MDef: 20, Accuracy: 30, Evasion: 30, RunSpeed: 100}
 	stronger := weak
 	stronger.PAtk, stronger.PDef = 10, 40
