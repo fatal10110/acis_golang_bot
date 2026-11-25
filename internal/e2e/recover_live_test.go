@@ -28,10 +28,17 @@ const skillEscape int32 = 2099
 // (#161, #223).
 var recoverGround = botclient.Point{X: -80994, Y: 246472, Z: -3696}
 
+// recoverPersona is partyPersona with the shortened recovery waits. It
+// loots only the drops of the creatures it fought (GroundNone): rule "loot"
+// runs ahead of rule "leader", and where other players left ground items
+// the bot picked them up one after another past its LeaderWait and never
+// cast /unstuck (#471: 19 pickups in a minute on the ground the GM stood
+// on, rule "loot" to the scenario's step deadline).
 func recoverPersona() botclient.Persona {
 	p := partyPersona()
 	p.Recover.ResurrectWait = recoverResurrectWait
 	p.Recover.LeaderWait = recoverLeaderWait
+	p.Loot.Ground = botclient.GroundNone
 	return p
 }
 
@@ -112,12 +119,15 @@ func TestLiveRecoverVillageRestart(t *testing.T) {
 // TestLiveRecoverLeaderLogout has the player leading a bot's party of two
 // log out, which disperses it: the bot holds for its LeaderWait, whispers
 // the gone leader once, then casts /unstuck, whose five-minute recall lands
-// it in town. The GM watches (#24).
+// it in town. The GM watches (#24). The GM waits at recoverGround, not
+// wherever the last scenario left the pooled GM: the bot is recalled to it,
+// and what lies around that spot decided whether it cast at all (#471).
 func TestLiveRecoverLeaderLogout(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM)
 	ctx := scenarioCtx(t, 12*time.Minute)
 	gm := enterGM(t, ctx, tg)
+	gmTeleport(t, ctx, gm, recoverGround)
 	acc, _ := tg.Account("rv", 2)
 	leader := enter(t, ctx, tg, acc, character(t, acc, &botclient.HumanFighter), nil)
 	account, _ := tg.Account("rv", 3)
@@ -136,7 +146,8 @@ func TestLiveRecoverLeaderLogout(t *testing.T) {
 	gone := time.Now()
 	ev, err := gm.Await(ctx, recoverLeaderWait+time.Minute, castBy(botID, skillEscape, 0))
 	if err != nil {
-		t.Fatalf("bot casts /unstuck: %v", err)
+		st := b.Status()
+		t.Fatalf("bot casts /unstuck: %v (bot at %v, rule %q)", err, st.Position, st.Rule)
 	}
 	if waited := time.Since(gone); waited < recoverLeaderWait-time.Second {
 		t.Fatalf("bot cast /unstuck %v after its leader left, want after its LeaderWait %v", waited, recoverLeaderWait)
