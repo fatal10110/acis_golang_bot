@@ -345,20 +345,24 @@ server's pathfinder.
 - **Wall clearance cost**: cells next to a blocked NSWE edge, or next to a drop, cost more. Routes
   then keep off walls and ledges. This looks more natural, and it leaves a margin for the step
   chain's jitter and for dead-reckoning error.
-- **Drops** (#504): a step landing more than 48 below the cell it leaves (`dropBound`, the climb
-  limit) cannot be walked back. `CanMove` takes it, and the server limits a descent only by fall
-  damage past the race's safe fall height (`ValidatePosition`, `character_fall.go`), but a bot
-  walking off a wall's top looks like nothing a player does: the Orc village's place routes went
-  up a ramp onto the wall's walkway and dropped 312 off its outer edge. Each drop costs `costDrop`
-  (100 cells) more: in the cell search, in the build's intra-cluster edge costs and on a border
-  crossing that drops, so a route goes down a ramp or through a gate whenever that way is less than
-  about 1600 units longer. The cost is a weight, not a ban, so a one-way drop toward a leader below
-  (`RouteOneWay`), a drop off one-way-out ground and a drop no ramp near it replaces still route.
-  It is kept small for the cell search's sake: A\* expands every cell whose straight-line estimate
-  is cheaper than the route, so a leg that must drop floods the cells within about `costDrop`/20 cells of it
-  first. On the owner's data the place routes from the Orc village town point to the 24 routable
-  spots within 20,000 of it held 17 single-cell descents past 48 (12 off the north wall, 312-376;
-  5 down a south slope, 56-72 a cell); with the cost they hold none.
+- **Drops** (#504): a step landing more than 96 below the cell it leaves (`dropBound`, twice the
+  climb limit) is a fall off a wall or a cliff. `CanMove` takes it, and the server limits a descent
+  only by fall damage past the race's safe fall height (`ValidatePosition`, `character_fall.go`),
+  but a bot walking off a wall's top looks like nothing a player does: the Orc village's place
+  routes went up a ramp onto the wall's walkway and dropped 312 off its outer edge. Each drop costs
+  `costDrop` (100 cells) more: in the cell search, in the build's intra-cluster edge costs and on a
+  border crossing that drops, so a route goes down a ramp or through a gate whenever that way is
+  less than about 1600 units longer. The cost is a weight, not a ban, so a one-way drop toward a
+  leader below (`RouteOneWay`), a drop off one-way-out ground and a drop no ramp near it replaces
+  still route. Both numbers are kept small for the cell search's sake: A\* expands every cell whose
+  straight-line estimate is cheaper than the route, so a leg that must drop floods the cells within
+  about `costDrop`/20 cells of it first, and at a bound of 48 every step of a slope steeper than
+  about 72° cost the same, which on the owner's data made routes 1.6 times slower at the median and
+  twice at p99 (`BenchmarkOwnerNav`, cold p50 87 to 142 ms, p99 451 to 1057 ms). A steep slope's
+  steps of 49 to 96 stay one-way, as before, and cost nothing extra. On the owner's data the place
+  routes from the Orc village town point to the 24 routable spots within 20,000 of it: 12 dropped
+  312 to 376 off the north wall; with the cost none descends more than 72 in one cell (the 5 routes
+  down the south slope keep its steps of 56 to 72).
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over
     139 regions;

@@ -21,9 +21,9 @@ var (
 	orcSpot = botclient.Point{X: -42592, Y: -109016, Z: -1776}
 )
 
-// orcDropBound is the largest single-cell descent a place walk takes: the
-// climb limit, nav's dropBound.
-const orcDropBound = block.CellIgnoreHeight
+// orcDropBound is the largest single-cell descent a place walk takes where
+// a way without it exists: nav's dropBound, twice the climb limit.
+const orcDropBound = 2 * block.CellIgnoreHeight
 
 // TestLiveNavOrcWall walks a bot out of the Orc village (#504): recalled to
 // the town point, it follows the GM, who stands still at the spot north of
