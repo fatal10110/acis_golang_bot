@@ -10,6 +10,7 @@ const (
 	skillFlameChant     int32 = 1002
 	skillChantFire      int32 = 1006
 	skillChantShielding int32 = 1009
+	skillResurrection   int32 = 1016
 	skillGroupHeal      int32 = 1027
 	skillHolyWeapon     int32 = 1043
 	skillGreaterEmpower int32 = 1059
@@ -219,11 +220,11 @@ func supportPart(part RolePart, attacks ...int32) RolePart {
 var (
 	// clericKit (CL): the healers' heals; Wind Strike on the leader's
 	// target; Might, Shield, Wind Walk, Acumen on the mystic members and
-	// Concentration.
+	// Concentration; Resurrection from 20, cast by ruleRaise in a bot party.
 	clericKit = ClassKit{
 		Skills: []int32{
 			skillHeal, skillBattleHeal, skillGroupHeal, skillMight, skillShield, skillWindWalk,
-			skillAcumen, skillConcentration, skillWindStrike,
+			skillAcumen, skillConcentration, skillWindStrike, skillResurrection,
 		},
 		Rotation: []Step{{Skill: skillWindStrike, Target: TargetLeaderTarget}},
 		Heals:    healerHeals,
@@ -237,11 +238,11 @@ var (
 	}
 	// elvenOracleKit (EO): the healers' heals; Dryad Root from 25 on a
 	// second attacker, Wind Strike on the leader's target; Might, Shield,
-	// Wind Walk, Agility and Holy Weapon from 25.
+	// Wind Walk, Agility and Holy Weapon from 25; Resurrection as the Cleric.
 	elvenOracleKit = ClassKit{
 		Skills: []int32{
 			skillHeal, skillBattleHeal, skillGroupHeal, skillMight, skillShield, skillWindWalk,
-			skillAgility, skillHolyWeapon, skillDryadRoot, skillWindStrike,
+			skillAgility, skillHolyWeapon, skillDryadRoot, skillWindStrike, skillResurrection,
 		},
 		Rotation: []Step{
 			{Skill: skillDryadRoot, From: 25, Target: TargetOtherAttacker, Attackers: 2},
@@ -258,11 +259,13 @@ var (
 	}
 	// shillienOracleKit (SO): the healers' heals; Wind Shackle once on the
 	// leader's target, then Wind Strike; Might, Shield, Wind Walk, Greater
-	// Empower and Focus from 25, Vampiric Rage from 30.
+	// Empower and Focus from 25, Vampiric Rage from 30; Resurrection as the
+	// Cleric.
 	shillienOracleKit = ClassKit{
 		Skills: []int32{
 			skillHeal, skillBattleHeal, skillGroupHeal, skillMight, skillShield, skillWindWalk,
 			skillGreaterEmpower, skillFocus, skillVampiricRage, skillWindShackle, skillWindStrike,
+			skillResurrection,
 		},
 		Rotation: []Step{
 			{Skill: skillWindShackle, Target: TargetLeaderTarget, Opener: true},

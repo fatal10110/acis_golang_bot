@@ -445,7 +445,9 @@ type rule struct {
 }
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
-// the party, ahead of fighting so a support in combat still heals;
+// the party, ahead of fighting so a support in combat still heals; "raise"
+// casts Resurrection out of combat on a dead member of the bot's own bot
+// party, right after "heal" so a living member's heal goes first;
 // "assist" (the leader's target), "classchange" (the class master, ahead
 // of the trainer so the new class learns its skills there), "train" (the
 // trainer), "gear" (wearing
@@ -492,6 +494,7 @@ var playRules = []rule{
 	{"critical", (*Brain).ruleCritical},
 	{"escape", (*Brain).ruleEscape},
 	{"heal", (*Brain).ruleHeal},
+	{"raise", (*Brain).ruleRaise},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"sweep", (*Brain).ruleSweep},
 	{"chat", (*Brain).ruleChat},
