@@ -320,6 +320,9 @@ const (
 	actTradeAdd
 	actTradeConfirm
 	actTradeCancel
+	// actTradeRequest asks a whisperer of a valuables round for a trade
+	// (valuables_trade.go).
+	actTradeRequest
 	actTell
 	actPickup
 	actDrop
