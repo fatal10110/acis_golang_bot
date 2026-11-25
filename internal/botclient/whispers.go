@@ -37,10 +37,13 @@ type whisperDeal struct {
 }
 
 // whisperPrice is where a deal stands: the partner's current price of one
-// unit and the counters it used.
+// unit, the counters it used, and whether the bot agreed to the current
+// price ("ok <price>, trade me") since its last counter. A deal with
+// neither a counter nor an agreement is an entry the partner named.
 type whisperPrice struct {
 	current  int64
 	counters int
+	agreed   bool
 }
 
 // whisperTalk is the responder's state of the latest round
@@ -81,8 +84,9 @@ type whisperOut struct {
 	to    int32
 	deal  whisperDeal
 	price int64
-	// counter is set when the reply used a counter.
-	counter bool
+	// counter is set when the reply used a counter, agreed when it agreed
+	// to price.
+	counter, agreed bool
 }
 
 // whisperQueue is the responder's queue, owned by the brain goroutine:
@@ -216,6 +220,12 @@ func (b *Brain) whisperSent(o whisperOut) {
 	if o.counter {
 		d.counters++
 	}
+	switch {
+	case o.agreed:
+		d.agreed = true
+	case o.counter:
+		d.agreed = false
+	}
 	t.deals[o.deal] = d
 }
 
@@ -271,20 +281,25 @@ func (b *Brain) roundReply(w whisperWait) (string, whisperOut) {
 		if 2*offer >= floor {
 			switch {
 			case offer >= d.current:
-				return "ok " + priceText(d.current) + ", trade me", whisperOut{deal: dl, price: d.current}
+				return "ok " + priceText(d.current) + ", trade me", whisperOut{deal: dl, price: d.current, agreed: true}
 			case d.counters < p.Counters:
 				c := min(d.current, ceilDiv(max(floor, (offer+d.current)/2), 1000)*1000)
 				return priceText(c) + " lowest", whisperOut{deal: dl, price: c, counter: true}
 			case offer >= floor:
-				return "ok " + priceText(offer) + ", trade me", whisperOut{deal: dl, price: offer}
+				return "ok " + priceText(offer) + ", trade me", whisperOut{deal: dl, price: offer, agreed: true}
 			default:
 				return "sorry, no", whisperOut{}
 			}
 		}
+		if len(named) == 1 {
+			return m.itemLabel(k, 1, d.current) + ", trade me", whisperOut{deal: dl, price: d.current}
+		}
 		return m.itemLabel(k, 1, d.current) + ", trade me", whisperOut{}
 	}
 	if len(named) == 1 {
-		return m.itemLabel(named[0], 1, b.deal(w.to, named[0]).current) + ", trade me", whisperOut{}
+		// The named entry's deal, for the trade's goods (valuableGoods).
+		d := b.deal(w.to, named[0])
+		return m.itemLabel(named[0], 1, d.current) + ", trade me", whisperOut{deal: whisperDeal{w.to, named[0]}, price: d.current}
 	}
 	return b.listReply(w.to, keys, false, ", trade me"), whisperOut{}
 }

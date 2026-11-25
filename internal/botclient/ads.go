@@ -223,6 +223,9 @@ func (b *Brain) adTurn(now time.Time) (Action, bool) {
 	for _, k := range keys[:n] {
 		r.named[k] = true
 	}
+	if r.ads == 0 {
+		r.first = now
+	}
 	r.ads++
 	r.adAt = now
 	return Action{kind: actSay, payload: encodeSay2(text, chatTrade)}, true

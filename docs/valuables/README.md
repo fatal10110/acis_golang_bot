@@ -43,7 +43,7 @@ Proposed, awaiting the owner.
 - **D30, Trade ads.** No channel a non-hero speaks on reaches the whole server, only the speaker's
   restart region ([server](server.md#server)). Proposal: `merchant`
   advertises valuables on **Trade** only, under the caps of [ads](ads.md); never Shout. Amends the
-  `docs/plan.md` section 4 bullet (lines 366-371): "never on Shout or Trade" gains this exception,
+  `docs/plan.md` section 4 bullet (lines 369-374): "never on Shout or Trade" gains this exception,
   "Chat only when answering a whisper" gains the ads, the only unprompted lines. Alternative: Trade
   and Shout under the same caps.
 - **D31, what is valuable.** The [score](score.md): price × 2^R, R from the supply ceiling (Seven
@@ -59,9 +59,9 @@ Proposed, awaiting the owner.
   points lower per unsold round; floor the worth (reference plus scrolls) or the store price,
   whichever is higher; two counters per buyer and item a round; nothing below the floor. The bot may
   invite a whisperer in sight (one request per buyer a round). Amends `docs/plan.md` line 351
-  ("trades are fixed-price sales...": a valuable is haggled between ask and floor), line 355
-  ("rate-limit trade requests per partner", today only incoming, `trade.go:359`: the bot may send
-  one per partner a round, one open at a time), and section 4 lines 366-369 ("rate-limited per
+  ("trades are fixed-price sales...": a valuable is haggled between ask and floor), line 356
+  ("rate-limit trade requests per partner", before V6 only incoming, `trade.go:368`: the bot may send
+  one per partner a round, one open at a time), and section 4 lines 369-372 ("rate-limited per
   sender and capped per bot"): whisper replies in a round and within `AnswerAfter` (30 min) after it
   (no offer, no trade then), under [their own caps](whispers.md#pacing-queue-and-caps) instead of
   the canned ones, never to a marked name.

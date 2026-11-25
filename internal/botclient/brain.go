@@ -321,6 +321,10 @@ type Brain struct {
 	// whispers are the valuables responder's replies waiting for their
 	// time (rule "chat", whisperHeard).
 	whispers whisperQueue
+	// valuablesSold are the session's valuable sales in adena, counted
+	// against ValuablePolicy.Budget (docs/valuables/release.md "Valuables
+	// budget (D34)"): the trades' so far (valuableSaleEvent).
+	valuablesSold int64
 	// announce are the craft order lines still to say, in order (rule
 	// "announce"): orders' answers and finished GM orders' clan chat lines,
 	// at most craftCommandCap.
@@ -484,12 +488,15 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		}
 		inParty := b.world.Party.In()
 		b.partyLeadEvent(ev, now)
+		// Before Apply: SendTradeDone clears the trade it counts.
+		b.valuableSaleEvent(ev)
 		b.world.Apply(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
 		b.slotPartyEvent(ev)
 		b.spotJoinEvent(ev, inParty)
 		b.partyClaimEvent(ev)
+		b.inviteEvent(ev)
 		switch e := ev.(type) {
 		case LeaveWorld:
 			switch {
