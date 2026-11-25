@@ -255,11 +255,20 @@ func valuablesMerchant(t *testing.T, ctx context.Context, tg *Target, gm *GMClie
 }
 
 // giveMerchant has the GM, brought next to f wherever it walks (a look or
-// round may have taken it to a keeper), give it count of tmpl.
+// round may have taken it to a keeper), give it count of tmpl, and waits
+// until f carries more of it. It counts by object (farmer.carries), not by
+// gmGive's stock, which reads one row: a sword an earlier run left with f
+// would hide the new one.
 func giveMerchant(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl, count int32) {
 	t.Helper()
 	gmOn(t, ctx, gm, f)
-	gmGive(t, ctx, gm, f, tmpl, count)
+	before := f.carries(tmpl)
+	if err := gm.Give(ctx, f.id, tmpl, count); err != nil {
+		t.Fatal(err)
+	}
+	waitForBy(t, ctx, fmt.Sprintf("%s gets %d of %d", f.name, count, tmpl), time.Now().Add(time.Minute), func() bool {
+		return f.carries(tmpl) > before
+	})
 }
 
 // valuablesBuyer is the buyer's client and what it heard from the merchant.
