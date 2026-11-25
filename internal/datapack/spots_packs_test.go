@@ -9,8 +9,8 @@ import (
 
 // TestSpotPackFacts checks the pack facts of a spot: the aggressive
 // monsters' totals capped at MaximumNPCs, their largest aggro range, clan
-// call range and run speed, the aggressive monsters' kinds, and the
-// territory's area.
+// call range and run speed, the aggressive monsters' kinds, every
+// monster's kind (Monsters, #527), and the territory's area.
 func TestSpotPackFacts(t *testing.T) {
 	// A 4000 x 3000 rectangle.
 	rect := &Territory{Name: "r", MinZ: -3500, MaxZ: -3000, Nodes: []Point{{0, 0}, {4000, 0}, {4000, 3000}, {0, 3000}}}
@@ -26,26 +26,30 @@ func TestSpotPackFacts(t *testing.T) {
 		spawn []Spawn
 		want  Spot
 		mobs  []Mob
+		all   []Mob
 	}{
 		{
 			name:  "aggressive totals, largest ranges and speed",
 			max:   20,
 			spawn: []Spawn{{NPCID: 20093, Total: 4}, {NPCID: 20342, Total: 3}, {NPCID: 20001, Total: 5}},
 			want:  Spot{Aggressive: 7, AggroRange: 1000, ClanRange: 300, RunSpeed: 118.8},
-			mobs:  []Mob{{Level: 10, Count: 4, Combat: orc}, {Level: 12, Count: 3}},
+			mobs:  []Mob{{NPCID: 20093, Level: 10, Count: 4, Combat: orc}, {NPCID: 20342, Level: 12, Count: 3}},
+			all:   []Mob{{NPCID: 20093, Level: 10, Count: 4, Combat: orc}, {NPCID: 20342, Level: 12, Count: 3}, {NPCID: 20001, Level: 13, Count: 5}},
 		},
 		{
 			name:  "capped at the maker's maximum",
 			max:   5,
 			spawn: []Spawn{{NPCID: 20093, Total: 4}, {NPCID: 20342, Total: 3}},
 			want:  Spot{Aggressive: 5, AggroRange: 1000, ClanRange: 300, RunSpeed: 118.8},
-			mobs:  []Mob{{Level: 10, Count: 4, Combat: orc}, {Level: 12, Count: 3}},
+			mobs:  []Mob{{NPCID: 20093, Level: 10, Count: 4, Combat: orc}, {NPCID: 20342, Level: 12, Count: 3}},
+			all:   []Mob{{NPCID: 20093, Level: 10, Count: 4, Combat: orc}, {NPCID: 20342, Level: 12, Count: 3}},
 		},
 		{
 			name:  "a passive monster counts toward none",
 			max:   9,
 			spawn: []Spawn{{NPCID: 20001, Total: 9}},
 			want:  Spot{},
+			all:   []Mob{{NPCID: 20001, Level: 13, Count: 9}},
 		},
 	}
 	for _, tt := range tests {
@@ -66,6 +70,9 @@ func TestSpotPackFacts(t *testing.T) {
 			}
 			if !reflect.DeepEqual(s.Mobs, tt.mobs) {
 				t.Errorf("Mobs = %+v, want %+v", s.Mobs, tt.mobs)
+			}
+			if !reflect.DeepEqual(s.Monsters, tt.all) {
+				t.Errorf("Monsters = %+v, want %+v", s.Monsters, tt.all)
 			}
 		})
 	}
