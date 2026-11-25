@@ -945,7 +945,8 @@ unreachable (with a reason).
     to it. The exposure is per exact stretch and per cell of several layers walked, so it depends
     on the terrain crossed, not on segment length. `nav_blocked_total` measures what is left.
 - **Sending**:
-  - Every segment goes out from standstill, from the server-confirmed position.
+  - Every segment goes out from standstill, from the server-confirmed position, except a
+    click-ahead at a checked corner (below).
   - A pawn walk (an approach to attack or cast) ends on the server's first 100 ms step in range,
     with no packet, up to a step short of the dead-reckoned end. The server stops the bot before it
     swings or casts and the packet carries its position then, so the world model adopts it
@@ -960,10 +961,48 @@ unreachable (with a reason).
     end moves later (a resample, a speed change, the next answer). It covers a normal answer, a
     reset mid-segment, a desync or door replan (once the server's own move ends) and a blocked
     stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
-  - **No click-ahead.** A click while moving would retarget the server's walk: a catch-up step
-    along the old destination, then a fresh routed click from there (see "Server behavior this
-    rests on"). Clicking ahead of the arrival at checked corners is approved by the owner
-    (2026-11-25) and replaces this rule when #308 lands.
+  - **Click-ahead at checked corners** (#308; owner, 2026-11-25). A segment that is not the
+    route's last sends the next one before its own move ends, so the server turns the walk at the
+    corner instead of stopping there. A click while moving retargets the server's walk: a catch-up
+    step along the old destination, then a fresh routed click from there, with the start-speed
+    update count kept (see "Server behavior this rests on"). So the click's origin is wherever the
+    server is when it takes the click, and every line from there must be one the walker checked
+    (`walker_ahead.go`):
+    - **When.** `aheadLead`, the answer latency A plus one position tick, before the modeled end of
+      the segment in flight, once the server answered it. The modeled end errs late by the
+      downlink, so the click reaches the server about a tick before the server's own arrival. The
+      walk wake fires there first, then at the end plus a tick as before.
+    - **The fan.** The server takes the click on the last stretch of the segment: the last
+      speed × (`aheadLead` + 2 × `navEmax`) of the server's line from the segment's answer's origin
+      to its end, the whole line when shorter, at the larger of run and walk speed. One `navEmax`
+      covers the arrival model's error; the other a catch-up step the server refuses, which leaves
+      the walk at its last update point (`catchUpLocked`). A click that comes after the arrival
+      starts from the segment's end, which is in the fan.
+    - **The check** (`nav.Planner.FanOpen`). Every line from a point within `FanBand` (2 units, the
+      server's rounded step points stray 1.5 from the line) of that stretch to the next waypoint
+      must hold. The planner checks the lines from the stretch's ends and from points at most half
+      a cell apart between them, each from the layer nearest the stretch's height there:
+      - `CanMove` to the waypoint at head height, as the server checks the click (the target's Z
+        raised by the collision height);
+      - the open-corridor test with the NSWE of the union of the quadrants of every line of the fan
+        (the band's corners at both ends bound them), and the reach of the cells next to the line
+        widened by √(4² + 2²), how far a line between two checked ones, from a point up to
+        `FanBand` off the stretch, strays from the nearer one;
+      - no avoided column (`Planner.Avoid`) on the line.
+
+      The exact check vouches for one line only, not for the lines between two checked ones, so a
+      fan needs the corridor test throughout. A segment whose fan fails is marked, and the next
+      segment goes out from standstill as before.
+    - **Not ahead**: into or out of water (the bot's move or the next segment), across a door cell
+      (either segment: a door may toggle under the click), during the bot's own swing or cast,
+      sitting, once the bot's own move has ended (the standstill send takes over), and after a
+      segment whose own answer missed its fan.
+    - **Origin.** `standing()` and the `!Moving` gate of `walkStep` belong to the standstill send:
+      a click-ahead's origin is its fan, never a mid-move estimate snapped to a layer. The packet's
+      origin field carries the dead-reckoned position; the server only bounds the click's 9900
+      distance by it.
+    - **Pacing**: the segment's one `MoveBackwardToLocation`, sent earlier through the frame pacer
+      (`gateNone`); click-ahead adds no packet.
   - No move goes out while the bot's own swing or cast is in progress, because the server would
     defer it and answer `ActionFailed`.
 - **Server answers to its own moves**:
@@ -987,6 +1026,26 @@ unreachable (with a reason).
     destination at warn level (`nav desync`), so a run names the leg its check got wrong, and
     replans from the server's origin. If the segment crosses a door cell, it counts
     `nav_door_replan_total` instead, which does not count toward unreachable.
+  - **Answers around a click-ahead.** The connection keeps the server's order, so what the server
+    sent about the previous segment before it took the click arrives before the click's answer,
+    and that answer always moves (a direct click toward the next waypoint):
+    - A blocked correction while the click is unanswered is the previous segment's. At that
+      segment's end it is its arrival: a catch-up into a closed line keeps `routeBlocked` set
+      through the retarget (`moveToLocationLocked` clears it only for a fresh move), and the walk
+      then ends as blocked where it arrives (`arrivalHookLocked`). Short of the end it is a
+      blocked stop of the previous segment, counted and avoided along that segment's line, never
+      the click's; the click then starts from the stop point, off the fan.
+    - A `StopMove` while the click is unanswered is likewise judged against the previous
+      segment's end.
+    - The click's answer has its origin checked against the fan. Off the fan the server walks a
+      line the walker did not check: the walker stops following the route, keeps to the server's
+      move and replans from where it ends. It sends no stop: that would be another packet and a
+      fresh walk-speed start, and the server checked `CanMove` on the line itself (it routes
+      otherwise, a desync), so what is left is a blocked stop, handled as any other. The segment
+      starts at the server's origin from then on, so such a stop builds its avoided line from
+      there.
+    - A blocked correction at the end of an answered click-ahead (the sticky block again) is its
+      arrival.
   - A segment starts where the server holds the bot. A talk click in reach answers with a
     `MoveToPawn` from the player's current location (`targeting.go` `thinkInteract`), and the bot
     stands exactly there, not on its own estimate of the approach's end: a cell off on a long
@@ -1213,6 +1272,12 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | field | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 25 | 6777 | 5673 | 61.46 s | 53.79 s | 45.02 s | 0.875 | 0.870 | 100 / 101 ms | 0 | 0 |
 | town | wf/nav-long-segments 95d875c (after #307) | 2026-11-24 | 9 | 3206 | 3021 | 27.92 s | 25.44 s | 23.98 s | 0.911 | 0.899 | 100 / 100 ms | 0 | 0 |
 | field | wf/nav-long-segments 95d875c (after #307) | 2026-11-24 | 16 | 6748 | 5690 | 58.59 s | 53.56 s | 45.16 s | 0.914 | 0.908 | 100 / 100 ms | 0 | 0 |
+| town | main 49f10a4 (before #308) | 2026-11-25 | 8 | 3227 | 3021 | 27.82 s | 25.61 s | 23.98 s | 0.921 | 0.909 | 100 / 100 ms | 0 | 0 |
+| field | main 49f10a4 (before #308) | 2026-11-25 | 16 | 6731 | 5669 | 58.25 s | 53.42 s | 44.99 s | 0.917 | 0.912 | 100 / 101 ms | 0 | 0 |
+| town | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 9 | 3214 | 3021 | 27.92 s | 25.51 s | 23.98 s | 0.914 | 0.902 | 100 / 101 ms | 0 | 0 |
+| field | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 17 | 6837 | 5691 | 57.53 s | 54.26 s | 45.16 s | 0.943 | 0.932 | 56 / 101 ms | 0 | 0 |
+| town | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 10 | 3274 | 3033 | 28.65 s | 25.99 s | 24.07 s | 0.907 | 0.892 | 89 / 101 ms | 0 | 0 |
+| field | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 16 | 6784 | 5662 | 56.92 s | 53.84 s | 44.93 s | 0.946 | 0.935 | 60 / 101 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
@@ -1239,6 +1304,18 @@ After #307 the pull reaches past the corridor test with exact-checked candidates
 position tick, and nothing was blocked or desynced. Fewer segments mean fewer answer latencies
 and walk-speed starts, which is most of what the elapsed time saved.
 
+After #308 the field route clicked 7 of its 16 later segments ahead in the first run (457f696)
+and 6 of 15 in the second (50ca07f): those idled 0 ms (the bucket up to 0), the others one tick.
+Its efficiency went from 0.917 to 0.943 and 0.946 (the bot's own from 0.912 to 0.932 and 0.935),
+0.7 s and 1.3 s faster on a route 53-106 units longer, with nothing blocked or desynced. The town
+route clicked none of its 8 later corners in the first run and 1 of 9 in the second: most of its
+corners are where the string pull wraps a house or a fence, and a line from any point before such
+a corner to the next waypoint cuts through the obstacle, so those fans fail and the segment goes
+out from standstill as before (0.921 to 0.914 and 0.907, one or two segments more, within the
+run-to-run spread of the route the pull takes). Only corners that wrap nothing qualify, mostly
+where the 500 cap of a follow walk splits open ground, so the gain is under the 5-7% `walking.md`
+estimated for every waypoint: about 3 points in the field, none in town.
+
 What #306 buys shows with a leader that moves. `TestLiveFollowMovingLeader` starts the bot 1900
 from the field route's end, in sight of the GM, who paces 300 back and forth there while the bot
 walks; the bot's follow delay is 1.5 s, so a re-path is pending for most of each leg. Its gaps are
@@ -1255,6 +1332,9 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveFollowMovingLeader' -
 | wf/follow-keepwalk 151a503 (after #306) | 2026-11-24 | 6 | 13 | 311 / 401 ms | 100 / 101 ms | 0 | 0 |
 | main 3f62617 (before #307) | 2026-11-24 | 7 | 17 | 326 / 399 ms | 100 / 101 ms | 0 | 0 |
 | wf/nav-long-segments 0849cc1 (after #307) | 2026-11-24 | 12 | 14 | 349 / 381 ms | 100 / 101 ms | 0 | 0 |
+| main 49f10a4 (before #308) | 2026-11-25 | 8 | 7 | 337 / 382 ms | 100 / 101 ms | 0 | 0 |
+| wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 7 | 7 | 321 / 382 ms | 100 / 101 ms | 0 | 0 |
+| wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 18 | 15 | 358 / 383 ms | 100 / 101 ms | 0 | 0 |
 
 Before #306 the bot stood through the follow delay after each segment that ended while a re-path
 was pending; after it, the bot keeps walking to its old slot and turns to the new one when the
@@ -1266,6 +1346,10 @@ within 1900 of the end, and with segments as long as a click that waypoint was t
 the bot started at the goal and walked no leg. The start is now the point on the route where it
 first comes within 1900, on the segment that crosses that distance. That start lies farther out
 than the waypoint before #307 did, so the GM paces more legs; the rows are not comparable in legs.
+
+After #308 the follower clicked none ahead in either run: every idle is still the one tick, and
+the gaps are unchanged within the spread. The leader's slot moves on while a segment is in flight, and each move
+past `walkSameDest` replans the walk, so the segment in flight rarely has a planned next waypoint.
 
 ## Delivery (milestone M7, "Own navigation", epic #151)
 
@@ -1284,8 +1368,8 @@ than the waypoint before #307 did, so the GM paces more legs; the rows are not c
 N1 to N4 change no behavior. From N5 on, each PR moves one set of consumers over and deletes their
 heuristics in the same PR. N5 needs N4, so no consumer uses routes that ignore doors.
 
-Walking efficiency (the stop at every waypoint, short segments, the follower's hold) is planned in
-[`walking.md`](walking.md): #304 to #308.
+Walking efficiency (the stop at every waypoint, short segments, the follower's hold, click-ahead at
+checked corners) is planned in [`walking.md`](walking.md) and delivered by #304 to #308.
 
 ## Risks
 
