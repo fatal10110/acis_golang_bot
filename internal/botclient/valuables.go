@@ -84,6 +84,10 @@ type valuables struct {
 	// lastStart is the latest round's start, zero before any of the
 	// process; the next starts RoundGap later at the earliest.
 	lastStart time.Time
+	// deposited are the carried valuables, by object, and their counts
+	// when a deposit of them was last tried, nil before any: the off-round
+	// deposit waits for a valuable picked up since (newFind).
+	deposited map[int32]int32
 }
 
 func newValuables() *valuables {
@@ -103,6 +107,40 @@ func (v *valuables) openRound(anchor Point, now time.Time) {
 func (v *valuables) endRound(now time.Time) {
 	v.round = valuableRound{}
 	v.talk.ended = now
+}
+
+// carried reports whether an entry has carried units.
+func (v *valuables) carried() bool {
+	for _, e := range v.entries {
+		if e.carried > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// markDeposited records rows, the carried valuables a deposit tries, as
+// the ones the off-round deposit leaves until a new find.
+func (v *valuables) markDeposited(rows []WarehouseRow) {
+	v.deposited = make(map[int32]int32, len(rows))
+	for _, r := range rows {
+		v.deposited[r.Object] += r.Count
+	}
+}
+
+// newFind reports whether rows, the carried valuables, hold one picked up
+// since the last deposit tried (markDeposited): an object it did not
+// carry, or more of a stack; any before the first.
+func (v *valuables) newFind(rows []WarehouseRow) bool {
+	if v.deposited == nil {
+		return len(rows) > 0
+	}
+	for _, r := range rows {
+		if r.Count > v.deposited[r.Object] {
+			return true
+		}
+	}
+	return false
 }
 
 // storedUnits are the units the private warehouse holds per entry and
@@ -304,21 +342,34 @@ func (p ValuablePolicy) lowered(ask int64, ref int32, floor int64) int64 {
 // the session's look at its private warehouse (lookTurn), then the
 // valuables round. Once roundDue holds it opens a round anchored where the
 // bot stands and runs it (roundStep), holding the turn on every decision
-// while it runs, so no later rule walks the bot away.
+// while it runs, so no later rule walks the bot away. With the budget
+// spent it runs the off-round deposit instead (offRoundDue), holding the
+// turn while it and its walk back run. A round pending on timers only
+// holds the turn with a wait for StoreHold at most (holdTurn).
 //
-// Pacing: the look's and the round's private requests as rule
-// "warehouse"'s (one open per warehouseOpenGap, openDue); the walks'
-// MoveBackwardToLocation segments as every goTo; the ad lines as adTurn's;
-// the trade requests as inviteTurn's; one round per RoundGap.
+// Pacing: the look's, the round's and the off-round deposit's private
+// requests as rule "warehouse"'s (one open per warehouseOpenGap, openDue);
+// the walks' MoveBackwardToLocation segments as every goTo; the ad lines
+// as adTurn's; the trade requests as inviteTurn's; one round per RoundGap;
+// one off-round deposit per new find.
 func (b *Brain) ruleValuables(now time.Time) (Action, bool) {
+	b.trackHold(now)
 	if a, ok := b.lookTurn(now); ok {
+		b.held.pause(now)
 		return a, true
 	}
+	b.held.resume(now)
 	if b.round.phase == roundIdle && !b.cfg.valuables.round.open {
-		if !b.roundDue(now) {
-			return Action{}, false
+		switch {
+		case b.offRoundDue(now):
+			if !b.startOffRound(now) {
+				return Action{}, false
+			}
+		case b.roundDue(now):
+			b.startRound(now)
+		default:
+			return Action{}, b.holdTurn(now)
 		}
-		b.startRound(now)
 	}
 	return b.roundStep(now)
 }

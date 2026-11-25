@@ -352,14 +352,17 @@ func (b *Brain) startStore(now time.Time) (Action, bool) {
 	return Action{kind: actStoreManage, payload: encodeRequestPrivateStoreManageSell()}, true
 }
 
-// storeReady reports whether the bot may start an opening at now.
+// storeReady reports whether the bot may start an opening at now: budget
+// left, no reopen wait, tradeReady, loot it sells, and neither its own
+// trade request awaiting an answer (ownTradeRequest) nor a pending
+// valuables round holding the store (storeHeld).
 func (b *Brain) storeReady(now time.Time) bool {
 	if b.persona.Store.Budget <= b.store.sold || now.Before(b.store.nextAt) || !b.tradeReady(now) {
 		return false
 	}
 	for _, it := range b.world.Inventory.Items {
 		if b.storeSells(it) {
-			return true
+			return !b.ownTradeRequest(now) && !b.storeHeld(now)
 		}
 	}
 	return false

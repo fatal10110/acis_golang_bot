@@ -280,6 +280,8 @@ type Brain struct {
 	// round is this session's part of the valuables round (rule
 	// "valuables"): its keeper visits, walks back and closing.
 	round sessionRound
+	// held is the pending round's hold on the store (rule "valuables").
+	held storeHold
 	// learn is the recipe learning errand (rule 9 errand "recipe").
 	learn recipeLearn
 	// craft is the clan crafter's cycle (rule "craft").
