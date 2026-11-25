@@ -9,7 +9,8 @@ import (
 // TestPartyJoinReleasesSpot checks the spot release of joining
 // (docs/parties/members.md, "Joining"): a bot holding a spot, or farming
 // beside one, gives it back on joining a party it does not lead; leading
-// the party, or a window of the party it is already in, keeps it.
+// the party, or a window of the party it is already in, keeps it, a leader
+// of its bot party with its party's weight (docs/parties/spots.md).
 func TestPartyJoinReleasesSpot(t *testing.T) {
 	player := slotParty(slotPlayerID, map[int32]string{slotPlayerID: "Abbot"})
 	tests := []struct {
@@ -33,7 +34,7 @@ func TestPartyJoinReleasesSpot(t *testing.T) {
 			b, _, _ := clearBrain(t, tt.slot, tt.before, Persona{JoinParty: acceptParty})
 			r := b.cfg.Spots
 			if tt.beside {
-				i, ok := r.farmBeside([]int{0})
+				i, ok := r.farmBesideN([]int{0}, 1)
 				if !ok {
 					t.Fatal("no room beside wolves")
 				}
@@ -50,7 +51,7 @@ func TestPartyJoinReleasesSpot(t *testing.T) {
 			switch {
 			case tt.release && (kept != 0 || b.spot.held || b.spot.beside):
 				t.Fatalf("wolves held %d beside %d, spot %+v: want given back", r.Held(0), r.Beside(0), b.spot)
-			case !tt.release && (kept != 1 || b.spot.held == tt.beside || b.spot.beside != tt.beside):
+			case !tt.release && (kept != b.spotWeight() || b.spot.held == tt.beside || b.spot.beside != tt.beside):
 				t.Fatalf("wolves held %d beside %d, spot %+v: want kept", r.Held(0), r.Beside(0), b.spot)
 			}
 		})

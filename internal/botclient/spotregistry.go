@@ -100,35 +100,41 @@ func (r *SpotRegistry) Statuses() []SpotStatus {
 // holds, else the first below its cap, and reports which; none when every
 // one is full. Empty spots first spread the bots over as many spots as
 // there are (#137).
-func (r *SpotRegistry) claim(order []int) (int, bool) {
+func (r *SpotRegistry) claim(order []int) (int, bool) { return r.claimN(order, 1) }
+
+// claimN takes n of a cap, as claim one: the first spot of order no bot
+// holds whose cap takes n, else the first with room for n under its cap. A
+// party's leader claims for its whole party (docs/parties/spots.md, "Claim
+// weight").
+func (r *SpotRegistry) claimN(order []int, n int) (int, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, i := range order {
-		if r.held[i] == 0 {
-			r.held[i]++
+		if r.held[i] == 0 && n <= r.caps[i] {
+			r.held[i] += n
 			return i, true
 		}
 	}
 	for _, i := range order {
-		if r.held[i] < r.caps[i] {
-			r.held[i]++
+		if r.held[i]+n <= r.caps[i] {
+			r.held[i] += n
 			return i, true
 		}
 	}
 	return 0, false
 }
 
-// claimTiers claims (claim) among the spots of order (sorted by MaxLevel,
-// highest first) one MaxLevel at a time, highest first, so an empty spot
-// outranks a shared one only among spots of one level: a bot under its
-// level window takes the highest spot with room (#446).
-func (r *SpotRegistry) claimTiers(order []int) (int, bool) {
+// claimTiers claims n (claimN) among the spots of order (sorted by
+// MaxLevel, highest first) one MaxLevel at a time, highest first, so an
+// empty spot outranks a shared one only among spots of one level: a bot
+// under its level window takes the highest spot with room (#446).
+func (r *SpotRegistry) claimTiers(order []int, n int) (int, bool) {
 	for lo := 0; lo < len(order); {
 		hi := lo + 1
 		for hi < len(order) && r.spots[order[hi]].MaxLevel == r.spots[order[lo]].MaxLevel {
 			hi++
 		}
-		if i, ok := r.claim(order[lo:hi]); ok {
+		if i, ok := r.claimN(order[lo:hi], n); ok {
 			return i, true
 		}
 		lo = hi
@@ -136,17 +142,18 @@ func (r *SpotRegistry) claimTiers(order []int) (int, bool) {
 	return 0, false
 }
 
-// claimOver takes, past its cap, the spot of order below its limit that
-// its bots fill least for its cap, the first in order on a tie, and
-// reports which; none when every one is at its limit. It is for a bot
-// that finds every spot that fits it at its cap: the overflow spreads
-// evenly rather than piling on the nearest spot (#137).
-func (r *SpotRegistry) claimOver(order []int) (int, bool) {
+// claimOverN takes n, past its cap, at the spot of order whose held plus n
+// stays within its limit that its bots fill least for its cap, the first
+// in order on a tie, and reports which; none when every one is too near its
+// limit. It is for a bot (n 1) or a party's leader (n its party) that finds
+// every spot that fits it at its cap: the overflow spreads evenly rather
+// than piling on the nearest spot (#137).
+func (r *SpotRegistry) claimOverN(order []int, n int) (int, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	best := -1
 	for _, i := range order {
-		if r.held[i] >= r.limits[i] {
+		if r.held[i]+n > r.limits[i] {
 			continue
 		}
 		// held/cap below the best's, in integers.
@@ -157,17 +164,18 @@ func (r *SpotRegistry) claimOver(order []int) (int, bool) {
 	if best < 0 {
 		return 0, false
 	}
-	r.held[best]++
+	r.held[best] += n
 	return best, true
 }
 
-// farmBeside counts a bot farming, with no claim, the spot of order that
-// the bots beside fill least per monster the server keeps there (its
-// limit), the first in order on a tie, and reports which; none for an
-// empty order. It is for a bot that finds every spot that fits it full
-// (SpotPolicy.Beside): those bots spread over the full spots by their
-// monsters rather than piling on the nearest one.
-func (r *SpotRegistry) farmBeside(order []int) (int, bool) {
+// farmBesideN counts n bots (a bot, or a party's leader for its party)
+// farming, with no claim, the spot of order that the bots beside fill least
+// per monster the server keeps there (its limit), the first in order on a
+// tie, and reports which; none for an empty order. It is for a bot that
+// finds every spot that fits it full (SpotPolicy.Beside): those bots spread
+// over the full spots by their monsters rather than piling on the nearest
+// one.
+func (r *SpotRegistry) farmBesideN(order []int, n int) (int, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	best := -1
@@ -180,17 +188,15 @@ func (r *SpotRegistry) farmBeside(order []int) (int, bool) {
 	if best < 0 {
 		return 0, false
 	}
-	r.beside[best]++
+	r.beside[best] += n
 	return best, true
 }
 
-// leaveBeside gives back a count farmBeside took.
-func (r *SpotRegistry) leaveBeside(i int) {
+// leaveBesideN gives back n of the counts farmBesideN took, never below 0.
+func (r *SpotRegistry) leaveBesideN(i, n int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.beside[i] > 0 {
-		r.beside[i]--
-	}
+	r.beside[i] = max(0, r.beside[i]-n)
 }
 
 // overCap reports whether more bots than its cap hold spot i.
@@ -207,13 +213,29 @@ func (r *SpotRegistry) hasRoom(i int) bool {
 	return r.held[i] < r.caps[i]
 }
 
-// release gives back a spot claim took.
-func (r *SpotRegistry) release(i int) {
+// release gives back one claim took.
+func (r *SpotRegistry) release(i int) { r.releaseN(i, 1) }
+
+// releaseN gives back n of a spot's held count, never below 0.
+func (r *SpotRegistry) releaseN(i, n int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.held[i] > 0 {
-		r.held[i]--
+	r.held[i] = max(0, r.held[i]-n)
+}
+
+// reweigh moves the count a party's leader holds at spot i, or farms beside
+// it, from old to n in one step (docs/parties/spots.md, "Weighted
+// release"): a window add or delete, or the end of its leading. It checks
+// nothing: a held count weighed up may pass the cap, and the leader's spot
+// rule then looks for room (overCap).
+func (r *SpotRegistry) reweigh(i int, beside bool, old, n int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := &r.held[i]
+	if beside {
+		c = &r.beside[i]
 	}
+	*c = max(0, *c+n-old)
 }
 
 // index is the spot of the maker named name, in any case.

@@ -13,7 +13,9 @@ import (
 // nearest farm target. The fight itself goes on under rule 5 once the
 // server reports the bot in combat. With no farm target the turn goes to
 // the persona's goal, until the bot has gone Persona.Spots.Idle with none:
-// then it moves on and avoids the spot for AvoidFor (idleOut, #360).
+// then it moves on and avoids the spot for AvoidFor (idleOut, #360). A
+// leader waiting for a bot member behind (gathering) picks no new target
+// and its wait is no idle stretch.
 //
 // It sends what fight sends, a selection or one attack per target paced by
 // the brain's decision tick and the frame pacer, plus the stand-up toggle
@@ -25,6 +27,10 @@ func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 	}
 	id := b.farmTarget(now)
 	if id == 0 {
+		if b.gathering(now) {
+			v.idleSince = time.Time{}
+			return Action{}, false
+		}
 		if b.idleOut(now) {
 			b.moveOn(now, b.persona.Spots.AvoidFor)
 			return Action{}, true
@@ -40,7 +46,8 @@ func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 
 // farmTarget is the creature the farming bot attacks at now, 0 for none:
 // its hardest hitter first, so attackers come before fresh targets, then
-// its target and then the nearest monster that is a farm target.
+// its target and then the nearest monster that is a farm target, unless it
+// leads a party whose bot member it waits for (gathering).
 func (b *Brain) farmTarget(now time.Time) int32 {
 	if hits := b.attackers(now); len(hits) > 0 {
 		return hits[0]
@@ -49,6 +56,9 @@ func (b *Brain) farmTarget(now time.Time) int32 {
 	centre := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
 	if t := b.world.Target; b.mayFarm(t, sp, centre, now) {
 		return t
+	}
+	if b.gathering(now) {
+		return 0
 	}
 	from := b.world.Self.Position(now)
 	var (

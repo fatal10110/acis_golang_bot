@@ -179,7 +179,7 @@ func TestSpotFallbackShared(t *testing.T) {
 			r := b.cfg.Spots
 			for i, n := range tt.held {
 				for range n {
-					if _, ok := r.claimOver([]int{i}); !ok {
+					if _, ok := r.claimOverN([]int{i}, 1); !ok {
 						t.Fatalf("pre-claim spot %d: full", i)
 					}
 				}
