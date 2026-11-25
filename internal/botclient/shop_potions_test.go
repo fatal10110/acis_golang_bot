@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -58,5 +59,44 @@ func TestShopVisitLeavesWantsElsewhere(t *testing.T) {
 	})
 	if b.shop.v.npcID != 30004 || !b.shop.shunned[armorer].Equal(at(5*time.Second+shopRetry)) {
 		t.Fatalf("visit to %d, armorer left alone until %v; want the grocer's, the armorer's shopRetry after its visit", b.shop.v.npcID, b.shop.shunned[armorer].Sub(t0))
+	}
+}
+
+// TestShopVisitOrder checks which merchant a due visit goes to: the
+// nearest that sells a want of the first tier wanted, here the grocer's
+// potions past a nearer armorer's gear, as buyRows spends a window's budget
+// (#441); else the nearest that sells any want.
+func TestShopVisitOrder(t *testing.T) {
+	tests := []struct {
+		name    string
+		potions int32
+		setup   func(b *Brain)
+		want    int32
+		lists   []int32
+	}{
+		{name: "supplies first", potions: 1, want: 30004, lists: []int32{14}},
+		{name: "no supplies wanted", potions: 20, want: gearMerchant, lists: []int32{1}},
+		{name: "grocer beyond reach", potions: 1, setup: func(b *Brain) { b.persona.Shop.Reach = 6000 }, want: gearMerchant, lists: []int32{1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newGearBrain(t, 0, wornSword, wornShirt, wornPants, adenaStack(300000), potionsOf(tt.potions))
+			b.persona.Shop.Restock = []Restock{{Item: lesserHealingPotion, Min: 5, Max: 20}}
+			shops, cheapest := indexShops([]datapack.BuyList{
+				{ID: 1, NPCID: gearMerchant, Products: gearShop},
+				{ID: 14, NPCID: 30004, Products: []datapack.Product{{ItemID: lesserHealingPotion, Price: 103}}},
+			})
+			gear, shopGear := indexGear(gearTemplates, cheapest)
+			b.cfg.Travel = &TravelMap{
+				spawns: map[int32][]Point{gearMerchant: {{X: 5000}}, 30004: {{X: 8000}}},
+				shops:  shops, cheapest: cheapest, gear: gear, shopGear: shopGear,
+			}
+			if tt.setup != nil {
+				tt.setup(b)
+			}
+			if !b.startShop(at(time.Second)) || b.shop.v.npcID != tt.want || !slices.Equal(b.shop.lists, tt.lists) {
+				t.Fatalf("visit %+v lists %v, want merchant %d lists %v", b.shop.v, b.shop.lists, tt.want, tt.lists)
+			}
+		})
 	}
 }

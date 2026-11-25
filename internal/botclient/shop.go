@@ -538,60 +538,80 @@ func (b *Brain) wantsElsewhere(npcID int32) bool {
 }
 
 // startShop starts a visit when one is due: at the merchant in sight, else
-// at the merchant spawn within Reach, nearest the bot that sells something it wants,
-// or for a visit only to sell, at any merchant. It reports whether it
-// started one.
+// at the merchant spawn within Reach, nearest the bot that sells something
+// of the first tier it wants (the budget's order, buyRows, kept across
+// merchants: supplies at the grocer before gear at the armorer, #441), else
+// something it wants, or for a visit only to sell, at any merchant. It
+// reports whether it started one.
 func (b *Brain) startShop(now time.Time) bool {
 	sh, p := &b.shop, &b.persona.Shop
 	if b.cfg.Travel == nil || now.Before(sh.nextAt) {
 		return false
 	}
 	junk := len(b.junk())
-	want := b.shopWants(junk > 0 && p.SellAt > 0)
+	due := b.dueWants(junk > 0 && p.SellAt > 0)
+	var want, first []buyRow
+	for _, w := range due {
+		want = append(want, w.buyRow)
+		if w.tier == due[0].tier {
+			first = append(first, w.buyRow)
+		}
+	}
 	sellDue := p.SellAt > 0 && junk >= p.SellAt
 	sell := sellDue || (p.SellAt > 0 && len(want) > 0 && junk > 0)
 	if len(want) == 0 && !sell {
 		return false
 	}
 	shops, from := b.cfg.Travel.shops, b.world.Self.Position(now)
+	sells := func(l shopList, rows []buyRow) bool {
+		return slices.ContainsFunc(rows, func(r buyRow) bool { _, ok := l.sells(r.item); return ok })
+	}
 	// lists returns the lists of merchant npcID the visit opens; ok is
-	// false for a merchant the visit has no use for: one selling nothing
-	// wanted, unless selling is due on its own.
-	lists := func(npcID int32) (ids []int32, ok bool) {
+	// false for a merchant the visit has no use for: one selling none of
+	// need, unless anyMerchant and selling is due on its own.
+	lists := func(npcID int32, need []buyRow, anyMerchant bool) (ids []int32, ok bool) {
 		if now.Before(sh.shunned[npcID]) {
 			return nil, false
 		}
 		for _, l := range shops[npcID] {
-			if slices.ContainsFunc(want, func(r buyRow) bool { _, ok := l.sells(r.item); return ok }) {
+			if sells(l, want) {
 				ids = append(ids, l.id)
 			}
+			ok = ok || sells(l, need)
 		}
-		return ids, len(ids) > 0 || (sellDue && len(shops[npcID]) > 0)
+		return ids, ok || (anyMerchant && sellDue && len(shops[npcID]) > 0)
 	}
-	var best shopVisit
-	bestDist := int64(math.MaxInt64)
-	for id, o := range b.world.Objects {
-		if o.Kind != KindNPC || o.Dead {
-			continue
-		}
-		at := o.Position(now)
-		if d := dist2(from, at); d < bestDist {
-			if ids, ok := lists(o.NPCID); ok {
-				best, bestDist = shopVisit{v: npcVisit{npcID: o.NPCID, at: at, obj: id}, lists: ids}, d
+	pick := func(need []buyRow, anyMerchant bool) (best shopVisit) {
+		bestDist := int64(math.MaxInt64)
+		for id, o := range b.world.Objects {
+			if o.Kind != KindNPC || o.Dead {
+				continue
+			}
+			at := o.Position(now)
+			if d := dist2(from, at); d < bestDist {
+				if ids, ok := lists(o.NPCID, need, anyMerchant); ok {
+					best, bestDist = shopVisit{v: npcVisit{npcID: o.NPCID, at: at, obj: id}, lists: ids}, d
+				}
 			}
 		}
-	}
-	if !best.v.active() {
+		if best.v.active() {
+			return best
+		}
 		reach := int64(p.Reach) * int64(p.Reach)
 		for npcID := range shops {
 			for _, at := range b.cfg.Travel.spawns[npcID] {
 				if d := dist2(from, at); d <= reach && d < bestDist {
-					if ids, ok := lists(npcID); ok {
+					if ids, ok := lists(npcID, need, anyMerchant); ok {
 						best, bestDist = shopVisit{v: npcVisit{npcID: npcID, at: at}, lists: ids}, d
 					}
 				}
 			}
 		}
+		return best
+	}
+	best := pick(first, false)
+	if !best.v.active() {
+		best = pick(want, true)
 	}
 	if !best.v.active() {
 		sh.nextAt = now.Add(shopRetry)
