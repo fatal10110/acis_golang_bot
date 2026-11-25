@@ -549,6 +549,18 @@ grocer lists).
   cannot move at all, so the bot caps itself. The gear it buys stays under the 66.6 % band too: a
   piece that would take the load there is left off the list (`gearFits`).
 
+  Besides the drops of the creatures it fought, a bot picks up other ground items within
+  `Loot.Radius` (`Loot.Ground`, #435), through the same queue, weight cap and timeout. The
+  farmer and merchant presets take any item (`GroundAny`); every other persona takes only what
+  it keeps rather than sells (adena, its potions, shots, arrows, supplies and keep set, and what
+  its keep hook holds, such as a clan crafter's materials) and gear that beats what it wears
+  (`GroundFit`). None takes its own drops or its `Loot.Junk`. The wire
+  names no loot owner, and the server lifts its 15 s lock of a kill's drops to the killer
+  without a packet (`data/manager/killrewards.go`), so the bot leaves such an item alone for
+  15 s after it first sees it. The bots of one process share a claim table (`GroundClaims`), so
+  no two of them chase one item; the server gives an item clicked by bots of two processes to
+  the first click.
+
   The gear errand never leaves the bot under the grade penalty (#436): while the server holds it
   (skill 4267), the bot takes off a worn armor or jewelry piece above its Expertise grade, then wears
   the best piece of its grade it carries. An over-grade weapon costs only accuracy, so it comes off
