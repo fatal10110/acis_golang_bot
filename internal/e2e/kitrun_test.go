@@ -246,7 +246,7 @@ func TestHunterOutcomes(t *testing.T) {
 			"hunter 3 (12): 0 Spoil casts, spoiled false; alive 50s after its spawn",
 		}},
 		{name: "past its kill bound", now: at.Add(10*time.Second + hunterKill + time.Second), want: []string{
-			"hunter 3 (12): 0 Spoil casts, spoiled false; alive past hunterKill (3m0s)",
+			"hunter 3 (12): 0 Spoil casts, spoiled false; alive past hunterKill (" + hunterKill.String() + ")",
 		}},
 	}
 	for _, tt := range tests {

@@ -38,7 +38,7 @@ const (
 func TestLiveSpoilSweep(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 30*time.Minute)
+	ctx := scenarioCtx(t, 35*time.Minute)
 	spots, travel := spotRegistry(t, tg), travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("ss", 1)
@@ -214,20 +214,22 @@ const werewolfHunter int32 = 20343
 var farmingRules = []string{"farm", "goal", "idle", ""}
 
 // spoilHunters is how many hunters a run spawns at most, one at a time,
-// each once the bot farms its spot: a spoil resisted (139) is cast again
-// while the hunter lives, so each hunter most likely dies spoiled and four
-// in five of those leave items to sweep; six all coming up empty is about
-// one run in 30000.
-const spoilHunters = 6
+// each once the bot farms its spot. A hunter the bot fights most likely
+// dies spoiled (a spoil resisted, 139, is cast again while it lives) and
+// four in five of those leave items to sweep, but the bot, busy with its
+// spot's own monsters, fought only one hunter in two within 3 minutes of
+// its spawn (runs 1909dce and 04a273a: hunter 1 never fought, hunter 2
+// spoiled and swept after 58s and 1m48s). At that rate nine all coming up
+// empty is about one run in 500; the hunters left alive stay targets.
+const spoilHunters = 9
 
-// spoilBound bounds the spoil step: each hunter is a walk to the spot or a
-// short fight, its kill and its sweep window, about a minute each in the
-// runs so far, or hunterKill for one the bot never fights.
-const spoilBound = 15 * time.Minute
+// spoilBound bounds the spoil step: each hunter is hunterKill at most, then
+// its sweep window.
+const spoilBound = 20 * time.Minute
 
 // hunterKill is how long a spawned hunter may live before the next one is
 // spawned: the bot may be busy with its spot's monsters first.
-const hunterKill = 3 * time.Minute
+const hunterKill = 2 * time.Minute
 
 // hunterDone reports whether the hunter mob spawned at spawned is done with
 // at now: dead and its sweep window over, or still alive past hunterKill.
