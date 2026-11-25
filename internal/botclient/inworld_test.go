@@ -76,7 +76,7 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 	w.WriteUint16(3)
 	w.WriteUint16(4)
 	w.WriteInt32(1012526)
-	w.WriteUint16(80)
+	w.WriteUint16(uint16(u.InvLimit))
 	w.WriteInt32(u.ClassID)
 	w.WriteInt32(0)
 	w.WriteInt32(u.MaxCP)
@@ -223,7 +223,7 @@ var (
 	testUserInfo = UserInfo{
 		ObjectID: 0x10000001, Name: "bot7", Pos: Point{X: -71000, Y: 258000, Z: -3100}, Heading: 49152,
 		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
-		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000,
+		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000, InvLimit: 100,
 		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
 		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001, AllyID: 0x0a000002,
 		CollisionRadius: 9, PKKills: 11, PvPKills: 12,

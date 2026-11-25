@@ -86,6 +86,10 @@ type SelfState struct {
 	CP, MaxCP          int32
 	// Load and MaxLoad are the carried weight and the weight limit.
 	Load, MaxLoad int32
+	// InvLimit is the inventory limit (UserInfo.InvLimit), 0 while
+	// unknown: the server refuses a pickup needing a slot past it
+	// (Brain.slotsFit).
+	InvLimit int32
 	// DeathPenalty is the death penalty level (0-15); deathPenaltyKnown
 	// is set once the session's first EtcStatusUpdate gave it
 	// (World.applyDeathPenalty).
@@ -872,7 +876,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.BaseClass, s.ClassID, s.Level, s.Exp, s.SP = e.BaseClass, e.ClassID, e.Level, e.Exp, e.SP
 	s.Race = e.Race
 	s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP = e.HP, e.MaxHP, e.MP, e.MaxMP, e.CP, e.MaxCP
-	s.Load, s.MaxLoad = e.Load, e.MaxLoad
+	s.Load, s.MaxLoad, s.InvLimit = e.Load, e.MaxLoad, e.InvLimit
 	s.AllyID = e.AllyID
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running

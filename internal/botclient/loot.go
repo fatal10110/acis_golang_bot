@@ -218,17 +218,34 @@ type lootQueue struct {
 	ground map[int32]time.Time
 	// claimed is the item the bot holds a GroundClaims claim on, 0 for none.
 	claimed int32
+	// own are the queued drops of creatures the bot fought (lootEvent), as
+	// against the ground items groundScan queues.
+	own map[int32]bool
+	// misses counts the ground items given up in a row after clicks that
+	// picked nothing up; from lootMisses, ground pickups pause until
+	// pauseUntil or the bot's next pickup (#528).
+	misses     int
+	pauseUntil time.Time
+	// full is how many items the bot held when the server refused a
+	// pickup for want of a slot (lootRefused), 0 for none (slotsFit).
+	full int
 }
 
 // next drops the head items that left the ground or ran out of time and
-// returns the first one left, 0 for none.
+// returns the first one left, 0 for none. One that ran out of time was
+// clicked and never picked up (missed).
 func (l *lootQueue) next(ground map[int32]GroundItem, timeout time.Duration, now time.Time) int32 {
 	for len(l.items) > 0 {
 		id := l.items[0]
-		if _, ok := ground[id]; ok && (l.started.IsZero() || now.Sub(l.started) < timeout) {
+		_, ok := ground[id]
+		if ok && (l.started.IsZero() || now.Sub(l.started) < timeout) {
 			return id
 		}
+		if ok {
+			l.missed(id, now)
+		}
 		l.items = l.items[1:]
+		delete(l.own, id)
 		l.started, l.clicked = time.Time{}, time.Time{}
 	}
 	return 0
@@ -237,6 +254,7 @@ func (l *lootQueue) next(ground map[int32]GroundItem, timeout time.Duration, now
 // skip gives up the item at the head of the queue: no walk reaches it.
 func (l *lootQueue) skip() {
 	if len(l.items) > 0 {
+		delete(l.own, l.items[0])
 		l.items = l.items[1:]
 	}
 	l.started, l.clicked, l.standFor = time.Time{}, time.Time{}, 0
@@ -288,6 +306,9 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 	case GetItem:
 		delete(b.loot.ground, e.ObjectID)
 		b.cfg.Ground.drop(e.ObjectID)
+		if e.PickerID == self {
+			b.loot.misses, b.loot.pauseUntil = 0, time.Time{}
+		}
 	case DeleteObject:
 		// The record forgets what World.Ground forgets (World.Apply), so it
 		// stays bounded by what lies in sight, also for a member that
@@ -318,6 +339,11 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 		if !slices.Contains(l.items, e.Item.ObjectID) {
 			l.items = append(l.items, e.Item.ObjectID)
 		}
+		if l.own == nil {
+			l.own = make(map[int32]bool)
+		}
+		maps.DeleteFunc(l.own, func(id int32, _ bool) bool { return !slices.Contains(l.items, id) })
+		l.own[e.Item.ObjectID] = true
 		if b.reactAt.IsZero() {
 			b.reactAt = now.Add(b.reactDelay())
 		}
@@ -394,7 +420,7 @@ func (b *Brain) groundSeen(id int32, now time.Time) {
 // record. One out of the radius stays recorded while it is in sight.
 func (b *Brain) groundScan(now time.Time) {
 	p, w, l := &b.persona.Loot, b.world, &b.loot
-	if len(l.ground) == 0 || !p.Pickup || p.Ground == GroundNone || b.leavesLoot() {
+	if len(l.ground) == 0 || !p.Pickup || p.Ground == GroundNone || b.leavesLoot() || now.Before(l.pauseUntil) {
 		return
 	}
 	var due []int32
@@ -424,7 +450,9 @@ func (b *Brain) groundScan(now time.Time) {
 }
 
 // groundTakes reports whether the policy takes ground item it, which the
-// bot did not fight for (LootPolicy.Ground): never its Junk.
+// bot did not fight for (LootPolicy.Ground): never its Junk. GroundFit
+// takes a piece that beats what the bot wears only while its bag lacks
+// the pieces to fill that jewelry slot (bagFills).
 func (b *Brain) groundTakes(it GroundItem) bool {
 	p := &b.persona.Loot
 	if slices.Contains(p.Junk, it.TemplateID) {
@@ -438,7 +466,7 @@ func (b *Brain) groundTakes(it GroundItem) bool {
 			return true
 		}
 		w := b.worn()
-		return b.beats(it.TemplateID, &w)
+		return b.beats(it.TemplateID, &w) && !b.bagFills(it.TemplateID, &w)
 	}
 	return false
 }
@@ -450,15 +478,16 @@ func (b *Brain) lootQueued(now time.Time) bool {
 
 // nextLoot is the queued item to pick up at now, 0 for none: the head of
 // the queue, after the ground items due (groundScan), giving up the ones
-// too heavy to carry (lootFits) and those another bot of the process is
-// after (GroundClaims). The bot claims the item it returns and gives back
-// the one it held before.
+// too heavy to carry or with no slot for them (lootFits), the ground items
+// while a loot stall pauses them (groundPaused) and those another bot of
+// the process is after (GroundClaims). The bot claims the item it returns
+// and gives back the one it held before.
 func (b *Brain) nextLoot(now time.Time) int32 {
 	b.groundScan(now)
 	l, self := &b.loot, b.world.Self.ObjectID
 	for {
 		id := l.next(b.world.Ground, b.persona.Loot.Timeout, now)
-		if id != 0 && (!b.lootFits(b.world.Ground[id]) || !b.cfg.Ground.claim(id, self, now)) {
+		if id != 0 && (!b.lootFits(b.world.Ground[id]) || l.groundPaused(id, now) || !b.cfg.Ground.claim(id, self, now)) {
 			l.skip()
 			continue
 		}
@@ -477,9 +506,13 @@ func (b *Brain) nextLoot(now time.Time) int32 {
 // weight is its count times its template's (TravelMap.weights); with the
 // weights known, adena and an item that weighs nothing always fit, and one
 // the table lacks weighs an unknown amount and never does. With no weights known,
-// it counts as nothing and the load alone must be under the caps.
+// it counts as nothing and the load alone must be under the caps. Whatever
+// the weight, it must have a slot (slotsFit, #528).
 func (b *Brain) lootFits(it GroundItem) bool {
 	s, pct := &b.world.Self, b.persona.Loot.StopAbove
+	if !b.slotsFit(it) {
+		return false
+	}
 	if s.MaxLoad <= 0 {
 		return true
 	}

@@ -49,6 +49,8 @@ type Datapack struct {
 	Names map[int32]string
 	// Stackable are the templates in Prices that stack.
 	Stackable map[int32]bool
+	// Herbs are the herb templates: they take no inventory slot.
+	Herbs map[int32]bool
 	// Recipes maps a craft recipe id to its recipe.
 	Recipes map[int32]Recipe
 	// ArmorSets maps an armor set's chest template id to the set.
@@ -134,7 +136,7 @@ func Load(xmlDir string) (*Datapack, error) {
 	}
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
-		Items: items.Items, EtcItems: items.Etc, Prices: items.Prices, Names: items.Names, Stackable: items.Stackable,
+		Items: items.Items, EtcItems: items.Etc, Prices: items.Prices, Names: items.Names, Stackable: items.Stackable, Herbs: items.Herbs,
 		Skills: skills, Recipes: recipes, ArmorSets: armorSets, Hennas: hennas, WaterZones: water, Zones: zones,
 		Classes: classes, Multisells: multisells, RestartPoints: restarts,
 	}, nil
