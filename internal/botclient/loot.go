@@ -326,7 +326,7 @@ func (b *Brain) fought(id int32, now time.Time) {
 	if _, mate := b.world.Party.Members[id]; mate {
 		return
 	}
-	if o := b.world.object(id); o == nil || !b.persona.PvP.MayFight(o) {
+	if o := b.world.object(id); o == nil || b.fightKind(id, o, now) == fightNone {
 		return
 	}
 	l := &b.loot

@@ -51,7 +51,10 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
 - **Duel state**: `idle → asked` (`ExDuelAskStart`, or its own challenge) `→ countdown` (1930 or
   1929) `→ fighting` (`ExDuelStart`, the opponent's first `ExDuelUpdateUserInfo`, carrying its
   object id, then the reaction delay) `→ idle` (`ExDuelEnd`, 1950-1956, 1931, a refusal 153, 1926,
-  1940, 2017-2028, or 15 s unanswered). The PvP [reaction](#changes-to-todays-code-x4) covers the
+  1940, 2017-2028, or 15 s unanswered). A result (1950-1956) or a 692 holds the duel `over`, nobody
+  fought, until its `ExDuelEnd`, which the server sends in the same step (`network/duel.go:433-445`);
+  a challenge refusal ends only an open challenge (153 also answers other requests). The code is
+  `internal/botclient/pvp_world.go`. The PvP [reaction](#changes-to-todays-code-x4) covers the
   gap to the bot's own start step, queued by the same loop (`network/duel.go:364-395`, `:396-399`; `duel/state.go:82-86`).
   Only while fighting is the opponent attackable with a plain `Action`.
 - **Arena state**: the bot's position in an arena polygon (X2; 283 and 284 come from sieges too).

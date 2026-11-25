@@ -238,9 +238,14 @@ Shared behavior in every persona:
   bot may attack a monster another player is fighting, and it does not track who fights what;
 - PvP defaults (configurable, D6): assist and fight-back target NPCs, or players who are flagged or
   have karma; never force-attack an unflagged player with no karma; stop fighting back when the
-  attacker unflags; do not heal or buff a flagged party member (that flags the bot);
+  attacker unflags; do not heal or buff a flagged or karma party member (that flags the bot);
+  a player's offensive cast at the bot is an attack, a heal or buff is not (`docs/pvp/wire.md`
+  "Changes to today's code (X4)");
 - blacklist a target after N failed attempts; stuck detection over 2.5 s, then a side step;
-- reaction delay 300-1200 ms before acting on a new event;
+- reaction delay 300-1200 ms before acting on a new event; a PvP event (a duel packet, a cast
+  cancelled, a cast by or at a player the bot fights or by a player at a party member, a fought
+  player's move or change of mask or flag) is acted on 200-600 ms after it instead, moving a
+  later reaction earlier, never later (D35, `docs/pvp/wire.md`);
 - server limits: 160 frames/s burst, 80/s average over 5 s, disconnect after 2 floods per minute;
   bypasses inside 100 ms dropped silently; emotes every 2 s; chat flood gates; traffic within the
   15 minute idle timeout.

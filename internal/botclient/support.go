@@ -236,7 +236,7 @@ func (b *Brain) ruleAssist(now time.Time) (Action, bool) {
 
 // patients are the party members the bot supports at now, in order: the
 // leader, the bot, then the others by object id. A member out of sight,
-// dead, or flagged against the PvP policy is left out.
+// dead, or refused by the support gate (supportAllowed) is left out.
 func (b *Brain) patients(now time.Time) []int32 {
 	self := b.world.Self.ObjectID
 	p := &b.world.Party
@@ -250,14 +250,14 @@ func (b *Brain) patients(now time.Time) []int32 {
 			ids = append(ids, id)
 		}
 	}
-	return slices.DeleteFunc(ids, func(id int32) bool { return id != self && !b.maySupport(id) })
+	return slices.DeleteFunc(ids, func(id int32) bool { return id != self && !b.maySupport(id, now) })
 }
 
-// maySupport reports whether the bot may heal or buff party member id: in
-// sight, alive and allowed by the PvP policy.
-func (b *Brain) maySupport(id int32) bool {
+// maySupport reports whether the bot may heal or buff party member id at
+// now: in sight, alive and allowed by the support gate (supportAllowed).
+func (b *Brain) maySupport(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && !o.Dead && b.persona.PvP.MaySupport(o)
+	return o != nil && !o.Dead && b.supportAllowed(id, o, now)
 }
 
 // vitals are member id's HP and maximum: the bot's own, or the party
@@ -279,7 +279,11 @@ func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 	if hp <= 0 {
 		return Heal{}, false
 	}
+	held := b.partySkillHeld(now)
 	for _, h := range b.build().Kit.Heals {
+		if h.Members > 0 && held {
+			continue
+		}
 		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
 			return h, true
 		}
@@ -380,10 +384,14 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 	}
 	weapon := b.buffWeapon(kit.Buffs)
 	from := s.Position(now)
+	held := b.partySkillHeld(now)
 	for _, id := range b.patients(now) {
 		for _, bf := range kit.Buffs {
 			on := id
 			if bf.Party {
+				if held {
+					continue
+				}
 				on = s.ObjectID
 				if o := b.world.object(id); id != s.ObjectID && (o == nil || dist2(from, o.Position(now)) > partyBuffReach*partyBuffReach) {
 					continue

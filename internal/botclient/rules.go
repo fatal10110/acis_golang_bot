@@ -504,7 +504,9 @@ type rule struct {
 // buy and draw and ahead of every rule that would walk the bot out of town.
 // "sweep" casts Sweeper on a corpse the bot spoiled while its sweep window
 // lasts, right after "outnumbered" so only the critical, escape, heal,
-// outnumbered and flee rules go first, and ahead of "loot".
+// outnumbered and flee rules go first, and ahead of "loot". "duel" fights
+// the duel opponent and holds every rule after it while the duel is on
+// (ruleDuel), after "raise".
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -513,6 +515,7 @@ var playRules = []rule{
 	{"escape", (*Brain).ruleEscape},
 	{"heal", (*Brain).ruleHeal},
 	{"raise", (*Brain).ruleRaise},
+	{"duel", (*Brain).ruleDuel},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"sweep", (*Brain).ruleSweep},
 	{"chat", (*Brain).ruleChat},

@@ -74,10 +74,12 @@ func TestCombatRules(t *testing.T) {
 			wantRule: "attacked",
 		},
 		{
-			name:     "the force-attack policy force-attacks an unflagged player",
+			// ForceAttack is PK mode, whose limits ship in X11: until
+			// then it lets no player pass MayFight's rules.
+			name:     "the force-attack policy no longer fights an unflagged player",
 			persona:  func(p *Persona) { p.PvP.ForceAttack = true },
 			setup:    func(b *Brain) { fighting(b); hitBy(b, pcID, 10); b.world.Target = pcID },
-			wantRule: "attacked", wantKind: actAttack, wantOp: opGameAttackRequest, wantObject: pcID,
+			wantRule: "attacked",
 		},
 		{
 			name:     "the policy may leave flagged players alone",
@@ -431,14 +433,15 @@ func TestCombatRules(t *testing.T) {
 }
 
 // TestPvPPolicySupport checks the heal and buff default: never a flagged
-// player unless the policy allows it.
+// or karma player unless the policy allows it, as supporting either flags
+// the caster (character_pvpflag.go skillTargetFlagsPvP).
 func TestPvPPolicySupport(t *testing.T) {
-	flagged, clean := &Object{Kind: KindPlayer, PvPFlag: 1}, &Object{Kind: KindPlayer, Karma: 10}
-	if def := DefaultPersona().PvP; def.MaySupport(flagged) || !def.MaySupport(clean) {
-		t.Error("default supports a flagged player or refuses an unflagged one")
+	flagged, karma, clean := &Object{Kind: KindPlayer, PvPFlag: 1}, &Object{Kind: KindPlayer, Karma: 10}, &Object{Kind: KindPlayer}
+	if def := DefaultPersona().PvP; def.MaySupport(flagged) || def.MaySupport(karma) || !def.MaySupport(clean) {
+		t.Error("default supports a flagged or karma player, or refuses a clean one")
 	}
-	if !(PvPPolicy{SupportFlagged: true}).MaySupport(flagged) {
-		t.Error("SupportFlagged refuses a flagged player")
+	if p := (PvPPolicy{SupportFlagged: true}); !p.MaySupport(flagged) || !p.MaySupport(karma) {
+		t.Error("SupportFlagged refuses a flagged or karma player")
 	}
 }
 
