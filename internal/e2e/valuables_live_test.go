@@ -129,10 +129,13 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	b.until(t, ctx, b.c.Self.Name+" hears a Trade line naming "+tearsName, 12*time.Minute, func() bool {
 		return b.adSince(lines, tearsName) != ""
 	})
-	if ad := b.adSince(lines, tearsName); !strings.Contains(ad, swordName) {
+	ad := b.adSince(lines, tearsName)
+	if !strings.Contains(ad, swordName) {
 		t.Errorf("the next round's Trade line %q names no %s", ad, swordName)
 	}
+	t.Logf("%s heard %s: %q", b.c.Self.Name, f.name, ad)
 	links := privateLinks(t, f, sent)
+	t.Logf("%s's private links: %+v", f.name, privateLinks(t, f, 0))
 	if !hasLink(links, "_WithdrawP") {
 		t.Errorf("the next round withdrew nothing first: private links %q", links)
 	}
@@ -398,10 +401,15 @@ func (b *valuablesBuyer) buyByTrade(t *testing.T, ctx context.Context, price int
 	return had - adenaLeft
 }
 
-// storeList clicks the store of owner, which stands within reach, and
-// returns its sell list.
+// storeList clicks owner, which stands within reach, to select it, clicks
+// it again to open its sell store (as the bot's market visit does) and
+// returns the store's list.
 func (b *valuablesBuyer) storeList(t *testing.T, ctx context.Context, owner int32) botclient.PrivateStoreListSell {
 	t.Helper()
+	if err := b.c.Send(ctx, botclient.EncodeAction(owner, b.c.Pos())); err != nil {
+		t.Fatal(err)
+	}
+	b.await(t, ctx, b.c.Self.Name+" selects "+b.merchant, 30*time.Second, func(botclient.Event) bool { return b.c.Target() == owner })
 	if err := b.c.Send(ctx, botclient.EncodeAction(owner, b.c.Pos())); err != nil {
 		t.Fatal(err)
 	}

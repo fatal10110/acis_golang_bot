@@ -167,9 +167,14 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2ewl1`-`e2ewl2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu3`,
   `e2erv1`-`e2erv3`, `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`,
   `e2est1`-`e2est3`, `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`,
-  `e2epn1`, `e2ewm1`) and
+  `e2epn1`, `e2ewm1`, `e2evm1`-`e2evm3`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
+- The valuables scenarios' buyer `<prefix>vb1` (`e2evb1`), no GM, with one human fighter whose
+  name does **not** carry the bot marker, so the merchant answers it: the first of the fixed
+  candidates `buyerNames` (`internal/e2e/valuables_buyer_test.go`) the server accepts; the
+  scenario fails before it logs in when the marker marks one. It keeps the valuables it bought
+  and the adena it was given.
 - The minted GMs `<prefix>mint<N>` (`e2emint1`, ...), each with one character `<prefix>mint<N>Bot` of
   access level 7, recorded in `.e2e/minted-<prefix>`; later runs lease them again. They stay
   until the owner retires them (`//set access <name> 0` from a GM, then delete the record's
@@ -274,6 +279,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveStoreBuy` | GM, datapack | #177 a bot buys the shots it wants from a second client's sell store at the listed price, not a Scroll of Escape listed over its price cap |
 | `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols, each draw answered by its HennaInfo, dye InventoryUpdate and SymbolAdded before the next; fails if the master (shown as 31228 "Hasha", #343) is not at its Talking Island spawn |
 | `TestLiveNavPickUpObstacle` | GM, datapack | #239 a level 5 farmer kills wolves the GM spawns and paralyses (a spawned monster wanders) at a measured site, recalled to its spot before each one, until it turns to a drop where the straight walk from where it stands fails: its kill spot for the first drop, the drop before for each next one (no site closes every drop spot: a scatter step blocked at once leaves the item on the corpse); it walks to a `StandPickUp` stand point, picks the item up from there, and the item reaches its inventory |
+| `TestLiveValuablesTradeSale` | GM, datapack | #402 a merchant-preset mystic given a Sword of Watershadow says a Trade line the unmarked buyer hears; the buyer's offer gets a counter, the counter an agreement and the merchant's TradeRequest, which the buyer accepts and pays: settled at that price (both inventories); private links at Rolfe only, the sword never worn |
+| `TestLiveValuablesWarehouse` | GM, datapack | #402 with `RoundGap` lowered, the merchant deposits the unsold sword at Rolfe after its round (30 adena a row), the GM gives it Tears of Eva, and its next round withdraws the sword at Rolfe before one Trade line naming both; no `_DepositP`/`_WithdrawP` names Rant |
+| `TestLiveValuablesRelease` | GM, datapack | #402 with `HoldRows` 1, a round with both valuables releases them: no deposit, the store lists them first, and the buyer buys the sword there at the listed price |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
 

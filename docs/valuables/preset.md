@@ -52,7 +52,7 @@ gives `NewTravelMap` a second argument, a `SupplyConfig`, built in `cmd/bots/swa
 
 Live harness, at most 4 characters each, never with `-race`.
 
-- **Buyer.** Every run account's character carries the bot marker (`docs/e2e-live.md:145-146`;
+- **Buyer.** Every run account's character carries the bot marker (`docs/e2e-live.md`, "What a run creates";
   `character`, `internal/e2e/helpers_live_test.go:31-43`, via `botnames.DefaultMarker`) and the bot
   replies to no marked name (`TestLiveChatReplies`, `internal/e2e/chat_live_test.go:12-17,73-78`);
   the unmarked GM is trade-exempt: offered nothing, confirmed only after it confirms
