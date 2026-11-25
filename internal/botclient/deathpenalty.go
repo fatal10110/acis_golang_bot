@@ -118,9 +118,28 @@ func (b *Brain) ruleRecover(now time.Time) (Action, bool) {
 	return useItemAction(it), true
 }
 
+// penaltyTrip reports whether the bot's death penalty sends it home
+// (supply trip causePenalty, #491): it lifts its penalty, carries no
+// Scroll: Recovery of its band, and a spawned merchant sells one at a base
+// price its adena past the supplies tier's floor pays, so the town visit
+// buys it (recoveryWants, first in that tier). A bot that cannot buy one
+// farms on with its penalty rather than walk to a town that sells it none.
+func (b *Brain) penaltyTrip() bool {
+	m := b.cfg.Travel
+	if !b.liftsPenalty() || m == nil {
+		return false
+	}
+	id := recoveryScroll(b.world.Self.Level)
+	price, sold := m.cheapest[id]
+	if !sold || !m.spawnedSold[id] || b.carried(id) > 0 {
+		return false
+	}
+	return int64(price) <= int64(b.carried(adenaID))-b.floor(tierSupplies)
+}
+
 // recoveryWants is the supplies tier's Scroll: Recovery purchase: one of
 // the bot's level band per death penalty level, less those it carries,
-// when a merchant sells it.
+// when a merchant sells it. It comes first in the tier (#491).
 func (b *Brain) recoveryWants() []buyRow {
 	if !b.liftsPenalty() || b.cfg.Travel == nil {
 		return nil

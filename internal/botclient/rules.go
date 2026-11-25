@@ -496,7 +496,10 @@ type rule struct {
 // rules so it never delays one. "buffpotion" drinks the build's buff potion
 // at the farming spot out of combat, after the rebuff so a support's buff
 // lands first. "recover" reads a Scroll: Recovery out of combat while the
-// bot has a death penalty level, anywhere, after the buff potion. "supply"
+// bot has a death penalty level, anywhere: lifting the penalty comes first
+// (#491), so it goes ahead of "rest", "rebuff", "buffpotion" and every
+// errand, behind only the death, command, chat, party, fight and
+// overweight rules. "supply"
 // is the farmer's trip home to restock (D16), after
 // the errands that already serve it and ahead of following and farming;
 // "escape" holds every rule after it while its Scroll of Escape's recall
@@ -531,10 +534,10 @@ var playRules = []rule{
 	{"overweight", (*Brain).ruleOverweight},
 	{"attacked", (*Brain).ruleAttacked},
 	{"overweight hold", (*Brain).ruleOverweightHold},
+	{"recover", (*Brain).ruleRecover},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
 	{"buffpotion", (*Brain).ruleBuffPotion},
-	{"recover", (*Brain).ruleRecover},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
 	{"valuables", (*Brain).ruleValuables},

@@ -35,6 +35,9 @@ const (
 	// restart, its own supply trip), the member carrying a Scroll of Escape
 	// with nothing attacking it (docs/parties/members.md, "Events").
 	causeLeader
+	// causePenalty: the bot has a death penalty and no Scroll: Recovery of
+	// its band, and the town sells one its adena pays (penaltyTrip, #491).
+	causePenalty
 )
 
 // supplyTrip is a farmer's trip home to restock (rule "supply", D16,
@@ -382,7 +385,8 @@ func (b *Brain) nearSlotLeader(now time.Time) bool {
 }
 
 // supplyCause is the first trigger of a supply trip that holds
-// (docs/items.md section 7), causeNone for none: a consumable it uses
+// (docs/items.md section 7), causeNone for none: a death penalty it has
+// no Scroll: Recovery for and can buy one (penaltyTrip), a consumable it uses
 // fighting runs out within ReturnMinutes, its HP potions are gone, its load
 // is past ReturnLoad with ShedMin to shed, or in the half-speed band
 // (slowed) with anything to shed, or it carries the price of the gear goal. The Extra supplies and the Scrolls of Escape count toward
@@ -398,6 +402,8 @@ func (b *Brain) supplyCause() tripCause {
 		v.potions = true
 	}
 	switch {
+	case b.penaltyTrip():
+		return causePenalty
 	case b.runsOut():
 		return causeRunOut
 	case potion && v.potions && potions == 0:
