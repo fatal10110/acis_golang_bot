@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -92,9 +93,9 @@ func TestLiveValuablesTradeSale(t *testing.T) {
 
 // TestLiveValuablesWarehouse: with RoundGap lowered, the buyer stays silent;
 // after its round the merchant deposits the sword at Rolfe (30 adena a row,
-// the sword gone); the GM gives it Tears of Eva unless it carried one from
-// an earlier run; its next round withdraws the sword at Rolfe, and one Trade
-// line the buyer hears names both. No private link names Rant.
+// the sword gone); the GM gives it Tears of Eva; its next round withdraws
+// the sword at Rolfe, and one Trade line the buyer hears names both. No
+// private link names Rant.
 func TestLiveValuablesWarehouse(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -102,6 +103,10 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	ctx := scenarioCtx(t, 30*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("vm", 2)
+	// The gift that starts the next round adds a Tears row each run:
+	// what earlier runs left goes first, so the deposit's rows and fee
+	// stay bounded.
+	trimCarried(t, ctx, tg, account, &botclient.HumanMystic, map[int32]int{swordOfWatershadow: 1, tearsOfEva: 0})
 	f := valuablesMerchant(t, ctx, tg, gm, account, func(v *botclient.ValuablePolicy) {
 		// Persona defaults (D6): two rounds within the scenario, and no
 		// cap release, which would send what earlier runs left with the
@@ -114,12 +119,10 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	}
 	b := enterBuyer(t, ctx, tg, gm, f)
 	from, sent := f.seen(), len(f.watch.Sent())
-	// A sword and Tears an earlier run's second round withdrew serve as
-	// well, and the merchant's stock (and the deposit's fee) stays bounded.
+	// A sword an earlier run's second round withdrew serves as well.
 	if f.carries(swordOfWatershadow) == 0 {
 		giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
 	}
-	hadTears := f.carries(tearsOfEva) > 0
 
 	untilServedBy(t, ctx, f.name+" deposits the sword after its round", time.Now().Add(12*time.Minute), f.watch, warehouseRefused(f.watch), func() string {
 		switch {
@@ -145,9 +148,9 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines, sent := len(b.ads), len(f.watch.Sent())
-	if !hadTears {
-		giveMerchant(t, ctx, gm, f, tearsOfEva, 1)
-	}
+	// Stored valuables alone start no round (docs/valuables/round.md
+	// "Start"): a valuable carried does.
+	giveMerchant(t, ctx, gm, f, tearsOfEva, 1)
 	b.until(t, ctx, b.c.Self.Name+" hears a Trade line naming "+tearsName, 12*time.Minute, func() bool {
 		return b.adSince(lines, tearsName) != ""
 	})
@@ -284,6 +287,65 @@ func giveMerchant(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tm
 	waitForBy(t, ctx, fmt.Sprintf("%s gets %d of %d", f.name, count, tmpl), time.Now().Add(time.Minute), func() bool {
 		return f.carries(tmpl) > before
 	})
+}
+
+// trimCarried enters account's character of class as a scripted client
+// before its bot does, destroys what it carries of each template of keep
+// beyond keep's count, one at a time, and logs out.
+func trimCarried(t *testing.T, ctx context.Context, tg *Target, account string, class *botclient.StartingClass, keep map[int32]int) {
+	t.Helper()
+	c, err := tg.EnterWhenFree(ctx, account, character(t, account, class), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoutAtEnd(t, c)
+	tg.Own(c.Self.Name, c.Self.ObjectID)
+	inv := make(map[int32]botclient.Item)
+	list, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
+		_, ok := ev.(botclient.ItemList)
+		return ok
+	})
+	if err != nil {
+		t.Fatalf("trim %s: its ItemList: %v", c.Self.Name, err)
+	}
+	applyInventory(inv, list)
+	seen := make(map[int32]int)
+	destroyed := 0
+	for _, id := range slices.Sorted(maps.Keys(inv)) {
+		it := inv[id]
+		n, ok := keep[it.TemplateID]
+		if !ok {
+			continue
+		}
+		if seen[it.TemplateID]++; seen[it.TemplateID] <= n {
+			continue
+		}
+		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(id, it.Count)); err != nil {
+			t.Fatal(err)
+		}
+		ev, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
+			applyInventory(inv, ev)
+			if m, ok := ev.(botclient.SystemMessage); ok && slices.Contains(destroyRefusals, m.ID) {
+				return true
+			}
+			_, carried := inv[id]
+			return !carried
+		})
+		if err != nil {
+			t.Fatalf("trim %s: destroy %+v: %v", c.Self.Name, it, err)
+		}
+		if _, carried := inv[id]; carried {
+			t.Fatalf("trim %s: destroy %+v refused: %T%+v", c.Self.Name, it, ev, ev)
+		}
+		destroyed++
+	}
+	t.Logf("%s trimmed: destroyed %d items of %v", c.Self.Name, destroyed, slices.Sorted(maps.Keys(keep)))
+	lctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if err := c.Logout(lctx); err != nil {
+		t.Fatalf("trim %s: logout: %v", c.Self.Name, err)
+	}
+	c.Close()
 }
 
 // valuablesBuyer is the buyer's client and what it heard from the merchant.

@@ -175,8 +175,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   candidates `buyerNames` (`internal/e2e/valuables_buyer_test.go`) the server accepts; the
   scenario fails before it logs in when the marker marks one. It destroys the valuables it bought
   when the scenario ends and keeps the adena it was given. `e2evm2`, the warehouse scenario's
-  merchant, ends each run carrying its valuables: one Sword of Watershadow and one Tears of Eva,
-  given only when it carries none.
+  merchant, ends each run carrying one Sword of Watershadow and one Tears of Eva; the next run's
+  scripted login destroys that Tears (and any second sword) before its bot logs in.
 - The minted GMs `<prefix>mint<N>` (`e2emint1`, ...), each with one character `<prefix>mint<N>Bot` of
   access level 7, recorded in `.e2e/minted-<prefix>`; later runs lease them again. They stay
   until the owner retires them (`//set access <name> 0` from a GM, then delete the record's
