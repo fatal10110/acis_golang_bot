@@ -50,7 +50,9 @@ Valuable sales, by trade and store, count in a per-session `Valuables.Budget` (f
 `-valuables-budget`, default 2000000), not `-store-budget` (50000), under which one valuable would
 never list. With `left = Budget - sold` (`sold` the session's valuable sales):
 
-- **Trade:** a valuable is offered while `left > 0`, at most `ceil(left / unit price)` units.
+- **Trade:** a valuable is offered while `left > 0`, at most `ceil(left / unit price)` units; with
+  several agreed in one window (#403), each in score order as the store's rows, its price then taken
+  off `left`.
 - **Store listing:** released rows by score while `left > 0`, a row's units at most `ceil(left /
   floor)`, the listed value then taken off `left`. Example: `left` 1000000 and three one-item rows
   at 600000: the first two list, the third waits.

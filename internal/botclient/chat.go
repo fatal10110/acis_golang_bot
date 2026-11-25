@@ -49,6 +49,28 @@ type chatLog struct {
 	to map[int32]time.Time
 	// sent are the replies within Window, oldest first.
 	sent []time.Time
+	// joins are the whispers answering a join within joinReplyWindow,
+	// oldest first, capped by LeadPolicy.JoinReplies apart from sent.
+	joins []time.Time
+}
+
+// joinReplyWindow is the window of LeadPolicy.JoinReplies: an hour, as
+// plan section 4's per-bot cap of whispers counts.
+const joinReplyWindow = time.Hour
+
+// joinAllows reports whether a join reply at now stays within limit, and
+// counts it when it does.
+func (l *chatLog) joinAllows(now time.Time, limit int) bool {
+	i := 0
+	for i < len(l.joins) && now.Sub(l.joins[i]) >= joinReplyWindow {
+		i++
+	}
+	l.joins = l.joins[i:]
+	if len(l.joins) >= limit {
+		return false
+	}
+	l.joins = append(l.joins, now)
+	return true
 }
 
 func newChatLog() *chatLog {

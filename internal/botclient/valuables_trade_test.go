@@ -332,9 +332,9 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		rows := []TradeItem{rowOf(sword), rowOf(staff)}
 		check := func(name string, want valuableKey) {
 			t.Helper()
-			row, k, ok := b.valuableGoods(pcID, rows)
-			if !ok || k != want || row.ObjectID != objOf[want] {
-				t.Fatalf("%s: goods %+v %v %v, want %v", name, row, k, ok, want)
+			goods := b.valuableGoods(pcID, rows)
+			if len(goods) != 1 || goods[0].key != want || goods[0].row.ObjectID != objOf[want] {
+				t.Fatalf("%s: goods %+v, want %v alone", name, goods, want)
 			}
 		}
 		check("no deal", top[0])
@@ -361,9 +361,9 @@ func TestValuablesTradeConfirm(t *testing.T) {
 			{budget, 0, false},
 		} {
 			b.valuablesSold = tt.sold
-			row, _, ok := b.valuableGoods(pcID, []TradeItem{rowOf(recipes)})
-			if ok != tt.ok || ok && row.Count != tt.units {
-				t.Fatalf("sold %d: goods %+v %v, want %d units %v", tt.sold, row, ok, tt.units, tt.ok)
+			goods := b.valuableGoods(pcID, []TradeItem{rowOf(recipes)})
+			if ok := len(goods) == 1; ok != tt.ok || ok && goods[0].row.Count != tt.units {
+				t.Fatalf("sold %d: goods %+v, want %d units %v", tt.sold, goods, tt.units, tt.ok)
 			}
 		}
 	})

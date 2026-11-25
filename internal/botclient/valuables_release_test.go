@@ -269,9 +269,9 @@ func testReleaseInRound(t *testing.T) {
 	if got := replyTo(t, b, pcID, "Alden", "conjuror's staff?", now.Add(time.Second)); strings.Contains(strings.ToLower(got), "conjuror") {
 		t.Errorf("whisper naming the staff: reply %q, want none naming it", got)
 	}
-	goods, k, ok := b.valuableGoods(pcID, []TradeItem{rowOf(carriedOf(storedStaff)), rowOf(swordUnit(103, 3)), rowOf(swordUnit(101, 0))})
-	if !ok || k != swordKey || goods.ObjectID != 101 {
-		t.Errorf("trade goods %+v %v %v, want the +0 sword", goods, k, ok)
+	goods := b.valuableGoods(pcID, []TradeItem{rowOf(carriedOf(storedStaff)), rowOf(swordUnit(103, 3)), rowOf(swordUnit(101, 0))})
+	if len(goods) != 1 || goods[0].key != swordKey || goods[0].row.ObjectID != 101 {
+		t.Errorf("trade goods %+v, want the +0 sword", goods)
 	}
 	end := now.Add(b.persona.Valuables.RoundWait)
 	tradeTurn(t, b, end)

@@ -245,7 +245,7 @@ func TestTradeRule(t *testing.T) {
 		},
 		{name: "expired request", setup: func(b *Brain) { b.world.Apply(SendTradeRequest{SenderID: pcID}, now.Add(-tradeRequestTimeout)) }, wantRule: ""},
 		{name: "open trade offers the goods", setup: func(b *Brain) { openTrade(b) }, want: encodeAddTradeItem(goodsID, 10), wantRule: "prompt"},
-		{name: "add sent waits for its echo", setup: func(b *Brain) { openTrade(b); b.world.Trade.added = true }, wantRule: "prompt"},
+		{name: "add sent waits for its echo", setup: func(b *Brain) { openTrade(b); b.world.Trade.added = 1 }, wantRule: "prompt"},
 		{name: "goods gone cancels", setup: func(b *Brain) { delete(b.world.Inventory.Items, goodsID); openTrade(b) }, want: cancel, wantRule: "prompt"},
 		{name: "offers locked before the bot's cancels", setup: func(b *Brain) { openTrade(b, TradePressOtherOk{}) }, want: cancel, wantRule: "prompt"},
 		{name: "short of the price waits", setup: func(b *Brain) { openTrade(b, TradeOwnAdd{Item: goodsRow}, TradeOtherAdd{Item: adenaRow(499)}) }, wantRule: "prompt"},

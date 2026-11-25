@@ -71,6 +71,10 @@ type LeadPolicy struct {
 	GatherRange int32
 	GatherWait  time.Duration
 	FarAway     int32
+	// JoinReplies caps the whispers answering a join ("party is full",
+	// "ask <leader>") within any joinReplyWindow, across the bot's
+	// sessions and apart from ChatPolicy.Total (docs/parties/players.md).
+	JoinReplies int
 }
 
 // defaultLeadPolicy is every persona's.
@@ -83,6 +87,7 @@ func defaultLeadPolicy() LeadPolicy {
 		GatherRange:  1200,
 		GatherWait:   time.Minute,
 		FarAway:      10000,
+		JoinReplies:  10,
 	}
 }
 
@@ -97,25 +102,33 @@ func (p LeadPolicy) withDefaults() LeadPolicy {
 		GatherRange:  positiveOr(p.GatherRange, d.GatherRange),
 		GatherWait:   positiveOr(p.GatherWait, d.GatherWait),
 		FarAway:      positiveOr(p.FarAway, d.FarAway),
+		JoinReplies:  positiveOr(p.JoinReplies, d.JoinReplies),
 	}
 }
 
 // positiveOr is v when above zero, else d.
-func positiveOr[T int32 | time.Duration](v, d T) T {
+func positiveOr[T int | int32 | time.Duration](v, d T) T {
 	if v > 0 {
 		return v
 	}
 	return d
 }
 
-// partyLead is a lead bot's invitations and oustings and a join bot's
-// handover, owned by the brain goroutine (rule "party"). It lasts the
-// session: a new session invites its listed members afresh.
+// partyLead is a lead bot's invitations and oustings, its join queue and a
+// join bot's handover, owned by the brain goroutine (rule "party"). It
+// lasts the session: a new session invites its listed members afresh and
+// starts with an empty join queue.
 type partyLead struct {
 	// invitee is the member the invitation in flight went to, at sentAt;
-	// "" for none. JoinParty names no one, so the bot remembers it.
+	// "" for none. JoinParty names no one, so the bot remembers it. player
+	// marks an invitee taken off the join queue.
 	invitee string
 	sentAt  time.Time
+	player  bool
+	// queue are the players who whispered join, in order (heardJoin), and
+	// heard when each sender may be answered again, by name.
+	queue []string
+	heard map[string]time.Time
 	// next is when the next invitation may go after a 164.
 	next time.Time
 	// retry is when each member may be invited again, by name.
@@ -170,11 +183,10 @@ func (b *Brain) partyLeadEvent(ev Event, now time.Time) {
 		if e.Response == 1 {
 			// The window adding it follows the answer; a lost add frees
 			// it for another invitation one InviteWait later.
-			v.waitFor(v.invitee, now, pol.InviteWait)
+			v.endInvite(now, pol.InviteWait)
 		} else {
-			v.waitFor(v.invitee, now, pol.InviteRetry)
+			v.endInvite(now, pol.InviteRetry)
 		}
-		v.invitee = ""
 	case SystemMessage:
 		switch {
 		case e.ID == msgLeftParty:
@@ -182,10 +194,13 @@ func (b *Brain) partyLeadEvent(ev Event, now time.Time) {
 			v.waitFor(e.Text[0], now, pol.InviteRetry)
 		case v.invitee == "":
 		case e.ID == msgWaitingForReply:
-			v.invitee, v.next = "", now.Add(pol.InviteWait)
+			// The bot's own window: a join player goes back to the head.
+			if v.player {
+				v.queue = slices.Insert(v.queue, 0, v.invitee)
+			}
+			v.invitee, v.player, v.next = "", false, now.Add(pol.InviteWait)
 		case inviteRefused(e, v.invitee):
-			v.waitFor(v.invitee, now, pol.InviteRetry)
-			v.invitee = ""
+			v.endInvite(now, pol.InviteRetry)
 		}
 	case PartySmallWindowDeleteAll:
 		for _, m := range b.world.Party.Members {
@@ -195,6 +210,23 @@ func (b *Brain) partyLeadEvent(ev Event, now time.Time) {
 	case PartySmallWindowDelete:
 		delete(v.ousted, e.Name)
 	}
+}
+
+// endInvite ends the invitation in flight: a listed member waits d for its
+// next one, a join player already off the queue gets none.
+func (v *partyLead) endInvite(now time.Time, d time.Duration) {
+	if !v.player {
+		v.waitFor(v.invitee, now, d)
+	}
+	v.invitee, v.player = "", false
+}
+
+// dropJoins forgets the join queue of a lead slot just cleared, so a later
+// lead slot never invites a player who asked to join another party (plan
+// section 6: never unasked). A player's invitation in flight still ends on
+// its answer, but a 164 no longer puts it back on the queue.
+func (v *partyLead) dropJoins() {
+	v.queue, v.player = nil, false
 }
 
 // inviteRefused reports whether m refuses the invitation to invitee: a
@@ -266,13 +298,12 @@ func (b *Brain) invite(slot Command, now time.Time) (Action, bool) {
 		}
 		// No answer: a silent client, or the Olympiad's silence
 		// (network/party.go).
-		v.waitFor(v.invitee, now, pol.InviteRetry)
-		v.invitee = ""
+		v.endInvite(now, pol.InviteRetry)
 	}
 	if now.Before(v.next) || len(p.Members)+1 >= maxPartyMembers {
 		return Action{}, false
 	}
-	name := b.nextInvitee(slot, now)
+	name, player := b.nextInvitee(slot, now)
 	if name == "" {
 		return Action{}, false
 	}
@@ -280,22 +311,47 @@ func (b *Brain) invite(slot Command, now time.Time) (Action, bool) {
 	if !b.pace.allow(a.gate(), now) {
 		return Action{}, false
 	}
-	v.invitee, v.sentAt = name, now
+	if player {
+		v.queue = v.queue[1:]
+	}
+	v.invitee, v.sentAt, v.player = name, now, player
 	return a, true
 }
 
-// nextInvitee is the member the next invitation goes to: the first member
-// slot lists who is not the bot, not in the party and not waiting out an
-// InviteRetry; "" for none. P6 puts the head of its join queue first.
-func (b *Brain) nextInvitee(slot Command, now time.Time) string {
+// nextInvitee is who the next invitation goes to: the head of the join
+// queue (player true) while the party has a free place (freePlaces), else
+// the first member slot lists who is not the bot, not in the party and not
+// waiting out an InviteRetry; "" for none. A queued player found in the
+// party leaves the queue.
+func (b *Brain) nextInvitee(slot Command, now time.Time) (name string, player bool) {
 	v := &b.partyLead
+	v.queue = slices.DeleteFunc(v.queue, b.partyNamed)
+	if len(v.queue) > 0 && b.freePlaces(slot) > 0 {
+		return v.queue[0], true
+	}
 	for _, name := range strings.Fields(slot.Arg) {
 		if name == b.world.Self.Name || b.partyNamed(name) || now.Before(v.retry[name]) {
 			continue
 		}
-		return name
+		return name, false
 	}
-	return ""
+	return "", false
+}
+
+// freePlaces is how many places of the party a lead bot leads, or is
+// about to, are free for join players: maxPartyMembers less the members,
+// the bot among them, less every bot slot lists not in the party
+// (reconnecting, in the join hold, between invitations), whose places stay
+// theirs. The server answers an invitation into a full party 155
+// (party/party.go BeginInvite).
+func (b *Brain) freePlaces(slot Command) int {
+	n := maxPartyMembers - 1 - len(b.world.Party.Members)
+	for _, name := range strings.Fields(slot.Arg) {
+		if name != b.world.Self.Name && !b.partyNamed(name) {
+			n--
+		}
+	}
+	return n
 }
 
 // partyNamed reports whether a member of the bot's party is named name.

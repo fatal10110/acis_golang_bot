@@ -6,13 +6,19 @@ The trade rule (`trade.go`) learns valuables:
 
 - `acceptTrade` counts a valuable as goods during a round; `Every` does not hold back a partner with
   an agreed price;
-- `tradeGoods` offers the valuable the partner named or agreed on, else the top-scored one, never a
-  released one; one valuable per trade, within the [budget's](release.md#valuables-budget-d34) offer
-  rule;
+- `valuableGoods` offers every valuable the partner agreed a price for, in one window (#403), else
+  the one it named, else the top-scored one, never a released one, in score order and within the
+  [budget's](release.md#valuables-budget-d34) offer rule: each while the budget has some left, its
+  price then taken off what is left, so a budget left that covers only the first offers it alone.
+  `tradeStep` sends an `AddTradeItem` a turn, each once the server's `TradeOwnAdd` took the one
+  before; a partner confirm before the last add locks the offers (the server drops later adds), so
+  the bot cancels. Non-valuable goods (`tradeGoods`) stay one item per trade;
 - `tradePrice` of a valuable is the agreed price, else the partner's current price, else the ask;
-  `tradePaid` confirms only once the partner's adena covers it, so the window is a haggle too. As
-  today (`tradeStep`, `trade.go:426-431`) a partner who stays short gets the cancel at `Timeout`, one
-  who confirms short gets it at once (the confirm locks the offers below the price).
+  `tradePaid` confirms only once the partner's adena covers the sum over the offered rows, so the
+  window is a haggle too. As today (`tradeStep`) a partner who stays short gets the cancel at
+  `Timeout`, one who confirms short gets it at once (the confirm locks the offers below the price).
+  The settled trade counts the sum in the budget and one `valuables_sold_total{via="trade"}` per
+  entry sold.
 
 ## Asking for a trade
 
@@ -46,3 +52,8 @@ gets only the whisper (`trade me`); its own request is still accepted.
   sales are under `Budget`, none once they reach it. After the success and the `InventoryUpdate`
   taking the sword away, its entry is gone and the next ad line (V4's step) names only those still
   carried. The cap is V7c's ([`TestValuablesRelease`](release.md#tests)).
+- `TestValuablesTradeMulti` (#403; a partner who agreed prices for the sword and the staff): an
+  `AddTradeItem` each, the second only after the first's `TradeOwnAdd`; adena short of the sum holds
+  and gets the cancel at `Timeout`, a confirm while short or before the second add the cancel at
+  once; the sum paid confirms, counts the sum in the budget and both entries leave the ledger; a
+  budget left equal to the first's price offers the first alone, its price due.

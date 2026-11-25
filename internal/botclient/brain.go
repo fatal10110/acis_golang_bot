@@ -241,6 +241,10 @@ type Brain struct {
 	// partyLead is the lead bot's invitations and oustings and the join
 	// bot's handover (rule "party").
 	partyLead partyLead
+	// partyAnswered is set when the bot sends RequestAnswerJoinParty and
+	// cleared on each party window after it (slotPartyEvent): a window
+	// with it clear reached the bot by no invitation of its own.
+	partyAnswered bool
 	// escape is the breaker of every /unstuck the bot sends (the walker's
 	// and rule "leader"'s).
 	escape escapeBreaker
@@ -273,6 +277,9 @@ type Brain struct {
 	prep townPrep
 	// loot is the loot queue (rule 8).
 	loot lootQueue
+	// shedding is set while rule "overweight" drops what the bot carries:
+	// from the immobile band until the load is under the half-speed band.
+	shedding bool
 	// shop is the merchant visit (rule 9 errand).
 	shop shopVisit
 	// market is the visit to another player's sell store (rule 9 errand
@@ -513,7 +520,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		pvpAt := b.pvpEvent(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
-		b.slotPartyEvent(ev)
+		b.slotPartyEvent(ev, now)
 		b.spotJoinEvent(ev, inParty)
 		b.partyClaimEvent(ev)
 		b.inviteEvent(ev)
@@ -578,6 +585,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			// A Fast teleport is an in-place correction with no loading
 			// screen: the server never takes the character out of the
 			// world for it (instant_teleport.go), so it asks no Appearing.
+			b.lootEvent(ev, now)
 			if e.ObjectID == self {
 				b.anchor = e.Pos
 				b.appearing = b.appearing || !e.Fast
@@ -654,6 +662,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				}
 			}
 		case DeleteObject:
+			b.lootEvent(ev, now)
 			delete(b.tries, e.ObjectID)
 			delete(b.spoils, e.ObjectID)
 			if e.ObjectID == b.opened {
@@ -965,6 +974,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		// The server takes the invitation with the first answer. A
 		// withdrawal not sent yet was for a party the bot is no longer in.
 		b.world.Prompts.Party = PartyInvite{}
+		b.partyAnswered = true
 		if b.orders.withdraw {
 			b.orders.withdraw, b.lead = false, leaderWatch{}
 		}
