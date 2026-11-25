@@ -102,8 +102,11 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("vm", 2)
 	f := valuablesMerchant(t, ctx, tg, gm, account, func(v *botclient.ValuablePolicy) {
-		// Persona defaults (D6): two rounds within the scenario.
+		// Persona defaults (D6): two rounds within the scenario, and no
+		// cap release, which would send what earlier runs left with the
+		// merchant to its store instead of the warehouse.
 		v.RoundGap, v.RoundWait, v.Grace = 3*time.Minute, time.Minute, 30*time.Second
+		v.HoldRows, v.HoldValue, v.MaxRounds = 1000, 1<<40, 1000
 	})
 	if have := f.carries(adena); have < 1000 {
 		giveMerchant(t, ctx, gm, f, adena, 1000-have)
