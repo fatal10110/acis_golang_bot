@@ -410,13 +410,16 @@ func (b *Brain) shed() int64 {
 }
 
 // gearPaid reports whether the adena the bot carries past the gear tier's
-// floor pays its gear goal at the cheapest base prices (gearGoal).
+// floor pays its gear goal at the cheapest base prices (gearGoal), and the
+// goal fits under the half-speed band on top of the load it carries now
+// (loadFits), as the shop errand's gearWants requires: a goal it would not
+// buy never sends it to town.
 func (b *Brain) gearPaid() bool {
 	if !b.persona.Gear.Buy {
 		return false
 	}
 	goal, _ := b.gearGoal()
-	if len(goal) == 0 {
+	if len(goal) == 0 || !b.loadFits(oneEach(goal)...) {
 		return false
 	}
 	price := b.price(goal)

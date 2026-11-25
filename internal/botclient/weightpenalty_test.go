@@ -194,6 +194,62 @@ func TestGearWantsUnderSlowBand(t *testing.T) {
 	}
 }
 
+// TestGearWantsSetUnderSlowBand checks that the planned set is bought only
+// when all of it fits under the half-speed band: a set past the band is
+// left out whole, never in part.
+func TestGearWantsSetUnderSlowBand(t *testing.T) {
+	const keep = 10000
+	set := []buyRow{{setShield, 1}, {setChest, 1}, {setLegs, 1}, {setHead, 1}}
+	tests := []struct {
+		name   string
+		weight int32
+		want   []buyRow
+	}{
+		// 60000 of 100000: 6599 to go.
+		{name: "the set fits", weight: 1500, want: set},
+		{name: "each piece fits, the set does not", weight: 2000},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newSetBrain(t, setShop, wornAt(1, oldShirt, partChest), wornAt(2, oldPants, partLegs), adenaStack(keep+2900))
+			b.cfg.Travel.weights = map[int32]int32{setShield: tt.weight, setChest: tt.weight, setLegs: tt.weight, setHead: tt.weight}
+			b.world.Self.Load, b.world.Self.MaxLoad = 60000, 100000
+			if got := b.gearWants(); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("gearWants = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGearPaidUnderSlowBand checks that a gear goal past the half-speed
+// band sends the bot to no town visit, as the shop would not buy it.
+func TestGearPaidUnderSlowBand(t *testing.T) {
+	tests := []struct {
+		name    string
+		weights map[int32]int32
+		want    bool
+	}{
+		// 60000 of 100000: 6599 to go.
+		{name: "the goal fits", weights: map[int32]int32{falchion: 2000}, want: true},
+		{name: "the goal is past the band", weights: map[int32]int32{falchion: 7000}},
+		{name: "no weights", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newGearBrain(t, 0, wornSword, wornShirt, wornPants, adenaStack(300000))
+			b.persona.Gear.Buy = true
+			b.cfg.Travel.weights = tt.weights
+			b.world.Self.Load, b.world.Self.MaxLoad = 60000, 100000
+			if goal, _ := b.gearGoal(); !reflect.DeepEqual(goal, []int32{falchion}) {
+				t.Fatalf("gearGoal = %v, want [falchion]", goal)
+			}
+			if got := b.gearPaid(); got != tt.want {
+				t.Fatalf("gearPaid = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestBrainStatusPenalties checks the load and penalty fields of the
 // snapshot (#436, read by the panel, #437): the load, its percent and
 // band, the run speed and mode and the grade and death penalties.

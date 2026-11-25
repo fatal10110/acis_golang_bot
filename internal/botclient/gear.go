@@ -725,18 +725,28 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 // each: the gearCandidates the adena past the reserve floor buys at their
 // cheapest base price, best first; the planned set's pieces (gearPlan)
 // only when it buys all of them, so the bot saves for a set rather than
-// buy part of it. None takes the load into the half-speed band (gearFits).
+// buy part of it. None takes the load into the half-speed band (gearFits):
+// the set fits as a whole or is left out, and the other pieces fit on top
+// of it, best first.
 func (b *Brain) gearWants() []buyRow {
 	budget := int64(b.carried(adenaID)) - b.floor(tierGear)
 	if budget <= 0 {
 		return nil
 	}
 	ids, set := b.gearPlan()
-	setFits := b.price(set) <= budget
-	var rows []buyRow
+	var chosen []buyRow
+	if setRows := oneEach(set); b.price(set) <= budget && b.loadFits(setRows...) {
+		chosen = setRows
+	}
 	for _, id := range ids {
 		r := buyRow{item: id, count: 1}
-		if (slices.Contains(set, id) && setFits || !slices.Contains(set, id) && int64(b.cfg.Travel.cheapest[id]) <= budget) && b.gearFits(rows, r) {
+		if !slices.Contains(set, id) && int64(b.cfg.Travel.cheapest[id]) <= budget && b.gearFits(chosen, r) {
+			chosen = append(chosen, r)
+		}
+	}
+	var rows []buyRow
+	for _, id := range ids {
+		if r := (buyRow{item: id, count: 1}); slices.Contains(chosen, r) {
 			rows = append(rows, r)
 		}
 	}

@@ -1,6 +1,9 @@
 package botclient
 
-import "cmp"
+import (
+	"cmp"
+	"slices"
+)
 
 // The two server penalties that slow a character (#436, docs/items.md
 // section 1):
@@ -109,19 +112,33 @@ func (b *Brain) weaponInGrade(w *worn) bool {
 	return false
 }
 
-// gearFits reports whether buying rows on top of the load keeps it under
+// gearFits reports whether buying rows and add on top of the load keeps
+// it under the half-speed band (loadFits).
+func (b *Brain) gearFits(rows []buyRow, add buyRow) bool {
+	return b.loadFits(append(slices.Clip(rows), add)...)
+}
+
+// loadFits reports whether buying rows on top of the load keeps it under
 // the half-speed band; with the weight limit or the item weights unknown
 // it does.
-func (b *Brain) gearFits(rows []buyRow, add buyRow) bool {
+func (b *Brain) loadFits(rows ...buyRow) bool {
 	s := &b.world.Self
 	t := b.cfg.Travel
 	if s.MaxLoad <= 0 || t == nil || len(t.weights) == 0 {
 		return true
 	}
-	weight := func(r buyRow) int64 { return int64(t.weights[r.item]) * int64(cmp.Or(r.count, 1)) }
-	load := int64(s.Load) + weight(add)
+	load := int64(s.Load)
 	for _, r := range rows {
-		load += weight(r)
+		load += int64(t.weights[r.item]) * int64(cmp.Or(r.count, 1))
 	}
 	return fitsUnderSlow(load, s.MaxLoad)
+}
+
+// oneEach are buy rows for one of each of ids.
+func oneEach(ids []int32) []buyRow {
+	rows := make([]buyRow, len(ids))
+	for i, id := range ids {
+		rows[i] = buyRow{item: id, count: 1}
+	}
+	return rows
 }
