@@ -427,9 +427,10 @@ func (b *Brain) leaveStore(now time.Time) {
 // supplies, Persona.Potions, Shots, Shop.Keep and Restock, the wielded
 // bow's arrows, wanted spellbooks, what the keep hook keeps) or wears next
 // (the gear errand), or a piece of the armor set it buys towards
-// (keepsForSet). A bot without a travel map sells nothing.
+// (keepsForSet), or a valuable (Brain.valuable). A bot without a travel
+// map sells nothing.
 func (b *Brain) storeLoot(it Item) bool {
-	if b.cfg.Travel == nil || it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.wearsNext(it) {
+	if b.cfg.Travel == nil || it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.wearsNext(it) || b.valuable(it) {
 		return false
 	}
 	if w := b.worn(); b.keepsForSet(it, &w) {
