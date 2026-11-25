@@ -13,6 +13,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botparty"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -111,7 +112,14 @@ type Config struct {
 	Rand *rand.Rand
 	// Log receives the supervisor's reports; nil discards them.
 	Log *slog.Logger
+	// Party, when set, runs the bot party organizer on its policy every
+	// PartyTick (docs/parties/organizer.md); nil runs none. The control
+	// panel sets it, a swarm has no organizer (D25).
+	Party *botparty.Policy
 }
+
+// PartyTick is how often the organizer plans the bot parties.
+const PartyTick = 30 * time.Second
 
 // RunState is what a bot's run is doing.
 type RunState string
@@ -156,7 +164,21 @@ type runState struct {
 	retryAt time.Time
 	// bot is the live run's bot once it handed it over (Run.Live), nil
 	// otherwise.
-	bot *botclient.Bot
+	bot runBot
+	// newRun marks a bot handed over since the last party pass. sent is
+	// the last organizer order handed to the bot and what became of it;
+	// answer is its answer channel while the answer is pending.
+	newRun bool
+	sent   botparty.Sent
+	answer <-chan error
+}
+
+// runBot is the bot of a live run as the supervisor uses it: a
+// *botclient.Bot, or a test's fake whose status and answers the test sets.
+type runBot interface {
+	Status() botclient.Status
+	Command(c botclient.Command) (<-chan error, error)
+	Inspect(wait time.Duration) (<-chan botclient.Inspection, error)
 }
 
 func (st *runState) state() RunState {
@@ -184,7 +206,7 @@ const FlushDelay = 3 * time.Second
 type event struct {
 	account string
 	// bot is set for the run's bot handed over (Run.Live).
-	bot *botclient.Bot
+	bot runBot
 	// learned is set for a learned character, with name and class.
 	learned bool
 	name    string
@@ -213,10 +235,14 @@ type Supervisor struct {
 	// flush is the registry flush timer, running while flushing is set.
 	flush    botclient.Timer
 	flushing bool
-	base     context.Context
-	closing  bool
-	rng      *rand.Rand
-	log      *slog.Logger
+	// party is the organizer's state, partyTimer its PartyTick timer, nil
+	// without an organizer (Config.Party).
+	party      botparty.State
+	partyTimer botclient.Timer
+	base       context.Context
+	closing    bool
+	rng        *rand.Rand
+	log        *slog.Logger
 }
 
 // New returns the supervisor of cfg; Run starts it.
@@ -226,6 +252,8 @@ func New(cfg Config) (*Supervisor, error) {
 		return nil, errors.New("supervisor: registry, run, gate and clock are required")
 	case cfg.MaxOnline < 1:
 		return nil, fmt.Errorf("supervisor: max online %d: want 1 or more", cfg.MaxOnline)
+	case cfg.Party != nil && (cfg.Party.Size < 2 || cfg.Party.Size > botparty.MaxSize):
+		return nil, fmt.Errorf("supervisor: party size %d: want 2 to %d", cfg.Party.Size, botparty.MaxSize)
 	}
 	rng := cfg.Rand
 	if rng == nil {
@@ -256,10 +284,16 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	defer close(s.done)
 	s.base = context.WithoutCancel(ctx)
 	s.restore()
+	if s.cfg.Party != nil {
+		s.partyTimer = s.cfg.Clock.NewTimer(PartyTick)
+	}
 	for {
-		var tick, flush <-chan time.Time
+		var tick, flush, party <-chan time.Time
 		if s.timer != nil {
 			tick = s.timer.C()
+		}
+		if s.partyTimer != nil {
+			party = s.partyTimer.C()
 		}
 		if s.armFlush() {
 			flush = s.flush.C()
@@ -277,6 +311,9 @@ func (s *Supervisor) Run(ctx context.Context) error {
 		case <-flush:
 			s.flushing = false
 			s.save()
+		case <-party:
+			s.partyPass()
+			s.partyTimer.Reset(PartyTick)
 		}
 	}
 }
@@ -290,6 +327,9 @@ func (s *Supervisor) shutdown() {
 	}
 	if s.flush != nil {
 		s.flush.Stop()
+	}
+	if s.partyTimer != nil {
+		s.partyTimer.Stop()
 	}
 	for _, st := range s.runs {
 		if st.cancel != nil {
@@ -471,8 +511,11 @@ func (s *Supervisor) update(account string, fn func(*Bot)) {
 func (s *Supervisor) handle(e event) {
 	if e.bot != nil {
 		// A run hands its bot over before it reports its end, so its run
-		// state is live.
-		s.runs[e.account].bot = e.bot
+		// state is live. A new bot holds no order of the organizer: the
+		// old one's mailbox answers ErrStopped.
+		st := s.runs[e.account]
+		st.bot, st.newRun = e.bot, true
+		st.sent, st.answer = botparty.Sent{}, nil
 		return
 	}
 	if e.learned {
@@ -491,7 +534,8 @@ func (s *Supervisor) handle(e event) {
 	if st.bot != nil {
 		snap := st.bot.Status()
 		s.update(e.account, func(b *Bot) { keepProgress(b, snap) })
-		st.bot = nil
+		st.bot, st.newRun = nil, false
+		st.sent, st.answer = botparty.Sent{}, nil
 	}
 	if s.closing {
 		delete(s.runs, e.account)

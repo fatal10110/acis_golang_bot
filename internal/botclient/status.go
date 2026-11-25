@@ -119,6 +119,11 @@ type Status struct {
 	// PartyLeft is why the brain last cleared its own party slot this run,
 	// "left" or "timeout"; "" while a slot is set or after an unparty.
 	PartyLeft string
+	// Heals is true while the skill list holds the heal of the bot's row
+	// (docs/parties/composition.md, "Healer"): 1011, 1015 or 1027 for a
+	// mystic, Cleric, Elven Oracle or Shillien Oracle line, 1229 for an
+	// Orc Shaman line. Between sessions it keeps the last session's.
+	Heals bool
 	// Reconnects counts the bot's attempts after its first.
 	Reconnects int
 	// Err is why the latest attempt ended, or why the bot stopped; nil
@@ -211,6 +216,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st.WeightPenalty, st.GradePenalty, st.DeathPenalty = weightBand(s.Load, s.MaxLoad), w.gradePenalty(), s.DeathPenalty
 	st.Town = b.nearestTown(st.Position)
 	st.ClanID, st.ClanLeader = w.Clan.ID, w.Clan.Leader
+	st.Heals = rowHeals(s.ClassID, w.Skills)
 	st.Crafter = b.crafterStatus(now)
 	st.Build = nil
 	if b.persona.Role != RoleNone {
@@ -229,6 +235,33 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 		slices.Sort(st.Members)
 	}
 	l.board.store(st)
+}
+
+// classProphet is the Cleric's buffer profession (data/xml/classes): its
+// row keeps the heals the Cleric learned.
+const classProphet int32 = 17
+
+// rowHeals reports a skill list holding the heal of classID's row: 1011
+// Heal, 1015 Battle Heal or 1027 Group Heal for a human, elven or dark
+// mystic, a Cleric, Elven Oracle or Shillien Oracle and the professions
+// after them, 1229 Chant of Life for an Orc Shaman or Warcryer. No other
+// row heals a party: an orc mystic's 1090 Life Drain heals only itself.
+func rowHeals(classID int32, skills map[int32]KnownSkill) bool {
+	switch classID {
+	case classHumanMystic, classElvenMystic, classDarkMystic,
+		classCleric, classBishop, classProphet, classElvenOracle, classElvenElder,
+		classShillienOracle, classShillienElder:
+		return hasSkill(skills, skillHeal) || hasSkill(skills, skillBattleHeal) || hasSkill(skills, skillGroupHeal)
+	case classOrcShaman, classWarcryer:
+		return hasSkill(skills, skillChantLife)
+	}
+	return false
+}
+
+// hasSkill reports id in skills.
+func hasSkill(skills map[int32]KnownSkill, id int32) bool {
+	_, ok := skills[id]
+	return ok
 }
 
 // nearestTown is the town of the travel map nearest to at, nil without a
