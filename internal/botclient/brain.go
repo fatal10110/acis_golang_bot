@@ -497,6 +497,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.spotJoinEvent(ev, inParty)
 		b.partyClaimEvent(ev)
 		b.inviteEvent(ev)
+		b.reweighSpot()
 		switch e := ev.(type) {
 		case LeaveWorld:
 			switch {

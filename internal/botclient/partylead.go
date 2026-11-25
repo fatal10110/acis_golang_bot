@@ -47,8 +47,10 @@ const (
 )
 
 // LeadPolicy times a lead bot's invitations and a join bot's handover
-// (docs/parties/leader.md). A zero field takes its default, so no persona
-// invites faster than the server's invitation window.
+// (docs/parties/leader.md) and how long a leader waits for its members at
+// its spot (docs/parties/spots.md, "Gather gate"). A zero field takes its
+// default, so no persona invites faster than the server's invitation
+// window.
 type LeadPolicy struct {
 	// InviteWait ends an invitation with no answer: the server's 15 s
 	// window counts from when it processed the request. After a 164 (the
@@ -62,6 +64,13 @@ type LeadPolicy struct {
 	// HandoverFor bounds the handover, past a duel's 2 minutes.
 	HandoverWait time.Duration
 	HandoverFor  time.Duration
+	// GatherRange: at its spot a leader picks no new farm target while a
+	// living bot member's reported position is farther from it than
+	// GatherRange (inside the server's 1500 party range), for at most
+	// GatherWait; a member farther than FarAway does not hold it.
+	GatherRange int32
+	GatherWait  time.Duration
+	FarAway     int32
 }
 
 // defaultLeadPolicy is every persona's.
@@ -71,6 +80,9 @@ func defaultLeadPolicy() LeadPolicy {
 		InviteRetry:  30 * time.Second,
 		HandoverWait: 5 * time.Second,
 		HandoverFor:  150 * time.Second,
+		GatherRange:  1200,
+		GatherWait:   time.Minute,
+		FarAway:      10000,
 	}
 }
 
@@ -82,11 +94,14 @@ func (p LeadPolicy) withDefaults() LeadPolicy {
 		InviteRetry:  positiveOr(p.InviteRetry, d.InviteRetry),
 		HandoverWait: positiveOr(p.HandoverWait, d.HandoverWait),
 		HandoverFor:  positiveOr(p.HandoverFor, d.HandoverFor),
+		GatherRange:  positiveOr(p.GatherRange, d.GatherRange),
+		GatherWait:   positiveOr(p.GatherWait, d.GatherWait),
+		FarAway:      positiveOr(p.FarAway, d.FarAway),
 	}
 }
 
 // positiveOr is v when above zero, else d.
-func positiveOr(v, d time.Duration) time.Duration {
+func positiveOr[T int32 | time.Duration](v, d T) T {
 	if v > 0 {
 		return v
 	}
