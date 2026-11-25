@@ -118,9 +118,10 @@ func (b *Brain) gathering(now time.Time) bool {
 }
 
 // memberBehind reports whether a living bot member of the party the bot
-// leads was last reported (PartyMemberPosition) farther from it than
-// GatherRange and no farther than FarAway. A member with no report yet, or
-// dead, holds nothing.
+// leads is farther from it than GatherRange and no farther than FarAway:
+// where it is in sight, else where it was last reported
+// (PartyMemberPosition, every 12 s). A member neither in sight nor reported
+// yet, or dead, holds nothing.
 func (b *Brain) memberBehind(now time.Time, pol LeadPolicy) bool {
 	if !b.leadsBotParty() {
 		return false
@@ -128,13 +129,19 @@ func (b *Brain) memberBehind(now time.Time, pol LeadPolicy) bool {
 	slot, from := b.cfg.link.party, b.world.Self.Position(now)
 	near, far := int64(pol.GatherRange)*int64(pol.GatherRange), int64(pol.FarAway)*int64(pol.FarAway)
 	for id, m := range b.world.Party.Members {
-		if !slotNames(slot, m.Name) || m.PosAt.IsZero() || m.HP <= 0 {
+		if !slotNames(slot, m.Name) || m.HP <= 0 {
 			continue
 		}
-		if o := b.world.Objects[id]; o != nil && o.Dead {
+		pos := m.Pos
+		if o := b.world.Objects[id]; o != nil {
+			if o.Dead {
+				continue
+			}
+			pos = o.Position(now)
+		} else if m.PosAt.IsZero() {
 			continue
 		}
-		if d := dist2(from, m.Pos); d > near && d <= far {
+		if d := dist2(from, pos); d > near && d <= far {
 			return true
 		}
 	}

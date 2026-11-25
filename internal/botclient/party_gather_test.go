@@ -9,7 +9,8 @@ import (
 // a living bot member was last reported farther than GatherRange (1200)
 // from it, for at most GatherWait (60 s); one beyond FarAway (10000), dead,
 // with no report yet, or a player holds nothing (docs/parties/spots.md,
-// "Gather gate"). The wait is no idle stretch.
+// "Gather gate"). A member in sight is measured where it is, not at its
+// last report. The wait is no idle stretch.
 func TestPartyGatherGate(t *testing.T) {
 	const mob = 0x5001
 	type step struct {
@@ -20,6 +21,7 @@ func TestPartyGatherGate(t *testing.T) {
 		name  string
 		id    int32
 		pos   Point
+		sight *Point
 		dead  bool
 		quiet bool
 		steps []step
@@ -29,6 +31,8 @@ func TestPartyGatherGate(t *testing.T) {
 		{name: "a member at 12000 holds nothing", id: abelID, pos: Point{X: 14000}, steps: []step{{2 * time.Second, true}}},
 		{name: "a dead member holds nothing", id: abelID, pos: Point{X: 4000}, dead: true, steps: []step{{2 * time.Second, true}}},
 		{name: "a member with no report holds nothing", id: abelID, quiet: true, steps: []step{{2 * time.Second, true}}},
+		{name: "a stale report at 2000 with the member in sight at 500 holds nothing", id: abelID, pos: Point{X: 4000}, sight: &Point{X: 2500}, steps: []step{{2 * time.Second, true}}},
+		{name: "a member in sight at 2000 with no report holds it", id: abelID, quiet: true, sight: &Point{X: 4000}, steps: []step{{2 * time.Second, false}}},
 		{name: "a player at 2000 holds nothing", id: talbotID, pos: Point{X: 4000}, steps: []step{{2 * time.Second, true}}},
 	}
 	for _, tt := range tests {
@@ -39,6 +43,9 @@ func TestPartyGatherGate(t *testing.T) {
 			}
 			b := newLeadSpotBrain(t, 1, []PartyMember{m}, testSpot("a", 2000, 0, 1, 3, 9))
 			b.world.Objects = map[int32]*Object{}
+			if tt.sight != nil {
+				b.world.Objects[tt.id] = &Object{Kind: KindPlayer, move: stopAt(*tt.sight)}
+			}
 			spotAt(b, 0, false, 2)
 			b.spot.arrived = true
 			b.world.Self.move = stopAt(Point{X: 2000})
