@@ -45,6 +45,13 @@ type TravelMap struct {
 	// list (datapack.Datapack.Prices): the price a store's manage list shows, which
 	// prices the loot a bot sells by trade (Brain.tradePrice).
 	prices map[int32]int32
+	// supply is the supply of every template in prices (indexSupply): its
+	// supply ceiling and marks, what a valuable's score reads
+	// (TravelMap.valueScore).
+	supply map[int32]itemSupply
+	// regions maps each restart point's map tiles to the point's index
+	// (indexRegions): the restart region of a position (restartRegion).
+	regions map[datapack.MapTile]int
 	// potions are the datapack's healing potions, best first
 	// (indexPotions): what WithItemIndex puts in a persona.
 	potions []int32
@@ -142,8 +149,9 @@ type destination struct {
 // its armor sets, the arrows each bow shoots, the items' reference prices, the healing
 // and buff potions and shots, the skills' cast ranges, the items' weights, the aggressive NPCs' aggro
 // ranges, the warehouse keepers, the craft recipes, the crystals gear
-// breaks into and the dye symbols.
-func NewTravelMap(dp *datapack.Datapack) *TravelMap {
+// breaks into and the dye symbols, and the supply of every priced template,
+// computed with supply, and the restart regions.
+func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
 	m.gear, m.shopGear = indexGear(dp.Items, m.cheapest)
@@ -181,6 +189,8 @@ func NewTravelMap(dp *datapack.Datapack) *TravelMap {
 		}
 	}
 	m.spawnedSold = spawnedSold(m.shops, m.spawns)
+	m.supply = indexSupply(dp, m.spawns, supply)
+	m.regions = indexRegions(dp.RestartPoints)
 	m.keepers = make(map[int32]bool)
 	for id := range m.spawns {
 		if dp.NPCs[id].Type == npcTypeWarehouseKeeper {

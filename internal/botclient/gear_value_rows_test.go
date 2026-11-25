@@ -34,7 +34,7 @@ var shippedTravel = sync.OnceValues(func() (*TravelMap, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewTravelMap(dp), nil
+	return NewTravelMap(dp, DefaultSupplyConfig()), nil
 })
 
 // shippedSetBonus is setBonus, against the shipped datapack, of the set

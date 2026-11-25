@@ -333,7 +333,7 @@ func TestIndexSetsShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := NewTravelMap(dp)
+	m := NewTravelMap(dp, DefaultSupplyConfig())
 	for chest, s := range dp.ArmorSets {
 		if _, ok := m.sets[chest]; !ok && !strings.HasPrefix(s.Name, "Clan Oath") && !strings.HasPrefix(s.Name, "Apella") {
 			t.Errorf("set %q not indexed", s.Name)

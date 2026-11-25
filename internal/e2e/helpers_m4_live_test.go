@@ -41,7 +41,7 @@ func travelMap(t *testing.T, tg *Target) *botclient.TravelMap {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return botclient.NewTravelMap(dp)
+	return botclient.NewTravelMap(dp, botclient.DefaultSupplyConfig())
 }
 
 // withTravel gives the bot the travel map, as every cmd/bots preset does.

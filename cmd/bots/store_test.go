@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
 func TestParseStoreFlags(t *testing.T) {
@@ -59,7 +61,7 @@ func TestStoreRegistry(t *testing.T) {
 		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	_, travel, _, err := loadSpots(dir, 1, nil, log)
+	_, travel, _, err := loadSpots(dir, 1, botclient.DefaultSupplyConfig(), nil, log)
 	if err != nil {
 		t.Fatal(err)
 	}
