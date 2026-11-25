@@ -121,19 +121,21 @@ func checkRowSets(t *testing.T, class, level int32, sets ...setGain) {
 
 // TestRowHMSetValue: the human mystic's Devotion Set (cast speed) gains in
 // both roles: its Damage attack is Wind Strike, not Self Heal, and its
-// Support heals faster.
+// Support heals faster. Against the level's reference monster the naked
+// support dies inside the survival floor, so the set is model-chosen there
+// (docs/strategy.md).
 func TestRowHMSetValue(t *testing.T) {
-	checkRowSets(t, classHumanMystic, 15, setGain{RoleDamage, setDevotion, true, true}, setGain{RoleSupport, setDevotion, true, true})
+	checkRowSets(t, classHumanMystic, 15, setGain{RoleDamage, setDevotion, true, true}, setGain{RoleSupport, setDevotion, true, true}, setGain{RoleSupport, setDevotion, false, false})
 }
 
 // TestRowEMSetValue: as HM, for the elven mystic.
 func TestRowEMSetValue(t *testing.T) {
-	checkRowSets(t, 25, 15, setGain{RoleDamage, setDevotion, true, true}, setGain{RoleSupport, setDevotion, true, true})
+	checkRowSets(t, 25, 15, setGain{RoleDamage, setDevotion, true, true}, setGain{RoleSupport, setDevotion, true, true}, setGain{RoleSupport, setDevotion, false, false})
 }
 
 // TestRowDMSetValue: as HM, for the dark mystic.
 func TestRowDMSetValue(t *testing.T) {
-	checkRowSets(t, classDarkMystic, 15, setGain{RoleDamage, setDevotion, true, true}, setGain{RoleSupport, setDevotion, true, true})
+	checkRowSets(t, classDarkMystic, 15, setGain{RoleDamage, setDevotion, true, true}, setGain{RoleSupport, setDevotion, true, true}, setGain{RoleSupport, setDevotion, false, false})
 }
 
 // TestRowOMSetValue: the orc mystic's Devotion Set gains in its Damage
@@ -143,19 +145,21 @@ func TestRowOMSetValue(t *testing.T) {
 }
 
 // TestRowCLSetValue: the cleric's Mithril Robe Set (+1 WIT, -1 INT)
-// heals faster more than its lost M. Atk costs the heal.
+// heals faster more than its lost M. Atk costs the heal. Against the
+// level's reference monster the naked support dies inside the survival
+// floor, so the set is model-chosen there (docs/strategy.md).
 func TestRowCLSetValue(t *testing.T) {
-	checkRowSets(t, 15, 30, setGain{RoleSupport, setMithril, true, true})
+	checkRowSets(t, 15, 30, setGain{RoleSupport, setMithril, true, true}, setGain{RoleSupport, setMithril, false, false})
 }
 
 // TestRowEOSetValue: as CL, for the elven oracle.
 func TestRowEOSetValue(t *testing.T) {
-	checkRowSets(t, 29, 30, setGain{RoleSupport, setMithril, true, true})
+	checkRowSets(t, 29, 30, setGain{RoleSupport, setMithril, true, true}, setGain{RoleSupport, setMithril, false, false})
 }
 
 // TestRowSOSetValue: as CL, for the shillien oracle.
 func TestRowSOSetValue(t *testing.T) {
-	checkRowSets(t, 42, 30, setGain{RoleSupport, setMithril, true, true})
+	checkRowSets(t, 42, 30, setGain{RoleSupport, setMithril, true, true}, setGain{RoleSupport, setMithril, false, false})
 }
 
 // TestRowHWSetValue: the human wizard's Knowledge Set (M. Atk) gains in

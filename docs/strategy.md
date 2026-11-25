@@ -288,6 +288,10 @@ a set worth more. These rows keep the model as it is:
   shaman's Chant of Life heals over time, with no skill power), so it is a tank valued by how long
   it lasts; max MP and M.Atk buy no survival, and Manticore Skin, Reinforced Leather and
   Knowledge are model-chosen.
+- HM, EM, DM (Devotion) and CL, EO, SO (Mithril Robe), Support: the sets gain where the support
+  lasts the survival floor. Against its level's reference monster the naked support dies inside
+  the floor, so its value is how long it lasts (`worth`), which reads no cast speed, max MP or
+  M.Atk, and the sets are model-chosen there.
 
 `TestRow<ID>SetValue` (`gear_value_rows_test.go`) holds each row of the shipped datapack to this.
 
@@ -484,9 +488,9 @@ behavior").
   minute: a full MP bar of its heal (the skill's power, plus √M.Atk for a `HEAL`, as the server's
   `formulas/heal.go` adds it unshot; a `HEAL_STATIC` adds nothing), cast at its cast speed, then the
   rest that wins the bar back, with a survival floor. Max MP counts for a damage role where the
-  kill's MP binds the rest; a support's max MP, cast speed and M.Atk always count (#369). A
-  damage role fights with its first known rotation step that deals damage (not a heal or a
-  bleed). A role's weights are persona defaults (D6).
+  kill's MP binds the rest; a support's max MP, cast speed and M.Atk count while it lasts the
+  survival floor (#369). A damage role fights with its first known rotation step that deals
+  damage (not a heal or a bleed). A role's weights are persona defaults (D6).
 
 ### 4. The build (`internal/botclient`)
 
