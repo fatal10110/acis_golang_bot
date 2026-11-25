@@ -39,9 +39,8 @@ type valuableEntry struct {
 
 // valuableRound is the state of a valuables round (docs/valuables/round.md):
 // open or not, its start, its anchor and its ad lines (adTurn). The
-// replies, trade requests, counters and prices per partner land with the
-// steps that read them (V5-V6), reset by openRound and endRound as these
-// are.
+// replies, counters and prices per partner are the responder's
+// (whisperTalk), which outlive endRound; the trade requests land with V6.
 type valuableRound struct {
 	open   bool
 	start  time.Time
@@ -66,6 +65,8 @@ type valuables struct {
 	// (wireValuables).
 	stored func() (map[valuableKey]int64, bool)
 	round  valuableRound
+	// talk is the whisper responder's state of the latest round.
+	talk whisperTalk
 	// noPrivate marks the keeper templates that refused a private request
 	// (docs/valuables/warehouse.md "Keeper marks").
 	noPrivate map[int32]bool
@@ -79,11 +80,14 @@ func newValuables() *valuables {
 // round ends back within anchorArrive of it until endRound.
 func (v *valuables) openRound(anchor Point, now time.Time) {
 	v.round = valuableRound{open: true, start: now, anchor: anchor}
+	v.talk = whisperTalk{}
 }
 
-// endRound ends the round.
-func (v *valuables) endRound() {
+// endRound ends the round at now; its responder's caps and deals hold for
+// AnswerAfter (docs/valuables/whispers.md "After a round").
+func (v *valuables) endRound(now time.Time) {
 	v.round = valuableRound{}
+	v.talk.ended = now
 }
 
 // storedUnits are the units the private warehouse holds per entry and
@@ -319,10 +323,17 @@ var gradeLetters = [...]string{1: "D", 2: "C", 3: "B", 4: "A", 5: "S"}
 // enchanted one, the template's name ("item <id>" for none), " (C)" for
 // graded gear, and the price as players write it (priceText).
 func (m *TravelMap) itemLabel(k valuableKey, units, price int64) string {
-	var sb strings.Builder
+	label := m.itemName(k) + " " + priceText(price)
 	if units > 1 {
-		fmt.Fprintf(&sb, "%dx ", units)
+		return fmt.Sprintf("%dx %s", units, label)
 	}
+	return label
+}
+
+// itemName is how a line names entry k: itemLabel's without units or
+// price.
+func (m *TravelMap) itemName(k valuableKey) string {
+	var sb strings.Builder
 	if k.enchant > 0 {
 		fmt.Fprintf(&sb, "+%d ", k.enchant)
 	}
@@ -334,7 +345,6 @@ func (m *TravelMap) itemLabel(k valuableKey, units, price int64) string {
 	if y, ok := m.crystals[k.template]; ok && y.grade > 0 && y.grade < len(gradeLetters) {
 		fmt.Fprintf(&sb, " (%s)", gradeLetters[y.grade])
 	}
-	sb.WriteString(" " + priceText(price))
 	return sb.String()
 }
 

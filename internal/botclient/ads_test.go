@@ -238,7 +238,7 @@ func TestAdPacing(t *testing.T) {
 				t.Fatalf("%s: line % x, want says %v", st.name, got, st.says)
 			}
 		}
-		b.cfg.valuables.endRound()
+		b.cfg.valuables.endRound(at(10 * p.AdEvery))
 		next := at(10*p.AdEvery + time.Second)
 		openAdRound(b, next)
 		if got := decideAd(t, "next round", b, next); got == nil {

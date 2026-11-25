@@ -192,7 +192,7 @@ func TestValuablesLedger(t *testing.T) {
 		if v.round.anchor != anchor || !v.round.open || !v.round.start.Equal(t0) {
 			t.Errorf("round = %+v, want open since t0 at the anchor", v.round)
 		}
-		v.endRound()
+		v.endRound(t0)
 		if v.round.open || v.round.anchor != (Point{}) {
 			t.Errorf("round after endRound = %+v, want none", v.round)
 		}
