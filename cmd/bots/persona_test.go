@@ -52,6 +52,7 @@ func TestPresetBrain(t *testing.T) {
 		travel:      &botclient.TravelMap{},
 		stores:      botclient.NewStoreRegistry(nil, 5, 150),
 		claims:      botclient.NewPartyClaims(),
+		ground:      botclient.NewGroundClaims(),
 		auth:        botclient.NewAuthority(botclient.AuthorityConfig{}),
 		board:       botclient.NewCraftBoard(),
 		storeBudget: 70000,
@@ -61,11 +62,12 @@ func TestPresetBrain(t *testing.T) {
 		wantHops   bool
 		wantSpots  bool
 		wantBudget int64
+		wantGround botclient.GroundLoot
 	}{
-		{"farmer", false, true, 0},
-		{"support", false, true, 0},
-		{"town", true, false, 0},
-		{"merchant", false, true, 70000},
+		{"farmer", false, true, 0, botclient.GroundAny},
+		{"support", false, true, 0, botclient.GroundFit},
+		{"town", true, false, 0, botclient.GroundFit},
+		{"merchant", false, true, 70000, botclient.GroundAny},
 	}
 	for _, tt := range tests {
 		t.Run(tt.preset, func(t *testing.T) {
@@ -88,6 +90,9 @@ func TestPresetBrain(t *testing.T) {
 			}
 			if cfg.Travel != sh.travel || cfg.PartyClaims != sh.claims || cfg.Authority != sh.auth {
 				t.Errorf("travel %p, claims %p, authority %p; want the shared %p, %p, %p", cfg.Travel, cfg.PartyClaims, cfg.Authority, sh.travel, sh.claims, sh.auth)
+			}
+			if cfg.Ground != sh.ground || cfg.Persona.Loot.Ground != tt.wantGround {
+				t.Errorf("ground claims %p (want the shared %p), ground loot %d, want %d", cfg.Ground, sh.ground, cfg.Persona.Loot.Ground, tt.wantGround)
 			}
 			if cfg.CraftBoard != sh.board {
 				t.Errorf("craft board %p, want the shared %p", cfg.CraftBoard, sh.board)
