@@ -56,8 +56,9 @@ func lootStack(obj, id, n int32) Item {
 // that runs out within ReturnMinutes of fighting (two HP potions last the
 // first estimate's 1.7 of ten minutes, one does not), HP potions gone once
 // carried, a load past ReturnLoad that a visit sheds ShedMin of (not one
-// between BuyLoad and ReturnLoad, nor one of kept items with nowhere to
-// go), and nothing for what the bot could never buy.
+// between BuyLoad and ReturnLoad), one in the half-speed band of kept or
+// unsold items to stash (#449), and nothing for what the bot could never
+// buy.
 func TestSupplyCause(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -80,12 +81,12 @@ func TestSupplyCause(t *testing.T) {
 		{name: "past BuyLoad, under ReturnLoad", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 60000},
 		{name: "past ReturnLoad, under ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 999)}, load: 66500},
 		{
-			name: "past ReturnLoad, kept with nowhere to go", items: []Item{potionStack(20), lootStack(60, keptMat, 5000)}, load: 90000,
-			edit: func(b *Brain) { b.persona.Shop.Keep = []int32{keptMat} },
+			name: "past ReturnLoad, kept items to stash", items: []Item{potionStack(20), lootStack(60, keptMat, 5000)}, load: 90000,
+			edit: func(b *Brain) { b.persona.Shop.Keep = []int32{keptMat} }, want: causeStash,
 		},
 		{
-			name: "past ReturnLoad, selling off", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 90000,
-			edit: func(b *Brain) { b.persona.Shop.SellAt = 0 },
+			name: "past ReturnLoad, selling off: stash", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 90000,
+			edit: func(b *Brain) { b.persona.Shop.SellAt = 0 }, want: causeStash,
 		},
 		{
 			name: "ReturnLoad 0 never", items: []Item{potionStack(20), lootStack(60, junkMat, 5000)}, load: 99000,

@@ -33,7 +33,8 @@ func TestWeightDefaultsUnderHalfSpeed(t *testing.T) {
 
 // TestSupplyCauseHalfSpeed checks the load trigger under the half-speed
 // band: a farmer at 67 % with ShedMin of junk to sell goes home, one at
-// 67 % with only kept items does not, and the trip starts past 60 %.
+// 67 % with only kept items goes home to stash them (#449), and the trip
+// starts past 60 %.
 func TestSupplyCauseHalfSpeed(t *testing.T) {
 	tests := []struct {
 		name string
@@ -42,7 +43,7 @@ func TestSupplyCauseHalfSpeed(t *testing.T) {
 		want tripCause
 	}{
 		{name: "67 % with junk to sell", item: lootStack(60, junkMat, 1000), load: 67000, want: causeLoad},
-		{name: "67 % with nothing to shed", item: lootStack(60, keptMat, 5000), load: 67000},
+		{name: "67 % with nothing to shed", item: lootStack(60, keptMat, 5000), load: 67000, want: causeStash},
 		{name: "at ReturnLoad", item: lootStack(60, junkMat, 1000), load: 60000},
 		{name: "past ReturnLoad", item: lootStack(60, junkMat, 1000), load: 60001, want: causeLoad},
 	}

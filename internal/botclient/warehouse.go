@@ -193,6 +193,9 @@ type WarehouseRequest struct {
 	Private           bool
 	Anchor            Point
 	Reach             int32
+	// stash marks the half-speed stash's deposit (queueStash): its result
+	// is also the errand's stashed.
+	stash bool
 }
 
 // empty reports whether the request asks for nothing.
@@ -309,6 +312,10 @@ type warehouseErrand struct {
 	timeouts int
 	// status is the clan warehouse's, private the bot's own.
 	status, private WarehouseStatus
+	// stashed is how the last half-speed stash ended (queueStash), zero
+	// before one: its deposit's result, or the outcome that kept it from
+	// starting.
+	stashed WarehouseResult
 	// shunned are the keeper templates not at their spawn, until a time;
 	// noClan the ones whose pages link no clan warehouse, noPrivate no
 	// private one. noPrivate may be handed in: it is read and filled in
@@ -356,6 +363,9 @@ func (e *warehouseErrand) result(o WarehouseOutcome, msg int32, now time.Time) {
 	}
 	if st := e.statusOf(e.req); e.depositing() {
 		st.Deposit = r
+		if e.req.stash {
+			e.stashed = r
+		}
 	} else {
 		st.Withdraw = r
 	}
@@ -399,6 +409,9 @@ func (e *warehouseErrand) giveUp(o WarehouseOutcome, msg int32, now time.Time) {
 	}
 	if len(e.req.Deposit) > 0 {
 		st.Deposit = WarehouseResult{Outcome: o, Msg: msg, At: now}
+		if e.req.stash {
+			e.stashed = st.Deposit
+		}
 	}
 	e.end()
 }
@@ -486,7 +499,13 @@ func (b *Brain) openLink(obj int32) string {
 // gate (gateBypass); legs and clicks the frame pacer, a visit spending at
 // most visitClicks clicks.
 func (b *Brain) ruleWarehouse(now time.Time) (Action, bool) {
-	if b.world.Self.InCombat || (!b.wh.running && !b.startWarehouse(now)) {
+	if b.world.Self.InCombat {
+		return Action{}, false
+	}
+	if !b.wh.running {
+		b.queueStash(now)
+	}
+	if !b.wh.running && !b.startWarehouse(now) {
 		return Action{}, false
 	}
 	return b.stepWarehouse(now)

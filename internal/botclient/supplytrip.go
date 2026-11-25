@@ -38,6 +38,11 @@ const (
 	// causePenalty: the bot has a death penalty and no Scroll: Recovery of
 	// its band, and the town sells one its adena pays (penaltyTrip, #491).
 	causePenalty
+	// causeStash: the load is in the half-speed band past
+	// Supply.ReturnLoad, a town visit sheds nothing, and the bot carries
+	// kept items it does not use to deposit in its own warehouse
+	// (queueStash, #449).
+	causeStash
 )
 
 // supplyTrip is a farmer's trip home to restock (rule "supply", D16,
@@ -341,7 +346,10 @@ func (b *Brain) supplyDue(now time.Time) tripCause {
 		return causeNone
 	}
 	v.checkAt = now.Add(supplyCheck)
-	return b.supplyCause()
+	if c := b.supplyCause(); c != causeStash || b.stashOpen(now) {
+		return c
+	}
+	return causeNone
 }
 
 // slotMember reports whether the bot is a join member of its bot party
@@ -389,10 +397,13 @@ func (b *Brain) nearSlotLeader(now time.Time) bool {
 // no Scroll: Recovery for and can buy one (penaltyTrip), a consumable it uses
 // fighting runs out within ReturnMinutes, its HP potions are gone, its load
 // is past ReturnLoad with ShedMin to shed, or in the half-speed band
-// (slowed) with anything to shed, or it carries the price of the gear goal. The Extra supplies and the Scrolls of Escape count toward
-// none.
+// (slowed) with anything to shed, or it carries the price of the gear
+// goal, or, last, in the half-speed band with nothing to shed, it carries
+// kept items it does not use to stash (causeStash; supplyDue holds it while
+// stashOpen does not). The Extra supplies and the Scrolls of Escape count
+// toward none.
 func (b *Brain) supplyCause() tripCause {
-	p, v := &b.persona.Supply, &b.supplyTrip
+	v := &b.supplyTrip
 	potion := b.supplyPotion() != 0
 	var potions int32
 	for _, id := range b.persona.Potions {
@@ -408,11 +419,12 @@ func (b *Brain) supplyCause() tripCause {
 		return causeRunOut
 	case potion && v.potions && potions == 0:
 		return causePotions
-	case b.overloaded() && b.shed()*100 >= int64(b.world.Self.MaxLoad)*int64(p.ShedMin),
-		b.overloaded() && b.slowed() && b.shed() > 0:
+	case b.loadSendsHome():
 		return causeLoad
 	case b.gearPaid():
 		return causeGear
+	case b.overloaded() && b.slowed() && len(b.stashRows()) > 0:
+		return causeStash
 	}
 	return causeNone
 }
@@ -441,6 +453,19 @@ func (b *Brain) runsOut() bool {
 	}
 	p := &b.persona
 	return b.supplyPotion() != 0 && low(p.Potions, b.meter.rate(p.Potions, p.Supply.PotionsPerHour/60))
+}
+
+// loadSendsHome reports whether the load sends the bot to town to shed it
+// (causeLoad): past Supply.ReturnLoad (overloaded) with Supply.ShedMin
+// percent of the limit to shed, or in the half-speed band (slowed) with
+// anything to shed. The shop visit sells junk under Shop.SellAt stacks
+// then (startShop), so the trip sheds it.
+func (b *Brain) loadSendsHome() bool {
+	if !b.overloaded() {
+		return false
+	}
+	shed := b.shed()
+	return shed*100 >= int64(b.world.Self.MaxLoad)*int64(b.persona.Supply.ShedMin) || b.slowed() && shed > 0
 }
 
 // overloaded reports whether the load is past Supply.ReturnLoad percent of
