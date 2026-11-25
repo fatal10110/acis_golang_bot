@@ -150,20 +150,26 @@ func (b *Brain) valuableSaleEvent(ev Event) {
 }
 
 // inviteEvent ends the round's sent trade request on its answer: a trade
-// window opening, or a refusal (tradeRequestRefusals).
+// window opening, or a refusal (tradeRequestRefusals); the same answer
+// ends one the round's end carried over (sessionRound.request).
 func (b *Brain) inviteEvent(ev Event) {
 	iv := &b.cfg.valuables.round.invite
-	if iv.sent.IsZero() {
+	if iv.sent.IsZero() && b.round.request.IsZero() {
 		return
 	}
 	switch e := ev.(type) {
 	case TradeStart:
-		*iv = valuableInvite{}
 	case SystemMessage:
-		if tradeRequestRefusals[e.ID] {
-			*iv = valuableInvite{}
+		if !tradeRequestRefusals[e.ID] {
+			return
 		}
+	default:
+		return
 	}
+	if !iv.sent.IsZero() {
+		*iv = valuableInvite{}
+	}
+	b.round.request = time.Time{}
 }
 
 // inviteSent records the round's trade request to partner sent at now.
@@ -174,14 +180,18 @@ func (b *Brain) inviteSent(partner int32, now time.Time) {
 }
 
 // roundEnd is the open round's end as it stands: RoundWait after its first
-// ad line; none before that line. The Grace extension lands with V7a; until
-// then no request goes out in it.
+// ad line, Grace later once the end was put off (roundOver); none before
+// that line.
 func (b *Brain) roundEnd() (time.Time, bool) {
-	r := &b.cfg.valuables.round
+	r, p := &b.cfg.valuables.round, b.persona.Valuables
 	if r.ads == 0 {
 		return time.Time{}, false
 	}
-	return r.first.Add(b.persona.Valuables.RoundWait), true
+	end := r.first.Add(p.RoundWait)
+	if r.extended {
+		end = end.Add(p.Grace)
+	}
+	return end, true
 }
 
 // inviteGate reports whether the round may set out to ask a whisperer, or

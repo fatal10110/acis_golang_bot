@@ -28,7 +28,7 @@ func newAdBrain(t *testing.T, board *AdBoard, region int, items ...Item) *Brain 
 
 // openAdRound opens a round of b at now, anchored where the bot stands.
 func openAdRound(b *Brain, now time.Time) {
-	b.cfg.valuables.openRound(Point{}, now)
+	b.cfg.valuables.openRound(b.world.Self.Position(now), now)
 }
 
 // adLine is the ad line naming the carried units of each key, in order.
@@ -157,6 +157,8 @@ func TestAdPacing(t *testing.T) {
 		a, b, c := newAdBrain(t, board, 0, swordUnit(101, 0)), newAdBrain(t, board, 0, swordUnit(101, 0)), newAdBrain(t, board, 0, swordUnit(101, 0))
 		other := newAdBrain(t, board, 1, swordUnit(101, 0))
 		for _, x := range []*Brain{a, b, c, other} {
+			// Rounds long enough for every step's line.
+			x.persona.Valuables.FirstLineWait, x.persona.Valuables.RoundWait = time.Hour, time.Hour
 			openAdRound(x, t0)
 		}
 		line := encodeSay2(adLine(t, a, swordKey), chatTrade)
@@ -219,6 +221,8 @@ func TestAdPacing(t *testing.T) {
 	t.Run("AdEvery and AdLines per round", func(t *testing.T) {
 		board := NewAdBoard(DefaultAdRegionGap, DefaultAdProcessPerHour)
 		b := newAdBrain(t, board, 0, swordUnit(101, 0))
+		// A round long enough to run past AdLines.
+		b.persona.Valuables.RoundWait = time.Hour
 		p := b.persona.Valuables
 		openAdRound(b, t0)
 		steps := []struct {
@@ -279,7 +283,7 @@ func TestAdPacing(t *testing.T) {
 		}{
 			{"in no region", func(b *Brain) { b.cfg.Travel.regions = nil }},
 			{"no ad board", func(b *Brain) { b.cfg.Ads = nil }},
-			{"disabled policy", func(b *Brain) { b.persona.Valuables = ValuablePolicy{} }},
+			{"disabled policy: no budget, the round ends", func(b *Brain) { b.persona.Valuables = ValuablePolicy{} }},
 			{"nothing carried", func(b *Brain) { b.world.Apply(ItemList{}, t0) }},
 			{"away from the anchor", func(b *Brain) { b.cfg.valuables.round.anchor = Point{X: 3000} }},
 		}
@@ -290,8 +294,12 @@ func TestAdPacing(t *testing.T) {
 				openAdRound(b, t0)
 				tt.setup(b)
 				rule, a := b.decide(t0)
-				if rule != "valuables" || a.kind == actSay {
+				ends := strings.HasPrefix(tt.name, "disabled policy")
+				if rule != "valuables" && !ends || a.kind == actSay {
 					t.Fatalf("decide = rule %q action %d, want rule valuables and no line", rule, a.kind)
+				}
+				if ends && b.cfg.valuables.round.open {
+					t.Fatal("round still open with a disabled policy")
 				}
 				if !board.Free(0, t0) || !board.Free(1, t0) {
 					t.Fatal("board claimed with no line")

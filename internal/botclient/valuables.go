@@ -56,6 +56,11 @@ type valuableRound struct {
 	// partners the round asked (or set out to), each once.
 	invite valuableInvite
 	asked  map[int32]bool
+	// back is when the walk back after the round's withdrawal ended, zero
+	// for none: FirstLineWait counts from it, else from start. extended is
+	// set once the end is put off for Grace (roundOver).
+	back     time.Time
+	extended bool
 }
 
 // valuables is a bot's valuables ledger, its round and its noPrivate
@@ -76,6 +81,9 @@ type valuables struct {
 	// noPrivate marks the keeper templates that refused a private request
 	// (docs/valuables/warehouse.md "Keeper marks").
 	noPrivate map[int32]bool
+	// lastStart is the latest round's start, zero before any of the
+	// process; the next starts RoundGap later at the earliest.
+	lastStart time.Time
 }
 
 func newValuables() *valuables {
@@ -87,6 +95,7 @@ func newValuables() *valuables {
 func (v *valuables) openRound(anchor Point, now time.Time) {
 	v.round = valuableRound{open: true, start: now, anchor: anchor}
 	v.talk = whisperTalk{}
+	v.lastStart = now
 }
 
 // endRound ends the round at now; its responder's caps and deals hold for
@@ -291,45 +300,27 @@ func (p ValuablePolicy) lowered(ask int64, ref int32, floor int64) int64 {
 	return max(ask-int64(p.RoundStep)*int64(ref)/100, floor)
 }
 
-// ruleValuables holds the turn for the session's look at its private
-// warehouse (lookTurn) and while a valuables round is open
-// (docs/valuables/round.md "The rule"), so no later rule walks the bot
-// away: it walks back to within anchorArrive of the round's anchor (goTo,
-// walkPlace), says the round's ad lines there (adTurn), asks a whisperer
-// for a trade from there (startInvite, inviteTurn), the walk back coming
-// before the next line or request, and sends nothing else once there or
-// when no route there holds. Only tests open a round until the round's
-// start lands (V7a).
+// ruleValuables is rule "valuables" (docs/valuables/round.md "The rule"):
+// the session's look at its private warehouse (lookTurn), then the
+// valuables round. Once roundDue holds it opens a round anchored where the
+// bot stands and runs it (roundStep), holding the turn on every decision
+// while it runs, so no later rule walks the bot away.
 //
-// Pacing: the walk's MoveBackwardToLocation segments, paced as every goTo;
-// the look's as rule "warehouse"'s; the ad lines' as adTurn's; the trade
-// requests' as inviteTurn's.
+// Pacing: the look's and the round's private requests as rule
+// "warehouse"'s (one open per warehouseOpenGap, openDue); the walks'
+// MoveBackwardToLocation segments as every goTo; the ad lines as adTurn's;
+// the trade requests as inviteTurn's; one round per RoundGap.
 func (b *Brain) ruleValuables(now time.Time) (Action, bool) {
 	if a, ok := b.lookTurn(now); ok {
 		return a, true
 	}
-	r := &b.cfg.valuables.round
-	if !r.open {
-		return Action{}, false
-	}
-	if a, ok := b.inviteTurn(now); ok {
-		return a, true
-	}
-	a, st := b.goTo(r.anchor, anchorArrive, walkPlace, now)
-	if st == walkWalking {
-		return a, true
-	}
-	if st == walkArrived {
-		if a, ok := b.adTurn(now); ok {
-			return a, true
+	if b.round.phase == roundIdle && !b.cfg.valuables.round.open {
+		if !b.roundDue(now) {
+			return Action{}, false
 		}
-		if b.startInvite(now) {
-			if a, ok := b.inviteTurn(now); ok {
-				return a, true
-			}
-		}
+		b.startRound(now)
 	}
-	return Action{}, true
+	return b.roundStep(now)
 }
 
 // gradeLetters are the crystal grades as an ad names them, by grade.
