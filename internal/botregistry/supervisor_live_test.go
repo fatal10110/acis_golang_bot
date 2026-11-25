@@ -3,13 +3,17 @@ package botregistry
 import (
 	"errors"
 	"math/rand/v2"
+	"runtime"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
-// liveBot builds the bot of r as a RunFunc does, without running it, and
-// hands it over.
+// liveBot builds the bot of r as a RunFunc does, without running it, hands
+// it over and returns once the supervisor holds it: Run.Live posts the bot to
+// the supervisor's mailbox, which its loop may serve after a List request
+// sent later, so a status read right after the hand-over could find no live
+// bot (as in botpanel's rig.next, #207).
 func liveBot(t *testing.T, h *harness, r *fakeRun) *botclient.Bot {
 	t.Helper()
 	b, err := botclient.NewBot(botclient.SessionConfig{Clock: h.clock, Gate: h.gate}, r.Account, "", botclient.BotConfig{Character: r.Character, Preset: r.Preset}, rand.New(rand.NewPCG(5, 6)))
@@ -17,7 +21,14 @@ func liveBot(t *testing.T, h *harness, r *fakeRun) *botclient.Bot {
 		t.Fatal(err)
 	}
 	r.Live(b)
-	return b
+	for range 10000 {
+		if h.list(t)[r.Account].Live != nil {
+			return b
+		}
+		runtime.Gosched()
+	}
+	t.Fatalf("supervisor never held the live bot of %s", r.Account)
+	return nil
 }
 
 func TestSupervisorCommandsTheLiveBot(t *testing.T) {
