@@ -38,15 +38,24 @@ const (
 	// default (aCis ships 200): the lower bound, so a deposit never counts
 	// on slots the server may not have.
 	clanWarehouseSlots = 150
+	// privateWarehouseSlots and dwarfWarehouseSlots are WarehouseNoDwarf
+	// and WarehouseDwarf, a private warehouse's slots
+	// (model/actor/player/character_storage_limits.go); the whLimit stat,
+	// which the bot does not see, is left out, so the count only undercounts.
+	privateWarehouseSlots = 100
+	dwarfWarehouseSlots   = 120
 	// warehouseChats is how many "Chat" links a visit follows looking for
 	// the keeper's clan warehouse links: some keepers link them from a
 	// second page (data/html/warehouse/30083.htm), some not at all.
 	warehouseChats = 3
 )
 
-// clanWarehouseType is the warehouse type of a clan warehouse list
-// (serverpackets/warehouse.go WarehouseClan).
-const clanWarehouseType uint16 = 2
+// The warehouse types of a list (serverpackets/warehouse.go
+// WarehousePrivate, WarehouseClan).
+const (
+	privateWarehouseType uint16 = 1
+	clanWarehouseType    uint16 = 2
+)
 
 // System messages of the clan warehouse (serverpackets/systemmessage.go).
 const (
@@ -167,15 +176,23 @@ func encodeWarehouseRequest(op byte, rows []warehouseRow) []byte {
 // names the one item object of the template it takes.
 type WarehouseRow struct{ TemplateID, Count, Object int32 }
 
-// WarehouseRequest is a clan warehouse errand: a withdrawal of Withdraw,
-// then a deposit of Deposit, either one empty for none. Look opens the
-// withdrawal list and sends no withdrawal: the list is a look at the
-// contents (WarehouseStatus), Withdraw ignored. The deposit right after the
+// WarehouseRequest is a warehouse errand: a withdrawal of Withdraw, then a
+// deposit of Deposit, either one empty for none. Look opens the withdrawal
+// list and sends no withdrawal: the list is a look at the contents
+// (WarehouseStatus), Withdraw ignored. The deposit right after the
 // withdrawal or the look opens the warehouse again at once; any other open
-// waits for MinOpenGap (warehouseOpenGap) since the bot's last.
+// waits for MinOpenGap (warehouseOpenGap) since the bot's last, whichever
+// warehouse it opened.
+//
+// Private sends it to the bot's own warehouse instead of its clan's, at the
+// nearest keeper within Reach of Anchor (docs/valuables/warehouse.md);
+// Anchor and Reach are read for a private request only.
 type WarehouseRequest struct {
 	Withdraw, Deposit []WarehouseRow
 	Look              bool
+	Private           bool
+	Anchor            Point
+	Reach             int32
 }
 
 // empty reports whether the request asks for nothing.
@@ -203,7 +220,8 @@ const (
 	WarehouseFull
 	// WarehouseTimeout: the server answered nothing (a silent refusal).
 	WarehouseTimeout
-	// WarehouseUnreachable: no keeper with a clan warehouse was reached.
+	// WarehouseUnreachable: no keeper with the warehouse asked for was
+	// reached.
 	WarehouseUnreachable
 	// WarehouseListed: a look got its fresh list (or the empty answer is
 	// WarehouseEmpty); no withdrawal went out.
@@ -220,9 +238,10 @@ type WarehouseResult struct {
 	Rows    []WarehouseRow
 }
 
-// WarehouseStatus is what the errand knows: the last result of each kind,
-// and the clan warehouse as the last withdrawal list or empty answer showed
-// it (Known false before one), with what the bot moved since.
+// WarehouseStatus is what the errand knows of one warehouse, the clan's or
+// the bot's own: the last result of each kind, and the warehouse as the last
+// withdrawal list or empty answer showed it (Known false before one), with
+// what the bot moved since.
 type WarehouseStatus struct {
 	Withdraw, Deposit WarehouseResult
 	Contents          []WarehouseItem
@@ -247,9 +266,9 @@ func defaultWarehousePolicy() WarehousePolicy { return WarehousePolicy{Reach: 80
 type whStep uint8
 
 const (
-	// whTalk talks to the keeper and follows its pages to the clan link.
+	// whTalk talks to the keeper and follows its pages to the open link.
 	whTalk whStep = iota
-	// whOpening waits for the list the clan link opens.
+	// whOpening waits for the list the open link opens.
 	whOpening
 	// whListed has the fresh list: the request goes out.
 	whListed
@@ -257,12 +276,16 @@ const (
 	whSent
 )
 
-// warehouseErrand is the bot's clan warehouse errand (rule 9 errand
-// "warehouse"). It is owned by the brain goroutine. One transaction is one
-// open (a clan link of the keeper's page) and one request.
+// warehouseErrand is the bot's warehouse errand (rule 9 errand
+// "warehouse"), clan or private. It is owned by the brain goroutine. One
+// transaction is one open (a clan or private link of the keeper's page)
+// and one request.
 type warehouseErrand struct {
 	v   npcVisit
 	req WarehouseRequest
+	// privateWant is the one private request queued for the next start,
+	// ahead of the clan's (startWarehouse); empty for none.
+	privateWant WarehouseRequest
 	// running is set while a request runs.
 	running bool
 	step    whStep
@@ -284,11 +307,15 @@ type warehouseErrand struct {
 	openedAt time.Time
 	exempt   bool
 	timeouts int
-	status   WarehouseStatus
+	// status is the clan warehouse's, private the bot's own.
+	status, private WarehouseStatus
 	// shunned are the keeper templates not at their spawn, until a time;
-	// noClan the ones whose pages link no clan warehouse.
-	shunned map[int32]time.Time
-	noClan  map[int32]bool
+	// noClan the ones whose pages link no clan warehouse, noPrivate no
+	// private one. noPrivate may be handed in: it is read and filled in
+	// place.
+	shunned   map[int32]time.Time
+	noClan    map[int32]bool
+	noPrivate map[int32]bool
 	// retryAt is when a request may start after one that ended before an
 	// open: no keeper, or a deposit failing its checks.
 	retryAt time.Time
@@ -296,6 +323,15 @@ type warehouseErrand struct {
 
 // depositing reports whether the transaction under way is the deposit.
 func (e *warehouseErrand) depositing() bool { return len(e.req.Withdraw) == 0 && !e.req.Look }
+
+// statusOf is the status of req's warehouse: the bot's own for a private
+// request, else the clan's.
+func (e *warehouseErrand) statusOf(req WarehouseRequest) *WarehouseStatus {
+	if req.Private {
+		return &e.private
+	}
+	return &e.status
+}
 
 // openDue reports whether an open may go out at now: MinOpenGap after the
 // last, doubled per timeout in a row, or at once for an exempt deposit.
@@ -318,10 +354,10 @@ func (e *warehouseErrand) result(o WarehouseOutcome, msg int32, now time.Time) {
 			r.Rows = append(r.Rows, WarehouseRow{TemplateID: row.item, Count: row.count, Object: row.object})
 		}
 	}
-	if e.depositing() {
-		e.status.Deposit = r
+	if st := e.statusOf(e.req); e.depositing() {
+		st.Deposit = r
 	} else {
-		e.status.Withdraw = r
+		st.Withdraw = r
 	}
 }
 
@@ -347,16 +383,38 @@ func (e *warehouseErrand) end() {
 	e.step, e.list, e.rows, e.chats, e.talked, e.firstPage = whTalk, nil, nil, nil, false, false
 }
 
-// fail ends the whole request with outcome o for each part left.
-func (e *warehouseErrand) fail(o WarehouseOutcome, now time.Time) {
+// fail ends the whole request with outcome o (and system message msg) for
+// each part left; the next request waits MinOpenGap.
+func (e *warehouseErrand) fail(o WarehouseOutcome, msg int32, now time.Time) {
 	e.retryAt = now.Add(warehouseOpenGap)
+	e.giveUp(o, msg, now)
+}
+
+// giveUp ends the whole request with outcome o (and system message msg) for
+// each part left, setting no retry time.
+func (e *warehouseErrand) giveUp(o WarehouseOutcome, msg int32, now time.Time) {
+	st := e.statusOf(e.req)
 	if len(e.req.Withdraw) > 0 || e.req.Look {
-		e.status.Withdraw = WarehouseResult{Outcome: o, At: now}
+		st.Withdraw = WarehouseResult{Outcome: o, Msg: msg, At: now}
 	}
 	if len(e.req.Deposit) > 0 {
-		e.status.Deposit = WarehouseResult{Outcome: o, At: now}
+		st.Deposit = WarehouseResult{Outcome: o, Msg: msg, At: now}
 	}
 	e.end()
+}
+
+// cancelPrivate ends the running private request before its request
+// packet went out (the round's cut-off, docs/valuables/round-end.md): at
+// the walk, the talk, the open link sent or the list received. It records
+// no result and sets no retry time; a sent open keeps its openedAt and its
+// late list or empty answer is dropped (warehouseEvent). A request already
+// sent, or a clan request, keeps running. It reports whether it ended one.
+func (e *warehouseErrand) cancelPrivate() bool {
+	if !e.running || !e.req.Private || e.step == whSent {
+		return false
+	}
+	e.end()
+	return true
 }
 
 // sent records a packet of the errand that went out at now.
@@ -391,17 +449,54 @@ func clanWarehouseCommand(obj int32, deposit bool) string {
 	return "npc_" + strconv.Itoa(int(obj)) + cmd
 }
 
+// openLink is the link of the open page that opens the transaction under
+// way at keeper obj, "" for none: the clan link, or the private deposit
+// link (DepositP, exact) or the first private withdrawal link (WithdrawP, a
+// prefix; folk_warehouse.go warehouseCommand).
+func (b *Brain) openLink(obj int32) string {
+	e, d := &b.wh, &b.world.Dialog
+	if !e.req.Private {
+		if cmd := clanWarehouseCommand(obj, e.depositing()); d.Has(cmd) {
+			return cmd
+		}
+		return ""
+	}
+	prefix := "npc_" + strconv.Itoa(int(obj))
+	if e.depositing() {
+		if cmd := prefix + "_DepositP"; d.Has(cmd) {
+			return cmd
+		}
+		return ""
+	}
+	for _, l := range d.Links {
+		if strings.HasPrefix(l, prefix+"_WithdrawP") {
+			return l
+		}
+	}
+	return ""
+}
+
 // ruleWarehouse is a rule 9 errand: with a request from
-// Persona.Warehouse.Want, the bot walks to the nearest warehouse keeper,
-// talks to it, follows its pages to the clan warehouse link, opens the
-// warehouse and sends one request per open, the withdrawal before the
-// deposit. Opens are at least MinOpenGap (warehouseOpenGap) apart, except
-// the deposit after its own withdrawal, and one request goes out per open,
-// after its list; links pass the bypass gate (gateBypass); legs and clicks
-// the frame pacer, a visit spending at most visitClicks clicks.
+// Persona.Warehouse.Want (or a queued private one), the bot walks to the
+// nearest warehouse keeper, talks to it, follows its pages to the clan (or
+// private) warehouse link, opens the warehouse and sends one request per
+// open, the withdrawal before the deposit. Opens are at least MinOpenGap
+// (warehouseOpenGap) apart, except the deposit after its own withdrawal,
+// and one request goes out per open, after its list; links pass the bypass
+// gate (gateBypass); legs and clicks the frame pacer, a visit spending at
+// most visitClicks clicks.
 func (b *Brain) ruleWarehouse(now time.Time) (Action, bool) {
+	if b.world.Self.InCombat || (!b.wh.running && !b.startWarehouse(now)) {
+		return Action{}, false
+	}
+	return b.stepWarehouse(now)
+}
+
+// stepWarehouse steps the running request, under rule "warehouse" or the
+// rule that started it, with ruleWarehouse's pacing.
+func (b *Brain) stepWarehouse(now time.Time) (Action, bool) {
 	e := &b.wh
-	if b.world.Self.InCombat || (!e.running && !b.startWarehouse(now)) {
+	if !e.running {
 		return Action{}, false
 	}
 	v := &e.v
@@ -413,7 +508,7 @@ func (b *Brain) ruleWarehouse(now time.Time) (Action, bool) {
 		// Unanswered: a silent refusal. The request ends and the next
 		// open waits longer.
 		e.timeouts++
-		e.fail(WarehouseTimeout, now)
+		e.fail(WarehouseTimeout, 0, now)
 		return Action{}, false
 	case whListed:
 		return b.warehouseRequest(now)
@@ -427,20 +522,22 @@ func (b *Brain) ruleWarehouse(now time.Time) (Action, bool) {
 			e.shunned = make(map[int32]time.Time)
 		}
 		e.shunned[v.npcID] = now.Add(visitShunFor)
-		e.fail(WarehouseUnreachable, now)
+		e.fail(WarehouseUnreachable, 0, now)
 		return Action{}, false
 	}
 	return a, true
 }
 
-// warehouseLink is the next link of the keeper's open page: the clan link
-// once an open is due, else a "Chat" link not followed yet. A keeper whose
-// first page leads to no clan link has no clan warehouse: it is left out
-// and the request ends, to be asked again at another keeper.
+// warehouseLink is the next link of the keeper's open page: the open link
+// (openLink) once an open is due, else a "Chat" link not followed yet. A
+// keeper whose first page leads to no open link has no warehouse of the
+// kind: it is marked (noClan, noPrivate) and the request ends, to be asked
+// again at another keeper. A private request ended so sets no retry time:
+// no open went out.
 func (b *Brain) warehouseLink(now time.Time) (Action, bool) {
 	e := &b.wh
 	v := &e.v
-	if cmd := clanWarehouseCommand(v.obj, e.depositing()); b.world.Dialog.Has(cmd) {
+	if cmd := b.openLink(v.obj); cmd != "" {
 		if !e.openDue(now) {
 			return Action{}, true
 		}
@@ -460,11 +557,19 @@ func (b *Brain) warehouseLink(now time.Time) (Action, bool) {
 		v.opened = false
 		return b.approach(v, now)
 	}
+	if e.req.Private {
+		if e.noPrivate == nil {
+			e.noPrivate = make(map[int32]bool)
+		}
+		e.noPrivate[v.npcID] = true
+		e.giveUp(WarehouseUnreachable, 0, now)
+		return Action{}, false
+	}
 	if e.noClan == nil {
 		e.noClan = make(map[int32]bool)
 	}
 	e.noClan[v.npcID] = true
-	e.fail(WarehouseUnreachable, now)
+	e.fail(WarehouseUnreachable, 0, now)
 	return Action{}, false
 }
 
@@ -528,8 +633,10 @@ func pickRows(want []WarehouseRow, stock []whStock) []warehouseRow {
 
 // depositRows picks the deposit's rows from stock and checks them: no open
 // trade, a slot for each new kind while the warehouse contents are known
-// (rows of new kinds past the free slots are left out), and adena for the
-// fee on top of any adena deposited. A failed check is its outcome.
+// (rows of new kinds past the free slots are left out; a clan warehouse has
+// clanWarehouseSlots, a private one privateWarehouseSlots or, for a dwarf,
+// dwarfWarehouseSlots), and adena for the fee on top of any adena
+// deposited. A failed check is its outcome.
 func (b *Brain) depositRows(stock []whStock) ([]warehouseRow, WarehouseOutcome, int32) {
 	e := &b.wh
 	if b.world.Trade.Open() {
@@ -539,8 +646,14 @@ func (b *Brain) depositRows(stock []whStock) ([]warehouseRow, WarehouseOutcome, 
 	if len(rows) == 0 {
 		return nil, WarehouseNothing, 0
 	}
-	if st := &e.status; st.Known {
+	if st := e.statusOf(e.req); st.Known {
 		free := clanWarehouseSlots - len(st.Contents)
+		if e.req.Private {
+			free = privateWarehouseSlots - len(st.Contents)
+			if b.world.Self.Race == RaceDwarf {
+				free = dwarfWarehouseSlots - len(st.Contents)
+			}
+		}
 		kept := rows[:0]
 		for _, r := range rows {
 			if merges(r, st.Contents) {
@@ -576,20 +689,28 @@ func merges(r warehouseRow, contents []WarehouseItem) bool {
 	})
 }
 
-// startWarehouse starts a request when one is due: the bot is in a clan,
-// an open is due and the crafter's cycle (warehouseWant) or
-// Persona.Warehouse.Want asks for one. A deposit whose
-// carried items fail its checks ends before any open. The keeper is the
-// nearest one in sight, else the nearest spawn within Reach. It reports
-// whether a request runs.
+// startWarehouse starts a request when one is due: an open is due and the
+// queued private request (privateWant), else, the bot in a clan, the
+// crafter's cycle (warehouseWant) or Persona.Warehouse.Want asks for one.
+// A deposit whose carried items fail its checks ends before any open. The
+// keeper of a clan request is the nearest one in sight, else the nearest
+// spawn within Persona.Warehouse.Reach; of a private request the nearest
+// one in sight within the request's Reach of its Anchor, else the nearest
+// such spawn. It reports whether a request runs.
 func (b *Brain) startWarehouse(now time.Time) bool {
 	e, p := &b.wh, &b.persona.Warehouse
 	m := b.cfg.Travel
-	if (p.Want == nil && !b.crafting()) || m == nil || len(m.keepers) == 0 || b.world.Clan.ID == 0 ||
+	if (p.Want == nil && !b.crafting() && e.privateWant.empty()) || m == nil || len(m.keepers) == 0 ||
 		!e.openDue(now) || now.Before(e.retryAt) {
 		return false
 	}
-	req := b.warehouseWant(now)
+	var req WarehouseRequest
+	if !e.privateWant.empty() {
+		req, e.privateWant = e.privateWant, WarehouseRequest{}
+		req.Private = true
+	} else if b.world.Clan.ID != 0 {
+		req = b.warehouseWant(now)
+	}
 	if req.empty() {
 		return false
 	}
@@ -603,35 +724,42 @@ func (b *Brain) startWarehouse(now time.Time) bool {
 		}
 	}
 	from := b.world.Self.Position(now)
-	usable := func(npcID int32) bool {
-		return m.keepers[npcID] && !e.noClan[npcID] && !now.Before(e.shunned[npcID])
+	reach, anchorReach := int64(p.Reach)*int64(p.Reach), int64(req.Reach)*int64(req.Reach)
+	usable := func(npcID int32, at Point) bool {
+		if !m.keepers[npcID] || now.Before(e.shunned[npcID]) {
+			return false
+		}
+		if req.Private {
+			return !e.noPrivate[npcID] && dist2(req.Anchor, at) <= anchorReach
+		}
+		return !e.noClan[npcID]
 	}
 	var best npcVisit
 	var bestDist int64
 	for id, o := range b.world.Objects {
-		if o.Kind != KindNPC || o.Dead || !usable(o.NPCID) {
+		if o.Kind != KindNPC || o.Dead {
 			continue
 		}
-		at := o.Position(now)
-		if d := dist2(from, at); !best.active() || d < bestDist {
-			best, bestDist = npcVisit{npcID: o.NPCID, at: at, obj: id}, d
+		if at := o.Position(now); usable(o.NPCID, at) {
+			if d := dist2(from, at); !best.active() || d < bestDist {
+				best, bestDist = npcVisit{npcID: o.NPCID, at: at, obj: id}, d
+			}
 		}
 	}
 	if !best.active() {
-		reach := int64(p.Reach) * int64(p.Reach)
 		for npcID := range m.keepers {
-			if !usable(npcID) {
-				continue
-			}
 			for _, at := range m.spawns[npcID] {
-				if d := dist2(from, at); d <= reach && (!best.active() || d < bestDist) {
+				if !usable(npcID, at) {
+					continue
+				}
+				if d := dist2(from, at); (req.Private || d <= reach) && (!best.active() || d < bestDist) {
 					best, bestDist = npcVisit{npcID: npcID, at: at}, d
 				}
 			}
 		}
 	}
 	if !best.active() {
-		e.fail(WarehouseUnreachable, now)
+		e.fail(WarehouseUnreachable, 0, now)
 		return false
 	}
 	e.v = best
@@ -663,22 +791,30 @@ func (b *Brain) warehouseEvent(ev Event, now time.Time) {
 			e.firstPage, e.talked = e.talked, false
 		}
 	case WarehouseDepositList:
-		if e.step == whOpening && e.depositing() && m.Type == clanWarehouseType {
+		if e.step == whOpening && e.depositing() && m.Type == e.listType() {
 			e.list, e.step, e.v.waitUntil = m.Items, whListed, time.Time{}
 		}
 	case WarehouseWithdrawList:
-		if e.step == whOpening && !e.depositing() && m.Type == clanWarehouseType {
+		if e.step == whOpening && !e.depositing() && m.Type == e.listType() {
 			e.list, e.step, e.v.waitUntil = m.Items, whListed, time.Time{}
-			e.status.Contents, e.status.Known = slices.Clone(m.Items), true
+			st := e.statusOf(e.req)
+			st.Contents, st.Known = slices.Clone(m.Items), true
 		}
 	case SystemMessage:
+		if e.step == whTalk && m.ID == msgAlreadyTrading && len(e.chats) > 0 {
+			// The request gate refused a "Chat" link (network/bypass.go,
+			// folk_bypass.go): a refusal, not a keeper without the link.
+			e.fail(WarehouseRefused, m.ID, now)
+			return
+		}
 		if e.step != whOpening && e.step != whSent {
 			return
 		}
 		switch {
 		case m.ID == msgNoItemDepositedInW && e.step == whOpening && !e.depositing():
 			e.timeouts = 0
-			e.status.Contents, e.status.Known = nil, true
+			st := e.statusOf(e.req)
+			st.Contents, st.Known = nil, true
 			e.endTransaction(WarehouseEmpty, 0, now)
 		case slices.Contains(warehouseRefusals, m.ID):
 			e.timeouts = 0
@@ -709,12 +845,22 @@ func (b *Brain) movedRows(u InventoryUpdate) bool {
 	return false
 }
 
+// listType is the warehouse type of the lists the request under way
+// opens.
+func (e *warehouseErrand) listType() uint16 {
+	if e.req.Private {
+		return privateWarehouseType
+	}
+	return clanWarehouseType
+}
+
 // trackContents applies the rows the server just moved to the known
 // contents: a withdrawal takes its counts off, a deposit adds to a stack
-// it merges into or adds a row of its kind.
+// it merges into or adds a row of its kind, a private one with the item's
+// object id and enchant (from the deposit list).
 func (b *Brain) trackContents() {
 	e := &b.wh
-	st := &e.status
+	st := e.statusOf(e.req)
 	if !st.Known {
 		return
 	}
@@ -731,7 +877,14 @@ func (b *Brain) trackContents() {
 			st.Contents[i].Count += r.count
 			continue
 		}
-		st.Contents = append(st.Contents, WarehouseItem{TemplateID: r.item, Count: r.count})
+		it := WarehouseItem{TemplateID: r.item, Count: r.count}
+		if e.req.Private {
+			it.ObjectID = r.object
+			if i := slices.IndexFunc(e.list, func(l WarehouseItem) bool { return l.ObjectID == r.object }); i >= 0 {
+				it.Enchant = e.list[i].Enchant
+			}
+		}
+		st.Contents = append(st.Contents, it)
 	}
 	st.Contents = slices.DeleteFunc(st.Contents, func(it WarehouseItem) bool { return it.Count <= 0 })
 }

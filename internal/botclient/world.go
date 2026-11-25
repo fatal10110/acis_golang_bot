@@ -74,8 +74,10 @@ type Symbols struct {
 type SelfState struct {
 	ObjectID int32
 	Name     string
-	// BaseClass is the class drawn on the model, ClassID the class played.
+	// BaseClass is the class drawn on the model, ClassID the class played;
+	// Race is the character's (RaceHuman to RaceDwarf).
 	BaseClass, ClassID int32
+	Race               int32
 	Level              int32
 	Exp                int64
 	SP                 int32
@@ -836,6 +838,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s := &w.Self
 	s.ObjectID, s.Name = e.ObjectID, e.Name
 	s.BaseClass, s.ClassID, s.Level, s.Exp, s.SP = e.BaseClass, e.ClassID, e.Level, e.Exp, e.SP
+	s.Race = e.Race
 	s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP = e.HP, e.MaxHP, e.MP, e.MaxMP, e.CP, e.MaxCP
 	s.Load, s.MaxLoad = e.Load, e.MaxLoad
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
