@@ -88,6 +88,10 @@ type BrainConfig struct {
 	// the bot stores open there (rule "store"), shared by every bot of the
 	// process. Nil opens no store.
 	Stores *StoreRegistry
+	// Ads, when set, is the ad board a merchant's valuables round claims
+	// its Trade lines on (docs/valuables/ads.md "Ad board"), shared by every
+	// bot of the process. Nil says no ad.
+	Ads *AdBoard
 	// Authority, when set, decides who may command the bot by whisper,
 	// shared by every bot of the process. Nil obeys nobody.
 	Authority *Authority
