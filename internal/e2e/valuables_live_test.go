@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -91,9 +92,9 @@ func TestLiveValuablesTradeSale(t *testing.T) {
 
 // TestLiveValuablesWarehouse: with RoundGap lowered, the buyer stays silent;
 // after its round the merchant deposits the sword at Rolfe (30 adena a row,
-// the sword gone); the GM gives it Tears of Eva; its next round withdraws
-// the sword at Rolfe, and one Trade line the buyer hears names both. No
-// private link names Rant.
+// the sword gone); the GM gives it Tears of Eva unless it carried one from
+// an earlier run; its next round withdraws the sword at Rolfe, and one Trade
+// line the buyer hears names both. No private link names Rant.
 func TestLiveValuablesWarehouse(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -113,11 +114,12 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	}
 	b := enterBuyer(t, ctx, tg, gm, f)
 	from, sent := f.seen(), len(f.watch.Sent())
-	// A sword an earlier run's second round withdrew serves as well, and
-	// the merchant's stock stays bounded.
+	// A sword and Tears an earlier run's second round withdrew serve as
+	// well, and the merchant's stock (and the deposit's fee) stays bounded.
 	if f.carries(swordOfWatershadow) == 0 {
 		giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
 	}
+	hadTears := f.carries(tearsOfEva) > 0
 
 	untilServedBy(t, ctx, f.name+" deposits the sword after its round", time.Now().Add(12*time.Minute), f.watch, warehouseRefused(f.watch), func() string {
 		switch {
@@ -143,7 +145,9 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines, sent := len(b.ads), len(f.watch.Sent())
-	giveMerchant(t, ctx, gm, f, tearsOfEva, 1)
+	if !hadTears {
+		giveMerchant(t, ctx, gm, f, tearsOfEva, 1)
+	}
 	b.until(t, ctx, b.c.Self.Name+" hears a Trade line naming "+tearsName, 12*time.Minute, func() bool {
 		return b.adSince(lines, tearsName) != ""
 	})
@@ -289,6 +293,8 @@ type valuablesBuyer struct {
 	merchantID int32
 	ads, tells []string
 	requested  bool
+	// bought are the object ids of the valuables it bought this run.
+	bought []int32
 }
 
 // enterBuyer enters the buyer (<prefix>vb1, buyerCharacter) next to the GM,
@@ -301,7 +307,47 @@ func enterBuyer(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, f *
 	// Its entry's ItemList is read already: the buyer counts its stock from
 	// the trade window and the store list, and gets the adena every run.
 	giveClient(t, ctx, gm, c, adena, valuablesBuyerAdena)
-	return &valuablesBuyer{c: c, merchant: f.name, merchantID: f.id}
+	b := &valuablesBuyer{c: c, merchant: f.name, merchantID: f.id}
+	// Registered after enter's, so it runs while the buyer is still in
+	// the world; t.Context, and so ctx, is done by then.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		b.destroyBought(t, ctx)
+	})
+	return b
+}
+
+// destroyBought destroys the valuables the buyer bought this run, one at a
+// time, so the shared buyer's weight and rows stay bounded across runs.
+func (b *valuablesBuyer) destroyBought(t *testing.T, ctx context.Context) {
+	t.Helper()
+	for _, id := range b.bought {
+		if err := b.c.Send(ctx, botclient.EncodeRequestDestroyItem(id, 1)); err != nil {
+			t.Errorf("%s destroys bought item %d: %v", b.c.Self.Name, id, err)
+			return
+		}
+		ev, err := b.c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+			switch e := ev.(type) {
+			case botclient.SystemMessage:
+				return slices.Contains(destroyRefusals, e.ID)
+			case botclient.InventoryUpdate:
+				for _, c := range e.Changes {
+					if c.Item.ObjectID == id && c.State == botclient.ItemRemoved {
+						return true
+					}
+				}
+			}
+			return false
+		})
+		if err != nil {
+			t.Errorf("%s destroys bought item %d: %v", b.c.Self.Name, id, err)
+			continue
+		}
+		if m, ok := ev.(botclient.SystemMessage); ok {
+			t.Errorf("%s destroys bought item %d: refused with system message %d", b.c.Self.Name, id, m.ID)
+		}
+	}
 }
 
 // note records ev: the merchant's Trade lines, its whispers and trade
@@ -424,6 +470,7 @@ func (b *valuablesBuyer) buyByTrade(t *testing.T, ctx context.Context, price int
 				switch {
 				case c.Item.TemplateID == swordOfWatershadow && c.State == botclient.ItemAdded:
 					sword = true
+					b.bought = append(b.bought, c.Item.ObjectID)
 				case c.Item.TemplateID == adena && c.State != botclient.ItemRemoved:
 					adenaLeft = c.Item.Count
 				case c.Item.TemplateID == adena:
@@ -481,6 +528,7 @@ func (b *valuablesBuyer) buyFromStore(t *testing.T, ctx context.Context, owner i
 				switch {
 				case want[c.Item.TemplateID] && c.State == botclient.ItemAdded:
 					added++
+					b.bought = append(b.bought, c.Item.ObjectID)
 				case c.Item.TemplateID == adena && c.State != botclient.ItemRemoved:
 					left = c.Item.Count
 				}
