@@ -17,6 +17,9 @@ const (
 	WhyNoHealer      = "no healer"
 	WhyNoSpot        = "no spot"
 	WhySpread        = "level spread"
+	WhyDissolved     = "dissolved by the panel"
+	WhyAutoOff       = "auto parties off"
+	WhyTaken         = "a bot taken by the panel"
 )
 
 // Plan returns the organizer's next state and the orders that move the parties toward the groups
@@ -204,6 +207,14 @@ func (pl *planner) tend(pt *Party) {
 		pl.breakParty(pt, why)
 		return
 	}
+	switch {
+	case pt.Dissolve != "":
+		pl.breakParty(pt, pt.Dissolve)
+		return
+	case pl.st.AutoOff && !pt.Pinned:
+		pl.breakParty(pt, WhyAutoOff)
+		return
+	}
 	rng := int64(pl.p.Range) * int64(pl.p.Range)
 	kept := pt.Members[:0]
 	for _, m := range pt.Members {
@@ -240,7 +251,7 @@ func (pl *planner) tend(pt *Party) {
 	pl.setTimer(&pt.NoSpotSince, lOnline != nil && lOnline.Spot == "")
 	pl.setTimer(&pt.NoHealerSince, !healer)
 	if leads && pt.State == Forming {
-		pt.State = Active
+		pt.State, pt.Since = Active, pl.now
 	}
 
 	if pt.Pinned {
@@ -324,15 +335,28 @@ func (pl *planner) spread(pt *Party) int32 {
 }
 
 // breakParty breaks pt: every member is freed, a pin's rows are cleared, and the sweep sends
-// unparty, the leader first.
+// unparty, the leader first. A leader the panel took into another party is left to that one.
 func (pl *planner) breakParty(pt *Party, why string) {
-	pt.State, pt.Why = Broken, why
+	pt.State, pt.Why, pt.Since = Broken, why, pl.now
 	for _, a := range pt.accounts() {
+		if pl.inOther(pt, a) {
+			continue
+		}
 		pl.st.Freed[a] = pl.now
 		if pt.Pinned {
 			pl.st.Unpin = append(pl.st.Unpin, a)
 		}
 	}
+}
+
+// inOther reports account a in a live party other than pt.
+func (pl *planner) inOther(pt *Party, a string) bool {
+	for i := range pl.st.Parties {
+		if o := &pl.st.Parties[i]; o.ID != pt.ID && o.State != Broken && slices.Contains(o.accounts(), a) {
+			return true
+		}
+	}
+	return false
 }
 
 // memberNames are the character names of pt's members but the leader.
@@ -367,6 +391,10 @@ func (pl *planner) order(pt *Party) {
 		if c == nil {
 			continue
 		}
+		if pl.awaiting(pt, c) {
+			ready = false
+			continue
+		}
 		o := pt.joinOrder(m)
 		if pending(c) || c.Slot != o.Slot() {
 			ready = false
@@ -379,7 +407,7 @@ func (pl *planner) order(pt *Party) {
 		}
 	}
 	leader := pl.by[pt.Leader.Account]
-	if leader == nil || pending(leader) || pt.Pinned && leader.Whispered {
+	if leader == nil || pl.awaiting(pt, leader) || pending(leader) || pt.Pinned && leader.Whispered {
 		return
 	}
 	o := Order{Account: leader.Account, Kind: OrderLead, Names: pt.memberNames()}
@@ -389,6 +417,24 @@ func (pl *planner) order(pt *Party) {
 	if ready || subset(o.Names, slotNames(leader.Slot, OrderLead)) {
 		pl.emit(pt, leader, o)
 	}
+}
+
+// awaiting reports a bot of pt.Await that is not ready for pt's slot yet, and hands it unparty
+// while it holds a slot with no order pending. It leaves Await once online with no slot, no
+// order pending and no party.
+func (pl *planner) awaiting(pt *Party, c *Candidate) bool {
+	if !pt.Await[c.Account] {
+		return false
+	}
+	switch {
+	case pending(c):
+	case c.Slot != "":
+		pl.emit(nil, c, Order{Account: c.Account, Kind: OrderUnparty})
+	case c.Online && c.Leader == "":
+		delete(pt.Await, c.Account)
+		return false
+	}
+	return true
 }
 
 // slotNames are the names of a slot of kind k, nil for another slot.

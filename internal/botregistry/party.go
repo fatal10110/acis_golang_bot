@@ -18,8 +18,10 @@ import (
 // (invites: docs/parties/server.md, "Pacing").
 func (s *Supervisor) partyPass() {
 	cands := s.candidates()
+	next := s.party.NextID
 	st, orders := botparty.Plan(s.party, cands, *s.cfg.Party, s.cfg.Clock.Now())
 	s.party = st
+	s.countParties(st, next)
 	for _, c := range cands {
 		s.runs[c.Account].newRun = false
 	}
@@ -27,6 +29,23 @@ func (s *Supervisor) partyPass() {
 		s.order(o)
 	}
 	s.unpin(st.Unpin)
+}
+
+// countParties counts the parties the pass formed, those of an id from
+// next on, and broke (the parties a pass returns broken are its own: the
+// next pass forgets them).
+func (s *Supervisor) countParties(st botparty.State, next int) {
+	for _, pt := range st.Parties {
+		if pt.ID >= next && s.cfg.Metrics != nil {
+			s.cfg.Metrics.PartyFormed()
+		}
+		if pt.State == botparty.Broken {
+			s.log.Info("party broken", "id", pt.ID, "leader", pt.Leader.Account, "why", pt.Why)
+			if s.cfg.Metrics != nil {
+				s.cfg.Metrics.PartyBroken(pt.Why)
+			}
+		}
+	}
 }
 
 // candidates are the registry's bots with a live run as the organizer reads

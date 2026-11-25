@@ -33,6 +33,10 @@ type Registry struct {
 
 	mu   sync.Mutex
 	bots []*Bot // guarded by mu
+	// partiesFormed and partiesBroken count the panel organizer's bot
+	// parties (docs/parties/panel.md, "Metrics"); guarded by mu.
+	partiesFormed uint64
+	partiesBroken map[string]uint64
 
 	last atomic.Pointer[Snapshot]
 }
@@ -66,6 +70,24 @@ func (r *Registry) NewBot() *Bot {
 // SetBreaker records the state of the process-wide credential breaker: open
 // once it has halted every login.
 func (r *Registry) SetBreaker(open bool) { r.breakerOpen.Store(open) }
+
+// PartyFormed counts a bot party the organizer formed.
+func (r *Registry) PartyFormed() {
+	r.mu.Lock()
+	r.partiesFormed++
+	r.mu.Unlock()
+}
+
+// PartyBroken counts a bot party the organizer broke for why, one of the
+// organizer's fixed reasons (botparty.Why*), so the keys stay few.
+func (r *Registry) PartyBroken(why string) {
+	r.mu.Lock()
+	if r.partiesBroken == nil {
+		r.partiesBroken = make(map[string]uint64)
+	}
+	r.partiesBroken[why]++
+	r.mu.Unlock()
+}
 
 // Snapshot is the sum of every Bot at one collection. Counters only grow;
 // QueueDepth counts the events the brain drained at each wakeup, and
@@ -115,6 +137,11 @@ type Snapshot struct {
 	ValuablesDeposits uint64            `json:"valuables_deposits_total"`
 	ValuablesReleased uint64            `json:"valuables_released_total"`
 	ValuablesHeld     int64             `json:"valuables_held"`
+	// PartiesFormed counts the bot parties the panel's organizer formed,
+	// by hand or by itself, and PartiesBroken the ones it broke, keyed by
+	// the reason (docs/parties/panel.md, "Metrics").
+	PartiesFormed uint64            `json:"parties_formed_total"`
+	PartiesBroken map[string]uint64 `json:"parties_broken_total"`
 }
 
 // The via labels of Snapshot.ValuablesSold.
@@ -161,6 +188,11 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 	hits := make([]uint64, len(r.rules))
 	r.mu.Lock()
 	s.Bots = len(r.bots)
+	s.PartiesFormed = r.partiesFormed
+	s.PartiesBroken = make(map[string]uint64, len(r.partiesBroken))
+	for why, n := range r.partiesBroken {
+		s.PartiesBroken[why] = n
+	}
 	for _, b := range r.bots {
 		s.Events += b.events.Load()
 		s.Sent += b.sent.Load()

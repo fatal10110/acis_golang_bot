@@ -77,6 +77,9 @@ func (pl *planner) nearest(g *group, pool []*Candidate, used map[string]bool, wa
 // healerless Damage candidate. A waiting group's members are neither; a short party takes one
 // member a pass.
 func (pl *planner) group() {
+	if pl.st.AutoOff {
+		return
+	}
 	live := pl.live()
 	var free []*Candidate
 	for i := range pl.cands {
@@ -162,6 +165,7 @@ func (pl *planner) group() {
 				Leader:      Member{Account: g.lead.Account, Character: g.lead.Character},
 				Members:     members(g.added),
 				FormedAt:    pl.now,
+				Since:       pl.now,
 				GoneSince:   map[string]time.Time{},
 				BehindSince: map[string]time.Time{},
 				Ordered:     map[string]bool{},
@@ -211,6 +215,7 @@ func (pl *planner) pins() {
 			ID:          pl.st.NextID,
 			Leader:      Member{Account: l.Account, Character: l.Character},
 			FormedAt:    pl.now,
+			Since:       pl.now,
 			Pinned:      true,
 			Group:       l.Group,
 			GoneSince:   map[string]time.Time{},

@@ -177,8 +177,17 @@ type Party struct {
 	Members  []Member
 	FormedAt time.Time
 	State    PartyState
+	// Since is when the party entered its State.
+	Since time.Time
 	// Why is the break's cause, "" for none.
 	Why string
+	// Dissolve is the cause of a break the panel asked for (Dissolve, Form), "" for none: the next
+	// pass breaks the party with it.
+	Dissolve string
+	// Await are the accounts of a party the panel formed that are ordered only once they hold no
+	// slot, have no order pending and are online in no party: unparty first when they hold a
+	// slot, so the player-led-party rule never clears the new one (docs/parties/panel.md).
+	Await map[string]bool
 	// Pinned is a pin of the panel; Group its name.
 	Pinned bool
 	Group  string
@@ -214,6 +223,9 @@ func (pt Party) clone() Party {
 	pt.GoneSince = cloneMap(pt.GoneSince)
 	pt.BehindSince = cloneMap(pt.BehindSince)
 	pt.Ordered = cloneMap(pt.Ordered)
+	if pt.Await != nil {
+		pt.Await = cloneMap(pt.Await)
+	}
 	return pt
 }
 
@@ -237,6 +249,9 @@ type State struct {
 	Unpin []string
 	// NextID is the id of the next party formed.
 	NextID int
+	// AutoOff is the panel's switch of auto parties off: a pass forms and fills none and breaks
+	// every auto party; pins are kept.
+	AutoOff bool
 }
 
 func (s State) clone() State {
@@ -245,6 +260,7 @@ func (s State) clone() State {
 		Freed:    cloneMap(s.Freed),
 		PairBans: cloneMap(s.PairBans),
 		NextID:   s.NextID,
+		AutoOff:  s.AutoOff,
 	}
 	for _, pt := range s.Parties {
 		out.Parties = append(out.Parties, pt.clone())

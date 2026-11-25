@@ -11,10 +11,12 @@ import { hrefOf, useHashRoute, type Route } from "./lib/useHashRoute";
 import { BotDetail } from "./pages/BotDetail";
 import { BotsPage } from "./pages/BotsPage";
 import { Dashboard } from "./pages/Dashboard";
+import { PartiesPage } from "./pages/PartiesPage";
 import { LogsPage } from "./pages/LogsPage";
 
 const nav: { route: Route; label: string }[] = [
   { route: { page: "bots" }, label: "Bots" },
+  { route: { page: "parties" }, label: "Parties" },
   { route: { page: "dashboard" }, label: "Dashboard" },
   { route: { page: "logs" }, label: "Logs" },
 ];
@@ -79,6 +81,7 @@ export function App() {
       <main id="main" className="mx-auto max-w-7xl px-4 py-6">
         {route.page === "bots" && <BotsPage bots={bots} ask={setConfirm} />}
         {route.page === "bot" && <BotDetail key={route.account} account={route.account} bots={bots} ask={setConfirm} />}
+        {route.page === "parties" && <PartiesPage ask={setConfirm} />}
         {route.page === "dashboard" && <Dashboard dash={update?.dashboard} samples={samples} ask={setConfirm} />}
         {route.page === "logs" && <LogsPage bots={bots} />}
       </main>

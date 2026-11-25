@@ -12,7 +12,7 @@ import { Card } from "../components/ui/Card";
 import { Select } from "../components/ui/Field";
 import { Empty, Failed, Loading } from "../components/ui/States";
 import { api } from "../lib/api";
-import { activityOf, characterOf, className, classOf, levelOf, statusOf, time, whereOf } from "../lib/format";
+import { activityOf, characterOf, className, classOf, levelOf, partyOf, statusOf, time, whereOf } from "../lib/format";
 import { useClassNames, useInspection, useLogs, usePresets, useSpots } from "../lib/queries";
 import type { Bot } from "../lib/types";
 import { useRun } from "../lib/useRun";
@@ -148,6 +148,21 @@ export function BotDetail({ account, bots, ask }: { account: string; bots: Bot[]
                 {presets.data ? <PresetOptions presets={presets.data.presets} /> : <option>{b.preset}</option>}
               </Select>
             </Row>
+            <Row label="Party mode">
+              <Select
+                aria-label="Party mode"
+                value={b.party_mode === "off" ? "off" : "auto"}
+                disabled={busy}
+                onChange={(e) => {
+                  const m = e.target.value === "off" ? "off" : "auto";
+                  void run(`${account}: party ${m}`, () => api.setPartyMode(account, m));
+                }}
+                className="w-auto"
+              >
+                <option value="auto">auto</option>
+                <option value="off">off</option>
+              </Select>
+            </Row>
             {l && (
               <>
                 <Row label="State">{l.state}</Row>
@@ -162,6 +177,7 @@ export function BotDetail({ account, bots, ask }: { account: string; bots: Bot[]
                 </Row>
                 <Row label="Rule / order">{activityOf(b)}</Row>
                 <Row label="Party">{l.leader ? [l.leader, ...(l.members ?? [])].join(", ") : ""}</Row>
+                <Row label="Party slot">{partyOf(b)}</Row>
                 {l.crafter && <CrafterStatus crafter={l.crafter} />}
                 <Row label="Reconnects">{l.reconnects}</Row>
                 {l.err && <Row label="Last error">{l.err}</Row>}

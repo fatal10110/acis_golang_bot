@@ -29,6 +29,8 @@ export interface Live {
   leader?: string;
   members?: string[];
   order?: string;
+  /** The party slot the organizer gave: "lead A B", "join L A"; absent for none. */
+  party?: string;
   reconnects: number;
   err?: string;
   crafter?: Crafter;
@@ -58,6 +60,11 @@ export interface Bot {
   class?: number;
   never_create?: boolean;
   preset: string;
+  /** "off" keeps the bot out of bot parties; absent takes part. */
+  party_mode?: string;
+  /** The pinned party the bot belongs to, and whether it leads it. */
+  party_group?: string;
+  party_lead?: boolean;
   online: boolean;
   level?: number;
   position?: Point;
@@ -102,6 +109,42 @@ export interface Dashboard {
   running: number;
   max_online: number;
   metrics: Metrics | null;
+}
+
+/** A bot of a party or of the free pool (botregistry.PartyBot). */
+export interface PartyBot {
+  account: string;
+  character?: string;
+  class_id?: number;
+  level: number;
+  preset: string;
+  role?: string;
+  online: boolean;
+  slot?: string;
+  town?: Point;
+}
+
+/** A bot party of the organizer (botregistry.PartyInfo); times are RFC 3339. */
+export interface Party {
+  id: number;
+  leader: PartyBot;
+  members: PartyBot[];
+  /** The leader's party members that are players: names only. */
+  players: string[];
+  spot?: string;
+  state: "forming" | "active" | "broken";
+  why?: string;
+  since: string;
+  formed_at: string;
+  pinned: boolean;
+  group?: string;
+}
+
+/** GET /api/parties: the auto switch, every party and the bots free to group. */
+export interface Parties {
+  auto: boolean;
+  parties: Party[];
+  free: PartyBot[];
 }
 
 /** What /api/events sends as "update" every few seconds. */

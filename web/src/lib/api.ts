@@ -1,4 +1,4 @@
-import type { Answer, Bot, ClassInfo, Inspection, LogLine, Presets, Spot } from "./types";
+import type { Answer, Bot, ClassInfo, Inspection, LogLine, Parties, Presets, Spot } from "./types";
 
 /** ApiError is a refused request: its HTTP status and the panel's reason. */
 export class ApiError extends Error {
@@ -50,4 +50,10 @@ export const api = {
   command: (account: string, command: string) => request<Answer>("POST", `${bot(account)}/command`, { command }),
   inspect: (account: string) => request<Inspection>("GET", `${bot(account)}/inspect`),
   resumeLogins: () => request<Answer>("POST", "/api/resume-logins"),
+  parties: () => request<Parties>("GET", "/api/parties"),
+  formParty: (leader: string, members: string[], pin: boolean) =>
+    request<{ id: number }>("POST", "/api/parties", { leader, members, pin }),
+  dissolveParty: (id: number) => request<Answer>("DELETE", `/api/parties/${id}`),
+  setPartyAuto: (on: boolean) => request<Answer>("POST", "/api/parties/auto", { on }),
+  setPartyMode: (account: string, mode: "auto" | "off") => request<Answer>("POST", `${bot(account)}/party`, { mode }),
 };

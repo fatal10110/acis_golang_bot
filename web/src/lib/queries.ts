@@ -12,6 +12,11 @@ export function useClassNames() {
   return { ...q, names: classMap(q.data) };
 }
 
+/** useParties polls the organizer's parties and free pool. */
+export function useParties() {
+  return useQuery({ queryKey: ["parties"], queryFn: api.parties, refetchInterval: 5_000 });
+}
+
 export function useSpots(enabled = true) {
   return useQuery({ queryKey: ["spots"], queryFn: api.spots, enabled, refetchInterval: 10_000 });
 }
