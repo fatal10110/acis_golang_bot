@@ -42,6 +42,11 @@ type memberState struct {
 	// asks the keep hook back; the shot orders are sized by trip targets,
 	// which read the extra supply hook that asks for their ore.
 	inHold, inShots bool
+	// holds is the persona's own keep hook, which wireMember wraps; wired
+	// is set once it did. The valuable test asks only the own hook
+	// (Brain.ownHold): the member's hold comes after valuable (D31).
+	holds func(w *World, it Item) Hold
+	wired bool
 }
 
 // wireMember installs the clan member option on the brain's persona: it
@@ -51,6 +56,7 @@ type memberState struct {
 func (b *Brain) wireMember() {
 	p := &b.persona
 	holds, extra, inTown, handOff, want := p.Holds, p.Supply.Extra, p.Supply.InTown, p.Supply.HandOff, p.Warehouse.Want
+	b.member.holds, b.member.wired = holds, true
 	p.Holds = func(w *World, it Item) Hold {
 		var h Hold
 		if holds != nil {
@@ -118,17 +124,24 @@ func (b *Brain) memberHold(it Item) Hold {
 }
 
 // memberKeep is memberHold for an item none of its guards excludes, with
-// the materials the member keeps (memberMaterials) built by the caller.
+// the materials the member keeps (memberMaterials) built by the caller. A
+// valuable is kept for none (D31): the member's hold comes after it, so
+// memberDeposit, memberHandOff and the fees leave it out. The valuable
+// test and the gear errand ask the keep hook back, so both run under
+// inHold.
 func (b *Brain) memberKeep(it Item, materials map[int32]bool) Hold {
 	st := &b.member
+	st.inHold = true
+	defer func() { st.inHold = false }()
+	if b.valuable(it) {
+		return Hold{}
+	}
 	if _, ok := b.recipeScrolls()[it.TemplateID]; ok || materials[it.TemplateID] {
 		return Hold{Keep: true}
 	}
 	if _, graded := b.cfg.Travel.crystals[it.TemplateID]; !graded {
 		return Hold{}
 	}
-	st.inHold = true
-	defer func() { st.inHold = false }()
 	w := b.worn()
 	if b.upgrade(it, &w) || b.fallsBack(it, &w) || b.keepsForSet(it, &w) {
 		return Hold{}

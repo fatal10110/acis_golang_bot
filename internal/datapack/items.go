@@ -176,6 +176,9 @@ type ItemTables struct {
 	Prices map[int32]int32
 	// Names are the names of the templates in Prices, whatever their type.
 	Names map[int32]string
+	// Stackable are the templates in Prices that stack (is_stackable): the
+	// server stores one row of each, not one per unit.
+	Stackable map[int32]bool
 }
 
 // LoadItems reads every *.xml item template file directly under dir, in
@@ -191,7 +194,7 @@ func LoadItems(dir string) (ItemTables, error) {
 	}
 	t := ItemTables{
 		Items: make(map[int32]Item), Etc: make(map[int32]EtcItem),
-		Prices: make(map[int32]int32), Names: make(map[int32]string),
+		Prices: make(map[int32]int32), Names: make(map[int32]string), Stackable: make(map[int32]bool),
 	}
 	for _, path := range paths {
 		var f itemFile
@@ -215,10 +218,14 @@ func (t ItemTables) add(el itemElement) error {
 	}
 	delete(t.Prices, id)
 	delete(t.Names, id)
+	delete(t.Stackable, id)
 	delete(t.Items, id)
 	delete(t.Etc, id)
 	if priced {
 		t.Prices[id], t.Names[id] = price, name
+		if itemAttrs(el).boolDefault("is_stackable", false) {
+			t.Stackable[id] = true
+		}
 	}
 	it, ok, err := buildItem(el)
 	if err != nil {

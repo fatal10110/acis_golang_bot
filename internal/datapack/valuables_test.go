@@ -256,6 +256,7 @@ func TestLoadItemNames(t *testing.T) {
 	<item id="5458" type="EtcItem" name="Recipe: Halberd(60%)">
 		<set name="etcitem_type" val="RECIPE"/>
 		<set name="price" val="366000"/>
+		<set name="is_stackable" val="true"/>
 	</item>
 	<item id="1" type="Weapon" name="Short Sword"><set name="price" val="768"/></item>
 	<item id="2" type="EtcItem" name="Unpriced"><set name="etcitem_type" val="RECIPE"/></item>
@@ -276,6 +277,9 @@ func TestLoadItemNames(t *testing.T) {
 	}
 	if _, ok := got.Etc[5458]; ok {
 		t.Error("recipe scroll 5458 kept as an etc item")
+	}
+	if want := map[int32]bool{5458: true}; !reflect.DeepEqual(got.Stackable, want) {
+		t.Errorf("Stackable = %v, want %v", got.Stackable, want)
 	}
 }
 
@@ -335,6 +339,9 @@ func TestLoadShippedValuables(t *testing.T) {
 	}
 	if got := dp.Names[5458]; got != "Recipe: Halberd(60%)" {
 		t.Errorf("Names[5458] = %q, want the recipe scroll's name", got)
+	}
+	if !dp.Stackable[5458] || dp.Stackable[121] {
+		t.Errorf("Stackable[5458] = %v, Stackable[121] = %v; want a stacking recipe scroll, a sword that does not", dp.Stackable[5458], dp.Stackable[121])
 	}
 
 	rows := 0

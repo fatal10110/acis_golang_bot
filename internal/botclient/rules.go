@@ -461,7 +461,9 @@ type rule struct {
 // farming spot) and "farm" (attacking a monster there) are rule 9 errands,
 // ahead of the persona's goal: a party member assists its leader, visits its
 // trainer, then follows instead of farming. "loot" is rule 8, after the
-// rebuff and ahead of every errand. "store" is the merchant's private store:
+// rebuff and ahead of every errand. "valuables" holds the turn while a
+// merchant's valuables round is open (docs/valuables/round.md), after
+// "loot" and ahead of "store". "store" is the merchant's private store:
 // it opens where the bot stands, ahead of every errand that would walk it
 // away, and puts the bot in store mode (storeRules). "command" sends what a
 // GM's whispered command asks for (a reply, a party withdrawal), and "stay"
@@ -504,6 +506,7 @@ var playRules = []rule{
 	{"recover", (*Brain).ruleRecover},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
+	{"valuables", (*Brain).ruleValuables},
 	{"store", (*Brain).ruleStore},
 	{"assist", (*Brain).ruleAssist},
 	{"classchange", (*Brain).ruleClassChange},
@@ -557,6 +560,7 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	if b.store.active() || b.world.Self.StoreType != 0 {
 		rules = storeRules
 	}
+	b.syncValuables()
 	for _, r := range rules {
 		if a, ok := r.run(b, now); ok {
 			return r.name, a
