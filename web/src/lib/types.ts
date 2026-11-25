@@ -26,6 +26,10 @@ export interface Live {
   town?: Point;
   preset?: string;
   rule?: string;
+  /** The npcmaker name of the farming spot the bot holds; absent for none. */
+  spot?: string;
+  /** "unreachable: <reason>" after the latest walk found no route; absent otherwise. */
+  walk?: string;
   leader?: string;
   members?: string[];
   order?: string;

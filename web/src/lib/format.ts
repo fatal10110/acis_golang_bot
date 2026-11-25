@@ -51,6 +51,11 @@ export function activityOf(b: Bot): string {
   return [b.live?.rule, b.live?.order].filter(Boolean).join(" / ");
 }
 
+/** spotWalkOf is the farming spot the bot holds and its latest walk failure. */
+export function spotWalkOf(b: Bot): string {
+  return [b.live?.spot, b.live?.walk].filter(Boolean).join(" / ");
+}
+
 export function percent(v: number, max: number): number {
   if (max <= 0) return 0;
   return Math.max(0, Math.min(100, Math.round((v / max) * 100)));
@@ -102,7 +107,7 @@ export function sortBots(bots: readonly Bot[], key: SortKey, desc: boolean, name
 export function matches(b: Bot, filter: string, names: ClassNames): boolean {
   const f = filter.trim().toLowerCase();
   if (!f) return true;
-  return [b.account, characterOf(b), b.preset, className(names, classOf(b)), statusOf(b), activityOf(b)].some((s) =>
+  return [b.account, characterOf(b), b.preset, className(names, classOf(b)), statusOf(b), activityOf(b), spotWalkOf(b)].some((s) =>
     s.toLowerCase().includes(f),
   );
 }
