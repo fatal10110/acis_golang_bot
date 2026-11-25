@@ -44,15 +44,11 @@ func TestLiveSpoilSweep(t *testing.T) {
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
 		class: &botclient.DwarvenFighter,
-		// The spots of monsters up to 5 levels under it, where the GM
-		// spawns the hunters: the level 7 to 9 packs of the spots of its
-		// level are too much for a dwarf of level 10 in starter gear
-		// (packFits, #446), which leaves it no spot by its village.
-		persona: func() botclient.Persona {
-			p := farmerPersona(spoilLevel)()
-			p.Spots.Above = 5
-			return p
-		},
+		// The level 7 to 9 packs of the spots of its level are too much
+		// for a dwarf of level 10 in starter gear (packFits): it falls back
+		// to the highest spot under its level that fits (#446), where the
+		// GM spawns the hunters.
+		persona: farmerPersona(spoilLevel),
 		// The travel map as cmd/bots' farmers have it: the corpse times
 		// of its NPC templates bound the sweep window (TravelMap.corpseTime).
 		brain: func(cfg *botclient.BrainConfig) { cfg.Spots, cfg.Travel = spots, travel },

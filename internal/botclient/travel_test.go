@@ -362,7 +362,9 @@ func TestTravelGivesUp(t *testing.T) {
 				{name: "talk 4", at: 65 * time.Second, wantRule: "travel", wantKind: actTalk},
 				{name: "talk 5", at: 86 * time.Second, wantRule: "travel", wantKind: actTalk},
 				{name: "talk 6", at: 107 * time.Second, wantRule: "travel", wantKind: actTalk},
-				{name: "clicks spent", at: 128 * time.Second},
+				// The trip given up, no spot of its level is left: it
+				// falls back to the one under it (#446).
+				{name: "clicks spent", at: 128 * time.Second, wantRule: "spot", wantKind: actMove},
 			},
 			shunFor: visitShunFor,
 		},

@@ -142,6 +142,17 @@ func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
 	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s)
 }
 
+// lowerFits reports whether s fits the bot at now as a fallback (claimLower):
+// its monsters all under its level window (SpotPolicy.Above), no pack a
+// death taught it to pass over, and no pack too much for its stats
+// (packFits). packFits stays the gate: the fallback only widens the level
+// window downward.
+func (b *Brain) lowerFits(s *datapack.Spot, now time.Time) bool {
+	self := &b.world.Self
+	level := int(self.Level)
+	return s.MaxLevel < level-b.persona.Spots.Above && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s)
+}
+
 // packBound is the pack a death at one taught the bot to pass over
 // (SpotPolicy.PackShare), until a time.
 type packBound struct {
@@ -203,6 +214,10 @@ type spotVisit struct {
 	// not its held ones. held and beside are never both set.
 	beside bool
 	at     Point
+	// lower is set while the spot held is a fallback under the bot's level
+	// window (claimLower): the bot looks again every spotRetry for one of
+	// its level.
+	lower bool
 	// arrived is set once the bot reached the spot's centre.
 	arrived bool
 	// idleSince is when the bot's idle stretch at the spot began, zero
@@ -244,7 +259,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || b.outleveled() || b.overRisk() || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || v.lower || b.outleveled() || b.overRisk() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.farming() {
@@ -420,8 +435,9 @@ func (b *Brain) outleveled() bool {
 
 // overRisk reports whether the pack of the spot the bot holds no longer
 // fits its stats (packFits), as when it took the spot before its stats came
-// in or its potions ran out: it looks for one that fits, and keeps the one
-// it holds with none.
+// in or its potions ran out: it looks for one that fits, of its level, else
+// a trip, else the highest under its level window (claimLower), and keeps
+// the one it holds with none.
 func (b *Brain) overRisk() bool {
 	v := &b.spot
 	return v.held && !b.packFits(&b.cfg.Spots.spots[v.idx])
@@ -433,11 +449,13 @@ func (b *Brain) overRisk() bool {
 // (navDistance) that no bot holds, else the nearest with room. With none,
 // it looks again after spotRetry and plans a trip by gatekeeper (rule
 // "travel", planTrip), giving up the spot it holds for the trip; with no
-// trip either, a bot holding no spot that fits shares, past its cap, the
-// spot in Wander its bots fill least (SpotPolicy.Overflow), one with every
-// such spot at its limit farms beside one (SpotPolicy.Beside, farmBeside),
-// and one that holds a spot that fits keeps it. A spot in another SCC is
-// never claimed.
+// trip either and no spot of its level that passes the model, it falls back
+// to the highest spot under its level window that does (claimLower, #446);
+// else a bot holding no spot that fits shares, past its cap, the spot in
+// Wander its bots fill least (SpotPolicy.Overflow), one with every such spot
+// at its limit farms beside one (SpotPolicy.Beside, farmBeside), and one
+// that holds a spot that fits keeps it. A spot in another SCC is never
+// claimed.
 func (b *Brain) pickSpot(now time.Time) {
 	here, ok := b.locate(b.standing(now))
 	if !ok {
@@ -460,12 +478,23 @@ type spotCand struct {
 // avoided and lie in its SCC within Wander in straight line, but the one it
 // holds.
 func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
+	return b.candsWhere(here, now, b.spotFits)
+}
+
+// lowerCands are the spots under the bot's level window that pass the
+// model (lowerFits) the bot may claim standing at here, as spotCands.
+func (b *Brain) lowerCands(here navPoint, now time.Time) []spotCand {
+	return b.candsWhere(here, now, b.lowerFits)
+}
+
+// candsWhere are the spots fit passes, as spotCands.
+func (b *Brain) candsWhere(here navPoint, now time.Time, fit func(*datapack.Spot, time.Time) bool) []spotCand {
 	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
 	far := max(float64(p.MaxTravel), float64(p.Wander))
 	var cands []spotCand
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !b.spotFits(sp, now) {
+		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !fit(sp, now) {
 			continue
 		}
 		line := math.Sqrt(float64(horizontal2(here.at, Point{X: sp.Center.X, Y: sp.Center.Y})))
@@ -514,7 +543,10 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 			// than block a place there for the trip and walk back to it.
 			b.leaveSpot()
 		}
-		if b.trip.v.active() || (v.held && !b.outleveled()) {
+		if b.trip.v.active() || (len(cands) == 0 && here != nil && b.claimLower(*here, now)) {
+			return
+		}
+		if v.held && !b.outleveled() {
 			return
 		}
 		if p.Overflow {
@@ -531,6 +563,70 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 	b.trip.onward = 0
 	b.leaveSpot()
 	v.idx, v.held, v.at = i, true, candAt(cands, i)
+}
+
+// claimLower is pickSpot's fallback for a bot with no spot of its level to
+// claim and no trip (#446): every spot of its level fails the model
+// (packFits) or the bot outlevelled them. It claims the spot under its level
+// window that passes the model (lowerCands) with the highest monsters, the
+// nearest among those: a monster more than 5 levels under its killer cuts
+// its drop and spoil chances by 18 % a level (server item/drop.go
+// LevelPenaltyMultiplier), so the highest that fits gives up least: it
+// claims level by level (SpotRegistry.claimTiers), so an empty spot is
+// taken before a shared one only among spots of one level. With every such
+// spot full it shares, past its cap, the one its bots fill least
+// (SpotPolicy.Overflow). A bot holding a spot of its level that fits keeps
+// it, and one holding a spot under its level window that fits (a fallback,
+// or the spot it outlevelled) keeps it until a higher one that fits has
+// room under its cap. It reports whether the bot holds a fallback.
+func (b *Brain) claimLower(here navPoint, now time.Time) bool {
+	r, v, p := b.cfg.Spots, &b.spot, &b.persona.Spots
+	if v.held && b.spotFits(&r.spots[v.idx], now) {
+		return false
+	}
+	cands := b.lowerCands(here, now)
+	if len(cands) == 0 {
+		return false
+	}
+	beyond := func(c spotCand) bool { return c.line > float64(p.MaxTravel) }
+	slices.SortStableFunc(cands, func(x, y spotCand) int {
+		if c := cmp.Compare(r.spots[y.i].MaxLevel, r.spots[x.i].MaxLevel); c != 0 {
+			return c
+		}
+		if bx, by := beyond(x), beyond(y); bx != by {
+			if bx {
+				return 1
+			}
+			return -1
+		}
+		return cmp.Compare(x.d, y.d)
+	})
+	// A held fallback that fits is left only for a higher one with room:
+	// never for one as high or lower, nor past a cap, so the bot does not
+	// hop between fallbacks.
+	held := &r.spots[v.idx]
+	keep := v.held && b.lowerFits(held, now)
+	order := make([]int, 0, len(cands))
+	for _, c := range cands {
+		if !keep || r.spots[c.i].MaxLevel > held.MaxLevel {
+			order = append(order, c.i)
+		}
+	}
+	i, ok := r.claimTiers(order)
+	if !ok && keep {
+		v.lower = true
+		return true
+	}
+	if !ok && p.Overflow {
+		i, ok = r.claimOver(order)
+	}
+	if !ok {
+		return false
+	}
+	b.trip.onward = 0
+	b.leaveSpot()
+	v.idx, v.held, v.lower, v.at = i, true, true, candAt(cands, i)
+	return true
 }
 
 // farmBeside makes a bot holding no spot, with every spot of order (the
@@ -599,6 +695,6 @@ func (b *Brain) leaveSpot() {
 	case v.beside:
 		b.cfg.Spots.leaveBeside(v.idx)
 	}
-	v.idx, v.held, v.beside, v.at, v.arrived = 0, false, false, Point{}, false
+	v.idx, v.held, v.beside, v.lower, v.at, v.arrived = 0, false, false, false, Point{}, false
 	v.idleSince, v.idleSeen = time.Time{}, time.Time{}
 }
