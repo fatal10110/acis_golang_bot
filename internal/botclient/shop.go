@@ -425,7 +425,7 @@ func buyCommand(obj, listID int32) string {
 // (gateBypass); buy and sell requests have no reuse gate on the server and
 // go out once per BuyList or SellList; legs and clicks pass the frame
 // pacer, a visit spending at most visitClicks clicks; visits are shopRetry
-// apart.
+// apart, but for one that leaves wants another merchant sells (endShop).
 func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 	sh := &b.shop
 	if b.world.Self.InCombat || (!sh.v.active() && !b.startShop(now)) {
@@ -460,7 +460,7 @@ func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 		sh.dropList()
 	}
 	if !sh.sell && len(sh.lists) == 0 {
-		sh.end(now, false)
+		b.endShop(now, false)
 		return Action{}, false
 	}
 	if v.opened {
@@ -483,7 +483,7 @@ func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 		}
 		// A merchant whose page had none of the links the visit needed
 		// is left alone.
-		sh.end(now, sh.asked == 0)
+		b.endShop(now, sh.asked == 0)
 		return Action{}, false
 	}
 	a, ok := b.approach(v, now)
@@ -496,61 +496,122 @@ func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 	return a, true
 }
 
+// endShop ends the visit (shopVisit.end). A visit that leaves a want the
+// bot can afford that its merchant does not sell and another merchant does
+// (wantsElsewhere: gear bought at the armorer, potions still due at the
+// grocer) is followed at once by a visit to another merchant, and the
+// merchant just visited is left alone for shopRetry, so a chain of such
+// visits passes each merchant once (#441).
+func (b *Brain) endShop(now time.Time, shun bool) {
+	sh := &b.shop
+	npcID := sh.v.npcID
+	sh.end(now, shun)
+	if shun || !b.wantsElsewhere(npcID) {
+		return
+	}
+	if sh.shunned == nil {
+		sh.shunned = make(map[int32]time.Time)
+	}
+	sh.shunned[npcID] = now.Add(shopRetry)
+	sh.nextAt = now
+}
+
+// wantsElsewhere reports whether the bot wants an item now, at a price its
+// adena pays (shopWants), that no list of merchant npcID sells and another
+// merchant's does.
+func (b *Brain) wantsElsewhere(npcID int32) bool {
+	shops := b.cfg.Travel.shops
+	sold := func(id, item int32) bool {
+		return slices.ContainsFunc(shops[id], func(l shopList) bool { _, ok := l.sells(item); return ok })
+	}
+	for _, r := range b.shopWants(false) {
+		if sold(npcID, r.item) {
+			continue
+		}
+		for id := range shops {
+			if id != npcID && sold(id, r.item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // startShop starts a visit when one is due: at the merchant in sight, else
-// at the merchant spawn within Reach, nearest the bot that sells something it wants,
-// or for a visit only to sell, at any merchant. It reports whether it
-// started one.
+// at the merchant spawn within Reach, nearest the bot that sells something
+// of the first tier it wants (the budget's order, buyRows, kept across
+// merchants: supplies at the grocer before gear at the armorer, #441), else
+// something it wants, or for a visit only to sell, at any merchant. It
+// reports whether it started one.
 func (b *Brain) startShop(now time.Time) bool {
 	sh, p := &b.shop, &b.persona.Shop
 	if b.cfg.Travel == nil || now.Before(sh.nextAt) {
 		return false
 	}
 	junk := len(b.junk())
-	want := b.shopWants(junk > 0 && p.SellAt > 0)
+	due := b.dueWants(junk > 0 && p.SellAt > 0)
+	var want, first []buyRow
+	for _, w := range due {
+		want = append(want, w.buyRow)
+		if w.tier == due[0].tier {
+			first = append(first, w.buyRow)
+		}
+	}
 	sellDue := p.SellAt > 0 && junk >= p.SellAt
 	sell := sellDue || (p.SellAt > 0 && len(want) > 0 && junk > 0)
 	if len(want) == 0 && !sell {
 		return false
 	}
 	shops, from := b.cfg.Travel.shops, b.world.Self.Position(now)
+	sells := func(l shopList, rows []buyRow) bool {
+		return slices.ContainsFunc(rows, func(r buyRow) bool { _, ok := l.sells(r.item); return ok })
+	}
 	// lists returns the lists of merchant npcID the visit opens; ok is
-	// false for a merchant the visit has no use for: one selling nothing
-	// wanted, unless selling is due on its own.
-	lists := func(npcID int32) (ids []int32, ok bool) {
+	// false for a merchant the visit has no use for: one selling none of
+	// need, unless anyMerchant and selling is due on its own.
+	lists := func(npcID int32, need []buyRow, anyMerchant bool) (ids []int32, ok bool) {
 		if now.Before(sh.shunned[npcID]) {
 			return nil, false
 		}
 		for _, l := range shops[npcID] {
-			if slices.ContainsFunc(want, func(r buyRow) bool { _, ok := l.sells(r.item); return ok }) {
+			if sells(l, want) {
 				ids = append(ids, l.id)
 			}
+			ok = ok || sells(l, need)
 		}
-		return ids, len(ids) > 0 || (sellDue && len(shops[npcID]) > 0)
+		return ids, ok || (anyMerchant && sellDue && len(shops[npcID]) > 0)
 	}
-	var best shopVisit
-	bestDist := int64(math.MaxInt64)
-	for id, o := range b.world.Objects {
-		if o.Kind != KindNPC || o.Dead {
-			continue
-		}
-		at := o.Position(now)
-		if d := dist2(from, at); d < bestDist {
-			if ids, ok := lists(o.NPCID); ok {
-				best, bestDist = shopVisit{v: npcVisit{npcID: o.NPCID, at: at, obj: id}, lists: ids}, d
+	pick := func(need []buyRow, anyMerchant bool) (best shopVisit) {
+		bestDist := int64(math.MaxInt64)
+		for id, o := range b.world.Objects {
+			if o.Kind != KindNPC || o.Dead {
+				continue
+			}
+			at := o.Position(now)
+			if d := dist2(from, at); d < bestDist {
+				if ids, ok := lists(o.NPCID, need, anyMerchant); ok {
+					best, bestDist = shopVisit{v: npcVisit{npcID: o.NPCID, at: at, obj: id}, lists: ids}, d
+				}
 			}
 		}
-	}
-	if !best.v.active() {
+		if best.v.active() {
+			return best
+		}
 		reach := int64(p.Reach) * int64(p.Reach)
 		for npcID := range shops {
 			for _, at := range b.cfg.Travel.spawns[npcID] {
 				if d := dist2(from, at); d <= reach && d < bestDist {
-					if ids, ok := lists(npcID); ok {
+					if ids, ok := lists(npcID, need, anyMerchant); ok {
 						best, bestDist = shopVisit{v: npcVisit{npcID: npcID, at: at}, lists: ids}, d
 					}
 				}
 			}
 		}
+		return best
+	}
+	best := pick(first, false)
+	if !best.v.active() {
+		best = pick(want, true)
 	}
 	if !best.v.active() {
 		sh.nextAt = now.Add(shopRetry)

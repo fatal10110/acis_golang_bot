@@ -108,8 +108,17 @@ func (b *Brain) wants(comfort bool) []want {
 // (buyRows). Unless anyAdena, only what the bot's adena past its tier's
 // floor buys one of at a merchant's base price is listed.
 func (b *Brain) shopWants(anyAdena bool) []buyRow {
-	adena := int64(b.carried(adenaID))
 	var rows []buyRow
+	for _, w := range b.dueWants(anyAdena) {
+		rows = append(rows, w.buyRow)
+	}
+	return rows
+}
+
+// dueWants are shopWants with their tiers, in budget order.
+func (b *Brain) dueWants(anyAdena bool) []want {
+	adena := int64(b.carried(adenaID))
+	var out []want
 	for _, w := range b.wants(false) {
 		if !anyAdena && b.cfg.Travel != nil {
 			price, ok := b.cfg.Travel.cheapest[w.item]
@@ -117,9 +126,9 @@ func (b *Brain) shopWants(anyAdena bool) []buyRow {
 				continue
 			}
 		}
-		rows = append(rows, w.buyRow)
+		out = append(out, w)
 	}
-	return rows
+	return out
 }
 
 // buyRows is the purchase from window l, the budget spent tier by tier:

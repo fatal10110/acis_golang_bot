@@ -25,9 +25,9 @@ repository.
 | M8 - Items and loadout | #166 | #167-#182 (`docs/items.md`, PRs I0-I13 with I8b, and the enchant backlog issue) |
 | M9 - Clan crafter | #184 | #185-#194 (`docs/crafting.md`, PRs C1-C10) |
 | M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332) |
-| M11 - Bot parties | to be filed | to be filed (`docs/parties/`, PRs P1a-P8, 13 PRs, proposed D25-D29) |
-| M12 - Merchant valuables | to be filed | to be filed (`docs/valuables/`, PRs V1-V9, 13 PRs, proposed D30-D34) |
-| M13 - PvP persona | to be filed | to be filed (`docs/pvp/`, PRs X1-X13, 15 PRs, proposed D35-D39) |
+| M11 - Bot parties | #371 | #373-#392 (`docs/parties/`, PRs P1a-P8, 13 PRs, D25-D29); follow-ups #395, #397, #398, #438 |
+| M12 - Merchant valuables | #376 | #378-#402 (`docs/valuables/`, PRs V1-V9, 13 PRs, D30-D34); follow-ups #403, #404 |
+| M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429 |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
@@ -69,6 +69,21 @@ the goal.
 | D22 | How a bot picks its profession branch | Weighted by race fit, drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). Owner, 2026-11-24. Design: `docs/strategy.md` |
 | D23 | Which professions are out of scope | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone (#332); the Overlord is not picked (a group class). Owner, 2026-11-24. Design: `docs/strategy.md` |
 | D24 | May the M10 rewrite change today's behavior | Yes, per PR: S4 lands behavior-neutral, and every later PR states the behavior it changes. Owner, 2026-11-24. Design: `docs/strategy.md` |
+| D25 | Who organizes bot parties | The panel's supervisor, from the registry and the live snapshots: online bots of the same town within walking reach and a level band; no in-game discovery. On by default in `bots ui` with a panel switch; no organizer in `bots swarm`. Owner, 2026-11-25. Design: `docs/parties/` |
+| D26 | Who is in a bot party | A Damage-role bot (`farmer`) leads; Support-role bots (`support`) join, at least one healer; a third is any other Support bot, else a second Damage bot with no healer to lead with. Size 3, at most 4 (persona defaults). `merchant`, `crafter` and `town` never take part; party mode `off` keeps a bot out; the panel may pin a party. Owner, 2026-11-25. Design: `docs/parties/composition.md` |
+| D27 | Loot and level band of a bot party | Loot by turn: items rotate, the server splits adena in range, a spoil stays with its sweeper. A party forms within 3 levels and breaks past 5; players are not counted. Owner, 2026-11-25. Design: `docs/parties/composition.md` |
+| D28 | What players may ask of a bot party | Any player may whisper `join` to a bot party's leader to be invited, and `invite me` to a Support member to take it out (extends D3 as D20 did, for these two whispers to bots of bot parties only); a GM's `invite me` takes the bot out and a GM's `leave` to the leader disperses the party. Owner, 2026-11-25. Design: `docs/parties/players.md` |
+| D29 | Whom a bot invites | Only the bots the organizer or the panel assigned to its party, and players who whisper `join`; never unasked. Bots of a bot party never whisper each other. Owner, 2026-11-25. Design: `docs/parties/README.md` |
+| D30 | Where the merchant advertises valuables | On Trade only, under the caps of `docs/valuables/ads.md`; never Shout. Owner, 2026-11-25. Design: `docs/valuables/` |
+| D31 | What is valuable | The score of `docs/valuables/score.md` (price x 2^R from the supply ceiling, NPC multisell and buylist rules, halved for craftables, raised by enchant past safe); valuable at score 100000 and price 10000. A valuable precedes the clan member's hold. Owner, 2026-11-25 |
+| D32 | How a valuable is priced and sold | Ask 100-150 % of reference by rarity plus the enchant scrolls, 10 points lower per unsold round; never below the floor (reference plus scrolls, or the store price if higher); two counters per buyer and item a round; the bot may invite a whisperer in sight, one request per buyer a round. Owner, 2026-11-25. Design: `docs/valuables/whispers.md`, `trades.md` |
+| D33 | Hold, warehouse and cap | A 5 min round of ads, then the private warehouse; a new valuable brings the stored out for another round; after a round all go to the store once they take more than 6 rows, or by the 2000000 ask cap, or one unsold through 3 rounds; released valuables list at their floor. Owner, 2026-11-25. Design: `docs/valuables/round.md`, `release.md` |
+| D34 | Valuables budget | A per-session `-valuables-budget`, default 2000000, apart from `-store-budget`; valuables are offered and listed while sales are under it. Owner, 2026-11-25 |
+| D35 | PvP modes | A new `pvp` preset (Damage role, farms between fights): duels, flagged and karma players, arenas on; open-world PK off (opt-in per bot). Other presets fight back only and decline duels, but every preset fights players with the PvP layer. PvP events wake the brain after 200-600 ms. Persona defaults (D6). Owner, 2026-11-25. Design: `docs/pvp/modes.md` |
+| D36 | How a `pvp` bot finds fights | Takes any duel it can; challenges a player who whispers `duel` (extends D3 as D20 did); challenges non-bot players and hunts flagged and karma players of its tier when the engage estimate passes; visits the nearest arena on a timer. Owner, 2026-11-25. Design: `docs/pvp/finding.md` |
+| D37 | PvP items | One loadout scored by `Value` and `PvPValue` blended by relative gains, 50 % each for `pvp` (others 0 %); no set swap; cures bought on supply trips; CP potions kept, never sold or bought. Owner, 2026-11-25. Design: `docs/pvp/model.md` |
+| D38 | Bots against bots | Outside an arena a bot never attacks, hunts or challenges a bot and fights one back only after its hit or offensive cast; in an arena anyone but its party. No bot duels. Owner, 2026-11-25. Design: `docs/pvp/targets.md` |
+| D39 | PvP death and karma | Duels to the end, no surrender; arenas to the death under a death cap; in the open world break off by the row and avoid the killer. No karma by accident and nothing that would cancel a duel. Opt-in PK mode and life with karma as in `docs/pvp/karma.md`. Owner, 2026-11-25. Design: `docs/pvp/guards.md` |
 
 ## Consequences of a separate repository (D5)
 

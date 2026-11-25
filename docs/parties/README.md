@@ -1,7 +1,7 @@
 # Bot parties (M11)
 
-Status: draft for owner review; proposed decisions D25-D29 open. Milestone M11 ("Bot parties"):
-epic and issues to be filed after the owner's answers.
+Status: owner approved D25-D29 as proposed on 2026-11-25 (`docs/plan.md`, "Owner decisions").
+Milestone M11 ("Bot parties"): epic #371, issues #373-#392.
 
 ## Paths
 

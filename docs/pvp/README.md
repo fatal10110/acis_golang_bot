@@ -1,7 +1,7 @@
 # PvP persona: bots that fight players (M13)
 
-Status: draft for owner review; proposed decisions D35-D39 open. Milestone M13 ("PvP persona"):
-epic and issues to be filed after the owner's answers.
+Status: owner approved D35-D39 as proposed on 2026-11-25 (`docs/plan.md`, "Owner decisions").
+Milestone M13 ("PvP persona"): epic #405, issues #406-#420, follow-ups #421-#429.
 
 ## Paths
 
