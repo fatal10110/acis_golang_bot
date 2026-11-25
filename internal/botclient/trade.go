@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
@@ -223,18 +224,27 @@ type Trade struct {
 	OwnOk, OtherOk bool
 	// At is when the window opened.
 	At time.Time
-	// added and confirmed are set once the bot sent its add and its
-	// confirm, cancelAt once it sent its cancel: each goes out once a
-	// trade.
-	added, confirmed bool
-	cancelAt         time.Time
-	// valuable is set while the bot's goods are a unit of the valuable
-	// entry key (Brain.valuableGoods); sale is then the trade's price,
-	// fixed when the bot confirms, which a SendTradeDone with success
-	// counts in the session's valuables budget (Brain.valuableSaleEvent).
+	// offer is what the bot offers, picked before its first add; added
+	// counts the adds it sent, one per offer row, each once the one before
+	// it is in Own. confirmed is set once the bot sent its confirm,
+	// cancelAt once it sent its cancel: each goes out once a trade.
+	offer     []tradeOffer
+	added     int
+	confirmed bool
+	cancelAt  time.Time
+	// valuable is set while the bot's offer is valuables
+	// (Brain.valuableGoods); sale is then the trade's price, fixed when the
+	// bot confirms, which a SendTradeDone with success counts in the
+	// session's valuables budget (Brain.valuableSaleEvent).
 	valuable bool
-	key      valuableKey
 	sale     int64
+}
+
+// tradeOffer is a row the bot offers in a trade and, of a valuable, its
+// ledger entry.
+type tradeOffer struct {
+	row TradeItem
+	key valuableKey
 }
 
 // Open reports whether a trade window is open.
@@ -374,15 +384,16 @@ func (b *Brain) acceptTrade(partner int32, now time.Time) bool {
 	if _, ok := b.tradeGoods(rows); ok {
 		return true
 	}
-	_, _, ok := b.valuableGoods(partner, rows)
-	return ok
+	return len(b.valuableGoods(partner, rows)) > 0
 }
 
 // tradeStep is the bot's next move in its open trade. It offers its goods,
-// in a valuables round a valuable first (valuableGoods), confirms once the partner's adena covers their price and the partner
-// stands within range, and cancels a trade that cannot settle: timed out,
-// the bot in combat, an item refused, or the offers locked before the bot
-// offered or short of the price.
+// in a valuables round valuables first (valuableGoods: every entry the
+// partner agreed a price for, an add a turn), confirms once the partner's
+// adena covers their price and the partner stands within range, and cancels
+// a trade that cannot settle: timed out, the bot in combat, an item
+// refused, or the offers locked before the bot offered them all or short of
+// the price.
 func (b *Brain) tradeStep(now time.Time) Action {
 	t, p := &b.world.Trade, &b.persona.Trade
 	if !t.cancelAt.IsZero() {
@@ -407,23 +418,31 @@ func (b *Brain) tradeStep(now time.Time) Action {
 			return Action{}
 		}
 	} else {
-		if len(t.Own) == 0 {
+		if t.offer == nil {
 			if t.OtherOk {
 				// The partner's confirm locked the offers before the bot's.
 				return tradeCancelAction()
 			}
-			if t.added {
-				return Action{}
+			t.offer = b.valuableGoods(t.PartnerID, t.Offerable)
+			t.valuable = len(t.offer) > 0
+			if goods, ok := b.tradeGoods(t.Offerable); !t.valuable && ok {
+				t.offer = []tradeOffer{{row: goods}}
 			}
-			goods, k, ok := b.valuableGoods(t.PartnerID, t.Offerable)
-			t.valuable, t.key = ok, k
-			if !ok {
-				goods, ok = b.tradeGoods(t.Offerable)
-			}
-			if !ok {
+			if t.offer == nil {
 				return tradeCancelAction()
 			}
-			return addTradeItemAction(goods)
+		}
+		if len(t.Own) < len(t.offer) {
+			if t.OtherOk {
+				// The partner's confirm locked the offers before the bot
+				// offered them all.
+				return tradeCancelAction()
+			}
+			if t.added > len(t.Own) {
+				// An add waits for its TradeOwnAdd.
+				return Action{}
+			}
+			return addTradeItemAction(t.offer[t.added].row)
 		}
 		if !b.tradePaid() {
 			if t.OtherOk {
@@ -511,18 +530,22 @@ func (b *Brain) tradePaid() bool {
 	return price > 0 && paid >= price
 }
 
-// tradeDue is the price of the bot's offer: of a valuable its unit price
-// to the partner (valuableUnit) times the units offered, of other goods
-// their trade prices (tradePrice).
+// tradeDue is the price of the bot's offer: of valuables the sum of each
+// row's unit price to the partner (valuableUnit) times its units offered,
+// 0 with a row the bot did not pick (Trade.offer); of other goods their
+// trade prices (tradePrice).
 func (b *Brain) tradeDue() int64 {
 	t := &b.world.Trade
 	var price int64
 	if t.valuable {
-		var units int64
 		for _, own := range t.Own {
-			units += int64(own.Count)
+			i := slices.IndexFunc(t.offer, func(o tradeOffer) bool { return o.row.ObjectID == own.ObjectID })
+			if i < 0 {
+				return 0
+			}
+			price += b.valuableUnit(t.PartnerID, t.offer[i].key) * int64(own.Count)
 		}
-		return b.valuableUnit(t.PartnerID, t.key) * units
+		return price
 	}
 	for _, own := range t.Own {
 		it, ok := b.world.Inventory.Items[own.ObjectID]
@@ -564,7 +587,7 @@ func (b *Brain) tradeSent(a Action, now time.Time) {
 			b.tradedAt[a.object] = now
 		}
 	case actTradeAdd:
-		t.added = true
+		t.added++
 	case actTradeConfirm:
 		t.confirmed = true
 		if t.valuable {

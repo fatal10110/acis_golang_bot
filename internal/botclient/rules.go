@@ -376,8 +376,9 @@ const (
 // (castPending, castTimeout) and its skill's reuse, and buffRetry spaces one
 // buff on one target. AnswerTradeRequest, AddTradeItem and TradeDone have no
 // reuse gate either (no flood protector covers them): a request is answered
-// once, and a trade gets one add, one confirm and one cancel (Trade.added,
-// confirmed, cancelAt). A pickup click (Action) has none: lootRetry spaces
+// once, and a trade gets one add per offered row, each after the server's
+// answer to the one before (TradeOwnAdd), one confirm and one cancel
+// (Trade.offer, added, confirmed, cancelAt). A pickup click (Action) has none: lootRetry spaces
 // the clicks on one item. A whisper (Say2 Tell), a GM command's reply or a
 // chat reply, has no server gate either (chat.go chatTell): it keeps the
 // chat gate, as does a clan chat line (Say2 Clan: no server gate either,
