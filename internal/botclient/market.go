@@ -172,13 +172,14 @@ func (b *Brain) ruleMarket(now time.Time) (Action, bool) {
 // owner is not cooling down, when the bot wants something (marketWants)
 // and carries adena past the reserve, no shop visit runs and the brain has
 // a travel map: the merchants' prices cap the stores'. It reports whether
-// it started one.
+// it started one. The wants, a gear plan among them, are computed last,
+// only with a store to visit: usually none is in sight (#493).
 func (b *Brain) startMarket(now time.Time) bool {
 	m := &b.market
 	if b.persona.Market.MaxOverReference <= 0 || b.cfg.Travel == nil || b.shop.v.active() {
 		return false
 	}
-	if int64(b.carried(adenaID)) <= b.reserve() || len(b.marketWants()) == 0 {
+	if int64(b.carried(adenaID)) <= b.reserve() {
 		return false
 	}
 	from := b.world.Self.Position(now)
@@ -192,7 +193,7 @@ func (b *Brain) startMarket(now time.Time) bool {
 			best, bestDist = id, d
 		}
 	}
-	if best == 0 {
+	if best == 0 || len(b.marketWants()) == 0 {
 		return false
 	}
 	m.v = npcVisit{obj: best}
