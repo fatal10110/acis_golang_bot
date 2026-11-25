@@ -31,6 +31,7 @@ func (p *Panel) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/bots", p.bots)
 	mux.HandleFunc("POST /api/bots", p.create)
 	mux.HandleFunc("GET /api/bots/{account}", p.bot)
+	mux.HandleFunc("GET /api/bots/{account}/inspect", p.inspect)
 	mux.HandleFunc("DELETE /api/bots/{account}", p.act(p.cfg.Supervisor.Delete))
 	mux.HandleFunc("POST /api/bots/{account}/spawn", p.act(p.cfg.Supervisor.Spawn))
 	mux.HandleFunc("POST /api/bots/{account}/despawn", p.act(p.cfg.Supervisor.Despawn))
@@ -524,6 +525,8 @@ func statusOf(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, botregistry.ErrStopped):
 		return http.StatusServiceUnavailable
+	case errors.Is(err, errInspectLimit):
+		return http.StatusTooManyRequests
 	}
 	return http.StatusInternalServerError
 }

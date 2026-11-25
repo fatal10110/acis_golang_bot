@@ -21,6 +21,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 	"github.com/fatal10110/acis_golang_bot/internal/botpanel"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // defaultListen is the web panel's address when -listen is not given.
@@ -317,11 +318,15 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		defer closeNav()
 		runner.shared.nav = n
 	}
+	// catalog names the items and effects of the panel's inspects.
+	var catalog *botpanel.Catalog
 	if o.datapack != "" {
 		sh := &runner.shared
-		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+		var dp *datapack.Datapack
+		if sh.spots, sh.travel, dp, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
 			return err
 		}
+		catalog = botpanel.NewCatalog(dp)
 		sh.stores = o.store.registry(sh.travel, log)
 	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
@@ -356,6 +361,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		MaxOnline:  o.maxOnline,
 		Presets:    offeredPresets(o.datapack, runner.shared.nav != nil),
 		Spots:      runner.shared.spots,
+		Catalog:    catalog,
 		Logs:       ring,
 		Log:        log,
 	})

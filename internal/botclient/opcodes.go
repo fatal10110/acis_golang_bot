@@ -78,6 +78,7 @@ const (
 const (
 	opGameMoveBackwardToLocation = 0x01 // movebackwardtolocation.go
 	opGameAction                 = 0x04 // wiresafe.go, targetaction.go
+	opGameRequestItemList        = 0x0f // client_dispatch.go, client_ingame.go
 	opGameRequestSocialAction    = 0x1b // wiresafe.go, stance_social.go
 	opGameAppearing              = 0x30 // wiresafe.go, appearing.go
 	opGameSay2                   = 0x38 // say2.go
