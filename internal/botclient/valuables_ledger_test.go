@@ -171,9 +171,10 @@ func TestValuablesLedger(t *testing.T) {
 		anchor := Point{X: 3000}
 		v := b.cfg.valuables
 		v.openRound(anchor, t0)
-		if rule, a := b.decide(t0); rule != "valuables" || a.kind != actHold {
-			t.Errorf("decide with no route to the anchor = %q, %d; want rule valuables staying", rule, a.kind)
+		if rule, a := b.decide(t0); rule == "valuables" || v.round.open {
+			t.Errorf("decide with no route to the anchor = %q, %d, round open %v; want the round ended as a cut-off", rule, a.kind, v.round.open)
 		}
+		v.openRound(anchor, t0)
 		walkOn(t, b)
 		now := at(time.Second)
 		rule, a := b.decide(now)
