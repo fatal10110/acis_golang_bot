@@ -57,14 +57,25 @@ func farmerPersona(level int32) func() botclient.Persona {
 // a bow).
 func TestLiveBuildFighters(t *testing.T) {
 	t.Parallel()
-	farmKits(t, "kf", &botclient.HumanFighter, &botclient.ElvenFighter, &botclient.DarkFighter)
+	farmKits(t, "kf", nil, &botclient.HumanFighter, &botclient.ElvenFighter, &botclient.DarkFighter)
 }
 
 // TestLiveBuildMystics farms a human, an elven and a dark elven mystic with
 // their kits: Wind Strike, Ice Bolt and their self heal.
 func TestLiveBuildMystics(t *testing.T) {
 	t.Parallel()
-	farmKits(t, "km", &botclient.HumanMystic, &botclient.ElvenMystic, &botclient.DarkMystic)
+	farmKits(t, "km", mysticSpots, &botclient.HumanMystic, &botclient.ElvenMystic, &botclient.DarkMystic)
+}
+
+// mysticSpots are the spots by the human, elven and dark elven villages
+// the level kitLevel mystics farmed live. The spot model would send them
+// elsewhere (#446): oren23_2018_04m1 fits a dark mystic, but its territory
+// is so wide that one held at its centre found no monster in its leash for
+// 12 minutes.
+var mysticSpots = []string{
+	"gludio32_1725_04m1", "gludio32_1725_06m1",
+	"oren02_2119_02m1", "oren02_2119_022sm1",
+	"oren23_2018_16sm1",
 }
 
 // TestLiveBuildMixed farms the other races' starting classes with their
@@ -74,16 +85,19 @@ func TestLiveBuildMystics(t *testing.T) {
 // (TestLiveSpoilSweep).
 func TestLiveBuildMixed(t *testing.T) {
 	t.Parallel()
-	farmKits(t, "kx", &botclient.OrcFighter, &botclient.OrcMystic, &botclient.DwarvenFighter)
+	farmKits(t, "kx", nil, &botclient.OrcFighter, &botclient.OrcMystic, &botclient.DwarvenFighter)
 }
 
 // farmKits runs one kit farm of classes, the accounts of group, each a
-// farmerPersona with the spots and the travel map; they go back to level 1
-// at the end (runFresh).
-func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
+// farmerPersona with the travel map and the spots, those named only when
+// only is not nil; they go back to level 1 at the end (runFresh).
+func farmKits(t *testing.T, group string, only []string, classes ...*botclient.StartingClass) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 25*time.Minute)
 	spots, travel := spotRegistry(t, tg), travelMap(t, tg)
+	if only != nil {
+		spots = spotsNamed(t, tg, only)
+	}
 	gm := enterGM(t, ctx, tg)
 	type kitFarmer struct {
 		f    *farmer
@@ -99,7 +113,7 @@ func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 			// of every spot by its village once its stats are in (#446):
 			// one that claimed a spot before keeps it, one that did not
 			// idles in town. The kit run is what this scenario proves, so
-			// its mystics farm with the model bound off.
+			// its mystics farm mysticSpots with the model bound off.
 			persona = func() botclient.Persona {
 				p := farmerPersona(kitLevel)()
 				p.Spots.Margin = -1
@@ -300,6 +314,21 @@ func (r kitRun) short(elapsed time.Duration) string {
 		miss = append(miss, fmt.Sprintf("%s of %s farmed", elapsed.Round(time.Second), kitFarm))
 	}
 	return strings.Join(miss, ", ")
+}
+
+// spotsNamed is a registry of the datapack's spots named names, every one
+// of which must exist.
+func spotsNamed(t *testing.T, tg *Target, names []string) *botclient.SpotRegistry {
+	t.Helper()
+	dp, err := datapack.Load(tg.Config().Datapack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spots := slices.DeleteFunc(dp.Spots(), func(s datapack.Spot) bool { return !slices.Contains(names, s.Maker) })
+	if len(spots) != len(names) {
+		t.Fatalf("%d of the spots %v in the datapack", len(spots), names)
+	}
+	return botclient.NewSpotRegistry(spots, 1)
 }
 
 // logSpotOnFail logs, when the test fails, the spot f holds then and its
