@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<list>
+	<npcs>
+		<npc>30001</npc>
+		<npc>30002</npc>
+	</npcs>
+	<item>
+		<ingredient id="57" count="2500"/>
+		<ingredient id="1" count="1"/>
+		<production id="10" count="1"/>
+	</item>
+	<item>
+		<ingredient id="5575" count="588000"/>
+		<production id="71" count="1"/>
+		<production id="17" count="20"/>
+	</item>
+</list>

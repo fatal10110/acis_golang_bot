@@ -23,6 +23,12 @@ func EncodeAttackRequest(objectID int32, origin Point) []byte {
 	return encodeAttackRequest(objectID, origin)
 }
 
+// EncodeRequestMagicSkillUse casts skill id on the current target, forced
+// (ctrl) or not (see encodeRequestMagicSkillUse).
+func EncodeRequestMagicSkillUse(id int32, ctrl bool) []byte {
+	return encodeRequestMagicSkillUse(id, ctrl)
+}
+
 // EncodeAppearing ends a teleport: the server keeps a teleported character
 // out of the world until it arrives (client_ingame.go handleAppearing).
 func EncodeAppearing() []byte { return encodeAppearing() }

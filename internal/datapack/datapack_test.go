@@ -27,6 +27,7 @@ func TestLoadSamples(t *testing.T) {
 			ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300,
 			Combat:     Combat{HP: 39, PAtk: 7.56, PDef: 39, AtkSpd: 247.42, Crit: 4, STR: 40, CON: 43, DEX: 30, INT: 20, WIT: 43, MEN: 20},
 			CorpseTime: corpseDefault,
+			Drops:      []DropCategory{{Kind: DropKindDrop, Chance: 50, Drops: []Drop{{ItemID: 57, Min: 1, Max: 2, Chance: 70}}}},
 		},
 		20002: {ID: 20002, Name: "Rabbit", Type: "Monster", Level: 3, Combat: combatDefaults, CorpseTime: corpseDefault},
 		20101: {ID: 20101, Name: "Set Name", Type: "Folk", Level: 1, Combat: combatDefaults, CorpseTime: corpseDefault},
@@ -66,7 +67,7 @@ func TestLoadSamples(t *testing.T) {
 
 	wantMakers := []*Maker{
 		{
-			Name: "dimension_gap_00", Territories: []*Territory{ssq}, MaximumNPCs: 9,
+			Name: "dimension_gap_00", Territories: []*Territory{ssq}, MaximumNPCs: 9, AIType: "manage_teleport_dungeon",
 			Spawns: []Spawn{{NPCID: 21659, Total: 2, Respawn: 90 * time.Second}},
 		},
 		{
