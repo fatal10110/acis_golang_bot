@@ -26,6 +26,8 @@ const (
 func newWhisperBrain(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	b := newLedgerBrain(t, items...)
+	// The tests' rounds say no ad line: long enough for every exchange.
+	b.persona.Valuables.FirstLineWait = time.Hour
 	m := b.cfg.Travel
 	m.itemNames = map[int32]string{
 		ledgerSword: "Sword of Watershadow", ledgerStaff: "Conjuror's Staff", ledgerRecipe: "Recipe: Halberd(60%)",

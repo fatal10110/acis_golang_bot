@@ -30,7 +30,9 @@ type valuablesLook struct {
 // wireValuables hands the bot's valuables value to this session's brain:
 // its stored-units accessor reads this session's private status, and the
 // warehouse errand reads and fills its noPrivate marks in place, so marks
-// survive a reconnect (docs/valuables/warehouse.md "Keeper marks").
+// survive a reconnect (docs/valuables/warehouse.md "Keeper marks"). A
+// round still open from an earlier session is marked stale for this
+// session's first decision to end (endStaleRound).
 func (b *Brain) wireValuables() {
 	v := b.cfg.valuables
 	v.stored = b.storedValuables
@@ -38,6 +40,7 @@ func (b *Brain) wireValuables() {
 		v.noPrivate = make(map[int32]bool)
 	}
 	b.wh.noPrivate = v.noPrivate
+	b.round.stale = v.round.open
 }
 
 // storedValuables are the units of every valuable the private warehouse

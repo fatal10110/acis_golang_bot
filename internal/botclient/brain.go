@@ -277,6 +277,9 @@ type Brain struct {
 	// look is the session's look at its private warehouse (rule
 	// "valuables").
 	look valuablesLook
+	// round is this session's part of the valuables round (rule
+	// "valuables"): its keeper visits, walks back and closing.
+	round sessionRound
 	// learn is the recipe learning errand (rule 9 errand "recipe").
 	learn recipeLearn
 	// craft is the clan crafter's cycle (rule "craft").
