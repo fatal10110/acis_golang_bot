@@ -234,22 +234,29 @@ func (b *Brain) supplyPotion() int32 {
 // item (startShop): one in sight, or one spawned within Shop.Reach of
 // where the bot stands or heads.
 func (b *Brain) soldNear(item int32) bool {
-	shops := b.cfg.Travel.shops
-	sells := func(npcID int32) bool {
-		return slices.ContainsFunc(shops[npcID], func(l shopList) bool { _, ok := l.sells(item); return ok })
-	}
 	for _, o := range b.world.Objects {
-		if o.Kind == KindNPC && !o.Dead && sells(o.NPCID) {
+		if o.Kind == KindNPC && !o.Dead && b.cfg.Travel.npcSells(o.NPCID, item) {
 			return true
 		}
 	}
-	from, reach := b.world.Self.move.to, int64(b.persona.Shop.Reach)*int64(b.persona.Shop.Reach)
-	for npcID := range shops {
-		if slices.ContainsFunc(b.cfg.Travel.spawns[npcID], func(at Point) bool { return dist2(from, at) <= reach }) && sells(npcID) {
+	return b.soldWithin(item, b.world.Self.move.to)
+}
+
+// soldWithin reports whether a merchant spawned within Shop.Reach of from
+// sells item.
+func (b *Brain) soldWithin(item int32, from Point) bool {
+	m, reach := b.cfg.Travel, int64(b.persona.Shop.Reach)*int64(b.persona.Shop.Reach)
+	for npcID := range m.shops {
+		if slices.ContainsFunc(m.spawns[npcID], func(at Point) bool { return dist2(from, at) <= reach }) && m.npcSells(npcID, item) {
 			return true
 		}
 	}
 	return false
+}
+
+// npcSells reports whether a buylist of merchant npcID sells item.
+func (m *TravelMap) npcSells(npcID, item int32) bool {
+	return slices.ContainsFunc(m.shops[npcID], func(l shopList) bool { _, ok := l.sells(item); return ok })
 }
 
 // supply is a consumable the bot carries for a trip and its trip target.

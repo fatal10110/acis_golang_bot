@@ -499,9 +499,9 @@ type rule struct {
 // bot has a death penalty level, anywhere: lifting the penalty comes first
 // (#491), so it goes ahead of "rest", "rebuff", "buffpotion" and every
 // errand, behind only the death, command, chat, party, fight and
-// overweight rules. "supply"
-// is the farmer's trip home to restock (D16), after
-// the errands that already serve it and ahead of following and farming;
+// overweight rules. "supply" is the farmer's trip home to restock (D16),
+// after the errands that already serve it and ahead of following and
+// farming;
 // "escape" holds every rule after it while its Scroll of Escape's recall
 // runs, after "critical" so a potion still goes down. "enchant" uses the
 // enchant scrolls on the worn gear in town, after the errands that wear,

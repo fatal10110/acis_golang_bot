@@ -4,21 +4,31 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // recoveryPrice is a Scroll: Recovery's base price at the merchants
 // (buyLists.xml, 2300 at the cheapest).
 const recoveryPrice int32 = 2300
 
+// recoveryMerchant is the template of the merchant selling the Scroll:
+// Recovery in the penalty trip tests.
+const recoveryMerchant int32 = 30001
+
 // newPenaltyTripBrain is newTripBrain (a level 5 farmer at its spot) with
-// death penalty level dp, a spawned merchant selling the no-grade Scroll:
-// Recovery at recoveryPrice and the Scroll of Escape at soePrice, and
+// death penalty level dp, a merchant spawned in its town selling the
+// no-grade Scroll: Recovery at recoveryPrice and the Scroll of Escape at
+// soePrice, and
 // items carried, plus adena past the supplies tier's floor.
 func newPenaltyTripBrain(t *testing.T, dp, past int32, items ...Item) *Brain {
 	t.Helper()
 	b := newTripBrain(t)
 	m := b.cfg.Travel
-	m.cheapest = map[int32]int32{recoveryNoGrade: recoveryPrice, scrollOfEscape: soePrice}
+	m.shops, m.cheapest = indexShops([]datapack.BuyList{{ID: 1, NPCID: recoveryMerchant, Products: []datapack.Product{
+		{ItemID: recoveryNoGrade, Price: recoveryPrice}, {ItemID: scrollOfEscape, Price: soePrice},
+	}}})
+	m.spawns = map[int32][]Point{recoveryMerchant: {{X: town.X + 500}}}
 	m.spawnedSold[recoveryNoGrade] = true
 	m.spawnedSold[scrollOfEscape] = true
 	b.world.Apply(EtcStatusUpdate{DeathPenalty: dp}, t0)
@@ -50,7 +60,15 @@ func TestSupplyCausePenalty(t *testing.T) {
 		{name: "carries its band's scroll", dp: 2, past: recoveryPrice, items: []Item{{ObjectID: 0x30000031, TemplateID: recoveryNoGrade, Count: 1}}},
 		{name: "carries another band's scroll", dp: 1, past: recoveryPrice, items: []Item{{ObjectID: 0x30000032, TemplateID: recoveryD, Count: 1}}, want: causePenalty},
 		{name: "adena short of one", dp: 1, past: recoveryPrice - 1},
-		{name: "no spawned merchant sells it", dp: 1, past: recoveryPrice, edit: func(b *Brain) { delete(b.cfg.Travel.spawnedSold, recoveryNoGrade) }},
+		{name: "no spawned merchant sells it", dp: 1, past: recoveryPrice, edit: func(b *Brain) {
+			delete(b.cfg.Travel.spawnedSold, recoveryNoGrade)
+			b.cfg.Travel.spawns = nil
+		}},
+		{name: "sold only in a town the trip does not reach", dp: 1, past: recoveryPrice, edit: func(b *Brain) {
+			far := Point{X: 60000}
+			b.cfg.Travel.gatekeepers = append(b.cfg.Travel.gatekeepers, gatekeeper{npcID: townGK + 1, at: far})
+			b.cfg.Travel.spawns = map[int32][]Point{recoveryMerchant: {far}}
+		}},
 		{name: "not sold", dp: 1, past: recoveryPrice, edit: func(b *Brain) { delete(b.cfg.Travel.cheapest, recoveryNoGrade) }},
 		{name: "the persona keeps its penalty", dp: 1, past: recoveryPrice, edit: func(b *Brain) { b.persona.Recover.LiftDeathPenalty = false }},
 	}

@@ -421,31 +421,32 @@ picks one per persona.
   shows in the abnormals (its own stack then stops the next) or 5 s pass (`buffPotionWait`; the
   server drops a use still in its 500 ms reuse in silence). The comfort tier buys one per effect
   time of `TripMinutes`, margin included, within the weight the supplies leave under `BuyLoad`.
-- **Death penalty** (#299, #491, `RecoverPolicy.LiftDeathPenalty`, rule `recover` ahead of
-  `rest`, `rebuff`, the buff potion and every errand). The level (0-15) is `EtcStatusUpdate`'s seventh int32 (0xf3). That packet has no object
-  id, and the server also broadcasts another player's to everyone in view when its Charm of Courage
-  starts or ends. So the bot takes the level only from the first one of the session, sent at
-  EnterWorld before the spawn. After that it takes the level from the system messages sent only to
-  the bot with each change: 1916 carries the new level, 1917 means it is lifted. A death raises
-  it by one at `DeathPenaltyChance`, and it never decays. Each Scroll: Recovery lifts one level and
-  fits one character level band: 8594 under 20, then 8595-8599 from 20, 40, 52, 61 and 76 (item
-  skill 2286; a scroll outside its band is refused). The supplies tier buys one scroll of the bot's
-  band per level, less those carried, ahead of every other supply, and the band's scroll is in the
-  keep set. The bot reads one anywhere, standing, out of combat with no attacker. Pacing: one UseItem per 11 s
-  (`recoveryReuse`), past the scroll's 10 s reuse, which the server enforces in silence. Black
-  Judge (npc 30981, `Quest BlackJudge remove_dp`) does the same for adena, but has only three
-  spawns, so the bot does not use it.
+- **Death penalty** (#299, #491, `RecoverPolicy.LiftDeathPenalty`, rule `recover` ahead of `rest`,
+  `rebuff`, the buff potion and every errand). The level (0-15) is `EtcStatusUpdate`'s seventh int32
+  (0xf3). That packet has no object id, and the server also broadcasts another player's to everyone
+  in view when its Charm of Courage starts or ends. So the bot takes the level only from the first
+  one of the session, sent at EnterWorld before the spawn. After that it takes the level from the
+  system messages sent only to the bot with each change: 1916 carries the new level, 1917 means it
+  is lifted. A death raises it by one at `DeathPenaltyChance`, and it never decays. Each Scroll:
+  Recovery lifts one level and fits one character level band: 8594 under 20, then 8595-8599 from 20,
+  40, 52, 61 and 76 (item skill 2286; a scroll outside its band is refused). The supplies tier buys
+  one scroll of the bot's band per level, less those carried, ahead of every other supply, and the
+  band's scroll is in the keep set. The bot reads one anywhere, standing, out of combat with no
+  attacker. Pacing: one UseItem per 11 s (`recoveryReuse`), past the scroll's 10 s reuse, which the
+  server enforces in silence. Black Judge (npc 30981, `Quest BlackJudge remove_dp`) does the same
+  for adena, but has only three spawns, so the bot does not use it.
 
   **Penalties first (#491).** A bot with a penalty handles it before it farms. The death penalty
   is lifted as above, and `recover` runs ahead of `rest`, `rebuff`, the buff potion and every
   errand, trip and farming rule. Only the death, GM command, chat, party, fight and overweight
-  rules go first, and `recover` reads no scroll while an attacker is on the bot.
-  Its scroll is first in the supplies tier, so a short budget buys it before shots or potions. A
-  farmer with a penalty that carries no scroll of its band goes home for one (supply trip, section
-  7) when a spawned merchant sells it and its adena past the supplies floor pays one; one that
-  cannot buy it farms on with its penalty. The weight penalty is handled by the load rules
-  (section 7, #436, #488) and the grade penalty by the gear errand, which takes off armor above
-  the bot's Expertise (#436).
+  rules go first, and `recover` reads no scroll while an attacker is on the bot. Its scroll is
+  first in the supplies tier, so a short budget buys it before shots or potions. A farmer with a
+  penalty that carries no scroll of its band goes home for one (supply trip, section 7) when a
+  merchant spawned within `Shop.Reach` of the town the trip reaches sells it and its adena past
+  the supplies floor pays one; one that cannot buy it there farms on with its penalty (the
+  scrolls from level 61 up are not sold in every town). The weight penalty is handled by the load
+  rules (section 7, #436, #488) and the grade penalty by the gear errand, which takes off armor
+  above the bot's Expertise (#436).
 
 ### 5. One budget
 
@@ -540,8 +541,8 @@ grocer lists).
 ### 7. Supply trip and preparation
 
 - **Going home.** A farmer starts a supply trip when any of these holds:
-  - it has a death penalty and no Scroll: Recovery of its band, and a spawned merchant sells one
-    at a price its adena past the reserve pays (#491, checked first);
+  - it has a death penalty and no Scroll: Recovery of its band, and a merchant of the town the
+    trip reaches sells one at a price its adena past the reserve pays (#491, checked first);
   - it would run out within `Supply.ReturnMinutes` (default 10) of fighting;
   - its HP potions are gone;
   - its load passes `Supply.ReturnLoad` (default 60 %, well above the 45 % `BuyLoad`, so a bot

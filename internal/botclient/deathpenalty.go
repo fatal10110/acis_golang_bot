@@ -120,10 +120,12 @@ func (b *Brain) ruleRecover(now time.Time) (Action, bool) {
 
 // penaltyTrip reports whether the bot's death penalty sends it home
 // (supply trip causePenalty, #491): it lifts its penalty, carries no
-// Scroll: Recovery of its band, and a spawned merchant sells one at a base
-// price its adena past the supplies tier's floor pays, so the town visit
-// buys it (recoveryWants, first in that tier). A bot that cannot buy one
-// farms on with its penalty rather than walk to a town that sells it none.
+// Scroll: Recovery of its band, and a merchant of the town the trip
+// reaches sells one (soldInTown) at a base price its adena past the
+// supplies tier's floor pays, so the town visit buys it (recoveryWants,
+// first in that tier). A bot that cannot buy one there farms on with its
+// penalty rather than walk to a town that sells it none: the Scroll:
+// Recovery of levels 61 and up is not sold in every town.
 func (b *Brain) penaltyTrip() bool {
 	m := b.cfg.Travel
 	if !b.liftsPenalty() || m == nil {
@@ -131,10 +133,19 @@ func (b *Brain) penaltyTrip() bool {
 	}
 	id := recoveryScroll(b.world.Self.Level)
 	price, sold := m.cheapest[id]
-	if !sold || !m.spawnedSold[id] || b.carried(id) > 0 {
+	if !sold || b.carried(id) > 0 || !b.soldInTown(id) {
 		return false
 	}
 	return int64(price) <= int64(b.carried(adenaID))-b.floor(tierSupplies)
+}
+
+// soldInTown reports whether a merchant spawned within Shop.Reach of the
+// town nearest where the bot stands or heads sells item: the town a supply
+// trip walks to (walkHome), where its shop errand looks for one
+// (startShop).
+func (b *Brain) soldInTown(item int32) bool {
+	t := b.nearestTown(b.world.Self.move.to)
+	return t != nil && b.soldWithin(item, *t)
 }
 
 // recoveryWants is the supplies tier's Scroll: Recovery purchase: one of
