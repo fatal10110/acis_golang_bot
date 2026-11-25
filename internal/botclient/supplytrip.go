@@ -342,11 +342,12 @@ func (b *Brain) supplyDue(now time.Time) tripCause {
 }
 
 // slotMember reports whether the bot is a join member of its bot party
-// with no spot farmed: the party a member's supply trip answers for
-// (docs/parties/members.md, "Events").
-func (b *Brain) slotMember() bool {
+// with no spot farmed, out of town at now: the party a member's supply trip
+// answers for (docs/parties/members.md, "Events"). In town a recall would
+// land it in a town again, so it takes no trip there.
+func (b *Brain) slotMember(now time.Time) bool {
 	l := b.cfg.link
-	return l != nil && l.party.Kind == CommandJoin && b.inBotParty() && !b.leading() && !b.spot.farming()
+	return l != nil && l.party.Kind == CommandJoin && b.inBotParty() && !b.leading() && !b.spot.farming() && !b.inTown(now)
 }
 
 // leaderTeleported reports whether a join member's bot leader teleported
@@ -356,7 +357,7 @@ func (b *Brain) slotMember() bool {
 // reported position instead (rule "follow").
 func (b *Brain) leaderTeleported(now time.Time) bool {
 	v := &b.lead
-	if !b.slotMember() || v.lost.IsZero() || !v.teleported || v.seen || v.home || v.name != slotLeader(b.cfg.link.party) {
+	if !b.slotMember(now) || v.lost.IsZero() || !v.teleported || v.seen || v.home || v.name != slotLeader(b.cfg.link.party) {
 		return false
 	}
 	if _, ok := b.world.Inventory.ByTemplate(scrollOfEscape); !ok {
@@ -369,7 +370,7 @@ func (b *Brain) leaderTeleported(now time.Time) bool {
 // LeadPolicy.GatherRange of its leader, in sight or where last reported
 // (PartyMemberPosition): where its triggers are read in place of a spot.
 func (b *Brain) nearSlotLeader(now time.Time) bool {
-	if !b.slotMember() {
+	if !b.slotMember(now) {
 		return false
 	}
 	lead, ok := b.leader(b.world.Party.LeaderID, now)

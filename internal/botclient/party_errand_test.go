@@ -37,7 +37,8 @@ func noLostLeaderAction(t *testing.T, rule string, a Action, now time.Time) {
 // whisper or /unstuck; with no spot, a Scroll of Escape and no attacker it
 // takes a supply trip, else it walks to the leader's last
 // PartyMemberPosition. A bot with no join slot and no spot takes no trip,
-// nor does a member whose leader is back in sight or that landed already.
+// nor does a member whose leader is back in sight, that landed already or
+// that stands in town.
 func TestPartyLeaderTeleported(t *testing.T) {
 	reported := Point{X: 3000}
 	lost := at(time.Minute)
@@ -76,6 +77,10 @@ func TestPartyLeaderTeleported(t *testing.T) {
 			edit: func(b *Brain) { b.lead.home = true },
 		},
 		{name: "no join slot, no spot: no trip", items: []Item{soeStack(2)}},
+		{
+			name: "in town: no trip", slot: joinSlot, items: []Item{soeStack(2)}, once: true,
+			edit: func(b *Brain) { b.world.Self.move = stopAt(town) },
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -139,8 +144,8 @@ func TestPartyLeaderTeleported(t *testing.T) {
 // no spot, within GatherRange of the leader in sight or reported, potions
 // gone, a consumable out or the load past ReturnLoad, go home at the next
 // supplyCheck keeping slot and party, and follow after; beyond the range,
-// within supplyTripGap, before the check, outside its bot party, or with no
-// slot and no spot, none goes.
+// within supplyTripGap, before the check, outside its bot party, in town,
+// or with no slot and no spot, none goes.
 func TestPartyMemberSupply(t *testing.T) {
 	now := at(time.Minute)
 	gone := func(b *Brain) { b.supplyTrip.potions = true }
@@ -181,6 +186,10 @@ func TestPartyMemberSupply(t *testing.T) {
 		},
 		{name: "a join slot in a player's party", slot: joinSlot, party: playerParty, lead: Point{X: -1000}, edit: gone},
 		{name: "no slot, no spot", lead: Point{X: -1000}, edit: gone},
+		{
+			name: "in town beside the leader", slot: joinSlot, lead: Point{X: 3700},
+			edit: func(b *Brain) { gone(b); b.world.Self.move = stopAt(town) },
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
