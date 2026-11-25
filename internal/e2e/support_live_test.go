@@ -483,7 +483,10 @@ func TestLiveSupport(t *testing.T) {
 	if d := firstAfter(seen.all(botID, heal), hurtAt).Sub(hurtAt); d > 15*time.Second {
 		t.Fatalf("heal %v after the leader fell under 60 %%", d)
 	} else {
-		t.Logf("leader under 60 %% HP, healed %v later", d)
+		t.Logf("leader under 60 %% HP, healed %v later; the leader taunted %d times", d, len(seen.all(self, func(ev botclient.Event) bool {
+			m, ok := ev.(botclient.MagicSkillUse)
+			return ok && m.SkillID == skillAggression
+		})))
 	}
 	if err := gm.Delete(ctx, mob); err != nil {
 		t.Fatal(err)
