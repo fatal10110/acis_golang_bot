@@ -75,9 +75,9 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) 
 			t = min(t, charmodel.TimeToKill(self, attack, mob))
 		}
 		t = c.kill(t, mob)
-		c := float64(m.Count)
-		n, k = n+c, k+c*t.Seconds()
-		dps += c * self.MaxHP / max(charmodel.TimeToDie(self, mob).Seconds(), 1e-3)
+		cnt := float64(m.Count)
+		n, k = n+cnt, k+cnt*t.Seconds()
+		dps += cnt * self.MaxHP / max(charmodel.TimeToDie(self, mob).Seconds(), 1e-3)
 	}
 	if n == 0 {
 		return 0, 0, false

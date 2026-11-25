@@ -59,9 +59,11 @@
 	</skill>
 	<skill id="284" levels="2" name="Hurricane Assault" >
 		<table name="#mpConsume"> 49 50 </table>
+		<table name="#mpInitialConsume"> 12 13 </table>
 		<table name="#power"> 501.0 535.0 </table>
 		<set name="weaponsAllowed" val="DUALFIST" />
 		<set name="mpConsume" val="#mpConsume"/>
+		<set name="mpInitialConsume" val="#mpInitialConsume"/>
 		<set name="power" val="#power"/>
 		<set name="target" val="ONE"/>
 		<set name="reuseDelay" val="17000"/>

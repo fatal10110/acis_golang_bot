@@ -125,7 +125,7 @@ func (b *Brain) memberModel(k memberKey) (memberModel, bool) {
 				continue
 			}
 			if sk, ok := learned(st.Skill); ok && sk.Power > 0 && slices.Contains(damageSkillTypes, sk.Type) {
-				mm.attack = charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPConsume)}
+				mm.attack = charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}
 				mm.skill = true
 				break
 			}
@@ -152,10 +152,11 @@ func grantedLevel(cl datapack.Class, id int32, level int) int {
 
 // healOf is sk as a heal on the leader: a HEAL its power plus
 // sqrt(M. Atk), a HEAL_STATIC its power, a HOT (1229 Chant of Life) its
-// HealOverTime ticks' total; not ok for any other skill or one that costs
-// no MP.
+// HealOverTime ticks' total, each cast costing its mpInitialConsume and
+// mpConsume as the server charges them (cast/controller.go CanCast); not ok
+// for any other skill or one that costs no MP.
 func healOf(sk datapack.Skill) (charmodel.Heal, bool) {
-	h := charmodel.Heal{HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPConsume)}
+	h := charmodel.Heal{HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}
 	switch sk.Type {
 	case "HEAL":
 		h.Power, h.MAtk = sk.Power, true

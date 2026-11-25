@@ -11,9 +11,9 @@ import (
 
 // The class templates and skills of a leader's bot members (classes/*.xml,
 // skills/1000-1099.xml, 1200-1299.xml): a human mystic (10) learns 1011
-// Heal level 4 at 14 (power 83, 13 MP, hit time 5 s, reuse 10 s), a human
+// Heal level 4 at 14 (power 83, 4 + 13 MP, hit time 5 s, reuse 10 s), a human
 // fighter (0) learns nothing, an Orc Shaman (50) 1229 Chant of Life level
-// 1 at 20 (15 ticks of 12 HP, 47 MP, hit time 7 s, reuse 20 s).
+// 1 at 20 (15 ticks of 12 HP, 12 + 47 MP, hit time 7 s, reuse 20 s).
 var (
 	humanMysticTmpl = datapack.Class{
 		ID: 10, Parent: -1, STR: 22, CON: 27, DEX: 21, INT: 41, WIT: 20, MEN: 39, PAtk: 3, PDef: 54, MAtk: 6, MDef: 41, RunSpeed: 120,
@@ -24,9 +24,9 @@ var (
 		ID: 50, Parent: 49, Race: 3, STR: 27, CON: 31, DEX: 24, INT: 31, WIT: 15, MEN: 42, PAtk: 4, PDef: 54, MAtk: 6, MDef: 41, RunSpeed: 121,
 		Skills: []datapack.SkillGrant{{ID: skillChantLife, Level: 1, MinLevel: 20}},
 	}
-	healLevel4 = datapack.Skill{Type: "HEAL", Power: 83, MPConsume: 13, HitTime: 5 * time.Second, ReuseDelay: 10 * time.Second}
+	healLevel4 = datapack.Skill{Type: "HEAL", Power: 83, MPInitialConsume: 4, MPConsume: 13, HitTime: 5 * time.Second, ReuseDelay: 10 * time.Second}
 	chantLife1 = datapack.Skill{
-		Type: "HOT", MPConsume: 47, HitTime: 7 * time.Second, ReuseDelay: 20 * time.Second,
+		Type: "HOT", MPInitialConsume: 12, MPConsume: 47, HitTime: 7 * time.Second, ReuseDelay: 20 * time.Second,
 		Effects: []datapack.Effect{{Name: "HealOverTime", Count: 15, Value: 12}},
 	}
 )
@@ -38,9 +38,10 @@ var (
 // FarAway, not reported yet, or a player adds nothing; a Damage member
 // kills faster, and an Orc Shaman's Chant of Life heals by its ticks.
 // kill and die are packFight's seconds, the margin the squire's 2: the
-// healer's 4.7 casts of 85.6 HP (83 + sqrt(7 M. Atk)) its 23 casts of MP
-// pay for over the 4.9 fights of the likely pack add 402 HP each fight;
-// the Orc Shaman's 1.6 Chants of Life 180 HP each add 288; the naked
+// healer's 17 casts of 17 MP (4 up front, 13 on landing) over the 4.9
+// fights of the likely pack, 3.5 a fight of 85.6 HP (83 + sqrt(7 M. Atk)),
+// add 298 HP each fight; the Orc Shaman's 6 Chants of Life of 59 MP, 1.2
+// a fight of 180 HP, add 221; the naked
 // fighter's fists cut a kill from 38.1 s to 25.9 s, so the squire need
 // last only 51.7 s.
 func TestPartyFitHealer(t *testing.T) {
@@ -63,7 +64,7 @@ func TestPartyFitHealer(t *testing.T) {
 		fit       bool
 	}{
 		{name: "alone", kill: 38.1, die: 60.4},
-		{name: "a healer at full MP", ms: []PartyMember{healer(abelID, 300)}, set: near(abelID), kill: 38.1, die: 101.8, fit: true},
+		{name: "a healer at full MP", ms: []PartyMember{healer(abelID, 300)}, set: near(abelID), kill: 38.1, die: 91.0, fit: true},
 		{name: "a healer with no MP left", ms: []PartyMember{healer(abelID, 0)}, set: near(abelID), kill: 38.1, die: 60.4},
 		{name: "a dead healer", ms: []PartyMember{func() PartyMember { m := healer(abelID, 300); m.HP = 0; return m }()}, set: near(abelID), kill: 38.1, die: 60.4},
 		{name: "a healer away on a trip", ms: []PartyMember{healer(abelID, 300)}, set: func(b *Brain) {
@@ -72,13 +73,13 @@ func TestPartyFitHealer(t *testing.T) {
 		{name: "a healer not reported yet", ms: []PartyMember{healer(abelID, 300)}, kill: 38.1, die: 60.4},
 		{name: "a healer in sight", ms: []PartyMember{healer(abelID, 300)}, set: func(b *Brain) {
 			b.world.Objects[abelID] = &Object{}
-		}, kill: 38.1, die: 101.8, fit: true},
+		}, kill: 38.1, die: 91.0, fit: true},
 		{name: "a dead healer in sight", ms: []PartyMember{healer(abelID, 300)}, set: func(b *Brain) {
 			b.world.Objects[abelID] = &Object{Dead: true}
 		}, kill: 38.1, die: 60.4},
 		{name: "a player healer", ms: []PartyMember{healer(talbotID, 300)}, set: near(talbotID), kill: 38.1, die: 60.4},
 		{name: "a fighter", ms: []PartyMember{fighter}, set: near(bethID), kill: 25.9, die: 60.5, fit: true},
-		{name: "an Orc Shaman's Chant of Life", ms: []PartyMember{shaman}, set: near(abelID), kill: 38.1, die: 90.6, fit: true},
+		{name: "an Orc Shaman's Chant of Life", ms: []PartyMember{shaman}, set: near(abelID), kill: 38.1, die: 83.1, fit: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
