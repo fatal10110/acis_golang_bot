@@ -147,6 +147,69 @@ func TestBrainInspect(t *testing.T) {
 			wantSent: 1, wantItems: []Item{listed},
 		},
 		{
+			name:  "Appearing still due holds it: stale at the deadline, nothing sent",
+			mails: 1, at: []time.Time{deadline},
+			run: func(t *testing.T, b *Brain, _ []mail) {
+				b.appearing = true
+				heldUntilDeadline(t, b, deadline)
+			},
+			wantStale: true, wantItems: []Item{potion, sword},
+		},
+		{
+			name:  "held until Appearing is out, then it goes out",
+			mails: 1, at: []time.Time{deadline},
+			run: func(t *testing.T, b *Brain, _ []mail) {
+				b.appearing = true
+				if err := b.wake(t0); err != nil {
+					t.Fatal(err)
+				}
+				b.appearing = false
+				retry := t0.Add(time.Second / frameRate)
+				if err := b.wake(retry); err != nil {
+					t.Fatal(err)
+				}
+				if err := b.handle([]Event{ItemList{Items: []Item{listed}}}, retry); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantSent: 1, wantItems: []Item{listed},
+		},
+		{
+			name:  "a Logout awaiting its answer holds it",
+			mails: 1, at: []time.Time{deadline},
+			run: func(t *testing.T, b *Brain, _ []mail) {
+				b.logout.requested, b.logout.pending, b.logout.deadline = true, true, deadline.Add(time.Minute)
+				heldUntilDeadline(t, b, deadline)
+			},
+			wantStale: true, wantItems: []Item{potion, sword},
+		},
+		{
+			name:  "a market visit holds it",
+			mails: 1, at: []time.Time{deadline},
+			run: func(t *testing.T, b *Brain, _ []mail) {
+				b.market.v.obj = 0x10000001
+				heldUntilDeadline(t, b, deadline)
+			},
+			wantStale: true, wantItems: []Item{potion, sword},
+		},
+		{
+			name:  "a shop purchase holds it and its ItemList answers it",
+			mails: 1, at: []time.Time{deadline},
+			run: func(t *testing.T, b *Brain, _ []mail) {
+				b.shop.v.npcID, b.shop.step = 30001, shopBuying
+				if err := b.wake(t0); err != nil {
+					t.Fatal(err)
+				}
+				if err := b.handle([]Event{ItemList{Items: []Item{listed}}}, t0.Add(80*time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
+				if b.shop.step != shopIdle {
+					t.Errorf("shop step %d, want the purchase answered", b.shop.step)
+				}
+			},
+			wantItems: []Item{listed},
+		},
+		{
 			name:  "the session ends first: stale",
 			mails: 1, at: []time.Time{deadline},
 			run: func(t *testing.T, b *Brain, _ []mail) {
@@ -215,6 +278,25 @@ func TestBrainInspect(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// heldUntilDeadline wakes b while its inspect is held: the request waits,
+// retried at the frame rate, and the deadline answers it.
+func heldUntilDeadline(t *testing.T, b *Brain, deadline time.Time) {
+	t.Helper()
+	if err := b.wake(t0); err != nil {
+		t.Fatal(err)
+	}
+	retry := t0.Add(time.Second / frameRate)
+	if at, ok := b.inspect.due(); !ok || !at.Equal(retry) {
+		t.Fatalf("due %v %v, want the retry %v", at, ok, retry)
+	}
+	if err := b.wake(retry); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.wake(deadline); err != nil {
+		t.Fatal(err)
 	}
 }
 

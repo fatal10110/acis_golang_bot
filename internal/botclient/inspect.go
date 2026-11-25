@@ -119,7 +119,9 @@ func (b *Brain) inspectAsked(m mail, now time.Time) {
 // inspectWake sends the inspects' RequestItemList, or answers them stale
 // at their deadline. RequestItemList has no server gate (gateNone): the
 // frame bucket bounds it, one per inspect at most, and the panel bounds the
-// inspects (one per bot in flight, a cooldown, a global cap).
+// inspects (one per bot in flight, a cooldown, a global cap). While
+// inspectHeld the request waits, retried at the frame rate until the
+// deadline.
 func (b *Brain) inspectWake(now time.Time) error {
 	s := &b.inspect
 	if len(s.replies) == 0 {
@@ -132,6 +134,10 @@ func (b *Brain) inspectWake(now time.Time) error {
 	if s.asked || now.Before(s.wakeAt) {
 		return nil
 	}
+	if b.inspectHeld() {
+		s.wakeAt = now.Add(time.Second / frameRate)
+		return nil
+	}
 	sent, err := b.send(Action{kind: actItemList, payload: encodeRequestItemList()}, now)
 	if err != nil {
 		return err
@@ -140,6 +146,21 @@ func (b *Brain) inspectWake(now time.Time) error {
 		s.wakeAt = now.Add(time.Second / frameRate)
 	}
 	return nil
+}
+
+// inspectHeld reports whether the inspect's RequestItemList must wait:
+//   - a Logout is asked or awaits its answer, or Appearing is still due
+//     after a loading-screen teleport: until then the bot sends nothing
+//     else (wake), as a client on a loading screen asks for no inventory;
+//   - a shop or market visit is under way: the server answers a purchase
+//     with an ItemList too (network/merchant.go buildItemList), and the
+//     visit takes the next ItemList as its purchase's answer (shopEvent,
+//     marketEvent), so an inspect's ItemList would end it early. The
+//     visit's own ItemList answers the inspect fresh (handle), else the
+//     deadline answers it stale.
+func (b *Brain) inspectHeld() bool {
+	l := &b.logout
+	return b.appearing || l.requested || l.pending || b.shop.v.active() || b.market.active()
 }
 
 // answerInspect answers every inspect waiting with the model at now.
