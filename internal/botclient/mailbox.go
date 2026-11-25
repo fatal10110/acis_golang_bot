@@ -99,10 +99,17 @@ var (
 // mail is a command in a Bot's mailbox. queued is set when it came while no
 // session ran: a follow or an assist then waits for its player to come in
 // sight instead of being refused. answer has room for the one answer.
+//
+// A mail with inspect set is an inspect instead (Bot.Inspect): the brain
+// answers it on inspect, which has room for the one Inspection, by
+// deadline on the bot's clock.
 type mail struct {
 	cmd    Command
 	queued bool
 	answer chan error
+
+	inspect  chan Inspection
+	deadline time.Time
 }
 
 // standing is a Bot's standing order: the latest stay, go, follow or assist
@@ -159,8 +166,8 @@ func (b *Bot) setInSession(in bool) {
 	b.mu.Unlock()
 }
 
-// stop marks the bot stopped and refuses the commands left in its mailbox:
-// no command comes in after it.
+// stop marks the bot stopped and refuses the commands left in its mailbox,
+// closing the reply of an inspect left there: no command comes in after it.
 func (b *Bot) stop() {
 	b.mu.Lock()
 	b.stopped = true
@@ -168,6 +175,10 @@ func (b *Bot) stop() {
 	for {
 		select {
 		case m := <-b.link.mail:
+			if m.inspect != nil {
+				close(m.inspect)
+				continue
+			}
 			m.answer <- ErrStopped
 		default:
 			return
@@ -175,8 +186,13 @@ func (b *Bot) stop() {
 	}
 }
 
-// command carries out a panel command at now and answers it.
+// command carries out a panel command at now and answers it, or takes an
+// inspect.
 func (b *Brain) command(m mail, now time.Time) {
+	if m.inspect != nil {
+		b.inspectAsked(m, now)
+		return
+	}
 	err := b.panelOrder(m.cmd, m.queued, now)
 	m.answer <- err
 	if err == nil {

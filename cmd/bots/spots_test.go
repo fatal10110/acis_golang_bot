@@ -102,7 +102,7 @@ func TestLoadSpots(t *testing.T) {
 		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	reg, travel, err := loadSpots(dir, 1, nil, log)
+	reg, travel, _, err := loadSpots(dir, 1, nil, log)
 	if err != nil {
 		t.Fatalf("loadSpots: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestLoadSpots(t *testing.T) {
 	if travel.Gatekeepers() != 1 {
 		t.Fatalf("gatekeepers = %d, want 1", travel.Gatekeepers())
 	}
-	if _, _, err := loadSpots(t.TempDir(), 1, nil, log); err == nil {
+	if _, _, _, err := loadSpots(t.TempDir(), 1, nil, log); err == nil {
 		t.Fatal("loadSpots of an empty directory: no error")
 	}
 }

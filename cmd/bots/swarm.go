@@ -207,7 +207,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		sh.nav = n
 	}
 	if o.datapack != "" {
-		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+		if sh.spots, sh.travel, _, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
@@ -297,13 +297,14 @@ func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry
 }
 
 // loadSpots reads the datapack whose XML directory is dir and returns the
-// spot registry and the travel map every bot of the process shares. With the
-// navigation n the registry leaves out the spots whose centre is in water
-// (Nav.DrySpots, #275). The datapack itself is dropped once they are built.
-func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, error) {
+// spot registry and the travel map every bot of the process shares, and the
+// datapack for the caller to take what else it needs from (the panel's
+// catalog) and drop. With the navigation n the registry leaves out the
+// spots whose centre is in water (Nav.DrySpots, #275).
+func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, *datapack.Datapack, error) {
 	dp, err := datapack.Load(dir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, w := range dp.Spawnlist.Warnings {
 		log.Debug("datapack", "warning", w)
@@ -312,7 +313,7 @@ func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logge
 	log.Info("farming spots", "spots", len(spots), "wet_dropped", wet, "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
 	travel := botclient.NewTravelMap(dp)
 	log.Info("travel map", "gatekeepers", travel.Gatekeepers())
-	return botclient.NewSpotRegistry(spots, multiplier), travel, nil
+	return botclient.NewSpotRegistry(spots, multiplier), travel, dp, nil
 }
 
 // newBots returns one new bot per account playing preset p, each with a copy

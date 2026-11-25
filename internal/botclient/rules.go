@@ -340,6 +340,9 @@ const (
 	actHennaUnequip
 	// actEnchant enchants an item with the selected scroll (enchant.go).
 	actEnchant
+	// actItemList asks for the inventory for the panel's inspect
+	// (inspect.go).
+	actItemList
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -378,6 +381,9 @@ const (
 // and an enchant scroll's UseItem have none either (network/client_dispatch.go):
 // the enchant rule sends one per answer it waits for (enchantReplyTimeout),
 // and an unfinished exchange waits EnchantPolicy.RetryAfter.
+// RequestItemList has none either (network/client_dispatch.go, no flood
+// protector): the panel's inspect sends one per inspect at most, and the
+// panel bounds the inspects (inspect.go).
 func (a Action) gate() gate {
 	switch a.kind {
 	case actEmote:

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CommandForm } from "../components/CommandForm";
 import { CrafterStatus } from "../components/CrafterStatus";
+import { InspectView } from "../components/InspectView";
 import type { Confirm } from "../components/ConfirmDialog";
 import { PresetOptions } from "../components/CreateDialog";
 import { LogView } from "../components/LogView";
@@ -12,7 +13,7 @@ import { Select } from "../components/ui/Field";
 import { Empty, Failed, Loading } from "../components/ui/States";
 import { api } from "../lib/api";
 import { activityOf, characterOf, className, classOf, levelOf, statusOf, time, whereOf } from "../lib/format";
-import { useClassNames, useLogs, usePresets, useSpots } from "../lib/queries";
+import { useClassNames, useInspection, useLogs, usePresets, useSpots } from "../lib/queries";
 import type { Bot } from "../lib/types";
 import { useRun } from "../lib/useRun";
 
@@ -33,6 +34,29 @@ function Gauge({ kind, value, max }: { kind: "hp" | "mp" | "cp"; value: number; 
         {value} / {max}
       </span>
     </div>
+  );
+}
+
+/** InspectCard asks the bot for its inventory, gear, penalties and effects when the page opens, and again on Refresh. */
+function InspectCard({ account }: { account: string }) {
+  const q = useInspection(account);
+  let body: ReactNode;
+  if (q.isPending) body = <Loading what="the inspect" />;
+  else if (q.isError) body = <Failed error={q.error} retry={() => void q.refetch()} />;
+  else body = <InspectView inspection={q.data} />;
+  return (
+    <Card
+      title={
+        <span className="flex items-center justify-between">
+          Inspect
+          <Button disabled={q.isFetching} onClick={() => void q.refetch()}>
+            Refresh
+          </Button>
+        </span>
+      }
+    >
+      {body}
+    </Card>
   );
 }
 
@@ -158,6 +182,7 @@ export function BotDetail({ account, bots, ask }: { account: string; bots: Bot[]
           {spots.error && <Failed error={spots.error} />}
         </Card>
       </div>
+      <InspectCard account={account} />
       <Card title="Log">
         {logs.error ? <Failed error={logs.error} retry={() => void logs.refetch()} /> : <LogView lines={logs.data ?? []} />}
       </Card>
