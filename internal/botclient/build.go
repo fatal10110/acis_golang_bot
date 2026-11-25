@@ -395,7 +395,8 @@ func professionKit(class int32) (ClassKit, bool) {
 // own), its spot margin, its class's gear and dyes, and its line: the
 // branch choice reads choice (chooseLine) for Branch and the professions,
 // and a base class or first profession wields its line's weapon
-// (branchWeapons). The trainers come from the
+// (branchWeapons), a first profession its own line's too (lineWeapons).
+// The trainers come from the
 // datapack (Brain.build). RoleNone compiles the zero Build. The tables are
 // Go tables, checked against the shipped datapack by
 // TestBehaviorRowsShipped.
@@ -415,6 +416,9 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 		if parent < 0 || class == l.first {
 			bd.Race.Professions[l.first] = l.second
 			if w := branchWeapons[l.second]; w != nil {
+				k.Gear.Weapons, k.Gear.Shield = w, false
+			}
+			if w := lineWeapons[l.second]; w != nil && class == l.first {
 				k.Gear.Weapons, k.Gear.Shield = w, false
 			}
 		}

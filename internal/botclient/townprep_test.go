@@ -211,7 +211,8 @@ func TestTownArrival(t *testing.T) {
 
 // TestSupplyCauseHandOff checks that the weight the trip in town hook will
 // hand off sheds toward ReturnLoad: a heavy bot carrying nothing to sell
-// but its hand-off starts a trip once that is ShedMin of the limit.
+// but its hand-off starts a trip once that is ShedMin of the limit, under
+// the half-speed band (TestSupplyCauseSlowBand has the band itself).
 func TestSupplyCauseHandOff(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -226,7 +227,7 @@ func TestSupplyCauseHandOff(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTripBrain(t, potionStack(20))
-			b.world.Self.Load = 90000
+			b.world.Self.Load = 66500
 			b.persona.Supply.HandOff = tt.handOff
 			if got := b.supplyDue(at(time.Minute)); got != tt.want {
 				t.Fatalf("supplyDue = %d, want %d", got, tt.want)

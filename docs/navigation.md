@@ -962,7 +962,8 @@ unreachable (with a reason).
     stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
   - **No click-ahead.** A click while moving would retarget the server's walk: a catch-up step
     along the old destination, then a fresh routed click from there (see "Server behavior this
-    rests on"). Clicking ahead of the arrival is a separate design (#308).
+    rests on"). Clicking ahead of the arrival at checked corners is approved by the owner
+    (2026-11-25) and replaces this rule when #308 lands.
   - No move goes out while the bot's own swing or cast is in progress, because the server would
     defer it and answer `ActionFailed`.
 - **Server answers to its own moves**:
@@ -1225,7 +1226,8 @@ of 10 in town and 25 instead of 14 in the field. Every idle is still the one pos
 the bucket up to 127 ms) and nothing was blocked or desynced, but each extra segment pays its
 answer latency and the server's walk-speed start, and the shorter pull bends the field route 283
 units longer: efficiency 0.904 to 0.864 in town and 0.926 to 0.875 in the field. That is the cost
-of the cap toward a leader that stands still; the scenario's GM never moves.
+of the cap toward a leader that stands still; the scenario's GM never moves. Owner, 2026-11-25:
+a follow toward a leader that stands still takes the long segments of #307, without the cap (#344).
 
 After #307 the pull reaches past the corridor test with exact-checked candidates, within the same
 500 cap: 9 segments instead of 15 in town and 16 instead of 25 in the field, efficiency 0.864 to
