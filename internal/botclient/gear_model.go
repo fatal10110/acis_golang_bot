@@ -332,7 +332,9 @@ var magicSkillTypes = []string{"MDAM", "DRAIN", "DEATHLINK"}
 // Support build with none is a tank, which values how long it lasts
 // (tank); any other build, the kills a minute of the first rotation step it
 // knows that deals damage (damageSkillTypes, as the spot fit's
-// spotAttack: not Self Heal's HEAL), else of its melee hits.
+// spotAttack: not Self Heal's HEAL), else of its melee hits. A cast costs
+// its mpInitialConsume and mpConsume as the server charges them
+// (cast/controller.go CanCast); a heal that costs no MP is no heal.
 func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	bd, m := b.build(), b.cfg.Travel
 	known := func(id int32) (datapack.Skill, bool) {
@@ -345,10 +347,10 @@ func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	}
 	if bd.Role == RoleSupport {
 		for _, h := range bd.Kit.Heals {
-			if sk, ok := known(h.Skill); ok && sk.MPConsume > 0 {
+			if sk, ok := known(h.Skill); ok && sk.MPInitialConsume+sk.MPConsume > 0 {
 				return charmodel.Role{
 					Kind: charmodel.Support, RestTime: charmodel.DefaultRestTime, SurvivalFloor: charmodel.DefaultSurvivalFloor,
-					HealPower: sk.Power, HealMP: float64(sk.MPConsume), HealHitTime: sk.HitTime, HealReuse: sk.ReuseDelay, HealMAtk: sk.Type == "HEAL",
+					HealPower: sk.Power, HealMP: float64(sk.MPInitialConsume + sk.MPConsume), HealHitTime: sk.HitTime, HealReuse: sk.ReuseDelay, HealMAtk: sk.Type == "HEAL",
 				}, false
 			}
 		}
@@ -357,7 +359,7 @@ func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	role = charmodel.Role{Kind: charmodel.Damage, RestTime: charmodel.DefaultRestTime}
 	for _, st := range bd.Kit.Rotation {
 		if sk, ok := known(st.Skill); ok && slices.Contains(damageSkillTypes, sk.Type) {
-			role.Attack = charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPConsume)}
+			role.Attack = charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}
 			break
 		}
 	}
