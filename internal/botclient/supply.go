@@ -180,7 +180,10 @@ func supplyPerHour(dp *datapack.Datapack, cfg SupplyConfig) map[int32]float64 {
 				if own := pr.Respawn + cfg.KillFloor; pr.Respawn > 0 && own < c {
 					c = own
 				}
-				addDrops(out, dp.NPCs[pr.NPCID], share*float64(sp.Total*pr.Weight), c, cfg)
+				// The server places one private per row; the row's weight
+				// is only the private's weight-point script value
+				// (CreatePrivates), not a count.
+				addDrops(out, dp.NPCs[pr.NPCID], share*float64(sp.Total), c, cfg)
 			}
 		}
 	}

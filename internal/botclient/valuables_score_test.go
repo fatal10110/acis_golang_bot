@@ -137,7 +137,8 @@ func TestValueScoreSupply(t *testing.T) {
 		{name: "private its shorter own cycle", makers: []*datapack.Maker{plain(withPrivates(scoreSpawn(scoreLeader, 1, 3*time.Minute), escort(1, 30*time.Second)))}, want: 40 * 0.2},
 		{name: "private own cycle longer", makers: []*datapack.Maker{plain(withPrivates(scoreSpawn(scoreLeader, 1, time.Minute), escort(1, 10*time.Minute)))}, want: s},
 		{name: "private under total 2 twice", makers: []*datapack.Maker{plain(withPrivates(scoreSpawn(scoreLeader, 2, time.Minute), escort(1, 0)))}, want: 2 * s},
-		{name: "private weight 2 twice", makers: []*datapack.Maker{plain(withPrivates(scoreSpawn(scoreLeader, 1, time.Minute), escort(2, 0)))}, want: 2 * s},
+		{name: "private weight 2 still once", makers: []*datapack.Maker{plain(withPrivates(scoreSpawn(scoreLeader, 1, time.Minute), escort(2, 0)))}, want: s},
+		{name: "private weight 0 still once", makers: []*datapack.Maker{plain(withPrivates(scoreSpawn(scoreLeader, 1, time.Minute), escort(0, 0)))}, want: s},
 		{name: "private takes its leader's share", makers: []*datapack.Maker{func() *datapack.Maker {
 			mk := plain(withPrivates(scoreSpawn(scoreLeader, 1, time.Minute), escort(1, 0)))
 			mk.Event = "ssq_event"
