@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/door"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
@@ -126,31 +128,146 @@ func TestClickAheadAtCheckedCorner(t *testing.T) {
 	}
 }
 
-// TestClickAheadFanFails checks that no click goes out early when a line of
-// the fan fails: the segment is marked, the walk wakes at its end and the
-// next segment goes out from standstill.
-func TestClickAheadFanFails(t *testing.T) {
-	b, _, _, at := aheadWalk(t)
-	w, s := &b.walk, &b.world.Self
-	w1 := w.route[0]
-	c := along(w.seg, 1-40/segLen(w.seg))
-	// A column the lines from the fan's start cross, not the planned
-	// segment's: as a blocked stop on another route would leave.
-	w.plan.Avoid.AddLine(toLoc(Point{X: c.X, Y: c.Y + 40}), toLoc(Point{X: c.X, Y: c.Y - 40}))
-	if a, _ := followStep(t, b, aheadDest, at); a.kind != actHold {
-		t.Fatalf("%v sent through a failing fan", a.kind)
+// TestClickAheadRefused checks that no click goes out early where the
+// walker may not click ahead. A corner refused for good (a failing fan
+// line, a door on either segment, water on the next segment or the bot's
+// own move wet) marks the segment, and the next segment goes out from
+// standstill at the end plus a tick; a passing state of the bot (casting,
+// swinging, sitting) holds the click without marking it.
+func TestClickAheadRefused(t *testing.T) {
+	tests := []struct {
+		name string
+		// setup changes the walk in flight before its click-ahead is due.
+		setup func(t *testing.T, b *Brain)
+		// marked is whether the segment is refused for good.
+		marked bool
+	}{
+		{
+			name: "a fan line fails",
+			setup: func(_ *testing.T, b *Brain) {
+				w := &b.walk
+				c := along(w.seg, 1-40/segLen(w.seg))
+				// A column the lines from the fan's start cross, not the
+				// planned segment's: as a blocked stop on another route
+				// would leave.
+				w.plan.Avoid.AddLine(toLoc(Point{X: c.X, Y: c.Y + 40}), toLoc(Point{X: c.X, Y: c.Y - 40}))
+			},
+			marked: true,
+		},
+		{
+			name:   "a door on the segment in flight",
+			setup:  func(t *testing.T, b *Brain) { withDoorAt(t, b, along(b.walk.seg, 0.5)) },
+			marked: true,
+		},
+		{
+			name: "a door on the next segment",
+			setup: func(t *testing.T, b *Brain) {
+				w := &b.walk
+				withDoorAt(t, b, midpoint(w.seg.to, w.route[1]))
+			},
+			marked: true,
+		},
+		{
+			name: "water on the next segment",
+			setup: func(_ *testing.T, b *Brain) {
+				w := &b.walk
+				n := *w.nav
+				n.Water = nav.NewWater([]nav.WaterBox{waterAt(midpoint(w.seg.to, w.route[1]))})
+				w.nav = &n
+			},
+			marked: true,
+		},
+		{
+			name: "the bot's own move wet",
+			setup: func(_ *testing.T, b *Brain) {
+				s := &b.world.Self
+				water := nav.NewWater([]nav.WaterBox{waterAt(along(b.walk.seg, 0.5))})
+				sm := *s.move.self
+				sm.swim = swimLine{water: water, speed: s.RunSpeed / 2}
+				s.move.self = &sm
+				s.move = s.move.withLine(s.move.from, s.move.to, s.move.start)
+				if !s.move.wet() {
+					t.Fatal("the move in flight is dry")
+				}
+			},
+			marked: true,
+		},
+		{
+			name:  "casting",
+			setup: func(_ *testing.T, b *Brain) { b.world.Self.castEnd = b.world.Self.arrival() },
+		},
+		{
+			name:  "swinging",
+			setup: func(_ *testing.T, b *Brain) { b.world.Self.swingEnd = b.world.Self.arrival() },
+		},
+		{
+			name:  "sitting",
+			setup: func(_ *testing.T, b *Brain) { b.world.Self.Sitting = true },
+		},
 	}
-	if !w.seg.noAhead {
-		t.Fatal("the segment is not marked: its fan would be checked again")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _, _, _ := aheadWalk(t)
+			w, s := &b.walk, &b.world.Self
+			w1 := w.route[0]
+			tt.setup(t, b)
+			at := s.arrival().Add(-s.aheadLead())
+			if !s.Moving(at) {
+				t.Fatal("the bot must still move at the click-ahead time")
+			}
+			if a, _ := followStep(t, b, aheadDest, at); a.kind != actHold {
+				t.Fatalf("%v sent early", a.kind)
+			}
+			if w.seg.noAhead != tt.marked {
+				t.Fatalf("segment marked %v, want %v", w.seg.noAhead, tt.marked)
+			}
+			if !tt.marked {
+				return
+			}
+			due := s.arrival().Add(positionTick)
+			if got := b.decisionAt(); !got.Equal(due) {
+				t.Fatalf("decision at %v, want the end plus a tick %v", got.Sub(t0), due.Sub(t0))
+			}
+			a, _ := followStep(t, b, aheadDest, due)
+			if a.kind != actMove || moveOrigin(a.payload) != w1 || w.seg.ahead {
+				t.Errorf("at the end plus a tick: %v from %+v ahead %v, want a standstill segment from %+v", a.kind, moveOrigin(a.payload), w.seg.ahead, w1)
+			}
+		})
 	}
-	due := s.arrival().Add(positionTick)
-	if got := b.decisionAt(); !got.Equal(due) {
-		t.Fatalf("decision at %v, want the end plus a tick %v", got.Sub(t0), due.Sub(t0))
+}
+
+// withDoorAt gives b's walker a door table holding one open door over p, so
+// the shared engine stays as built.
+func withDoorAt(t *testing.T, b *Brain, p Point) {
+	t.Helper()
+	tmpl := geotest.CorridorDoor()
+	x0, x1 := int(p.X)-8, int(p.X)+7
+	y0, y1 := int(p.Y)-8, int(p.Y)+7
+	tmpl.Opened = true
+	tmpl.Position = location.Location{X: int(p.X), Y: int(p.Y), Z: geotest.Ground}
+	tmpl.Coordinates = []location.Point{{X: x0, Y: y0}, {X: x1, Y: y0}, {X: x1, Y: y1}, {X: x0, Y: y1}}
+	doors, err := door.NewTable([]*door.Template{tmpl})
+	if err != nil {
+		t.Fatal(err)
 	}
-	a, _ := followStep(t, b, aheadDest, due)
-	if a.kind != actMove || moveOrigin(a.payload) != w1 || w.seg.ahead {
-		t.Errorf("at the end plus a tick: %v from %+v ahead %v, want a standstill segment from %+v", a.kind, moveOrigin(a.payload), w.seg.ahead, w1)
+	w := &b.walk
+	n := *w.nav
+	n.Doors = NewDoorTable(n.Engine, doors, discardLog())
+	w.nav = &n
+	if !n.Doors.Crosses(midpoint(p, Point{X: p.X - 16, Y: p.Y}), midpoint(p, Point{X: p.X + 16, Y: p.Y})) {
+		t.Fatalf("the door at %+v has no footprint", p)
 	}
+}
+
+// waterAt is a small water zone around p, from below the ground to above
+// the bot.
+func waterAt(p Point) nav.WaterBox {
+	return nav.WaterBox{X1: int(p.X) - 20, Y1: int(p.Y) - 20, X2: int(p.X) + 20, Y2: int(p.Y) + 20, MinZ: int(p.Z) - 50, MaxZ: int(p.Z) + 50}
+}
+
+// midpoint is the point halfway between a and b.
+func midpoint(a, b Point) Point {
+	return Point{X: (a.X + b.X) / 2, Y: (a.Y + b.Y) / 2, Z: (a.Z + b.Z) / 2}
 }
 
 // TestClickAheadUCorners walks around the U, whose corners hug its walls:

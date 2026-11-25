@@ -1276,6 +1276,8 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | field | main 49f10a4 (before #308) | 2026-11-25 | 16 | 6731 | 5669 | 58.25 s | 53.42 s | 44.99 s | 0.917 | 0.912 | 100 / 101 ms | 0 | 0 |
 | town | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 9 | 3214 | 3021 | 27.92 s | 25.51 s | 23.98 s | 0.914 | 0.902 | 100 / 101 ms | 0 | 0 |
 | field | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 17 | 6837 | 5691 | 57.53 s | 54.26 s | 45.16 s | 0.943 | 0.932 | 56 / 101 ms | 0 | 0 |
+| town | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 10 | 3274 | 3033 | 28.65 s | 25.99 s | 24.07 s | 0.907 | 0.892 | 89 / 101 ms | 0 | 0 |
+| field | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 16 | 6784 | 5662 | 56.92 s | 53.84 s | 44.93 s | 0.946 | 0.935 | 60 / 101 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
@@ -1302,15 +1304,17 @@ After #307 the pull reaches past the corridor test with exact-checked candidates
 position tick, and nothing was blocked or desynced. Fewer segments mean fewer answer latencies
 and walk-speed starts, which is most of what the elapsed time saved.
 
-After #308 the field route clicked 7 of its 16 later segments ahead: those idled 0 ms (the bucket
-up to 0), the other 9 one tick. Its efficiency went from 0.917 to 0.943 (the bot's own from 0.912
-to 0.932), 0.7 s faster on a route 106 units longer, with nothing blocked or desynced. The town
-route clicked none: its corners are where the string pull wraps a house or a fence, and a line
-from any point before such a corner to the next waypoint cuts through the obstacle, so every fan
-there fails and each segment goes out from standstill as before (0.921 to 0.914, one segment more,
-within the run-to-run spread). Only corners that wrap nothing qualify, mostly where the 500 cap of
-a follow walk splits open ground, so the gain is under the 5-7% `walking.md` estimated for every
-waypoint: 2.6 points in the field, none in town.
+After #308 the field route clicked 7 of its 16 later segments ahead in the first run (457f696)
+and 6 of 15 in the second (50ca07f): those idled 0 ms (the bucket up to 0), the others one tick.
+Its efficiency went from 0.917 to 0.943 and 0.946 (the bot's own from 0.912 to 0.932 and 0.935),
+0.7 s and 1.3 s faster on a route 53-106 units longer, with nothing blocked or desynced. The town
+route clicked none of its 8 later corners in the first run and 1 of 9 in the second: most of its
+corners are where the string pull wraps a house or a fence, and a line from any point before such
+a corner to the next waypoint cuts through the obstacle, so those fans fail and the segment goes
+out from standstill as before (0.921 to 0.914 and 0.907, one or two segments more, within the
+run-to-run spread of the route the pull takes). Only corners that wrap nothing qualify, mostly
+where the 500 cap of a follow walk splits open ground, so the gain is under the 5-7% `walking.md`
+estimated for every waypoint: about 3 points in the field, none in town.
 
 What #306 buys shows with a leader that moves. `TestLiveFollowMovingLeader` starts the bot 1900
 from the field route's end, in sight of the GM, who paces 300 back and forth there while the bot
@@ -1330,6 +1334,7 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveFollowMovingLeader' -
 | wf/nav-long-segments 0849cc1 (after #307) | 2026-11-24 | 12 | 14 | 349 / 381 ms | 100 / 101 ms | 0 | 0 |
 | main 49f10a4 (before #308) | 2026-11-25 | 8 | 7 | 337 / 382 ms | 100 / 101 ms | 0 | 0 |
 | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 7 | 7 | 321 / 382 ms | 100 / 101 ms | 0 | 0 |
+| wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 18 | 15 | 358 / 383 ms | 100 / 101 ms | 0 | 0 |
 
 Before #306 the bot stood through the follow delay after each segment that ended while a re-path
 was pending; after it, the bot keeps walking to its old slot and turns to the new one when the
@@ -1342,8 +1347,8 @@ the bot started at the goal and walked no leg. The start is now the point on the
 first comes within 1900, on the segment that crosses that distance. That start lies farther out
 than the waypoint before #307 did, so the GM paces more legs; the rows are not comparable in legs.
 
-After #308 the follower clicked none ahead: every idle is still the one tick, and the gaps are
-unchanged within the spread. The leader's slot moves on while a segment is in flight, and each move
+After #308 the follower clicked none ahead in either run: every idle is still the one tick, and
+the gaps are unchanged within the spread. The leader's slot moves on while a segment is in flight, and each move
 past `walkSameDest` replans the walk, so the segment in flight rarely has a planned next waypoint.
 
 ## Delivery (milestone M7, "Own navigation", epic #151)
