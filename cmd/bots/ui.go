@@ -62,9 +62,11 @@ type uiOptions struct {
 	listen          string
 	datapack        string
 	spawnMultiplier float64
-	gm              gmOptions
-	store           storeOptions
-	geo             geoOptions
+	// spawnEvents is the server's SpawnEvents (-spawn-events).
+	spawnEvents string
+	gm          gmOptions
+	store       storeOptions
+	geo         geoOptions
 }
 
 func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
@@ -92,6 +94,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	addGeoFlags(fs, &o.geo)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml); the presets town and merchant and farming need it")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
+	addSpawnEventsFlag(fs, &o.spawnEvents)
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	fs.StringVar(&o.listen, "listen", defaultListen, "loopback address the web panel serves on (open http://ADDR/ in a browser)")
@@ -330,7 +333,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	if o.datapack != "" {
 		sh := &runner.shared
 		var dp *datapack.Datapack
-		if sh.spots, sh.travel, dp, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+		if sh.spots, sh.travel, dp, err = loadSpots(o.datapack, o.spawnMultiplier, supplyConfig(o.spawnEvents), sh.nav, log); err != nil {
 			return err
 		}
 		catalog = botpanel.NewCatalog(dp)

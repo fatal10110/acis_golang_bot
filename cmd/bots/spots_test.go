@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
 
 // spotsNPCs, spotsSpawnlist, spotsTeleports, spotsItems and spotsBuyLists
@@ -102,7 +104,7 @@ func TestLoadSpots(t *testing.T) {
 		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	reg, travel, _, err := loadSpots(dir, 1, nil, log)
+	reg, travel, _, err := loadSpots(dir, 1, botclient.DefaultSupplyConfig(), nil, log)
 	if err != nil {
 		t.Fatalf("loadSpots: %v", err)
 	}
@@ -112,7 +114,7 @@ func TestLoadSpots(t *testing.T) {
 	if travel.Gatekeepers() != 1 {
 		t.Fatalf("gatekeepers = %d, want 1", travel.Gatekeepers())
 	}
-	if _, _, _, err := loadSpots(t.TempDir(), 1, nil, log); err == nil {
+	if _, _, _, err := loadSpots(t.TempDir(), 1, botclient.DefaultSupplyConfig(), nil, log); err == nil {
 		t.Fatal("loadSpots of an empty directory: no error")
 	}
 }

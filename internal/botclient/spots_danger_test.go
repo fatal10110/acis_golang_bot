@@ -238,7 +238,7 @@ func TestPackFitShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := NewTravelMap(dp)
+	m := NewTravelMap(dp, DefaultSupplyConfig())
 	tests := []struct {
 		maker   string
 		self    squire

@@ -89,7 +89,7 @@ func TestNewTravelMap(t *testing.T) {
 		},
 		Prices: map[int32]int32{1867: 10},
 	}
-	m := NewTravelMap(dp)
+	m := NewTravelMap(dp, DefaultSupplyConfig())
 	if want := map[int32]int32{1867: 10}; !reflect.DeepEqual(m.prices, want) {
 		t.Fatalf("prices = %v, want %v", m.prices, want)
 	}
@@ -119,7 +119,7 @@ func TestTravelMapShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := NewTravelMap(dp)
+	m := NewTravelMap(dp, DefaultSupplyConfig())
 	t.Logf("gatekeepers=%d gear=%d sold gear=%d", m.Gatekeepers(), len(m.gear), len(m.shopGear))
 	for _, g := range m.gatekeepers {
 		if g.npcID != 30006 {
