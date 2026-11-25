@@ -56,7 +56,8 @@ type valuables struct {
 	entries map[valuableKey]*valuableEntry
 	// stored reports the units the private warehouse holds per entry and
 	// whether its status is known; nil reports none stored and the status
-	// known. The session's look wires it to the private status (V3b).
+	// known. Each session's brain wires it to its private status
+	// (wireValuables).
 	stored func() (map[valuableKey]int64, bool)
 	round  valuableRound
 	// noPrivate marks the keeper templates that refused a private request
@@ -96,10 +97,11 @@ type carriedUnits struct {
 }
 
 // sync derives every entry's units from carried and the stored units
-// (docs/valuables/ledger.md "Entries and units"): a carried key with no
-// entry adds one at firstAsk's ask, rounds 0; an entry with none carried
-// is dropped once the private status is known with none stored, and kept
-// while it is not known.
+// (docs/valuables/ledger.md "Entries and units", "Stored rows with no
+// entry"): a carried or stored key with no entry adds one at firstAsk's
+// ask, rounds 0; an entry with none carried is dropped once the private
+// status is known with none stored, and kept with its stored units while
+// it is not known.
 func (v *valuables) sync(carried map[valuableKey]carriedUnits, firstAsk func(valuableKey) int64) {
 	stored, known := v.storedUnits()
 	for k, u := range carried {
@@ -110,11 +112,18 @@ func (v *valuables) sync(carried map[valuableKey]carriedUnits, firstAsk func(val
 		}
 		e.carried, e.objects = u.count, u.objects
 	}
+	for k, n := range stored {
+		if _, ok := v.entries[k]; !ok && n > 0 {
+			v.entries[k] = &valuableEntry{ask: firstAsk(k)}
+		}
+	}
 	for k, e := range v.entries {
 		if _, ok := carried[k]; !ok {
 			e.carried, e.objects = 0, nil
 		}
-		e.stored = stored[k]
+		if known {
+			e.stored = stored[k]
+		}
 		if e.carried == 0 && e.stored == 0 && known {
 			delete(v.entries, k)
 		}
@@ -175,11 +184,7 @@ func (b *Brain) ownHold(it Item) Hold {
 // clan member's hold comes after it (memberKeep). The zero policy finds
 // none.
 func (b *Brain) valuable(it Item) bool {
-	m, p := b.cfg.Travel, b.persona.Valuables
-	if m == nil || p == (ValuablePolicy{}) || it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || m.shadows[it.TemplateID] {
-		return false
-	}
-	if _, shopSells := m.cheapest[it.TemplateID]; shopSells || !p.valuable(m.valueScore(p, it.TemplateID, int(it.Enchant))) {
+	if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || !b.valuableTemplate(it.TemplateID, it.Enchant) {
 		return false
 	}
 	if b.keeps(it.TemplateID) || b.ownHold(it).Keep {
@@ -187,6 +192,30 @@ func (b *Brain) valuable(it Item) bool {
 	}
 	w := b.worn()
 	return !b.upgrade(it, &w) && !b.fallsBack(it, &w) && !b.keepsForSet(it, &w)
+}
+
+// valuableTemplate reports whether template at enchant passes the parts of
+// the valuable test that read neither the bot's carry nor the unit's own
+// classes: the persona's numeric test (ValuablePolicy.valuable), not a
+// shadow item and not sold by a counted buylist. The zero policy passes
+// none.
+func (b *Brain) valuableTemplate(template int32, enchant uint16) bool {
+	m, p := b.cfg.Travel, b.persona.Valuables
+	if m == nil || p == (ValuablePolicy{}) || m.shadows[template] {
+		return false
+	}
+	if _, shopSells := m.cheapest[template]; shopSells {
+		return false
+	}
+	return p.valuable(m.valueScore(p, template, int(enchant)))
+}
+
+// valuableRow reports whether private warehouse row r passes the warehouse
+// row test (docs/valuables/ledger.md "Stored rows with no entry"): the
+// valuable test at the row's enchant without the carry checks, which
+// decide what the bot wants to carry, not what it stored.
+func (b *Brain) valuableRow(r WarehouseItem) bool {
+	return r.SubCategory != subCategoryQuest && r.Augmentation == 0 && b.valuableTemplate(r.TemplateID, r.Enchant)
 }
 
 // carriedValuables are the units of every valuable the bot carries, by
@@ -246,14 +275,19 @@ func (p ValuablePolicy) lowered(ask int64, ref int32, floor int64) int64 {
 	return max(ask-int64(p.RoundStep)*int64(ref)/100, floor)
 }
 
-// ruleValuables holds the turn while a valuables round is open
+// ruleValuables holds the turn for the session's look at its private
+// warehouse (lookTurn) and while a valuables round is open
 // (docs/valuables/round.md "The rule"), so no later rule walks the bot
 // away: it walks back to within anchorArrive of the round's anchor (goTo,
 // walkPlace) and sends nothing once there or when no route there holds.
 // Only tests open a round until the round's start lands (V7a).
 //
-// Pacing: the walk's MoveBackwardToLocation segments, paced as every goTo.
+// Pacing: the walk's MoveBackwardToLocation segments, paced as every goTo;
+// the look's as rule "warehouse"'s.
 func (b *Brain) ruleValuables(now time.Time) (Action, bool) {
+	if a, ok := b.lookTurn(now); ok {
+		return a, true
+	}
 	r := &b.cfg.valuables.round
 	if !r.open {
 		return Action{}, false

@@ -354,8 +354,25 @@ func (b *Brain) startStore(now time.Time) (Action, bool) {
 
 // storeReady reports whether the bot may start an opening at now.
 func (b *Brain) storeReady(now time.Time) bool {
-	p, s, w := &b.persona.Store, &b.world.Self, b.world
-	if p.Budget <= b.store.sold || b.cfg.Stores == nil || b.cfg.Travel == nil || now.Before(b.store.nextAt) {
+	if b.persona.Store.Budget <= b.store.sold || now.Before(b.store.nextAt) || !b.tradeReady(now) {
+		return false
+	}
+	for _, it := range b.world.Inventory.Items {
+		if b.storeSells(it) {
+			return true
+		}
+	}
+	return false
+}
+
+// tradeReady holds the state checks a store opening and the valuables
+// errands share (docs/valuables/round.md "Start"): a registry and travel
+// map, alive, out of combat and PvP flag, not casting, still, no trade
+// prompt or window, no shop, trip, newbie, class, dyes or train visit, and
+// not called away.
+func (b *Brain) tradeReady(now time.Time) bool {
+	s, w := &b.world.Self, b.world
+	if b.cfg.Stores == nil || b.cfg.Travel == nil {
 		return false
 	}
 	if s.Dead || s.InCombat || s.PvPFlag != 0 || s.Casting(now) || !b.castAt.IsZero() || s.Moving(now) {
@@ -367,15 +384,7 @@ func (b *Brain) storeReady(now time.Time) bool {
 	if b.shop.v.active() || b.trip.v.active() || b.newbie.v.active() || b.class.v.active() || b.dyes.v.active() || b.train.npc != 0 {
 		return false
 	}
-	if b.called() {
-		return false
-	}
-	for _, it := range w.Inventory.Items {
-		if b.storeSells(it) {
-			return true
-		}
-	}
-	return false
+	return !b.called()
 }
 
 // storeSells reports whether the bot's store sells it: loot (storeLoot)
