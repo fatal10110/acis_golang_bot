@@ -30,6 +30,11 @@ func TestPlanNeedsHealer(t *testing.T) {
 		c.Heals = heals
 		return c
 	}
+	prophet := func(heals bool) Candidate {
+		c := cand("Prop", PresetSupport, classProphet, 40, 100)
+		c.Heals = heals
+		return c
+	}
 	mystic := func(level int32, heals bool) Candidate {
 		c := healer("Myst", level, 100)
 		c.Heals = heals
@@ -48,6 +53,8 @@ func TestPlanNeedsHealer(t *testing.T) {
 		{"orc shaman 20", shaman(20, true), 20, true},
 		{"orc shaman 20 no heals", shaman(20, false), 20, false},
 		{"cleric 20", cand("Cler", PresetSupport, classCleric, 20, 100), 20, true},
+		{"prophet 40", prophet(true), 40, true},
+		{"prophet 40 no heals", prophet(false), 40, false},
 		{"elven oracle 20", cand("Orac", PresetSupport, classElvenOracle, 20, 100), 20, true},
 		{"shillien oracle 20", cand("Shil", PresetSupport, classShillienOracle, 20, 100), 20, true},
 		{"healer set farmer", cand("Myst", PresetFarmer, classHumanMystic, 10, 100), 10, false},
