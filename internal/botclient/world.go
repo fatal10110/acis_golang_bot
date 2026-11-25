@@ -720,7 +720,15 @@ func (w *World) Apply(ev Event, now time.Time) {
 			if t != nil {
 				dest = short(from, t.at(now), e.Distance)
 			}
-			if e.ObjectID == w.Self.ObjectID {
+			switch {
+			case e.ObjectID == w.Self.ObjectID && t != nil && e.Distance > 0 && short(e.Origin, t.at(now), e.Distance) == e.Origin:
+				// In reach already, the server faces the target from where it
+				// holds the bot (targeting.go thinkInteract, the player's
+				// current location): the bot stands there, not on its own
+				// estimate of a pawn approach's end, so its next segment
+				// starts where the server's walk does (#434).
+				w.Self.move = w.Self.moved(now, e.Origin, e.Origin)
+			case e.ObjectID == w.Self.ObjectID:
 				// The bot's own approach keeps its swim and arrival model.
 				// Stopping short of a creature, the server's timer runs one
 				// update past the one that ends the walk (creature.go
@@ -730,7 +738,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 					mv.self.end = mv.self.end.Add(positionTick)
 				}
 				w.Self.move = mv
-			} else {
+			default:
 				*m = motion{from: from, to: dest, start: now, speed: w.speedOf(e.ObjectID)}
 			}
 		}
