@@ -115,7 +115,8 @@ type harness struct {
 	abandon chan struct{}
 }
 
-func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline int) *harness {
+// startSupervisor starts a Supervisor over reg; each opt edits its Config.
+func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline int, opts ...func(*Config)) *harness {
 	t.Helper()
 	h := &harness{
 		reg:     reg,
@@ -126,7 +127,7 @@ func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline in
 		done:    make(chan struct{}),
 		abandon: make(chan struct{}),
 	}
-	sup, err := New(Config{
+	cfg := Config{
 		Registry:  reg,
 		Run:       h.run,
 		Gate:      h.gate,
@@ -140,7 +141,11 @@ func startSupervisor(t *testing.T, reg *Registry, clock *fakeClock, maxOnline in
 			return nil
 		},
 		Rand: rand.New(rand.NewPCG(1, 2)),
-	})
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	sup, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
