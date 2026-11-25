@@ -50,7 +50,7 @@ func TestLiveWeightOverload(t *testing.T) {
 	// A chain a run left behind goes with the strip.
 	strip(t, ctx, tg, gm, with(items, anguishChain), account, &botclient.HumanFighter, stripEnd{level: 1}, squiresSword, squiresShirt, squiresPants)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
-		warriorGear(p)
+		fighterGear(p)
 		// Neither buys nor sells: the chains can only go by the drop.
 		p.Gear.Buy, p.Shop = false, botclient.ShopPolicy{}
 	})

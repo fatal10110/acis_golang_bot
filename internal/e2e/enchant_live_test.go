@@ -54,7 +54,7 @@ func TestLiveEnchantSafe(t *testing.T) {
 	strip(t, ctx, tg, gm, with(items, enchantWeaponD, soulshotD), account, &botclient.HumanFighter,
 		stripEnd{level: 20, carry: map[int32]int32{saber: 1, soulshotD: 400}}, squiresShirt, squiresPants)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
-		warriorGear(p)
+		fighterGear(p)
 		errandsOff(p)
 		// Wearing only what it is given, never buying or selling.
 		p.Shop = botclient.ShopPolicy{}

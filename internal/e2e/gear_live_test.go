@@ -20,24 +20,29 @@ const gearBound = 5 * time.Minute
 // logs in (stripEnd).
 const gearAdena int32 = 30000
 
-// warriorGear pins the persona's class table to the entry a warrior
-// (class 1) plays by default, the build's: swords, blunts and their
-// two-handed kinds, with a shield. The scenario's character is a human
-// fighter (class 0): the GM changes no class, and the table is a persona
-// default (D6). The default persona holds no table of its own since the
-// builds (S4, #323): the warrior's build gives the entry.
-func warriorGear(p *botclient.Persona) {
-	g := botclient.CompileBuild(0, 1, 20, botclient.RoleDamage, botclient.BranchChoice{}).Kit.Gear
-	if len(g.Weapons) == 0 {
-		panic("the warrior's build wields nothing")
-	}
-	p.Gear.Classes = []botclient.GearClass{g}
+// fighterGear pins the persona's class table to one entry for every class:
+// swords, blunts and their two-handed kinds in heavy armor, with a shield,
+// weighed as fighters weigh gear (the default table's last entry,
+// botclient defaultGearClasses). The scenarios' characters are human
+// fighters (class 0): the GM changes no class, and the table is a persona
+// default (D6). The entry is spelled out rather than taken from a build:
+// the warrior's build gave it until the Warrior got a row of its own
+// (#443), a two-handed blunt or a polearm with no shield for class 1 only,
+// which left a class 0 bot with no entry, no shield and no weapon type to
+// wear (#455).
+func fighterGear(p *botclient.Persona) {
+	p.Gear.Classes = []botclient.GearClass{{
+		Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"},
+		Armor:   "HEAVY",
+		Shield:  true,
+		Weights: botclient.StatWeights{PAtk: 1, PAtkSpd: 1, PDef: 1, MDef: 1, SDef: 0.05},
+	}}
 }
 
-// TestLiveGearWear runs a fighter that wears the warrior's gear in the
-// Talking Island village, stripped to its starting set (#79): given a
-// shield, a necklace and two Magic Rings, it wears all four, the rings on
-// both fingers; given a Ring of Knowledge, it takes a Magic Ring off and
+// TestLiveGearWear runs a fighter that wears a sword and shield fighter's
+// gear (fighterGear) in the Talking Island village, stripped to its
+// starting set (#79): given a shield, a necklace and two Magic Rings, it
+// wears all four, the rings on both fingers; given a Ring of Knowledge, it takes a Magic Ring off and
 // wears that ring; given a two-handed sword, it wears it and the server
 // takes the shield off.
 func TestLiveGearWear(t *testing.T) {
@@ -50,7 +55,7 @@ func TestLiveGearWear(t *testing.T) {
 	account, _ := tg.Account("gw", 1)
 	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, stripEnd{}, squiresSword, squiresShirt, squiresPants)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
-		warriorGear(p)
+		fighterGear(p)
 		// Wearing only: what it is given, never what it could buy.
 		p.Gear.Buy, p.Shop = false, botclient.ShopPolicy{}
 	})
