@@ -21,9 +21,12 @@ type PartyClaims struct {
 }
 
 // partyClaim is the bot holding a leader, and when it last claimed it.
+// pending marks a claim taken on a player's invite me, before the bot's
+// own withdrawal (claimPending).
 type partyClaim struct {
-	bot int32
-	at  time.Time
+	bot     int32
+	at      time.Time
+	pending bool
 }
 
 // NewPartyClaims returns an empty claim table.
@@ -59,16 +62,44 @@ func (c *PartyClaims) Held() int {
 // held. It reports false, taking nothing, when another bot holds leader; a
 // bot claiming the leader it holds keeps it, from now.
 func (c *PartyClaims) claim(leader string, bot int32, now time.Time) bool {
+	return c.take(leader, partyClaim{bot: bot, at: now})
+}
+
+// claimPending claims leader, a player whose invite me the bot obeys, for
+// bot at now as claim does, marked pending: the window that answers the
+// bot's own withdrawal keeps it (settle), so a second member hearing the
+// same player stays.
+func (c *PartyClaims) claimPending(leader string, bot int32, now time.Time) bool {
+	return c.take(leader, partyClaim{bot: bot, at: now, pending: true})
+}
+
+// take gives leader to h.bot unless another bot holds it.
+func (c *PartyClaims) take(leader string, h partyClaim) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if h, ok := c.byLeader[leader]; ok && h.bot != bot {
+	if o, ok := c.byLeader[leader]; ok && o.bot != h.bot {
 		return false
 	}
-	if old, ok := c.byBot[bot]; ok && old != leader {
+	if old, ok := c.byBot[h.bot]; ok && old != leader {
 		delete(c.byLeader, old)
 	}
-	c.byLeader[leader] = partyClaim{bot: bot, at: now}
-	c.byBot[bot] = leader
+	c.byLeader[leader] = h
+	c.byBot[h.bot] = leader
+	return true
+}
+
+// settle drops the pending mark of the claim bot holds and reports whether
+// there was one.
+func (c *PartyClaims) settle(bot int32) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	leader, ok := c.byBot[bot]
+	if !ok || !c.byLeader[leader].pending {
+		return false
+	}
+	h := c.byLeader[leader]
+	h.pending = false
+	c.byLeader[leader] = h
 	return true
 }
 
@@ -112,12 +143,19 @@ func (b *Brain) tidyPartyClaim(now time.Time) {
 // left its party, the party ended, or its leader changed. The server sends a
 // leader change as PartySmallWindowDeleteAll then PartySmallWindowAll to
 // every member (party Registry.changeLeader), so a claim never follows a new
-// leader: the bot stays in the party unclaimed, and the new leader is free
-// for another bot.
+// leader: the bot stays in the party unclaimed unless its handover step
+// claims the new leader (handoverToPlayer). A pending claim (claimPending)
+// is kept, its mark dropped: the window answers the bot's own withdrawal
+// (party/party.go remove), and the claim lapses in tidyPartyClaim unless
+// the player's invitation comes.
 func (b *Brain) partyClaimEvent(ev Event) {
-	if _, ok := ev.(PartySmallWindowDeleteAll); ok {
-		b.releasePartyClaim()
+	if _, ok := ev.(PartySmallWindowDeleteAll); !ok {
+		return
 	}
+	if c := b.cfg.PartyClaims; c != nil && c.settle(b.world.Self.ObjectID) {
+		return
+	}
+	b.releasePartyClaim()
 }
 
 // releasePartyClaim gives back the leader the bot holds, if any: when its

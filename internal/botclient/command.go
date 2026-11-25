@@ -17,9 +17,10 @@ const chatTell int32 = 2
 // echoPrefix starts the name of the echo of the bot's own whisper.
 const echoPrefix = "->"
 
-// inviteMeText is what the bot whispers back to a GM's "invite me": the bot
-// invites only the bots its lead slot lists, never a GM, so the GM stays
-// its party's leader.
+// inviteMeText is what the bot whispers back to a GM's "invite me", and a
+// Support member to a player's (playerInviteMe): the bot invites only the
+// bots its lead slot lists and players who whisper join, never the GM, so
+// the GM stays its party's leader.
 const inviteMeText = "invite me"
 
 // Replies to a "go" the bot cannot carry out.
@@ -43,6 +44,9 @@ const (
 	// cmdCraft is the craft order of a clan crafter (docs/crafting.md
 	// section 8): the clan leader may give it too, and in clan chat.
 	cmdCraft
+	// cmdJoin is any player's ask to join a bot party (D28,
+	// docs/parties/players.md): it never reaches the authority.
+	cmdJoin
 )
 
 // command is a parsed whispered command; spot is the argument of "go",
@@ -55,8 +59,8 @@ type command struct {
 }
 
 // parseCommand reads text as a command: one of "follow", "assist", "stay",
-// "go <spot>", "invite me", "leave", "logout" and "craft <item name>
-// [count]", in any case, with any spacing around and between the words.
+// "go <spot>", "invite me", "leave", "logout", "join" and "craft <item
+// name> [count]", in any case, with any spacing around and between the words.
 // Any other text is no command.
 func parseCommand(text string) (command, bool) {
 	f := strings.Fields(text)
@@ -79,6 +83,8 @@ func parseCommand(text string) (command, bool) {
 			return command{kind: cmdLeave}, true
 		case "logout":
 			return command{kind: cmdLogout}, true
+		case "join":
+			return command{kind: cmdJoin}, true
 		}
 		return command{}, false
 	}
@@ -140,8 +146,10 @@ type orders struct {
 // other whisper may get the valuables responder's reply (whisperHeard) or
 // a chat reply (chatHeard), a command never does,
 // whoever sent it. A craft order, by whisper or in clan chat, goes to
-// heardCraft: the clan leader's needs no authority. The sender is the
-// line's object id, which the server fills from the speaker.
+// heardCraft: the clan leader's needs no authority. A join goes to
+// heardJoin and never to the authority; a bot with no party slot takes it
+// as chat. The sender is the line's object id, which the server fills
+// from the speaker.
 func (b *Brain) heard(e CreatureSay, now time.Time) {
 	if e.ObjectID == 0 || e.ObjectID == b.world.Self.ObjectID || strings.HasPrefix(e.Name, echoPrefix) {
 		return
@@ -155,6 +163,9 @@ func (b *Brain) heard(e CreatureSay, now time.Time) {
 		return
 	}
 	cmd, ok := parseCommand(e.Text)
+	if ok && cmd.kind == cmdJoin && !b.slotted() {
+		ok = false
+	}
 	if !ok {
 		if !b.whisperHeard(e, now) {
 			b.chatHeard(e, now)
@@ -162,17 +173,26 @@ func (b *Brain) heard(e CreatureSay, now time.Time) {
 		return
 	}
 	t := tell{sender: e.ObjectID, name: e.Name, cmd: cmd}
-	if cmd.kind == cmdCraft {
+	switch cmd.kind {
+	case cmdCraft:
 		b.heardCraft(t, now)
+		return
+	case cmdJoin:
+		b.heardJoin(t, now)
 		return
 	}
 	b.askAuthority(t, now)
 }
 
 // askAuthority asks the authority about t at now and obeys an answer it
-// gives at once; a database check's answer comes later (verdicts).
+// gives at once; a database check's answer comes later (verdicts). With no
+// authority every command is refused, so an invite me takes the player
+// path (playerInviteMe).
 func (b *Brain) askAuthority(t tell, now time.Time) {
 	if b.cfg.Authority == nil {
+		if t.cmd.kind == cmdInviteMe {
+			b.playerInviteMe(t, now)
+		}
 		return
 	}
 	if v, done := b.cfg.Authority.ask(t, now, b.verdicts); done {
@@ -180,9 +200,14 @@ func (b *Brain) askAuthority(t tell, now time.Time) {
 	}
 }
 
-// obey carries out an authorized command at now and reacts to it.
+// obey carries out an authorized command at now and reacts to it. A
+// refused one is dropped, but a refused invite me takes the player path
+// (playerInviteMe): a failed check counts as refused.
 func (b *Brain) obey(v verdict, now time.Time) {
 	if !v.ok {
+		if v.cmd.kind == cmdInviteMe {
+			b.playerInviteMe(v.tell, now)
+		}
 		return
 	}
 	o := &b.orders
