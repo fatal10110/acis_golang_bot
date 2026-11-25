@@ -228,5 +228,6 @@ func (b *Brain) adTurn(now time.Time) (Action, bool) {
 	}
 	r.ads++
 	r.adAt = now
+	b.metrics.ValuablesAd()
 	return Action{kind: actSay, payload: encodeSay2(text, chatTrade)}, true
 }

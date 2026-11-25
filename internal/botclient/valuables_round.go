@@ -71,7 +71,7 @@ func (b *Brain) roundReady(now time.Time) bool {
 // none, nor released ones (docs/valuables/ledger.md "Released entries").
 func (b *Brain) roundDue(now time.Time) bool {
 	v, p := b.cfg.valuables, b.persona.Valuables
-	if p == (ValuablePolicy{}) || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
+	if !p.Enabled || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
 		return false
 	}
 	if !v.lastStart.IsZero() && now.Sub(v.lastStart) < p.RoundGap || b.valuablesLeft() <= 0 {
@@ -149,7 +149,7 @@ func (b *Brain) valuableRows(released bool) []WarehouseRow {
 // released ones only once the valuables budget is spent (the off-round
 // deposit then takes them); none with the policy disabled.
 func (b *Brain) valuableFees() int64 {
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil {
 		return 0
 	}
 	rows := b.keptRows()
@@ -351,7 +351,7 @@ func (b *Brain) countRound() {
 func (b *Brain) ranRound() {
 	b.countRound()
 	if m := b.cfg.Travel; m != nil {
-		b.cfg.valuables.capEntries(b.persona.Valuables, m.stackable)
+		b.metrics.ValuablesReleased(b.cfg.valuables.capEntries(b.persona.Valuables, m.stackable))
 	}
 }
 
@@ -468,7 +468,7 @@ func (b *Brain) endStaleRound(now time.Time) {
 	}
 	if v.capDue && b.wh.private.Known && b.look.phase == lookIdle && b.cfg.Travel != nil {
 		v.capDue = false
-		v.capEntries(b.persona.Valuables, b.cfg.Travel.stackable)
+		b.metrics.ValuablesReleased(v.capEntries(b.persona.Valuables, b.cfg.Travel.stackable))
 	}
 }
 

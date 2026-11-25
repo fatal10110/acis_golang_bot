@@ -174,8 +174,9 @@ type Persona struct {
 	Gear GearPolicy
 	// Warehouse is the clan warehouse errand (rule 9 errand "warehouse").
 	Warehouse WarehousePolicy
-	// Valuables is how a merchant tells a valuable among its loot
-	// (docs/valuables); the zero ValuablePolicy, every preset's, finds none.
+	// Valuables is how a merchant tells a valuable among its loot and
+	// sells it (docs/valuables); the zero ValuablePolicy, every preset's
+	// but the merchant's, finds none.
 	Valuables ValuablePolicy
 	// Recipes is recipe learning (rule 9 errand "recipe").
 	Recipes RecipePolicy

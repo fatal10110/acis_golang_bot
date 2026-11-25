@@ -131,8 +131,14 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if err := o.geo.validate(o.datapack); err != nil {
 		return o, err
 	}
-	if p, _ := findPreset(o.persona); !p.store && flagSet(fs, "store-budget") {
+	p, _ := findPreset(o.persona)
+	if !p.store && flagSet(fs, "store-budget") {
 		return o, fmt.Errorf("-store-budget applies to -persona merchant, not %s", o.persona)
+	}
+	for _, name := range valuablesFlags {
+		if !p.persona().Valuables.Enabled && flagSet(fs, name) {
+			return o, fmt.Errorf("-%s applies to -persona merchant, not %s", name, o.persona)
+		}
 	}
 	for _, n := range strings.Split(*inviters, ",") {
 		if n = strings.TrimSpace(n); n != "" {
@@ -202,7 +208,10 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Log:        log,
 	}
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
-	sh := shared{claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters}
+	sh := shared{
+		claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters,
+		ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
+	}
 	// The navigation opens before the spots: the registry drops the spots in
 	// water (loadSpots).
 	if o.geo.set() {

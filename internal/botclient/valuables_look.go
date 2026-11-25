@@ -135,7 +135,7 @@ func (b *Brain) lookTurn(now time.Time) (Action, bool) {
 	l, e := &b.look, &b.wh
 	switch l.phase {
 	case lookIdle:
-		if b.persona.Valuables == (ValuablePolicy{}) || e.private.Known || !b.lookReady(now) {
+		if !b.persona.Valuables.Enabled || e.private.Known || !b.lookReady(now) {
 			return Action{}, false
 		}
 		l.anchor = b.world.Self.Position(now)

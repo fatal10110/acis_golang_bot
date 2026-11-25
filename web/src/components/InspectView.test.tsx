@@ -83,6 +83,30 @@ describe("InspectView", () => {
     expect(row("Run speed")).toBe("126");
   });
 
+  it("shows a merchant's held valuables", () => {
+    render(
+      <InspectView
+        inspection={{
+          ...fresh,
+          valuables: [
+            { id: 6579, name: "Arcana Mace", enchant: 4, place: "carried", carried: 1, stored: 0, rounds: 1, ask: 900000 },
+            { id: 1888, name: "Synthetic Cokes", place: "carried, stored", carried: 20, stored: 30, rounds: 3, ask: 4000, released: true },
+            { id: 4039, name: "Mold Glue", place: "stored", carried: 0, stored: 12, rounds: 0, ask: 2500 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Valuables")).toBeInTheDocument();
+    expect(row("+4 Arcana Mace")).toBe("1 carried, 1 unsold round, ask 900000");
+    expect(row("Synthetic Cokes")).toBe("20 carried, 30 stored, 3 unsold rounds, ask 4000, released to the store");
+    expect(row("Mold Glue")).toBe("12 stored, 0 unsold rounds, ask 2500");
+  });
+
+  it("shows no valuables section for a bot holding none", () => {
+    render(<InspectView inspection={fresh} />);
+    expect(screen.queryByText("Valuables")).not.toBeInTheDocument();
+  });
+
   it("shows an offline and an unresponsive bot", () => {
     const { rerender } = render(<InspectView inspection={{ state: "offline" }} />);
     expect(screen.getByText(/The bot is offline/)).toBeInTheDocument();

@@ -127,7 +127,7 @@ func TestValuablesRoundStart(t *testing.T) {
 // testRoundNone: no round while a start condition fails; one once it
 // holds where it is a wait.
 func testRoundNone(t *testing.T) {
-	p := defaultValuablePolicy()
+	p := DefaultValuablePolicy()
 	for _, tt := range []struct {
 		name  string
 		setup func(b *Brain)
@@ -455,7 +455,7 @@ func TestValuablesGrace(t *testing.T) {
 			after  time.Duration
 		}{
 			{"leaves sight", []Event{DeleteObject{ObjectID: pcID}}, 30 * time.Second},
-			{"past Grace", nil, defaultValuablePolicy().Grace},
+			{"past Grace", nil, DefaultValuablePolicy().Grace},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0))
@@ -540,7 +540,7 @@ func TestValuablesGrace(t *testing.T) {
 		wantTurn(t, "answered: the deposit", rule, a, "valuables", actSelect, nil)
 	})
 	t.Run("no request in the extension's last 15 s", func(t *testing.T) {
-		grace := defaultValuablePolicy().Grace
+		grace := DefaultValuablePolicy().Grace
 		for _, tt := range []struct {
 			name  string
 			after time.Duration

@@ -157,7 +157,7 @@ func (b *Brain) answering(now time.Time) bool {
 // DelayMin-DelayMax later, none to a marked name or past the round's caps.
 func (b *Brain) whisperHeard(e CreatureSay, now time.Time) bool {
 	v := b.cfg.valuables
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil || v == nil {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil || v == nil {
 		return false
 	}
 	switch {
@@ -205,6 +205,7 @@ func (b *Brain) whisperSent(o whisperOut) {
 	b.whispers.drop(o.to)
 	b.whispers.out = whisperOut{}
 	t.replies++
+	b.metrics.ValuablesReply()
 	if t.to == nil {
 		t.to = make(map[int32]int)
 	}

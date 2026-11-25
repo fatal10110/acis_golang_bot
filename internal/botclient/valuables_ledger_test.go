@@ -22,7 +22,7 @@ const (
 func newLedgerBrain(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	b := newStoreBrain(t, 1000000, items...)
-	b.persona.Valuables = defaultValuablePolicy()
+	b.persona.Valuables = DefaultValuablePolicy()
 	m := b.cfg.Travel
 	m.prices = map[int32]int32{ledgerSword: 136000, ledgerStaff: 644000, ledgerRecipe: 366000, ledgerScroll: 50000}
 	m.supply = map[int32]itemSupply{
@@ -154,7 +154,7 @@ func TestValuablesLedger(t *testing.T) {
 				}
 			})
 		}
-		p := defaultValuablePolicy()
+		p := DefaultValuablePolicy()
 		if got := p.lowered(170000, 136000, 136000); got != 156400 {
 			t.Errorf("lowered once = %d, want 156400: 10 points of the reference price", got)
 		}

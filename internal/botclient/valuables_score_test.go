@@ -266,7 +266,7 @@ func TestValueScore(t *testing.T) {
 					tt.edit(dp)
 				}
 			})
-			sc := m.valueScore(defaultValuablePolicy(), tt.id, tt.enchant)
+			sc := m.valueScore(DefaultValuablePolicy(), tt.id, tt.enchant)
 			if math.Abs(sc.r-tt.wantR) > 1e-9 || sc.w != tt.wantW {
 				t.Fatalf("R %v W %v, want R %v W %v", sc.r, sc.w, tt.wantR, tt.wantW)
 			}
@@ -283,11 +283,13 @@ func TestValueScoreThresholds(t *testing.T) {
 		dp.Prices[cheap], dp.Prices[rich] = 9999, 60000
 	})
 	// scoreLoot: ref 50000, R 1.22 at CommonSupply 100: V 116700.
-	def := defaultValuablePolicy()
+	def := DefaultValuablePolicy()
 	scarce := def
 	scarce.CommonSupply = 10 // R 0.22: V 58400
 	picky := def
 	picky.ValueMin = 200000
+	off := def
+	off.Enabled = false
 	tests := []struct {
 		name string
 		p    ValuablePolicy
@@ -296,10 +298,11 @@ func TestValueScoreThresholds(t *testing.T) {
 	}{
 		{name: "both thresholds met", p: def, id: scoreLoot, want: true},
 		{name: "zero policy finds none", p: ValuablePolicy{}, id: scoreLoot},
+		{name: "defaults not enabled find none", p: off, id: scoreLoot},
 		{name: "unpriced none", p: def, id: 4242},
-		{name: "under PriceFloor", p: ValuablePolicy{PriceFloor: 10000, CommonSupply: 100, RMax: 4, ValueMin: 1}, id: cheap},
+		{name: "under PriceFloor", p: ValuablePolicy{Enabled: true, PriceFloor: 10000, CommonSupply: 100, RMax: 4, ValueMin: 1}, id: cheap},
 		{name: "no source under ValueMin", p: def, id: cheap},
-		{name: "no source over ValueMin by price", p: ValuablePolicy{PriceFloor: 10000, ValueMin: 60000, CommonSupply: 100, RMax: 4}, id: rich, want: true},
+		{name: "no source over ValueMin by price", p: ValuablePolicy{Enabled: true, PriceFloor: 10000, ValueMin: 60000, CommonSupply: 100, RMax: 4}, id: rich, want: true},
 		{name: "other persona's CommonSupply", p: scarce, id: scoreLoot},
 		{name: "other persona's ValueMin", p: picky, id: scoreLoot},
 	}
