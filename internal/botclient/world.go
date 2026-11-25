@@ -20,9 +20,9 @@ const snapDrift = 200
 type World struct {
 	Self SelfState
 	// gen counts the events applied but the moves and the status and looks
-	// of other objects, which change nothing of the bot's own: what a
-	// cache of values derived from the bot's character is valid for
-	// (Brain.valuer).
+	// of other objects, which change nothing of the bot's own: a cache of
+	// values derived from the bot's character that checked its inputs at
+	// one count needs no check again until the next (Brain.valuer).
 	gen uint64
 	// Objects are the objects in sight by object id, the bot's own
 	// character excluded.

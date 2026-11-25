@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"cmp"
+	"maps"
 	"slices"
 
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
@@ -19,14 +20,18 @@ const statTieBreak = 1e-6
 // 5): the bot's class template, level, learned passives and dyes, its
 // build's role, the reference monster of its level (indexRefMobs) as the
 // target, and the calibration of the model against the stats UserInfo
-// reports for what it wears now. It is valid for the world's events
-// applied when it was made (World.gen) and the bot's class, level and
-// role; values holds the value of each arrangement asked for.
+// reports for what it wears now. It is valid while its inputs (in, skills)
+// are the bot's; gen is the world's event count (World.gen) they were last
+// found unchanged at, so no event since leaves them unchanged without a
+// check. values holds the value of each arrangement asked for.
 type gearModel struct {
-	gen   uint64
-	key   buildKey
-	build charmodel.Build
-	role  charmodel.Role
+	gen uint64
+	in  gearInputs
+	// skills are the bot's skills the model was made with: its passives
+	// (passiveFuncs) and the heal or attack it values gear for (gearRole).
+	skills map[int32]KnownSkill
+	build  charmodel.Build
+	role   charmodel.Role
 	// tank values survival alone (gearRole).
 	tank   bool
 	target charmodel.Profile
@@ -35,30 +40,70 @@ type gearModel struct {
 	// value gains are fractions of it, so they compare across roles.
 	norm   float64
 	values map[gearValueKey]float64
+	// worn and funcs are profile's buffers for the gear and stat functions
+	// of the arrangement it models, reused from one call to the next.
+	worn  []datapack.Item
+	funcs []datapack.StatFunc
 }
 
 // gearValueKey is an arrangement the model valued: the template and
 // enchant level worn in each slot, whether a complete set's skills count,
 // and the dyes.
 type gearValueKey struct {
-	worn [slotCount]struct{ id, enchant int32 }
+	worn wornKey
 	sets bool
 	dyes charmodel.Attrs
+}
+
+// wornKey is the template and enchant level worn in each slot, what the
+// model sees of an arrangement (gearModel.profile).
+type wornKey [slotCount]struct{ id, enchant int32 }
+
+// keyOf is the wornKey of arrangement w.
+func keyOf(w *worn) wornKey {
+	var k wornKey
+	for s, it := range w {
+		if it.TemplateID != 0 {
+			k[s].id, k[s].enchant = it.TemplateID, int32(it.Enchant)
+		}
+	}
+	return k
+}
+
+// gearInputs are the inputs of the gear model but the skills
+// (gearModel.skills): the bot's class, level and role, what it wears now,
+// the stats UserInfo and StatusUpdate report (the calibration's), and its
+// dyes' sum.
+type gearInputs struct {
+	key      buildKey
+	worn     wornKey
+	reported charmodel.Profile
+	dyes     charmodel.Attrs
 }
 
 // valuer is the bot's gear model now, nil where the model cannot value
 // gear: without a travel map, the bot's class template or a reference
 // monster for its level. Then every score is the StatWeights score alone
 // and sets take GearPolicy.SetBonus, as before the model.
+//
+// The model, and the values it holds, last while its inputs do: an event
+// that changes none of them (a move, an HP or MP update, a ground item, a
+// chat line) keeps it.
 func (b *Brain) valuer() *gearModel {
-	m, s := b.cfg.Travel, &b.world.Self
+	v, m, s := b.gearVal, b.cfg.Travel, &b.world.Self
 	key := buildKey{s.ClassID, s.Level, b.persona.Role}
-	if v := b.gearVal; v != nil && v.gen == b.world.gen && v.key == key {
+	if v != nil && v.gen == b.world.gen && v.in.key == key {
 		return v
 	}
 	b.gearVal = nil
 	if m == nil {
 		return nil
+	}
+	now := b.rawWorn()
+	in := gearInputs{key: key, worn: keyOf(&now), reported: b.reported(), dyes: b.wornDyes()}
+	if v != nil && v.in == in && maps.Equal(v.skills, b.world.Skills) {
+		v.gen, b.gearVal = b.world.gen, v
+		return v
 	}
 	cl, ok := m.classes[s.ClassID]
 	if !ok {
@@ -68,11 +113,10 @@ func (b *Brain) valuer() *gearModel {
 	if !ok {
 		return nil
 	}
-	v := &gearModel{gen: b.world.gen, key: key, target: target, norm: 1, values: make(map[gearValueKey]float64)}
+	v = &gearModel{gen: b.world.gen, in: in, skills: maps.Clone(b.world.Skills), target: target, norm: 1, values: make(map[gearValueKey]float64)}
 	v.role, v.tank = b.gearRole()
-	v.build = charmodel.Build{Class: cl, Level: int(s.Level), Mage: charmodel.MageClass(m.classes, s.ClassID), Funcs: b.passiveFuncs(), Dyes: b.wornDyes()}
-	now := b.rawWorn()
-	v.calib = charmodel.Calibrate(v.profile(m, &now, true, v.build.Dyes), b.reported())
+	v.build = charmodel.Build{Class: cl, Level: int(s.Level), Mage: charmodel.MageClass(m.classes, s.ClassID), Funcs: b.passiveFuncs(), Dyes: in.dyes}
+	v.calib = charmodel.Calibrate(v.profile(m, &now, true, v.build.Dyes), in.reported)
 	if n := v.value(m, &now, true, v.build.Dyes); n > 0 {
 		v.norm = n
 	}
@@ -85,26 +129,25 @@ func (b *Brain) valuer() *gearModel {
 func (v *gearModel) profile(m *TravelMap, w *worn, sets bool, dyes charmodel.Attrs) charmodel.Profile {
 	bd := v.build
 	bd.Dyes = dyes
-	bd.Worn = nil
+	v.worn = v.worn[:0]
 	for _, it := range w {
 		if g, ok := m.gear[it.TemplateID]; ok && it.TemplateID != 0 {
-			bd.Worn = append(bd.Worn, enchantedTmpl(g.tmpl, int(it.Enchant)))
+			v.worn = append(v.worn, enchantedTmpl(g.tmpl, int(it.Enchant)))
 		}
 	}
+	bd.Worn = v.worn
 	if sets {
-		bd.Funcs = append(slices.Clip(bd.Funcs), m.setFuncs(w)...)
+		if f := m.setFuncs(w); len(f) > 0 {
+			v.funcs = append(append(v.funcs[:0], bd.Funcs...), f...)
+			bd.Funcs = v.funcs
+		}
 	}
 	return v.calib.Apply(charmodel.Model(bd))
 }
 
 // value is the model's value of arrangement w with dyes (charmodel.Value).
 func (v *gearModel) value(m *TravelMap, w *worn, sets bool, dyes charmodel.Attrs) float64 {
-	k := gearValueKey{sets: sets, dyes: dyes}
-	for s, it := range w {
-		if it.TemplateID != 0 {
-			k.worn[s].id, k.worn[s].enchant = it.TemplateID, int32(it.Enchant)
-		}
-	}
+	k := gearValueKey{worn: keyOf(w), sets: sets, dyes: dyes}
 	if x, ok := v.values[k]; ok {
 		return x
 	}
