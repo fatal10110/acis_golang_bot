@@ -41,8 +41,10 @@ const (
 // (rule "store"). Every value is a configurable default (D6); the store
 // registry (BrainConfig.Stores) holds the process-wide limits.
 type StorePolicy struct {
-	// Budget is the adena the bot's store sales may bring in per session;
-	// a store lists no more than what is left of it. 0 opens no store.
+	// Budget is the adena the bot's store sales of loot may bring in per
+	// session; a store lists no more loot than what is left of it. 0 lists
+	// no loot: a store opens then only for released valuables
+	// (docs/valuables/release.md), under the valuables budget.
 	Budget int64
 	// Title is the store title; empty, or longer than storeTitleMax UTF-16
 	// units, sends none.
@@ -170,6 +172,13 @@ func decodePrivateStoreMsgSell(r *wire.Reader) Event {
 // object, how many and the unit price.
 type storeRow struct{ object, count, price int32 }
 
+// listedValuable is a released valuable's row of a store list and its
+// ledger entry.
+type listedValuable struct {
+	row storeRow
+	key valuableKey
+}
+
 // encodeRequestPrivateStoreManageSell opens the sell store manage window;
 // no body (clientpackets/privatestore.go).
 func encodeRequestPrivateStoreManageSell() []byte {
@@ -260,6 +269,9 @@ type storeState struct {
 	// prices are the unit prices of the loot templates the store sells,
 	// from the manage lists; trades sell at them too.
 	prices map[int32]int32
+	// valuables are the released valuable rows the last list carried, by
+	// entry: their sales count in the valuables budget (countSold).
+	valuables []listedValuable
 	// nextAt is when the bot may start the next opening; stoodAt is its
 	// last stand-up.
 	nextAt, stoodAt time.Time
@@ -352,16 +364,19 @@ func (b *Brain) startStore(now time.Time) (Action, bool) {
 	return Action{kind: actStoreManage, payload: encodeRequestPrivateStoreManageSell()}, true
 }
 
-// storeReady reports whether the bot may start an opening at now: budget
-// left, no reopen wait, tradeReady, loot it sells, and neither its own
+// storeReady reports whether the bot may start an opening at now: no
+// reopen wait, tradeReady, loot it sells with the store budget left or a
+// released valuable with the valuables budget left
+// (docs/valuables/release.md "Release to the store"), and neither its own
 // trade request awaiting an answer (ownTradeRequest) nor a pending
-// valuables round holding the store (storeHeld).
+// valuables round or release withdrawal holding the store (storeHeld).
 func (b *Brain) storeReady(now time.Time) bool {
-	if b.persona.Store.Budget <= b.store.sold || now.Before(b.store.nextAt) || !b.tradeReady(now) {
+	if now.Before(b.store.nextAt) || !b.tradeReady(now) {
 		return false
 	}
+	loot, valuables := b.persona.Store.Budget > b.store.sold, b.valuablesLeft() > 0
 	for _, it := range b.world.Inventory.Items {
-		if b.storeSells(it) {
+		if b.releasedValuable(it) && valuables || loot && b.storeLoot(it) && b.storeSells(it) {
 			return !b.ownTradeRequest(now) && !b.storeHeld(now)
 		}
 	}
@@ -390,12 +405,15 @@ func (b *Brain) tradeReady(now time.Time) bool {
 	return !b.called()
 }
 
-// storeSells reports whether the bot's store sells it: loot (storeLoot)
-// with a store price, the one its store's manage lists showed, else the one
-// of the travel map's reference price, the test storeRows applies. An
-// opening with no such loot lists nothing: its manage list and title go out
-// for no store.
+// storeSells reports whether the bot's store sells it: a released valuable
+// (releasedValuable), or loot (storeLoot) with a store price, the one its
+// store's manage lists showed, else the one of the travel map's reference
+// price, the test storeRows applies. An opening with no such item lists
+// nothing: its manage list and title go out for no store.
 func (b *Brain) storeSells(it Item) bool {
+	if b.releasedValuable(it) {
+		return true
+	}
 	if !b.storeLoot(it) {
 		return false
 	}
@@ -469,11 +487,12 @@ func (b *Brain) storePrice(ref int32) int32 {
 	return int32(price)
 }
 
-// storeRows is the list of the opening: the candidates that are loot,
+// storeRows is the list of the opening, at most MaxRows and, with the
+// adena carried, within the largest int32 the server takes (privatestore
+// FillSell): first the released valuables (valuableStoreRows), kept in
+// the store's valuables for countSold; then the candidates that are loot,
 // priced (storePrice of the reference price the manage list shows, kept in
-// the store's prices), at most MaxRows, within the budget left and, with the adena
-// carried, within the largest int32 the server takes (privatestore
-// FillSell).
+// the store's prices), within the store budget left.
 func (b *Brain) storeRows() []storeRow {
 	st, p := &b.store, &b.persona.Store
 	left := p.Budget - st.sold
@@ -482,7 +501,7 @@ func (b *Brain) storeRows() []storeRow {
 		adena = int64(it.Count)
 	}
 	room := math.MaxInt32 - adena
-	var rows []storeRow
+	rows := b.valuableStoreRows(&room)
 	for _, c := range st.candidates {
 		if len(rows) >= p.MaxRows {
 			break
@@ -512,6 +531,69 @@ func (b *Brain) storeRows() []storeRow {
 		room -= n * price
 	}
 	return rows
+}
+
+// valuableStoreRows are the released valuables' rows of the opening
+// (docs/valuables/release.md "Valuables budget (D34)"): by score, each
+// candidate of a released entry the bot carries at the entry's floor, a
+// row's units at most ceil(left / floor) of the valuables budget left, the
+// listed value then taken off left and off room; at most MaxRows, none
+// once left is spent. It keeps them in the store's valuables.
+func (b *Brain) valuableStoreRows(room *int64) []storeRow {
+	st := &b.store
+	st.valuables = nil
+	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {
+		return nil
+	}
+	left := b.valuablesLeft()
+	var rows []storeRow
+	for _, k := range b.valuablesByScore(func(e *valuableEntry) bool { return e.released && e.carried > 0 }) {
+		floor := b.valuableFloor(k)
+		for _, c := range st.candidates {
+			if left <= 0 || len(rows) >= b.persona.Store.MaxRows {
+				return rows
+			}
+			it, ok := b.world.Inventory.Items[c.ObjectID]
+			if !ok || it.TemplateID != k.template || it.Enchant != k.enchant || !b.releasedValuable(it) || floor <= 0 {
+				continue
+			}
+			n := min(int64(c.Count), ceilDiv(left, floor), *room/floor)
+			if n < 1 {
+				continue
+			}
+			r := storeRow{object: c.ObjectID, count: int32(n), price: int32(floor)}
+			rows = append(rows, r)
+			st.valuables = append(st.valuables, listedValuable{row: r, key: k})
+			left -= n * floor
+			*room -= n * floor
+		}
+	}
+	return rows
+}
+
+// releasedValuable reports whether carried item it is a valuable of a
+// released entry (docs/valuables/ledger.md "Released entries"), which the
+// store sells.
+func (b *Brain) releasedValuable(it Item) bool {
+	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil || b.cfg.valuables == nil {
+		return false
+	}
+	return b.cfg.valuables.released(valuableKey{template: it.TemplateID, enchant: it.Enchant}) && b.valuable(it)
+}
+
+// storeListed reports the price at which the open store lists entry k, a
+// released valuable with units left of its row.
+func (b *Brain) storeListed(k valuableKey) (int64, bool) {
+	st := &b.store
+	if st.step != storeOpen {
+		return 0, false
+	}
+	for _, l := range st.valuables {
+		if it, ok := b.world.Inventory.Items[l.row.object]; ok && l.key == k && it.Count > 0 {
+			return int64(l.row.price), true
+		}
+	}
+	return 0, false
 }
 
 // storeManageList takes the manage list the opening asked for; storeRows
@@ -558,14 +640,29 @@ func (b *Brain) closeStore(now time.Time) {
 }
 
 // countSold adds what an open or listed store brought in to the session's
-// sales.
+// sales, split between the budgets (docs/valuables/release.md "Valuables
+// budget (D34)"): the units each listed valuable row lost (listed less
+// still carried) times its price to the valuables budget, the rest to the
+// store's.
 func (b *Brain) countSold() {
 	st := &b.store
 	if st.step == storeOpen || st.step == storeListed {
 		if it, ok := b.world.Inventory.ByTemplate(adenaID); ok {
-			st.sold += max(int64(it.Count)-st.adenaAtOpen, 0)
+			gained := max(int64(it.Count)-st.adenaAtOpen, 0)
+			var valuables int64
+			for _, l := range st.valuables {
+				var kept int64
+				if it, ok := b.world.Inventory.Items[l.row.object]; ok {
+					kept = int64(it.Count)
+				}
+				valuables += max(int64(l.row.count)-kept, 0) * int64(l.row.price)
+			}
+			valuables = min(valuables, gained)
+			b.valuablesSold += valuables
+			st.sold += gained - valuables
 		}
 	}
+	st.valuables = nil
 }
 
 // endStore ends the opening or the store: the registry claim goes back and
@@ -573,7 +670,7 @@ func (b *Brain) countSold() {
 func (b *Brain) endStore(now time.Time) {
 	st := &b.store
 	b.releaseStore()
-	st.step, st.candidates, st.waitUntil = storeIdle, nil, time.Time{}
+	st.step, st.candidates, st.waitUntil, st.valuables = storeIdle, nil, time.Time{}, nil
 	st.nextAt = now.Add(b.persona.Store.Retry)
 }
 

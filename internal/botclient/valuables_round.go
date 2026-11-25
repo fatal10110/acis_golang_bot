@@ -46,6 +46,10 @@ type sessionRound struct {
 	// stale is set when the session started with an earlier session's
 	// round open, for its first decision to end (endStaleRound).
 	stale bool
+	// offRound is set for an off-round errand (docs/valuables/round-end.md
+	// "Off-round errands"): the release withdrawal or the budget-spent
+	// deposit, no round open.
+	offRound bool
 }
 
 // roundReady reports whether a round may start at now as far as the bot's
@@ -62,9 +66,9 @@ func (b *Brain) roundReady(now time.Time) bool {
 
 // roundDue reports whether a round starts at now (docs/valuables/round.md
 // "Start"): the policy enabled, the session's look done and none running,
-// a valuable carried, RoundGap past the latest start, the valuables budget
-// not spent, and roundReady. Stored valuables alone start none. The
-// release mark that keeps an entry out lands with V7c.
+// a valuable not released carried, RoundGap past the latest start, the
+// valuables budget not spent, and roundReady. Stored valuables alone start
+// none, nor released ones (docs/valuables/ledger.md "Released entries").
 func (b *Brain) roundDue(now time.Time) bool {
 	v, p := b.cfg.valuables, b.persona.Valuables
 	if p == (ValuablePolicy{}) || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
@@ -77,8 +81,9 @@ func (b *Brain) roundDue(now time.Time) bool {
 }
 
 // startRound opens a round at now anchored where the bot stands and queues
-// its withdrawal of every stored valuable (step 1). A withdrawal that does
-// not start leaves them stored: the round advertises what it carries.
+// its withdrawal of the stored valuables (step 1, storedRows). A
+// withdrawal that does not start leaves them stored: the round advertises
+// what it carries.
 func (b *Brain) startRound(now time.Time) {
 	anchor := b.world.Self.Position(now)
 	b.cfg.valuables.openRound(anchor, now)
@@ -88,26 +93,51 @@ func (b *Brain) startRound(now time.Time) {
 	}
 }
 
-// storedRows are the withdrawal's rows: every private warehouse row that
-// passes the warehouse row test, named by its object.
+// storedRows are the withdrawal's rows, each private warehouse row that
+// passes the warehouse row test, named by its object
+// (docs/valuables/round-end.md step 1, "Off-round errands"): a round's
+// takes the entries not released, and the released ones while the
+// valuables budget is not spent; the off-round release withdrawal's takes
+// the released ones only.
 func (b *Brain) storedRows() []WarehouseRow {
+	v, spent := b.cfg.valuables, b.valuablesLeft() <= 0
 	var rows []WarehouseRow
 	for _, r := range b.wh.private.Contents {
-		if r.Count > 0 && b.valuableRow(r) {
-			rows = append(rows, WarehouseRow{TemplateID: r.TemplateID, Count: r.Count, Object: r.ObjectID})
+		if r.Count <= 0 || !b.valuableRow(r) {
+			continue
 		}
+		if rel := v.released(valuableKey{template: r.TemplateID, enchant: r.Enchant}); rel && spent || !rel && b.round.offRound {
+			continue
+		}
+		rows = append(rows, WarehouseRow{TemplateID: r.TemplateID, Count: r.Count, Object: r.ObjectID})
 	}
 	return rows
 }
 
-// carriedRows are the deposit's rows: every valuable the bot carries,
-// named by its object, in object order.
+// carriedRows are the rows of every valuable the bot carries, released or
+// not, named by its object, in object order: the budget-spent deposit's
+// (docs/valuables/round-end.md "Off-round errands").
 func (b *Brain) carriedRows() []WarehouseRow {
+	return b.valuableRows(true)
+}
+
+// keptRows are a round's deposit rows: carriedRows but the released
+// entries, which stay carried for the store (docs/valuables/round-end.md
+// step 5).
+func (b *Brain) keptRows() []WarehouseRow {
+	return b.valuableRows(false)
+}
+
+// valuableRows are the rows of the valuables the bot carries, the released
+// entries' with released set, in object order.
+func (b *Brain) valuableRows(released bool) []WarehouseRow {
+	v := b.cfg.valuables
 	var rows []WarehouseRow
 	for _, it := range b.world.Inventory.Items {
-		if b.valuable(it) {
-			rows = append(rows, WarehouseRow{TemplateID: it.TemplateID, Count: it.Count, Object: it.ObjectID})
+		if !b.valuable(it) || !released && v.released(valuableKey{template: it.TemplateID, enchant: it.Enchant}) {
+			continue
 		}
+		rows = append(rows, WarehouseRow{TemplateID: it.TemplateID, Count: it.Count, Object: it.ObjectID})
 	}
 	slices.SortFunc(rows, func(a, c WarehouseRow) int { return cmp.Compare(a.Object, c.Object) })
 	return rows
@@ -125,7 +155,8 @@ func (b *Brain) valuableFees() int64 {
 }
 
 // queueRound queues and starts the private request of phase: the
-// withdrawal of the stored valuables or the deposit of the carried ones, at
+// withdrawal of the stored valuables (storedRows) or the deposit of the
+// carried ones (keptRows in a round, carriedRows off-round), at
 // the nearest unmarked keeper within RoundReach of the anchor. It reports
 // whether one runs; one that does not leaves nothing queued.
 func (b *Brain) queueRound(phase roundPhase, now time.Time) bool {
@@ -133,7 +164,10 @@ func (b *Brain) queueRound(phase roundPhase, now time.Time) bool {
 	if phase == roundWithdraw {
 		req.Withdraw = b.storedRows()
 	} else {
-		req.Deposit = b.carriedRows()
+		req.Deposit = b.keptRows()
+		if b.round.offRound {
+			req.Deposit = b.carriedRows()
+		}
 		b.cfg.valuables.markDeposited(req.Deposit)
 	}
 	if req.empty() {
@@ -199,6 +233,10 @@ func (b *Brain) roundStep(now time.Time) (Action, bool) {
 			return a, true
 		case walkUnreachable:
 			return b.endCut(now)
+		}
+		if s.offRound {
+			*s = sessionRound{request: s.request}
+			return Action{}, false
 		}
 		s.phase = roundIdle
 		b.cfg.valuables.round.back = now
@@ -285,21 +323,30 @@ func (b *Brain) agreedInSight() bool {
 	return false
 }
 
-// countRound steps every entry the bot carries as an unsold round: rounds
-// + 1 and the ask RoundStep points of its reference price lower, never
-// below its floor (docs/valuables/whispers.md "Prices"). The release mark
-// and the cap land with V7c.
+// countRound steps every entry not released the bot carries as an unsold
+// round: rounds + 1 and the ask RoundStep points of its reference price
+// lower, never below its floor (docs/valuables/whispers.md "Prices").
 func (b *Brain) countRound() {
 	p, m := b.persona.Valuables, b.cfg.Travel
 	if m == nil {
 		return
 	}
 	for k, e := range b.cfg.valuables.entries {
-		if e.carried == 0 {
+		if e.carried == 0 || e.released {
 			continue
 		}
 		e.rounds++
 		e.ask = p.lowered(e.ask, m.valueScore(p, k.template, int(k.enchant)).ref, b.valuableFloor(k))
+	}
+}
+
+// ranRound counts a round run to its end and runs the cap
+// (docs/valuables/round-end.md step 5): before the deposit, so the
+// deposit leaves the released entries carried.
+func (b *Brain) ranRound() {
+	b.countRound()
+	if m := b.cfg.Travel; m != nil {
+		b.cfg.valuables.capEntries(b.persona.Valuables, m.stackable)
 	}
 }
 
@@ -308,7 +355,7 @@ func (b *Brain) countRound() {
 func (b *Brain) endOpen(now time.Time, counted bool) {
 	v := b.cfg.valuables
 	if counted {
-		b.countRound()
+		b.ranRound()
 	}
 	b.round.anchor = v.round.anchor
 	if sent := v.round.invite.sent; !sent.IsZero() && now.Sub(sent) < tradeRequestTimeout {
@@ -320,13 +367,13 @@ func (b *Brain) endOpen(now time.Time, counted bool) {
 // closeStep is the closing of an ended round (steps 5 and 6): once the
 // bot's own trade request is answered or tradeRequestTimeout old and no
 // player's request awaits its answer, it deposits the carried valuables
-// when an open is due, then walks back to the anchor and lets go. With no
+// the cap did not release (keptRows) when an open is due, then walks back to the anchor and lets go. With no
 // open due, or a deposit that does not start, they stay carried.
 func (b *Brain) closeStep(now time.Time) (Action, bool) {
 	s, w := &b.round, b.world
 	switch s.phase {
 	case roundSettle:
-		if len(b.carriedRows()) > 0 && b.wh.openDue(now) && !now.Before(b.wh.retryAt) && !b.wh.running {
+		if len(b.keptRows()) > 0 && b.wh.openDue(now) && !now.Before(b.wh.retryAt) && !b.wh.running {
 			if !s.request.IsZero() && now.Sub(s.request) < tradeRequestTimeout || w.Prompts.Trade.Pending(now) || w.Trade.Open() {
 				return Action{}, true
 			}
@@ -356,11 +403,12 @@ func (b *Brain) closeStep(now time.Time) (Action, bool) {
 
 // endCut ends the round at now as a cut-off without a request to stop
 // (docs/valuables/round-end.md "Cut-off"): counted as run after its first
-// ad line, nothing deposited, the valuables carried; the rule lets go.
+// ad line (ranRound), nothing deposited, the valuables carried; the rule
+// lets go.
 func (b *Brain) endCut(now time.Time) (Action, bool) {
 	if v := b.cfg.valuables; v.round.open {
 		if v.round.ads > 0 {
-			b.countRound()
+			b.ranRound()
 		}
 		v.endRound(now)
 	}
@@ -394,14 +442,28 @@ func (b *Brain) holdStep(now time.Time) (Action, bool) {
 // endStaleRound ends at the session's first decision a round an earlier
 // session left open (docs/valuables/ledger.md "The valuables value"): a
 // cut-off, its reply queue, partners and trade request dropped, nothing
-// deposited.
+// deposited. Cut after its first line its entries step at once, and its
+// cap runs once the session's look is done (docs/valuables/release.md
+// "Tests"): the cap counts the stored units the look reads.
 func (b *Brain) endStaleRound(now time.Time) {
-	if !b.round.stale {
+	v := b.cfg.valuables
+	if v == nil {
 		return
 	}
-	b.round.stale = false
-	if b.cfg.valuables.round.open {
-		b.endCut(now)
+	if b.round.stale {
+		b.round.stale = false
+		if v.round.open {
+			if v.round.ads > 0 {
+				b.countRound()
+				v.capDue = true
+			}
+			v.endRound(now)
+			b.round = sessionRound{}
+		}
+	}
+	if v.capDue && b.wh.private.Known && b.look.phase == lookIdle && b.cfg.Travel != nil {
+		v.capDue = false
+		v.capEntries(b.persona.Valuables, b.cfg.Travel.stackable)
 	}
 }
 
