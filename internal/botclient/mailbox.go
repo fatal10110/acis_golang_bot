@@ -183,7 +183,10 @@ type botLink struct {
 	// leaders every join of this run named (slotAnswer).
 	party   Command
 	leaders map[string]bool
-	board   statusBoard
+	// partyLeft is why the brain last cleared the slot itself
+	// (Status.PartyLeft), "" while a slot is set or after an unparty.
+	partyLeft string
+	board     statusBoard
 	// crafter is how the crafter's last cycle ended and until when its
 	// breaker holds: the next session's brain resumes from it.
 	crafter craftEnded
@@ -260,16 +263,19 @@ func (b *Brain) command(m mail, now time.Time) {
 // panelOrder carries out c at now, a standing order in place of the bot's
 // orders and its Bot's standing one. A follow or an assist resolves its
 // player in sight by name; queued, it waits for the player instead of
-// being refused.
+// being refused. A standing order carried out and a leave clear the party
+// slot first (clearSlot); a refused one keeps it.
 func (b *Brain) panelOrder(c Command, queued bool, now time.Time) error {
 	o := &b.orders
 	switch c.Kind {
 	case CommandStay:
+		b.clearSlot()
 		b.holdStill()
 	case CommandGo:
 		if err := b.goToSpot(c.Arg, now); err != nil {
 			return err
 		}
+		b.clearSlot()
 		*o = orders{roam: true, reply: o.reply, withdraw: o.withdraw}
 	case CommandFollow, CommandAssist:
 		id, name, ok := b.playerInSight(0, c.Arg)
@@ -279,17 +285,25 @@ func (b *Brain) panelOrder(c Command, queued bool, now time.Time) error {
 		if ok {
 			c.Arg = name
 		}
+		b.clearSlot()
 		b.orderPlayer(c.Kind, id)
 		b.orderPending = !ok
 		b.cfg.link.order = standing{cmd: c, id: id}
 		return nil
 	case CommandLeave:
-		// The server ignores a withdrawal from no party (server
-		// internal/gameserver/network/partymatch.go, withdrawParty).
+		// A partyless bot holding a slot clears it and answers nil. The
+		// server ignores a withdrawal from no party (server
+		// internal/gameserver/network/partymatch.go, withdrawParty), so the
+		// bot sends one only from a party, through the withdraw flag: a
+		// disband before it goes drops it.
+		cleared := b.clearSlot()
 		if !b.world.Party.In() {
+			if cleared {
+				return nil
+			}
 			return ErrNoParty
 		}
-		o.reply = leavePartyAction()
+		o.withdraw = true
 		return nil
 	case CommandLogout:
 		b.logout.commanded = true

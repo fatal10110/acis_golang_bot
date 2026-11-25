@@ -452,7 +452,9 @@ These keep the server and the bot host working; they are operational, not player
   `'acisbot'@'127.0.0.1'` granted only `SELECT(obj_Id, accesslevel, deletetime)` on `characters`, with
   `MAX_USER_CONNECTIONS 2`.
 - Commands: `follow`, `assist`, `stay`, `go <spot>`, `invite me` (the bot invites nobody; it asks the
-  GM to invite it, so the GM stays leader), `leave`, `logout`.
+  GM to invite it, so the GM stays leader), `leave`, `logout`. A GM's `invite me` and `leave` take the
+  bot out of its bot party and clear its party slot first, as its `follow`, `assist`, `stay` and
+  `go <spot>` do (`docs/parties/orders.md`, "Slot clearing").
 
 ### 7. Metrics
 
