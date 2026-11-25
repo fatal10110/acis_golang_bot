@@ -47,6 +47,8 @@ func TestLiveTownErrands(t *testing.T) {
 	})
 	toGrocer(t, ctx, tg, gm, f)
 	from := f.seen()
+	// A refusal of the purchase fails the visit at once (#441).
+	refused := merchantBuyRefused(f.watch)
 	if err := gm.Select(ctx, f.id); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +56,7 @@ func TestLiveTownErrands(t *testing.T) {
 	gmGive(t, ctx, gm, f, adena, 10000)
 	t.Logf("%s seeded with adena in the village", f.name)
 
-	until(t, ctx, "the merchant visit", func() string {
+	untilServed(t, ctx, "the merchant visit", f.watch, refused, func() string {
 		if !rose(f.counts(lesserHealingPotion, from)) || !fell(f.counts(adena, from)) {
 			return "potions bought"
 		}
