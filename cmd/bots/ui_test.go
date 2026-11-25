@@ -44,6 +44,8 @@ func TestParseUIFlags(t *testing.T) {
 				return o.importPrefix == "hz" && o.importCount == 20 && o.importMarker == npc
 			}, "",
 		},
+		{"pprof", append(base, "-pprof", "127.0.0.1:6061"), func(o uiOptions) bool { return o.pprof == "127.0.0.1:6061" }, ""},
+		{"pprof wildcard", append(base, "-pprof", "0.0.0.0:6061"), nil, "-pprof"},
 		{"no secret", []string{"-prefix", "home"}, nil, "-secret-file"},
 		{"marker without prefix", append(base, "-name-marker", "Npc"), nil, "go with -prefix"},
 		{"bad prefix", append(base, "-prefix", "Home"), nil, "-prefix"},

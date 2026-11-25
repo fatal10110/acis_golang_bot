@@ -55,6 +55,9 @@ type uiOptions struct {
 	localAddr   string
 	allowlisted bool
 	metrics     string
+	// pprof is the loopback address of the profile endpoint; empty serves
+	// none. It never shares the panel's listener.
+	pprof string
 	// listen is the panel's loopback address.
 	listen          string
 	datapack        string
@@ -90,6 +93,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml); the presets town and merchant and farming need it")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
+	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	fs.StringVar(&o.listen, "listen", defaultListen, "loopback address the web panel serves on (open http://ADDR/ in a browser)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
@@ -154,6 +158,9 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
 		}
+	}
+	if err := checkPprofFlag(o.pprof); err != nil {
+		return o, err
 	}
 	if err := botpanel.CheckAddr(o.listen); err != nil {
 		return o, fmt.Errorf("-listen: %w", err)
@@ -378,6 +385,11 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	tick := time.NewTicker(metricsPeriod)
 	defer tick.Stop()
 	defer serveMetrics(ctx, metricsLn, metrics, tick.C, log)()
+	pprofLn, err := listenPprof(o.pprof, log)
+	if err != nil {
+		return err
+	}
+	defer servePprof(ctx, pprofLn, log)()
 	ln, err := botpanel.Listen(o.listen)
 	if err != nil {
 		return err

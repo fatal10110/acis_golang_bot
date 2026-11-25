@@ -47,6 +47,9 @@ type swarmOptions struct {
 	// metrics is the loopback address of the metrics endpoint; empty
 	// serves none.
 	metrics string
+	// pprof is the loopback address of the profile endpoint; empty serves
+	// none.
+	pprof string
 	// datapack is the server datapack's XML directory the bots pick
 	// farming spots from; empty farms nowhere. spawnMultiplier is the
 	// server's SpawnMultiplier, which scales each spot's bot cap.
@@ -83,6 +86,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
+	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -139,6 +143,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
 		}
+	}
+	if err := checkPprofFlag(o.pprof); err != nil {
+		return o, err
 	}
 	return o, nil
 }
@@ -252,6 +259,14 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		defer serveMetrics(ctx, ln, reg, tick.C, log)()
 		log.Info("metrics serve", "addr", ln.Addr().String(), "path", botmetrics.VarsPath)
 	}
+	pln, err := listenPprof(o.pprof, log)
+	if err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
+	}
+	// Deferred after the bots are joined below: the profiles stay available
+	// until every bot returned.
+	defer servePprof(ctx, pln, log)()
 	log.Info("swarm starts", "bots", len(bots), "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent, "allowlisted", o.allowlisted)
 	var wg sync.WaitGroup
 	for _, b := range bots {
