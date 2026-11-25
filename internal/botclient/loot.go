@@ -32,9 +32,22 @@ const (
 	// (regularLootProtection, data/manager/killrewards.go) and announces
 	// neither the owner nor the lift, so an item the bot did not see fall
 	// may still be locked; a player who dropped an item has as long to take
-	// it back. A raid boss's drops stay locked for 300 s: a click on one
-	// costs the item's Timeout before the bot gives it up.
+	// it back. A raid or grand boss's drops wait lootRaidGrace instead.
 	lootGrace = 15 * time.Second
+	// lootRaidGrace is lootGrace for the drops of a raid or grand boss
+	// (TravelMap.raidBoss): the server locks those for 300 s
+	// (raidLootProtection, data/manager/killrewards.go; Hostile.RaidBoss in
+	// model/actor/npc/hostile.go). The wire names neither, so the dropper's
+	// template tells them; an item that came into sight (SpawnItem) has no
+	// dropper and waits lootGrace.
+	lootRaidGrace = 300 * time.Second
+)
+
+// The NPC template types (npcs/*.xml) whose drops the server locks for
+// lootRaidGrace.
+const (
+	npcTypeRaidBoss  = "RaidBoss"
+	npcTypeGrandBoss = "GrandBoss"
 )
 
 // GroundLoot is which ground items the bot did not fight for it picks up
@@ -302,7 +315,7 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 			b.fought(e.CasterID, now)
 		}
 	case SpawnItem:
-		b.groundSeen(e.Item.ObjectID, now)
+		b.groundSeen(e.Item.ObjectID, now, lootGrace)
 	case GetItem:
 		delete(b.loot.ground, e.ObjectID)
 		b.cfg.Ground.drop(e.ObjectID)
@@ -321,7 +334,7 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 	case DropItem:
 		if !b.lootable(e, now) {
 			if e.DropperID != b.world.Self.ObjectID {
-				b.groundSeen(e.Item.ObjectID, now)
+				b.groundSeen(e.Item.ObjectID, now, b.dropGrace(e.DropperID))
 			}
 			return
 		}
@@ -397,11 +410,29 @@ func (b *Brain) leavesLoot() bool {
 	return b.persona.Loot.LeaveFindersKeepers && pt.In() && pt.LeaderID != b.world.Self.ObjectID && pt.Loot == partyLootFindersKeepers
 }
 
+// dropGrace is how long the bot leaves alone a drop of dropper it did not
+// fight for: lootRaidGrace for a raid or grand boss, lootGrace for any
+// other. The boss's corpse stays in sight when its drops fall: the server
+// deletes it only when the corpse decays.
+func (b *Brain) dropGrace(dropper int32) time.Duration {
+	if o := b.world.object(dropper); o != nil && o.Kind == KindNPC && b.cfg.Travel.raidBoss(o.NPCID) {
+		return lootRaidGrace
+	}
+	return lootGrace
+}
+
+// raidBoss reports whether NPC template npcID is a raid or grand boss;
+// false without a travel map.
+func (m *TravelMap) raidBoss(npcID int32) bool {
+	return m != nil && m.bosses[npcID]
+}
+
 // groundSeen records ground item id, which the bot did not fight for, in
-// sight at now: lootGrace on, groundScan may queue it. Items leave the
-// record as they leave World.Ground (lootEvent), which bounds it by what
-// lies in sight at a constant cost per sighting (#495).
-func (b *Brain) groundSeen(id int32, now time.Time) {
+// sight at now: grace on, groundScan may queue it. A later sighting keeps
+// the first. Items leave the record as they leave World.Ground
+// (lootEvent), which bounds it by what lies in sight at a constant cost per
+// sighting (#495).
+func (b *Brain) groundSeen(id int32, now time.Time, grace time.Duration) {
 	if p := &b.persona.Loot; !p.Pickup || p.Ground == GroundNone {
 		return
 	}
@@ -410,7 +441,7 @@ func (b *Brain) groundSeen(id int32, now time.Time) {
 		l.ground = make(map[int32]time.Time)
 	}
 	if _, ok := l.ground[id]; !ok {
-		l.ground[id] = now.Add(lootGrace)
+		l.ground[id] = now.Add(grace)
 	}
 }
 
