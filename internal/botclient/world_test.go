@@ -47,10 +47,10 @@ func TestWorldDeadReckoning(t *testing.T) {
 		{"along the move", []step{{0, MoveToLocation{ObjectID: selfID, Dest: Point{X: 1000, Z: 100}}}}, 2 * time.Second, Point{X: 200, Z: 20}, true},
 		{"never past the destination", []step{{0, MoveToLocation{ObjectID: selfID, Dest: Point{X: 1000}}}}, 20 * time.Second, Point{X: 1000}, false},
 		{
-			"report within drift keeps the estimate",
+			"self report within drift is adopted",
 			[]step{{0, MoveToLocation{ObjectID: selfID, Dest: Point{X: 1000}}}, {2 * time.Second, ValidateLocation{ObjectID: selfID, Pos: Point{X: 350}}}},
 			3 * time.Second,
-			Point{X: 300},
+			Point{X: 450},
 			true,
 		},
 		{
