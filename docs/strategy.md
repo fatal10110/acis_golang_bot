@@ -276,6 +276,21 @@ lose 3, 87000 lose 2, 149000 lose 1).
 | DW | Dark Wizard (39), Damage → Spellhowler | BLUNT/MAGIC or SWORD/MAGIC. | Robe pair; D: Knowledge Set. | Cast 750 (Twister, Shadow Spark) | INT+1 WIT− (8, 20, 32) twice: all in on INT 44 |
 | OS | Orc Shaman (50), Support and Damage → Warcryer | BLUNT/MAGIC (casts, and Stun Attack takes BLUNT). | Heavy pair (Heavy Armor Mastery: cast ×0.855 net, P.Def); D: Brigandine Set without its shield. The Knowledge robe is the fallback when no heavy pair is affordable. | Cast 750 (Frost Flame); melee with Stun Attack | MEN+1 WIT− (10, 22, 34): chants run on MP |
 
+**Model-chosen sets (#369).** The model (Design section 3, Value) ranks a row's set by what its
+set skill adds to the role's value; where the role's value cannot read the stat the set adds, the
+row's set is model-chosen: it wins on its pieces' stats and the StatWeights tie-break, or loses to
+a set worth more. These rows keep the model as it is:
+
+- RO, ES, AS, MO, Damage: Manticore Skin and Reinforced Leather add max MP, which counts where the
+  kill's MP binds the rest. Where HP binds it, or the fight does not pay off, MP rests nothing away
+  and the sets are model-chosen.
+- RO, ES, AS, MO, HW, EW, DW and OS, Support: the build knows no heal the model times (the
+  shaman's Chant of Life heals over time, with no skill power), so it is a tank valued by how long
+  it lasts; max MP and M.Atk buy no survival, and Manticore Skin, Reinforced Leather and
+  Knowledge are model-chosen.
+
+`TestRow<ID>SetValue` (`gear_value_rows_test.go`) holds each row of the shipped datapack to this.
+
 ### Combat (columns 3-7)
 
 | Row | 3. Opener | 4. Rotation (priority order, gates) | 5. Sustain | 6. Self-buffs and toggles | 7. Rest |
@@ -466,7 +481,12 @@ behavior").
   know cancel out. Only the difference a candidate makes is used.
 - **Value:** `Value(profile, role, target)` is the one number every errand compares: for damage
   roles the kills per minute a fight sustains before resting, for support roles the HP healed per
-  MP with a survival floor. A role's weights are persona defaults (D6).
+  minute: a full MP bar of its heal (the skill's power, plus √M.Atk for a `HEAL`, as the server's
+  `formulas/heal.go` adds it unshot; a `HEAL_STATIC` adds nothing), cast at its cast speed, then the
+  rest that wins the bar back, with a survival floor. Max MP counts for a damage role where the
+  kill's MP binds the rest; a support's max MP, cast speed and M.Atk always count (#369). A
+  damage role fights with its first known rotation step that deals damage (not a heal or a
+  bleed). A role's weights are persona defaults (D6).
 
 ### 4. The build (`internal/botclient`)
 
