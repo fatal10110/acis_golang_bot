@@ -29,10 +29,11 @@ func (b *Brain) armPrep() {
 }
 
 // townArrival is a supply trip's arrival in town: it arms the preparation
-// gate, then calls the trip in town hook (SupplyPolicy.InTown), once per
-// arrival.
+// gate and the half-speed stash (stashDue, queueStash), then calls the trip
+// in town hook (SupplyPolicy.InTown), once per arrival.
 func (b *Brain) townArrival() {
 	b.armPrep()
+	b.stashDue = true
 	if f := b.persona.Supply.InTown; f != nil {
 		f(b.world)
 	}

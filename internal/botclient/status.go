@@ -75,6 +75,13 @@ type Status struct {
 	Load, MaxLoad int32
 	Weight        int32
 	WeightPenalty int32
+	// Stash is how the last half-speed stash ended (docs/items.md section
+	// 7, #449): the deposit, in the bot's own warehouse, of the kept items
+	// it does not use while its load is in the half-speed band.
+	// WarehouseUnreachable reports no warehouse keeper (none on the travel
+	// map, or none reached), WarehouseShort the fee unpaid, WarehouseFull
+	// no slot; zero before any.
+	Stash WarehouseResult
 	// GradePenalty is set while the server holds the grade penalty on the
 	// bot: a worn piece above its Expertise grade slows it (skill 4267).
 	// DeathPenalty is its death penalty level (0-15).
@@ -214,6 +221,8 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 		st.Weight = int32(int64(s.Load) * 100 / int64(s.MaxLoad))
 	}
 	st.WeightPenalty, st.GradePenalty, st.DeathPenalty = weightBand(s.Load, s.MaxLoad), w.gradePenalty(), s.DeathPenalty
+	st.Stash = b.wh.stashed
+	st.Stash.Rows = slices.Clone(st.Stash.Rows)
 	st.Town = b.nearestTown(st.Position)
 	st.ClanID, st.ClanLeader = w.Clan.ID, w.Clan.Leader
 	st.Heals = rowHeals(s.ClassID, w.Skills)

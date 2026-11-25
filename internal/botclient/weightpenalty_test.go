@@ -36,7 +36,8 @@ func TestWeightBand(t *testing.T) {
 // TestSupplyCauseSlowBand checks the trip home in the half-speed band: a
 // farmer from 66.6 % goes home with anything to sell, even under ShedMin,
 // since every step there is at half speed; under the band ShedMin still
-// holds, and with nothing to shed, or the load trigger off, it stays.
+// holds, with nothing to shed it goes to stash its kept or unsold items
+// (#449), and with the load trigger off it stays.
 func TestSupplyCauseSlowBand(t *testing.T) {
 	tests := []struct {
 		name string
@@ -48,8 +49,8 @@ func TestSupplyCauseSlowBand(t *testing.T) {
 		{name: "67 % with a little junk", item: lootStack(60, junkMat, 100), load: 67000, want: causeLoad},
 		{name: "66.6 % with a little junk", item: lootStack(60, junkMat, 100), load: 66600, want: causeLoad},
 		{name: "66.5 % with a little junk", item: lootStack(60, junkMat, 100), load: 66500},
-		{name: "67 % with nothing to shed", item: lootStack(60, keptMat, 100), load: 67000},
-		{name: "67 % with no sale", item: lootStack(60, junkMat, 100), load: 67000, edit: func(b *Brain) { b.persona.Shop.SellAt = 0 }},
+		{name: "67 % with nothing to shed", item: lootStack(60, keptMat, 100), load: 67000, want: causeStash},
+		{name: "67 % with no sale", item: lootStack(60, junkMat, 100), load: 67000, edit: func(b *Brain) { b.persona.Shop.SellAt = 0 }, want: causeStash},
 		{name: "ReturnLoad 0", item: lootStack(60, junkMat, 100), load: 90000, edit: func(b *Brain) { b.persona.Supply.ReturnLoad = 0 }},
 	}
 	for _, tt := range tests {

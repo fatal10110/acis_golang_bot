@@ -673,11 +673,18 @@ func (b *Brain) junk() map[int32]Item {
 // the shots keepsShot keeps, spellbooks wanted or held for a learn and the
 // enchant scrolls of a grade the bot wears (keepsScroll).
 func (b *Brain) keeps(id int32) bool {
+	return id == adenaID || slices.Contains(b.persona.Shop.Keep, id) || b.uses(id)
+}
+
+// uses reports whether the bot keeps item template id for its own use:
+// keeps but adena and Shop.Keep, which it keeps with no use of its own
+// (the half-speed stash deposits those, stashes).
+func (b *Brain) uses(id int32) bool {
 	p := &b.persona
 	if _, shot := b.shotTable()[id]; shot && b.keepsShot(id) {
 		return true
 	}
-	return id == adenaID || b.inKeepSet(id) || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
+	return b.inKeepSet(id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
 		id == b.bowArrows() || id == b.nextBowArrows() || b.keepsScroll(id) ||

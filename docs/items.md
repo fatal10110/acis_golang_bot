@@ -553,7 +553,28 @@ grocer lists).
     nowhere to go do not send it home after every return. In the half-speed band (66.6 % and up,
     a GM grant, a trade or a lower limit after a level change put it there) anything to shed
     sends it home, under `ShedMin` too (#436);
-  - the saved adena covers the gear goal.
+  - the saved adena covers the gear goal;
+  - last, in the half-speed band past `Supply.ReturnLoad` with nothing to shed, it carries kept
+    items it does not use (the stash, #449).
+
+  **The stash (#449).** In the half-speed band a town visit that cannot sell the load must still
+  shed it: what it carries may be `Shop.Keep` templates, items the shop refused, or gear from a
+  trade or a GM grant. On every supply trip's arrival in town, once the shop visit and the
+  preparation gate are over, a bot still in the half-speed band deposits those items in its own
+  (private) warehouse, at the nearest keeper within `Warehouse.Reach` of where it stands, the
+  heaviest stack first. Stashed are the carried items of a known weight above zero that it keeps
+  with no use of its own. Never stashed: worn items, adena, quest items, valuables (the valuables
+  ledger's, D33), what the keep hook keeps (the clan member's deposit for the crafter, D17 and
+  D19), supplies, shots, potions and the keep set, and gear it wears next, falls back to or keeps
+  for a set. It deposits only as many rows as the adena past the valuables' fees pays the 30
+  adena fee per row (`network/warehouse.go` `depositFeePerItem`), at most 80 rows. The errand
+  paces it as every warehouse visit: opens 60 s apart, one deposit per open, links through the
+  bypass gate. `Status.Stash` reports how the last stash ended. A stash that moved nothing (no
+  keeper on the travel map or none reached, a full warehouse, the fee short, a refusal) holds
+  the next stash trip and the next arrival's stash off for an hour, so a bot that cannot stash
+  does not walk home every 10 minutes for it; with no warehouse it stays at half speed and
+  `Status.Stash` says why. Stashed items are never withdrawn: they have no use of the bot's own,
+  and they are no valuables rows (the ledger counts valuables only).
 
   A load the trip cannot shed must not slow the bot down either. It gives up a queued pickup that
   would bring its load to `Loot.StopAbove` (default 65 %, under the 66.6 % band), weighing the
@@ -587,8 +608,8 @@ grocer lists).
     and farming. At speed 0 the server keeps a move in flight, stalled where the bot stands,
     and walks on to its destination once the speed returns; the bot models that stall, so its
     drops name where it stands. A town trip cannot help a bot that cannot move, and a Scroll of
-    Escape would leave it as stuck in town. Shedding kept items between 66.6 % and 100 % is
-    #449's.
+    Escape would leave it as stuck in town. Between 66.6 % and 100 % the stash sheds kept items
+    (#449, "Going home").
 
 - **Slot limit (#528).** Also an operational limit, not a persona default (D6). The server
   refuses a pickup needing a slot past the inventory limit (ActionFailed and SystemMessage 129,
