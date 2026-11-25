@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
@@ -85,20 +86,22 @@ func (b *Brain) agreedDeal(partner int32) bool {
 	return false
 }
 
-// valuableGoods is the valuable the bot offers partner in a trade
-// (docs/valuables/trades.md "Trades"): only while a round is open and the
-// budget has some left, one row of rows of the entry the partner agreed a
-// price for, else named, else the top-scored carried one (by score V, as
-// the ads order them, adEntries: no released entry), at most ceil(left /
-// unit price) of its units.
-func (b *Brain) valuableGoods(partner int32, rows []TradeItem) (TradeItem, valuableKey, bool) {
+// valuableGoods is the valuables the bot offers partner in a trade
+// (docs/valuables/trades.md "Trades"), only while a round is open and the
+// budget has some left: a row of rows for every entry the partner agreed a
+// price for, else for the one it named, else for the top-scored carried
+// one, in the order of their scores (as the ads order them, adEntries: no
+// released entry). As the store lists its rows (release.md "Valuables
+// budget (D34)"), each row while the budget has some left, at most ceil(left
+// / unit price) of its units, its price then taken off what is left.
+func (b *Brain) valuableGoods(partner int32, rows []TradeItem) []tradeOffer {
 	v := b.cfg.valuables
 	if !v.round.open || !b.persona.Valuables.Enabled || b.cfg.Travel == nil {
-		return TradeItem{}, valuableKey{}, false
+		return nil
 	}
 	left := b.valuablesLeft()
 	if left <= 0 {
-		return TradeItem{}, valuableKey{}, false
+		return nil
 	}
 	byKey := make(map[valuableKey]TradeItem)
 	for _, row := range rows {
@@ -114,43 +117,57 @@ func (b *Brain) valuableGoods(partner int32, rows []TradeItem) (TradeItem, valua
 			byKey[k] = row
 		}
 	}
-	keys := b.adEntries()
-	pick := func(match func(valuableKey) bool) (valuableKey, bool) {
-		for _, k := range keys {
-			if _, ok := byKey[k]; ok && match(k) {
-				return k, true
-			}
+	var carried []valuableKey
+	for _, k := range b.adEntries() {
+		if _, ok := byKey[k]; ok {
+			carried = append(carried, k)
 		}
-		return valuableKey{}, false
 	}
 	deal := func(k valuableKey) (whisperPrice, bool) {
 		d, ok := v.talk.deals[whisperDeal{partner, k}]
 		return d, ok
 	}
-	k, ok := pick(func(k valuableKey) bool { d, ok := deal(k); return ok && d.agreed })
-	if !ok {
-		k, ok = pick(func(k valuableKey) bool { _, ok := deal(k); return ok })
+	var keys []valuableKey
+	for _, k := range carried {
+		if d, ok := deal(k); ok && d.agreed {
+			keys = append(keys, k)
+		}
 	}
-	if !ok {
-		k, ok = pick(func(valuableKey) bool { return true })
+	if keys == nil {
+		if i := slices.IndexFunc(carried, func(k valuableKey) bool { _, ok := deal(k); return ok }); i >= 0 {
+			keys = carried[i : i+1]
+		} else if len(carried) > 0 {
+			keys = carried[:1]
+		}
 	}
-	unit := b.valuableUnit(partner, k)
-	if !ok || unit <= 0 {
-		return TradeItem{}, valuableKey{}, false
+	var offer []tradeOffer
+	for _, k := range keys {
+		if left <= 0 {
+			break
+		}
+		unit := b.valuableUnit(partner, k)
+		if unit <= 0 {
+			continue
+		}
+		row := byKey[k]
+		row.Count = int32(min(int64(row.Count), ceilDiv(left, unit)))
+		left -= unit * int64(row.Count)
+		offer = append(offer, tradeOffer{row: row, key: k})
 	}
-	row := byKey[k]
-	row.Count = int32(min(int64(row.Count), ceilDiv(left, unit)))
-	return row, k, true
+	return offer
 }
 
-// valuableSaleEvent counts a trade that settled with a valuable in the
-// session's valuables budget, at the price the bot confirmed (Trade.sale).
+// valuableSaleEvent counts a trade that settled with valuables in the
+// session's valuables budget, at the price the bot confirmed (Trade.sale),
+// and a sale in the metrics per entry it sold.
 // It runs before the world applies ev, which clears the trade.
 func (b *Brain) valuableSaleEvent(ev Event) {
 	e, ok := ev.(SendTradeDone)
 	if t := &b.world.Trade; ok && e.Success && t.Open() && t.valuable {
 		b.valuablesSold += t.sale
-		b.metrics.ValuablesSold(botmetrics.ViaTrade)
+		for range t.Own {
+			b.metrics.ValuablesSold(botmetrics.ViaTrade)
+		}
 	}
 }
 

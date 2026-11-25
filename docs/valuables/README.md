@@ -19,8 +19,9 @@ Goal: a merchant that loots a **valuable** (worth much for its price and scarcit
 the NPC sale and its store; in town, before its store, advertises it on Trade, answers whispers with
 a price, haggles to a floor, invites a whisperer in sight and sells by trade; deposits the unsold in
 its private warehouse; with a later new valuable withdraws and advertises them all; and lists
-everything in its store once too much piles up. Out of scope: buying from players, multi-item trade
-windows (one valuable per trade), the clan warehouse for valuables, presets other than `merchant`.
+everything in its store once too much piles up. Out of scope: buying from players, the clan
+warehouse for valuables, presets other than `merchant`. A buyer who agreed prices for several
+valuables gets them all in one trade window (#403).
 
 ## Approach and files
 
@@ -126,8 +127,6 @@ reviewable diff. No unit test waits on the wall clock; no e2e scenario runs with
 
 ## Gaps
 
-- One valuable per trade window, so a buyer of two trades twice (a multi-item `tradeGoods` offer): a follow-up issue in M12 once the
-  owner approves.
 - The ledger lives in memory, not the bot registry: a follow-up in M12 if the owner wants it kept
   across process restarts.
 - No server gap.

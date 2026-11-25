@@ -320,8 +320,8 @@ func (b *Bot) ValuablesReply() {
 	}
 }
 
-// ValuablesSold records one sale of valuables via ViaTrade (a settled
-// trade) or ViaStore (a listed row that sold units); another via counts
+// ValuablesSold records one sale of valuables via ViaTrade (an entry a
+// settled trade sold) or ViaStore (a listed row that sold units); another via counts
 // nothing.
 func (b *Bot) ValuablesSold(via string) {
 	if b == nil {

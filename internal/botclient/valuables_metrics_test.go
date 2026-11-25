@@ -53,11 +53,28 @@ func TestValuablesMetrics(t *testing.T) {
 		{
 			name: "trade sale: a failed trade first", items: []Item{swordUnit(101, 0)},
 			step: func(_ *testing.T, b *Brain) {
-				b.world.Trade = Trade{PartnerID: 9, valuable: true, key: sword, sale: 136000}
+				row := rowOf(swordUnit(101, 0))
+				b.world.Trade = Trade{
+					PartnerID: 9, Own: []TradeItem{row},
+					offer: []tradeOffer{{row: row, key: sword}}, valuable: true, sale: 136000,
+				}
 				b.valuableSaleEvent(SendTradeDone{})
 				b.valuableSaleEvent(SendTradeDone{Success: true})
 			},
 			want: valuablesCounts{trade: 1},
+		},
+		{
+			name: "trade sale of two entries", items: []Item{swordUnit(101, 0), swordUnit(102, 3)},
+			step: func(_ *testing.T, b *Brain) {
+				a, c := rowOf(swordUnit(101, 0)), rowOf(swordUnit(102, 3))
+				b.world.Trade = Trade{
+					PartnerID: 9, Own: []TradeItem{a, c},
+					offer:    []tradeOffer{{row: a, key: sword}, {row: c, key: valuableKey{template: ledgerSword, enchant: 3}}},
+					valuable: true, sale: 300000,
+				}
+				b.valuableSaleEvent(SendTradeDone{Success: true})
+			},
+			want: valuablesCounts{trade: 2},
 		},
 		{
 			name: "trade of no valuable",
