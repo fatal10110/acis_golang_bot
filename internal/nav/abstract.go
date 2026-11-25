@@ -328,58 +328,73 @@ func allows(nodes []int32, n int32) bool {
 }
 
 // firstLeg refines the leg from the start to the first entrance node inside
-// the start's cluster. When none joins them there, the search has flooded
-// everything the start reaches in the cluster, so the nodes it reached are
-// the ones the start may seat on: it seats the start there and answers
-// errReseat. A start that reaches no node keeps the free search.
+// the start's cluster. It looks for a leg without a drop first: the abstract
+// search joins the start to its cluster's nodes by a straight line, which
+// does not see a drop off the band the start stands on (#504). When none
+// joins them there, the search has flooded everything the start reaches in
+// the cluster, so the nodes it reached are the ones the start may seat on:
+// it seats the start there and answers errReseat. Only a start that reaches
+// no node without a drop looks again with drops, and seats the same way; a
+// start that reaches no node at all keeps the free search.
 func (h *Hierarchy) firstLeg(s *scratch, p *Planner, q *routeQuery, a, c Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
 	q.seat.startDone = true
 	box := h.clusterBox(a)
-	cells, used, err := p.search(s, a, c, budget, avoid, box)
-	if !errors.Is(err, ErrUnreachable) {
-		return cells, used, err
-	}
-	g := h.graph
-	first, end := g.clusterNodes(int(q.a.res.cluster))
-	var starts []int32
-	for n := first; n < end; n++ {
-		if _, ok := s.index.get(cellKey(g.nodeRep(n))); ok && q.span.start(g.nodeSCC(n)) {
-			starts = append(starts, int32(n))
+	used := 0
+	for _, dry := range [2]bool{true, false} {
+		lp := *p
+		lp.noDrops = dry
+		cells, n, err := lp.search(s, a, c, budget-used, avoid, box)
+		used += n
+		if !errors.Is(err, ErrUnreachable) {
+			return cells, used, err
+		}
+		if starts := h.seats(s, q.a, q.span.start); len(starts) > 0 {
+			q.seat.starts = starts
+			return nil, used, errReseat
 		}
 	}
-	if len(starts) == 0 {
-		cells, more, err := p.search(s, a, c, budget-used, avoid, anywhere)
-		return cells, used + more, err
-	}
-	q.seat.starts = starts
-	return nil, used, errReseat
+	cells, more, err := p.search(s, a, c, budget-used, avoid, anywhere)
+	return cells, used + more, err
 }
 
 // lastLeg is firstLeg for the leg from the last entrance node to the goal:
-// when they do not join inside the goal's cluster, it walks back from the
-// goal over the cluster to the nodes that reach it and seats the goal there.
+// when they do not join inside the goal's cluster, without a drop and then
+// with drops, it walks back from the goal over the cluster to the nodes that
+// reach it and seats the goal there.
 func (h *Hierarchy) lastLeg(s *scratch, p *Planner, q *routeQuery, c, goal Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
 	q.seat.goalDone = true
 	box := h.clusterBox(goal)
-	cells, used, err := p.search(s, c, goal, budget, avoid, box)
-	if !errors.Is(err, ErrUnreachable) {
-		return cells, used, err
-	}
-	used += p.reachers(s, goal, box)
-	g := h.graph
-	first, end := g.clusterNodes(int(q.b.res.cluster))
-	var goals []int32
-	for n := first; n < end; n++ {
-		if _, ok := s.index.get(cellKey(g.nodeRep(n))); ok && q.span.goal(g.nodeSCC(n)) {
-			goals = append(goals, int32(n))
+	used := 0
+	for _, dry := range [2]bool{true, false} {
+		lp := *p
+		lp.noDrops = dry
+		cells, n, err := lp.search(s, c, goal, budget-used, avoid, box)
+		used += n
+		if !errors.Is(err, ErrUnreachable) {
+			return cells, used, err
+		}
+		used += lp.reachers(s, goal, box)
+		if goals := h.seats(s, q.b, q.span.goal); len(goals) > 0 {
+			q.seat.goals = goals
+			return nil, used, errReseat
 		}
 	}
-	if len(goals) == 0 {
-		cells, more, err := p.search(s, c, goal, budget-used, avoid, anywhere)
-		return cells, used + more, err
+	cells, more, err := p.search(s, c, goal, budget-used, avoid, anywhere)
+	return cells, used + more, err
+}
+
+// seats returns the nodes of m's cluster whose representative the last
+// flood reached (s.index) and whose SCC in reports true.
+func (h *Hierarchy) seats(s *scratch, m Member, in func(scc int32) bool) []int32 {
+	g := h.graph
+	first, end := g.clusterNodes(int(m.res.cluster))
+	var nodes []int32
+	for n := first; n < end; n++ {
+		if _, ok := s.index.get(cellKey(g.nodeRep(n))); ok && in(g.nodeSCC(n)) {
+			nodes = append(nodes, int32(n))
+		}
 	}
-	q.seat.goals = goals
-	return nil, used, errReseat
+	return nodes
 }
 
 // middleLeg refines a leg between two entrance nodes inside the clusters

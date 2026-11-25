@@ -141,7 +141,8 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 // check failed is skipped. With nothing yet, it
 // takes the farthest within exactCells that passes CanMove and the full
 // step-chain check. None crosses a column of p.Avoid but the
-// route's endpoints'. When even the next cell fails, it reports that edge.
+// route's endpoints', and none drops (dropBound) where the cell path it
+// stands for does not. When even the next cell fails, it reports that edge.
 func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (edgeKey, bool) {
 	n := len(cells) - 1
 	s.points = s.points[:0]
@@ -160,6 +161,10 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		cells = append(cells, cells[0])
 		n = 1
 	}
+	s.drops = append(s.drops[:0], 0)
+	for k := 1; k <= n; k++ {
+		s.drops = append(s.drops, s.drops[k-1]+min(dropCost(cells[k-1].Z, cells[k].Z), 1))
+	}
 	s.route = append(s.route[:0], from)
 	s.grid.invalidate()
 	for i := 0; i < n; {
@@ -169,7 +174,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		// candidates fail it. Both must pass, so the order changes nothing.
 		for j := n; j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
-			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
+			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.dropsAsPath(s, i, j) {
 				next = j
 			}
 		}
@@ -192,7 +197,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 					continue
 				}
 				s.work++
-				if !p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
+				if !p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) || !p.dropsAsPath(s, i, j) {
 					continue
 				}
 				st := p.corridorStretches(s, a, b)
@@ -210,7 +215,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		}
 		for j := min(n, i+exactCells); j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
-			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.stepChainOK(s, a, b) {
+			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.dropsAsPath(s, i, j) && p.stepChainOK(s, a, b) {
 				next = j
 			}
 		}
@@ -221,6 +226,33 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		i = next
 	}
 	return edgeKey{}, true
+}
+
+// dropsAsPath reports whether the segment from waypoint i to cell j may be
+// taken as far as drops go: the cell path from i to j holds a drop, or the
+// segment's line holds none. A route that weighed a ramp over a drop keeps
+// to it, where a straight line off the band's edge would pass CanMove (#504).
+func (p *Planner) dropsAsPath(s *scratch, i, j int) bool {
+	return s.drops[j] > s.drops[i] || !p.lineDrops(s, s.points[i], s.points[j])
+}
+
+// lineDrops reports whether the walk along the line from a to b, landing on
+// each cell's layer as CanMove does (the nearest at or below the last floor
+// plus block.CellIgnoreHeight), takes a drop.
+func (p *Planner) lineDrops(s *scratch, a, b location.Location) bool {
+	s.dropLine = appendLineCells(s.dropLine[:0], a, b)
+	z := int16(p.Engine.Height(a.X, a.Y, a.Z))
+	for _, c := range s.dropLine[1:] {
+		h, _, ok := p.Engine.NodeBelow(c.x, c.y, int(z)+block.CellIgnoreHeight)
+		if !ok {
+			return false // CanMove refuses the line
+		}
+		if dropCost(z, h) > 0 {
+			return true
+		}
+		z = h
+	}
+	return false
 }
 
 // segLen is the ground length of the segment from a to b.

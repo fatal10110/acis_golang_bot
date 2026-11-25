@@ -21,7 +21,7 @@ import (
 // BOT_NAV_GEODATA_CACHE, BOT_NAV_DOORS (doors.xml) and BOT_NAV_CACHE are
 // set. BOT_NAV_WATER (zones/WaterZone.xml) is the water the nav cache was
 // built with; unset is no water.
-func ownerNav(b *testing.B) (*engine.Engine, *Graph, *Water) {
+func ownerNav(b testing.TB) (*engine.Engine, *Graph, *Water) {
 	b.Helper()
 	env := func(k string) string {
 		v := os.Getenv(k)
