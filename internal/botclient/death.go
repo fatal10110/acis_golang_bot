@@ -354,9 +354,9 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 // while its handover runs (rule "party"), so the bot neither follows itself
 // nor claims a spot. The rules ahead of "leader" (attacked, heal, rest,
 // rebuff, the errands) still run. JoinWait after the bot found itself
-// partyless the
-// brain clears the slot (Status.PartyLeft "timeout") and resets the leader
-// watch, ending the hold: the bot plays its persona where it stands.
+// partyless the brain clears the slot (Status.PartyLeft "timeout") and
+// resets the leader watch, ending the hold: the bot plays its persona where
+// it stands.
 func (b *Brain) joinHold(now time.Time) bool {
 	l, v := b.cfg.link, &b.lead
 	if l == nil || l.party.Kind != CommandJoin {

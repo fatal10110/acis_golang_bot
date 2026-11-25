@@ -341,6 +341,14 @@ func TestPartyHandoverLeaves(t *testing.T) {
 				t.Fatalf("asked %q, want %q", got, tt.asked)
 			}
 			if tt.slot.Kind != 0 {
+				// A join member made leader waits for no lost leader and
+				// whispers nobody while its handover runs.
+				if !b.lead.lost.IsZero() {
+					t.Fatalf("leader lost at %v, want no lost-leader wait", b.lead.lost)
+				}
+				if n := len(framesOf(out, opGameSay2)); n != 0 {
+					t.Fatalf("%d whispers, want none", n)
+				}
 				return
 			}
 			wakeAll(t, b, 6*time.Minute, 7*time.Minute, 8*time.Minute)
@@ -433,4 +441,18 @@ func TestPartyWhisperNoReformLeader(t *testing.T) {
 			t.Fatalf("invitations % x, want Mate at 31 s and 62 s", got)
 		}
 	})
+}
+
+// TestPartyLeadRetryPruned checks the invitation waits are dropped once
+// they end, so a bot that never leads does not keep every member it saw.
+func TestPartyLeadRetryPruned(t *testing.T) {
+	b, _, _ := clearBrain(t, Command{}, &memberParty, waiter)
+	handleAt(t, b, at(time.Second), PartySmallWindowDeleteAll{}, slotParty(selfID, map[int32]string{talbotID: "Talbot"}))
+	if _, ok := b.partyLead.retry["Leader"]; !ok {
+		t.Fatalf("retry %v, want the former leader waiting", b.partyLead.retry)
+	}
+	handleAt(t, b, at(time.Minute), SystemMessage{ID: msgLeftParty, Text: [2]string{"Zed"}})
+	if _, ok := b.partyLead.retry["Zed"]; !ok || len(b.partyLead.retry) != 1 {
+		t.Fatalf("retry %v, want only Zed", b.partyLead.retry)
+	}
 }

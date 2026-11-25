@@ -121,15 +121,22 @@ type handover struct {
 	left  bool
 }
 
-// waitFor keeps name from the next invitation until t.
-func (v *partyLead) waitFor(name string, t time.Time) {
+// waitFor keeps name from the next invitation for d after now. It drops
+// the waits that ended by now, so a bot that never leads keeps the map
+// to the members of its recent parties.
+func (v *partyLead) waitFor(name string, now time.Time, d time.Duration) {
 	if name == "" {
 		return
 	}
 	if v.retry == nil {
 		v.retry = make(map[string]time.Time)
 	}
-	if t.After(v.retry[name]) {
+	for n, t := range v.retry {
+		if !t.After(now) {
+			delete(v.retry, n)
+		}
+	}
+	if t := now.Add(d); t.After(v.retry[name]) {
 		v.retry[name] = t
 	}
 }
@@ -148,26 +155,26 @@ func (b *Brain) partyLeadEvent(ev Event, now time.Time) {
 		if e.Response == 1 {
 			// The window adding it follows the answer; a lost add frees
 			// it for another invitation one InviteWait later.
-			v.waitFor(v.invitee, now.Add(pol.InviteWait))
+			v.waitFor(v.invitee, now, pol.InviteWait)
 		} else {
-			v.waitFor(v.invitee, now.Add(pol.InviteRetry))
+			v.waitFor(v.invitee, now, pol.InviteRetry)
 		}
 		v.invitee = ""
 	case SystemMessage:
 		switch {
 		case e.ID == msgLeftParty:
 			// A withdrawal or a disconnect (party/party.go remove).
-			v.waitFor(e.Text[0], now.Add(pol.InviteRetry))
+			v.waitFor(e.Text[0], now, pol.InviteRetry)
 		case v.invitee == "":
 		case e.ID == msgWaitingForReply:
 			v.invitee, v.next = "", now.Add(pol.InviteWait)
 		case inviteRefused(e, v.invitee):
-			v.waitFor(v.invitee, now.Add(pol.InviteRetry))
+			v.waitFor(v.invitee, now, pol.InviteRetry)
 			v.invitee = ""
 		}
 	case PartySmallWindowDeleteAll:
 		for _, m := range b.world.Party.Members {
-			v.waitFor(m.Name, now.Add(pol.InviteRetry))
+			v.waitFor(m.Name, now, pol.InviteRetry)
 		}
 		v.ousted = nil
 	case PartySmallWindowDelete:
@@ -244,7 +251,7 @@ func (b *Brain) invite(slot Command, now time.Time) (Action, bool) {
 		}
 		// No answer: a silent client, or the Olympiad's silence
 		// (network/party.go).
-		v.waitFor(v.invitee, now.Add(pol.InviteRetry))
+		v.waitFor(v.invitee, now, pol.InviteRetry)
 		v.invitee = ""
 	}
 	if now.Before(v.next) || len(p.Members)+1 >= maxPartyMembers {
