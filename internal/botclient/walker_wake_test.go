@@ -20,6 +20,9 @@ func wakeWalk(t *testing.T, dest Point, answer func(origin, to Point) MoveToLoca
 	if st != walkWalking || a.kind != actMove {
 		t.Fatalf("first decision: status %v kind %v (%s), want a move", st, a.kind, b.walk.reason)
 	}
+	// The wake at the segment's end: the click-ahead's earlier wake is
+	// TestClickAheadAtCheckedCorner's.
+	b.walk.seg.noAhead = true
 	seg := b.walk.seg
 	b.handleOne(t, answer(moveOrigin(a.payload), moveTarget(a.payload)), t0.Add(wakeAnswerLag))
 	b.nextTick, b.reactAt = t0.Add(time.Minute), time.Time{}
