@@ -280,8 +280,8 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 }
 
 // farmWalking reports whether the bot is under way to the stand point it
-// fights its farm target from: the target lies within the leash, the walk
-// to it need not (around a wall, a rock, a slope). Walked back to the spot
+// fights its farm target from: the target lies within the leash or inside
+// the spot's territory (#447), the walk to it need not (around a wall, a rock, a slope). Walked back to the spot
 // from a segment's end beyond the leash, the bot set out again on the same
 // walk at the next decision, back and forth with no attack (#269). The walk
 // ends at the stand point, or unreachable, which blacklists the target

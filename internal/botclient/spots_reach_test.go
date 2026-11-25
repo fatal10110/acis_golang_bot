@@ -29,7 +29,8 @@ func arriveAtSpot(t *testing.T, b *Brain, spot Point) time.Time {
 // idled for 24 minutes. Decisions come every second from the arrival but
 // in a pause, where a rule ahead held the turn; a pause longer than idleGap
 // starts the idle stretch over. A farm target before the timeout keeps the
-// spot.
+// spot, and one in reach only briefly starts the stretch over from when it
+// went.
 func TestSpotIdleMovesOn(t *testing.T) {
 	const mob = int32(0x20000031)
 	tests := []struct {
@@ -38,14 +39,19 @@ func TestSpotIdleMovesOn(t *testing.T) {
 		// pauseFrom and pauseTo, after the arrival, bound a stretch with no
 		// decision.
 		pauseFrom, pauseTo time.Duration
-		// mobAt, when not 0, is when a monster comes within the leash.
-		mobAt time.Duration
+		// mobAt, when not 0, is when a monster comes within the leash;
+		// mobGone, when not 0, is when it leaves sight.
+		mobAt, mobGone time.Duration
 		// wantMoved is when, after the arrival, the bot moves on; 0 for
 		// never within 30 minutes.
 		wantMoved time.Duration
 	}{
 		{name: "nothing to fight: moves on", idle: 5 * time.Minute, wantMoved: 5 * time.Minute},
 		{name: "a monster before the timeout keeps the spot", idle: 5 * time.Minute, mobAt: 4 * time.Minute},
+		{
+			name: "a monster in reach briefly starts it over", idle: 5 * time.Minute,
+			mobAt: 4*time.Minute + 50*time.Second, mobGone: 5 * time.Minute, wantMoved: 10 * time.Minute,
+		},
 		{
 			name: "a short pause goes on with the stretch", idle: 5 * time.Minute,
 			pauseFrom: 2 * time.Minute, pauseTo: 2*time.Minute + idleGap, wantMoved: 5 * time.Minute,
@@ -71,8 +77,12 @@ func TestSpotIdleMovesOn(t *testing.T) {
 				if tt.mobAt != 0 && d == tt.mobAt {
 					b.world.Apply(NPCInfo{ObjectID: mob, NPCID: 20003, Attackable: true, Pos: Point{X: 600}}, now)
 				}
+				if tt.mobGone != 0 && d == tt.mobGone {
+					b.world.Apply(DeleteObject{ObjectID: mob}, now)
+				}
+				inReach := tt.mobAt != 0 && d >= tt.mobAt && (tt.mobGone == 0 || d < tt.mobGone)
 				rule, a := b.decide(now)
-				if tt.mobAt != 0 && d >= tt.mobAt && (rule != "farm" || a.object != mob) {
+				if inReach && (rule != "farm" || a.object != mob) {
 					t.Fatalf("at %v: rule %q object %d, want farming the monster %d", d, rule, a.object, mob)
 				}
 				if b.spot.held {
