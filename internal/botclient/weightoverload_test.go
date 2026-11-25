@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"bytes"
 	"slices"
 	"testing"
 	"time"
@@ -204,5 +205,35 @@ func TestTradeReceivableWeight(t *testing.T) {
 				t.Fatalf("tradeReceivable = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestOverweightDropsWhereTheServerHolds replays the live run's frames
+// (TestLiveWeightOverload at fe41b6f): the bot starts a walk, a GM grant
+// takes it to 117 % and the server's UserInfo sets its speeds to 0 where it
+// stands, with no StopMove. The drop names that spot, inside the server's
+// drop range (network/inventory.go dropInRange), not the walk's end.
+func TestOverweightDropsWhereTheServerHolds(t *testing.T) {
+	origin := Point{X: -84141, Y: 244623, Z: -3728}
+	dest := Point{X: -84424, Y: 244072, Z: -3705}
+	chains := lootStack(60, heavyMat, 2015)
+	b := newOverloadBrain(t, 0, chains)
+	self := b.world.Self.ObjectID
+	info := func(run, walk, load int32) UserInfo {
+		return UserInfo{ObjectID: self, Name: "bot7", RunSpeed: run, WalkSpeed: walk, Running: true, Pos: origin, Load: load, MaxLoad: 109020}
+	}
+	start := at(time.Second)
+	b.world.Apply(info(126, 88, 26000), start)
+	b.world.Apply(MoveToLocation{ObjectID: self, Origin: origin, Dest: dest}, start.Add(5*time.Millisecond))
+	b.world.Apply(info(0, 0, 127561), start.Add(43*time.Millisecond))
+	for _, d := range []time.Duration{140 * time.Millisecond, 10 * time.Second} {
+		now := start.Add(d)
+		if p := b.world.Self.Position(now); p != origin {
+			t.Fatalf("at +%v the bot stands at %v, want %v", d, p, origin)
+		}
+		a, ok := b.ruleOverweight(now)
+		if want := dropAction(chains, origin); !ok || a.kind != actDrop || !bytes.Equal(a.payload, want.payload) {
+			t.Fatalf("at +%v ruleOverweight = %v %v, want the chains dropped at %v", d, ok, a.kind, origin)
+		}
 	}
 }

@@ -205,13 +205,21 @@ func (s *SelfState) moved(now time.Time, origin, dest Point) motion {
 // at the speeds the bot has now, re-timed from now for the distance left with
 // the updates done since its anchor (creature.go retimeLocked), and ending no
 // earlier than before unless its speed changed; a move over stands at the
-// sampled position.
+// sampled position. A move the bot's speed fell to 0 in stands at p: the
+// server's immobile weight band (refreshWeightPenalty) holds the character
+// where it reports it and sends no StopMove (#488).
 func (s *SelfState) resample(now time.Time, p Point) {
 	old := s.move
 	from := old.sample(now, p)
 	if !old.moving(now) {
 		m := stopAt(from)
 		m.start = old.end()
+		s.move = m
+		return
+	}
+	if pace(s.Running, s.RunSpeed, s.WalkSpeed) <= 0 {
+		m := stopAt(p)
+		m.start = now
 		s.move = m
 		return
 	}
