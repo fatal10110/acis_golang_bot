@@ -311,6 +311,20 @@ Table-driven, with an injected clock:
 - Run it on `main` before #305, after #305 and #306, and after #307. The scenario is
   `TestLiveWalkEfficiency`; its numbers are in `docs/navigation.md`, "Walking efficiency".
 
+## Plan metrics (#497)
+
+- **Metric** `nav_plans_total`: the walker's route plans by outcome, counted where every walk plans
+  (`planWalk`), whatever rule asked for the walk (spots, trainers, shops, follow): `ok` (a route),
+  `budget` (the search ran out of `walkBudget`), `door`, `blocked` (the refused segments cut every
+  way), `no_route`, `isolated` (the /unstuck asks counted too) and `no_nav` (the bot off the
+  navigation). `nav_plan_us` is each plan's duration on the brain's clock, in microseconds.
+  Both are on the panel's dashboard ("Route plans") and in `/debug/vars`.
+- **Spot rule back-off**: a walk to a spot that ends unreachable gives the spot up for `walkRetry`
+  and the bot picks the next candidate; after `spotFailMax` (3) such walks in a row it looks for no
+  spot for `spotRetry`, the run's spots avoided past it, so each window tries the next three
+  candidates. A bot the cell planner cannot route from runs at most 3 spot plans a minute instead
+  of one per candidate. An arrival ends the run, and so does a search with no candidate left.
+
 ## Click-ahead at checked corners (#308)
 
 Deferred until #304's numbers after #305-#307, then approved by the owner (2026-11-25): it replaced

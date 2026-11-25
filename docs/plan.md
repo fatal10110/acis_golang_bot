@@ -311,7 +311,8 @@ are covered rather than waiting for one. A bot claims, among the fitting spots i
 within `MaxTravel` (20000) of where it stands in straight line, the nearest by abstract-graph distance
 that no bot holds, else the nearest with room; with none, the same within `Wander` (40000); it walks
 there through its walker, and a walk that ends unreachable gives the spot up for a minute (#158,
-#144); with none, a gatekeeper trip planned by Dijkstra over its position, the gatekeepers, their
+#144), three such walks in a row stop its search for a minute with their spots avoided past it
+(#497); with none, a gatekeeper trip planned by Dijkstra over its position, the gatekeepers, their
 destinations and the spots with room, walks priced by time and teleports by adena, when it carries
 the price; with none, it shares past its cap the fitting spot within `Wander` that its bots fill least for
 its cap, up to one bot per monster (`maximumNpcs`), and looks again each minute for a spot with room.

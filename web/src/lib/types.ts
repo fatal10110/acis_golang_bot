@@ -89,6 +89,10 @@ export interface Metrics {
   rules: Record<string, number> | null;
   queue_depth: Histogram;
   wake_lag_us: Histogram;
+  /** The walker's route plans by outcome (ok, budget, door, blocked, no_route, isolated, no_nav). */
+  nav_plans_total: Record<string, number> | null;
+  /** How long each route plan took, in microseconds. */
+  nav_plan_us: Histogram;
 }
 
 export interface Dashboard {
