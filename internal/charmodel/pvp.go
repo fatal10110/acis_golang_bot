@@ -135,20 +135,24 @@ func landingType(s datapack.Skill) string {
 	return s.Type
 }
 
-// effectLand is the percent chance effect e of skill s lands
-// (ResolveEffectSuccessInput): an effect without its own effect power
-// lands with the skill's roll, one without a type rolls its bare power, a
+// effectLand is the percent chance effect e of skill s lands. The skill's
+// own roll comes first (handler/skill damage.go, continuous.go,
+// disablers.go: checkSkillSuccessBSSWithShield), and only a landed skill
+// rolls each effect with its own effect power (apply.go
+// applyEffectsWithLanding, ResolveEffectSuccessInput): an effect without
+// one lands with the skill, one without a type rolls its bare power, a
 // CANCEL always lands, any other resists as its type.
 func effectLand(s datapack.Skill, e datapack.Effect, caster, target Fighter) float64 {
+	skill := LandRate(s, caster, target)
 	switch {
 	case e.EffectPower < 0:
-		return LandRate(s, caster, target)
+		return skill
 	case e.EffectType == "":
-		return e.EffectPower
+		return skill * e.EffectPower / 100
 	case typeKey(e.EffectType) == "CANCEL":
-		return 100
+		return skill
 	}
-	return landRate(s, e.EffectPower, e.EffectType, caster, target)
+	return skill * landRate(s, e.EffectPower, e.EffectType, caster, target) / 100
 }
 
 // typeKey is a skill or effect type as the server compares it

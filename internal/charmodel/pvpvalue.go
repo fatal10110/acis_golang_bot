@@ -95,8 +95,8 @@ type pressure struct {
 // target's archetype, each at its period (cast time or scaled reuse,
 // whichever is longer), and plain attacks for the time the casts leave.
 // A damage step deals its skill damage, a DamOverTime effect its ticks
-// while it lasts, a control effect holds target for its duration; each
-// effect weighed by its land rate. MP is not modeled: a fight is short.
+// while it lasts, a control effect holds target for its duration (a sleep
+// only until f's next hit wakes it); each effect weighed by its land rate. MP is not modeled: a fight is short.
 func play(f, target Fighter, rows RowTable) pressure {
 	var busy, damage, hold float64
 	for _, step := range rows.steps(f, target.Row.Archetype()) {
@@ -118,6 +118,14 @@ func play(f, target Fighter, rows RowTable) pressure {
 			case e.Name == "DamOverTime":
 				damage += land * e.Value * float64(ticks) / max(period, lasting)
 			case controlEffects[e.Name]:
+				if e.Name == "Sleep" {
+					// Any hit wakes a sleeping player
+					// (character_stats.go
+					// applyNonConsumptionDamageEffects), and the
+					// holder keeps attacking: it holds until the
+					// holder's next plain hit.
+					lasting = min(lasting, AttackInterval(f.Profile.PAtkSpd).Seconds())
+				}
 				hold += land * min(lasting, period) / period
 			}
 		}
