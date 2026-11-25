@@ -249,7 +249,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		// Bound before any login: a taken port fails the run, not the bots.
 		ln, err := botmetrics.Listen(o.metrics)
 		if err != nil {
-			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			fmt.Fprintf(stderr, "bots swarm: metrics: %v\n", err)
 			return 1
 		}
 		tick := time.NewTicker(metricsPeriod)

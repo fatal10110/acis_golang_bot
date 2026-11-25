@@ -41,7 +41,7 @@ func TestParsePprofFlag(t *testing.T) {
 	}
 }
 
-// TestServePprof serves the profile index and stop joins the goroutine.
+// TestServePprofLifecycle serves the profile index and stop joins the goroutine.
 func TestServePprofLifecycle(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	if ln, err := listenPprof("", log); ln != nil || err != nil {

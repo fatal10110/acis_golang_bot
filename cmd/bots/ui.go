@@ -378,7 +378,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	var metricsLn net.Listener
 	if o.metrics != "" {
 		if metricsLn, err = botmetrics.Listen(o.metrics); err != nil {
-			return err
+			return fmt.Errorf("metrics: %w", err)
 		}
 		log.Info("metrics serve", "addr", metricsLn.Addr().String(), "path", botmetrics.VarsPath)
 	}

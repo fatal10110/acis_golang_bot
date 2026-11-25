@@ -24,7 +24,7 @@ const (
 // VarsPath is where the endpoint serves its variables, as expvar does.
 const VarsPath = "/debug/vars"
 
-// Listen opens the metrics listener on addr, which must be a loopback IP
+// Listen opens a listener on addr, which must be a loopback IP
 // literal and port ("127.0.0.1:6060", "[::1]:6060"). An empty host, an
 // unspecified address, any other IP and any host name are refused, and so
 // is a listener the system bound anywhere but loopback.
@@ -34,7 +34,7 @@ func Listen(addr string) (net.Listener, error) {
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("metrics listen: %w", err)
+		return nil, fmt.Errorf("listen: %w", err)
 	}
 	if a, ok := ln.Addr().(*net.TCPAddr); !ok || !a.IP.IsLoopback() {
 		_ = ln.Close()

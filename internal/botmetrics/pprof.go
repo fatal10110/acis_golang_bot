@@ -12,8 +12,9 @@ const PprofPath = "/debug/pprof/"
 
 // PprofHandler serves the Go profiles under PprofPath on its own mux:
 // the index, every named profile (heap, goroutine, block, mutex, ...),
-// profile (CPU), trace and symbol. It does not touch http.DefaultServeMux,
-// and cmdline is not served: it holds the process flags, the account
+// profile (CPU), trace and symbol. Importing net/http/pprof registers its
+// handlers on http.DefaultServeMux, which the bot never serves; this handler
+// has its own mux, and cmdline is not served: it holds the process flags, the account
 // prefix among them.
 func PprofHandler() http.Handler {
 	mux := http.NewServeMux()
