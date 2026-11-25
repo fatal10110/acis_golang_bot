@@ -322,8 +322,13 @@ The same choice runs at every level-up that outlevels its spot. Level 1 farmers 
 (31 orc, 43 dwarven), until a holder levels on (`TestStarterSpread`).
 Owner decision (#138): it is fine for a farmer to steal a kill. A monster another player is fighting
 is a target like any other, which keeps more farmers fighting on shared spots. A farm target lies
-within the leash (1500) of the spot's centre, and a bot that ends a fight beyond the leash walks back;
-the walk to a target, around a wall or a rock, may leave the leash on its way (#269).
+within the leash (1500) of the spot's centre or inside the spot's territory and its height band, and
+a bot that ends a fight beyond the leash and outside the territory walks back; the walk to a target,
+around a wall or a rock, may leave the leash on its way (#269). A maker spreads its monsters over its
+whole territory, which can be far wider than the leash (#447). A bot at its spot that goes 5 minutes
+out of combat with no farm target, other players taking every monster or none coming in reach, moves
+on and avoids the spot for 10 minutes; a pause of over 30 seconds in that stretch (a rest, a supply
+trip) starts it over (#360). Both durations are persona defaults (D6).
 
 **town** (PR4): idles, sits, buys potions and shots, sells loot to merchants, uses the gatekeeper,
 visits the Newbie Helper for buffs (levels 8-24).

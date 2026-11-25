@@ -3,6 +3,8 @@ package botclient
 import (
 	"cmp"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // ruleFarm is the rule 9 errand "farm": a bot that arrived at its farming
@@ -10,7 +12,8 @@ import (
 // lately, else its target while that one is still a farm target, else the
 // nearest farm target. The fight itself goes on under rule 5 once the
 // server reports the bot in combat. With no farm target the turn goes to
-// the persona's goal.
+// the persona's goal, until the bot has gone Persona.Spots.Idle with none:
+// then it moves on and avoids the spot for AvoidFor (idleOut, #360).
 //
 // It sends what fight sends, a selection or one attack per target paced by
 // the brain's decision tick and the frame pacer, plus the stand-up toggle
@@ -22,8 +25,13 @@ func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 	}
 	id := b.farmTarget(now)
 	if id == 0 {
+		if b.idleOut(now) {
+			b.moveOn(now, b.persona.Spots.AvoidFor)
+			return Action{}, true
+		}
 		return Action{}, false
 	}
+	v.idleSince = time.Time{}
 	if s.Sitting {
 		return b.toggle(now), true
 	}
@@ -39,7 +47,7 @@ func (b *Brain) farmTarget(now time.Time) int32 {
 	}
 	sp := &b.cfg.Spots.spots[b.spot.idx]
 	centre := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
-	if t := b.world.Target; b.mayFarm(t, centre, now) {
+	if t := b.world.Target; b.mayFarm(t, sp, centre, now) {
 		return t
 	}
 	from := b.world.Self.Position(now)
@@ -48,7 +56,7 @@ func (b *Brain) farmTarget(now time.Time) int32 {
 		d  int64
 	)
 	for k, o := range b.world.Objects {
-		if !b.mayFarm(k, centre, now) {
+		if !b.mayFarm(k, sp, centre, now) {
 			continue
 		}
 		if dk := dist2(from, o.Position(now)); id == 0 || cmp.Or(cmp.Compare(dk, d), cmp.Compare(k, id)) < 0 {
@@ -59,15 +67,50 @@ func (b *Brain) farmTarget(now time.Time) int32 {
 }
 
 // mayFarm reports whether id is a farm target at now: a monster the bot may
-// fight within the spot's leash of centre. A monster another player is
-// fighting is a target all the same: kill stealing is allowed (owner
-// decision on #138, plan "Shared behavior").
-func (b *Brain) mayFarm(id int32, centre Point, now time.Time) bool {
+// fight within the leash of spot sp's centre or inside sp's territory
+// (inTerritory). A monster another player is fighting is a target all the
+// same: kill stealing is allowed (owner decision on #138, plan "Shared
+// behavior").
+func (b *Brain) mayFarm(id int32, sp *datapack.Spot, centre Point, now time.Time) bool {
 	if !b.world.monster(id) || !b.mayFight(id, now) {
 		return false
 	}
 	leash := int64(b.persona.Spots.Leash)
-	return dist2(b.world.Objects[id].Position(now), centre) <= leash*leash
+	at := b.world.Objects[id].Position(now)
+	return dist2(at, centre) <= leash*leash || inTerritory(sp, at)
+}
+
+// inTerritory reports whether p lies inside spot sp's territory, within its
+// height band: the maker spreads its monsters over the whole territory,
+// which can be far wider than the leash (oren23_2018_04 spans about 4000 by
+// 6000), so a bot held at the centre would see them fought and never reach
+// one (#447). The leash still bounds a spot with no territory.
+func inTerritory(sp *datapack.Spot, p Point) bool {
+	t := sp.Territory
+	return t != nil && p.Z >= t.MinZ && p.Z <= t.MaxZ && t.Contains(datapack.Point{X: p.X, Y: p.Y})
+}
+
+// idleGap is the longest pause between two decisions that find the bot at
+// its spot with no farm target within one idle stretch: a longer one means
+// a rule ahead held the turn (a fight, a rest, a supply trip) and the
+// stretch starts over.
+const idleGap = 30 * time.Second
+
+// idleOut records a decision at now that finds the bot at its spot, out of
+// combat, with no farm target, and reports whether such decisions have run
+// on for Persona.Spots.Idle: the spot gives it nothing to fight, every
+// monster in reach killed by others or none coming near (#360). A farm
+// target ends the stretch (ruleFarm), as does leaving the spot (leaveSpot).
+func (b *Brain) idleOut(now time.Time) bool {
+	v, d := &b.spot, b.persona.Spots.Idle
+	if d <= 0 {
+		return false
+	}
+	if v.idleSince.IsZero() || now.Sub(v.idleSeen) > idleGap {
+		v.idleSince = now
+	}
+	v.idleSeen = now
+	return now.Sub(v.idleSince) >= d
 }
 
 // monster reports whether id is an attackable NPC in sight that is alive.

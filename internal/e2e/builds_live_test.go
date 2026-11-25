@@ -69,18 +69,12 @@ func TestLiveBuildMystics(t *testing.T) {
 
 // mysticSpots are the spots by the human, elven and dark elven villages
 // the level kitLevel mystics farmed live. The spot model would send them
-// elsewhere (#446), to wideSpots among others.
+// elsewhere (#446).
 var mysticSpots = []string{
 	"gludio32_1725_04m1", "gludio32_1725_06m1",
 	"oren02_2119_02m1", "oren02_2119_022sm1",
 	"oren23_2018_16sm1",
 }
-
-// wideSpots are the spots by the villages whose territory is so wide that
-// a kit farmer held at the centre found no monster in its leash for 12
-// minutes (#447): oren23_2018_04m1, live with a dark mystic (run bbcd841)
-// and a dark fighter (run 8f5aff1). No kit farm holds them.
-var wideSpots = []string{"oren23_2018_04m1"}
 
 // TestLiveBuildMixed farms the other races' starting classes with their
 // kits: an orc fighter (Iron Punch with fists, Power Strike with a sword or
@@ -94,8 +88,8 @@ func TestLiveBuildMixed(t *testing.T) {
 
 // farmKits runs one kit farm of classes, the accounts of group, each a
 // farmerPersona with the travel map and the spots, those named only when
-// only is not nil, else all but wideSpots; they go back to level 1 at the
-// end (runFresh).
+// only is not nil, else all of them; they go back to level 1 at the end
+// (runFresh).
 func farmKits(t *testing.T, group string, only []string, classes ...*botclient.StartingClass) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 25*time.Minute)
@@ -104,7 +98,7 @@ func farmKits(t *testing.T, group string, only []string, classes ...*botclient.S
 	if only != nil {
 		spots = spotsNamed(t, tg, only)
 	} else {
-		spots = spotsWhere(t, tg, func(s datapack.Spot) bool { return !slices.Contains(wideSpots, s.Maker) })
+		spots = spotsWhere(t, tg, func(datapack.Spot) bool { return true })
 	}
 	gm := enterGM(t, ctx, tg)
 	type kitFarmer struct {

@@ -749,6 +749,10 @@ the werewolves after pulling a third wolf); a death there still teaches the bot 
 pack (`learnPack`).
 With no stats yet, no monster with stats, or a cast on the target it has no travel map to price,
 only the level bounds the spot.
+The model prices risk, not reach: a spot whose monsters all fall to other players, or stay out of
+reach, leaves the bot nothing to fight. The farmer takes farm targets anywhere in the spot's
+territory, not only within the leash of its centre (#447), and moves on after
+`SpotPolicy.Idle` (5 minutes) with none (#360).
 
 ## Pacing
 

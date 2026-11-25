@@ -27,9 +27,9 @@ func TestLiveFarmStarters(t *testing.T) {
 		t.Fatal(err)
 	}
 	spots := botclient.NewSpotRegistry(dp.Spots(), 1)
-	centres := map[string]botclient.Point{}
+	byName := map[string]datapack.Spot{}
 	for _, s := range dp.Spots() {
-		centres[s.Maker] = botclient.Point{X: s.Center.X, Y: s.Center.Y, Z: s.Z}
+		byName[s.Maker] = s
 	}
 	leash := botclient.DefaultPersona().Spots.Leash
 	gm := enterGM(t, ctx, tg)
@@ -66,23 +66,23 @@ func TestLiveFarmStarters(t *testing.T) {
 	}
 	for _, f := range farmers {
 		waitFor(t, ctx, f.name+" killing a monster at its spot", func() bool {
-			centre, ok := centres[f.bot.Status().Spot]
-			return ok && killedAtSpot(f, centre, leash)
+			sp, ok := byName[f.bot.Status().Spot]
+			return ok && killedAtSpot(f, sp, leash)
 		})
 		t.Logf("%s killed a monster at %s", f.name, f.bot.Status().Spot)
 	}
 }
 
-// killedAtSpot reports whether a monster f swung at from within leash of
-// its spot's centre died: a kill on the way to the spot, when attacked
-// there, does not count.
-func killedAtSpot(f *farmer, centre botclient.Point, leash int32) bool {
+// killedAtSpot reports whether a monster f swung at from its spot sp died:
+// from within leash of its centre or inside its territory, where the farmer
+// takes farm targets too (#447). A kill on the way to the spot, when
+// attacked there, does not count.
+func killedAtSpot(f *farmer, sp datapack.Spot, leash int32) bool {
 	swungAt := map[int32]bool{}
 	for _, s := range f.watch.Seen(0) {
 		switch e := s.Event.(type) {
 		case botclient.Attack:
-			dx, dy := int64(e.Pos.X-centre.X), int64(e.Pos.Y-centre.Y)
-			if e.AttackerID == f.id && len(e.Hits) > 0 && dx*dx+dy*dy <= int64(leash)*int64(leash) {
+			if e.AttackerID == f.id && len(e.Hits) > 0 && atSpot(e.Pos, sp, int64(leash)) {
 				swungAt[e.Hits[0].TargetID] = true
 			}
 		case botclient.Die:
@@ -124,4 +124,12 @@ func backToLevel1(t *testing.T, gm *GMClient, f *farmer) {
 	if err != nil {
 		t.Logf("cleanup: level of %s: %v", f.name, err)
 	}
+}
+
+// atSpot reports whether p is at spot sp: within leash of its centre or,
+// on the X/Y plane, inside its territory, where the farmer takes farm
+// targets and stays after a fight too (#447).
+func atSpot(p botclient.Point, sp datapack.Spot, leash int64) bool {
+	c := botclient.Point{X: sp.Center.X, Y: sp.Center.Y}
+	return within(p, c, leash) || sp.Territory != nil && sp.Territory.Contains(datapack.Point{X: p.X, Y: p.Y})
 }
