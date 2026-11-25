@@ -17,15 +17,41 @@ const immobileBand = 4
 // a bot that cannot move, and a Scroll of Escape would leave it as stuck
 // in town. It drops its Loot.Junk first, lowest object id first, then the
 // heaviest stack it would sell (shedItem); worn, kept, quest, augmented,
-// enchanted and valuable items are never dropped. It waits out a move the
-// bot believes is under way, since the drop names the bot's position, and
-// leaves the decision to the next rules when nothing is left to drop.
+// enchanted and valuable items are never dropped.
+//
+// It runs ahead of "attacked": a drop needs no move, so a bot in combat
+// sheds as well, and between drops, while the drop gate is closed, it
+// leaves the decision to the fight. Rule "overweight hold", after
+// "attacked", holds the rules after it until the next drop.
 //
 // It sends RequestDropItem: gateDrop spaces the drops at the server's
 // drop gate (config_gates.go DropItemDelay), and dropRetry spaces a
 // repeated drop of one stack. The server's drop never checks weight
 // (network/inventory.go dropLiveItem), so an immobile bot may drop.
 func (b *Brain) ruleOverweight(now time.Time) (Action, bool) {
+	a, ok := b.shedStep(now)
+	if !ok || a.kind != actDrop || !b.pace.allow(gateDrop, now) {
+		return Action{}, false
+	}
+	return a, true
+}
+
+// ruleOverweightHold holds every rule after "attacked" while the bot
+// sheds: no rest, errand, trip or farming until its load is under the
+// half-speed band or nothing is left to drop.
+func (b *Brain) ruleOverweightHold(now time.Time) (Action, bool) {
+	if _, ok := b.shedStep(now); ok {
+		return Action{}, true
+	}
+	return Action{}, false
+}
+
+// shedStep is the overweight recovery's next step: the drop of shedItem at
+// the bot's position, or a hold without an action while the bot walks at
+// a speed above 0, since the drop names where it stands; a move stalled at
+// speed 0 stands where the server holds it (SelfState.Stalled). It reports
+// false when the bot is not shedding or has nothing left to drop.
+func (b *Brain) shedStep(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	switch band := weightBand(s.Load, s.MaxLoad); {
 	case band >= immobileBand:
@@ -40,13 +66,13 @@ func (b *Brain) ruleOverweight(now time.Time) (Action, bool) {
 	if !ok {
 		return Action{}, false
 	}
-	if s.Moving(now) {
+	if s.Moving(now) && !s.Stalled() {
 		return Action{}, true
 	}
 	return dropAction(it, s.Position(now)), true
 }
 
-// shedItem is the stack ruleOverweight drops next: the Loot.Junk stack
+// shedItem is the stack shedStep drops next: the Loot.Junk stack
 // with the lowest object id, else the heaviest stack of a known weight
 // (TravelMap.weights) the bot would sell rather than keep; never a worn,
 // quest, augmented, enchanted or valuable item, adena, nor a stack it asked

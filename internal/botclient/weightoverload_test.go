@@ -30,7 +30,7 @@ func newOverloadBrain(t *testing.T, load int32, items ...Item) *Brain {
 	return b
 }
 
-// TestRuleOverweight checks the overweight recovery's pick: from the
+// TestRuleOverweight checks the overweight recovery's pick (shedStep): from the
 // immobile band a bot drops its junk first, then the heaviest stack it
 // would sell, never a worn, kept or quest item, nor a stack it just asked
 // to drop; under the immobile band it starts nothing, and with no item
@@ -89,13 +89,13 @@ func TestRuleOverweight(t *testing.T) {
 			if tt.edit != nil {
 				tt.edit(b)
 			}
-			a, ok := b.ruleOverweight(now)
+			a, ok := b.shedStep(now)
 			var got int32
 			if ok && a.kind == actDrop {
 				got = a.object
 			}
 			if got != tt.want || ok != (tt.want != 0 || tt.hold) {
-				t.Fatalf("ruleOverweight = %v drop %d, want drop %d (hold %v)", ok, got, tt.want, tt.hold)
+				t.Fatalf("shedStep = %v drop %d, want drop %d (hold %v)", ok, got, tt.want, tt.hold)
 			}
 		})
 	}
@@ -235,5 +235,127 @@ func TestOverweightDropsWhereTheServerHolds(t *testing.T) {
 		if want := dropAction(chains, origin); !ok || a.kind != actDrop || !bytes.Equal(a.payload, want.payload) {
 			t.Fatalf("at +%v ruleOverweight = %v %v, want the chains dropped at %v", d, ok, a.kind, origin)
 		}
+	}
+}
+
+// TestOverweightStallWalksOn replays the stall past the shed: the server
+// keeps the walk in flight at speed 0 with no arrival (creature.go
+// SetSpeed, retimeLocked), and once a drop brings the speed back it walks
+// on from where it stood to the old destination, so the bot's model does
+// too.
+func TestOverweightStallWalksOn(t *testing.T) {
+	origin := Point{X: -84141, Y: 244623, Z: -3728}
+	dest := Point{X: -84424, Y: 244072, Z: -3705}
+	b := newOverloadBrain(t, 0, lootStack(60, heavyMat, 2015))
+	s := &b.world.Self
+	info := func(run, walk, load int32) UserInfo {
+		return UserInfo{ObjectID: s.ObjectID, Name: "bot7", RunSpeed: run, WalkSpeed: walk, Running: true, Pos: origin, Load: load, MaxLoad: 109020}
+	}
+	start := at(time.Second)
+	b.world.Apply(info(126, 88, 26000), start)
+	b.world.Apply(MoveToLocation{ObjectID: s.ObjectID, Origin: origin, Dest: dest}, start.Add(5*time.Millisecond))
+	b.world.Apply(info(0, 0, 127561), start.Add(43*time.Millisecond))
+	stalled := start.Add(10 * time.Second)
+	if !s.Moving(stalled) || !s.Stalled() || s.Position(stalled) != origin {
+		t.Fatalf("at speed 0: moving %v stalled %v at %v, want stalled at %v", s.Moving(stalled), s.Stalled(), s.Position(stalled), origin)
+	}
+	b.world.Apply(info(126, 88, 100000), stalled)
+	if !s.Moving(stalled) || s.Stalled() {
+		t.Fatalf("speed back: moving %v stalled %v, want the walk on", s.Moving(stalled), s.Stalled())
+	}
+	left := func(p Point) int64 { return horizontal2(p, dest) }
+	if p := s.Position(stalled.Add(time.Second)); p == origin || left(p) >= left(origin) {
+		t.Fatalf("a second on the bot stands at %v, want it on the way from %v to %v", p, origin, dest)
+	}
+	if done := stalled.Add(time.Minute); s.Moving(done) || s.Position(done) != dest {
+		t.Fatalf("a minute on: moving %v at %v, want arrived at %v", s.Moving(done), s.Position(done), dest)
+	}
+}
+
+// TestOverweightShedsInCombat checks that an immobile bot sheds in combat:
+// rule "overweight" drops ahead of "attacked", which an attacker the bot
+// cannot reach at speed 0 would hold; while the drop gate is closed the
+// fight goes on, and out of combat "overweight hold" holds the rules after
+// it until the next drop.
+func TestOverweightShedsInCombat(t *testing.T) {
+	for _, combat := range []bool{true, false} {
+		b := newOverloadBrain(t, 117000, lootStack(60, junkMat, 2000), lootStack(61, heavyMat, 300))
+		self := b.world.Self.ObjectID
+		if combat {
+			b.world.Self.InCombat = true
+			b.world.Apply(NPCInfo{ObjectID: npcID, NPCID: 20001, Attackable: true, Pos: Point{X: 400}}, t0)
+			b.world.Apply(Attack{AttackerID: npcID, Pos: Point{X: 400}, Hits: []AttackHit{{TargetID: self, Damage: 10}}}, t0)
+		}
+		now := at(time.Second)
+		rule, a := b.decide(now)
+		if rule != "overweight" || a.kind != actDrop || a.object != 60 {
+			t.Fatalf("combat %v: decide = %q %d object %d, want overweight's drop of 60", combat, rule, a.kind, a.object)
+		}
+		if ok, err := b.send(a, now); err != nil || !ok {
+			t.Fatalf("send = %v, %v", ok, err)
+		}
+		b.world.Self.Load -= 20000
+		wantBetween := "overweight hold"
+		if combat {
+			wantBetween = "attacked"
+		}
+		if rule, _ := b.decide(now.Add(100 * time.Millisecond)); rule != wantBetween {
+			t.Fatalf("combat %v: drop gate closed: %q, want %q", combat, rule, wantBetween)
+		}
+		rule, a = b.decide(now.Add(dropGap))
+		if rule != "overweight" || a.kind != actDrop || a.object != 61 {
+			t.Fatalf("combat %v: gate open again: %q %d object %d, want overweight's drop of 61", combat, rule, a.kind, a.object)
+		}
+	}
+}
+
+// TestCraftNeverPastLimit checks the crafter's weight check (#488): the
+// server's craft never checks weight (craft/craft.go), so a craft whose
+// product, less its materials, would take the load to the limit is not
+// sent; the crafter deposits what the plan does not need, or trips its
+// breaker when it has nothing to deposit.
+func TestCraftNeverPastLimit(t *testing.T) {
+	tests := []struct {
+		name    string
+		load    int32
+		weights map[int32]int32
+		edit    func(b *Brain)
+		want    string // craft, deposit or trip
+	}{
+		{name: "fits", load: 980, weights: map[int32]int32{ironOre: 10, steel: 30}, want: "craft"},
+		{name: "reaches the limit: deposit", load: 990, weights: map[int32]int32{ironOre: 10, steel: 30}, want: "deposit"},
+		{
+			name: "reaches the limit, nothing to deposit: trip", load: 990, weights: map[int32]int32{ironOre: 10, steel: 30},
+			edit: func(b *Brain) { b.craft.plan.Chains[0].Steps[0].Times = 5 }, want: "trip",
+		},
+		{name: "lighter product", load: 999, weights: map[int32]int32{ironOre: 10, steel: 5}, want: "craft"},
+		{name: "unknown product", load: 0, weights: map[int32]int32{ironOre: 10}, want: "deposit"},
+		{name: "no weights known", load: 999, want: "craft"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := makingBrain(t)
+			b.cfg.Travel.weights = tt.weights
+			b.world.Self.Load, b.world.Self.MaxLoad = tt.load, 1000
+			if tt.edit != nil {
+				tt.edit(b)
+			}
+			rule, a := b.decide(at(time.Second))
+			c := &b.craft
+			var got string
+			switch {
+			case a.kind == actCraft:
+				got = "craft"
+			case c.tripped || !c.nextCheck.Before(at(time.Second).Add(b.persona.Crafter.BreakerHold)):
+				// The trip ends the cycle at once with nothing to deposit,
+				// holding the next check for BreakerHold.
+				got = "trip"
+			case c.phase == craftDeposit && c.resume:
+				got = "deposit"
+			}
+			if rule != "craft" || got != tt.want {
+				t.Fatalf("decide = %q %d (phase %d resume %v tripped %v), want %s", rule, a.kind, c.phase, c.resume, c.tripped, tt.want)
+			}
+		})
 	}
 }

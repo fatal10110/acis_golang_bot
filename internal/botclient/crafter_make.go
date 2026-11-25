@@ -11,7 +11,8 @@ import (
 // craftNext is the cycle's next craft: the crystallizing of the withdrawn
 // gear first (crystallizeNext); after the answer to the last craft, or
 // its timeout; the weight guard's deposit first when the bot carries 50 %
-// or more of its limit; a rest first when its MP is short of the recipe's
+// or more of its limit, or when the craft could take it to the limit
+// (craftOverloads), and with nothing to deposit then a breaker trip; a rest first when its MP is short of the recipe's
 // cost; and at least craftGap plus jitter after the last craft.
 func (b *Brain) craftNext(now time.Time) (Action, bool) {
 	c, p, s := &b.craft, &b.persona.Crafter, &b.world.Self
@@ -47,7 +48,17 @@ func (b *Brain) craftNext(now time.Time) (Action, bool) {
 			return Action{}, true
 		}
 	}
-	if r := b.cfg.Travel.recipes[step.Recipe]; s.MP < r.MPCost {
+	r := b.cfg.Travel.recipes[step.Recipe]
+	if b.craftOverloads(r) {
+		if rows := b.craftDepositRows(c.remainingNeeds(b.cfg.Travel.recipes), now); len(rows) > 0 {
+			c.resume = true
+			b.beginDeposit(rows, now)
+			return Action{}, true
+		}
+		b.tripCrafter(now)
+		return Action{}, true
+	}
+	if s.MP < r.MPCost {
 		// Rule "rest" sits until StandMP from the next decision.
 		b.resting = true
 		return Action{}, true
@@ -56,6 +67,29 @@ func (b *Brain) craftNext(now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	return craftAction(step.Recipe), true
+}
+
+// craftOverloads reports whether a successful craft of r could take the
+// load to the weight limit, from which the bot cannot move (#488): the
+// server's craft never checks weight (craft/craft.go). The product weighs
+// its yield times its template's weight (TravelMap.weights), less the
+// materials the craft uses; a product the loaded table lacks weighs an
+// unknown amount and always could. With no weights or no limit known it
+// reports false.
+func (b *Brain) craftOverloads(r datapack.Recipe) bool {
+	s, t := &b.world.Self, b.cfg.Travel
+	if s.MaxLoad <= 0 || t == nil || len(t.weights) == 0 {
+		return false
+	}
+	unit, ok := t.weights[r.Product.ItemID]
+	if !ok {
+		return true
+	}
+	net := int64(unit) * int64(max(r.Product.Count, 1))
+	for _, g := range r.Materials {
+		net -= int64(t.weights[g.ItemID]) * int64(g.Count)
+	}
+	return int64(s.Load)+net >= int64(s.MaxLoad)
 }
 
 // remainingNeeds are the materials the plan's crafts left to go use, by

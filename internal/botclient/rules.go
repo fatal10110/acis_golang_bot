@@ -507,9 +507,11 @@ type rule struct {
 // outnumbered and flee rules go first, and ahead of "loot". "duel" fights
 // the duel opponent and holds every rule after it while the duel is on
 // (ruleDuel), after "raise". "overweight" drops what an immobile bot
-// carries (#488) right after "attacked", so a bot fights back first, and
-// ahead of "rest", whose regeneration the immobile band cuts to a tenth,
-// and of every errand, trip and farming rule.
+// carries (#488) ahead of "attacked", since a drop needs no move and an
+// attacker the bot cannot reach at speed 0 would hold it in the fight; it
+// gives way to the fight while the drop gate is closed. "overweight hold"
+// then holds "rest", whose regeneration the immobile band cuts to a tenth,
+// and every errand, trip and farming rule until the bot has shed.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -525,8 +527,9 @@ var playRules = []rule{
 	{"announce", (*Brain).ruleAnnounce},
 	{"party", (*Brain).ruleParty},
 	{"shots", (*Brain).ruleShots},
-	{"attacked", (*Brain).ruleAttacked},
 	{"overweight", (*Brain).ruleOverweight},
+	{"attacked", (*Brain).ruleAttacked},
+	{"overweight hold", (*Brain).ruleOverweightHold},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
 	{"buffpotion", (*Brain).ruleBuffPotion},

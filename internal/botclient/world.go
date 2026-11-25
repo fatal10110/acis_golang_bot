@@ -205,9 +205,11 @@ func (s *SelfState) moved(now time.Time, origin, dest Point) motion {
 // at the speeds the bot has now, re-timed from now for the distance left with
 // the updates done since its anchor (creature.go retimeLocked), and ending no
 // earlier than before unless its speed changed; a move over stands at the
-// sampled position. A move the bot's speed fell to 0 in stands at p: the
+// sampled position. A move the bot's speed fell to 0 in stalls at p: the
 // server's immobile weight band (refreshWeightPenalty) holds the character
-// where it reports it and sends no StopMove (#488).
+// where it reports it, sends no StopMove and keeps the leg in flight with
+// no arrival until the speed returns, then walks on to the old destination
+// (creature.go SetSpeed, retimeLocked; #488).
 func (s *SelfState) resample(now time.Time, p Point) {
 	old := s.move
 	from := old.sample(now, p)
@@ -217,14 +219,12 @@ func (s *SelfState) resample(now time.Time, p Point) {
 		s.move = m
 		return
 	}
-	if pace(s.Running, s.RunSpeed, s.WalkSpeed) <= 0 {
-		m := stopAt(p)
-		m.start = now
-		s.move = m
-		return
+	speed := pace(s.Running, s.RunSpeed, s.WalkSpeed)
+	if speed <= 0 {
+		from = p
 	}
 	m := old.withLine(from, old.to, now)
-	m.speed = pace(s.Running, s.RunSpeed, s.WalkSpeed)
+	m.speed = speed
 	var keep time.Time
 	if m.speed == old.speed {
 		keep = old.end()
@@ -247,8 +247,13 @@ func scale(origin, from, dest Point) float64 {
 // tryLiveMoveTo) and answers ActionFailed.
 func (s *SelfState) Swinging(now time.Time) bool { return now.Before(s.swingEnd) }
 
-// Moving reports whether the character is still on its way at now.
+// Moving reports whether the character is still on its way at now, a
+// move stalled at speed 0 included (Stalled).
 func (s *SelfState) Moving(now time.Time) bool { return s.move.moving(now) }
+
+// Stalled reports whether the character's move is held where it stands at
+// speed 0, as the server's immobile weight band holds it (resample).
+func (s *SelfState) Stalled() bool { return s.move.stalled() }
 
 // ObjectKind tells NPCs from players.
 type ObjectKind uint8
@@ -538,6 +543,11 @@ func (m motion) duration() time.Duration {
 	return time.Duration(total * float64(time.Second))
 }
 
+// stalled reports whether the motion is the bot's own move held at its
+// from at speed 0, on its way to to with no arrival until the speed
+// returns (creature.go retimeLocked).
+func (m motion) stalled() bool { return m.self != nil && m.speed <= 0 && m.from != m.to }
+
 // stopAt is a motion standing still at p.
 func stopAt(p Point) motion { return motion{from: p, to: p} }
 
@@ -545,6 +555,9 @@ func stopAt(p Point) motion { return motion{from: p, to: p} }
 // in the horizontal plane, z following in proportion, never past to; the
 // part in water at the swim speed, measured in 3D.
 func (m motion) at(now time.Time) Point {
+	if m.stalled() {
+		return m.from
+	}
 	if m.from == m.to || m.speed <= 0 {
 		return m.to
 	}
@@ -568,8 +581,11 @@ func (m motion) at(now time.Time) Point {
 }
 
 // moving reports whether the motion has not reached its end at now: for
-// the bot's own move, its modeled arrival.
+// the bot's own move, its modeled arrival, and never while it is stalled.
 func (m motion) moving(now time.Time) bool {
+	if m.stalled() {
+		return true
+	}
 	if m.self != nil {
 		return now.Before(m.self.end)
 	}
