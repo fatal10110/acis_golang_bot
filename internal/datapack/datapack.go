@@ -4,10 +4,12 @@
 // buylists (buyLists.xml), weapon, armor and etc item templates
 // (items/*.xml), skill templates (skills/*.xml), craft recipes
 // (recipes.xml), armor sets (armorSets.xml), water zones
-// (zones/WaterZone.xml) and class templates (classes/*.xml). Parse rules
+// (zones/WaterZone.xml), class templates (classes/*.xml), multisell lists
+// (multisell/*.xml) and restart points (restartPointAreas.xml). Parse rules
 // follow the server's loaders (acis_golang internal/gameserver/data/xml
-// npc.go, spawnlist.go, item.go, skill.go, economy.go, zone.go and
-// classtemplate.go), reduced to the fields bots use.
+// npc.go, spawnlist.go, item.go, skill.go, economy.go, zone.go,
+// classtemplate.go, multisell.go and restart.go), reduced to the fields bots
+// use.
 //
 // Load runs once per process. The returned Datapack is never mutated after
 // Load returns, so any number of goroutines may read it without locking.
@@ -42,6 +44,8 @@ type Datapack struct {
 	// type, tradable, priced) to its reference price in adena: the price
 	// a store's manage list shows.
 	Prices map[int32]int32
+	// Names maps the id of every template in Prices to its name.
+	Names map[int32]string
 	// Recipes maps a craft recipe id to its recipe.
 	Recipes map[int32]Recipe
 	// ArmorSets maps an armor set's chest template id to the set.
@@ -53,14 +57,19 @@ type Datapack struct {
 	// Classes maps a class ID to its template, skill tree merged with its
 	// line's.
 	Classes map[int32]Class
+	// Multisells are the multisell lists in file name order.
+	Multisells []Multisell
+	// RestartPoints are the restart points in file order.
+	RestartPoints []RestartPoint
 }
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
 // and skills/*.xml file directly under it, its teleports.xml, its
 // buyLists.xml, its recipes.xml, its armorSets.xml, its hennas.xml, its
-// zones/WaterZone.xml and every classes/*.xml file. xmlDir is configuration; the bot ships no datapack of its
-// own.
+// zones/WaterZone.xml, every classes/*.xml and multisell/*.xml file and its
+// restartPointAreas.xml. xmlDir is configuration; the bot ships no datapack
+// of its own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
 	if err != nil {
@@ -78,7 +87,7 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
-	items, etc, prices, err := LoadItems(filepath.Join(xmlDir, "items"))
+	items, err := LoadItems(filepath.Join(xmlDir, "items"))
 	if err != nil {
 		return nil, err
 	}
@@ -106,10 +115,19 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
+	multisells, err := LoadMultisells(filepath.Join(xmlDir, "multisell"))
+	if err != nil {
+		return nil, err
+	}
+	restarts, err := LoadRestartPoints(filepath.Join(xmlDir, "restartPointAreas.xml"))
+	if err != nil {
+		return nil, err
+	}
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
-		Items: items, EtcItems: etc, Prices: prices, Skills: skills, Recipes: recipes,
-		ArmorSets: armorSets, Hennas: hennas, WaterZones: water, Classes: classes,
+		Items: items.Items, EtcItems: items.Etc, Prices: items.Prices, Names: items.Names,
+		Skills: skills, Recipes: recipes, ArmorSets: armorSets, Hennas: hennas, WaterZones: water,
+		Classes: classes, Multisells: multisells, RestartPoints: restarts,
 	}, nil
 }
 

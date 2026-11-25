@@ -33,8 +33,27 @@ type Maker struct {
 	MaximumNPCs int
 	// Event names the event that switches the maker on; empty for an
 	// always-on maker.
-	Event  string
+	Event string
+	// SpawnTime is the spawnTime attribute, such as
+	// "siege_warfare_start(8)"; empty for none.
+	SpawnTime string
+	// AIType is the last <ai type> of the maker, else its maker attribute;
+	// empty for neither.
+	AIType string
+	// Params are the maker's <ai> <set> parameters named in makerParams, the
+	// last value of a name winning and "@" stripped, as the server's
+	// flattenAI does; nil for none.
+	Params map[string]string
 	Spawns []Spawn
+}
+
+// makerParams are the maker <ai> parameters bots read: the event gate
+// (EventName), the day or night half (IsNight), whether a linked maker
+// starts at boot (on_start_spawn) and the linked set of an instant random
+// maker (maker_name1 to maker_name3, maker_cnt).
+var makerParams = map[string]bool{
+	"EventName": true, "IsNight": true, "on_start_spawn": true,
+	"maker_name1": true, "maker_name2": true, "maker_name3": true, "maker_cnt": true,
 }
 
 // Spawn is one <npc> entry of a maker.
@@ -49,6 +68,9 @@ type Spawn struct {
 	// Respawn is the respawn delay: 0 when absent, NoRespawn for "no".
 	Respawn       time.Duration
 	RespawnRandom time.Duration
+	// Privates are the entry's own <privates><private> rows in file order,
+	// which replace its template's NPC.Privates; nil for none.
+	Privates []Private
 }
 
 // Position is one pos="x;y;z;heading[;chance%]" tuple.
@@ -82,14 +104,29 @@ type territoryElement struct {
 	Nodes []attrsElement `xml:"node"`
 }
 
-// makerElement is one <npcmaker>; its <ai> blocks are not read.
+// makerElement is one <npcmaker>: its attributes, its <ai> blocks and its
+// <npc> entries.
 type makerElement struct {
 	Attrs []xml.Attr     `xml:",any,attr"`
-	NPCs  []attrsElement `xml:"npc"`
+	AI    []aiElement    `xml:"ai"`
+	NPCs  []entryElement `xml:"npc"`
 }
 
-// attrsElement is an element read only for its attributes; its children
-// (an <npc>'s <ai> and <privates>) are not read.
+// aiElement is one <ai>: its type attribute and its <set> parameters.
+type aiElement struct {
+	Attrs []xml.Attr   `xml:",any,attr"`
+	Sets  []setElement `xml:"set"`
+}
+
+// entryElement is one <npc> entry of a maker: its attributes and its
+// <privates><private> rows (repeated <privates> blocks merge). Its <ai> is
+// not read.
+type entryElement struct {
+	Attrs    []xml.Attr     `xml:",any,attr"`
+	Privates []attrsElement `xml:"privates>private"`
+}
+
+// attrsElement is an element read only for its attributes.
 type attrsElement struct {
 	Attrs []xml.Attr `xml:",any,attr"`
 }
@@ -192,12 +229,19 @@ func buildMaker(el makerElement, territories map[string]*Territory, warnings *[]
 		}
 		spawns = append(spawns, s)
 	}
+	aiType, params := flattenMakerAI(el.AI)
+	if aiType == "" {
+		aiType = a.strDefault("maker", "")
+	}
 	m := &Maker{
 		Name:        a.str("name"),
 		Territories: refs,
 		Banned:      banned,
 		MaximumNPCs: a.int("maximumNpcs"),
 		Event:       a.strDefault("event", ""),
+		SpawnTime:   a.strDefault("spawnTime", ""),
+		AIType:      aiType,
+		Params:      params,
 		Spawns:      spawns,
 	}
 	if a.err != nil {
@@ -206,7 +250,29 @@ func buildMaker(el makerElement, territories map[string]*Territory, warnings *[]
 	return m, nil
 }
 
-func buildSpawn(el attrsElement) (Spawn, error) {
+// flattenMakerAI merges a maker's <ai> blocks the way the server's
+// flattenAI does for a maker: the last type named wins, a later value of a
+// parameter replaces an earlier one and "@" is removed from every value. It
+// keeps only the makerParams; nil params for none.
+func flattenMakerAI(ai []aiElement) (kind string, params map[string]string) {
+	for _, el := range ai {
+		if t, ok := foldAttrs(el.Attrs).vals["type"]; ok {
+			kind = t
+		}
+		for _, s := range el.Sets {
+			if !makerParams[s.Name] {
+				continue
+			}
+			if params == nil {
+				params = make(map[string]string)
+			}
+			params[s.Name] = strings.ReplaceAll(s.Val, "@", "")
+		}
+	}
+	return kind, params
+}
+
+func buildSpawn(el entryElement) (Spawn, error) {
 	a := foldAttrs(el.Attrs)
 	id := a.strDefault("id", "?")
 	positions, err := parsePositions(a.strDefault("pos", ""))
@@ -223,7 +289,26 @@ func buildSpawn(el attrsElement) (Spawn, error) {
 	if a.err != nil {
 		return Spawn{}, fmt.Errorf("npc %s: %w", id, a.err)
 	}
+	for _, p := range el.Privates {
+		private, err := buildSpawnPrivate(p)
+		if err != nil {
+			return Spawn{}, fmt.Errorf("npc %s: %w", id, err)
+		}
+		s.Privates = append(s.Privates, private)
+	}
 	return s, nil
+}
+
+// buildSpawnPrivate mirrors the server's buildSpawnPrivate
+// (data/xml/spawnlist.go): an entry's <private> needs its id and weight; its
+// respawn defaults to 0.
+func buildSpawnPrivate(el attrsElement) (Private, error) {
+	a := foldAttrs(el.Attrs)
+	p := Private{NPCID: a.int32("id"), Weight: a.int("weight"), Respawn: a.duration("respawn")}
+	if a.err != nil {
+		return Private{}, fmt.Errorf("private: %w", a.err)
+	}
+	return p, nil
 }
 
 // resolveTerritories looks up each ";"-separated name in raw the way the

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<area minZ="-3700" maxZ="-3000">
+		<node x="-84000" y="243000"/>
+		<node x="-83000" y="243000"/>
+		<node x="-83000" y="244000"/>
+		<restart race="ELF" zone="talking_island_town"/>
+	</area>
+	<point>
+		<set name="name" val="talking_island_town"/>
+		<set name="point" val="-83990;243336;-3700"/>
+		<set name="map" val="15;23"/>
+		<set name="map" val="16;23"/>
+		<set name="bbs" val="0"/>
+		<set name="locName" val="910"/>
+	</point>
+	<point>
+		<set name="name" val="no_tiles"/>
+		<set name="bbs" val="0"/>
+		<set name="locName" val="911"/>
+	</point>
+</list>
