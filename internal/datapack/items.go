@@ -51,6 +51,11 @@ type Item struct {
 	// Soulshots and Spiritshots are how many shots a weapon's attack or
 	// cast spends; 0 for armor and arrows.
 	Soulshots, Spiritshots int
+	// Skills are the item_skill entries: the passive skills the item
+	// gives while worn, whose Funcs carry a weapon's Special Ability
+	// (pvpPhysDmg, pvpPhysSkillsDmg, pvpMagicalDmg) and a jewel's
+	// vulnerabilities; nil for none.
+	Skills []SkillRef
 }
 
 // Stats are the base values of the stats bots compare gear by: what a
@@ -300,6 +305,11 @@ func buildItem(el itemElement) (Item, bool, error) {
 	if a.err != nil {
 		return Item{}, false, fmt.Errorf("item %d: %w", it.ID, a.err)
 	}
+	skills, err := parseSkillRefs(a.strDefault("item_skill", ""))
+	if err != nil {
+		return Item{}, false, fmt.Errorf("item %d: item_skill: %w", it.ID, err)
+	}
+	it.Skills = skills
 	if err := readStats(el, &it); err != nil {
 		return Item{}, false, fmt.Errorf("item %d: %w", it.ID, err)
 	}

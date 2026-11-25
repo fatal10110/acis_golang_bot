@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Sample of aCis_datapack/data/xml/zones/ArenaZone.xml. -->
+	<zone shape="NPoly" minZ="-3596" maxZ="-3396"><!-- dion_monster_pvp -->
+		<node x="11947" y="183019"/>
+		<node x="12937" y="183019"/>
+		<node x="12943" y="184010"/>
+		<node x="11941" y="184010"/>
+	</zone>
+</list>

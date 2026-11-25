@@ -4,7 +4,8 @@
 // buylists (buyLists.xml), weapon, armor and etc item templates
 // (items/*.xml), skill templates (skills/*.xml), craft recipes
 // (recipes.xml), armor sets (armorSets.xml), water zones
-// (zones/WaterZone.xml), class templates (classes/*.xml), multisell lists
+// (zones/WaterZone.xml), the arena, peace, town, Derby track, siege and
+// no-restart zones (zones/*.xml), class templates (classes/*.xml), multisell lists
 // (multisell/*.xml) and restart points (restartPointAreas.xml). Parse rules
 // follow the server's loaders (acis_golang internal/gameserver/data/xml
 // npc.go, spawnlist.go, item.go, skill.go, economy.go, zone.go,
@@ -54,6 +55,8 @@ type Datapack struct {
 	Hennas map[int32]Henna
 	// WaterZones are the water zones in file order: where a player swims.
 	WaterZones []WaterZone
+	// Zones are the zones that decide where a character may fight.
+	Zones Zones
 	// Classes maps a class ID to its template, skill tree merged with its
 	// line's.
 	Classes map[int32]Class
@@ -67,9 +70,9 @@ type Datapack struct {
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
 // and skills/*.xml file directly under it, its teleports.xml, its
 // buyLists.xml, its recipes.xml, its armorSets.xml, its hennas.xml, its
-// zones/WaterZone.xml, every classes/*.xml and multisell/*.xml file and its
-// restartPointAreas.xml. xmlDir is configuration; the bot ships no datapack
-// of its own.
+// zones/WaterZone.xml, the six zone files LoadZones reads, every
+// classes/*.xml and multisell/*.xml file and its restartPointAreas.xml.
+// xmlDir is configuration; the bot ships no datapack of its own.
 func Load(xmlDir string) (*Datapack, error) {
 	npcs, err := LoadNPCs(filepath.Join(xmlDir, "npcs"))
 	if err != nil {
@@ -111,6 +114,10 @@ func Load(xmlDir string) (*Datapack, error) {
 	if err != nil {
 		return nil, err
 	}
+	zones, err := LoadZones(filepath.Join(xmlDir, "zones"))
+	if err != nil {
+		return nil, err
+	}
 	classes, err := LoadClasses(filepath.Join(xmlDir, "classes"))
 	if err != nil {
 		return nil, err
@@ -126,7 +133,7 @@ func Load(xmlDir string) (*Datapack, error) {
 	return &Datapack{
 		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
 		Items: items.Items, EtcItems: items.Etc, Prices: items.Prices, Names: items.Names,
-		Skills: skills, Recipes: recipes, ArmorSets: armorSets, Hennas: hennas, WaterZones: water,
+		Skills: skills, Recipes: recipes, ArmorSets: armorSets, Hennas: hennas, WaterZones: water, Zones: zones,
 		Classes: classes, Multisells: multisells, RestartPoints: restarts,
 	}, nil
 }
