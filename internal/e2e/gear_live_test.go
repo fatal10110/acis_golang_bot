@@ -56,8 +56,9 @@ func TestLiveGearWear(t *testing.T) {
 	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, stripEnd{}, squiresSword, squiresShirt, squiresPants)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		fighterGear(p)
-		// Wearing only: what it is given, never what it could buy.
-		p.Gear.Buy, p.Shop = false, botclient.ShopPolicy{}
+		// Wearing only: what it is given, never what it could buy or
+		// what other players leave on the town's ground.
+		p.Gear.Buy, p.Shop, p.Loot.Ground = false, botclient.ShopPolicy{}, botclient.GroundNone
 	})
 	toTown(t, ctx, tg, gm, f)
 
