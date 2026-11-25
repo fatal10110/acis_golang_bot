@@ -173,10 +173,15 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - The valuables scenarios' buyer `<prefix>vb1` (`e2evb1`), no GM, with one human fighter whose
   name does **not** carry the bot marker, so the merchant answers it: the first of the fixed
   candidates `buyerNames` (`internal/e2e/valuables_buyer_test.go`) the server accepts; the
-  scenario fails before it logs in when the marker marks one. It destroys the valuables it bought
+  scenario fails before it logs in when the marker marks one (`checkUnmarkedNames`). It destroys the valuables it bought
   when the scenario ends and keeps the adena it was given. `e2evm2`, the warehouse scenario's
   merchant, ends each run carrying one Sword of Watershadow and one Tears of Eva; the next run's
   scripted login destroys that Tears (and any second sword) before its bot logs in.
+- The chat scenario's speaker `<prefix>ch3` (`e2ech3`), no GM, with one human fighter whose name
+  does **not** carry the bot marker, so the bot under test answers its whispers: the first of the
+  fixed candidates `speakerNames` (`internal/e2e/chat_speaker_test.go`) the server accepts, checked
+  like the buyer's. Every GM, minted or pinned, carries the marker, so no GM can be the speaker
+  (#485).
 - The minted GMs `<prefix>mint<N>` (`e2emint1`, ...), each with one character `<prefix>mint<N>Bot` of
   access level 7, recorded in `.e2e/minted-<prefix>`; later runs lease them again. They stay
   until the owner retires them (`//set access <name> 0` from a GM, then delete the record's
@@ -203,7 +208,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   merchant bot `e2em1` spends all its adena on Lesser Healing Potions each run, the town bot
   `e2etw1` all but 19000, and both keep what they bought; the town bot ends in another town, the
   Newbie Guide's bot `e2eg1` at level 8 with the newbie buffs. The buyers keep what they
-  bought and the adena they did not spend. `TestLiveChatReplies` has the GM say one line on the
+  bought and the adena they did not spend. `TestLiveChatReplies` has its speaker say one line on the
   shout and one on the trade channel ("e2e test line, please ignore"), which other players in
   the region see.
 - `TestLiveTrainer` sets its mystic to level 1 with no SP at the start and the end (the server
