@@ -1000,8 +1000,8 @@ unreachable (with a reason).
     flight or the last decision called `goTo`, and only while that time is later than the last
     walk wake. The wake is derived from the bot's motion, fires once per end and re-arms when the
     end moves later (a resample, a speed change, the next answer). It covers a normal answer, a
-    reset mid-segment, a desync or door replan (once the server's own move ends) and a blocked
-    stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
+    reset mid-segment, a desync or door replan (at the end of the hold below: the last leg of the
+    server's move plus one tick plus A) and a blocked stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
   - **Click-ahead at checked corners** (#308; owner, 2026-11-25). A segment that is not the
     route's last sends the next one before its own move ends, so the server turns the walk at the
     corner instead of stopping there. A click while moving retargets the server's walk: a catch-up
@@ -1064,9 +1064,22 @@ unreachable (with a reason).
   - A `MoveToLocation` answering the bot's click with another destination is a **desync**. The
     server routed or truncated, so the bot's geodata or door state differs from the server's. The
     walker counts `nav_desync_total`, logs the segment (from, to) with the server's origin and
-    destination at warn level (`nav desync`), so a run names the leg its check got wrong, and
-    replans from the server's origin. If the segment crosses a door cell, it counts
-    `nav_door_replan_total` instead, which does not count toward unreachable.
+    destination at warn level (`nav desync`), so a run names the leg its check got wrong. If the
+    segment crosses a door cell, it counts `nav_door_replan_total` instead, which does not count
+    toward unreachable.
+  - **Hold after a desync** (#501). A routed answer is the route's first waypoint: the server
+    queues the rest and sends each next leg as a new `MoveToLocation` at the end of the one before,
+    with no click (`resolvePathLocked`, `finishLocked`, `segmentAdvanced`). That leg reaches the
+    bot about when the bot models the last one's end, so a segment sent then would take the next
+    leg for its answer and click over the server's route. After every desync, door replans
+    included (a routed answer cannot be told from a truncated one on the wire), the walker holds:
+    it sends nothing until no leg of the bot's own move arrived for one position tick plus the
+    answer lag A after the modeled end of the last one received, or a `StopMove`, a blocked
+    correction or a teleport confirms the standstill. The world model follows each leg as it
+    arrives, and a leg with no click in flight is no answer, so it counts nothing. The walk wake
+    moves with the hold. When the hold ends, a bot within the walk's arrival radius of its
+    destination has arrived; otherwise the walker plans from where it stands. The hold applies
+    only after a desync: the normal path keeps its one-tick wait.
   - **Answers around a click-ahead.** The connection keeps the server's order, so what the server
     sent about the previous segment before it took the click arrives before the click's answer,
     and that answer always moves (a direct click toward the next waypoint):
