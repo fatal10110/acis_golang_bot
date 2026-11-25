@@ -10,18 +10,26 @@ import (
 // is gone and the session drops its stay, roam, follow and assist, keeping a
 // reply or a withdrawal not sent yet, so neither applyStanding nor followed
 // keeps the old order. A join's leader is known for the rest of the run
-// (slotAnswer).
+// (slotAnswer), as is every member a lead lists (oust).
 func (b *Brain) setPartySlot(c Command) {
 	l := b.cfg.link
 	l.order = standing{}
 	b.orders = orders{reply: b.orders.reply, withdraw: b.orders.withdraw}
 	b.orderPending = false
 	l.party, l.partyLeft = c, ""
-	if c.Kind == CommandJoin {
+	switch c.Kind {
+	case CommandJoin:
 		if l.leaders == nil {
 			l.leaders = make(map[string]bool)
 		}
 		l.leaders[slotLeader(c)] = true
+	case CommandLead:
+		if l.listed == nil {
+			l.listed = make(map[string]bool)
+		}
+		for _, name := range strings.Fields(c.Arg) {
+			l.listed[name] = true
+		}
 	}
 }
 
@@ -45,13 +53,14 @@ func (b *Brain) unparty() {
 // party slot named it withdraws (orders.withdraw, sent by ruleCommand ahead
 // of any reply); in no party it resets the leader watch, so a bot freed
 // from a dispersed bot party neither whispers its old leader nor casts
-// /unstuck. In any other party it does nothing: it never takes a bot out of
-// a player's party.
+// /unstuck. A join member the server made leader withdraws too, ending its
+// handover (docs/parties/leader.md). In any other party it does nothing: it
+// never takes a bot out of a player's party.
 func (b *Brain) leaveSlot(slot Command) {
 	switch {
 	case !b.world.Party.In():
 		b.lead = leaderWatch{}
-	case b.inSlotParty(slot):
+	case b.inSlotParty(slot), slot.Kind == CommandJoin && b.leading():
 		b.orders.withdraw = true
 	}
 }

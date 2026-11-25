@@ -144,6 +144,7 @@ const (
 	opGameRequestJoinParty       = 0x29
 	opGameRequestAnswerJoinParty = 0x2a
 	opGameRequestWithdrawParty   = 0x2b
+	opGameRequestOustPartyMember = 0x2c
 )
 
 // Clan, both directions (internal/gameserver/network/serverpackets/pledge.go,
@@ -255,6 +256,9 @@ const (
 	// follows.
 	opGameClientExtended             = 0xd0
 	opGameRequestAutoSoulShot uint16 = 0x0005
+	// opGameRequestChangePartyLeader follows opGameClientExtended
+	// (clientpackets/party.go).
+	opGameRequestChangePartyLeader uint16 = 0x0004
 )
 
 // Dialogs and the class trainer, both directions

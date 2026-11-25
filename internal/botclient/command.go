@@ -18,7 +18,8 @@ const chatTell int32 = 2
 const echoPrefix = "->"
 
 // inviteMeText is what the bot whispers back to a GM's "invite me": the bot
-// invites nobody, so the GM stays its party's leader.
+// invites only the bots its lead slot lists, never a GM, so the GM stays
+// its party's leader.
 const inviteMeText = "invite me"
 
 // Replies to a "go" the bot cannot carry out.

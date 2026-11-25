@@ -350,14 +350,20 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 // (docs/parties/members.md, "Join hold"): holding a join slot in no party,
 // it waits for its leader's invitation, claiming nothing, for any loss of
 // its leader and between invitations; it neither whispers nor casts
-// /unstuck. The rules ahead of "leader" (attacked, heal, rest, rebuff, the
-// errands) still run. JoinWait after the bot found itself partyless the
+// /unstuck. It holds a join member the server made leader the same way
+// while its handover runs (rule "party"), so the bot neither follows itself
+// nor claims a spot. The rules ahead of "leader" (attacked, heal, rest,
+// rebuff, the errands) still run. JoinWait after the bot found itself
+// partyless the
 // brain clears the slot (Status.PartyLeft "timeout") and resets the leader
 // watch, ending the hold: the bot plays its persona where it stands.
 func (b *Brain) joinHold(now time.Time) bool {
 	l, v := b.cfg.link, &b.lead
-	if l == nil || l.party.Kind != CommandJoin || b.world.Party.In() {
+	if l == nil || l.party.Kind != CommandJoin {
 		return false
+	}
+	if b.world.Party.In() {
+		return b.leading()
 	}
 	w := b.persona.Recover.JoinWait
 	if w <= 0 || v.partyless.IsZero() || now.Before(v.partyless.Add(w)) {
