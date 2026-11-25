@@ -178,7 +178,7 @@ func (b *Bot) publish(state BotState, err error) {
 	st := b.link.board.load()
 	st.At, st.State, st.Rule, st.Spot, st.Walk, st.Crafter = b.cfg.Clock.Now(), state, "", "", "", nil
 	st.Character, st.Order, st.Reconnects = cmp.Or(b.char.Name, st.Character), b.link.order.cmd, b.reconnects
-	st.Party, st.Whispered = b.link.party.String(), false
+	st.Party, st.Whispered, st.PartyLeft = b.link.party.String(), false, b.link.partyLeft
 	if err != nil {
 		st.Err = err
 	}
@@ -196,7 +196,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st, w := l.board.load(), b.world
 	s := &w.Self
 	st.At, st.State, st.Rule, st.Order = now, StateOnline, b.lastRule, l.order.cmd
-	st.Party, st.Whispered = l.party.String(), b.orders.whispered
+	st.Party, st.Whispered, st.PartyLeft = l.party.String(), b.orders.whispered, l.partyLeft
 	st.Spot, st.Walk = "", b.walk.failed()
 	if b.spot.farming() {
 		st.Spot = b.cfg.Spots.spots[b.spot.idx].Maker

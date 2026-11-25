@@ -195,9 +195,15 @@ type leaderWatch struct {
 
 // watchLeader updates the watch from the party: a leader that is no longer
 // the party's (the party disbanded, or the bot leads it now) is lost; the
-// lost leader leading the bot again, or a new leader, ends the loss.
+// lost leader leading the bot again, or a new leader, ends the loss. A join
+// member the server made leader keeps its slot for the handover, so it
+// counts no leader lost (docs/parties/leader.md, "Handover").
 func (b *Brain) watchLeader(now time.Time) {
 	v, w := &b.lead, b.world
+	if l := b.cfg.link; l != nil && l.party.Kind == CommandJoin && w.Party.In() && w.Party.LeaderID == w.Self.ObjectID {
+		*v = leaderWatch{}
+		return
+	}
 	var cur int32
 	if p := &w.Party; p.In() && p.LeaderID != w.Self.ObjectID {
 		cur = p.LeaderID
@@ -290,7 +296,7 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 		return a, true
 	}
 	v, p, s := &b.lead, &b.persona.Recover, &b.world.Self
-	if v.lost.IsZero() || p.LeaderWait <= 0 || b.orders.follow != 0 {
+	if v.lost.IsZero() || p.LeaderWait <= 0 || b.orders.follow != 0 || b.slotLeaderLost() {
 		return Action{}, false
 	}
 	switch {
@@ -314,6 +320,15 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 		return b.toggle(now), true
 	}
 	return escapeAction(), true
+}
+
+// slotLeaderLost reports whether the lost leader is a bot the party slot
+// names: bots of a bot party never whisper each other (docs/plan.md, D29),
+// and a join member the server made leader keeps its slot for the handover
+// instead of waiting (docs/parties/members.md, "Clearing from no party").
+func (b *Brain) slotLeaderLost() bool {
+	l := b.cfg.link
+	return l != nil && l.party.Kind != 0 && b.lead.name != "" && slotNames(l.party, b.lead.name)
 }
 
 // byLeaderBody sits the bot by the body of the leader it follows, within

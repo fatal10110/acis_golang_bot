@@ -183,6 +183,13 @@ func (b *Brain) obey(v verdict, now time.Time) {
 	}
 	o := &b.orders
 	switch v.cmd.kind {
+	case cmdFollow, cmdAssist, cmdStay, cmdGo, cmdInviteMe, cmdLeave:
+		// The order, and a GM's invite me or leave, take the bot out of its
+		// bot party and clear its slot first: ruleCommand sends the
+		// withdrawal ahead of any move or reply.
+		b.clearSlot()
+	}
+	switch v.cmd.kind {
 	case cmdFollow:
 		o.stay, o.roam, o.follow = false, false, v.sender
 	case cmdAssist:
@@ -200,9 +207,11 @@ func (b *Brain) obey(v verdict, now time.Time) {
 		}
 	case cmdLeave:
 		// The server ignores a withdrawal from no party (server
-		// internal/gameserver/network/partymatch.go, withdrawParty).
+		// internal/gameserver/network/partymatch.go, withdrawParty), so the
+		// bot sends one only from a party, through the withdraw flag: a
+		// disband before it goes drops it.
 		if b.world.Party.In() {
-			o.reply = leavePartyAction()
+			o.withdraw = true
 		}
 	case cmdCraft:
 		b.craftOrder(v.tell, OrderByGM, now)

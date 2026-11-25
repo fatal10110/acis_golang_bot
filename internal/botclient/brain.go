@@ -465,6 +465,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.world.Apply(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
+		b.slotPartyEvent(ev)
 		b.partyClaimEvent(ev)
 		switch e := ev.(type) {
 		case LeaveWorld:
