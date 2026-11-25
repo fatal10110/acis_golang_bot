@@ -208,7 +208,9 @@ func (w StatWeights) score(it *datapack.Item, enchant int) float64 {
 // daggers and archers bows (the shop errand restocks their arrows,
 // ShopPolicy.ArrowsMin) in light armor; monks fists in light armor; gladiators and bladedancers
 // duals, warlords polearms and destroyers two-handed weapons, in heavy
-// armor; the first fighter classes swords or blunts in light armor (their
+// armor; the warrior its lines' two-handed blunts and polearms in heavy
+// armor without a shield (CompileBuild keeps its line's one, lineWeapons);
+// the first fighter classes swords or blunts in light armor (their
 // starting set) with a shield; every other fighter swords, blunts or
 // their two-handed kinds in heavy armor with a shield (classes/*.xml,
 // model/actor/player/race.go). Mystics weigh gear as casters, every other
@@ -223,6 +225,7 @@ func defaultGearClasses() []GearClass {
 		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{46, 113}, Weapons: []string{"BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{1}, Weapons: []string{"BIGBLUNT", "POLE"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 	}

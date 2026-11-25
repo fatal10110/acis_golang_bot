@@ -210,3 +210,13 @@ var branchWeapons = map[int32][]string{
 	9: bowBranch, 24: bowBranch, 37: bowBranch,
 	48: fistWeapons,
 }
+
+// lineWeapons are the weapon kinds of the first professions whose row names
+// one per line, by second profession (docs/strategy.md, column 1 of row
+// WA): the Warrior's two-handed blunt on the Gladiator line (Stun Attack and
+// Power Smash take it) and its polearm on the Warlord line (Wild Sweep).
+// Their base row keeps its own (row HF: a sword or a blunt with a shield).
+var lineWeapons = map[int32][]string{
+	2: {"BIGBLUNT"},
+	3: {"POLE"},
+}

@@ -32,6 +32,8 @@ const (
 	redSunsetSword   int32 = 981
 	cottonRobe       int32 = 427
 	testSword24000   int32 = 90001
+	shortSpear       int32 = 15
+	conjurorsStaff   int32 = 1304
 	classHumanFight  int32 = 0
 	classWarrior     int32 = 1
 	classRogue       int32 = 7
@@ -59,6 +61,8 @@ var slotTemplates = func() map[int32]datapack.Item {
 		{ID: redSunsetSword, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGSWORD", Price: 25500, Stats: datapack.Stats{PAtk: 16, MAtk: 10, PAtkSpd: 325}},
 		{ID: cottonRobe, Type: "Armor", BodyPart: "fullarmor", Kind: "MAGIC", Price: 3550, Stats: datapack.Stats{PDef: 35}},
 		{ID: testSword24000, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Price: 24000, Stats: datapack.Stats{PAtk: 12, MAtk: 9, PAtkSpd: 379}},
+		{ID: shortSpear, Type: "Weapon", BodyPart: "lrhand", Kind: "POLE", Price: 136000, Stats: datapack.Stats{PAtk: 24, MAtk: 17, PAtkSpd: 325}},
+		{ID: conjurorsStaff, Type: "Weapon", BodyPart: "lrhand", Kind: "BIGBLUNT", Price: 66600, Stats: datapack.Stats{PAtk: 15, MAtk: 17, PAtkSpd: 325}},
 	} {
 		m[it.ID] = it
 	}
@@ -112,8 +116,13 @@ func TestIndexGearSlots(t *testing.T) {
 	}
 }
 
-// TestGearSlotsBeats checks shields, jewelry, the two-handed trade-off and
-// the class table's empty slots.
+// swapTable is a class table of one entry wielding swords, blunts and their
+// two-handed kinds with a shield: the two-handed trade-off cases' class.
+var swapTable = []GearClass{{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights}}
+
+// TestGearSlotsBeats checks shields, jewelry, the two-handed trade-off,
+// the warrior's two-handers without a shield and the class table's empty
+// slots.
 func TestGearSlotsBeats(t *testing.T) {
 	sword := wornAt(201, shortSword, partRHand)
 	wand := wornAt(201, apprenticeWand, partRHand)
@@ -125,6 +134,7 @@ func TestGearSlotsBeats(t *testing.T) {
 		class     int32
 		noJewelry bool
 		noTable   bool
+		table     []GearClass
 		items     []Item
 		id        int32
 		want      bool
@@ -146,16 +156,23 @@ func TestGearSlotsBeats(t *testing.T) {
 		{name: "no shield for a mystic", class: classMysticHuman, items: []Item{wand}, id: smallShield},
 		{name: "no shield for a rogue", class: classRogue, id: smallShield},
 		{name: "no shield over a two-hander", class: classWarrior, items: []Item{twoHander}, id: smallShield},
+		{name: "no shield for an unarmed warrior", class: classWarrior, id: smallShield},
+		{name: "unarmed warrior takes a two-handed blunt", class: classWarrior, id: conjurorsStaff, want: true},
+		{name: "unarmed warrior takes a pole", class: classWarrior, id: shortSpear, want: true},
+		{name: "unarmed warrior, a sword", class: classWarrior, id: longSword},
+		{name: "unarmed warrior, a two-handed sword", class: classWarrior, id: redSunsetSword},
+		{name: "warrior's pole over sword and shield", class: classWarrior, items: []Item{sword, shield(buckler)}, id: shortSpear, want: true},
+		{name: "warrior's sword under a pole", class: classWarrior, items: []Item{wornAt(201, shortSpear, partLRHand)}, id: testSword24000},
 		{name: "better shield", class: classHumanFight, items: []Item{sword, shield(leatherShield)}, id: buckler, want: true},
 		{name: "cheaper shield", class: classHumanFight, items: []Item{sword, shield(buckler)}, id: smallShield},
 		{name: "enchanted shield under a better one", class: classHumanFight, items: []Item{sword, {ObjectID: 204, TemplateID: leatherShield, Equipped: true, BodySlot: partLHand, Enchant: 1}}, id: buckler, want: true},
-		{name: "two-hander over sword and shield", class: classWarrior, items: []Item{sword, shield(buckler)}, id: redSunsetSword, want: true},
-		{name: "two-hander under sword and carried shield", class: classWarrior, items: []Item{wornAt(201, testSword24000, partRHand), carried(220, buckler, partLHand)}, id: redSunsetSword},
-		{name: "two-hander under long sword", class: classWarrior, items: []Item{wornAt(201, longSword, partRHand)}, id: redSunsetSword},
-		{name: "two-hander over sword and enchanted shield", class: classWarrior, items: []Item{sword, {ObjectID: 204, TemplateID: buckler, Equipped: true, BodySlot: partLHand, Enchant: 2}}, id: redSunsetSword, want: true},
+		{name: "two-hander over sword and shield", class: classKnight, table: swapTable, items: []Item{sword, shield(buckler)}, id: redSunsetSword, want: true},
+		{name: "two-hander under sword and carried shield", class: classKnight, table: swapTable, items: []Item{wornAt(201, testSword24000, partRHand), carried(220, buckler, partLHand)}, id: redSunsetSword},
+		{name: "two-hander under long sword", class: classKnight, table: swapTable, items: []Item{wornAt(201, longSword, partRHand)}, id: redSunsetSword},
+		{name: "two-hander over sword and enchanted shield", class: classKnight, table: swapTable, items: []Item{sword, {ObjectID: 204, TemplateID: buckler, Equipped: true, BodySlot: partLHand, Enchant: 2}}, id: redSunsetSword, want: true},
 		{name: "no two-hander for a first fighter", class: classHumanFight, items: []Item{sword}, id: redSunsetSword},
-		{name: "sword under a two-hander", class: classWarrior, items: []Item{twoHander}, id: testSword24000},
-		{name: "sword and carried shield over a two-hander", class: classWarrior, items: []Item{twoHander, carried(220, buckler, partLHand)}, id: testSword24000, want: true},
+		{name: "sword under a two-hander", class: classKnight, table: swapTable, items: []Item{twoHander}, id: testSword24000},
+		{name: "sword and carried shield over a two-hander", class: classKnight, table: swapTable, items: []Item{twoHander, carried(220, buckler, partLHand)}, id: testSword24000, want: true},
 		{name: "staff over a wand", class: classMysticHuman, items: []Item{wand}, id: willowStaff, want: true},
 		{name: "jewelry fills the neck", class: classMysticHuman, id: necklaceOfMagic, want: true},
 		{name: "jewelry off", class: classMysticHuman, noJewelry: true, id: necklaceOfMagic},
@@ -173,6 +190,9 @@ func TestGearSlotsBeats(t *testing.T) {
 			b.persona.Gear.Jewelry = !tt.noJewelry
 			if tt.noTable {
 				b.persona.Gear.Classes = []GearClass{}
+			}
+			if tt.table != nil {
+				b.persona.Gear.Classes = tt.table
 			}
 			w := b.worn()
 			if got := b.beats(tt.id, &w); got != tt.want {
@@ -226,11 +246,11 @@ func TestBrainGearPairStuck(t *testing.T) {
 	}
 }
 
-// TestBrainGearTwoHander wears a two-handed sword over a sword and shield:
-// the server takes the shield off, and both are junk.
+// TestBrainGearTwoHander has a warrior wear a two-handed blunt over a sword
+// and shield: the server takes the shield off, and both are junk.
 func TestBrainGearTwoHander(t *testing.T) {
 	sword, shield := wornAt(201, shortSword, partRHand), wornAt(204, buckler, partLHand)
-	b := newSlotsBrain(t, classWarrior, sword, shield, carried(220, redSunsetSword, partLRHand))
+	b := newSlotsBrain(t, classWarrior, sword, shield, carried(220, conjurorsStaff, partLRHand))
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "wear the two-hander", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(220)},
 		{
@@ -238,7 +258,7 @@ func TestBrainGearTwoHander(t *testing.T) {
 			events: []Event{InventoryUpdate{Changes: []ItemChange{
 				{ItemModified, carried(204, buckler, partLHand)},
 				{ItemModified, carried(201, shortSword, partRHand)},
-				{ItemModified, wornAt(220, redSunsetSword, partLRHand)},
+				{ItemModified, wornAt(220, conjurorsStaff, partLRHand)},
 			}}},
 		},
 	})
