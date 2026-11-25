@@ -110,6 +110,15 @@ type Status struct {
 	Build *BuildStatus
 	// Order is the standing order of the panel, the zero Command for none.
 	Order Command
+	// Party is the party slot, "lead A B" or "join L A B", "" for none
+	// (docs/parties/orders.md).
+	Party string
+	// Whispered is true while a GM's whispered follow, assist, stay or go
+	// holds the session: a lead or a join then answers ErrWhispered.
+	Whispered bool
+	// PartyLeft is why the brain last cleared its own party slot this run,
+	// "left" or "timeout"; "" while a slot is set or after an unparty.
+	PartyLeft string
 	// Reconnects counts the bot's attempts after its first.
 	Reconnects int
 	// Err is why the latest attempt ended, or why the bot stopped; nil
@@ -169,6 +178,7 @@ func (b *Bot) publish(state BotState, err error) {
 	st := b.link.board.load()
 	st.At, st.State, st.Rule, st.Spot, st.Walk, st.Crafter = b.cfg.Clock.Now(), state, "", "", "", nil
 	st.Character, st.Order, st.Reconnects = cmp.Or(b.char.Name, st.Character), b.link.order.cmd, b.reconnects
+	st.Party, st.Whispered = b.link.party.String(), false
 	if err != nil {
 		st.Err = err
 	}
@@ -186,6 +196,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st, w := l.board.load(), b.world
 	s := &w.Self
 	st.At, st.State, st.Rule, st.Order = now, StateOnline, b.lastRule, l.order.cmd
+	st.Party, st.Whispered = l.party.String(), b.orders.whispered
 	st.Spot, st.Walk = "", b.walk.failed()
 	if b.spot.farming() {
 		st.Spot = b.cfg.Spots.spots[b.spot.idx].Maker

@@ -16,7 +16,10 @@ type CommandKind uint8
 
 // The panel's commands. Stay, go, follow and assist are standing orders: the
 // Bot keeps the latest one and applies it again at every session start.
-// Leave and logout are one-off.
+// Leave and logout are one-off. Lead and join are standing too, in the
+// Bot's party slot beside its standing order; unparty, which clears the
+// slot, is one-off (docs/parties/orders.md). The panel's raw command route
+// takes only stay to logout.
 const (
 	CommandStay CommandKind = iota + 1
 	CommandGo
@@ -24,15 +27,21 @@ const (
 	CommandAssist
 	CommandLeave
 	CommandLogout
+	CommandLead
+	CommandJoin
+	CommandUnparty
 )
 
 var commandNames = [...]string{
-	CommandStay:   "stay",
-	CommandGo:     "go",
-	CommandFollow: "follow",
-	CommandAssist: "assist",
-	CommandLeave:  "leave",
-	CommandLogout: "logout",
+	CommandStay:    "stay",
+	CommandGo:      "go",
+	CommandFollow:  "follow",
+	CommandAssist:  "assist",
+	CommandLeave:   "leave",
+	CommandLogout:  "logout",
+	CommandLead:    "lead",
+	CommandJoin:    "join",
+	CommandUnparty: "unparty",
 }
 
 func (k CommandKind) String() string {
@@ -43,7 +52,8 @@ func (k CommandKind) String() string {
 }
 
 // Command is an order of the control panel to one bot. Arg is the spot of
-// a go and the player's name of a follow or an assist, and empty for the
+// a go and the player's name of a follow or an assist, the character names
+// of a lead or a join (the leader first), single-spaced, and empty for the
 // others. The zero Command is no order.
 type Command struct {
 	Kind CommandKind
@@ -65,12 +75,49 @@ func (c Command) String() string {
 // valid reports a known command with the argument it takes.
 func (c Command) valid() bool {
 	switch c.Kind {
-	case CommandStay, CommandLeave, CommandLogout:
+	case CommandStay, CommandLeave, CommandLogout, CommandUnparty:
 		return c.Arg == ""
 	case CommandGo, CommandFollow, CommandAssist:
 		return strings.TrimSpace(c.Arg) == c.Arg && c.Arg != ""
+	case CommandLead, CommandJoin:
+		return validPartyNames(c.Arg)
 	}
 	return false
+}
+
+// maxPartyNames is the most names a lead or a join takes: the other members
+// of a full party (maxPartyMembers).
+const maxPartyNames = maxPartyMembers - 1
+
+// validPartyNames reports 1 to maxPartyNames character names, single-spaced,
+// each 1 to 16 ASCII letters or digits, none twice in any case.
+func validPartyNames(arg string) bool {
+	names := strings.Split(arg, " ")
+	if len(names) > maxPartyNames {
+		return false
+	}
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		k := strings.ToLower(n)
+		if !validPartyName(n) || seen[k] {
+			return false
+		}
+		seen[k] = true
+	}
+	return true
+}
+
+// validPartyName reports 1 to 16 ASCII letters or digits.
+func validPartyName(n string) bool {
+	if n == "" || len(n) > 16 {
+		return false
+	}
+	for _, r := range n {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // Errors Bot.Command returns at once, and the answers of commands a
@@ -94,6 +141,9 @@ var (
 	ErrNotInSight = errors.New("player not in sight")
 	// ErrNoParty answers a leave while the bot is in no party.
 	ErrNoParty = errors.New("not in a party")
+	// ErrWhispered answers a lead or a join while a GM's whispered follow,
+	// assist, stay or go holds the session (Status.Whispered).
+	ErrWhispered = errors.New("held by a GM's whispered order")
 )
 
 // mail is a command in a Bot's mailbox. queued is set when it came while no
@@ -121,13 +171,19 @@ type standing struct {
 }
 
 // botLink is what a Bot lends each session's brain: its mailbox, its
-// standing order, its status board and the crafter's last cycle end. The
-// brain runs on Run's goroutine, so it writes the order, the cycle end and
-// publishes the status as their one owner.
+// standing order, its party slot, its status board and the crafter's last
+// cycle end. The brain runs on Run's goroutine, so it writes the order, the
+// slot, the cycle end and publishes the status as their one owner. A Bot
+// plays one run, so a new run starts with no slot and no known leader.
 type botLink struct {
 	mail  chan mail
 	order standing
-	board statusBoard
+	// party is the party slot: the latest lead or join of the panel, the
+	// zero Command for none (docs/parties/orders.md). leaders are the
+	// leaders every join of this run named (slotAnswer).
+	party   Command
+	leaders map[string]bool
+	board   statusBoard
 	// crafter is how the crafter's last cycle ended and until when its
 	// breaker holds: the next session's brain resumes from it.
 	crafter craftEnded
@@ -135,7 +191,8 @@ type botLink struct {
 
 // Command hands c to the bot and returns the channel its one answer comes
 // on: nil once a session carried it out, else why not (ErrNoSpots,
-// ErrUnknownSpot, ErrSpotFull, ErrNotInSight, ErrNoParty, ErrStopped). It
+// ErrUnknownSpot, ErrSpotFull, ErrNotInSight, ErrNoParty, ErrWhispered,
+// ErrStopped). It
 // never waits for the bot: a full mailbox answers ErrBusy, a stopped bot
 // ErrStopped. A command that comes between sessions waits for the next
 // one. No command sends a whisper: every packet goes out through the
@@ -213,7 +270,7 @@ func (b *Brain) panelOrder(c Command, queued bool, now time.Time) error {
 		if err := b.goToSpot(c.Arg, now); err != nil {
 			return err
 		}
-		*o = orders{roam: true, reply: o.reply}
+		*o = orders{roam: true, reply: o.reply, withdraw: o.withdraw}
 	case CommandFollow, CommandAssist:
 		id, name, ok := b.playerInSight(0, c.Arg)
 		if !ok && !queued {
@@ -240,6 +297,15 @@ func (b *Brain) panelOrder(c Command, queued bool, now time.Time) error {
 			b.requestLogout(now)
 		}
 		return nil
+	case CommandLead, CommandJoin:
+		if o.whispered {
+			return ErrWhispered
+		}
+		b.setPartySlot(c)
+		return nil
+	case CommandUnparty:
+		b.unparty()
+		return nil
 	}
 	b.orderPending = false
 	b.cfg.link.order = standing{cmd: c}
@@ -248,7 +314,7 @@ func (b *Brain) panelOrder(c Command, queued bool, now time.Time) error {
 
 // holdStill makes the bot stay where it stands, dropping its other orders.
 func (b *Brain) holdStill() {
-	b.orders = orders{stay: true, reply: b.orders.reply}
+	b.orders = orders{stay: true, reply: b.orders.reply, withdraw: b.orders.withdraw}
 	b.assist = assistPlan{}
 }
 
@@ -256,7 +322,7 @@ func (b *Brain) holdStill() {
 // follows or assists (kind), dropping its other orders.
 func (b *Brain) orderPlayer(kind CommandKind, id int32) {
 	o := &b.orders
-	*o = orders{reply: o.reply}
+	*o = orders{reply: o.reply, withdraw: o.withdraw}
 	if kind == CommandFollow {
 		o.follow = id
 	} else {
