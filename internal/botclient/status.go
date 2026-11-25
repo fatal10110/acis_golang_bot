@@ -63,6 +63,21 @@ type Status struct {
 	MP, MaxMP      int32
 	CP, MaxCP      int32
 	Position       Point
+	// RunSpeed is the run speed the server gave last, its penalties
+	// applied (UserInfo).
+	RunSpeed int32
+	// Load and MaxLoad are the carried weight and the weight limit, 0
+	// until known; Weight is Load in percent of MaxLoad, and WeightPenalty
+	// the server's weight band for it (weightBand, 0-4: 2 and 3 halve the
+	// move speed, 4 stops the bot).
+	Load, MaxLoad int32
+	Weight        int32
+	WeightPenalty int32
+	// GradePenalty is set while the server holds the grade penalty on the
+	// bot: a worn piece above its Expertise grade slows it (skill 4267).
+	// DeathPenalty is its death penalty level (0-15).
+	GradePenalty bool
+	DeathPenalty int32
 	// Town is the town of the travel map nearest to Position, nil without
 	// a travel map (BrainConfig.Travel).
 	Town *Point
@@ -176,6 +191,11 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st.Character, st.ClassID, st.Level = s.Name, s.ClassID, s.Level
 	st.HP, st.MaxHP, st.MP, st.MaxMP, st.CP, st.MaxCP = s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP
 	st.Position = s.Position(now)
+	st.RunSpeed, st.Load, st.MaxLoad, st.Weight = s.RunSpeed, s.Load, s.MaxLoad, 0
+	if s.MaxLoad > 0 {
+		st.Weight = int32(int64(s.Load) * 100 / int64(s.MaxLoad))
+	}
+	st.WeightPenalty, st.GradePenalty, st.DeathPenalty = weightBand(s.Load, s.MaxLoad), w.gradePenalty(), s.DeathPenalty
 	st.Town = b.nearestTown(st.Position)
 	st.ClanID, st.ClanLeader = w.Clan.ID, w.Clan.Leader
 	st.Crafter = b.crafterStatus(now)

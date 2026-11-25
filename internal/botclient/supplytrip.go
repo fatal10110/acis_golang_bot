@@ -332,8 +332,8 @@ func (b *Brain) supplyDue(now time.Time) tripCause {
 // supplyCause is the first trigger of a supply trip that holds
 // (docs/items.md section 7), causeNone for none: a consumable it uses
 // fighting runs out within ReturnMinutes, its HP potions are gone, its load
-// is past ReturnLoad with ShedMin to shed, or it carries the price of the
-// gear goal. The Extra supplies and the Scrolls of Escape count toward
+// is past ReturnLoad with ShedMin to shed, or in the half-speed band
+// (slowed) with anything to shed, or it carries the price of the gear goal. The Extra supplies and the Scrolls of Escape count toward
 // none.
 func (b *Brain) supplyCause() tripCause {
 	p, v := &b.persona.Supply, &b.supplyTrip
@@ -350,7 +350,8 @@ func (b *Brain) supplyCause() tripCause {
 		return causeRunOut
 	case potion && v.potions && potions == 0:
 		return causePotions
-	case b.overloaded() && b.shed()*100 >= int64(b.world.Self.MaxLoad)*int64(p.ShedMin):
+	case b.overloaded() && b.shed()*100 >= int64(b.world.Self.MaxLoad)*int64(p.ShedMin),
+		b.overloaded() && b.slowed() && b.shed() > 0:
 		return causeLoad
 	case b.gearPaid():
 		return causeGear
