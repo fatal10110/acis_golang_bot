@@ -137,7 +137,8 @@ type orders struct {
 
 // heard takes a chat line at now: a whisper from another player that
 // parses as a command goes to the authority, other lines never do; any
-// other whisper may get a chat reply (chatHeard), a command never does,
+// other whisper may get the valuables responder's reply (whisperHeard) or
+// a chat reply (chatHeard), a command never does,
 // whoever sent it. A craft order, by whisper or in clan chat, goes to
 // heardCraft: the clan leader's needs no authority. The sender is the
 // line's object id, which the server fills from the speaker.
@@ -155,7 +156,9 @@ func (b *Brain) heard(e CreatureSay, now time.Time) {
 	}
 	cmd, ok := parseCommand(e.Text)
 	if !ok {
-		b.chatHeard(e, now)
+		if !b.whisperHeard(e, now) {
+			b.chatHeard(e, now)
+		}
 		return
 	}
 	t := tell{sender: e.ObjectID, name: e.Name, cmd: cmd}

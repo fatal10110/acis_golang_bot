@@ -129,27 +129,54 @@ func (b *Brain) chatHeard(e CreatureSay, now time.Time) {
 		b.cfg.markers.Marks(e.Name) || !b.cfg.chat.allows(e.ObjectID, now, p) {
 		return
 	}
-	delay := p.DelayMin + time.Duration(b.rng.Int64N(int64(max(p.DelayMax-p.DelayMin, 0))+1))
 	b.chat = chatReply{
 		reply: chatReplyAction(e.Name, p.Replies[b.rng.IntN(len(p.Replies))]),
 		to:    e.ObjectID,
-		at:    now.Add(delay),
+		at:    now.Add(b.chatDelay()),
 		wake:  true,
 	}
 }
 
+// chatDelay is a uniform delay in ChatPolicy's DelayMin-DelayMax.
+func (b *Brain) chatDelay() time.Duration {
+	p := &b.persona.Chat
+	return p.DelayMin + time.Duration(b.rng.Int64N(int64(max(p.DelayMax-p.DelayMin, 0))+1))
+}
+
 // ruleChat sends the waiting whisper reply once due and the chat gate lets
-// it go, and passes until then.
+// it go, and passes until then: the canned one or the valuables
+// responder's (ruleWhisper), the earliest due first.
+//
+// Pacing: one Say2 Tell per chatGap through the frame bucket; the canned
+// replies within ChatPolicy's caps (chatLog), the responder's within
+// ValuablePolicy's Replies and RepliesPerPartner a round (whisperTalk).
+// Whispers have no server gate.
 func (b *Brain) ruleChat(now time.Time) (Action, bool) {
+	b.whispers.out = whisperOut{}
+	if !b.pace.allow(gateChat, now) {
+		return Action{}, false
+	}
 	c := &b.chat
-	if c.reply.kind == actHold || now.Before(c.at) || !b.pace.allow(gateChat, now) {
+	var canned time.Time
+	if c.reply.kind != actHold && !now.Before(c.at) {
+		canned = c.at
+	}
+	if a, ok := b.ruleWhisper(now, canned); ok {
+		return a, true
+	}
+	if canned.IsZero() {
 		return Action{}, false
 	}
 	return c.reply, true
 }
 
-// chatSent counts the reply sent at now and frees the slot.
+// chatSent counts the reply sent at now and frees its slot: the
+// responder's in its round's caps, the canned one in chatLog.
 func (b *Brain) chatSent(now time.Time) {
+	if o := b.whispers.out; o.to != 0 {
+		b.whisperSent(o)
+		return
+	}
 	b.cfg.chat.record(b.chat.to, now, &b.persona.Chat)
 	b.chat = chatReply{}
 }
