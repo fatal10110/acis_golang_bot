@@ -125,6 +125,9 @@ type BrainConfig struct {
 	// chat is the bot's whisper replies for the caps, carried from session
 	// to session by its Bot; nil starts an empty one.
 	chat *chatLog
+	// valuables is the bot's valuables ledger and round, carried from
+	// session to session by its Bot; nil starts an empty one.
+	valuables *valuables
 	// link is the Bot's mailbox, standing order and status board; nil
 	// takes no panel command and publishes no status.
 	link *botLink
@@ -351,6 +354,9 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	}
 	if cfg.chat == nil {
 		cfg.chat = newChatLog()
+	}
+	if cfg.valuables == nil {
+		cfg.valuables = newValuables()
 	}
 	if cfg.log == nil {
 		cfg.log = slog.New(slog.DiscardHandler)

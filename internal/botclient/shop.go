@@ -649,12 +649,13 @@ func (b *Brain) carried(item int32) int32 {
 // junk are the object ids of the stacks the bot would sell (ShopPolicy
 // SellAt). A piece the gear errand wears next is not junk, nor a weapon it
 // falls back to (fallsBack), nor a piece of the set it buys towards
-// (keepsForSet); the one it replaced otherwise is.
+// (keepsForSet), nor a valuable (Brain.valuable); the one it replaced
+// otherwise is.
 func (b *Brain) junk() map[int32]Item {
 	out := make(map[int32]Item)
 	w := b.worn()
 	for id, it := range b.world.Inventory.Items {
-		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) || b.fallsBack(it, &w) || b.keepsForSet(it, &w) {
+		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) || b.fallsBack(it, &w) || b.keepsForSet(it, &w) || b.valuable(it) {
 			continue
 		}
 		out[id] = it

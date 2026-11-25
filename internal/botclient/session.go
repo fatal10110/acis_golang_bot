@@ -174,6 +174,9 @@ type Bot struct {
 	// chat is the whisper replies of every session, for the chat caps;
 	// each session's brain owns it while it runs.
 	chat *chatLog
+	// valuables is the valuables ledger and round of every session; each
+	// session's brain owns it while it runs.
+	valuables *valuables
 	// reconnects counts the attempts after the first.
 	reconnects int
 
@@ -200,16 +203,17 @@ func NewBot(cfg SessionConfig, account, password string, bot BotConfig, rng *ran
 		log = slog.New(slog.DiscardHandler)
 	}
 	b := &Bot{
-		cfg:      cfg,
-		brain:    bot.Brain,
-		learned:  bot.Learned,
-		account:  account,
-		password: password,
-		char:     ch,
-		rng:      rand.New(rand.NewPCG(rng.Uint64(), rng.Uint64())),
-		log:      log.With("account", account),
-		retry:    backoff{base: retryBase, max: retryMax},
-		chat:     newChatLog(),
+		cfg:       cfg,
+		brain:     bot.Brain,
+		learned:   bot.Learned,
+		account:   account,
+		password:  password,
+		char:      ch,
+		rng:       rand.New(rand.NewPCG(rng.Uint64(), rng.Uint64())),
+		log:       log.With("account", account),
+		retry:     backoff{base: retryBase, max: retryMax},
+		chat:      newChatLog(),
+		valuables: newValuables(),
 	}
 	b.net = netDialer{cfg: &b.cfg}
 	b.link.mail = make(chan mail, mailboxSize)
@@ -346,7 +350,7 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 	cfg := b.brain
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
-	cfg.markers, cfg.chat, cfg.link, cfg.log = b.cfg.Markers, b.chat, &b.link, b.log
+	cfg.markers, cfg.chat, cfg.valuables, cfg.link, cfg.log = b.cfg.Markers, b.chat, b.valuables, &b.link, b.log
 	cfg.account = b.account
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })

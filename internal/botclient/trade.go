@@ -299,14 +299,15 @@ func (p *TradePolicy) exempt(w *World, partner int32) bool {
 // tradeGoods is the item the bot sells in a trade: the first of rows,
 // in their order, the inventory holds unequipped and not as a quest item,
 // priced by the policy, or else loot its store would sell (storeLoot) at
-// the store's price.
+// the store's price. A valuable (Brain.valuable) is never offered so: a
+// round sells it at its own price.
 func (b *Brain) tradeGoods(rows []TradeItem) (TradeItem, bool) {
 	for _, row := range rows {
 		if row.Count <= 0 || row.SubCategory == subCategoryQuest {
 			continue
 		}
 		it, ok := b.world.Inventory.Items[row.ObjectID]
-		if !ok || it.Equipped || it.SubCategory == subCategoryQuest {
+		if !ok || it.Equipped || it.SubCategory == subCategoryQuest || b.valuable(it) {
 			continue
 		}
 		if _, priced := b.tradePrice(it); !priced {

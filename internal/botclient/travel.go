@@ -117,10 +117,17 @@ type TravelMap struct {
 	// (corpseTime).
 	corpseTimes map[int32]time.Duration
 	// products maps the lower-case name of each recipe product to its
-	// template, and itemNames each such product to its name: what a craft
-	// order names (indexProductNames).
+	// template (indexProductNames): what a craft order names. itemNames
+	// maps each such product and every priced template to its name: the
+	// craft order's and the valuables' labels.
 	products  map[string]int32
 	itemNames map[int32]string
+	// stackable are the priced templates that stack: the private warehouse
+	// stores one row of each, not one per unit (valuables.rows).
+	stackable map[int32]bool
+	// shadows are the shadow item templates (a mana Duration): never
+	// valuable.
+	shadows map[int32]bool
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
@@ -150,7 +157,8 @@ type destination struct {
 // and buff potions and shots, the skills' cast ranges, the items' weights, the aggressive NPCs' aggro
 // ranges, the warehouse keepers, the craft recipes, the crystals gear
 // breaks into and the dye symbols, and the supply of every priced template,
-// computed with supply, and the restart regions.
+// computed with supply, the restart regions, and the priced templates'
+// names and stackability and the shadow items the valuables read.
 func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m := &TravelMap{spawns: make(map[int32][]Point)}
 	m.shops, m.cheapest = indexShops(dp.BuyLists)
@@ -176,6 +184,12 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.refMobs = indexRefMobs(dp.NPCs)
 	m.corpseTimes = indexCorpseTimes(dp.NPCs)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
+	for id, name := range dp.Names {
+		if _, ok := m.itemNames[id]; !ok {
+			m.itemNames[id] = name
+		}
+	}
+	m.stackable, m.shadows = dp.Stackable, indexShadows(dp.Items)
 	for _, mk := range dp.Spawnlist.Makers {
 		if mk.Event != "" {
 			continue
