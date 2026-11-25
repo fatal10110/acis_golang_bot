@@ -18,6 +18,12 @@ import (
 // gate on it (network/chat.go chatClan).
 const chatClan int32 = 4
 
+// chatTrade is the Say2 channel of trade chat (server handler/chat/chat.go
+// Trade): the server sends the line to every player in the speaker's restart
+// region (network/chat.go chatTrade, broadcastToRegion), behind the
+// TradeChatTime flood gate (0 by default), dropping a gated line silently.
+const chatTrade int32 = 8
+
 // chatMaxText is the longest line the server takes, in UTF-16 units: it
 // drops a longer one whole (handler/chat/chat.go MaxTextLength, Admit).
 const chatMaxText = 100

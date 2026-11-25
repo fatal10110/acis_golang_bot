@@ -8,11 +8,9 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 )
 
-// Say2 channels a reply never answers (say2.go): shout and trade.
-const (
-	chatShout int32 = 1
-	chatTrade int32 = 8
-)
+// chatShout is the Say2 channel of shout, which a reply never answers
+// (say2.go), as it never answers trade (chatTrade).
+const chatShout int32 = 1
 
 // chatDelay is the fixed reply delay of chatPersona.
 const chatDelay = 5 * time.Second

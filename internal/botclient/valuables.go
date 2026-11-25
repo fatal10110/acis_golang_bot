@@ -38,13 +38,19 @@ type valuableEntry struct {
 }
 
 // valuableRound is the state of a valuables round (docs/valuables/round.md):
-// open or not, its start and its anchor. The ad lines said, the replies,
-// trade requests, counters and prices per partner land with the steps that
-// read them (V4-V6), reset by openRound and endRound as these are.
+// open or not, its start, its anchor and its ad lines (adTurn). The
+// replies, trade requests, counters and prices per partner land with the
+// steps that read them (V5-V6), reset by openRound and endRound as these
+// are.
 type valuableRound struct {
 	open   bool
 	start  time.Time
 	anchor Point
+	// ads are the ad lines the round claimed, the last at adAt; named are
+	// the entries a line named since the round last named every entry.
+	ads   int
+	adAt  time.Time
+	named map[valuableKey]bool
 }
 
 // valuables is a bot's valuables ledger, its round and its noPrivate
@@ -279,11 +285,12 @@ func (p ValuablePolicy) lowered(ask int64, ref int32, floor int64) int64 {
 // warehouse (lookTurn) and while a valuables round is open
 // (docs/valuables/round.md "The rule"), so no later rule walks the bot
 // away: it walks back to within anchorArrive of the round's anchor (goTo,
-// walkPlace) and sends nothing once there or when no route there holds.
-// Only tests open a round until the round's start lands (V7a).
+// walkPlace), says the round's ad lines there (adTurn) and sends nothing
+// else once there or when no route there holds. Only tests open a round
+// until the round's start lands (V7a).
 //
 // Pacing: the walk's MoveBackwardToLocation segments, paced as every goTo;
-// the look's as rule "warehouse"'s.
+// the look's as rule "warehouse"'s; the ad lines' as adTurn's.
 func (b *Brain) ruleValuables(now time.Time) (Action, bool) {
 	if a, ok := b.lookTurn(now); ok {
 		return a, true
@@ -292,8 +299,14 @@ func (b *Brain) ruleValuables(now time.Time) (Action, bool) {
 	if !r.open {
 		return Action{}, false
 	}
-	if a, st := b.goTo(r.anchor, anchorArrive, walkPlace, now); st == walkWalking {
+	a, st := b.goTo(r.anchor, anchorArrive, walkPlace, now)
+	if st == walkWalking {
 		return a, true
+	}
+	if st == walkArrived {
+		if a, ok := b.adTurn(now); ok {
+			return a, true
+		}
 	}
 	return Action{}, true
 }
