@@ -229,6 +229,9 @@ type Brain struct {
 	// lead is the party leader the bot follows and its loss (rule
 	// "leader").
 	lead leaderWatch
+	// partyLead is the lead bot's invitations and oustings and the join
+	// bot's handover (rule "party").
+	partyLead partyLead
 	// escape is the breaker of every /unstuck the bot sends (the walker's
 	// and rule "leader"'s).
 	escape escapeBreaker
@@ -477,6 +480,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.doors.Observe(ev)
 		}
 		inParty := b.world.Party.In()
+		b.partyLeadEvent(ev, now)
 		b.world.Apply(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)

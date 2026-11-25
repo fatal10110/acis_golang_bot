@@ -180,9 +180,11 @@ type botLink struct {
 	order standing
 	// party is the party slot: the latest lead or join of the panel, the
 	// zero Command for none (docs/parties/orders.md). leaders are the
-	// leaders every join of this run named (slotAnswer).
+	// leaders every join of this run named (slotAnswer), listed the
+	// members every lead of this run listed (oust).
 	party   Command
 	leaders map[string]bool
+	listed  map[string]bool
 	// partyLeft is why the brain last cleared the slot itself
 	// (Status.PartyLeft), "" while a slot is set or after an unparty.
 	partyLeft string

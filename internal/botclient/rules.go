@@ -107,6 +107,9 @@ type Persona struct {
 	// waits for one, and how it handles a dead or lost leader (rules
 	// "dead" and "leader").
 	Recover RecoverPolicy
+	// Lead times a lead bot's invitations and a join bot's handover (rule
+	// "party").
+	Lead LeadPolicy
 	// Answer answers an open prompt (rule 2); a zero Action waits.
 	Answer func(w *World, now time.Time) Action
 	// JoinParty decides whether to accept the party invitation of the
@@ -228,6 +231,7 @@ func DefaultPersona() Persona {
 		Role:           RoleSupport,
 		Death:          restartToVillage,
 		Recover:        defaultRecoverPolicy(),
+		Lead:           defaultLeadPolicy(),
 		JoinParty:      acceptParty,
 		FleeOutrun:     true,
 		FleeDistance:   600,
@@ -346,6 +350,11 @@ const (
 	// actItemList asks for the inventory for the panel's inspect
 	// (inspect.go).
 	actItemList
+	// actInviteParty invites a member, actOustParty expels one and
+	// actChangeLeader hands the party over (partylead.go).
+	actInviteParty
+	actOustParty
+	actChangeLeader
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -473,7 +482,9 @@ type rule struct {
 // would move it. "chat" whispers a delayed reply to a player's whisper
 // (ChatPolicy), after the flee and heal rules so it never delays one; a
 // due reply waits for them. "announce" says the queued craft order lines
-// (answers and finished GM orders) in turn, after "chat". "leader" handles a dead or lost leader ahead of
+// (answers and finished GM orders) in turn, after "chat". "party" sends a lead
+// bot's invitations and oustings and a join bot's handover after
+// "announce", ahead of every errand (docs/parties/leader.md). "leader" handles a dead or lost leader ahead of
 // following it. The shot toggle is set-up, not a plan rule: it runs once
 // per shot template carried, ahead of the fight it serves, after the flee
 // rules so it never delays one. "buffpotion" drinks the build's buff potion
@@ -501,6 +512,7 @@ var playRules = []rule{
 	{"sweep", (*Brain).ruleSweep},
 	{"chat", (*Brain).ruleChat},
 	{"announce", (*Brain).ruleAnnounce},
+	{"party", (*Brain).ruleParty},
 	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
 	{"rest", (*Brain).ruleRest},

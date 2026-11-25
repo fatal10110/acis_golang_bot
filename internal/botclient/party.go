@@ -140,8 +140,9 @@ func decodePartyMemberPosition(r *wire.Reader) Event {
 }
 
 // encodeRequestJoinParty invites the player named target into the bot's
-// party under loot rule loot (party.go on the server: 0 finders keepers,
-// 1 random, 2 random with spoil; another rule is ignored).
+// party under loot rule loot (lootFindersKeepers to lootByTurnSpoil; the
+// server invites nobody under another rule, and a leader's invitation
+// carries its party's rule whatever loot says).
 func encodeRequestJoinParty(target string, loot int32) []byte {
 	w := wire.NewPacketWriter(opGameRequestJoinParty)
 	w.WriteString(target)
