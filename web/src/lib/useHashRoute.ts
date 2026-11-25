@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 export type Route =
   | { page: "bots" }
   | { page: "bot"; account: string }
+  | { page: "parties" }
   | { page: "dashboard" }
   | { page: "logs" };
 
@@ -13,6 +14,7 @@ export function parseRoute(hash: string): Route {
     const account = decodeURIComponent(h.slice(4));
     if (account) return { page: "bot", account };
   }
+  if (h === "parties") return { page: "parties" };
   if (h === "dashboard") return { page: "dashboard" };
   if (h === "logs") return { page: "logs" };
   return { page: "bots" };

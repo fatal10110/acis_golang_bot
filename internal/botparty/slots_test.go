@@ -159,6 +159,7 @@ func TestPlanState(t *testing.T) {
 			Members:     []Member{{Account: "heal", Character: "Heal"}},
 			FormedAt:    t0,
 			State:       Forming,
+			Since:       t0,
 			GoneSince:   map[string]time.Time{},
 			BehindSince: map[string]time.Time{},
 			Ordered:     map[string]bool{"heal": true},

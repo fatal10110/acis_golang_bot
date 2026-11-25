@@ -24,6 +24,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botparty"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
 )
 
@@ -102,6 +103,8 @@ func newRig(t *testing.T, cfg Config) *rig {
 	g.gate = gate
 	metrics := botmetrics.NewRegistry()
 	presets := []string{"support", "town"}
+	// The organizer runs as in `bots ui` (D25).
+	party := botparty.DefaultPolicy()
 	sup, err := botregistry.New(botregistry.Config{
 		Registry:  reg,
 		Run:       g.run(log),
@@ -115,8 +118,9 @@ func newRig(t *testing.T, cfg Config) *rig {
 			}
 			return nil
 		},
-		Rand: rand.New(rand.NewPCG(3, 4)),
-		Log:  log,
+		Rand:  rand.New(rand.NewPCG(3, 4)),
+		Log:   log,
+		Party: &party,
 	})
 	if err != nil {
 		t.Fatal(err)

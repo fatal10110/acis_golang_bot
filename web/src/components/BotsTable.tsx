@@ -7,6 +7,7 @@ import {
   classOf,
   levelOf,
   matches,
+  partyOf,
   sortBots,
   statusOf,
   whereOf,
@@ -160,6 +161,9 @@ export function BotsTable({ bots, names, onBulk }: BotsTableProps) {
               <th scope="col" className="hidden px-3 py-2 lg:table-cell">
                 Rule / order
               </th>
+              <th scope="col" className="hidden px-3 py-2 lg:table-cell">
+                Party
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -204,6 +208,7 @@ export function BotsTable({ bots, names, onBulk }: BotsTableProps) {
                 </td>
                 <td className="hidden px-3 py-2 text-xs xl:table-cell">{whereOf(b)}</td>
                 <td className="hidden px-3 py-2 text-xs lg:table-cell">{activityOf(b)}</td>
+                <td className="hidden px-3 py-2 text-xs lg:table-cell">{partyOf(b)}</td>
               </tr>
             ))}
           </tbody>

@@ -38,6 +38,14 @@ export function whereOf(b: Bot): string {
   return p ? `${p.x}, ${p.y}, ${p.z}` : "";
 }
 
+/** partyOf is the bot's party slot, its pin and its party mode. */
+export function partyOf(b: Bot): string {
+  const parts = [b.live?.party ?? ""];
+  if (b.party_group) parts.push(b.party_lead ? `leads pin ${b.party_group}` : `pin ${b.party_group}`);
+  if (b.party_mode === "off") parts.push("party off");
+  return parts.filter(Boolean).join(" / ");
+}
+
 /** activityOf is the rule the bot runs and the order it follows. */
 export function activityOf(b: Bot): string {
   return [b.live?.rule, b.live?.order].filter(Boolean).join(" / ");
