@@ -173,18 +173,18 @@ func TestRecordedPvPFields(t *testing.T) {
 	if !ok {
 		t.Fatal("04.bin is not a UserInfo")
 	}
-	if u.CollisionRadius < 4 || u.CollisionRadius > 30 {
-		t.Errorf("UserInfo CollisionRadius = %v, want 4..30", u.CollisionRadius)
+	if u.CollisionRadius != 7.5 {
+		t.Errorf("UserInfo CollisionRadius = %v, want 7.5", u.CollisionRadius)
 	}
-	if u.PKKills < 0 || u.PvPKills < 0 || u.AllyID < 0 {
-		t.Errorf("UserInfo PKKills, PvPKills, AllyID = %d, %d, %d, want >= 0", u.PKKills, u.PvPKills, u.AllyID)
+	if u.PKKills != 0 || u.PvPKills != 0 || u.AllyID != 0 {
+		t.Errorf("UserInfo PKKills, PvPKills, AllyID = %d, %d, %d, want 0, 0, 0", u.PKKills, u.PvPKills, u.AllyID)
 	}
 	n, ok := decode("16.bin").(NPCInfo)
 	if !ok {
 		t.Fatal("16.bin is not an NPCInfo")
 	}
-	if n.CollisionRadius < 1 || n.CollisionRadius > 300 {
-		t.Errorf("NPCInfo CollisionRadius = %v, want 1..300", n.CollisionRadius)
+	if n.CollisionRadius != 13 {
+		t.Errorf("NPCInfo CollisionRadius = %v, want 13", n.CollisionRadius)
 	}
 }
 

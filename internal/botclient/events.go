@@ -167,8 +167,10 @@ type CharInfo struct {
 	InCombat, Dead      bool
 	// StoreType is the private store mode, as in UserInfo.
 	StoreType uint8
-	// RHand and LHand are the template ids of the weapon and the shield
-	// (or the two-handed weapon again) drawn in its hands, 0 for none.
+	// RHand is the template id of the weapon in its right hand (a two-handed
+	// weapon too), LHand that of the shield, or of the arrows or lure paired
+	// with a bow or rod; LHand is 0 under any other two-handed weapon. 0 for
+	// none.
 	RHand, LHand int32
 	// CollisionRadius is its reach margin in a distance check.
 	CollisionRadius float64
