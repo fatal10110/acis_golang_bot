@@ -288,6 +288,15 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 	case GetItem:
 		delete(b.loot.ground, e.ObjectID)
 		b.cfg.Ground.drop(e.ObjectID)
+	case DeleteObject:
+		// The record forgets what World.Ground forgets (World.Apply), so it
+		// stays bounded by what lies in sight, also for a member that
+		// leaves the loot alone and never scans it (groundScan).
+		delete(b.loot.ground, e.ObjectID)
+	case TeleportToLocation:
+		if e.ObjectID == self && !e.Fast {
+			clear(b.loot.ground)
+		}
 	case DropItem:
 		if !b.lootable(e, now) {
 			if e.DropperID != b.world.Self.ObjectID {
@@ -363,8 +372,9 @@ func (b *Brain) leavesLoot() bool {
 }
 
 // groundSeen records ground item id, which the bot did not fight for, in
-// sight at now: lootGrace on, groundScan may queue it. Items that left the
-// ground leave the record, which bounds it by what lies in sight.
+// sight at now: lootGrace on, groundScan may queue it. Items leave the
+// record as they leave World.Ground (lootEvent), which bounds it by what
+// lies in sight at a constant cost per sighting (#495).
 func (b *Brain) groundSeen(id int32, now time.Time) {
 	if p := &b.persona.Loot; !p.Pickup || p.Ground == GroundNone {
 		return
@@ -373,10 +383,6 @@ func (b *Brain) groundSeen(id int32, now time.Time) {
 	if l.ground == nil {
 		l.ground = make(map[int32]time.Time)
 	}
-	maps.DeleteFunc(l.ground, func(id int32, _ time.Time) bool {
-		_, ok := b.world.Ground[id]
-		return !ok
-	})
 	if _, ok := l.ground[id]; !ok {
 		l.ground[id] = now.Add(lootGrace)
 	}
