@@ -78,7 +78,7 @@ func TestSupplyCause(t *testing.T) {
 		},
 		{name: "past ReturnLoad with ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 60001, want: causeLoad},
 		{name: "past BuyLoad, under ReturnLoad", items: []Item{potionStack(20), lootStack(60, junkMat, 1000)}, load: 60000},
-		{name: "past ReturnLoad, under ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 999)}, load: 90000},
+		{name: "past ReturnLoad, under ShedMin to sell", items: []Item{potionStack(20), lootStack(60, junkMat, 999)}, load: 66500},
 		{
 			name: "past ReturnLoad, kept with nowhere to go", items: []Item{potionStack(20), lootStack(60, keptMat, 5000)}, load: 90000,
 			edit: func(b *Brain) { b.persona.Shop.Keep = []int32{keptMat} },

@@ -378,7 +378,8 @@ type gearState struct {
 	// room is set, waited for until until.
 	obj   int32
 	until time.Time
-	// room is the earring or ring template a take-off frees a side for.
+	// room is the earring or ring template a take-off frees a side for,
+	// or the template taken off for the grade penalty (overGrade).
 	room int32
 	// refused are the templates the server left unequipped past
 	// gearTimeout: never worn, bought or kept again.
@@ -649,7 +650,9 @@ func (b *Brain) wearsNext(it Item) bool {
 	return b.upgrade(it, &w)
 }
 
-// ruleGear is a rule 9 errand: standing, out of combat and trade, the bot uses the
+// ruleGear is a rule 9 errand: standing, out of combat and trade, the bot
+// first takes off a piece worn above its Expertise grade while the server
+// holds the grade penalty (overGrade), then uses the
 // best (highest scoring) carried piece that beats the one worn in its slot (UseItem equips
 // it), the first slot first. For an earring or ring with both sides worn
 // it first uses the piece it replaces (UseItem takes it off,
@@ -686,6 +689,13 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 		}
 	}
 	w := b.worn()
+	if off := b.overGrade(&w); off.ObjectID != 0 {
+		// Taken off for the grade penalty (#436): waited for unequipped.
+		g.room = off.TemplateID
+		a := useItemAction(off)
+		a.object = off.ObjectID
+		return a, true
+	}
 	var best Item
 	var bestG gearItem
 	for _, it := range b.world.Inventory.Items {
@@ -715,18 +725,29 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 // each: the gearCandidates the adena past the reserve floor buys at their
 // cheapest base price, best first; the planned set's pieces (gearPlan)
 // only when it buys all of them, so the bot saves for a set rather than
-// buy part of it.
+// buy part of it. None takes the load into the half-speed band (gearFits):
+// the set fits as a whole or is left out, and the other pieces fit on top
+// of it, best first.
 func (b *Brain) gearWants() []buyRow {
 	budget := int64(b.carried(adenaID)) - b.floor(tierGear)
 	if budget <= 0 {
 		return nil
 	}
 	ids, set := b.gearPlan()
-	setFits := b.price(set) <= budget
+	var chosen []buyRow
+	if setRows := oneEach(set); b.price(set) <= budget && b.loadFits(setRows...) {
+		chosen = setRows
+	}
+	for _, id := range ids {
+		r := buyRow{item: id, count: 1}
+		if !slices.Contains(set, id) && int64(b.cfg.Travel.cheapest[id]) <= budget && b.gearFits(chosen, r) {
+			chosen = append(chosen, r)
+		}
+	}
 	var rows []buyRow
 	for _, id := range ids {
-		if slices.Contains(set, id) && setFits || !slices.Contains(set, id) && int64(b.cfg.Travel.cheapest[id]) <= budget {
-			rows = append(rows, buyRow{item: id, count: 1})
+		if r := (buyRow{item: id, count: 1}); slices.Contains(chosen, r) {
+			rows = append(rows, r)
 		}
 	}
 	return rows

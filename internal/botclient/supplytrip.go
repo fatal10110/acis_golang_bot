@@ -332,8 +332,8 @@ func (b *Brain) supplyDue(now time.Time) tripCause {
 // supplyCause is the first trigger of a supply trip that holds
 // (docs/items.md section 7), causeNone for none: a consumable it uses
 // fighting runs out within ReturnMinutes, its HP potions are gone, its load
-// is past ReturnLoad with ShedMin to shed, or it carries the price of the
-// gear goal. The Extra supplies and the Scrolls of Escape count toward
+// is past ReturnLoad with ShedMin to shed, or in the half-speed band
+// (slowed) with anything to shed, or it carries the price of the gear goal. The Extra supplies and the Scrolls of Escape count toward
 // none.
 func (b *Brain) supplyCause() tripCause {
 	p, v := &b.persona.Supply, &b.supplyTrip
@@ -350,7 +350,8 @@ func (b *Brain) supplyCause() tripCause {
 		return causeRunOut
 	case potion && v.potions && potions == 0:
 		return causePotions
-	case b.overloaded() && b.shed()*100 >= int64(b.world.Self.MaxLoad)*int64(p.ShedMin):
+	case b.overloaded() && b.shed()*100 >= int64(b.world.Self.MaxLoad)*int64(p.ShedMin),
+		b.overloaded() && b.slowed() && b.shed() > 0:
 		return causeLoad
 	case b.gearPaid():
 		return causeGear
@@ -409,13 +410,16 @@ func (b *Brain) shed() int64 {
 }
 
 // gearPaid reports whether the adena the bot carries past the gear tier's
-// floor pays its gear goal at the cheapest base prices (gearGoal).
+// floor pays its gear goal at the cheapest base prices (gearGoal), and the
+// goal fits under the half-speed band on top of the load it carries now
+// (loadFits), as the shop errand's gearWants requires: a goal it would not
+// buy never sends it to town.
 func (b *Brain) gearPaid() bool {
 	if !b.persona.Gear.Buy {
 		return false
 	}
 	goal, _ := b.gearGoal()
-	if len(goal) == 0 {
+	if len(goal) == 0 || !b.loadFits(oneEach(goal)...) {
 		return false
 	}
 	price := b.price(goal)
