@@ -75,9 +75,14 @@ type live struct {
 	Town      *point    `json:"town,omitempty"`
 	Preset    string    `json:"preset,omitempty"`
 	Rule      string    `json:"rule,omitempty"`
-	Leader    string    `json:"leader,omitempty"`
-	Members   []string  `json:"members,omitempty"`
-	Order     string    `json:"order,omitempty"`
+	// Spot is the npcmaker name of the farming spot the bot holds, absent
+	// while it holds none; Walk is "unreachable: <reason>" after its latest
+	// walk found no route that holds, absent otherwise (botclient.Status).
+	Spot    string   `json:"spot,omitempty"`
+	Walk    string   `json:"walk,omitempty"`
+	Leader  string   `json:"leader,omitempty"`
+	Members []string `json:"members,omitempty"`
+	Order   string   `json:"order,omitempty"`
 	// Party is the bot's party slot ("lead A B", "join L A"), "" for none.
 	Party      string `json:"party,omitempty"`
 	Reconnects int    `json:"reconnects"`
@@ -170,7 +175,7 @@ func viewOf(s botregistry.Status) botView {
 		l := &live{
 			At: st.At, State: st.State.String(), Character: st.Character, ClassID: st.ClassID, Level: st.Level,
 			HP: st.HP, MaxHP: st.MaxHP, MP: st.MP, MaxMP: st.MaxMP, CP: st.CP, MaxCP: st.MaxCP,
-			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Leader: st.Leader, Members: st.Members,
+			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Spot: st.Spot, Walk: st.Walk, Leader: st.Leader, Members: st.Members,
 			Order: st.Order.String(), Party: st.Party, Reconnects: st.Reconnects, Crafter: crafterOf(st.Crafter),
 			Build: buildOf(st.Build),
 		}

@@ -176,6 +176,8 @@ export function BotDetail({ account, bots, ask }: { account: string; bots: Bot[]
                   <Gauge kind="cp" value={l.cp} max={l.max_cp} />
                 </Row>
                 <Row label="Rule / order">{activityOf(b)}</Row>
+                <Row label="Spot">{l.spot ?? "none"}</Row>
+                <Row label="Walk">{l.walk ?? "ok"}</Row>
                 <Row label="Party">{l.leader ? [l.leader, ...(l.members ?? [])].join(", ") : ""}</Row>
                 <Row label="Party slot">{partyOf(b)}</Row>
                 {l.crafter && <CrafterStatus crafter={l.crafter} />}
