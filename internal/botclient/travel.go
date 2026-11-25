@@ -122,6 +122,10 @@ type TravelMap struct {
 	// corpseTime is not the default (indexCorpseTimes): the sweep window
 	// (corpseTime).
 	corpseTimes map[int32]time.Duration
+	// killValues are the adena a kill of each NPC template that drops
+	// anything is worth (indexKillValues): what the earning mode ranks
+	// spots by (earnRate, #527).
+	killValues map[int32]float64
 	// products maps the lower-case name of each recipe product to its
 	// template (indexProductNames): what a craft order names. itemNames
 	// maps each such product and every priced template to its name: the
@@ -191,6 +195,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.setSkills = indexSetSkills(dp.ArmorSets)
 	m.refMobs = indexRefMobs(dp.NPCs)
 	m.corpseTimes = indexCorpseTimes(dp.NPCs)
+	m.killValues = indexKillValues(dp.NPCs, dp.Prices)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for id, name := range dp.Names {
 		if _, ok := m.itemNames[id]; !ok {

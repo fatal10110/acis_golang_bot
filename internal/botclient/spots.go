@@ -221,6 +221,9 @@ type spotVisit struct {
 	// window (claimLower): the bot looks again every spotRetry for one of
 	// its level.
 	lower bool
+	// earning is set while the spot held is an earning spot (claimEarn,
+	// #527): the bot looks again every spotRetry for one that fits.
+	earning bool
 	// arrived is set once the bot reached the spot's centre.
 	arrived bool
 	// idleSince is when the bot's idle stretch at the spot began, zero
@@ -272,7 +275,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || v.lower || b.outleveled() || b.misfit() || b.overRisk(now) || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || v.lower || v.earning || b.outleveled() || b.misfit() || b.overRisk(now) || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.farming() {
@@ -465,7 +468,9 @@ func (b *Brain) overRisk(now time.Time) bool {
 // it looks again after spotRetry and plans a trip by gatekeeper (rule
 // "travel", planTrip), giving up the spot it holds for the trip; with no
 // trip either and no spot of its level that passes the model, it falls back
-// to the highest spot under its level window that does (claimLower, #446);
+// to the highest spot under its level window that does (claimLower, #446),
+// and a bot with a death penalty and no such fallback that holds no spot
+// (or an earning one) farms for adena (claimEarn, #527);
 // else a bot holding no spot that fits shares, past its cap, the spot in
 // Wander its bots fill least (SpotPolicy.Overflow), one with every such spot
 // at its limit farms beside one (SpotPolicy.Beside, farmBeside), and one
@@ -578,6 +583,8 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 					return
 				}
 			} else if b.claimLower(*here, now) {
+				return
+			} else if (!v.held || v.earning) && b.claimEarn(*here, now) {
 				return
 			}
 		}
@@ -731,6 +738,6 @@ func (b *Brain) leaveSpot() {
 	case v.beside:
 		b.cfg.Spots.leaveBesideN(v.idx, v.claimWeight())
 	}
-	v.idx, v.held, v.beside, v.lower, v.at, v.arrived, v.weight = 0, false, false, false, Point{}, false, 0
+	v.idx, v.held, v.beside, v.lower, v.earning, v.at, v.arrived, v.weight = 0, false, false, false, false, Point{}, false, 0
 	v.idleSince, v.idleSeen, v.gatherSince = time.Time{}, time.Time{}, time.Time{}
 }

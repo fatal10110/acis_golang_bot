@@ -34,11 +34,15 @@ type Spot struct {
 	// Mobs are its aggressive monsters, one per spawn: what a bot weighs a
 	// fight there with.
 	Mobs []Mob
+	// Monsters are all its monsters, aggressive or not, one per spawn: what
+	// a bot weighs the spot's earnings with (#527).
+	Monsters []Mob
 }
 
-// Mob is one kind of aggressive monster a spot spawns: its level, its
+// Mob is one kind of monster a spot spawns: its template, its level, its
 // combat stats and how many of it the spawn declares.
 type Mob struct {
+	NPCID        int32
 	Level, Count int
 	Combat       Combat
 }
@@ -89,6 +93,10 @@ func (d *Datapack) spot(m *Maker) (Spot, bool) {
 			s.MinLevel = npc.Level
 		}
 		s.MaxLevel = max(s.MaxLevel, npc.Level)
+		mob := Mob{NPCID: sp.NPCID, Level: npc.Level, Count: sp.Total, Combat: npc.Combat}
+		if sp.Total > 0 {
+			s.Monsters = append(s.Monsters, mob)
+		}
 		if npc.AggroRange > 0 {
 			s.AggroLevel = max(s.AggroLevel, npc.Level)
 			s.Aggressive += sp.Total
@@ -96,7 +104,7 @@ func (d *Datapack) spot(m *Maker) (Spot, bool) {
 			s.ClanRange = max(s.ClanRange, npc.ClanRange)
 			s.RunSpeed = max(s.RunSpeed, npc.RunSpeed)
 			if sp.Total > 0 {
-				s.Mobs = append(s.Mobs, Mob{Level: npc.Level, Count: sp.Total, Combat: npc.Combat})
+				s.Mobs = append(s.Mobs, mob)
 			}
 		}
 		monsters++

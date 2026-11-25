@@ -754,6 +754,29 @@ reach, leaves the bot nothing to fight. The farmer takes farm targets anywhere i
 territory, not only within the leash of its centre (#447), and moves on after
 `SpotPolicy.Idle` (5 minutes) with none (#360).
 
+#### Earning mode (#527)
+
+A death penalty (skill 5076: at level 15 P./M.Atk and both speeds ×0.25, both defences ×0.4) can
+leave a bot with no spot that passes the bound, of its level or under its window (`claimLower`),
+and too poor for a Scroll: Recovery: it stood forever. When pickSpot finds nothing for a bot with
+a death penalty that holds no spot, it claims an earning spot (`claimEarn`), under its cap, never
+one it avoids:
+
+1. By rate: among the spots in reach whose monsters stay within its level window
+   (`SpotPolicy.Above`) and that no death taught it to pass over, the one it earns the most adena an
+   hour at, by a survival bound of 1 instead of the row's margin with every monster counted, not
+   only the aggressive ones. A kill is worth its CURRENCY drops at face value and its DROP items at
+   half their reference price (what a merchant pays, server `inventory/sell.go`), by their chances
+   and mean counts, cut by the server's level gap rule (`LevelPenaltyMultiplier`); the rate is that
+   worth over the model's mean kill time. The spawn rate is left out.
+2. Else the spot in reach with the lowest monsters, whatever its pack, the nearest among them.
+
+It keeps that spot while its penalty lasts and looks every `spotRetry` for one that fits, which
+ends the mode; once the penalty is gone the spot it holds is an ordinary one. What it earns goes to
+Scrolls: Recovery first (#491: `recoveryWants`, the penalty's supply trip, rule `recover`). By the
+model the level 5 orc mystic of #527 with penalty 15 kills nothing in time (`TestEarnShipped`), so
+it takes step 2.
+
 ## Pacing
 
 Nothing new is sent faster than today. Every cast still waits for its own `MagicSkillUse` or
