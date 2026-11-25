@@ -208,3 +208,58 @@ func TestHunterDone(t *testing.T) {
 		})
 	}
 }
+
+func TestHunterOutcomes(t *testing.T) {
+	const self, other, h1, h2, h3, spot = int32(1), int32(2), int32(10), int32(11), int32(12), int32(20)
+	at := time.Date(2026, 11, 25, 1, 0, 0, 0, time.UTC)
+	ev := func(d time.Duration, e botclient.Event) Seen { return Seen{At: at.Add(d), Event: e} }
+	cast := func(skill, target int32) botclient.Event {
+		return botclient.MagicSkillUse{CasterID: self, SkillID: skill, TargetID: target}
+	}
+	hit := func(attacker, target int32) botclient.Event {
+		return botclient.Attack{AttackerID: attacker, Hits: []botclient.AttackHit{{TargetID: target, Damage: 50}}}
+	}
+	seen := []Seen{
+		// h1: spoiled by the bot, killed by it, swept.
+		ev(1*time.Second, cast(skillSpoil, h1)),
+		ev(2*time.Second, botclient.SystemMessage{ID: msgSpoilSuccess}),
+		ev(3*time.Second, hit(self, h1)),
+		ev(4*time.Second, botclient.Die{ObjectID: h1, Sweepable: true}),
+		ev(5*time.Second, cast(skillSweeper, h1)),
+		// h2: a resisted spoil, a spot monster's spoil took, another killed it.
+		ev(10*time.Second, cast(skillSpoil, h2)),
+		ev(11*time.Second, cast(skillSpoil, spot)),
+		ev(12*time.Second, botclient.SystemMessage{ID: msgSpoilSuccess}),
+		ev(13*time.Second, hit(other, h2)),
+		ev(14*time.Second, botclient.Die{ObjectID: h2}),
+		ev(15*time.Second, hit(self, h2)),
+	}
+	hunters := []hunterSpawn{{h1, at}, {h2, at.Add(9 * time.Second)}, {h3, at.Add(10 * time.Second)}}
+	tests := []struct {
+		name string
+		now  time.Time
+		want []string
+	}{
+		{name: "fresh", now: at.Add(time.Minute), want: []string{
+			"hunter 1 (10): 1 Spoil casts, spoiled true; died 4s after its spawn, last struck by the bot, sweepable true, 1 Sweeper casts at it",
+			"hunter 2 (11): 1 Spoil casts, spoiled false; died 5s after its spawn, last struck by 2, sweepable false, 0 Sweeper casts at it",
+			"hunter 3 (12): 0 Spoil casts, spoiled false; alive 50s after its spawn",
+		}},
+		{name: "past its kill bound", now: at.Add(10*time.Second + hunterKill + time.Second), want: []string{
+			"hunter 3 (12): 0 Spoil casts, spoiled false; alive past hunterKill (3m0s)",
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hunterOutcomes(seen, self, hunters, tt.now)
+			if len(got) != len(hunters) {
+				t.Fatalf("hunterOutcomes = %q, want %d lines", got, len(hunters))
+			}
+			for _, w := range tt.want {
+				if !slices.Contains(got, w) {
+					t.Errorf("hunterOutcomes = %q, want the line %q", got, w)
+				}
+			}
+		})
+	}
+}

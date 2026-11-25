@@ -67,20 +67,20 @@ func TestLiveSpoilSweep(t *testing.T) {
 	gmOn(t, ctx, gm, f, kit.grants()...)
 	from := f.seen()
 	gmTeleport(t, ctx, gm, townTI)
+	var hunters []hunterSpawn
 	t.Cleanup(func() {
 		if t.Failed() {
-			for _, l := range sweepTrace(f.watch.Seen(from), f.watch.Sent(), f.id) {
+			seen := f.watch.Seen(from)
+			for _, l := range hunterOutcomes(seen, f.id, hunters, time.Now()) {
+				t.Log(l)
+			}
+			for _, l := range sweepTrace(seen, f.watch.Sent(), f.id) {
 				t.Log(l)
 			}
 		}
 	})
 	start, alive := time.Now(), time.Now()
-	var (
-		r       spoilRun
-		mob     int32
-		spawned time.Time
-		hunters int
-	)
+	var r spoilRun
 	untilBy(t, ctx, f.name+" spoiling and sweeping", start.Add(spoilBound), func() string {
 		if time.Since(alive) > gmKeepAlive {
 			gmTeleport(t, ctx, gm, townTI)
@@ -94,25 +94,100 @@ func TestLiveSpoilSweep(t *testing.T) {
 		if r.short() == "" {
 			return ""
 		}
-		if mob != 0 && !hunterDone(seen, mob, spawned, time.Now()) {
-			return fmt.Sprintf("hunter %d of %d: %s", hunters, spoilHunters, r)
+		if n := len(hunters); n > 0 && !hunterDone(seen, hunters[n-1].mob, hunters[n-1].at, time.Now()) {
+			return fmt.Sprintf("hunter %d of %d: %s", n, spoilHunters, r)
 		}
 		s := f.bot.Status()
 		if s.Spot == "" {
 			return fmt.Sprintf("no spot held (rule %q at %v): %s", s.Rule, s.Position, r)
 		}
-		if hunters == spoilHunters {
-			t.Fatalf("%s: %d Werewolf Hunters spawned at it: %s", f.name, hunters, r)
+		if len(hunters) == spoilHunters {
+			t.Fatalf("%s: %d Werewolf Hunters spawned at it: %s", f.name, len(hunters), r)
 		}
-		mob, spawned = spawnHunter(t, ctx, gm, f), time.Now()
-		hunters++
+		hunters = append(hunters, hunterSpawn{mob: spawnHunter(t, ctx, gm, f), at: time.Now()})
 		alive = time.Now()
-		return fmt.Sprintf("hunter %d of %d spawned: %s", hunters, spoilHunters, r)
+		return fmt.Sprintf("hunter %d of %d spawned: %s", len(hunters), spoilHunters, r)
 	})
 	if all := spoilRunOf(f.watch.Seen(0), f.id); len(all.refused) > 0 {
 		t.Errorf("%s: the server refused %v", f.name, all.refused)
 	}
-	t.Logf("%s spoiled and swept in %s, %d Werewolf Hunters spawned: %s (%v)", f.name, time.Since(start).Round(time.Second), hunters, r, r.earned)
+	t.Logf("%s spoiled and swept in %s, %d Werewolf Hunters spawned: %s (%v)", f.name, time.Since(start).Round(time.Second), len(hunters), r, r.earned)
+	for _, l := range hunterOutcomes(f.watch.Seen(from), f.id, hunters, time.Now()) {
+		t.Log(l)
+	}
+}
+
+// hunterSpawn is the Werewolf Hunter mob the GM spawned at at.
+type hunterSpawn struct {
+	mob int32
+	at  time.Time
+}
+
+// hunterOutcomes is a line for each hunter of what became of it at now in
+// seen, as the bot self read it: how many Spoil casts the bot aimed at it and
+// whether one took (612), whether it died, how long after its spawn, who
+// struck it last (the attacker of the last Attack hitting it or the caster
+// of the last skill aimed at it), whether its Die said sweepable, and
+// whether the bot cast Sweeper at its corpse; or that it still lives, past
+// hunterKill or not.
+func hunterOutcomes(seen []Seen, self int32, hunters []hunterSpawn, now time.Time) []string {
+	out := make([]string, 0, len(hunters))
+	for i, h := range hunters {
+		var (
+			spoils, swept      int
+			spoiled, sweepable bool
+			striker, lastSpoil int32
+			died               time.Time
+		)
+		for _, s := range seen {
+			switch e := s.Event.(type) {
+			case botclient.MagicSkillUse:
+				if e.CasterID == self && e.SkillID == skillSpoil {
+					lastSpoil = e.TargetID
+				}
+				if e.TargetID != h.mob {
+					continue
+				}
+				switch {
+				case e.CasterID == self && e.SkillID == skillSpoil:
+					spoils++
+				case e.CasterID == self && e.SkillID == skillSweeper:
+					swept++
+				}
+				if died.IsZero() {
+					striker = e.CasterID
+				}
+			case botclient.Attack:
+				if died.IsZero() && slices.ContainsFunc(e.Hits, func(hit botclient.AttackHit) bool { return hit.TargetID == h.mob }) {
+					striker = e.AttackerID
+				}
+			case botclient.SystemMessage:
+				if e.ID == msgSpoilSuccess && lastSpoil == h.mob {
+					spoiled = true
+				}
+			case botclient.Die:
+				if e.ObjectID == h.mob && died.IsZero() {
+					died, sweepable = s.At, e.Sweepable
+				}
+			}
+		}
+		line := fmt.Sprintf("hunter %d (%d): %d Spoil casts, spoiled %v; ", i+1, h.mob, spoils, spoiled)
+		switch {
+		case !died.IsZero():
+			by := fmt.Sprint(striker)
+			if striker == self {
+				by = "the bot"
+			}
+			line += fmt.Sprintf("died %s after its spawn, last struck by %s, sweepable %v, %d Sweeper casts at it",
+				died.Sub(h.at).Round(time.Second), by, sweepable, swept)
+		case now.Sub(h.at) > hunterKill:
+			line += fmt.Sprintf("alive past hunterKill (%s)", hunterKill)
+		default:
+			line += fmt.Sprintf("alive %s after its spawn", now.Sub(h.at).Round(time.Second))
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // werewolfHunter is the Werewolf Hunter template (data/xml/npcs, 20343): a

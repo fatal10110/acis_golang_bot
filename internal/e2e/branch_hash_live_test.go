@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // TestLiveBranchHash takes two new human fighters to their first profession
@@ -75,7 +76,10 @@ func TestLiveBranchHash(t *testing.T) {
 // new characters.
 func hashedAccounts(t *testing.T, tg *Target, group string, base int32) map[int32]string {
 	t.Helper()
-	race := botclient.RaceHuman
+	race, ok := datapack.ClassRace(base)
+	if !ok {
+		t.Fatalf("class %d has no race", base)
+	}
 	pins := botclient.BranchPins(base)
 	accounts := make(map[int32]string)
 	start := int(time.Now().Unix() % 10_000_000)
