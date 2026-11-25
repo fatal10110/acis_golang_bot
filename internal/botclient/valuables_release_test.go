@@ -55,6 +55,78 @@ func TestValuablesRelease(t *testing.T) {
 	t.Run("budget spent", testReleaseBudgetSpent)
 	t.Run("look finds a released stored one", testReleaseLook)
 	t.Run("store rows", testReleaseRows)
+	t.Run("a trade-sold valuable counts in no cap", testReleaseTradeSold)
+	t.Run("after a process start the look's units count", testReleaseProcessStart)
+	t.Run("fees", testReleaseFees)
+}
+
+// testReleaseTradeSold: two carried swords whose asks pass HoldValue
+// together release at a cut-off after the first line; with one sold in a
+// trade during the round, the other alone stays under it.
+func testReleaseTradeSold(t *testing.T) {
+	for _, sold := range []bool{false, true} {
+		t.Run(map[bool]string{false: "both carried", true: "one trade-sold"}[sold], func(t *testing.T) {
+			b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0), swordUnit(103, 3))
+			b.cfg.valuables.entries[swordKey].ask = 1200000
+			b.cfg.valuables.entries[sword3Key].ask = 1200000
+			b.cfg.valuables.openRound(Point{}, t0)
+			b.cfg.valuables.round.ads = 1
+			if sold {
+				if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(103, 3)}}}}, t0); err != nil {
+					t.Fatal(err)
+				}
+				b.syncValuables()
+			}
+			b.endCut(t0)
+			if got := b.cfg.valuables.released(swordKey); got != !sold {
+				t.Errorf("+0 sword released %v, want %v", got, !sold)
+			}
+		})
+	}
+}
+
+// testReleaseProcessStart: a process start's ledger is empty; the look's
+// stored +0 Sword of Watershadow and +5 Conjuror's Staff come in stored
+// and count in the next cap (two rows past HoldRows 1).
+func testReleaseProcessStart(t *testing.T) {
+	b := newRoundBrain(t, nearKeeper, nil)
+	if len(b.cfg.valuables.entries) != 0 {
+		t.Fatalf("entries %v, want a fresh ledger", b.cfg.valuables.entries)
+	}
+	c := nextSession(t, b, map[int32][]Point{keeperNPC: {nearKeeper}}, map[int32]NPCInfo{keeperObj: {NPCID: keeperNPC, Pos: nearKeeper}})
+	roundTown(c)
+	c.world.Apply(ItemList{Items: []Item{adenaStack(1000)}}, t0)
+	c.persona.Valuables.HoldRows = 1
+	runTrainerSteps(t, c, lookSteps(0))
+	tradeTurn(t, c, at(5*time.Second), privateList(storedSword, storedStaff))
+	for _, k := range []valuableKey{swordKey, staffKey5} {
+		if e := entryOf(t, c, k.template, k.enchant); e.stored != 1 || e.released {
+			t.Fatalf("%v %+v, want stored by the look, not released", k, e)
+		}
+	}
+	c.cfg.valuables.openRound(Point{}, at(6*time.Second))
+	c.cfg.valuables.round.ads = 1
+	c.endCut(at(7 * time.Second))
+	for _, k := range []valuableKey{swordKey, staffKey5} {
+		if !c.cfg.valuables.released(k) {
+			t.Errorf("%v not released, want the stored units counted in the cap", k)
+		}
+	}
+}
+
+// testReleaseFees: the shop reserve's deposit fees count a released
+// carried valuable only once the valuables budget is spent.
+func testReleaseFees(t *testing.T) {
+	b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0), swordUnit(103, 3))
+	b.persona.Valuables.HoldRows = 0
+	release(t, b, sword3Key)
+	if got := b.valuableFees(); got != warehouseFee {
+		t.Errorf("budget left: fees %d, want the kept row's %d", got, warehouseFee)
+	}
+	b.valuablesSold = b.persona.Valuables.Budget
+	if got := b.valuableFees(); got != 2*warehouseFee {
+		t.Errorf("budget spent: fees %d, want both rows' %d", got, 2*warehouseFee)
+	}
 }
 
 // testReleaseCap: the cap over carried and stored units, each entry once.
@@ -384,6 +456,29 @@ func TestValuablesStoreSplit(t *testing.T) {
 		b.syncValuables()
 		if _, ok := b.cfg.valuables.entries[swordKey]; ok || b.cfg.valuables.rows(b.cfg.Travel.stackable) != 0 {
 			t.Errorf("entries %v, want the sold sword out of the ledger", b.cfg.valuables.entries)
+		}
+	})
+	t.Run("a stack listed in part", func(t *testing.T) {
+		recipe := Item{ObjectID: 110, TemplateID: ledgerRecipe, Count: 5, SubCategory: 5}
+		recipeCand := StoreItem{Type2: 5, ObjectID: 110, TemplateID: ledgerRecipe, Count: 5, Price: 366000, ReferencePrice: 366000}
+		b := newRoundBrain(t, nearKeeper, nil, recipe)
+		k := valuableKey{template: ledgerRecipe}
+		release(t, b, k)
+		floor := b.valuableFloor(k)
+		b.valuablesSold = b.persona.Valuables.Budget - 2*floor - 1
+		if rows := listRows(b, recipeCand); len(rows) != 1 || rows[0].count != 3 {
+			t.Fatalf("rows %v, want 3 of the 5 recipes", rows)
+		}
+		before := b.valuablesSold
+		b.storeSent(Action{kind: actStoreList}, t0)
+		b.store.step = storeOpen
+		recipe.Count = 4
+		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(int32(1000 + floor))}, {ItemModified, recipe}}}}, at(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		b.closeStore(at(time.Second))
+		if b.valuablesSold-before != floor || b.store.sold != 0 {
+			t.Errorf("valuables sold %d store sold %d, want %d and 0", b.valuablesSold-before, b.store.sold, floor)
 		}
 	})
 	t.Run("replies", func(t *testing.T) {

@@ -172,11 +172,13 @@ func decodePrivateStoreMsgSell(r *wire.Reader) Event {
 // object, how many and the unit price.
 type storeRow struct{ object, count, price int32 }
 
-// listedValuable is a released valuable's row of a store list and its
-// ledger entry.
+// listedValuable is a released valuable's row of a store list, its ledger
+// entry and the units its object held when listed (a stack may list part
+// of them).
 type listedValuable struct {
-	row storeRow
-	key valuableKey
+	row    storeRow
+	key    valuableKey
+	atList int64
 }
 
 // encodeRequestPrivateStoreManageSell opens the sell store manage window;
@@ -563,7 +565,7 @@ func (b *Brain) valuableStoreRows(room *int64) []storeRow {
 			}
 			r := storeRow{object: c.ObjectID, count: int32(n), price: int32(floor)}
 			rows = append(rows, r)
-			st.valuables = append(st.valuables, listedValuable{row: r, key: k})
+			st.valuables = append(st.valuables, listedValuable{row: r, key: k, atList: int64(it.Count)})
 			left -= n * floor
 			*room -= n * floor
 		}
@@ -641,9 +643,9 @@ func (b *Brain) closeStore(now time.Time) {
 
 // countSold adds what an open or listed store brought in to the session's
 // sales, split between the budgets (docs/valuables/release.md "Valuables
-// budget (D34)"): the units each listed valuable row lost (listed less
-// still carried) times its price to the valuables budget, the rest to the
-// store's.
+// budget (D34)"): the units each listed valuable row sold (its object's
+// units at listing less still carried, at most the row's) times its price
+// to the valuables budget, the rest to the store's.
 func (b *Brain) countSold() {
 	st := &b.store
 	if st.step == storeOpen || st.step == storeListed {
@@ -655,7 +657,7 @@ func (b *Brain) countSold() {
 				if it, ok := b.world.Inventory.Items[l.row.object]; ok {
 					kept = int64(it.Count)
 				}
-				valuables += max(int64(l.row.count)-kept, 0) * int64(l.row.price)
+				valuables += min(int64(l.row.count), max(l.atList-kept, 0)) * int64(l.row.price)
 			}
 			valuables = min(valuables, gained)
 			b.valuablesSold += valuables

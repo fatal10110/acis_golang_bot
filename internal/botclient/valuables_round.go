@@ -145,13 +145,18 @@ func (b *Brain) valuableRows(released bool) []WarehouseRow {
 
 // valuableFees is the deposit fees a merchant's shop visits never spend
 // (docs/valuables/warehouse.md "Fees and slots"): warehouseFee a row for
-// the larger of HoldRows and the rows its carried valuables take; none
-// with the policy disabled.
+// the larger of HoldRows and the rows its carried valuables take, the
+// released ones only once the valuables budget is spent (the off-round
+// deposit then takes them); none with the policy disabled.
 func (b *Brain) valuableFees() int64 {
 	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {
 		return 0
 	}
-	return int64(warehouseFee) * int64(max(b.persona.Valuables.HoldRows, len(b.carriedRows())))
+	rows := b.keptRows()
+	if b.valuablesLeft() <= 0 {
+		rows = b.carriedRows()
+	}
+	return int64(warehouseFee) * int64(max(b.persona.Valuables.HoldRows, len(rows)))
 }
 
 // queueRound queues and starts the private request of phase: the
