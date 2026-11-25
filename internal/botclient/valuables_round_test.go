@@ -33,12 +33,19 @@ func newRoundBrain(t *testing.T, keeper Point, stored []WarehouseItem, items ...
 	if horizontal2(keeper, Point{}) <= 300*300 {
 		b.world.Apply(NPCInfo{ObjectID: keeperObj, NPCID: keeperNPC, Pos: keeper}, t0)
 	}
-	m.regions = map[datapack.MapTile]int{originTile: 0}
-	m.itemNames = map[int32]string{ledgerSword: "Sword of Watershadow", ledgerStaff: "Conjuror's Staff"}
-	b.cfg.Ads = NewAdBoard(DefaultAdRegionGap, DefaultAdProcessPerHour)
+	roundTown(b)
 	b.wh.private = WarehouseStatus{Known: true, Contents: slices.Clone(stored)}
 	b.syncValuables()
 	return b
+}
+
+// roundTown makes the origin's town an advertising one: restart region 0
+// with its ad board, the fixture's valuables named.
+func roundTown(b *Brain) {
+	m := b.cfg.Travel
+	m.regions = map[datapack.MapTile]int{originTile: 0}
+	m.itemNames = map[int32]string{ledgerSword: "Sword of Watershadow", ledgerStaff: "Conjuror's Staff"}
+	b.cfg.Ads = NewAdBoard(DefaultAdRegionGap, DefaultAdProcessPerHour)
 }
 
 // nearKeeper is the round tests' keeper, in sight 300 east of the anchor.
@@ -103,6 +110,14 @@ func TestValuablesRoundStart(t *testing.T) {
 		if !r.open || r.anchor != (Point{}) || !b.cfg.valuables.lastStart.Equal(t0) || b.wh.running {
 			t.Fatalf("round %+v last start %v errand running %v; want open at the origin since t0, no withdrawal", r, b.cfg.valuables.lastStart, b.wh.running)
 		}
+	})
+	t.Run("a full town within storeTownRadius", func(t *testing.T) {
+		b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0))
+		b.cfg.Stores = NewStoreRegistry([]Point{{X: storeTownRadius - 100}}, 1, 150)
+		if _, ok := b.cfg.Stores.claim(Point{X: storeTownRadius}); !ok || b.cfg.Stores.hasRoom(Point{}) {
+			t.Fatal("fixture: the town is not full")
+		}
+		firstLine(t, b)
 	})
 	t.Run("none", testRoundNone)
 	t.Run("unreachable walk back", testRoundUnreachable)
@@ -306,18 +321,31 @@ func TestValuablesHoldsTurn(t *testing.T) {
 		}
 	})
 	t.Run("follow while the deposit walks to a far keeper", func(t *testing.T) {
-		b := newRoundBrain(t, Point{X: 5348}, nil, swordUnit(101, 0))
-		firstLine(t, b)
-		end := at(b.persona.Valuables.RoundWait)
-		rule, a := tradeTurn(t, b, end)
-		wantTurn(t, "walk to the keeper", rule, a, "valuables", actMove, nil)
-		follow(b)
-		if rule, _ := b.decide(end.Add(time.Second)); rule == "valuables" {
-			t.Fatal("rule valuables matched while following")
-		}
-		wantNoRound(t, "follow", b)
-		if e := entryOf(t, b, ledgerSword, 0); e.carried != 1 || !b.wh.retryAt.IsZero() || b.wh.private.Deposit.Outcome != WarehouseNone {
-			t.Errorf("sword %+v retry %v deposit %+v; want carried, no retry time, no result", e, b.wh.retryAt, b.wh.private.Deposit)
+		for _, tt := range []struct {
+			name string
+			call func(b *Brain)
+		}{
+			{"a follow order", follow},
+			{"the party leader moving off", func(b *Brain) {
+				b.world.Party = Party{LeaderID: pcID, Members: map[int32]*PartyMate{pcID: {}}}
+			}},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				b := newRoundBrain(t, Point{X: 5348}, nil, swordUnit(101, 0))
+				firstLine(t, b)
+				end := at(b.persona.Valuables.RoundWait)
+				rule, a := tradeTurn(t, b, end)
+				wantTurn(t, "walk to the keeper", rule, a, "valuables", actMove, nil)
+				tt.call(b)
+				placePlayer(t, b, pcID, Point{X: -1500})
+				if rule, _ := b.decide(end.Add(time.Second)); rule != "follow" {
+					t.Fatalf("called away: rule %q, want rule follow's legs", rule)
+				}
+				wantNoRound(t, "follow", b)
+				if e := entryOf(t, b, ledgerSword, 0); e.carried != 1 || !b.wh.retryAt.IsZero() || b.wh.private.Deposit.Outcome != WarehouseNone {
+					t.Errorf("sword %+v retry %v deposit %+v; want carried, no retry time, no result", e, b.wh.retryAt, b.wh.private.Deposit)
+				}
+			})
 		}
 	})
 	t.Run("follow at the list", func(t *testing.T) {
@@ -499,6 +527,50 @@ func TestValuablesGrace(t *testing.T) {
 		}
 		rule, a := tradeTurn(t, b, at(end+time.Second))
 		wantTurn(t, "answered: the deposit", rule, a, "valuables", actSelect, nil)
+	})
+	t.Run("a party invitation", func(t *testing.T) {
+		b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0))
+		firstLine(t, b)
+		end := b.persona.Valuables.RoundWait
+		rule, _ := tradeTurn(t, b, at(end), AskJoinParty{Requester: "buyer"})
+		if rule != "prompt" || b.wh.running {
+			t.Fatalf("invitation at the end: rule %q errand running %v; want rule prompt answering first", rule, b.wh.running)
+		}
+		rule, a := tradeTurn(t, b, at(end+time.Second))
+		wantTurn(t, "answered: the deposit", rule, a, "valuables", actSelect, nil)
+	})
+	t.Run("no request in the extension's last 15 s", func(t *testing.T) {
+		grace := defaultValuablePolicy().Grace
+		for _, tt := range []struct {
+			name  string
+			after time.Duration
+			ask   bool
+		}{
+			{"before", grace - tradeRequestTimeout - time.Millisecond, true},
+			{"within", grace - tradeRequestTimeout, false},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0))
+				firstLine(t, b)
+				agreed(b)
+				end := at(b.persona.Valuables.RoundWait)
+				rule, a := tradeTurn(t, b, end)
+				wantTurn(t, "put off", rule, a, "valuables", actHold, nil)
+				if !b.cfg.valuables.round.extended {
+					t.Fatal("round not extended")
+				}
+				b.cfg.valuables.talk.to = map[int32]int{pcID: 1}
+				rule, a = tradeTurn(t, b, end.Add(tt.after))
+				if tt.ask {
+					wantWalk(t, "legs to the whisperer", b, rule, a, Point{X: 600}, inviteArrive)
+					return
+				}
+				wantTurn(t, "no request", rule, a, "valuables", actHold, nil)
+				if b.cfg.valuables.round.invite.partner != 0 {
+					t.Errorf("invite %+v, want none", b.cfg.valuables.round.invite)
+				}
+			})
+		}
 	})
 	t.Run("142 at the open", func(t *testing.T) {
 		b := newRoundBrain(t, nearKeeper, nil, swordUnit(101, 0))

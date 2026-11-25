@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"cmp"
 	"slices"
 	"time"
 )
@@ -112,7 +113,7 @@ func (b *Brain) carriedRows() []WarehouseRow {
 			rows = append(rows, WarehouseRow{TemplateID: it.TemplateID, Count: it.Count, Object: it.ObjectID})
 		}
 	}
-	slices.SortFunc(rows, func(a, c WarehouseRow) int { return int(a.Object) - int(c.Object) })
+	slices.SortFunc(rows, func(a, c WarehouseRow) int { return cmp.Compare(a.Object, c.Object) })
 	return rows
 }
 
