@@ -128,31 +128,71 @@ func TestLootSlotsFullRefused(t *testing.T) {
 	}
 }
 
+// newFullRingBrain is a ground looter (GroundAny) wearing nothing, with
+// Gear.Jewelry on and inventory limit lim, holding adena, an unworn Magic
+// Ring and non-stacking filler items up to n items.
+func newFullRingBrain(t *testing.T, lim int32, n int) *Brain {
+	t.Helper()
+	items := []Item{{ObjectID: 0x50000000, TemplateID: adenaID, Count: 100}, carried(0x50000001, magicRing, partLRFinger)}
+	for i := range int32(n - 2) {
+		items = append(items, Item{ObjectID: 0x50000002 + i, TemplateID: fillerItem + i, Count: 1})
+	}
+	b := newSlotsBrain(t, classMysticHuman, items...)
+	b.persona.Gear.Jewelry = true
+	b.persona.Loot = defaultLootPolicy()
+	b.persona.Loot.Ground = GroundAny
+	b.cfg.Travel.herbs = map[int32]bool{herbOfLife: true}
+	b.world.Self.InvLimit = lim
+	return b
+}
+
 // TestLootFullBagFreesRules checks that a bag at its limit with the ground
 // covered in items needing a slot leaves the decision to the rules after
-// loot, while with the limit unknown loot takes it.
+// loot: the gear errand wears the unworn ring. With the limit unknown loot
+// takes it.
 func TestLootFullBagFreesRules(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		lim  int32
-		want bool
+		want string
 	}{
-		{name: "at the limit", lim: slotLimit},
-		{name: "limit unknown", want: true},
+		{name: "at the limit", lim: slotLimit, want: "gear"},
+		{name: "limit unknown", want: "loot"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newSlotLimitBrain(t, tt.lim, 80)
-			b.persona.Loot.Ground = GroundAny
+			b := newFullRingBrain(t, tt.lim, int(slotLimit))
 			var evs []timed
 			for i := range int32(10) {
 				evs = append(evs, timed{0, SpawnItem{Item: GroundItem{ObjectID: 0x40000100 + i, TemplateID: 2000 + i, Pos: Point{X: 100 + i}, Count: 1}}})
 			}
 			handleAll(t, b, evs)
-			rule, _ := b.decide(at(lootGrace))
-			if got := rule == "loot"; got != tt.want {
-				t.Fatalf("decide = %q, want loot %v", rule, tt.want)
+			if rule, _ := b.decide(at(lootGrace)); rule != tt.want {
+				t.Fatalf("decide = %q, want %q", rule, tt.want)
 			}
 		})
+	}
+}
+
+// TestLootStallFreesRules checks that after lootMisses ground items in a
+// row clicked for Loot.Timeout without a pickup, with the limit unknown,
+// the decision goes to the rules after loot: the gear errand wears the
+// unworn ring.
+func TestLootStallFreesRules(t *testing.T) {
+	b := newFullRingBrain(t, 0, 10)
+	var evs []timed
+	for i := range int32(lootMisses + 1) {
+		evs = append(evs, timed{0, SpawnItem{Item: GroundItem{ObjectID: 0x40000100 + i, TemplateID: 2000, Pos: Point{X: 100}, Count: 1}}})
+	}
+	handleAll(t, b, evs)
+	now := at(lootGrace)
+	for i := range int32(lootMisses) {
+		if id, _ := pickedUp(b, now); id != 0x40000100+i {
+			t.Fatalf("miss %d: picks up %d, want %d", i, id, 0x40000100+i)
+		}
+		now = now.Add(b.persona.Loot.Timeout)
+	}
+	if rule, _ := b.decide(now); rule != "gear" {
+		t.Fatalf("after %d misses decide = %q, want %q", lootMisses, rule, "gear")
 	}
 }
 
