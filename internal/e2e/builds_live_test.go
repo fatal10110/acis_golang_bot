@@ -93,9 +93,22 @@ func farmKits(t *testing.T, group string, classes ...*botclient.StartingClass) {
 	farmers := make([]kitFarmer, len(classes))
 	for i, class := range classes {
 		account, _ := tg.Account(group, i+1)
+		persona := farmerPersona(kitLevel)
+		if class.Mystic {
+			// The spot model prices a level 7 mystic in starter gear out
+			// of every spot by its village once its stats are in (#446):
+			// one that claimed a spot before keeps it, one that did not
+			// idles in town. The kit run is what this scenario proves, so
+			// its mystics farm with the model bound off.
+			persona = func() botclient.Persona {
+				p := farmerPersona(kitLevel)()
+				p.Spots.Margin = -1
+				return p
+			}
+		}
 		setup := botSetup{
 			class:   class,
-			persona: farmerPersona(kitLevel),
+			persona: persona,
 			// The travel map as cmd/bots' farmers have it: the brain
 			// tells the worn weapon's kind from its items (wornKind), and
 			// a weapon-gated step never passes without it.
