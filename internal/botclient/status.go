@@ -64,8 +64,10 @@ type Status struct {
 	CP, MaxCP      int32
 	Position       Point
 	// RunSpeed is the run speed the server gave last, its penalties
-	// applied (UserInfo).
+	// applied (UserInfo), and Running whether the bot runs rather than
+	// walks.
 	RunSpeed int32
+	Running  bool
 	// Load and MaxLoad are the carried weight and the weight limit, 0
 	// until known; Weight is Load in percent of MaxLoad, and WeightPenalty
 	// the server's weight band for it (weightBand, 0-4: 2 and 3 halve the
@@ -191,7 +193,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	st.Character, st.ClassID, st.Level = s.Name, s.ClassID, s.Level
 	st.HP, st.MaxHP, st.MP, st.MaxMP, st.CP, st.MaxCP = s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP
 	st.Position = s.Position(now)
-	st.RunSpeed, st.Load, st.MaxLoad, st.Weight = s.RunSpeed, s.Load, s.MaxLoad, 0
+	st.RunSpeed, st.Running, st.Load, st.MaxLoad, st.Weight = s.RunSpeed, s.Running, s.Load, s.MaxLoad, 0
 	if s.MaxLoad > 0 {
 		st.Weight = int32(int64(s.Load) * 100 / int64(s.MaxLoad))
 	}

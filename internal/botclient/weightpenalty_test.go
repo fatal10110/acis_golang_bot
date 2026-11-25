@@ -196,7 +196,7 @@ func TestGearWantsUnderSlowBand(t *testing.T) {
 
 // TestBrainStatusPenalties checks the load and penalty fields of the
 // snapshot (#436, read by the panel, #437): the load, its percent and
-// band, the run speed and the grade and death penalties.
+// band, the run speed and mode and the grade and death penalties.
 func TestBrainStatusPenalties(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -216,17 +216,17 @@ func TestBrainStatusPenalties(t *testing.T) {
 			b, _ := newCommandBrain(t, DefaultPersona())
 			l := linkBrain(b, standing{})
 			s := &b.world.Self
-			s.Load, s.MaxLoad, s.RunSpeed, s.DeathPenalty = tt.load, tt.maxLoad, 63, 2
+			s.Load, s.MaxLoad, s.RunSpeed, s.Running, s.DeathPenalty = tt.load, tt.maxLoad, 63, true, 2
 			if tt.penalty {
 				b.world.Apply(SkillList{Skills: []KnownSkill{{ID: gradePenaltySkill, Level: 1, Passive: true}}}, t0)
 			}
 			b.publishStatus(t0, true)
 			st := l.board.load()
 			want := tt.want
-			want.RunSpeed, want.DeathPenalty = 63, 2
+			want.RunSpeed, want.Running, want.DeathPenalty = 63, true, 2
 			got := Status{
 				Load: st.Load, MaxLoad: st.MaxLoad, Weight: st.Weight, WeightPenalty: st.WeightPenalty,
-				GradePenalty: st.GradePenalty, DeathPenalty: st.DeathPenalty, RunSpeed: st.RunSpeed,
+				GradePenalty: st.GradePenalty, DeathPenalty: st.DeathPenalty, RunSpeed: st.RunSpeed, Running: st.Running,
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("status %+v, want %+v", got, want)

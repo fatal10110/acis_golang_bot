@@ -553,7 +553,7 @@ grocer lists).
   (skill 4267), the bot takes off a worn armor or jewelry piece above its Expertise grade, then wears
   the best piece of its grade it carries. An over-grade weapon costs only accuracy, so it comes off
   only once a weapon of the bot's grade it carries replaces it. Status publishes the load, its band,
-  the run speed and the grade and death penalties for the panel.
+  the run speed and mode and the grade and death penalties for the panel.
 
   It reads SoE only with no attacker. The recall is not a magic cast, so a hit does not break it
   (server `cast/controller.go` `InterruptOnDamage`); only death, or a stun, sleep or paralysis a
