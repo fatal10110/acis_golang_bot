@@ -468,10 +468,12 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		if b.doors != nil {
 			b.doors.Observe(ev)
 		}
+		inParty := b.world.Party.In()
 		b.world.Apply(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
 		b.slotPartyEvent(ev)
+		b.spotJoinEvent(ev, inParty)
 		b.partyClaimEvent(ev)
 		switch e := ev.(type) {
 		case LeaveWorld:
