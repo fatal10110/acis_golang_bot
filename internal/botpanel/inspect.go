@@ -94,6 +94,24 @@ type inspectView struct {
 	Equipment []wornView     `json:"equipment,omitempty"`
 	Penalties *penaltyView   `json:"penalties,omitempty"`
 	Effects   []effectView   `json:"effects,omitempty"`
+	// Valuables are a merchant's held valuables (docs/valuables/preset.md
+	// "Wiring"), absent for a bot holding none.
+	Valuables []valuableView `json:"valuables,omitempty"`
+}
+
+// valuableView is one held valuable: where it is (carried, stored, or
+// both), its units in each place, its unsold rounds and its ask of one
+// unit; Released once the cap gave it to the store.
+type valuableView struct {
+	ID       int32  `json:"id"`
+	Name     string `json:"name"`
+	Enchant  int32  `json:"enchant,omitempty"`
+	Place    string `json:"place"`
+	Carried  int64  `json:"carried"`
+	Stored   int64  `json:"stored"`
+	Rounds   int    `json:"rounds"`
+	Ask      int64  `json:"ask"`
+	Released bool   `json:"released,omitempty"`
 }
 
 // inventoryView is the carried items, worn ones left to the equipment, and
@@ -261,5 +279,23 @@ func inspectViewOf(in botclient.Inspection, state string, cat *Catalog) inspectV
 		}
 		v.Effects = append(v.Effects, ev)
 	}
+	for _, h := range in.Valuables {
+		v.Valuables = append(v.Valuables, valuableView{
+			ID: h.TemplateID, Name: cat.itemName(h.TemplateID), Enchant: h.Enchant, Place: valuablePlace(h),
+			Carried: h.Carried, Stored: h.Stored, Rounds: h.Rounds, Ask: h.Ask, Released: h.Released,
+		})
+	}
 	return v
+}
+
+// valuablePlace is where h's units are: "carried", "stored", or
+// "carried, stored" when both hold some.
+func valuablePlace(h botclient.HeldValuable) string {
+	switch {
+	case h.Carried > 0 && h.Stored > 0:
+		return "carried, stored"
+	case h.Stored > 0:
+		return "stored"
+	}
+	return "carried"
 }

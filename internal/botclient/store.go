@@ -5,6 +5,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
@@ -544,7 +545,7 @@ func (b *Brain) storeRows() []storeRow {
 func (b *Brain) valuableStoreRows(room *int64) []storeRow {
 	st := &b.store
 	st.valuables = nil
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil {
 		return nil
 	}
 	left := b.valuablesLeft()
@@ -577,7 +578,7 @@ func (b *Brain) valuableStoreRows(room *int64) []storeRow {
 // released entry (docs/valuables/ledger.md "Released entries"), which the
 // store sells.
 func (b *Brain) releasedValuable(it Item) bool {
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil || b.cfg.valuables == nil {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil || b.cfg.valuables == nil {
 		return false
 	}
 	return b.cfg.valuables.released(valuableKey{template: it.TemplateID, enchant: it.Enchant}) && b.valuable(it)
@@ -645,22 +646,30 @@ func (b *Brain) closeStore(now time.Time) {
 // sales, split between the budgets (docs/valuables/release.md "Valuables
 // budget (D34)"): the units each listed valuable row sold (its object's
 // units at listing less still carried, at most the row's) times its price
-// to the valuables budget, the rest to the store's.
+// to the valuables budget, the rest to the store's. Each valuable row that
+// sold units counts one store sale (botmetrics.ViaStore).
 func (b *Brain) countSold() {
 	st := &b.store
 	if st.step == storeOpen || st.step == storeListed {
 		if it, ok := b.world.Inventory.ByTemplate(adenaID); ok {
 			gained := max(int64(it.Count)-st.adenaAtOpen, 0)
 			var valuables int64
+			rows := 0
 			for _, l := range st.valuables {
 				var kept int64
 				if it, ok := b.world.Inventory.Items[l.row.object]; ok {
 					kept = int64(it.Count)
 				}
-				valuables += min(int64(l.row.count), max(l.atList-kept, 0)) * int64(l.row.price)
+				if sold := min(int64(l.row.count), max(l.atList-kept, 0)); sold > 0 {
+					valuables += sold * int64(l.row.price)
+					rows++
+				}
 			}
 			valuables = min(valuables, gained)
 			b.valuablesSold += valuables
+			for ; valuables > 0 && rows > 0; rows-- {
+				b.metrics.ValuablesSold(botmetrics.ViaStore)
+			}
 			st.sold += gained - valuables
 		}
 	}

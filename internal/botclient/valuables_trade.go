@@ -1,6 +1,10 @@
 package botclient
 
-import "time"
+import (
+	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+)
 
 // inviteArrive is how near the whisperer it asks for a trade the bot walks
 // first (docs/valuables/trades.md "Asking for a trade"): inside
@@ -89,7 +93,7 @@ func (b *Brain) agreedDeal(partner int32) bool {
 // unit price) of its units.
 func (b *Brain) valuableGoods(partner int32, rows []TradeItem) (TradeItem, valuableKey, bool) {
 	v := b.cfg.valuables
-	if !v.round.open || b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {
+	if !v.round.open || !b.persona.Valuables.Enabled || b.cfg.Travel == nil {
 		return TradeItem{}, valuableKey{}, false
 	}
 	left := b.valuablesLeft()
@@ -146,6 +150,7 @@ func (b *Brain) valuableSaleEvent(ev Event) {
 	e, ok := ev.(SendTradeDone)
 	if t := &b.world.Trade; ok && e.Success && t.Open() && t.valuable {
 		b.valuablesSold += t.sale
+		b.metrics.ValuablesSold(botmetrics.ViaTrade)
 	}
 }
 

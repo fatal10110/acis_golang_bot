@@ -60,7 +60,7 @@ func (b *Brain) trackHold(now time.Time) {
 // With the budget spent neither is.
 func (b *Brain) roundPending(now time.Time) (pending, timers bool) {
 	v, p := b.cfg.valuables, b.persona.Valuables
-	if p == (ValuablePolicy{}) || b.cfg.Travel == nil || v.round.open || b.round.phase != roundIdle {
+	if !p.Enabled || b.cfg.Travel == nil || v.round.open || b.round.phase != roundIdle {
 		return false, false
 	}
 	if b.valuablesLeft() <= 0 || !b.tradeReady(now) {
@@ -122,7 +122,7 @@ func (b *Brain) ownTradeRequest(now time.Time) bool {
 // with one picked up since the last deposit tried (newFind), and the
 // look's conditions (lookReady). The ad board never holds it.
 func (b *Brain) offRoundDue(now time.Time) bool {
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
 		return false
 	}
 	if b.valuablesLeft() > 0 {
@@ -137,7 +137,7 @@ func (b *Brain) offRoundDue(now time.Time) bool {
 // entry stored, and the look's conditions (lookReady). The ad board never
 // holds it.
 func (b *Brain) releaseDue(now time.Time) bool {
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil || !b.wh.private.Known || b.look.phase != lookIdle {
 		return false
 	}
 	return b.valuablesLeft() > 0 && b.cfg.valuables.releasedStored() && b.lookReady(now)

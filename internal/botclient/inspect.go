@@ -51,6 +51,22 @@ type Inspection struct {
 	// RunSpeed is the run speed the server gave last, its penalties
 	// applied.
 	RunSpeed int32
+	// Valuables are the entries of a merchant's valuables ledger by
+	// template and enchant; none for a bot whose ValuablePolicy is off.
+	Valuables []HeldValuable
+}
+
+// HeldValuable is one entry of a merchant's valuables ledger
+// (docs/valuables/ledger.md "Entries and units"): the item, its units
+// carried and stored as the last decision derived them, its unsold rounds,
+// its ask of one unit, and whether the cap released it to the store.
+type HeldValuable struct {
+	TemplateID      int32
+	Enchant         int32
+	Carried, Stored int64
+	Rounds          int
+	Ask             int64
+	Released        bool
 }
 
 // Inspect hands an inspect to the running session's brain and returns the
@@ -172,7 +188,7 @@ func (b *Brain) answerInspect(now time.Time, stale bool) {
 	in := b.inspection(now, stale)
 	for i, r := range s.replies {
 		if i > 0 {
-			in.Items, in.Effects = slices.Clone(in.Items), slices.Clone(in.Effects)
+			in.Items, in.Effects, in.Valuables = slices.Clone(in.Items), slices.Clone(in.Effects), slices.Clone(in.Valuables)
 		}
 		r <- in
 	}
@@ -203,7 +219,28 @@ func (b *Brain) inspection(now time.Time, stale bool) Inspection {
 		in.Effects = append(in.Effects, e)
 	}
 	slices.SortFunc(in.Effects, func(a, b Effect) int { return cmp.Compare(a.SkillID, b.SkillID) })
+	in.Valuables = b.heldValuables()
 	return in
+}
+
+// heldValuables are the valuables ledger's entries by template and
+// enchant, none while the policy is off.
+func (b *Brain) heldValuables() []HeldValuable {
+	v := b.cfg.valuables
+	if !b.persona.Valuables.Enabled || v == nil || len(v.entries) == 0 {
+		return nil
+	}
+	held := make([]HeldValuable, 0, len(v.entries))
+	for k, e := range v.entries {
+		held = append(held, HeldValuable{
+			TemplateID: k.template, Enchant: int32(k.enchant), Carried: e.carried, Stored: e.stored,
+			Rounds: e.rounds, Ask: e.ask, Released: e.released,
+		})
+	}
+	slices.SortFunc(held, func(a, b HeldValuable) int {
+		return cmp.Or(cmp.Compare(a.TemplateID, b.TemplateID), cmp.Compare(a.Enchant, b.Enchant))
+	})
+	return held
 }
 
 // encodeRequestItemList asks the server for the whole inventory: it

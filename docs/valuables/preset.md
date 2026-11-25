@@ -25,7 +25,18 @@
 | `Budget` | 2000000 per session | [release](release.md#valuables-budget-d34) |
 
 All are persona defaults (D6) except `RegionGap` and `ProcessPerHour`, operational limits on what the
-process says, set by flags.
+process says, set by flags. `Budget` is the persona's default, which `-valuables-budget` sets for the
+merchants of a process.
+
+| Flag | Default | Sets |
+| --- | --- | --- |
+| `-valuables-budget` | 2000000 | `Budget` of every merchant, per session (D34), apart from `-store-budget` |
+| `-ad-region-gap` | 60s | the ad board's `RegionGap`, 1s at least |
+| `-ads-per-hour` | 30 | the ad board's `ProcessPerHour`, 1 at least |
+
+They apply to `-persona merchant` only (`bots swarm` refuses them with another preset); `bots ui`
+takes them for the merchants it starts. One ad board per process, built beside the store registry
+(`cmd/bots/swarm.go`, `cmd/bots/ui.go`), is shared by every brain.
 
 ## Process settings
 

@@ -32,7 +32,7 @@ func newValuableMember(t *testing.T, hook func(*World, Item) Hold, items ...Item
 	m.supply = map[int32]itemSupply{dBlade: {perHour: 1}, dSword: {perHour: 1}, ngSword: {perHour: 1}, ironScroll: {perHour: 1}, spiritOre: {perHour: 1}, steel: {perHour: 50}}
 	b.cfg.CraftBoard = NewCraftBoard()
 	b.cfg.CraftBoard.Publish(memberClan, CrafterEntry{Bot: memberCrafty, Name: "crafter", Recipes: []int32{20, ironRecipe}, ShotGrades: []int{1}})
-	b.persona.Valuables = defaultValuablePolicy()
+	b.persona.Valuables = DefaultValuablePolicy()
 	b.persona.Holds = hook
 	b.persona.ClanMember = true
 	b.wireMember()

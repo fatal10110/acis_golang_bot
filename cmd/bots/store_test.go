@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 )
@@ -19,10 +20,10 @@ func TestParseStoreFlags(t *testing.T) {
 		want    storeOptions
 		wantErr string
 	}{
-		{"defaults", base, storeOptions{budget: defaultStoreBudget, perTown: 5, spacing: 150}, ""},
+		{"defaults", base, storeOptions{budget: defaultStoreBudget, perTown: 5, spacing: 150, valuablesBudget: defaultValuablesBudget, adRegionGap: time.Minute, adsPerHour: 30}, ""},
 		{
 			"merchants", append(base, "-persona", "merchant", "-datapack", "xml", "-store-budget", "70000", "-stores-per-town", "3", "-store-spacing", "200"),
-			storeOptions{budget: 70000, perTown: 3, spacing: 200},
+			storeOptions{budget: 70000, perTown: 3, spacing: 200, valuablesBudget: defaultValuablesBudget, adRegionGap: time.Minute, adsPerHour: 30},
 			"",
 		},
 		{"budget of another preset", append(base, "-datapack", "xml", "-store-budget", "1"), storeOptions{}, "-store-budget applies to -persona merchant"},

@@ -149,13 +149,21 @@ func (v *valuables) released(k valuableKey) bool {
 // every entry once, released or not, counting carried and stored units:
 // all are released when they take more than HoldRows rows; all that each
 // ask at most HoldValue when their asks times units pass HoldValue; and
-// each unsold through MaxRounds rounds, alone.
-func (v *valuables) capEntries(p ValuablePolicy, stackable map[int32]bool) {
+// each unsold through MaxRounds rounds, alone. It returns how many entries
+// it released that were not.
+func (v *valuables) capEntries(p ValuablePolicy, stackable map[int32]bool) int {
+	n := 0
+	release := func(e *valuableEntry) {
+		if !e.released {
+			e.released = true
+			n++
+		}
+	}
 	if v.rows(stackable) > p.HoldRows {
 		for _, e := range v.entries {
-			e.released = true
+			release(e)
 		}
-		return
+		return n
 	}
 	var sum int64
 	for _, e := range v.entries {
@@ -165,9 +173,19 @@ func (v *valuables) capEntries(p ValuablePolicy, stackable map[int32]bool) {
 	}
 	for _, e := range v.entries {
 		if sum > p.HoldValue && e.ask <= p.HoldValue || e.rounds >= p.MaxRounds {
-			e.released = true
+			release(e)
 		}
 	}
+	return n
+}
+
+// heldUnits are the units the ledger holds, carried and stored.
+func (v *valuables) heldUnits() int64 {
+	var n int64
+	for _, e := range v.entries {
+		n += e.carried + e.stored
+	}
+	return n
 }
 
 // markDeposited records rows, the carried valuables a deposit tries, as
@@ -315,7 +333,7 @@ func (b *Brain) valuable(it Item) bool {
 // none.
 func (b *Brain) valuableTemplate(template int32, enchant uint16) bool {
 	m, p := b.cfg.Travel, b.persona.Valuables
-	if m == nil || p == (ValuablePolicy{}) || m.shadows[template] {
+	if m == nil || !p.Enabled || m.shadows[template] {
 		return false
 	}
 	if _, shopSells := m.cheapest[template]; shopSells {
@@ -354,12 +372,14 @@ func (b *Brain) carriedValuables() map[valuableKey]carriedUnits {
 }
 
 // syncValuables derives the ledger's units on each decision of a persona
-// whose ValuablePolicy is enabled (valuables.sync).
+// whose ValuablePolicy is enabled (valuables.sync), and sets the held
+// valuables gauge from it.
 func (b *Brain) syncValuables() {
-	if b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {
+	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil {
 		return
 	}
 	b.cfg.valuables.sync(b.carriedValuables(), b.firstAsk)
+	b.metrics.ValuablesHeld(b.cfg.valuables.heldUnits())
 }
 
 // firstAsk is the first ask of one unit of entry k
