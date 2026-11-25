@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"slices"
+	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -26,13 +27,16 @@ var damageSkillTypes = []string{"PDAM", "BLOW", "MDAM", "DRAIN", "DEATHLINK"}
 // spot's monsters (packFight). With no margin (a row without one, or
 // SpotPolicy.Margin below 0) or nothing to judge
 // by (packFight not ok) only the level and a death's teaching bound a spot.
-func (b *Brain) packFits(s *datapack.Spot) bool {
+// A leader fits it with the bot members present at now (partyCrew,
+// docs/parties/model.md), by its own row's margin.
+func (b *Brain) packFits(s *datapack.Spot, now time.Time) bool {
 	bd := b.build()
 	margin := bd.Kit.SpotMargin
 	if margin <= 0 {
 		return true
 	}
-	kill, die, ok := b.packFight(s, &bd, margin)
+	c := b.partyCrew(now)
+	kill, die, ok := b.packFight(s, &bd, margin, &c)
 	return !ok || die >= margin*kill
 }
 
@@ -47,8 +51,10 @@ func (b *Brain) packFits(s *datapack.Spot) bool {
 // spotPack fights. Not ok when the bot's stats are not in yet, s has no
 // monster with HP and P.Def, or the bot casts on its target what it has no
 // travel map to price (spotAttack). Regeneration, shots and its own buffs beyond
-// what UserInfo carries are left out.
-func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64) (kill, die float64, ok bool) {
+// what UserInfo carries are left out. A leader's crew c kills each monster
+// with it (crew.kill) and heals it over margin kills as its potions do
+// (crew.healed); the whole pack still hits the leader.
+func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) (kill, die float64, ok bool) {
 	self := b.reported()
 	if self.PAtk <= 0 || self.PDef <= 0 || self.PAtkSpd <= 0 || self.MaxHP <= 0 {
 		return 0, 0, false
@@ -68,15 +74,17 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64) (kill, di
 		if skill {
 			t = min(t, charmodel.TimeToKill(self, attack, mob))
 		}
-		c := float64(m.Count)
-		n, k = n+c, k+c*t.Seconds()
-		dps += c * self.MaxHP / max(charmodel.TimeToDie(self, mob).Seconds(), 1e-3)
+		t = c.kill(t, mob)
+		cnt := float64(m.Count)
+		n, k = n+cnt, k+cnt*t.Seconds()
+		dps += cnt * self.MaxHP / max(charmodel.TimeToDie(self, mob).Seconds(), 1e-3)
 	}
 	if n == 0 {
 		return 0, 0, false
 	}
 	k, dps = k/n, dps/n
-	hp := self.MaxHP + b.potionsHeal(margin*k, max(1, spotPack(s)))
+	fights := max(1, spotPack(s))
+	hp := self.MaxHP + b.potionsHeal(margin*k, fights) + c.healed(margin*k, fights)
 	return k, hp / dps, true
 }
 

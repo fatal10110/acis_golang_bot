@@ -63,10 +63,10 @@ func TestLoadSkills(t *testing.T) {
 			NumCharges: 1, MaxCharges: max, Charges: ChargeCond{Min: max, Not: true},
 		}
 	}
-	hurricane := func(mp int, power float64) Skill {
+	hurricane := func(mp, initMP int, power float64) Skill {
 		return Skill{
 			Name: "Hurricane Assault", Type: "CHARGEDAM", OperateType: "ACTIVE", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"},
-			CastRange: 40, HitTime: 1360 * time.Millisecond, ReuseDelay: 17 * time.Second, MPConsume: mp, Power: power,
+			CastRange: 40, HitTime: 1360 * time.Millisecond, ReuseDelay: 17 * time.Second, MPConsume: mp, MPInitialConsume: initMP, Power: power,
 			NumCharges: 2, Charges: ChargeCond{Min: 2},
 		}
 	}
@@ -89,8 +89,8 @@ func TestLoadSkills(t *testing.T) {
 			Funcs: []StatFunc{{Op: "add", Stat: "accCombat", Value: 3}},
 		}},
 	}
-	want[SkillRef{284, 1}] = hurricane(49, 501)
-	want[SkillRef{284, 2}] = hurricane(50, 535)
+	want[SkillRef{284, 1}] = hurricane(49, 12, 501)
+	want[SkillRef{284, 2}] = hurricane(50, 13, 535)
 	want[SkillRef{290, 1}] = passive("Final Frenzy", StatFunc{Op: "add", Stat: "pAtk", Value: 2, OtherCond: true})
 	want[SkillRef{3502, 1}] = passive("Mithril Heavy Armor Set", StatFunc{Op: "addMul", Stat: "poisonVuln", Value: 20})
 	// None of these sets a landing or cure field: each reads its default,
