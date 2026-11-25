@@ -146,6 +146,13 @@ type RecoverPolicy struct {
 	// falls back to the nearest town with /unstuck. 0 never falls back.
 	LeaderWait time.Duration
 	Whisper    string
+	// JoinWait bounds the join hold (docs/parties/members.md, "Join hold"):
+	// a bot holding a join slot in no party holds where it stands, whispering
+	// nothing, until its leader invites it again or the organizer's unparty
+	// frees it; JoinWait after it found itself partyless it clears the slot
+	// itself (Status.PartyLeft "timeout") and plays on. 0 holds until the
+	// unparty or another clear of the slot.
+	JoinWait time.Duration
 	// LiftDeathPenalty buys, in the shop errand's supplies tier, a Scroll:
 	// Recovery of the bot's level band per death penalty level and reads
 	// them out of combat (rule "recover"), one level each.
@@ -154,8 +161,10 @@ type RecoverPolicy struct {
 
 // defaultRecoverPolicy is the support persona's (docs/plan.md, personas):
 // a party member waits two minutes for a resurrection, a bot whose leader
-// is gone waits five minutes before it gives up on it, and a death penalty
-// is lifted with Scrolls: Recovery.
+// is gone waits five minutes before it gives up on it, a member of a bot
+// party out of it waits six (the organizer's LeaderGone plus two of its
+// ticks) for its leader's invitation, and a death penalty is lifted with
+// Scrolls: Recovery.
 func defaultRecoverPolicy() RecoverPolicy {
 	return RecoverPolicy{
 		AcceptResurrection: true,
@@ -163,6 +172,7 @@ func defaultRecoverPolicy() RecoverPolicy {
 		SitByLeader:        true,
 		LeaderWait:         5 * time.Minute,
 		Whisper:            "where did you go?",
+		JoinWait:           6 * time.Minute,
 		LiftDeathPenalty:   true,
 	}
 }
@@ -191,6 +201,10 @@ type leaderWatch struct {
 	home     bool
 	// sat is set while the bot sits by its dead leader.
 	sat bool
+	// partyless is when the bot, holding a join slot, found itself in no
+	// party, zero while it is in one or holds no join slot (the join hold's
+	// JoinWait counts from it).
+	partyless time.Time
 }
 
 // watchLeader updates the watch from the party: a leader that is no longer
@@ -203,6 +217,12 @@ func (b *Brain) watchLeader(now time.Time) {
 	if l := b.cfg.link; l != nil && l.party.Kind == CommandJoin && w.Party.In() && w.Party.LeaderID == w.Self.ObjectID {
 		*v = leaderWatch{}
 		return
+	}
+	switch l := b.cfg.link; {
+	case w.Party.In() || l == nil || l.party.Kind != CommandJoin:
+		v.partyless = time.Time{}
+	case v.partyless.IsZero():
+		v.partyless = now
 	}
 	var cur int32
 	if p := &w.Party; p.In() && p.LeaderID != w.Self.ObjectID {
@@ -282,7 +302,8 @@ func (b *Brain) leaderEvent(ev Event, now time.Time) {
 // and holds until the recall lands it in town; a leader teleported away is
 // waited for there, while one that left frees the bot. A leader back or a
 // new leader ends it. While told to follow a commander, only the body
-// matters.
+// matters. A bot holding a join slot in no party holds in the join hold
+// instead (joinHold).
 //
 // The whisper passes the chat gate (gateChat). /unstuck (RequestUserCommand)
 // has no server gate: escapeRetry spaces a repeat while no recall cast runs,
@@ -294,6 +315,9 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 	b.watchLeader(now)
 	if a, ok := b.byLeaderBody(now); ok {
 		return a, true
+	}
+	if b.joinHold(now) {
+		return Action{}, true
 	}
 	v, p, s := &b.lead, &b.persona.Recover, &b.world.Self
 	if v.lost.IsZero() || p.LeaderWait <= 0 || b.orders.follow != 0 || b.slotLeaderLost() {
@@ -320,6 +344,30 @@ func (b *Brain) ruleLeader(now time.Time) (Action, bool) {
 		return b.toggle(now), true
 	}
 	return escapeAction(), true
+}
+
+// joinHold reports whether the join hold keeps the bot where it stands
+// (docs/parties/members.md, "Join hold"): holding a join slot in no party,
+// it waits for its leader's invitation, claiming nothing, for any loss of
+// its leader and between invitations; it neither whispers nor casts
+// /unstuck. The rules ahead of "leader" (attacked, heal, rest, rebuff, the
+// errands) still run. JoinWait after the bot found itself partyless the
+// brain clears the slot (Status.PartyLeft "timeout") and resets the leader
+// watch, ending the hold: the bot plays its persona where it stands.
+func (b *Brain) joinHold(now time.Time) bool {
+	l, v := b.cfg.link, &b.lead
+	if l == nil || l.party.Kind != CommandJoin || b.world.Party.In() {
+		return false
+	}
+	w := b.persona.Recover.JoinWait
+	if w <= 0 || v.partyless.IsZero() || now.Before(v.partyless.Add(w)) {
+		return true
+	}
+	slot := l.party
+	l.party, l.partyLeft = Command{}, partyLeftTimeout
+	b.leaveSlot(slot)
+	b.log.Info("join hold timed out: party slot cleared", "leader", slotLeader(slot), "wait", w)
+	return false
 }
 
 // slotLeaderLost reports whether the lost leader is a bot the party slot

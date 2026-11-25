@@ -73,8 +73,27 @@ func (b *Brain) clearSlot() bool {
 	return true
 }
 
-// partyLeftLeft is Status.PartyLeft for a slot a clearing event cleared.
-const partyLeftLeft = "left"
+// Status.PartyLeft: a slot a clearing event cleared, or the join hold's
+// JoinWait (joinHold).
+const (
+	partyLeftLeft    = "left"
+	partyLeftTimeout = "timeout"
+)
+
+// spotJoinEvent gives back the spot the bot holds or farms beside when it
+// joins a party it does not lead (docs/parties/members.md, "Joining"): a
+// member follows its leader, so a spot it kept would sit unused. wasIn is
+// whether the bot was in a party before ev. A leader change (the server's
+// PartySmallWindowDeleteAll then PartySmallWindowAll) is a join too: the
+// bot leading the party keeps its spot.
+func (b *Brain) spotJoinEvent(ev Event, wasIn bool) {
+	if _, ok := ev.(PartySmallWindowAll); !ok || wasIn || !b.spot.held && !b.spot.beside {
+		return
+	}
+	if p := &b.world.Party; p.In() && p.LeaderID != b.world.Self.ObjectID {
+		b.leaveSpot()
+	}
+}
 
 // slotPartyEvent applies the player-led-party rule on each party window: a
 // bot in a party led by anyone its slot does not name (a player's or a
@@ -130,6 +149,14 @@ func (b *Brain) inSlotParty(slot Command) bool {
 		return m != nil && m.Name == slotLeader(slot)
 	}
 	return false
+}
+
+// inBotParty reports whether the bot is in its own bot party: the party its
+// lead slot leads, or the named leader's under a join (inSlotParty). A bot
+// with no slot, or in a player's party, is not.
+func (b *Brain) inBotParty() bool {
+	l := b.cfg.link
+	return l != nil && b.inSlotParty(l.party)
 }
 
 // slotLeader is the leader a join names, its first name.
