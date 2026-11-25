@@ -84,7 +84,12 @@ battle-caster bots are never poisoned; bleeds (Bleed 96, Sting 223) are ungated.
   magic vs M.Def, poison and bleed ticks by land rate vs the bot's CON, `poisonVuln`, `bleedVuln`.
 - `TTK_r` = (its max CP + max HP) / (the bot's damage per second with `pvpPhysDmg`,
   `pvpPhysSkillsDmg`, `pvpMagicalDmg`, × `u_r`), `u_r` = 1 − the time share `r`'s control holds the
-  bot (land rates vs its CON and `stunVuln`, MEN and sleep and root vulns).
+  bot (land rates vs its CON and `stunVuln`, MEN and sleep and root vulns). An effect with its own
+  `effectPower` lands only when the skill's own roll landed first, so its land rate is the product of
+  the two rolls. Any hit wakes a sleeping player and the holder keeps attacking, so a Sleep holds
+  only until the holder's next hit (its attack interval), not for its full time.
+- The opponent's damage per second in `TTD_r` is cut the same way by the time share the bot's own
+  row's control holds it, so an equal opponent, control rows included, is an even fight.
 - `win_r = TTD_r / (TTD_r + TTK_r)` (0.5 even); `PvPValue = Σ s_r × win_r`.
 
 **Blend.** M10 compares gear by the candidate's difference to `Value` (kills per minute for Damage,
