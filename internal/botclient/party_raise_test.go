@@ -29,7 +29,8 @@ func raiseParty(b *Brain, slot Command, leader int32, dead ...int32) {
 // TestPartyRaise checks the raise rule (docs/parties/members.md, "Events"):
 // a level-20 Cleric member out of combat, the leader dead in sight, selects
 // it and casts Resurrection, the leader first; not in combat, not outside
-// its bot party, not on reuse, not under SitMP; a cast in flight is waited
+// its bot party, not on reuse, not under SitMP, not a flagged member
+// unless the PvP policy supports one; a cast in flight is waited
 // out; a level-19 Elven Mystic never.
 func TestPartyRaise(t *testing.T) {
 	now := at(time.Second)
@@ -59,6 +60,15 @@ func TestPartyRaise(t *testing.T) {
 		{name: "none dead", setup: target(pcID)},
 		{name: "in combat", dead: []int32{pcID}, setup: func(b *Brain) { b.world.Self.InCombat = true }},
 		{name: "out of sight", dead: []int32{pcID}, setup: func(b *Brain) { delete(b.world.Objects, pcID) }},
+		{name: "a flagged leader", dead: []int32{pcID}, setup: func(b *Brain) { b.world.Objects[pcID].PvPFlag = 1 }},
+		{
+			name: "a flagged leader, SupportFlagged: selects it", dead: []int32{pcID},
+			setup: func(b *Brain) {
+				b.world.Objects[pcID].PvPFlag = 1
+				b.persona.PvP.SupportFlagged = true
+			},
+			want: actSelect, object: pcID,
+		},
 		{name: "a player's party", slot: &Command{}, dead: []int32{pcID}},
 		{name: "another leader's party", slot: &Command{Kind: CommandJoin, Arg: "someone"}, dead: []int32{pcID}},
 		{
