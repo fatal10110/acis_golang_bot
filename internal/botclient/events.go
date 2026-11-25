@@ -99,16 +99,21 @@ type UserInfo struct {
 	Critical, MAtk, CastSpd, MDef int32
 	// CollisionHeight is the character's; the server adds it to the Z of
 	// every ground click (network/movement.go moveLivePlayer).
-	CollisionHeight float64
+	// CollisionRadius is its own reach margin in a distance check.
+	CollisionRadius, CollisionHeight float64
 	// StoreType is the private store mode (the server's operate type; 0
 	// for none).
 	StoreType uint8
 	IsGM      bool
-	// ClanID is the character's clan, 0 for none.
-	ClanID int32
+	// ClanID is the character's clan, AllyID its clan's alliance, 0 for
+	// none.
+	ClanID, AllyID int32
 	// Abnormal is the abnormal effect mask drawn on the character; an
 	// invisible game master sees AbnormalStealth in its own.
 	Abnormal int32
+	// PKKills and PvPKills count the players it killed without and with
+	// a flag.
+	PKKills, PvPKills int32
 }
 
 // AbnormalStealth is the abnormal effect bit of an invisible game master
@@ -162,6 +167,19 @@ type CharInfo struct {
 	InCombat, Dead      bool
 	// StoreType is the private store mode, as in UserInfo.
 	StoreType uint8
+	// RHand and LHand are the template ids of the weapon and the shield
+	// (or the two-handed weapon again) drawn in its hands, 0 for none.
+	RHand, LHand int32
+	// CollisionRadius is its reach margin in a distance check.
+	CollisionRadius float64
+	// ClanID and AllyID are its clan and alliance, 0 for none.
+	ClanID, AllyID int32
+	// Abnormal is the abnormal effect mask drawn on it, as in UserInfo.
+	Abnormal  int32
+	CP, MaxCP int32
+	// DuelTeam is its side in a duel (1 blue, 2 red), 0 outside one; a
+	// spawn-protected player shows blue.
+	DuelTeam uint8
 }
 
 // NPCInfo describes an NPC (a monster, a townsperson or a summon) in sight.
@@ -179,6 +197,8 @@ type NPCInfo struct {
 	Running, InCombat   bool
 	Dead, Summon        bool
 	PvPFlag, Karma      int32
+	// CollisionRadius is its reach margin in a distance check.
+	CollisionRadius float64
 	// Name and Title are the server-side name and title, "" unless the
 	// template uses them (usingServerSideName and usingServerSideTitle,
 	// npc/folk.go infoSnapshot): the client shows its own otherwise.

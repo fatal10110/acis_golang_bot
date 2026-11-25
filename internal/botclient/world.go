@@ -792,6 +792,12 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyAttack(e, now)
 	case MagicSkillUse:
 		w.applyMagicSkillUse(e, now)
+	case MagicSkillCanceled:
+		// The bot's own cast stopped before it hit (X1); another caster's
+		// last cast is the PvP opponent record's (X4).
+		if e.CasterID == w.Self.ObjectID {
+			w.Self.castEnd = time.Time{}
+		}
 	case SkillList:
 		w.applySkillList(e)
 	case SkillCoolTime:
