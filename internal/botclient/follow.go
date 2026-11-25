@@ -35,6 +35,13 @@ const (
 	followArrive = 50
 	// headingUnits is a full turn in the units of a heading.
 	headingUnits = 65536
+	// followStill is how long a leader in sight stands still before a
+	// follow walk toward it takes long segments (walkFollowStill, #344);
+	// followReportStill is the same for a leader out of sight, whose
+	// position the server reports every 12 s (PartyMemberPosition): a report
+	// that moved means the leader may still be moving until the next one.
+	followStill       = 3 * time.Second
+	followReportStill = 13 * time.Second
 )
 
 // followState is the bot's slot behind its party leader.
@@ -60,6 +67,31 @@ type followState struct {
 	stuck     bool
 	// runToggledAt is the last walk/run toggle not yet settled.
 	runToggledAt time.Time
+	// seen is where the leader was at the last decision, seenOK false
+	// before the first; movedAt is when the leader was last seen moving or
+	// found away from seen, zero for never (followState.still).
+	seen    Point
+	seenOK  bool
+	movedAt time.Time
+}
+
+// still reports whether the leader has stood still long enough at now for
+// a follow walk toward it to take long segments (#344): it was not seen
+// moving, nor found more than walkSameDest from where it was at the last
+// decision, for followStill in sight and followReportStill out of sight. A
+// leader never seen moving stands still. It records the leader's position
+// for the next decision, so it runs once per decision.
+func (v *followState) still(lead leaderView, now time.Time) bool {
+	if lead.obj != nil && lead.obj.Moving(now) ||
+		v.seenOK && horizontal2(lead.pos, v.seen) > walkSameDest*walkSameDest {
+		v.movedAt = now
+	}
+	v.seen, v.seenOK = lead.pos, true
+	wait := followStill
+	if lead.obj == nil {
+		wait = followReportStill
+	}
+	return v.movedAt.IsZero() || now.Sub(v.movedAt) >= wait
 }
 
 // leaderView is what the bot knows of its leader at a decision.
@@ -86,10 +118,14 @@ type leaderView struct {
 //
 // The slot is snapped into the leader's SCC (walker.inSCC) and walked
 // through the walker (D13), which may take one-way drops toward it
-// (walkFollow): a slot across a wall is routed around it, a leader below a
-// ledge is followed down, and a leader on ground the bot cannot climb to is
-// not chased: the walk ends unreachable and the bot waits for the leader to
-// move on.
+// (walkPurpose.drops): a slot across a wall is routed around it, a leader
+// below a ledge is followed down, and a leader on ground the bot cannot
+// climb to is not chased: the walk ends unreachable and the bot waits for
+// the leader to move on. The walk takes segments of at most movingSegment
+// toward a leader that moves (walkFollow), and the planner's long ones
+// toward a leader that stands still (walkFollowStill, followState.still); a
+// leader that starts moving resets the walk, which lets the segment in
+// flight run out and replans from its end with the cap (#344).
 //
 // Each move is one walker segment (MoveBackwardToLocation) and each toggle
 // one RequestActionUse, at most one per decision, through the frame pacer
@@ -112,6 +148,10 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	lead, ok := b.leader(id, now)
 	if !ok {
 		return Action{}, true
+	}
+	purpose := walkFollow
+	if v.still(lead, now) {
+		purpose = walkFollowStill
 	}
 	s := &w.Self
 	if run := lead.obj == nil || lead.obj.Running; run != s.Running && now.Sub(v.runToggledAt) >= toggleSettle {
@@ -139,7 +179,7 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	if !v.traveling {
 		return Action{}, true
 	}
-	a, st := b.goTo(v.dest, followArrive, walkFollow, now)
+	a, st := b.goTo(v.dest, followArrive, purpose, now)
 	switch st {
 	case walkArrived:
 		v.traveling = false

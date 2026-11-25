@@ -41,20 +41,25 @@ func arrivedAtSlot(b *Brain) bool {
 // bot walks to its slot does not stop the bot at the end of its segment for
 // the follow delay. Each segment goes out one position tick past the end of
 // the one before, during the delay too, and the walk turns to the new slot
-// once the delay ends (#306).
+// once the delay ends (#306). The leader moves from the start, so the walk
+// takes segments of at most movingSegment while it counts as moving (#344).
 func TestFollowKeepsWalkingThroughDelay(t *testing.T) {
 	b := newFollowBrain(t)
 	const delay = 8 * time.Second
 	b.persona.Follow.DelayMin, b.persona.Follow.DelayMax = delay, delay
-	b.world.Apply(StopMove{ObjectID: gmID, Pos: followGM(2000, 0)}, t0)
+	b.world.Apply(MoveToLocation{ObjectID: gmID, Origin: followGM(0, 0), Dest: followGM(2000, 0)}, t0)
 	now := at(time.Second)
 	b.nextTick, b.reactAt = now, time.Time{}
 
-	var sends, pending int
+	var sends, pending, capped int
 	var movedAt time.Time
 	followRun(t, b, now, func(seg segment, prevEnd time.Time) {
-		if d := horizontal2(seg.from, seg.to); d > movingSegment*movingSegment {
-			t.Fatalf("segment %d %+v -> %+v longer than %d", sends, seg.from, seg.to, movingSegment)
+		// Once the leader stood still for followStill, the walk takes long
+		// segments again (walkFollowStill).
+		if b.walk.purpose == walkFollow {
+			if capped++; horizontal2(seg.from, seg.to) > movingSegment*movingSegment {
+				t.Fatalf("segment %d %+v -> %+v longer than %d", sends, seg.from, seg.to, movingSegment)
+			}
 		}
 		if sends > 0 {
 			if idle := seg.sentAt.Sub(prevEnd); idle > positionTick {
@@ -71,8 +76,8 @@ func TestFollowKeepsWalkingThroughDelay(t *testing.T) {
 		}
 	}, func() bool { return !movedAt.IsZero() && arrivedAtSlot(b) })
 
-	if pending == 0 {
-		t.Fatalf("no segment went out during the follow delay (%d segments)", sends)
+	if pending == 0 || capped == 0 {
+		t.Fatalf("%d of %d segments went out during the follow delay and %d toward the leader moving, want some of each", pending, sends, capped)
 	}
 	if lead := followGM(2300, 0); b.follow.anchor != lead {
 		t.Fatalf("slot drawn for the leader at %+v, want at %+v", b.follow.anchor, lead)
@@ -102,9 +107,10 @@ func TestFollowAtSlotWaitsDelay(t *testing.T) {
 	}
 }
 
-// TestWalkSegmentCap: a walk toward a destination that moves (follow, melee,
-// flee) takes no segment longer than movingSegment; a walk to a fixed place
-// keeps segments up to navSegment (#306).
+// TestWalkSegmentCap: a walk toward a destination that moves (following a
+// leader that moves, melee, flee) takes no segment longer than
+// movingSegment; a walk to a fixed place, or following a leader that stands
+// still, keeps segments up to navSegment (#306, #344).
 func TestWalkSegmentCap(t *testing.T) {
 	dest := Point{X: 4000}
 	tests := []struct {
@@ -113,6 +119,7 @@ func TestWalkSegmentCap(t *testing.T) {
 		long bool
 	}{
 		{walkFollow, false},
+		{walkFollowStill, true},
 		{walkMelee, false},
 		{walkFlee, false},
 		{walkPlace, true},
