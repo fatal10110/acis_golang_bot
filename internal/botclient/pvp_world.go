@@ -382,7 +382,10 @@ func (b *Brain) duelWindow(e ExDuelUpdateUserInfo, now time.Time) time.Time {
 		r.HP, r.MaxHP, r.CP, r.MaxCP, r.SeenAt = e.HP, e.MaxHP, e.CP, e.MaxCP, now
 	}
 	d := b.duel(now)
-	if (d.Phase != DuelCountdown && d.Phase != DuelStarted) || e.ObjectID == b.world.Self.ObjectID {
+	// The server also sends the window in the countdown, on every CP or HP
+	// gauge change (network/duel.go sendDuelVitals): only a started duel
+	// fights, and ExDuelStart always comes before its first window.
+	if d.Phase != DuelStarted || e.ObjectID == b.world.Self.ObjectID {
 		return time.Time{}
 	}
 	d.Phase, d.Name, d.Opponent = DuelFighting, e.Name, e.ObjectID

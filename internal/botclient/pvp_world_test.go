@@ -54,14 +54,15 @@ func pvpBrain(t *testing.T, arena bool, edit func(*Persona)) *Brain {
 }
 
 // duelUntil plays the bot's duel with foeName (pcID) through the loop from
-// its acceptance at from up to phase: the countdown (1930, ExDuelReady),
-// the start (ExDuelStart) or the fight (the opponent's first
+// its acceptance at from up to phase: the countdown (1930), the start
+// (ExDuelReady with ExDuelStart, as the server sends them together,
+// network/duel.go startDuel) or the fight (the opponent's first
 // ExDuelUpdateUserInfo).
 func duelUntil(t *testing.T, b *Brain, phase DuelPhase, from time.Time) {
 	t.Helper()
 	b.handleOne(t, SystemMessage{ID: msgYouAcceptedS1Duel, Text: [2]string{foeName}}, from)
-	b.handleOne(t, ExDuelReady{}, from)
 	if phase >= DuelStarted {
+		b.handleOne(t, ExDuelReady{}, from.Add(5*time.Second))
 		b.handleOne(t, ExDuelStart{}, from.Add(5*time.Second))
 	}
 	if phase >= DuelFighting {
@@ -533,6 +534,20 @@ func TestPvPDuelFight(t *testing.T) {
 				b.world.Target = pcID
 				for i := range int32(3) {
 					b.handleOne(t, SystemMessage{ID: msgDuelBeginsInS1Seconds, Number: 3 - i}, at(time.Duration(2+i)*time.Second))
+				}
+			},
+			now:      at(4 * time.Second),
+			wantRule: "duel",
+		},
+		{
+			name: "the opponent's countdown duel window does not start the fight",
+			setup: func(t *testing.T, b *Brain) {
+				duelUntil(t, b, DuelCountdown, t0)
+				knowWindStrike(b)
+				b.world.Target = pcID
+				b.handleOne(t, ExDuelUpdateUserInfo{Name: foeName, ObjectID: pcID, HP: 80, MaxHP: 100}, at(2*time.Second))
+				if d := b.duel(at(2 * time.Second)); d.Phase != DuelCountdown {
+					t.Fatalf("phase after a countdown window = %v, want the countdown", d.Phase)
 				}
 			},
 			now:      at(4 * time.Second),
