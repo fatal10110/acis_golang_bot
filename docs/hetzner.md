@@ -136,7 +136,9 @@ keeps serving until every bot has logged out.
   drained, packets sent and held by the pacer, rule hits, reconnects, server aborts, whether the
   credential breaker is open, and two histograms with power-of-two buckets (`queue_depth`: events
   per brain wakeup; `wake_lag_us`: how late timed wakeups ran, which grows when `CPUQuota` starves
-  the swarm). No account name or secret appears; `cmdline` is not served.
+  the swarm). `nav_plans_total` counts the walker's route plans by outcome and `nav_plan_us` times
+  them (`docs/walking.md`, "Plan metrics (#497)"): the first place to look when route planning
+  dominates a CPU profile. No account name or secret appears; `cmdline` is not served.
 - `memstats` is the Go runtime's: `HeapAlloc` (live heap) and `Sys` (memory from the OS). The
   RSS against `MemoryMax` is `systemctl show -p MemoryCurrent acis-bots`, or `VmRSS` in
   `/proc/$(systemctl show -p MainPID --value acis-bots)/status`. Once every bot is in the world,

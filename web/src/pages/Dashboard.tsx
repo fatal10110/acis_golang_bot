@@ -35,6 +35,10 @@ export function Dashboard({ dash, samples, ask }: { dash: DashboardData | undefi
   if (!dash) return <Loading what="the dashboard" />;
   const m = dash.metrics;
   const rules = Object.entries(m?.rules ?? {}).sort((a, b) => b[1] - a[1]);
+  const plans = Object.entries(m?.nav_plans_total ?? {}).sort((a, b) => b[1] - a[1]);
+  const planTime = m?.nav_plan_us;
+  const planMean = planTime && planTime.count > 0 ? (planTime.sum / planTime.count / 1000).toFixed(1) : "—";
+  const planMax = planTime && planTime.count > 0 ? (planTime.max / 1000).toFixed(1) : "—";
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Dashboard</h1>
@@ -82,6 +86,29 @@ export function Dashboard({ dash, samples, ask }: { dash: DashboardData | undefi
           <Chart title="Traffic" times={times} series={traffic} />
         </Card>
       </div>
+      <Card title="Route plans">
+        <p className="mb-2 text-sm text-slate-500">
+          {planTime?.count ?? 0} plans, mean {planMean} ms, max {planMax} ms
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-slate-500 uppercase">
+              <th scope="col">Outcome</th>
+              <th scope="col" className="text-right">
+                Plans
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {plans.map(([k, v]) => (
+              <tr key={k} className="border-t border-slate-100 dark:border-slate-800">
+                <td className="py-1">{k}</td>
+                <td className="py-1 text-right tabular-nums">{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
       <Card title="Rule hits">
         {rules.length === 0 ? (
           <p className="text-sm text-slate-500">No rule ran yet.</p>

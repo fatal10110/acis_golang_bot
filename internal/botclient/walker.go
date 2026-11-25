@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
@@ -453,11 +454,47 @@ func (w *walker) segmentDone(now, end time.Time) bool {
 }
 
 // planWalk plans the route from pos, the bot standing there, to the walk's
+// destination (planRoute), and records the plan's outcome and how long it
+// took on the injected clock (botmetrics.Bot.NavPlan): the one place every
+// walk plans, whatever rule asked for it (#497).
+func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
+	start := b.clock.Now()
+	a, ok := b.planRoute(pos, now)
+	b.metrics.NavPlan(b.walk.planOutcome(ok), b.clock.Now().Sub(start))
+	return a, ok
+}
+
+// planOutcome is how the plan that just ran ended: ok with a route, else
+// the walk's unreachable reason; a plan that neither found a route nor
+// ended the walk asked /unstuck on isolated ground.
+func (w *walker) planOutcome(ok bool) botmetrics.PlanOutcome {
+	switch {
+	case ok:
+		return botmetrics.PlanOK
+	case w.status != walkUnreachable:
+		return botmetrics.PlanIsolated
+	}
+	switch w.reason {
+	case reasonBudget:
+		return botmetrics.PlanBudget
+	case reasonDoor:
+		return botmetrics.PlanDoor
+	case reasonBlocked:
+		return botmetrics.PlanBlocked
+	case reasonIsolated:
+		return botmetrics.PlanIsolated
+	case reasonNoNav:
+		return botmetrics.PlanNoNav
+	}
+	return botmetrics.PlanNoRoute
+}
+
+// planRoute plans the route from pos, the bot standing there, to the walk's
 // destination. Isolated ground takes /unstuck, asked again while the recall
 // does not land the bot, under the breaker; one-way-out ground first
 // drops into the nearest abstract SCC it reaches. It reports false with the
 // packet to send (none, or the /unstuck) when there is no route to walk yet.
-func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
+func (b *Brain) planRoute(pos Point, now time.Time) (Action, bool) {
 	w := &b.walk
 	h := w.nav.Hier
 	from := toLoc(pos)
