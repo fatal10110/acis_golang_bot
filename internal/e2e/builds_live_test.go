@@ -69,14 +69,18 @@ func TestLiveBuildMystics(t *testing.T) {
 
 // mysticSpots are the spots by the human, elven and dark elven villages
 // the level kitLevel mystics farmed live. The spot model would send them
-// elsewhere (#446): oren23_2018_04m1 fits a dark mystic, but its territory
-// is so wide that one held at its centre found no monster in its leash for
-// 12 minutes.
+// elsewhere (#446), to wideSpots among others.
 var mysticSpots = []string{
 	"gludio32_1725_04m1", "gludio32_1725_06m1",
 	"oren02_2119_02m1", "oren02_2119_022sm1",
 	"oren23_2018_16sm1",
 }
+
+// wideSpots are the spots by the villages whose territory is so wide that
+// a kit farmer held at the centre found no monster in its leash for 12
+// minutes (#447): oren23_2018_04m1, live with a dark mystic (run bbcd841)
+// and a dark fighter (run 8f5aff1). No kit farm holds them.
+var wideSpots = []string{"oren23_2018_04m1"}
 
 // TestLiveBuildMixed farms the other races' starting classes with their
 // kits: an orc fighter (Iron Punch with fists, Power Strike with a sword or
@@ -90,13 +94,17 @@ func TestLiveBuildMixed(t *testing.T) {
 
 // farmKits runs one kit farm of classes, the accounts of group, each a
 // farmerPersona with the travel map and the spots, those named only when
-// only is not nil; they go back to level 1 at the end (runFresh).
+// only is not nil, else all but wideSpots; they go back to level 1 at the
+// end (runFresh).
 func farmKits(t *testing.T, group string, only []string, classes ...*botclient.StartingClass) {
 	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 25*time.Minute)
-	spots, travel := spotRegistry(t, tg), travelMap(t, tg)
+	travel := travelMap(t, tg)
+	var spots *botclient.SpotRegistry
 	if only != nil {
 		spots = spotsNamed(t, tg, only)
+	} else {
+		spots = spotsWhere(t, tg, func(s datapack.Spot) bool { return !slices.Contains(wideSpots, s.Maker) })
 	}
 	gm := enterGM(t, ctx, tg)
 	type kitFarmer struct {
@@ -320,14 +328,21 @@ func (r kitRun) short(elapsed time.Duration) string {
 // of which must exist.
 func spotsNamed(t *testing.T, tg *Target, names []string) *botclient.SpotRegistry {
 	t.Helper()
+	r := spotsWhere(t, tg, func(s datapack.Spot) bool { return slices.Contains(names, s.Maker) })
+	if n := len(r.Statuses()); n != len(names) {
+		t.Fatalf("%d of the spots %v in the datapack", n, names)
+	}
+	return r
+}
+
+// spotsWhere is a registry of the datapack's spots keep keeps.
+func spotsWhere(t *testing.T, tg *Target, keep func(datapack.Spot) bool) *botclient.SpotRegistry {
+	t.Helper()
 	dp, err := datapack.Load(tg.Config().Datapack)
 	if err != nil {
 		t.Fatal(err)
 	}
-	spots := slices.DeleteFunc(dp.Spots(), func(s datapack.Spot) bool { return !slices.Contains(names, s.Maker) })
-	if len(spots) != len(names) {
-		t.Fatalf("%d of the spots %v in the datapack", len(spots), names)
-	}
+	spots := slices.DeleteFunc(dp.Spots(), func(s datapack.Spot) bool { return !keep(s) })
 	return botclient.NewSpotRegistry(spots, 1)
 }
 
