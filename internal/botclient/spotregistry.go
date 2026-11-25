@@ -25,6 +25,9 @@ type SpotRegistry struct {
 	// (SpotPolicy.Beside): counted apart from held, toward neither the cap
 	// nor the limit.
 	beside []int
+
+	// points keeps spotPoint's answers; it has its own lock.
+	points spotPoints
 }
 
 // NewSpotRegistry returns a registry over spots (datapack.Datapack.Spots).

@@ -93,6 +93,12 @@ export interface Metrics {
   nav_plans_total: Record<string, number> | null;
   /** How long each route plan took, in microseconds. */
   nav_plan_us: Histogram;
+  /** The nav hierarchy's Locates by how they were answered (pinned, cached, computed, place). */
+  nav_locate_total: Record<string, number> | null;
+  /** Bytes the cluster result LRU holds. */
+  nav_lru_bytes: number;
+  /** Cells the place table holds. */
+  nav_places: number;
 }
 
 export interface Dashboard {
