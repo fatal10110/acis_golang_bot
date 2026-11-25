@@ -39,6 +39,11 @@ func (p *Panel) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/bots/{account}/preset", p.setPreset)
 	mux.HandleFunc("POST /api/bots/{account}/branch", p.setBranch)
 	mux.HandleFunc("POST /api/bots/{account}/command", p.command)
+	mux.HandleFunc("POST /api/bots/{account}/party", p.setPartyMode)
+	mux.HandleFunc("GET /api/parties", p.parties)
+	mux.HandleFunc("POST /api/parties", p.formParty)
+	mux.HandleFunc("DELETE /api/parties/{id}", p.dissolveParty)
+	mux.HandleFunc("POST /api/parties/auto", p.setPartyAuto)
 	mux.HandleFunc("POST /api/import", p.importBots)
 	mux.HandleFunc("GET /api/dashboard", p.dashboard)
 	mux.HandleFunc("POST /api/resume-logins", p.resumeLogins)
@@ -55,26 +60,33 @@ type point struct {
 
 // live is a bot's snapshot (botclient.Status) in the API.
 type live struct {
-	At         time.Time `json:"at"`
-	State      string    `json:"state"`
-	Character  string    `json:"character,omitempty"`
-	ClassID    int32     `json:"class_id"`
-	Level      int32     `json:"level"`
-	HP         int32     `json:"hp"`
-	MaxHP      int32     `json:"max_hp"`
-	MP         int32     `json:"mp"`
-	MaxMP      int32     `json:"max_mp"`
-	CP         int32     `json:"cp"`
-	MaxCP      int32     `json:"max_cp"`
-	Position   point     `json:"position"`
-	Town       *point    `json:"town,omitempty"`
-	Preset     string    `json:"preset,omitempty"`
-	Rule       string    `json:"rule,omitempty"`
-	Leader     string    `json:"leader,omitempty"`
-	Members    []string  `json:"members,omitempty"`
-	Order      string    `json:"order,omitempty"`
-	Reconnects int       `json:"reconnects"`
-	Err        string    `json:"err,omitempty"`
+	At        time.Time `json:"at"`
+	State     string    `json:"state"`
+	Character string    `json:"character,omitempty"`
+	ClassID   int32     `json:"class_id"`
+	Level     int32     `json:"level"`
+	HP        int32     `json:"hp"`
+	MaxHP     int32     `json:"max_hp"`
+	MP        int32     `json:"mp"`
+	MaxMP     int32     `json:"max_mp"`
+	CP        int32     `json:"cp"`
+	MaxCP     int32     `json:"max_cp"`
+	Position  point     `json:"position"`
+	Town      *point    `json:"town,omitempty"`
+	Preset    string    `json:"preset,omitempty"`
+	Rule      string    `json:"rule,omitempty"`
+	// Spot is the npcmaker name of the farming spot the bot holds, absent
+	// while it holds none; Walk is "unreachable: <reason>" after its latest
+	// walk found no route that holds, absent otherwise (botclient.Status).
+	Spot    string   `json:"spot,omitempty"`
+	Walk    string   `json:"walk,omitempty"`
+	Leader  string   `json:"leader,omitempty"`
+	Members []string `json:"members,omitempty"`
+	Order   string   `json:"order,omitempty"`
+	// Party is the bot's party slot ("lead A B", "join L A"), "" for none.
+	Party      string `json:"party,omitempty"`
+	Reconnects int    `json:"reconnects"`
+	Err        string `json:"err,omitempty"`
 	// Crafter is the crafter's cycle (botclient.CrafterStatus), absent for
 	// a bot that plays none.
 	Crafter *crafterLive `json:"crafter,omitempty"`
@@ -163,8 +175,8 @@ func viewOf(s botregistry.Status) botView {
 		l := &live{
 			At: st.At, State: st.State.String(), Character: st.Character, ClassID: st.ClassID, Level: st.Level,
 			HP: st.HP, MaxHP: st.MaxHP, MP: st.MP, MaxMP: st.MaxMP, CP: st.CP, MaxCP: st.MaxCP,
-			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Leader: st.Leader, Members: st.Members,
-			Order: st.Order.String(), Reconnects: st.Reconnects, Crafter: crafterOf(st.Crafter),
+			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Spot: st.Spot, Walk: st.Walk, Leader: st.Leader, Members: st.Members,
+			Order: st.Order.String(), Party: st.Party, Reconnects: st.Reconnects, Crafter: crafterOf(st.Crafter),
 			Build: buildOf(st.Build),
 		}
 		if st.Town != nil {
@@ -516,10 +528,13 @@ func readJSON(r *http.Request, v any) error {
 func statusOf(err error) int {
 	var re requestError
 	switch {
-	case errors.As(err, &re), errors.Is(err, botclient.ErrBadCommand), errors.Is(err, botregistry.ErrBranch):
+	case errors.As(err, &re), errors.Is(err, botclient.ErrBadCommand), errors.Is(err, botregistry.ErrBranch),
+		errors.Is(err, botregistry.ErrBadParty):
 		return http.StatusBadRequest
-	case errors.Is(err, botregistry.ErrNoBot):
+	case errors.Is(err, botregistry.ErrNoBot), errors.Is(err, botregistry.ErrNoParty):
 		return http.StatusNotFound
+	case errors.Is(err, botregistry.ErrPartyRefused), errors.Is(err, botregistry.ErrNoOrganizer):
+		return http.StatusConflict
 	case errors.Is(err, botregistry.ErrOnline), errors.Is(err, botregistry.ErrOffline), errors.Is(err, botregistry.ErrMaxOnline),
 		errors.Is(err, botregistry.ErrNoRun), errors.Is(err, botclient.ErrBusy), errors.Is(err, botclient.ErrStopped):
 		return http.StatusConflict

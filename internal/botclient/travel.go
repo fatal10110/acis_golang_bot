@@ -87,6 +87,9 @@ type TravelMap struct {
 	spawnedSold map[int32]bool
 	// keepers are the warehouse keeper templates with a fixed spawn.
 	keepers map[int32]bool
+	// bosses are the raid and grand boss templates, whose drops the server
+	// locks for lootRaidGrace.
+	bosses map[int32]bool
 	// weights are the weights of the item templates that weigh anything:
 	// the supplies' (SupplyPolicy.BuyLoad) and the junk's a town visit
 	// sheds (SupplyPolicy.ShedMin).
@@ -218,6 +221,12 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.spawnedSold = spawnedSold(m.shops, m.spawns)
 	m.supply = indexSupply(dp, m.spawns, supply)
 	m.regions = indexRegions(dp.RestartPoints)
+	m.bosses = make(map[int32]bool)
+	for id, n := range dp.NPCs {
+		if n.Type == npcTypeRaidBoss || n.Type == npcTypeGrandBoss {
+			m.bosses[id] = true
+		}
+	}
 	m.keepers = make(map[int32]bool)
 	for id := range m.spawns {
 		if dp.NPCs[id].Type == npcTypeWarehouseKeeper {

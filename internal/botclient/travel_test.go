@@ -71,6 +71,9 @@ func TestNewTravelMap(t *testing.T) {
 			30006: {ID: 30006, Type: npcTypeGatekeeper},
 			30059: {ID: 30059, Type: npcTypeGatekeeper},
 			31000: {ID: 31000, Type: "Folk"},
+			25001: {ID: 25001, Type: npcTypeRaidBoss},
+			29001: {ID: 29001, Type: npcTypeGrandBoss},
+			20001: {ID: 20001, Type: "Monster"},
 		},
 		Spawnlist: &datapack.Spawnlist{Makers: []*datapack.Maker{
 			{Name: "town", Spawns: []datapack.Spawn{
@@ -105,6 +108,9 @@ func TestNewTravelMap(t *testing.T) {
 	}
 	if !reflect.DeepEqual(m.spawns, wantSpawns) {
 		t.Fatalf("spawns = %+v, want %+v", m.spawns, wantSpawns)
+	}
+	if want := map[int32]bool{25001: true, 29001: true}; !reflect.DeepEqual(m.bosses, want) {
+		t.Fatalf("bosses = %v, want %v", m.bosses, want)
 	}
 }
 

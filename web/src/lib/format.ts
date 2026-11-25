@@ -38,9 +38,22 @@ export function whereOf(b: Bot): string {
   return p ? `${p.x}, ${p.y}, ${p.z}` : "";
 }
 
+/** partyOf is the bot's party slot, its pin and its party mode. */
+export function partyOf(b: Bot): string {
+  const parts = [b.live?.party ?? ""];
+  if (b.party_group) parts.push(b.party_lead ? `leads pin ${b.party_group}` : `pin ${b.party_group}`);
+  if (b.party_mode === "off") parts.push("party off");
+  return parts.filter(Boolean).join(" / ");
+}
+
 /** activityOf is the rule the bot runs and the order it follows. */
 export function activityOf(b: Bot): string {
   return [b.live?.rule, b.live?.order].filter(Boolean).join(" / ");
+}
+
+/** spotWalkOf is the farming spot the bot holds and its latest walk failure. */
+export function spotWalkOf(b: Bot): string {
+  return [b.live?.spot, b.live?.walk].filter(Boolean).join(" / ");
 }
 
 export function percent(v: number, max: number): number {
@@ -94,7 +107,7 @@ export function sortBots(bots: readonly Bot[], key: SortKey, desc: boolean, name
 export function matches(b: Bot, filter: string, names: ClassNames): boolean {
   const f = filter.trim().toLowerCase();
   if (!f) return true;
-  return [b.account, characterOf(b), b.preset, className(names, classOf(b)), statusOf(b), activityOf(b)].some((s) =>
+  return [b.account, characterOf(b), b.preset, className(names, classOf(b)), statusOf(b), activityOf(b), spotWalkOf(b)].some((s) =>
     s.toLowerCase().includes(f),
   );
 }

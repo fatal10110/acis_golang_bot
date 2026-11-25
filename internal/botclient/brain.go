@@ -275,6 +275,9 @@ type Brain struct {
 	supplyTrip supplyTrip
 	// prep is the town preparation gate.
 	prep townPrep
+	// stashDue is set by a supply trip's arrival in town until the
+	// half-speed stash is queued or found not needed (queueStash).
+	stashDue bool
 	// loot is the loot queue (rule 8).
 	loot lootQueue
 	// shedding is set while rule "overweight" drops what the bot carries:

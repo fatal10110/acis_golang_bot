@@ -557,8 +557,11 @@ func (b *Brain) startShop(now time.Time) bool {
 			first = append(first, w.buyRow)
 		}
 	}
-	// A bag at or near its slot limit sells what junk it has (#528).
-	sellDue := p.SellAt > 0 && (junk >= p.SellAt || junk > 0 && b.bagFull())
+	// A bag at or near its slot limit sells what junk it has (#528), and
+	// so does a load that sends the bot home (loadSendsHome): the load
+	// trip sheds that junk (shed), and the half-speed stash leaves it to
+	// the visit (stashRows, #449).
+	sellDue := p.SellAt > 0 && (junk >= p.SellAt || junk > 0 && (b.bagFull() || b.loadSendsHome()))
 	sell := sellDue || (p.SellAt > 0 && len(want) > 0 && junk > 0)
 	if len(want) == 0 && !sell {
 		return false
@@ -673,11 +676,18 @@ func (b *Brain) junk() map[int32]Item {
 // the shots keepsShot keeps, spellbooks wanted or held for a learn and the
 // enchant scrolls of a grade the bot wears (keepsScroll).
 func (b *Brain) keeps(id int32) bool {
+	return id == adenaID || slices.Contains(b.persona.Shop.Keep, id) || b.uses(id)
+}
+
+// uses reports whether the bot keeps item template id for its own use:
+// keeps but adena and Shop.Keep, which it keeps with no use of its own
+// (the half-speed stash deposits those, stashes).
+func (b *Brain) uses(id int32) bool {
 	p := &b.persona
 	if _, shot := b.shotTable()[id]; shot && b.keepsShot(id) {
 		return true
 	}
-	return id == adenaID || b.inKeepSet(id) || slices.Contains(p.Shop.Keep, id) || slices.Contains(p.Potions, id) ||
+	return b.inKeepSet(id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
 		id == b.bowArrows() || id == b.nextBowArrows() || b.keepsScroll(id) ||

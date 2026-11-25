@@ -39,3 +39,22 @@ Ships in P7. Party mode and pins: [organizer](organizer.md#pinned-parties).
   slot, and keeps pinned ones; switched on, a freed bot is grouped only after its `Cooldown`.
 - Panel (unit, `httptest`): the party endpoints through the supervisor; no secret in any response.
   Vitest: the Parties page and the form dialog.
+
+## As shipped (P7)
+
+- `FormParty` also refuses, for an auto party (`pin` false), a leader that is no `farmer` (the
+  record would break as `leader ineligible` on the next pass), a bot with a standing order, a level
+  spread over `MaxSpread` (it would break as `level spread`, the bots' old records already broken),
+  and any while the auto switch is off; a whispered bot is refused either way (no pin order replaces a
+  whispered one). A pin's group is its leader's character name.
+- Every bot of a hand-formed record waits in `Party.Await` until it is online with no slot, no order
+  pending and no party: one holding a slot gets `unparty` first. A free bot clears it on the next
+  pass; a bot taken from another record joins only once out of the server's party. An awaiting bot
+  that is online with no slot and no order pending in a party no bot leads (a player's party, which
+  no `unparty` takes it out of) is dropped, a pin's rows cleared; as the leader it breaks the record
+  (`leader in a player's party`).
+- `DissolveParty` and a record broken by `FormParty` (`Party.Dissolve`) break on the next pass, so
+  the sweep sends `unparty` leader first. The auto switch is `State.AutoOff`, in the supervisor's
+  memory like the auto parties: every panel start has it on.
+- Metrics: `parties_formed_total` and `parties_broken_total` (by reason) on the dashboard snapshot.
+- API errors: a malformed call 400, an unknown party 404, a refused bot or no organizer 409.
