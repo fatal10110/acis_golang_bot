@@ -147,12 +147,24 @@ func bpTrio(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, group s
 	leader = bpRun(t, ctx, tg, acc(1), &botclient.HumanFighter, leaderPersona, func(cfg *botclient.BrainConfig) { cfg.Spots = spots })
 	m1 = bpRun(t, ctx, tg, acc(2), &botclient.HumanMystic, partyPersona, nil)
 	m2 = bpRun(t, ctx, tg, acc(3), &botclient.HumanMystic, partyPersona, nil)
-	gmTeleport(t, ctx, gm, recoverGround)
-	for _, f := range []*farmer{leader, m1, m2} {
-		recallBot(t, ctx, tg, gm, f.name)
-	}
+	bpGather(t, ctx, tg, gm, leader, m1, m2)
 	bpForm(t, ctx, leader, m1, m2)
 	return leader, m1, m2
+}
+
+// bpGather teleports the GM to recoverGround and recalls every one of fs
+// to it, waiting until each stands there.
+func bpGather(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, fs ...*farmer) {
+	t.Helper()
+	gmTeleport(t, ctx, gm, recoverGround)
+	for _, f := range fs {
+		recallBot(t, ctx, tg, gm, f.name)
+	}
+	for _, f := range fs {
+		waitForBy(t, ctx, f.name+" at recoverGround", time.Now().Add(time.Minute), func() bool {
+			return dist(f.bot.Status().Position, recoverGround) <= 300
+		})
+	}
 }
 
 // bpDied waits until f reads its own Die at index from or later.
@@ -252,7 +264,6 @@ func TestLiveBotPartyRaise(t *testing.T) {
 	ctx := scenarioCtx(t, 25*time.Minute)
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
-	masterAt(t, ctx, gm)
 
 	acc := func(n int) string { a, _ := tg.Account("bpr", n); return a }
 	leader := bpRun(t, ctx, tg, acc(1), &botclient.HumanFighter, func() botclient.Persona {
@@ -274,11 +285,12 @@ func TestLiveBotPartyRaise(t *testing.T) {
 
 	// The party forms about 4300 from the master, out of the Cleric's
 	// sight: its walk there takes the travel map, which the old party
-	// gate refused.
-	gmTeleport(t, ctx, gm, recoverGround)
-	for _, f := range []*farmer{leader, mate, cleric} {
-		recallBot(t, ctx, tg, gm, f.name)
-	}
+	// gate refused. The GM goes there in one teleport: a GM whose restart
+	// left it by the master read the master before a second teleport's
+	// TeleportToLocation, and recalled the party to the master (the
+	// first live run), where the dead leader stood out of the Cleric's
+	// sight (181).
+	bpGather(t, ctx, tg, gm, leader, mate, cleric)
 	bpForm(t, ctx, leader, mate, cleric)
 
 	levelTo(t, ctx, gm, cleric, 20)
