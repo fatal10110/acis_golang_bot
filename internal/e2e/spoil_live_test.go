@@ -68,6 +68,13 @@ func TestLiveSpoilSweep(t *testing.T) {
 	gmOn(t, ctx, gm, f, kit.grants()...)
 	from := f.seen()
 	gmTeleport(t, ctx, gm, townTI)
+	t.Cleanup(func() {
+		if t.Failed() {
+			for _, l := range sweepTrace(f.watch.Seen(from), f.watch.Sent(), f.id) {
+				t.Log(l)
+			}
+		}
+	})
 	start, alive := time.Now(), time.Now()
 	var r spoilRun
 	untilBy(t, ctx, f.name+" spoiling and sweeping", start.Add(22*time.Minute), func() string {
@@ -163,4 +170,47 @@ func (r spoilRun) short() string {
 func (r spoilRun) String() string {
 	return fmt.Sprintf("%d Spoil casts, %d took; %d spoiled monsters died, %d sweepable; %d Sweeper casts, %d earned items",
 		r.spoils, r.spoiled, r.died, r.sweepable, r.sweeps, r.paid)
+}
+
+// sweepWindow is how long after a sweepable Die sweepTrace follows the bot:
+// twice the default corpse time, the sweep window of a spoiled corpse.
+const sweepWindow = 14 * time.Second
+
+// sweepTrace is, for each monster the bot self spoiled (612 after its Spoil
+// cast) that died sweepable, what the bot read and wrote in the sweepWindow
+// after its Die: a failed scenario's account of a sweep that never went out.
+func sweepTrace(seen []Seen, sent []Sent, self int32) []string {
+	var out []string
+	var target int32
+	spoiled := make(map[int32]bool)
+	for i, s := range seen {
+		switch e := s.Event.(type) {
+		case botclient.MagicSkillUse:
+			if e.CasterID == self && e.SkillID == skillSpoil {
+				target = e.TargetID
+			}
+		case botclient.SystemMessage:
+			if e.ID == msgSpoilSuccess {
+				spoiled[target] = true
+			}
+		case botclient.Die:
+			if !spoiled[e.ObjectID] || !e.Sweepable {
+				continue
+			}
+			end := s.At.Add(sweepWindow)
+			out = append(out, fmt.Sprintf("sweepable corpse %d died at %s:", e.ObjectID, s.At.Format("15:04:05.000")))
+			for _, n := range seen[i+1:] {
+				if n.At.After(end) {
+					break
+				}
+				out = append(out, fmt.Sprintf("  %s read %T %+v", n.At.Format("15:04:05.000"), n.Event, n.Event))
+			}
+			for _, p := range sent {
+				if !p.At.Before(s.At) && !p.At.After(end) {
+					out = append(out, fmt.Sprintf("  %s sent 0x%02x target %d", p.At.Format("15:04:05.000"), p.Op, p.Target))
+				}
+			}
+		}
+	}
+	return out
 }

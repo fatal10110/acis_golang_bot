@@ -162,3 +162,21 @@ func TestSpoilRunOf(t *testing.T) {
 		})
 	}
 }
+
+func TestSweepTrace(t *testing.T) {
+	const self, mob = int32(1), int32(10)
+	at := time.Date(2026, 11, 25, 1, 0, 0, 0, time.UTC)
+	seen := []Seen{
+		{At: at, Event: botclient.MagicSkillUse{CasterID: self, SkillID: skillSpoil, TargetID: mob}},
+		{At: at, Event: botclient.SystemMessage{ID: msgSpoilSuccess}},
+		{At: at.Add(time.Second), Event: botclient.Die{ObjectID: 11, Sweepable: true}},
+		{At: at.Add(2 * time.Second), Event: botclient.Die{ObjectID: mob, Sweepable: true}},
+		{At: at.Add(3 * time.Second), Event: botclient.MyTargetSelected{ObjectID: mob}},
+		{At: at.Add(20 * time.Second), Event: botclient.DeleteObject{ObjectID: mob}},
+	}
+	sent := []Sent{{At: at, Op: 0x2f, Target: skillSpoil}, {At: at.Add(4 * time.Second), Op: 0x04, Target: mob}}
+	got := sweepTrace(seen, sent, self)
+	if len(got) != 3 || !strings.Contains(got[0], "corpse 10") || !strings.Contains(got[1], "MyTargetSelected") || !strings.Contains(got[2], "sent 0x04") {
+		t.Errorf("sweepTrace = %q", got)
+	}
+}
