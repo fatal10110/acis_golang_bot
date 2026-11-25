@@ -136,10 +136,10 @@ func chatUnits(text string) int {
 	return n
 }
 
-// adEntries are the entries with carried units an ad names, by score V
-// (then template and enchant), highest first.
+// adEntries are the entries not released with carried units an ad names,
+// by score V (then template and enchant), highest first.
 func (b *Brain) adEntries() []valuableKey {
-	return b.valuablesByScore(func(e *valuableEntry) bool { return e.carried > 0 })
+	return b.valuablesByScore(func(e *valuableEntry) bool { return e.carried > 0 && !e.released })
 }
 
 // valuablesByScore are the entries keep keeps, by score V (then template

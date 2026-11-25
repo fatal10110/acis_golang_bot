@@ -85,8 +85,8 @@ func (b *Brain) agreedDeal(partner int32) bool {
 // (docs/valuables/trades.md "Trades"): only while a round is open and the
 // budget has some left, one row of rows of the entry the partner agreed a
 // price for, else named, else the top-scored carried one (by score V, as
-// the ads order them), at most ceil(left / unit price) of its units. The
-// release mark that keeps a released entry out lands with V7c.
+// the ads order them, adEntries: no released entry), at most ceil(left /
+// unit price) of its units.
 func (b *Brain) valuableGoods(partner int32, rows []TradeItem) (TradeItem, valuableKey, bool) {
 	v := b.cfg.valuables
 	if !v.round.open || b.persona.Valuables == (ValuablePolicy{}) || b.cfg.Travel == nil {

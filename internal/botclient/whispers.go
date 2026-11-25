@@ -306,14 +306,24 @@ func (b *Brain) roundReply(w whisperWait) (string, whisperOut) {
 
 // afterReply is the reply to w within AnswerAfter of a round's end
 // (docs/valuables/whispers.md "After a round"): no offer, no trade. A
-// released entry's replies are V7c's.
+// released entry listed in the open store gets its store price; any other
+// named entry "not now". A price question naming none lists the entries
+// not released, which a later round offers.
 func (b *Brain) afterReply(w whisperWait) string {
 	keys := b.whisperKeys(true)
 	if len(keys) == 0 {
 		return ""
 	}
-	if named, _ := b.cfg.Travel.whisperNames(w.text, keys); len(named) == 1 {
-		return b.cfg.Travel.itemName(named[0]) + " not now, wts again soon"
+	m := b.cfg.Travel
+	if named, _ := m.whisperNames(w.text, keys); len(named) == 1 {
+		if price, ok := b.storeListed(named[0]); ok {
+			return m.itemName(named[0]) + " in my store " + priceText(price)
+		}
+		return m.itemName(named[0]) + " not now, wts again soon"
+	}
+	keys = slices.DeleteFunc(keys, b.cfg.valuables.released)
+	if len(keys) == 0 {
+		return ""
 	}
 	return b.listReply(w.to, keys, true, " again soon")
 }
@@ -340,9 +350,13 @@ func (b *Brain) listReply(partner int32, keys []valuableKey, after bool, tail st
 }
 
 // whisperKeys are the entries a whisper may name, by score highest first:
-// those carried in a round, those carried or stored after it (held).
+// those not released carried in a round, every one carried or stored after
+// it (held), released or not.
 func (b *Brain) whisperKeys(held bool) []valuableKey {
-	return b.valuablesByScore(func(e *valuableEntry) bool { return e.carried > 0 || held && e.stored > 0 })
+	if !held {
+		return b.adEntries()
+	}
+	return b.valuablesByScore(func(e *valuableEntry) bool { return e.carried > 0 || e.stored > 0 })
 }
 
 // safeLead gives text a lowercase "wts " lead when it starts with a walker
