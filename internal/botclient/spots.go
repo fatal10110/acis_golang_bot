@@ -239,7 +239,7 @@ type spotVisit struct {
 	// avoid are the spots the bot moved on from, until a time.
 	avoid map[int]time.Time
 	// failed are the spots of the bot's current run of walks that ended
-	// unreachable (failedWalk), oldest first: avoided while the run lasts,
+	// unreachable (failedWalk), oldest first, each once: avoided while the run lasts,
 	// until a walk arrives or no candidate is left.
 	failed []int
 	// pack is the pack its deaths taught it to pass over.
@@ -732,12 +732,17 @@ func (b *Brain) moveOn(now time.Time, d time.Duration) {
 // it for walkRetry. Every spotFailMax walks in a row that so end, the bot
 // looks for no spot for spotRetry, the whole run's spots avoided past that,
 // so each window tries the next spotFailMax candidates: at most spotFailMax
-// route plans to spots per spotRetry (#497).
+// route plans to spots per spotRetry (#497). A spot that fails again within
+// the run (its avoid ran out during a long walk) is not added twice, so the
+// run holds each spot once; the candidates are cycling, so it waits too.
 func (b *Brain) failedWalk(now time.Time) {
 	v := &b.spot
-	v.failed = append(v.failed, v.idx)
+	repeat := slices.Contains(v.failed, v.idx)
+	if !repeat {
+		v.failed = append(v.failed, v.idx)
+	}
 	b.moveOn(now, walkRetry)
-	if len(v.failed)%spotFailMax != 0 {
+	if !repeat && len(v.failed)%spotFailMax != 0 {
 		return
 	}
 	v.retryAt = now.Add(spotRetry)

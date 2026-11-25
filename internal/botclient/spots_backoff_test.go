@@ -80,8 +80,8 @@ func TestSpotUnreachableBackOff(t *testing.T) {
 
 // TestSpotFailedRun checks how a run of unreachable spot walks grows and
 // ends: the spotFailMax-th failure waits spotRetry with the run's spots
-// avoided past it, an arrival ends the run, and so does a search with no
-// candidate left.
+// avoided past it, a spot failing again is not added twice and waits too,
+// an arrival ends the run, and so does a search with no candidate left.
 func TestSpotFailedRun(t *testing.T) {
 	now := at(time.Minute)
 	tests := []struct {
@@ -90,6 +90,8 @@ func TestSpotFailedRun(t *testing.T) {
 		failed []int
 		// avoidAll avoids every spot for walkRetry.
 		avoidAll bool
+		// expired lets the run's avoids run out, so a run spot is picked again.
+		expired bool
 		// budget is the walker's search budget, 0 for the default.
 		budget     int
 		wantFailed int
@@ -98,6 +100,7 @@ func TestSpotFailedRun(t *testing.T) {
 		{name: "first failure: look again at once", self: backoffSelf, budget: 1, wantFailed: 1},
 		{name: "spotFailMax-th failure: wait spotRetry", self: backoffSelf, failed: []int{1, 2}, budget: 1, wantFailed: 3, wantRetry: now.Add(spotRetry)},
 		{name: "arrival ends the run", self: Point{X: 3000, Y: 2000}, failed: []int{1, 2}},
+		{name: "repeat failure: wait spotRetry, run not grown", self: backoffSelf, failed: []int{0, 1, 2, 3, 4}, expired: true, budget: 1, wantFailed: 5, wantRetry: now.Add(spotRetry)},
 		{name: "no candidate left ends the run", self: backoffSelf, failed: []int{0}, avoidAll: true, wantRetry: now.Add(spotRetry)},
 	}
 	for _, tt := range tests {
@@ -110,7 +113,9 @@ func TestSpotFailedRun(t *testing.T) {
 			v := &b.spot
 			v.failed, v.avoid = append([]int(nil), tt.failed...), map[int]time.Time{}
 			for _, i := range tt.failed {
-				v.avoid[i] = now.Add(walkRetry - time.Second)
+				if !tt.expired {
+					v.avoid[i] = now.Add(walkRetry - time.Second)
+				}
 			}
 			if tt.avoidAll {
 				for i := range backoffSpots {
@@ -121,7 +126,7 @@ func TestSpotFailedRun(t *testing.T) {
 			if len(v.failed) != tt.wantFailed || !v.retryAt.Equal(tt.wantRetry) {
 				t.Fatalf("run %v retry %v, want %d spots and retry %v", v.failed, v.retryAt, tt.wantFailed, tt.wantRetry)
 			}
-			if tt.wantFailed == spotFailMax {
+			if !tt.wantRetry.IsZero() && tt.wantFailed > 0 {
 				for _, i := range v.failed {
 					if v.avoid[i].Before(tt.wantRetry.Add(walkRetry)) {
 						t.Errorf("spot %d avoided until %v, want past the wait and walkRetry", i, v.avoid[i])
