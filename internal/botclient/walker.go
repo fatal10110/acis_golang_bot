@@ -83,9 +83,11 @@ const (
 	talkWait = 10 * time.Second
 	// movingSegment caps a segment of a walk toward a destination that
 	// moves (walkPurpose.segmentCap): a segment in flight cannot be cut
-	// short, so a follower, a melee approach or a flight commits to at most
-	// this much toward a point gone stale (docs/walking.md, "Follower and
-	// moving destinations"). A constant, not a persona knob: a persona's
+	// short, so a follower of a leader that moves, a melee approach or a
+	// flight commits to at most this much toward a point gone stale
+	// (docs/walking.md, "Follower and moving destinations"). A follower of
+	// a leader that stands still takes the planner's long segments
+	// (walkFollowStill, #344). A constant, not a persona knob: a persona's
 	// Repath must not shrink melee or flee walks.
 	movingSegment = 500
 	// walkSameDest is how far a consumer's destination may move without
@@ -132,23 +134,30 @@ const (
 	walkMelee
 	walkPickup
 	walkRanged
-	// walkFollow is a follower's walk to its slot behind the leader, and
-	// back to the leader after a death; walkFlee and walkIdle are a run away
-	// from an attacker and an idle drift.
+	// walkFollow is a follower's walk to its slot behind a leader that
+	// moves, and back to the leader after a death; walkFollowStill is the
+	// same walk toward a leader that stands still (ruleFollow,
+	// followState.still). walkFlee and walkIdle are a run away from an
+	// attacker and an idle drift.
 	walkFollow
 	walkFlee
 	walkIdle
+	walkFollowStill
 )
+
+// follows reports whether a walk for p follows the leader, moving or not.
+func (p walkPurpose) follows() bool { return p == walkFollow || p == walkFollowStill }
 
 // drops reports whether a walk for p may take a one-way drop toward its
 // destination: only following the leader does (docs/navigation.md,
 // "Queries"), and never down to isolated ground only /unstuck leaves.
-func (p walkPurpose) drops() bool { return p == walkFollow }
+func (p walkPurpose) drops() bool { return p.follows() }
 
 // segmentCap is the longest segment a walk for p plans: movingSegment
-// toward a destination that moves (the leader's slot, a monster closed in
-// on, away from an attacker), zero (the planner's navSegment) toward a
-// fixed one.
+// toward a destination that moves (the slot behind a leader that moves, a
+// monster closed in on, away from an attacker), zero (the planner's
+// navSegment) toward a fixed one, the slot behind a leader that stands
+// still included (#344).
 func (p walkPurpose) segmentCap() float64 {
 	switch p {
 	case walkFollow, walkMelee, walkFlee:
@@ -555,7 +564,7 @@ func (w *walker) swimRoute(from location.Location) ([]location.Location, bool) {
 	if w.plan.Swim <= 0 || !w.nav.Water.Near(from, to, walkSwimNear) {
 		return nil, false
 	}
-	if c, ok := w.plan.Locate(to); ok && w.purpose != walkFollow && w.nav.Water.Contains(to.X, to.Y, int(c.Z)) {
+	if c, ok := w.plan.Locate(to); ok && !w.purpose.follows() && w.nav.Water.Contains(to.X, to.Y, int(c.Z)) {
 		return nil, false
 	}
 	route, err := w.plan.Route(from, to)

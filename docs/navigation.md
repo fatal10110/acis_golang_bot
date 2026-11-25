@@ -1256,7 +1256,7 @@ Each route logs one `walk-efficiency` line. Its fields:
   segment's modeled arrival to its send (mean and max; power-of-two buckets in the log line).
 
 The scenario fails unless `nav_blocked_total` and `nav_desync_total` are both 0. Each walking lane
-(#305, #306, #307) reruns it and appends its rows:
+(#305, #306, #307, #308, #344) reruns it and appends its rows:
 
 ```sh
 go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
@@ -1278,6 +1278,8 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveWalkEfficiency' -v
 | field | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 17 | 6837 | 5691 | 57.53 s | 54.26 s | 45.16 s | 0.943 | 0.932 | 56 / 101 ms | 0 | 0 |
 | town | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 10 | 3274 | 3033 | 28.65 s | 25.99 s | 24.07 s | 0.907 | 0.892 | 89 / 101 ms | 0 | 0 |
 | field | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 16 | 6784 | 5662 | 56.92 s | 53.84 s | 44.93 s | 0.946 | 0.935 | 60 / 101 ms | 0 | 0 |
+| town | wf/nav-follow-long f6b61c1 (after #344) | 2026-11-25 | 6 | 3240 | 3046 | 26.92 s | 25.71 s | 24.18 s | 0.955 | 0.939 | 80 / 100 ms | 0 | 0 |
+| field | wf/nav-follow-long f6b61c1 (after #344) | 2026-11-25 | 3 | 5696 | 5688 | 45.77 s | 45.21 s | 45.15 s | 0.988 | 0.980 | 100 / 100 ms | 0 | 0 |
 
 On the baseline, the 10 town idles fell in the buckets up to 511 ms (1), 1023 ms (4) and 2047 ms
 (5). The 13 field idles fell up to 255 ms (1), 511 ms (1), 1023 ms (4) and 2047 ms (7). A
@@ -1316,6 +1318,17 @@ run-to-run spread of the route the pull takes). Only corners that wrap nothing q
 where the 500 cap of a follow walk splits open ground, so the gain is under the 5-7% `walking.md`
 estimated for every waypoint: about 3 points in the field, none in town.
 
+After #344 the scenario's follow walk, toward a GM who never moves, takes the long segments of #307
+without the 500 cap (`walkFollowStill`, `docs/walking.md`). The field route took 3 segments instead
+of 15-17, on a route of 5696 units for a straight line of 5688: the long pull runs almost straight,
+about 1100 units shorter than after #308. Its efficiency went from 0.943-0.946 to 0.988 (the bot's
+own 0.980), 11 s faster. The town route took 6 segments instead of 8-10, efficiency 0.907-0.921
+to 0.955 (the bot's own 0.939), about 1 s faster. Both are above the after-#305 rows (0.904 and
+0.926) that #344 asked for. With fewer corners, click-ahead had less to do: town clicked 1 of its 5
+later segments ahead (the bucket up to 0), the field none of its 2; every other idle was the one
+position tick. Nothing was blocked or desynced. Toward a leader that moves the cap stays: the
+`TestLiveFollowMovingLeader` row below kept its gaps at 306 / 380 ms, under the 1 s bound.
+
 What #306 buys shows with a leader that moves. `TestLiveFollowMovingLeader` starts the bot 1900
 from the field route's end, in sight of the GM, who paces 300 back and forth there while the bot
 walks; the bot's follow delay is 1.5 s, so a re-path is pending for most of each leg. Its gaps are
@@ -1335,6 +1348,7 @@ go test -count=1 -timeout 12m ./internal/e2e -run 'TestLiveFollowMovingLeader' -
 | main 49f10a4 (before #308) | 2026-11-25 | 8 | 7 | 337 / 382 ms | 100 / 101 ms | 0 | 0 |
 | wf/nav-click-ahead 457f696 (after #308) | 2026-11-25 | 7 | 7 | 321 / 382 ms | 100 / 101 ms | 0 | 0 |
 | wf/nav-click-ahead 50ca07f (after #308) | 2026-11-25 | 18 | 15 | 358 / 383 ms | 100 / 101 ms | 0 | 0 |
+| wf/nav-follow-long f6b61c1 (after #344) | 2026-11-25 | 12 | 12 | 306 / 380 ms | 91 / 101 ms | 0 | 0 |
 
 Before #306 the bot stood through the follow delay after each segment that ended while a re-path
 was pending; after it, the bot keeps walking to its old slot and turns to the new one when the
