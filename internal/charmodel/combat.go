@@ -85,26 +85,35 @@ func AttackInterval(pAtkSpd float64) time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
-// castPeriod is the time between two casts of a: its cast time and its
-// reuse scaled by the speed that times it (cast/controller.go buildPlan:
-// t*333/speed, a cast time of 500 ms or more held to 500, a spiritshot
-// cutting a magic cast to 70 %), whichever is longer.
+// castPeriod is the time between two casts of a: its cast time (castTime)
+// and its reuse scaled by the speed that times it, whichever is longer.
 func castPeriod(p Profile, a Attack) time.Duration {
-	speed := p.PAtkSpd
-	if a.Magic {
-		speed = p.MAtkSpd
-	}
-	speed = max(speed, 1)
+	reuse := int64(float64(a.Reuse.Milliseconds()) * (333 / castSpeed(p, a)))
+	return max(castTime(p, a), time.Duration(reuse)*time.Millisecond)
+}
+
+// castTime is how long one cast of a takes (cast/controller.go buildPlan:
+// t*333/speed, a cast time of 500 ms or more held to 500, a spiritshot
+// cutting a magic cast to 70 %).
+func castTime(p Profile, a Attack) time.Duration {
 	hitMs := a.HitTime.Milliseconds()
-	hit := int64(float64(hitMs) * 333 / speed)
+	hit := int64(float64(hitMs) * 333 / castSpeed(p, a))
 	if a.Magic && a.Shot != NoShot {
 		hit = int64(float64(hit) * 0.7)
 	}
 	if hitMs >= 500 && hit < 500 {
 		hit = 500
 	}
-	reuse := int64(float64(a.Reuse.Milliseconds()) * (333 / speed))
-	return time.Duration(max(hit, reuse)) * time.Millisecond
+	return time.Duration(hit) * time.Millisecond
+}
+
+// castSpeed is the speed that times a: cast speed for magic, attack speed
+// else, at least 1.
+func castSpeed(p Profile, a Attack) float64 {
+	if a.Magic {
+		return max(p.MAtkSpd, 1)
+	}
+	return max(p.PAtkSpd, 1)
 }
 
 // hitDamage is the expected damage of one action of a by p on target: a

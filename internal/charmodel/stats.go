@@ -83,6 +83,12 @@ func MageClass(classes map[int32]datapack.Class, id int32) bool {
 // Enchantment and grade penalties are not modeled; calibration against the
 // reported stats absorbs them for the current gear.
 func Model(b Build) Profile {
+	p, _, _ := derive(b)
+	return p
+}
+
+// derive is Model with the final base stats and the pipeline it ran.
+func derive(b Build) (Profile, Attrs, calc) {
 	kinds := wornKinds(b.Worn)
 	funcs := append(itemFuncs(b.Worn), b.Funcs...)
 	c := calc{funcs: funcs, kinds: kinds}
@@ -114,7 +120,7 @@ func Model(b Build) Profile {
 	p.MDef = math.Trunc(c.stat("mDef", positive(cl.MDef), func(v float64) float64 { return (v - mDefPenalty) * MENBonus(a.MEN) * lm }))
 	p.RunSpeed = c.stat("runSpd", cl.RunSpeed, mul(DEXBonus(a.DEX)))
 	p.WeightLimit = math.Trunc(c.stat("weightLimit", baseWeightLimit*CONBonus(a.CON), nil))
-	return p
+	return p, a, c
 }
 
 // Monster derives an NPC's final stats from its template's bases, base

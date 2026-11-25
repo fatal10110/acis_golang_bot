@@ -67,6 +67,13 @@ var baseClassRaces = map[int32]int32{
 	0: 0, 10: 0, 18: 1, 25: 1, 31: 2, 38: 2, 44: 3, 49: 3, 53: 4,
 }
 
+// ClassParent is the profession id upgrades from, -1 for a base class; ok
+// is false for an id the profession table does not hold.
+func ClassParent(id int32) (parent int32, ok bool) {
+	parent, ok = classParents[id]
+	return parent, ok
+}
+
 // BaseClass is the base class of profession id's line (id itself for a
 // base class); ok is false for an id the profession table does not hold.
 func BaseClass(id int32) (base int32, ok bool) {
