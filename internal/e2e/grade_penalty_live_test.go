@@ -32,9 +32,11 @@ func TestLiveGradePenalty(t *testing.T) {
 	account, _ := tg.Account("gp", 1)
 	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, stripEnd{level: 1}, squiresSword, squiresShirt, squiresPants, leatherBoots)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
-		warriorGear(p)
-		// Wearing only: what it carries, never what it could buy.
-		p.Gear.Buy, p.Shop = false, botclient.ShopPolicy{}
+		fighterGear(p)
+		// Wearing only: what it carries, never what it could buy or what
+		// other players leave on the town's ground (their gear would
+		// weigh it into a weight band).
+		p.Gear.Buy, p.Shop, p.Loot.Ground = false, botclient.ShopPolicy{}, botclient.GroundNone
 	})
 	toTown(t, ctx, tg, gm, f)
 
