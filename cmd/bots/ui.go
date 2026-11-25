@@ -20,6 +20,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 	"github.com/fatal10110/acis_golang_bot/internal/botpanel"
+	"github.com/fatal10110/acis_golang_bot/internal/botparty"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -354,6 +355,9 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	// -metrics, which only adds their endpoint.
 	metrics := botmetrics.NewRegistry(botclient.RuleNames()...)
 	gate.ReportBreaker(metrics)
+	// The panel's bots form bot parties (D25): the organizer plans them
+	// every botregistry.PartyTick.
+	party := botparty.DefaultPolicy()
 	sup, err := botregistry.New(botregistry.Config{
 		Registry:    reg,
 		Run:         runner.run,
@@ -363,6 +367,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		Metrics:     metrics,
 		CheckPreset: func(name string) error { return validatePersona(name, o.datapack) },
 		Log:         log,
+		Party:       &party,
 	})
 	if err != nil {
 		return err

@@ -68,6 +68,15 @@ type Bot struct {
 	// (botclient.BranchPins), 0 for none: while its character is a base
 	// class the bot heads for it instead of its account's draw (D22).
 	Branch int32 `json:"branch,omitempty"`
+	// PartyMode is the bot's party mode (docs/parties/organizer.md): ""
+	// takes part in bot parties, "off" (botparty.ModeOff) never.
+	PartyMode string `json:"party_mode,omitempty"`
+	// PartyGroup names the pinned bot party the bot belongs to, "" for
+	// none, and PartyLead is set on its leader: the pin forms whatever band
+	// and composition say, and the organizer clears both once the bot
+	// leaves it.
+	PartyGroup string `json:"party_group,omitempty"`
+	PartyLead  bool   `json:"party_lead,omitempty"`
 	// Online is whether the bot should be in the world: a panel start
 	// restores the bots marked online.
 	Online bool `json:"online"`

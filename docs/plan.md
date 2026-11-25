@@ -486,6 +486,14 @@ to avoid: both would log in the same accounts and kick each other.
   nothing, so it has nothing to sell), extended as personas land. A preset is a persona plus its
   options. Presets that need the datapack (`town`, `merchant`, farming spots) are offered only when
   the panel started with one. `bots swarm -persona` takes one preset name from the same catalog.
+- Bot parties (D25, `docs/parties/`): the supervisor runs the party organizer, which groups online
+  `farmer` (Damage, the leader) and `support` bots of the same town into bot parties and hands their
+  `lead`, `join` and `unparty` orders to the bots every `PartyTick` (30 s); `merchant`, `crafter`
+  and `town` bots never take part. It is on in `bots ui` and absent from `bots swarm`. Each registry
+  bot has a party mode, `""` (auto) or `off` (never in a bot party), and may be pinned to a named
+  party (`PartyGroup`, its leader `PartyLead`), which forms whatever band and composition say and
+  outlives a panel restart until a member leaves it or the panel dissolves it; auto parties live in
+  the supervisor's memory and form again after a restart.
 - Each bot gets its own `BrainConfig` from its preset: today `SessionConfig.Brain` is one field of
   the config every bot shares, so `Brain` moves out of `SessionConfig` and `NewBot` takes the
   preset's `BrainConfig` (with the bot's `Character`). The party-claims table is created once (today
