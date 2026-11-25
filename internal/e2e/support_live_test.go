@@ -18,6 +18,24 @@ const (
 	skillMight      int32 = 1068
 )
 
+// skillAggression is the knights' taunt the GM seeds on the leader (#363):
+// at level 1 its power 655 adds 655/(level+7)*150 hate on the level 14
+// orc, about 4700 (the server's disableAggDamage), where a Wind Strike's
+// damage adds a few hundred; its reuse is 3 s.
+const skillAggression int32 = 28
+
+// The taunt's bounds: tauntLand is how long the leader's Aggression may
+// take to show as cast (its 1 s cast behind a swing in flight), and
+// tauntEvery how long the leader waits between taunts, past its 3 s reuse.
+const (
+	tauntLand  = 10 * time.Second
+	tauntEvery = 5 * time.Second
+)
+
+// healOrcs is how many orcs the heal phase may go through: the bot and the
+// leader killed one before it took the leader under 60 % HP (#363).
+const healOrcs = 3
+
 // buffTime is the datapack's duration of Might and Shield at level 1.
 const buffTime = 20 * time.Minute
 
@@ -289,7 +307,7 @@ func TestLiveSupport(t *testing.T) {
 	}
 	// Full HP too: a leader that entered dead restarts in the village
 	// with part of it, and the heal phase starts from a full bar.
-	for _, cmd := range []string{"cancel " + leader.Self.Name, "set level 15", "heal " + leader.Self.Name} {
+	for _, cmd := range []string{"cancel " + leader.Self.Name, "set level 15", "skill set 28 1", "heal " + leader.Self.Name} {
 		if err := gm.OnTargetWatch(ctx, self, cmd, seen.note); err != nil {
 			t.Fatal(err)
 		}
@@ -402,26 +420,73 @@ func TestLiveSupport(t *testing.T) {
 	}
 
 	// The orc hits back: once the leader is under 60 % HP the bot heals it.
-	// A death on the way fails at once rather than at the deadline: the
-	// bot's or the leader's leaves no heal to see, and the orc's before the
-	// leader is hurt leaves nothing to hurt it.
+	// The leader taunts the orc so it stays on the leader (#363): one Wind
+	// Strike of the bot's outweighs the leader's swings on the orc's hate
+	// list, and an orc that turned on the mystic killed it before any heal.
+	// An orc that dies before the leader is hurt leaves nothing to hurt it:
+	// another one takes its place, up to healOrcs, the leader's HP carried
+	// over. A death of the bot or the leader on the way fails at once: it
+	// leaves no heal to see.
 	heal := func(ev botclient.Event) bool { return skill(skillHeal, self)(ev) || skill(skillBattleHeal, self)(ev) }
 	died := func(ev botclient.Event) bool { _, ok := ev.(botclient.Die); return ok }
-	watchUntilBy(t, ctx, leader, "the leader under 60 % HP and the bot healing it", time.Now().Add(fightBound), func() bool {
-		for _, who := range []int32{botID, self, mob} {
-			if at := firstAfter(seen.all(who, died), attackAt); !at.IsZero() && (who != mob || hurtAt.IsZero()) {
-				t.Fatalf("%d died %v after the leader's first swing, before the heal", who, at.Sub(attackAt))
+	for n := 1; ; n++ {
+		if n > 1 {
+			if mob, err = gm.Spawn(ctx, vukuOrc); err != nil {
+				t.Fatal(err)
+			}
+			if err := leader.Send(ctx, botclient.EncodeAction(mob, leader.Pos())); err != nil {
+				t.Fatal(err)
 			}
 		}
-		if hurtAt.IsZero() {
-			return false
+		fightFrom := time.Now()
+		var tauntAt time.Time
+		taunt := func() {
+			if err := leader.Send(ctx, botclient.EncodeRequestMagicSkillUse(skillAggression, false)); err != nil {
+				t.Fatal(err)
+			}
+			tauntAt = time.Now()
 		}
-		return !firstAfter(seen.all(botID, heal), hurtAt).IsZero()
-	}, track)
+		taunt()
+		orcDied := false
+		watchUntilBy(t, ctx, leader, "the leader under 60 % HP and the bot healing it", time.Now().Add(fightBound), func() bool {
+			for _, who := range []int32{botID, self} {
+				if at := firstAfter(seen.all(who, died), attackAt); !at.IsZero() {
+					t.Fatalf("%d died %v after the leader's first swing, before the heal", who, at.Sub(attackAt))
+				}
+			}
+			if firstAfter(seen.all(self, skill(skillAggression, mob)), tauntAt).IsZero() {
+				if time.Since(tauntAt) > tauntLand {
+					t.Fatalf("the leader's Aggression on the orc %d not cast %v after it was sent", mob, tauntLand)
+				}
+			} else if !firstAfter(seen.all(mob, hits(botID)), tauntAt).IsZero() && time.Since(tauntAt) >= tauntEvery {
+				// The orc turned on the bot past the last taunt: taunt again.
+				taunt()
+			}
+			if hurtAt.IsZero() && !firstAfter(seen.all(mob, died), fightFrom).IsZero() {
+				orcDied = true
+				return true
+			}
+			if hurtAt.IsZero() {
+				return false
+			}
+			return !firstAfter(seen.all(botID, heal), hurtAt).IsZero()
+		}, track)
+		if !orcDied {
+			break
+		}
+		gm.Forget(mob)
+		if n == healOrcs {
+			t.Fatalf("%d orcs died before the leader fell under 60 %% HP (%d/%d)", n, hp, maxHP)
+		}
+		t.Logf("orc %d died %v into its fight, the leader at %d/%d HP: another one", mob, time.Since(fightFrom).Round(time.Second), hp, maxHP)
+	}
 	if d := firstAfter(seen.all(botID, heal), hurtAt).Sub(hurtAt); d > 15*time.Second {
 		t.Fatalf("heal %v after the leader fell under 60 %%", d)
 	} else {
-		t.Logf("leader under 60 %% HP, healed %v later", d)
+		t.Logf("leader under 60 %% HP, healed %v later; the leader taunted %d times", d, len(seen.all(self, func(ev botclient.Event) bool {
+			m, ok := ev.(botclient.MagicSkillUse)
+			return ok && m.SkillID == skillAggression
+		})))
 	}
 	if err := gm.Delete(ctx, mob); err != nil {
 		t.Fatal(err)

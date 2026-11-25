@@ -19,6 +19,8 @@ func TestHarnessEncoders(t *testing.T) {
 		{"Appearing", EncodeAppearing(), []byte{0x30}},
 		{"Action", EncodeAction(0x01020304, Point{X: 1, Y: -1, Z: 2}), []byte{0x04, 4, 3, 2, 1, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0, 0}},
 		{"MoveBackwardToLocation", EncodeMoveBackwardToLocation(Point{X: 1, Y: -1, Z: 2}, Point{X: 3, Y: 4, Z: 5}), []byte{0x01, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 1, 0, 0, 0}},
+		{"RequestMagicSkillUse", EncodeRequestMagicSkillUse(28, false), []byte{0x2f, 28, 0, 0, 0, 0, 0, 0, 0, 0}},
+		{"RequestMagicSkillUse ctrl", EncodeRequestMagicSkillUse(0x0102, true), []byte{0x2f, 2, 1, 0, 0, 1, 0, 0, 0, 0}},
 		{"WalkRunToggle", EncodeWalkRunToggle(), []byte{0x45, 1, 0, 0, 0, 0, 0, 0, 0, 0}},
 		{"RequestJoinParty", EncodeRequestJoinParty("ab", 1), []byte{0x29, 'a', 0, 'b', 0, 0, 0, 1, 0, 0, 0}},
 		{"Say2Tell", EncodeSay2Tell("ab", "hi"), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 2, 0, 0, 0, 'a', 0, 'b', 0, 0, 0}},
