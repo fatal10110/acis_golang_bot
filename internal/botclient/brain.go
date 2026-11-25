@@ -241,6 +241,10 @@ type Brain struct {
 	// partyLead is the lead bot's invitations and oustings and the join
 	// bot's handover (rule "party").
 	partyLead partyLead
+	// partyAnswered is set when the bot sends RequestAnswerJoinParty and
+	// cleared on each party window after it (slotPartyEvent): a window
+	// with it clear reached the bot by no invitation of its own.
+	partyAnswered bool
 	// escape is the breaker of every /unstuck the bot sends (the walker's
 	// and rule "leader"'s).
 	escape escapeBreaker
@@ -516,7 +520,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		pvpAt := b.pvpEvent(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
-		b.slotPartyEvent(ev)
+		b.slotPartyEvent(ev, now)
 		b.spotJoinEvent(ev, inParty)
 		b.partyClaimEvent(ev)
 		b.inviteEvent(ev)
@@ -968,6 +972,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		// The server takes the invitation with the first answer. A
 		// withdrawal not sent yet was for a party the bot is no longer in.
 		b.world.Prompts.Party = PartyInvite{}
+		b.partyAnswered = true
 		if b.orders.withdraw {
 			b.orders.withdraw, b.lead = false, leaderWatch{}
 		}

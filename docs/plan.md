@@ -466,8 +466,11 @@ These keep the server and the bot host working; they are operational, not player
   `'acisbot'@'127.0.0.1'` granted only `SELECT(obj_Id, accesslevel, deletetime)` on `characters`, with
   `MAX_USER_CONNECTIONS 2`.
 - Commands: `follow`, `assist`, `stay`, `go <spot>`, `invite me` (a bot invites only the bots the
-  organizer or the panel assigned to its party, and never invites unasked; it asks the GM to invite
-  it, so the GM stays leader), `leave`, `logout`. A GM's `invite me` and `leave` take the
+  organizer or the panel assigned to its party and players who whisper `join`, and never invites
+  unasked; it asks the GM to invite it, so the GM stays leader; `invite me` from a player takes a
+  Support member of a bot party out, under the claim table, and is ignored by any other bot),
+  `leave`, `logout`. `join` from any player to a bot party's leader with a free place invites the
+  player (D28, `docs/parties/players.md`). A GM's `invite me` and `leave` take the
   bot out of its bot party and clear its party slot first, as its `follow`, `assist`, `stay` and
   `go <spot>` do (`docs/parties/orders.md`, "Slot clearing").
 

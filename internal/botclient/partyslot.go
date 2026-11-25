@@ -3,6 +3,7 @@ package botclient
 import (
 	"slices"
 	"strings"
+	"time"
 )
 
 // setPartySlot makes c, a lead or a join, the Bot's party slot. It replaces
@@ -56,10 +57,14 @@ func (b *Brain) unparty() {
 // from a dispersed bot party neither whispers its old leader nor casts
 // /unstuck. A join member the server made leader withdraws too, ending its
 // handover (docs/parties/leader.md). In any other party it does nothing: it
-// never takes a bot out of a player's party.
+// never takes a bot out of a player's party. A lead slot's join queue goes
+// with it (partyLead.dropJoins): those players asked to join that party.
 func (b *Brain) leaveSlot(slot Command) {
 	// A leader's spot weighs 1 at once, the spot kept.
 	b.reweighSpot()
+	if slot.Kind == CommandLead {
+		b.partyLead.dropJoins()
+	}
 	switch {
 	case !b.world.Party.In():
 		b.lead = leaderWatch{}
@@ -107,18 +112,23 @@ func (b *Brain) spotJoinEvent(ev Event, wasIn bool) {
 	}
 }
 
-// slotPartyEvent applies the player-led-party rule on each party window: a
-// bot in a party led by anyone its slot does not name (a player's or a
-// GM's) clears its slot, players first (D28). A join member the server
-// made leader keeps it for the handover (docs/parties/leader.md).
-func (b *Brain) slotPartyEvent(ev Event) {
+// slotPartyEvent applies the player-led-party rule on each party window at
+// now: a bot in a party led by anyone its slot does not name (a player's or
+// a GM's) clears its slot, players first (D28). A join member the server
+// made leader keeps it for the handover (docs/parties/leader.md). A slot
+// cleared on a window no invitation answer of the bot's own led to (no
+// RequestAnswerJoinParty since its last window) is a handover to a player:
+// its handoverToPlayer step runs.
+func (b *Brain) slotPartyEvent(ev Event, now time.Time) {
 	switch ev.(type) {
-	case PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowDelete:
+	case PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowDelete, PartySmallWindowDeleteAll:
 	default:
 		return
 	}
-	if l := b.cfg.link; l != nil && l.party.Kind != 0 && b.ledByStranger(l.party) {
-		b.clearSlot()
+	answered := b.partyAnswered
+	b.partyAnswered = false
+	if l := b.cfg.link; l != nil && l.party.Kind != 0 && b.ledByStranger(l.party) && b.clearSlot() && !answered {
+		b.handoverToPlayer(now)
 	}
 }
 
