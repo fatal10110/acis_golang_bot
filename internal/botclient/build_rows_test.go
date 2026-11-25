@@ -241,7 +241,7 @@ func TestBehaviorRowsShipped(t *testing.T) {
 			}
 		}
 	}
-	items, _, _, err := datapack.LoadItems(filepath.Join(dir, "items"))
+	tables, err := datapack.LoadItems(filepath.Join(dir, "items"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestBehaviorRowsShipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	for class, r := range gearRows {
-		for _, e := range checkGearRow(class, r, classes, items, sets, hennas) {
+		for _, e := range checkGearRow(class, r, classes, tables.Items, sets, hennas) {
 			t.Error(e)
 		}
 	}

@@ -371,12 +371,12 @@ func TestEnchantScrollsShipped(t *testing.T) {
 	if dir == "" {
 		t.Skip("BOT_DATAPACK_XML not set")
 	}
-	_, etc, _, err := datapack.LoadItems(filepath.Join(dir, "items"))
+	tables, err := datapack.LoadItems(filepath.Join(dir, "items"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for id, s := range enchantScrolls {
-		e, ok := etc[id]
+		e, ok := tables.Etc[id]
 		grade := "(Grade " + string("?DCBAS"[s.grade]) + ")"
 		if !ok || e.Kind != datapack.EtcEnchantScroll || !strings.HasSuffix(e.Name, grade) ||
 			strings.Contains(e.Name, "Weapon") != s.weapon || strings.HasPrefix(e.Name, "Blessed") != s.blessed {

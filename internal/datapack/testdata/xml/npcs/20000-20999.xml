@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <list>
-	<!-- Aggressive monster: nested <ai> and <drops> sets are not template fields. -->
+	<!-- Aggressive monster: nested <ai> sets are not template fields; <drops> are read as drops. -->
 	<npc id="20001" name="Gremlin" title="" alias="gremlin">
 		<set name="type" val="Monster"/>
 		<set name="level" val="1"/>
@@ -20,7 +20,7 @@
 			<set name="level" val="99"/>
 		</ai>
 		<drops>
-			<category id="0">
+			<category type="DROP" chance="50">
 				<drop itemid="57" min="1" max="2" chance="70.0"/>
 			</category>
 		</drops>

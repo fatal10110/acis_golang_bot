@@ -64,12 +64,12 @@ func shippedInput(tb testing.TB) Input {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	_, _, prices, err := datapack.LoadItems(filepath.Join(dir, "items"))
+	tables, err := datapack.LoadItems(filepath.Join(dir, "items"))
 	if err != nil {
 		tb.Fatal(err)
 	}
 	in := Input{
-		Warehouse: map[int32]int64{}, Recipes: recs, Prices: prices,
+		Warehouse: map[int32]int64{}, Recipes: recs, Prices: tables.Prices,
 		DwarvenLevel: 9, CommonLevel: 9, DwarvenLimit: 1000, CommonLimit: 1000,
 		Orders: []Order{{Product: 1463, Count: 1000}},
 	}
