@@ -566,7 +566,10 @@ grocer lists).
   with no use of its own. Never stashed: worn items, adena, quest items, valuables (the valuables
   ledger's, D33), what the keep hook keeps (the clan member's deposit for the crafter, D17 and
   D19), supplies, shots, potions and the keep set, and gear it wears next, falls back to or keeps
-  for a set. It deposits only as many rows as the adena past the valuables' fees pays the 30
+  for a set, and, while selling is on (`Shop.SellAt` above 0), the junk the shop visit sells: the
+  stash never pays 30 adena a row for what a merchant would buy. A load past `Supply.ReturnLoad`
+  makes the visit sell junk below `SellAt` stacks (as a bag near its slot limit does, #528), so
+  the load trip that brought the bot home sheds it. It deposits only as many rows as the adena past the valuables' fees pays the 30
   adena fee per row (`network/warehouse.go` `depositFeePerItem`), at most 80 rows. The errand
   paces it as every warehouse visit: opens 60 s apart, one deposit per open, links through the
   bypass gate. `Status.Stash` reports how the last stash ended. A stash that moved nothing (no

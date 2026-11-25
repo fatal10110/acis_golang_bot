@@ -37,13 +37,19 @@ func (b *Brain) stashes(it Item, w *worn) bool {
 }
 
 // stashRows are the rows of the items the stash deposits (stashes), the
-// heaviest stack first, then by object id.
+// heaviest stack first, then by object id. With selling on (Shop.SellAt)
+// it leaves what the shop visit sells (junk): the stash never deposits for
+// 30 adena a row what a merchant would pay for.
 func (b *Brain) stashRows() []WarehouseRow {
 	w := b.worn()
 	t := b.cfg.Travel
+	var junk map[int32]Item
+	if b.persona.Shop.SellAt > 0 {
+		junk = b.junk()
+	}
 	var rows []WarehouseRow
-	for _, it := range b.world.Inventory.Items {
-		if b.stashes(it, &w) {
+	for id, it := range b.world.Inventory.Items {
+		if _, sold := junk[id]; !sold && b.stashes(it, &w) {
 			rows = append(rows, WarehouseRow{TemplateID: it.TemplateID, Count: it.Count, Object: it.ObjectID})
 		}
 	}

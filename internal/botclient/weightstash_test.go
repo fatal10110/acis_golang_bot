@@ -99,26 +99,41 @@ func TestStashDue(t *testing.T) {
 }
 
 // TestStashRows checks what the stash deposits: the kept stacks the bot
-// does not use, heaviest first; never adena, potions or a valuable.
+// does not use, heaviest first; never adena, potions or a valuable, nor
+// the junk the shop visit sells while selling is on (SellAt).
 func TestStashRows(t *testing.T) {
-	b := newStashTripBrain(t, adenaStack(5000), lootStack(60, keptMat, 500), lootStack(61, stashMat, 200), lootStack(62, junkMat, 10))
-	want := []WarehouseRow{
+	kept := []WarehouseRow{
 		{TemplateID: stashMat, Count: 200, Object: 61},
 		{TemplateID: keptMat, Count: 500, Object: 60},
-		{TemplateID: junkMat, Count: 10, Object: 62},
 	}
-	if got := b.stashRows(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("stashRows = %+v, want %+v", got, want)
+	tests := []struct {
+		name   string
+		sellAt int
+		want   []WarehouseRow
+	}{
+		{name: "selling on: junk left to the shop", sellAt: 5, want: kept},
+		{name: "selling off: junk stashed", want: append(kept, WarehouseRow{TemplateID: junkMat, Count: 10, Object: 62})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newStashTripBrain(t, adenaStack(5000), lootStack(60, keptMat, 500), lootStack(61, stashMat, 200), lootStack(62, junkMat, 10))
+			b.persona.Shop.SellAt = tt.sellAt
+			if got := b.stashRows(); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("stashRows = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 
 // newStashBrain is newPrivateBrain at 70 % of its limit back from a supply
-// trip (stashDue), carrying items, the skins of a known weight.
+// trip (stashDue), carrying items, the skins of a known weight and kept
+// (Shop.Keep).
 func newStashBrain(t *testing.T, items ...Item) *Brain {
 	t.Helper()
 	b := newPrivateBrain(t, items...)
 	b.cfg.Travel.weights = map[int32]int32{animalSkin: 50}
 	b.persona.Warehouse.Reach = privReach
+	b.persona.Shop.Keep = []int32{animalSkin}
 	b.world.Self.Load, b.world.Self.MaxLoad = 70000, 100000
 	b.stashDue = true
 	return b
@@ -180,6 +195,7 @@ func TestStashStart(t *testing.T) {
 		{name: "slowed with kept skins", items: []Item{adenaStack(1000), whCarriedSkins}, running: true},
 		{name: "under the band", items: []Item{adenaStack(1000), whCarriedSkins}, edit: func(b *Brain) { b.world.Self.Load = 66000 }},
 		{name: "nothing to stash", items: []Item{adenaStack(1000)}},
+		{name: "junk skins left to the shop", items: []Item{adenaStack(1000), whCarriedSkins}, edit: func(b *Brain) { b.persona.Shop.Keep = nil }},
 		{name: "not due", items: []Item{adenaStack(1000), whCarriedSkins}, edit: func(b *Brain) { b.stashDue = false }},
 		{name: "shop visit on", items: []Item{adenaStack(1000), whCarriedSkins}, edit: func(b *Brain) { b.shop.v = npcVisit{npcID: 1, at: Point{X: 500}} }, due: true},
 		{name: "held", items: []Item{adenaStack(1000), whCarriedSkins}, edit: func(b *Brain) {
