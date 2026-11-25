@@ -15,7 +15,10 @@ type TownPolicy struct {
 	HopMin, HopMax time.Duration
 	// MaxPrice is the most adena one hop may cost.
 	MaxPrice int32
-	// Reach is how far the bot walks to the gatekeeper.
+	// Reach is how far the bot walks to the gatekeeper. The town persona's
+	// reaches the gatekeeper of its village from any of the village's
+	// merchants, as Shop.Reach and TrainerReach do: on Talking Island the
+	// grocer stands 4202 from the gatekeeper (#441).
 	Reach int32
 }
 
@@ -31,7 +34,7 @@ func TownPersona() Persona {
 	p.IdleRadius = 400
 	// greet, yes, bow, waiting, laugh, applaud, dance
 	p.Emotes = []int32{2, 6, 7, 9, 10, 11, 12}
-	p.Town = TownPolicy{HopMin: 10 * time.Minute, HopMax: 30 * time.Minute, MaxPrice: 50000, Reach: 4000}
+	p.Town = TownPolicy{HopMin: 10 * time.Minute, HopMax: 30 * time.Minute, MaxPrice: 50000, Reach: 8000}
 	return p
 }
 
