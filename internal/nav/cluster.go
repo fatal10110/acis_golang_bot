@@ -100,7 +100,7 @@ func (g *localGraph) load(p *Planner, x0, y0, size int) {
 // appendSteps appends the weighted steps out of cell i that stay inside the
 // cluster, with the step costs of Planner.neighbours: cardinals, and a
 // diagonal where both L-shaped detours land on the same cell, plus the
-// clearance extra next to a wall or drop. It skips the diagonal's own
+// clearance extra next to a wall or drop, and costDrop on a drop. It skips the diagonal's own
 // CanMove: the costs only rank, and the build makes no CanMove call per
 // cell this way.
 func (g *localGraph) appendSteps(dst []step, i int32) []step {
@@ -111,7 +111,7 @@ func (g *localGraph) appendSteps(dst []step, i int32) []step {
 	nx := g.next[4*i : 4*i+4]
 	for _, t := range nx {
 		if t >= 0 {
-			dst = append(dst, step{t, costCardinal + extra})
+			dst = append(dst, step{t, costCardinal + extra + dropCost(g.z[i], g.z[t])})
 		}
 	}
 	for _, xi := range [2]int{0, 1} {
@@ -121,7 +121,7 @@ func (g *localGraph) appendSteps(dst []step, i int32) []step {
 				continue
 			}
 			if via := g.next[4*a+int32(yi)]; via >= 0 && via == g.next[4*b+int32(xi)] {
-				dst = append(dst, step{via, costDiagonal + extra})
+				dst = append(dst, step{via, costDiagonal + extra + dropCost(g.z[i], g.z[via])})
 			}
 		}
 	}

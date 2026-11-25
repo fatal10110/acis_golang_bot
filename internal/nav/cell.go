@@ -58,6 +58,10 @@ type Planner struct {
 	// is none. The cell search, the string pull and the refinement of
 	// Hierarchy.Route honor it; its owner sets it per route.
 	Avoid Avoid
+
+	// noDrops refuses every drop (dropCost), for the hierarchy's endpoint
+	// legs; set on a copy only.
+	noDrops bool
 }
 
 // Locate snaps a world point to its cell and the layer nearest its Z, as the
@@ -138,7 +142,7 @@ func (p *Planner) crossDry(c Cell, n block.NSWE, d direction) (Cell, block.NSWE,
 		return Cell{}, 0, false
 	}
 	h, nn, ok := p.Engine.NodeBelow(nx, ny, int(c.Z)+block.CellIgnoreHeight)
-	if !ok || (!p.swims() && p.Water.wet(nx, ny, h)) {
+	if !ok || (!p.swims() && p.Water.wet(nx, ny, h)) || (p.noDrops && dropCost(c.Z, h) > 0) {
 		return Cell{}, 0, false
 	}
 	return Cell{X: nx, Y: ny, Z: h}, nn, true
@@ -158,6 +162,28 @@ const (
 	costDiagonal  = 14
 	costClearance = 10
 )
+
+// A drop is a step that lands more than dropBound below the cell it leaves:
+// past the climb limit, so it cannot be walked back. CanMove takes it (the
+// server limits a descent by fall damage only), but a bot walking it looks
+// like one jumping off a wall (#504). Each drop costs costDrop more, in the
+// cell search and in the nav build's edge costs, so a route goes down a ramp
+// or through a gate whenever that way is less than costDrop/costCardinal
+// cells longer, and takes a drop only where no such way exists, as a
+// one-way drop toward a leader below does (docs/navigation.md, "Drops").
+const (
+	dropBound = block.CellIgnoreHeight
+	costDrop  = 1000
+)
+
+// dropCost returns costDrop when a step from a floor at z down to one at to
+// is a drop, else 0.
+func dropCost(z, to int16) int32 {
+	if int(to) < int(z)-dropBound {
+		return costDrop
+	}
+	return 0
+}
 
 // neighbour is one directed edge out of a cell.
 type neighbour struct {
@@ -204,7 +230,7 @@ func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 	}
 	for i := range cardinals {
 		if open[i] {
-			dst = append(dst, neighbour{next[i], cost(next[i], costCardinal+extra)})
+			dst = append(dst, neighbour{next[i], cost(next[i], costCardinal+extra) + dropCost(c.Z, next[i].Z)})
 		}
 	}
 	// Diagonals: X index (East 0, West 1) then Y index (South 2, North 3).
@@ -215,14 +241,14 @@ func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 			}
 			viaX, okX := p.crossFrom(next[xi], nextNSWE[xi], cardinals[yi])
 			viaY, okY := p.crossFrom(next[yi], nextNSWE[yi], cardinals[xi])
-			if !okX || !okY || viaX != viaY {
+			if !okX || !okY || viaX != viaY || (p.noDrops && dropCost(c.Z, viaX.Z) > 0) {
 				continue
 			}
 			from, to := c.World(), viaX.World()
 			if !p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) {
 				continue
 			}
-			dst = append(dst, neighbour{viaX, cost(viaX, costDiagonal+extra)})
+			dst = append(dst, neighbour{viaX, cost(viaX, costDiagonal+extra) + dropCost(c.Z, viaX.Z)})
 		}
 	}
 	return dst

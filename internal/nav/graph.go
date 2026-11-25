@@ -40,7 +40,7 @@ import (
 // side or water is stale and refused, as is a corrupt one.
 const (
 	navMagic       = "ACISNAV\x00"
-	navVersion     = 3
+	navVersion     = 4
 	navHeaderSize  = 64
 	clusterRecSize = 12
 	nodeRecSize    = 28

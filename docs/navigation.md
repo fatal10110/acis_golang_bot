@@ -345,6 +345,20 @@ server's pathfinder.
 - **Wall clearance cost**: cells next to a blocked NSWE edge, or next to a drop, cost more. Routes
   then keep off walls and ledges. This looks more natural, and it leaves a margin for the step
   chain's jitter and for dead-reckoning error.
+- **Drops** (#504): a step landing more than 48 below the cell it leaves (`dropBound`, the climb
+  limit) cannot be walked back. `CanMove` takes it, and the server limits a descent only by fall
+  damage past the race's safe fall height (`ValidatePosition`, `character_fall.go`), but a bot
+  walking off a wall's top looks like nothing a player does: the Orc village's place routes went
+  up a ramp onto the wall's walkway and dropped 312 off its outer edge. Each drop costs `costDrop`
+  (100 cells) more: in the cell search, in the build's intra-cluster edge costs and on a border
+  crossing that drops, so a route goes down a ramp or through a gate whenever that way is less than
+  about 1600 units longer. The cost is a weight, not a ban, so a one-way drop toward a leader below
+  (`RouteOneWay`), a drop off one-way-out ground and a drop no ramp near it replaces still route.
+  It is kept small for the cell search's sake: A\* expands every cell whose straight-line estimate
+  is cheaper than the route, so a leg that must drop floods the cells within about `costDrop`/20 cells of it
+  first. On the owner's data the place routes from the Orc village town point to the 24 routable
+  spots within 20,000 of it held 17 single-cell descents past 48 (12 off the north wall, 312-376;
+  5 down a south slope, 56-72 a cell); with the cost they hold none.
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over
     139 regions;
@@ -394,7 +408,10 @@ server's pathfinder.
   - **Queries.** After `Locate`, `SameSCC(a, b)` (reachable each way) is O(1). `Reachable(a, b)`
     one way is a search over the condensation, which is small.
   - **Consumers ask for `SameSCC` by default**, so a bot never walks down into a pit it cannot
-    climb out of. Only follow and death return accept a one-way drop.
+    climb out of. Only follow and death return accept a one-way drop. That is about the
+    endpoints; inside one SCC a route also keeps off drops (above, "Drops"): a place walk takes a
+    single-cell descent past `dropBound` only where no way without one is within the drop cost,
+    inside an SCC or not.
   - **`RouteOneWay`** is the route for them: it also takes a destination only `Reachable` from
     the start. Its abstract search runs over the SCCs on a way from the start's to the
     destination's over the condensation, found by one depth-first walk of it, and crosses from one
@@ -432,8 +449,13 @@ server's pathfinder.
     has flooded everything the start reaches in the cluster, and the abstract search runs again
     from the nodes it reached. The last leg does the same, walking back from the goal over the
     cluster's cardinal crossings to the nodes that reach it. Without this the leg's cell search
-    flooded the world until the cell budget ran out;
-  - string pulling with the copied `CanMove`;
+    flooded the world until the cell budget ran out. Both ends look for a leg without a drop
+    first (#504): the straight line joining the start to a node of its cluster does not see a
+    drop off the walkway the start stands on, so the start seats on the nodes it reaches
+    without one, and only an end that reaches none that way seats with drops;
+  - string pulling with the copied `CanMove`, where a segment drops past `dropBound` only when
+    the cell path it stands for drops: a straight line from a wall's walkway passes `CanMove`
+    over its edge even when the cell path went down the ramp (#504);
   - splitting into segments of at most `navSegment` (about 2500 units, roughly a click on screen,
     far under 9900 in 3D);
   - **every segment passes both checks of the Goal**, the step chain through the open-corridor
