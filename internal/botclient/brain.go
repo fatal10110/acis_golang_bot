@@ -15,10 +15,14 @@ import (
 
 // Brain timing defaults and fixed waits.
 const (
-	defaultTick          = time.Second
-	defaultTickJitter    = 500 * time.Millisecond
-	defaultReactMin      = 300 * time.Millisecond
-	defaultReactMax      = 1200 * time.Millisecond
+	defaultTick       = time.Second
+	defaultTickJitter = 500 * time.Millisecond
+	defaultReactMin   = 300 * time.Millisecond
+	defaultReactMax   = 1200 * time.Millisecond
+	// defaultPvPReactMin and defaultPvPReactMax bound the reaction to a PvP
+	// event (D35).
+	defaultPvPReactMin   = 200 * time.Millisecond
+	defaultPvPReactMax   = 600 * time.Millisecond
 	defaultLogoutTimeout = 15 * time.Second
 	// logoutRetry is how long a bot whose Logout was refused (in combat)
 	// plays on before it asks again.
@@ -69,6 +73,9 @@ type BrainConfig struct {
 	// ReactMin and ReactMax bound the uniform reaction delay between an
 	// event about the bot and the decision that acts on it.
 	ReactMin, ReactMax time.Duration
+	// PvPReactMin and PvPReactMax bound it instead for a PvP event
+	// (Brain.pvpEvent; D35), which moves a reaction armed later earlier.
+	PvPReactMin, PvPReactMax time.Duration
 	// LogoutTimeout is how long a Logout waits for an answer.
 	LogoutTimeout time.Duration
 	// LogoutLimit, when set, bounds a requested logout in all, refusals
@@ -162,6 +169,8 @@ type Brain struct {
 	// nextTick is the next regular decision; reactAt, when set, replaces it
 	// with the reaction to an event.
 	nextTick, reactAt time.Time
+	// pvp is the PvP world model: opponent records, the duel.
+	pvp pvpWorld
 	// anchor is where idle drift stays around: the arrival point.
 	anchor Point
 	// engaged is the target the bot already attacked; it is not clicked
@@ -373,6 +382,8 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	cfg.TickJitter = cmp.Or(cfg.TickJitter, defaultTickJitter)
 	cfg.ReactMin = cmp.Or(cfg.ReactMin, defaultReactMin)
 	cfg.ReactMax = max(cmp.Or(cfg.ReactMax, defaultReactMax), cfg.ReactMin)
+	cfg.PvPReactMin = cmp.Or(cfg.PvPReactMin, defaultPvPReactMin)
+	cfg.PvPReactMax = max(cmp.Or(cfg.PvPReactMax, defaultPvPReactMax), cfg.PvPReactMin)
 	cfg.LogoutTimeout = cmp.Or(cfg.LogoutTimeout, defaultLogoutTimeout)
 	if len(cfg.markers) == 0 {
 		cfg.markers = botnames.Markers{botnames.DefaultMarker}
@@ -499,6 +510,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		// Before Apply: SendTradeDone clears the trade it counts.
 		b.valuableSaleEvent(ev)
 		b.world.Apply(ev, now)
+		pvpAt := b.pvpEvent(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
 		b.slotPartyEvent(ev)
@@ -687,7 +699,14 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case PrivateStoreListSell:
 			b.marketEvent(ev)
 		}
-		if b.reactAt.IsZero() && salient(ev, self) {
+		switch {
+		case !pvpAt.IsZero():
+			// A PvP event's reaction moves one armed later earlier,
+			// never later (D35).
+			if b.reactAt.IsZero() || pvpAt.Before(b.reactAt) {
+				b.reactAt = pvpAt
+			}
+		case b.reactAt.IsZero() && salient(ev, self):
 			b.reactAt = now.Add(b.reactDelay())
 		}
 	}

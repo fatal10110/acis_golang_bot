@@ -21,7 +21,7 @@ func (b *Brain) ruleRaise(now time.Time) (Action, bool) {
 	if _, known := b.world.Skills[skillResurrection]; !known || s.InCombat || !b.inBotParty() {
 		return Action{}, false
 	}
-	dead := b.corpses()
+	dead := b.corpses(now)
 	switch {
 	case len(dead) == 0:
 		return Action{}, false
@@ -36,7 +36,7 @@ func (b *Brain) ruleRaise(now time.Time) (Action, bool) {
 // corpses are the dead players of the bot's party in sight that it may
 // raise, in order: the leader, then the others by object id. The bot itself
 // and a member the PvP policy does not let it support are left out.
-func (b *Brain) corpses() []int32 {
+func (b *Brain) corpses(now time.Time) []int32 {
 	p := &b.world.Party
 	self := b.world.Self.ObjectID
 	ids := slices.Sorted(maps.Keys(p.Members))
@@ -45,6 +45,6 @@ func (b *Brain) corpses() []int32 {
 	}
 	return slices.DeleteFunc(ids, func(id int32) bool {
 		o := b.world.object(id)
-		return id == self || o == nil || o.Kind != KindPlayer || !o.Dead || !b.persona.PvP.MaySupport(o)
+		return id == self || o == nil || o.Kind != KindPlayer || !o.Dead || !b.supportAllowed(id, o, now)
 	})
 }
