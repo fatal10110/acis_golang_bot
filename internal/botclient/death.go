@@ -153,9 +153,10 @@ type RecoverPolicy struct {
 	// itself (Status.PartyLeft "timeout") and plays on. 0 holds until the
 	// unparty or another clear of the slot.
 	JoinWait time.Duration
-	// LiftDeathPenalty buys, in the shop errand's supplies tier, a Scroll:
-	// Recovery of the bot's level band per death penalty level and reads
-	// them out of combat (rule "recover"), one level each.
+	// LiftDeathPenalty buys, first in the shop errand's supplies tier, a
+	// Scroll: Recovery of the bot's level band per death penalty level,
+	// goes home for one when it carries none (supply trip causePenalty),
+	// and reads them out of combat (rule "recover"), one level each.
 	LiftDeathPenalty bool
 }
 

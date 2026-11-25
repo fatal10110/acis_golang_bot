@@ -7,10 +7,10 @@ import "slices"
 type tier uint8
 
 const (
-	// tierSupplies is one trip's supplies, above the reserve: the wanted
-	// spellbooks, the Restock rows, the shots, the HP potion and Scrolls
-	// of Escape, the arrows, the Extra supplies, then the Scrolls:
-	// Recovery that lift the death penalty (recoveryWants).
+	// tierSupplies is one trip's supplies, above the reserve: the Scrolls:
+	// Recovery that lift the death penalty first (recoveryWants, #491),
+	// then the wanted spellbooks, the Restock rows, the shots, the HP
+	// potion and Scrolls of Escape, the arrows and the Extra supplies.
 	tierSupplies tier = iota
 	// tierGear is the gear goal and the other upgrades (gearWants), then
 	// the dyes of the symbols the bot draws next (dyeWants), above the
@@ -56,9 +56,9 @@ func (b *Brain) floor(t tier) int64 {
 }
 
 // wants are the shop errand's planned purchases in budget order: the
-// supplies tier (the wanted spellbooks it lacks, by id, the restocks of
-// its class under their minimum, in persona order, then shotWants,
-// supplyWants, arrowWants, extraWants and recoveryWants), then the gear tier
+// supplies tier (recoveryWants, the wanted spellbooks it lacks, by id, the
+// restocks of its class under their minimum, in persona order, then
+// shotWants, supplyWants, arrowWants and extraWants), then the gear tier
 // (gearWants, then dyeWants), then, with comfort, the comfort tier
 // (comfortWants).
 func (b *Brain) wants(comfort bool) []want {
@@ -69,6 +69,8 @@ func (b *Brain) wants(comfort bool) []want {
 			out = append(out, want{buyRow: r, tier: t})
 		}
 	}
+	// Lifting the death penalty comes first (#491).
+	add(tierSupplies, b.recoveryWants())
 	if p.Books {
 		var books []buyRow
 		for id := range b.shop.books {
@@ -91,7 +93,6 @@ func (b *Brain) wants(comfort bool) []want {
 	add(tierSupplies, b.supplyWants())
 	add(tierSupplies, b.arrowWants())
 	add(tierSupplies, b.extraWants())
-	add(tierSupplies, b.recoveryWants())
 	add(tierGear, b.gearWants())
 	dyes, fee := b.dyeWants()
 	for _, r := range dyes {
