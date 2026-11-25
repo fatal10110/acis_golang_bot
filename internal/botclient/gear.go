@@ -390,6 +390,10 @@ type gearState struct {
 	// ahead plans one grade above the bot's (gearGrade) while jumpGoal
 	// runs, and is false otherwise.
 	ahead bool
+	// plans counts the gear plans computed (planGear), the expensive part
+	// of a decision; the tests read it to keep plans off the hot paths
+	// that do not need one (#493).
+	plans int
 }
 
 // sent records a gear UseItem that went out at now.
@@ -790,6 +794,7 @@ func (b *Brain) gearPlan() (ids, set []int32) {
 // planGear is gearPlan with the grade jump's goal priced at jump; 0 for
 // none, which buys every piece that beats the worn one.
 func (b *Brain) planGear(jump int64) (ids, set []int32) {
+	b.gear.plans++
 	p := &b.persona.Gear
 	if !p.Buy || !p.Equip || b.cfg.Travel == nil {
 		return nil, nil

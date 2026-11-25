@@ -149,6 +149,11 @@ built `Self.move` from `sample(now, e.Origin)`. Neither knew the start speed. Th
   - Counting a fresh start where the server only retargeted makes the end later: conservative.
 - **The distance timed** is the larger of |e.Origin → dest| and |sample estimate → dest|. `sample`
   keeps the estimate within `snapDrift` (200).
+- **A self `ValidateLocation` is adopted as is** (`SelfState.correct`, #464). The server sends one
+  only when the bot's reported position drifts more than its move speed from the server's, and
+  never adopts the report (`network/movement.go` `validateLivePlayerPosition`). So the bot moves to
+  it however close it is to the estimate, and the move in flight and the next segment continue
+  from it. `UserInfo` and other objects' reports keep the `snapDrift` smoothing.
 - **No eta is stored any more.**
   - `segmentDone` holds when the segment is answered and now ≥ end + positionTick: the same
     quantity the wake uses.
@@ -310,6 +315,20 @@ Table-driven, with an injected clock:
   - `nav_blocked_total` and `nav_desync_total`, both of which must be 0.
 - Run it on `main` before #305, after #305 and #306, and after #307. The scenario is
   `TestLiveWalkEfficiency`; its numbers are in `docs/navigation.md`, "Walking efficiency".
+
+## Plan metrics (#497)
+
+- **Metric** `nav_plans_total`: the walker's route plans by outcome, counted where every walk plans
+  (`planWalk`), whatever rule asked for the walk (spots, trainers, shops, follow): `ok` (a route),
+  `budget` (the search ran out of `walkBudget`), `door`, `blocked` (the refused segments cut every
+  way), `no_route`, `isolated` (the /unstuck asks counted too) and `no_nav` (the bot off the
+  navigation). `nav_plan_us` is each plan's duration on the brain's clock, in microseconds.
+  Both are on the panel's dashboard ("Route plans") and in `/debug/vars`.
+- **Spot rule back-off**: a walk to a spot that ends unreachable gives the spot up for `walkRetry`
+  and the bot picks the next candidate; after `spotFailMax` (3) such walks in a row it looks for no
+  spot for `spotRetry`, the run's spots avoided past it, so each window tries the next three
+  candidates. A bot the cell planner cannot route from runs at most 3 spot plans a minute instead
+  of one per candidate. An arrival ends the run, and so does a search with no candidate left.
 
 ## Click-ahead at checked corners (#308)
 

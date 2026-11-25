@@ -199,6 +199,11 @@ const (
 	// ground inside the spot's territory when the centre itself lies on
 	// none (a wall, a ledge, another SCC).
 	spotSnap = 400
+	// spotFailMax is how many walks to spots in a row may end unreachable
+	// before the bot stops looking for spotRetry (#497): each costs a route
+	// search of up to walkBudget cells, and a bot the cell planner cannot
+	// route from would otherwise plan to every candidate at once.
+	spotFailMax = 3
 )
 
 // spotVisit is the bot's farming spot (rule "spot"). It is owned by the
@@ -233,6 +238,10 @@ type spotVisit struct {
 	retryAt time.Time
 	// avoid are the spots the bot moved on from, until a time.
 	avoid map[int]time.Time
+	// failed are the spots of the bot's current run of walks that ended
+	// unreachable (failedWalk), oldest first, each once: avoided while the run lasts,
+	// until a walk arrives or no candidate is left.
+	failed []int
 	// pack is the pack its deaths taught it to pass over.
 	pack packBound
 	// gatherSince is when a bot member of the party the bot leads fell
@@ -259,8 +268,9 @@ func (v *spotVisit) farming() bool { return v.held || v.beside }
 //
 // Every move is the walker's (goTo): one MoveBackwardToLocation per checked
 // segment through the frame pacer (gateNone). A walk that ends unreachable
-// gives the spot up for walkRetry, and a fruitless search waits spotRetry,
-// so a bot that cannot get anywhere stops sending.
+// gives the spot up for walkRetry, spotFailMax of them in a row wait
+// spotRetry (failedWalk), and a fruitless search waits spotRetry, so a bot
+// that cannot get anywhere stops sending and stops planning.
 func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	r, s, v := b.cfg.Spots, &b.world.Self, &b.spot
 	if r == nil || s.InCombat {
@@ -294,14 +304,15 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	case walkUnreachable:
 		// The walk the abstract graph promised does not hold (blocked,
 		// desync, a closed door): the walker refuses this spot for
-		// walkRetry anyway, so look for another.
-		b.moveOn(now, walkRetry)
+		// walkRetry anyway, so look for another, or after spotFailMax in a
+		// row wait spotRetry first.
+		b.failedWalk(now)
 		return Action{}, false
 	}
 	if v.arrived {
 		return Action{}, false
 	}
-	v.arrived, v.idleSince = true, time.Time{}
+	v.arrived, v.idleSince, v.failed = true, time.Time{}, v.failed[:0]
 	b.anchor = s.Position(now)
 	if b.crowded(v.at, now) {
 		b.moveOn(now, b.persona.Spots.AvoidFor)
@@ -558,7 +569,9 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 		i, ok = r.claimN(order[n:], w)
 	}
 	if !ok {
-		v.retryAt = now.Add(spotRetry)
+		// No candidate left: the run of unreachable walks ends, its spots
+		// avoided only as long as moveOn said.
+		v.retryAt, v.failed = now.Add(spotRetry), v.failed[:0]
 		if here != nil && !party {
 			// A leader takes no gatekeeper trip: its members follow by
 			// walking only.
@@ -713,6 +726,32 @@ func (b *Brain) moveOn(now time.Time, d time.Duration) {
 	}
 	v.avoid[v.idx] = now.Add(d)
 	b.leaveSpot()
+}
+
+// failedWalk gives the spot up after its walk ended unreachable, avoiding
+// it for walkRetry. Every spotFailMax walks in a row that so end, the bot
+// looks for no spot for spotRetry, the whole run's spots avoided past that,
+// so each window tries the next spotFailMax candidates: at most spotFailMax
+// route plans to spots per spotRetry (#497). A spot that fails again within
+// the run (its avoid ran out during a long walk) is not added twice, so the
+// run holds each spot once; the candidates are cycling, so it waits too.
+func (b *Brain) failedWalk(now time.Time) {
+	v := &b.spot
+	repeat := slices.Contains(v.failed, v.idx)
+	if !repeat {
+		v.failed = append(v.failed, v.idx)
+	}
+	b.moveOn(now, walkRetry)
+	if !repeat && len(v.failed)%spotFailMax != 0 {
+		return
+	}
+	v.retryAt = now.Add(spotRetry)
+	until := v.retryAt.Add(walkRetry)
+	for _, i := range v.failed {
+		if v.avoid[i].Before(until) {
+			v.avoid[i] = until
+		}
+	}
 }
 
 // diedAtSpot gives back the spot the bot holds or farms beside, if any, on

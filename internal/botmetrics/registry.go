@@ -99,6 +99,11 @@ type Snapshot struct {
 	// run speed, in per mille (docs/walking.md, "Measurement (#304)").
 	NavWalkIdleMillis HistogramSnapshot `json:"nav_walk_idle_ms"`
 	NavWalkEfficiency HistogramSnapshot `json:"nav_walk_efficiency_permille"`
+	// NavPlans counts the walker's route plans by outcome (the PlanOutcome
+	// names, every one present), and NavPlanMicros is how long each took, in
+	// microseconds (docs/walking.md, "Plan metrics (#497)").
+	NavPlans      map[string]uint64 `json:"nav_plans_total"`
+	NavPlanMicros HistogramSnapshot `json:"nav_plan_us"`
 	// The merchants' valuables (docs/valuables/preset.md "Wiring"): the
 	// Trade ad lines, the whisper replies, the sales by kind (ValuablesSold
 	// keyed by via, "trade" and "store"), the private deposits and the
@@ -118,11 +123,41 @@ const (
 	ViaStore = "store"
 )
 
+// PlanOutcome is how one of the walker's route plans ended.
+type PlanOutcome uint8
+
+// The outcomes of a route plan: a route to walk, or the walker's reason for
+// none (the search ran out of its budget, a closed door, the refused
+// segments cut every way, no route, isolated ground, the bot off the
+// navigation). Isolated counts the /unstuck asks too.
+const (
+	PlanOK PlanOutcome = iota
+	PlanBudget
+	PlanDoor
+	PlanBlocked
+	PlanNoRoute
+	PlanIsolated
+	PlanNoNav
+	planOutcomes
+)
+
+// planNames are the Snapshot.NavPlans keys, indexed by PlanOutcome.
+var planNames = [planOutcomes]string{"ok", "budget", "door", "blocked", "no_route", "isolated", "no_nav"}
+
+// String is the outcome's Snapshot.NavPlans key.
+func (o PlanOutcome) String() string {
+	if o >= planOutcomes {
+		return "unknown"
+	}
+	return planNames[o]
+}
+
 // Collect sums every Bot as of at, stores the sum as the latest and returns
 // it.
 func (r *Registry) Collect(at time.Time) *Snapshot {
 	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), Rules: make(map[string]uint64, len(r.rules))}
 	var soldTrade, soldStore uint64
+	var plans [planOutcomes]uint64
 	hits := make([]uint64, len(r.rules))
 	r.mu.Lock()
 	s.Bots = len(r.bots)
@@ -146,12 +181,20 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		for i := range b.rules {
 			hits[i] += b.rules[i].Load()
 		}
+		for i := range b.navPlans {
+			plans[i] += b.navPlans[i].Load()
+		}
 		s.QueueDepth.add(&b.depth)
 		s.WakeLagMicros.add(&b.wakeLag)
 		s.NavWalkIdleMillis.add(&b.walkIdle)
 		s.NavWalkEfficiency.add(&b.walkEfficiency)
+		s.NavPlanMicros.add(&b.planTime)
 	}
 	r.mu.Unlock()
+	s.NavPlans = make(map[string]uint64, planOutcomes)
+	for i, n := range plans {
+		s.NavPlans[planNames[i]] = n
+	}
 	s.ValuablesSold = map[string]uint64{ViaTrade: soldTrade, ViaStore: soldStore}
 	for i, name := range r.rules {
 		s.Rules[name] = hits[i]
@@ -166,7 +209,11 @@ func (r *Registry) Last() *Snapshot {
 	if s := r.last.Load(); s != nil {
 		return s
 	}
-	return &Snapshot{Rules: map[string]uint64{}, ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
+	plans := make(map[string]uint64, planOutcomes)
+	for _, n := range planNames {
+		plans[n] = 0
+	}
+	return &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
 }
 
 // Run collects on every tick until ctx ends. The caller owns the ticker
@@ -190,6 +237,7 @@ type Bot struct {
 	events, sent, paced, reconnects, aborts atomic.Uint64
 	navBlocked, navDesync, navDoorReplan    atomic.Uint64
 	navSegments                             atomic.Uint64
+	navPlans                                [planOutcomes]atomic.Uint64
 	valuablesAds, valuablesReplies          atomic.Uint64
 	valuablesSoldTrade, valuablesSoldStore  atomic.Uint64
 	valuablesDeposits, valuablesReleased    atomic.Uint64
@@ -199,6 +247,7 @@ type Bot struct {
 	wakeLag                                 Histogram // microseconds
 	walkIdle                                Histogram // milliseconds
 	walkEfficiency                          Histogram // per mille
+	planTime                                Histogram // microseconds
 }
 
 // Drained records one wakeup of the brain that drained n queued events.
@@ -281,6 +330,16 @@ func (b *Bot) NavWalkEfficiency(permille int64) {
 	if b != nil {
 		b.walkEfficiency.Observe(permille)
 	}
+}
+
+// NavPlan records one of the walker's route plans: how it ended and how
+// long it took. An outcome out of range counts nothing.
+func (b *Bot) NavPlan(o PlanOutcome, d time.Duration) {
+	if b == nil || o >= planOutcomes {
+		return
+	}
+	b.navPlans[o].Add(1)
+	b.planTime.Observe(d.Microseconds())
 }
 
 // NavBlocked records a blocked stop of one of the walker's segments.
