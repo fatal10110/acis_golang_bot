@@ -314,7 +314,10 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 			Gate:       gate,
 			Log:        log,
 		},
-		shared:   shared{claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget},
+		shared: shared{
+			claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget,
+			ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
+		},
 		secret:   secret,
 		datapack: o.datapack,
 	}

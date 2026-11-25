@@ -20,7 +20,7 @@ func TestValuablesShipped(t *testing.T) {
 		t.Fatalf("Load(%s): %v", dir, err)
 	}
 	m := NewTravelMap(dp, DefaultSupplyConfig())
-	p := defaultValuablePolicy()
+	p := DefaultValuablePolicy()
 	tests := []struct {
 		name     string
 		id       int32

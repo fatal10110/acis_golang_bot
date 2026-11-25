@@ -166,7 +166,9 @@ func openStore(mode uint8) bool { return mode == 1 || mode == 8 }
 type storeSetup struct {
 	// merchant runs the merchant preset (cmd/bots -persona merchant):
 	// DefaultPersona with the Damage role (D21) farming the datapack's
-	// spots; otherwise partyPersona,
+	// spots, its valuables policy enabled at the defaults on an ad board
+	// of cmd/bots' defaults (docs/valuables/preset.md "Wiring"); otherwise
+	// partyPersona,
 	// a bot that moves only for what the scenario asserts.
 	merchant bool
 	// brain, when set, adjusts the brain config last (commandedBy).
@@ -194,12 +196,16 @@ func storeBot(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, accou
 			p := persona()
 			if s.merchant {
 				p.Role = botclient.RoleDamage
+				p.Valuables = botclient.DefaultValuablePolicy()
 			}
 			p.Store.Budget = storeBudget
 			return p
 		},
 		brain: func(cfg *botclient.BrainConfig) {
 			cfg.Travel, cfg.Stores, cfg.Spots = travel, stores, spots
+			if s.merchant {
+				cfg.Ads = botclient.NewAdBoard(botclient.DefaultAdRegionGap, botclient.DefaultAdProcessPerHour)
+			}
 			if s.brain != nil {
 				s.brain(cfg)
 			}

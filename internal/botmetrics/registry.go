@@ -99,12 +99,30 @@ type Snapshot struct {
 	// run speed, in per mille (docs/walking.md, "Measurement (#304)").
 	NavWalkIdleMillis HistogramSnapshot `json:"nav_walk_idle_ms"`
 	NavWalkEfficiency HistogramSnapshot `json:"nav_walk_efficiency_permille"`
+	// The merchants' valuables (docs/valuables/preset.md "Wiring"): the
+	// Trade ad lines, the whisper replies, the sales by kind (ValuablesSold
+	// keyed by via, "trade" and "store"), the private deposits and the
+	// entries released to the store. ValuablesHeld is a gauge: the units
+	// the ledgers hold now, carried and stored.
+	ValuablesAds      uint64            `json:"valuables_ads_total"`
+	ValuablesReplies  uint64            `json:"valuables_replies_total"`
+	ValuablesSold     map[string]uint64 `json:"valuables_sold_total"`
+	ValuablesDeposits uint64            `json:"valuables_deposits_total"`
+	ValuablesReleased uint64            `json:"valuables_released_total"`
+	ValuablesHeld     int64             `json:"valuables_held"`
 }
+
+// The via labels of Snapshot.ValuablesSold.
+const (
+	ViaTrade = "trade"
+	ViaStore = "store"
+)
 
 // Collect sums every Bot as of at, stores the sum as the latest and returns
 // it.
 func (r *Registry) Collect(at time.Time) *Snapshot {
 	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), Rules: make(map[string]uint64, len(r.rules))}
+	var soldTrade, soldStore uint64
 	hits := make([]uint64, len(r.rules))
 	r.mu.Lock()
 	s.Bots = len(r.bots)
@@ -118,6 +136,13 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.NavDesync += b.navDesync.Load()
 		s.NavDoorReplan += b.navDoorReplan.Load()
 		s.NavSegments += b.navSegments.Load()
+		s.ValuablesAds += b.valuablesAds.Load()
+		s.ValuablesReplies += b.valuablesReplies.Load()
+		soldTrade += b.valuablesSoldTrade.Load()
+		soldStore += b.valuablesSoldStore.Load()
+		s.ValuablesDeposits += b.valuablesDeposits.Load()
+		s.ValuablesReleased += b.valuablesReleased.Load()
+		s.ValuablesHeld += b.valuablesHeld.Load()
 		for i := range b.rules {
 			hits[i] += b.rules[i].Load()
 		}
@@ -127,6 +152,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.NavWalkEfficiency.add(&b.walkEfficiency)
 	}
 	r.mu.Unlock()
+	s.ValuablesSold = map[string]uint64{ViaTrade: soldTrade, ViaStore: soldStore}
 	for i, name := range r.rules {
 		s.Rules[name] = hits[i]
 	}
@@ -140,7 +166,7 @@ func (r *Registry) Last() *Snapshot {
 	if s := r.last.Load(); s != nil {
 		return s
 	}
-	return &Snapshot{Rules: map[string]uint64{}}
+	return &Snapshot{Rules: map[string]uint64{}, ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
 }
 
 // Run collects on every tick until ctx ends. The caller owns the ticker
@@ -164,6 +190,10 @@ type Bot struct {
 	events, sent, paced, reconnects, aborts atomic.Uint64
 	navBlocked, navDesync, navDoorReplan    atomic.Uint64
 	navSegments                             atomic.Uint64
+	valuablesAds, valuablesReplies          atomic.Uint64
+	valuablesSoldTrade, valuablesSoldStore  atomic.Uint64
+	valuablesDeposits, valuablesReleased    atomic.Uint64
+	valuablesHeld                           atomic.Int64
 	rules                                   []atomic.Uint64 // indexed like reg.rules
 	depth                                   Histogram
 	wakeLag                                 Histogram // microseconds
@@ -273,5 +303,58 @@ func (b *Bot) NavDesync() {
 func (b *Bot) NavDoorReplan() {
 	if b != nil {
 		b.navDoorReplan.Add(1)
+	}
+}
+
+// ValuablesAd records a Trade ad line of a valuables round.
+func (b *Bot) ValuablesAd() {
+	if b != nil {
+		b.valuablesAds.Add(1)
+	}
+}
+
+// ValuablesReply records a whisper reply of the valuables responder.
+func (b *Bot) ValuablesReply() {
+	if b != nil {
+		b.valuablesReplies.Add(1)
+	}
+}
+
+// ValuablesSold records one sale of valuables via ViaTrade (a settled
+// trade) or ViaStore (a listed row that sold units); another via counts
+// nothing.
+func (b *Bot) ValuablesSold(via string) {
+	if b == nil {
+		return
+	}
+	switch via {
+	case ViaTrade:
+		b.valuablesSoldTrade.Add(1)
+	case ViaStore:
+		b.valuablesSoldStore.Add(1)
+	}
+}
+
+// ValuablesDeposited records a private deposit of valuables the server
+// made.
+func (b *Bot) ValuablesDeposited() {
+	if b != nil {
+		b.valuablesDeposits.Add(1)
+	}
+}
+
+// ValuablesReleased records n ledger entries the cap released to the
+// store.
+func (b *Bot) ValuablesReleased(n int) {
+	if b != nil && n > 0 {
+		b.valuablesReleased.Add(uint64(n))
+	}
+}
+
+// ValuablesHeld sets the gauge of the units of valuables the bot's ledger
+// holds, carried and stored.
+func (b *Bot) ValuablesHeld(units int64) {
+	if b != nil {
+		b.valuablesHeld.Store(units)
 	}
 }

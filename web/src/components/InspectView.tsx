@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { time } from "../lib/format";
-import type { InspectEffect, Inspection, Penalties } from "../lib/types";
+import type { HeldValuable, InspectEffect, Inspection, Penalties } from "../lib/types";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -43,11 +43,18 @@ export function runSpeedOf(p: Penalties): string {
   return p.base_run_speed ? `${p.run_speed} of base ${p.base_run_speed}` : String(p.run_speed);
 }
 
+/** valuableOf is a held valuable's place, units, unsold rounds and ask, and whether the cap released it to the store. */
+export function valuableOf(h: HeldValuable): string {
+  const units = h.place === "carried, stored" ? `${h.carried} carried, ${h.stored} stored` : `${h.carried + h.stored} ${h.place}`;
+  const rounds = `${h.rounds} unsold ${h.rounds === 1 ? "round" : "rounds"}`;
+  return `${units}, ${rounds}, ask ${h.ask}${h.released ? ", released to the store" : ""}`;
+}
+
 function named(name: string, enchant?: number): string {
   return enchant ? `+${enchant} ${name}` : name;
 }
 
-/** InspectView is a bot's inventory, worn gear, penalties and effects as its inspect answered them. */
+/** InspectView is a bot's inventory, worn gear, penalties, effects and held valuables as its inspect answered them. */
 export function InspectView({ inspection: v }: { inspection: Inspection }) {
   if (v.state === "offline") return <p className="text-sm text-slate-500">The bot is offline: no live data to show.</p>;
   if (v.state === "unresponsive") return <p className="text-sm text-amber-700">The bot did not answer the inspect.</p>;
@@ -126,6 +133,17 @@ export function InspectView({ inspection: v }: { inspection: Inspection }) {
                 </Row>
               ))
             )}
+          </dl>
+        </Section>
+      )}
+      {v.valuables && v.valuables.length > 0 && (
+        <Section title="Valuables">
+          <dl>
+            {v.valuables.map((h, i) => (
+              <Row key={i} label={named(h.name, h.enchant)}>
+                {valuableOf(h)}
+              </Row>
+            ))}
           </dl>
         </Section>
       )}

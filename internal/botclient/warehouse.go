@@ -826,6 +826,11 @@ func (b *Brain) warehouseEvent(ev Event, now time.Time) {
 		}
 		e.timeouts = 0
 		b.trackContents()
+		if e.req.Private && e.depositing() {
+			// Only the valuables round and its off-round errand deposit
+			// privately (queueRound).
+			b.metrics.ValuablesDeposited()
+		}
 		e.endTransaction(WarehouseDone, 0, now)
 	}
 }

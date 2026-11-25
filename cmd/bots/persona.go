@@ -45,7 +45,7 @@ var presets = []preset{
 	{name: "farmer", help: "damage dealer that farms the datapack's spots alone", persona: damagePersona, farms: true, walks: true, member: true},
 	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true, member: true},
 	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
-	{name: "merchant", help: "damage dealer that farms the datapack's spots alone for loot and sells it in a town store, up to -store-budget a session (needs -datapack)", datapack: true, persona: damagePersona, farms: true, store: true, walks: true, member: true},
+	{name: "merchant", help: "damage dealer that farms the datapack's spots alone for loot and sells it in a town store, up to -store-budget a session; keeps its valuables in its private warehouse and sells them by Trade ads, whispers and trades, up to -valuables-budget a session (needs -datapack)", datapack: true, persona: merchantPersona, farms: true, store: true, walks: true, member: true},
 	{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
 		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
@@ -60,6 +60,15 @@ func damagePersona() botclient.Persona {
 	p := botclient.DefaultPersona()
 	p.Role = botclient.RoleDamage
 	p.Loot.Ground = botclient.GroundAny
+	return p
+}
+
+// merchantPersona is the merchant preset's persona: the damage persona
+// with the valuables policy enabled at its defaults (docs/valuables/
+// preset.md "Wiring"), the only preset that enables it.
+func merchantPersona() botclient.Persona {
+	p := damagePersona()
+	p.Valuables = botclient.DefaultValuablePolicy()
 	return p
 }
 
@@ -120,6 +129,11 @@ type shared struct {
 	nav *botclient.Nav
 	// storeBudget is a merchant's store budget per session.
 	storeBudget int64
+	// ads is the ad board every merchant's valuables rounds claim their
+	// Trade lines on; valuablesBudget is a merchant's valuables budget per
+	// session (D34), 0 keeping the policy's.
+	ads             *botclient.AdBoard
+	valuablesBudget int64
 	// clanInviters are the names a crafter accepts a clan invitation from
 	// (-clan-inviters); none accepts any player's.
 	clanInviters []string
@@ -127,7 +141,8 @@ type shared struct {
 
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
-// presets get the spot registry, only merchants the store registry; every
+// presets get the spot registry, only merchants the store registry and,
+// with their valuables policy, the ad board and valuables budget; every
 // preset gets the craft board and the ground item claims, and the farmer,
 // support and merchant presets the
 // clan member option that orders from it (preset.member). With
@@ -148,6 +163,12 @@ func (p preset) brain(s shared) botclient.BrainConfig {
 	if p.store && s.stores != nil {
 		cfg.Stores = s.stores
 		cfg.Persona.Store.Budget = s.storeBudget
+	}
+	if cfg.Persona.Valuables.Enabled {
+		cfg.Ads = s.ads
+		if s.valuablesBudget > 0 {
+			cfg.Persona.Valuables.Budget = s.valuablesBudget
+		}
 	}
 	if p.inviters && len(s.clanInviters) > 0 {
 		cfg.Persona.JoinClan = botclient.AcceptClanFrom(s.clanInviters...)

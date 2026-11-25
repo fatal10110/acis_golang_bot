@@ -41,7 +41,13 @@ import (
 // go to the store once they take more than HoldRows warehouse rows, once
 // their asks together pass HoldValue, or one alone after MaxRounds unsold
 // rounds; Budget is the session's valuables sales budget.
+//
+// Enabled switches it on (docs/valuables/preset.md "Wiring"): only the
+// merchant preset sets it. The zero ValuablePolicy, every other preset's,
+// is disabled and finds no valuable.
 type ValuablePolicy struct {
+	Enabled bool
+
 	PriceFloor   int64
 	ValueMin     int64
 	CommonSupply float64
@@ -70,10 +76,11 @@ type ValuablePolicy struct {
 	Budget    int64
 }
 
-// defaultValuablePolicy is the policy at the design's defaults
-// (docs/valuables/preset.md "Defaults"); no preset enables it yet.
-func defaultValuablePolicy() ValuablePolicy {
+// DefaultValuablePolicy is the policy enabled at the design's defaults
+// (docs/valuables/preset.md "Defaults"), the merchant preset's.
+func DefaultValuablePolicy() ValuablePolicy {
 	return ValuablePolicy{
+		Enabled:    true,
 		PriceFloor: 10000, ValueMin: 100000, CommonSupply: 100, RMax: 4, CraftDivisor: 2, EnchantRare: 0.25,
 		RoundGap: 30 * time.Minute, RoundWait: 5 * time.Minute, Grace: 2 * time.Minute, FirstLineWait: 2 * time.Minute,
 		RoundReach: 6000, StoreHold: 2 * time.Minute,
@@ -130,7 +137,7 @@ func (m *TravelMap) valueScore(p ValuablePolicy, id int32, enchant int) valueSco
 // passes nothing. What else the valuable test excludes (equipped, kept, sold
 // by a buylist, ...) is the caller's.
 func (p ValuablePolicy) valuable(sc valueScore) bool {
-	if p == (ValuablePolicy{}) || !sc.priced {
+	if !p.Enabled || !sc.priced {
 		return false
 	}
 	return int64(sc.ref) >= p.PriceFloor && sc.v >= float64(p.ValueMin)

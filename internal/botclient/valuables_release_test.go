@@ -156,7 +156,7 @@ func testReleaseCap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newValuables()
 			v.entries = tt.entries
-			v.capEntries(defaultValuablePolicy(), map[int32]bool{ledgerRecipe: true})
+			v.capEntries(DefaultValuablePolicy(), map[int32]bool{ledgerRecipe: true})
 			for k, e := range v.entries {
 				want := false
 				for _, w := range tt.want {
