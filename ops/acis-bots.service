@@ -6,6 +6,7 @@
 # only (mode 0600, owner acis-bots); no secret belongs in this unit.
 # -allowlisted assumes AcceptFilterAllowlist = 127.0.0.2 on both servers.
 # -metrics serves live counters on loopback only (docs/hetzner.md, section 8).
+# Add -pprof 127.0.0.1:6061 for profiles (docs/hetzner.md, "Profiling").
 #
 # Sizing is for the 2 vCPU / 3.8 GB host where the gameserver heap is about
 # 1.4 GB. Raise -bots and MaximumOnlineUsers together (docs/hetzner.md).

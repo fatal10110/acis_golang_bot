@@ -75,7 +75,7 @@ func TestRunSwarmMetrics(t *testing.T) {
 		want    string
 	}{
 		{"not loopback", "0.0.0.0:6060", 2, "not loopback"},
-		{"port taken", taken.Addr().String(), 1, "metrics listen"},
+		{"port taken", taken.Addr().String(), 1, "metrics: listen"},
 		// A signal before any turn of the gate: the endpoint starts, every
 		// bot returns at once, and the endpoint stops.
 		{"serves until the bots return", "127.0.0.1:0", 0, "metrics serve"},
