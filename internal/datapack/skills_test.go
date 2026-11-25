@@ -14,39 +14,48 @@ func TestLoadSkills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	haste := func(order float64) []Effect {
-		return []Effect{{Name: "Buff", StackType: "attack_time_down", StackOrder: order, Time: 1200, Count: 1}}
+	haste := func(order, speed float64) []Effect {
+		return []Effect{{
+			Name: "Buff", StackType: "attack_time_down", StackOrder: order, Time: 1200, Count: 1,
+			Funcs: []StatFunc{{Op: "mul", Stat: "pAtkSpd", Value: speed}},
+		}}
 	}
 	hot := func(order, val float64) []Effect {
 		return []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: order, Time: 2, Count: 7, Value: val}}
 	}
-	magicHaste := func(order float64) []Effect {
-		return []Effect{{Name: "Buff", StackType: "casting_time_down", StackOrder: order, Time: 1200, Count: 1}}
+	magicHaste := func(order, speed float64) []Effect {
+		return []Effect{{
+			Name: "Buff", StackType: "casting_time_down", StackOrder: order, Time: 1200, Count: 1,
+			Funcs: []StatFunc{{Op: "mul", Stat: "mAtkSpd", Value: speed}},
+		}}
 	}
 	// The stack order of 1086 and 2169 and the cast range of 4110 differ
 	// by level (#stackOrder, #castRange);
 	// 1086's enchanted levels are not read; 4327 keeps its last
 	// declaration.
 	want := map[SkillRef]Skill{
-		{1086, 1}: {Name: "Haste", Target: "TARGET_ONE", CastRange: 400, Effects: haste(1)},
-		{1086, 2}: {Name: "Haste", Target: "TARGET_ONE", CastRange: 400, Effects: haste(2)},
+		{1086, 1}: {Name: "Haste", Target: "TARGET_ONE", CastRange: 400, Effects: haste(1, 1.15)},
+		{1086, 2}: {Name: "Haste", Target: "TARGET_ONE", CastRange: 400, Effects: haste(2, 1.33)},
 		{1177, 1}: {Name: "Wind Strike", CastRange: 600},
 		{4110, 1}: {Name: "Breath Attack", CastRange: 500},
 		{4110, 2}: {Name: "Breath Attack", CastRange: 1000},
 		{2002, 1}: {Name: "Healing Drug", Potion: true, Effects: []Effect{{Name: "HealOverTime", StackType: "hp_recover", StackOrder: 1.5, Time: 5, Count: 4, Value: 1.5}}},
-		{2012, 1}: {Name: "Potion of Alacrity", Potion: true, Effects: haste(1)},
+		{2012, 1}: {Name: "Potion of Alacrity", Potion: true, Effects: haste(1, 1.15)},
 		{2013, 1}: {Name: "Scroll of Escape", Type: "TELEPORT"},
 		{2031, 1}: {Name: "Lesser Healing Potion", Potion: true, Effects: hot(1, 16)},
 		{2032, 1}: {Name: "Healing potion", Potion: true, Effects: hot(2, 48)},
 		{2037, 1}: {Name: "Greater Healing Potion", Potion: true, Effects: hot(3, 100)},
-		{2169, 1}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(2)},
-		{2169, 2}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(3)},
-		{4327, 1}: {Name: "Haste for Beginners", Effects: []Effect{{Name: "Buff", StackType: "attack_time_down", StackOrder: 2, Time: 3600, Count: 1}}},
+		{2169, 1}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(2, 1.23)},
+		{2169, 2}: {Name: "Magic Haste Potion", Potion: true, Effects: magicHaste(3, 1.3)},
+		{4327, 1}: {Name: "Haste for Beginners", Effects: []Effect{{
+			Name: "Buff", StackType: "attack_time_down", StackOrder: 2, Time: 3600, Count: 1,
+			Funcs: []StatFunc{{Op: "mul", Stat: "pAtkSpd", Value: 1.15}},
+		}}},
 	}
 	// Combat fields, charges and stat functions: maxCharges, the
 	// <not><player Charges> of 50 and the val of 142 differ by level
 	// (#maxCharges, #rEvas); 163's unknown <for> element is skipped; 256's
-	// effect count is hex and its <add> inside the effect is not read.
+	// effect count is hex and its <add> inside the effect is the effect's.
 	focused := func(max int) Skill {
 		return Skill{
 			Name: "Focused Force", Type: "BUFF", OperateType: "ACTIVE", Target: "SELF", WeaponsAllowed: []string{"DUALFIST"},
@@ -75,12 +84,25 @@ func TestLoadSkills(t *testing.T) {
 	want[SkillRef{163, 1}] = passive("Spellcraft", StatFunc{Op: "mul", Stat: "mAtkSpd", Value: 0.5, Using: []string{"MAGIC"}, NotUsing: true})
 	want[SkillRef{256, 1}] = Skill{
 		Name: "Accuracy", Type: "CONT", OperateType: "TOGGLE", Target: "SELF", MPConsume: 1,
-		Effects: []Effect{{Name: "ManaDamOverTime", StackType: "none", Time: 5, Count: 0x7fffffff, Value: 4.8}},
+		Effects: []Effect{{
+			Name: "ManaDamOverTime", StackType: "none", Time: 5, Count: 0x7fffffff, Value: 4.8,
+			Funcs: []StatFunc{{Op: "add", Stat: "accCombat", Value: 3}},
+		}},
 	}
 	want[SkillRef{284, 1}] = hurricane(49, 501)
 	want[SkillRef{284, 2}] = hurricane(50, 535)
 	want[SkillRef{290, 1}] = passive("Final Frenzy", StatFunc{Op: "add", Stat: "pAtk", Value: 2, OtherCond: true})
 	want[SkillRef{3502, 1}] = passive("Mithril Heavy Armor Set", StatFunc{Op: "addMul", Stat: "poisonVuln", Value: 20})
+	// None of these sets a landing or cure field: each reads its default,
+	// and only Hurricane Assault's CHARGEDAM is offensive.
+	for ref, sk := range want {
+		sk.Radius, sk.AbnormalLevel, sk.EffectAbnormalLevel, sk.NegateLevel = 80, -1, -1, -1
+		sk.Offensive = sk.Type == "CHARGEDAM"
+		for i := range sk.Effects {
+			sk.Effects[i].EffectPower = -1
+		}
+		want[ref] = sk
+	}
 	if !reflect.DeepEqual(dp.Skills, want) {
 		t.Errorf("Skills = %+v, want %+v", dp.Skills, want)
 	}

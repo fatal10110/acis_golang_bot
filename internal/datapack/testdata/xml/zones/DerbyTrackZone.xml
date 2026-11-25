@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Sample of aCis_datapack/data/xml/zones/DerbyTrackZone.xml, made up. -->
+	<zone shape="NPoly" minZ="-3800" maxZ="-3400">
+		<node x="12000" y="181000"/>
+		<node x="13000" y="181000"/>
+		<node x="13000" y="182000"/>
+		<node x="12000" y="182000"/>
+	</zone>
+</list>

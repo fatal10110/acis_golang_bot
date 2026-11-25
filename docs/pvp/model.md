@@ -104,7 +104,7 @@ set swap.
   `items/0300-0399.xml` 352, `items/2300-2399.xml` 2378; `skills/3500-3599.xml:22-30`, `:59-66`,
   `:492-507`). `poisonVuln` only cuts the gated poison steps ([PvP value](#pvp-value)), so it counts
   only for a caster or healer in those pieces.
-- **PvP damage weapons** (186 C- to S-grade; C 26, B 14, A 102, S 44; for example 4809 Blood
+- **PvP damage weapons** (143 A- and S-grade; A 99, S 44; for example 4809 Blood
   Tornado - Haste, `item_skill` 3068-2), the B-and-up [PvP sets](server-items.md) and the boss jewels
   score through the same model, worn when owned and within grade (M8), never bought (boss jewels
   list at 616 000 to 4 940 000 adena); all past the M10 range (C grade is 40).

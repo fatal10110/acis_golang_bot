@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Sample of aCis_datapack/data/xml/zones/NoRestartZone.xml, made up. -->
+	<zone shape="NPoly" minZ="-5000" maxZ="5000">
+		<node x="-1000" y="-1000"/>
+		<node x="1000" y="-1000"/>
+		<node x="1000" y="1000"/>
+		<node x="-1000" y="1000"/>
+	</zone>
+</list>

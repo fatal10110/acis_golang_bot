@@ -7,6 +7,7 @@
 		<set pAtk="4" pDef="80" mAtk="6" mDef="41" runSpd="125" walkSpd="90" swimSpd="50"/>
 		<set hpTable="89;101.74;114.62"/>
 		<set mpTable="30;35.46;40.98"/>
+		<set cpTable="35.6;40.696;45.848"/>
 		<items>
 			<item id="2369" count="1" isEquipped="true"/>
 		</items>
@@ -19,14 +20,14 @@
 		<set id="19" baseLvl="20" fists="244"/>
 		<set pAtk="4" pDef="80" mAtk="6" mDef="41"/>
 		<set pAtk="5"/>
-		<set hpTable="89" mpTable="30"/>
+		<set hpTable="89" mpTable="30" cpTable="35.6"/>
 		<skills>
 			<skill id="77" lvl="2" cost="5000" minLvl="28"/>
 		</skills>
 	</class>
 	<class><!-- Temple Knight: merges the already merged Elf Knight tree. -->
 		<set id="20" baseLvl="40" fists="244"/>
-		<set pAtk="4" pDef="80" mAtk="6" mDef="41" hpTable="89" mpTable="30"/>
+		<set pAtk="4" pDef="80" mAtk="6" mDef="41" hpTable="89" mpTable="30" cpTable="35.6"/>
 		<skills>
 			<skill id="10" lvl="1" cost="25000" minLvl="40"/>
 		</skills>

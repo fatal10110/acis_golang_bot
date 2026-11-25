@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- A concave (L-shaped) peace zone: its notch is outside. -->
+	<zone shape="NPoly" minZ="-100" maxZ="100">
+		<node x="0" y="0"/>
+		<node x="2000" y="0"/>
+		<node x="2000" y="1000"/>
+		<node x="1000" y="1000"/>
+		<node x="1000" y="2000"/>
+		<node x="0" y="2000"/>
+	</zone>
+</list>
