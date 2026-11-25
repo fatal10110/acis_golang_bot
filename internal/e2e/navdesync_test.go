@@ -81,7 +81,7 @@ func desyncCause(d desync, collision int32, door, canMove func(a, b botclient.Po
 	case !canMove(d.from, d.to):
 		cause = "the bot's geodata closes the click's own line: not a segment the walker checked"
 	case !canMove(d.origin, head):
-		cause = "the bot's geodata closes the line from the server's origin to the head-level target: the walker's check differs from the server's inputs (height or layer)"
+		cause = "the bot's geodata closes the line from the server's origin to the head-level target: the walker's check differs from the server's inputs (the bot's own position within a cell of the click's origin, its height or its layer)"
 	default:
 		cause = "the bot's geodata opens the line from the server's origin: the server's geodata or a dynamic object (a GM fence, a door state) differs from the bot's on this line"
 	}
@@ -194,7 +194,7 @@ func TestDesyncCause(t *testing.T) {
 			name:    "closed at head level from the server's origin",
 			d:       d,
 			canMove: open([2]botclient.Point{d.origin, head}),
-			want:    prefix + "the bot's geodata closes the line from the server's origin to the head-level target: the walker's check differs from the server's inputs (height or layer)",
+			want:    prefix + "the bot's geodata closes the line from the server's origin to the head-level target: the walker's check differs from the server's inputs (the bot's own position within a cell of the click's origin, its height or its layer)",
 		},
 		{
 			name:    "closed from the click's own origin",
