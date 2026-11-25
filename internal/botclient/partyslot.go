@@ -17,6 +17,7 @@ func (b *Brain) setPartySlot(c Command) {
 	b.orders = orders{reply: b.orders.reply, withdraw: b.orders.withdraw}
 	b.orderPending = false
 	l.party, l.partyLeft = c, ""
+	defer b.reweighSpot()
 	switch c.Kind {
 	case CommandJoin:
 		if l.leaders == nil {
@@ -57,6 +58,8 @@ func (b *Brain) unparty() {
 // handover (docs/parties/leader.md). In any other party it does nothing: it
 // never takes a bot out of a player's party.
 func (b *Brain) leaveSlot(slot Command) {
+	// A leader's spot weighs 1 at once, the spot kept.
+	b.reweighSpot()
 	switch {
 	case !b.world.Party.In():
 		b.lead = leaderWatch{}

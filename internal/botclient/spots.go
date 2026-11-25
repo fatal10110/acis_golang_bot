@@ -112,13 +112,7 @@ func defaultSpotPolicy() SpotPolicy {
 }
 
 // fits reports whether s fits a bot of level.
-func (p *SpotPolicy) fits(s *datapack.Spot, level int) bool {
-	aggro := p.AggroAbove
-	if level <= p.Newbie {
-		aggro = max(aggro, p.Below)
-	}
-	return s.MaxLevel <= level+p.Below && s.AggroLevel <= level+aggro && s.MaxLevel >= level-p.Above
-}
+func (p *SpotPolicy) fits(s *datapack.Spot, level int) bool { return p.fitsBand(s, level, level) }
 
 // spotPack is how many of s's aggressive monsters a fight there likely
 // draws: those of them, spread evenly over its territory, within its aggro
@@ -137,9 +131,15 @@ func spotPack(s *datapack.Spot) float64 {
 // death taught it to pass over, and no pack too much for its stats
 // (packFits).
 func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
+	level := int(b.world.Self.Level)
+	return b.spotFitsBand(s, level, level, now)
+}
+
+// spotFitsBand is spotFits for the levels lo to hi of a leader's bot
+// members (fitBand): the pack bounds stay the bot's own.
+func (b *Brain) spotFitsBand(s *datapack.Spot, lo, hi int, now time.Time) bool {
 	self := &b.world.Self
-	level := int(self.Level)
-	return b.persona.Spots.fits(s, level) && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s)
+	return b.persona.Spots.fitsBand(s, lo, hi) && !b.spot.pack.covers(s, int(self.Level), self.RunSpeed, now) && b.packFits(s)
 }
 
 // lowerFits reports whether s fits the bot at now as a fallback (claimLower):
@@ -209,6 +209,9 @@ type spotVisit struct {
 	// (spotPoint): where the bot walks and stays.
 	idx  int
 	held bool
+	// weight is how many places of the spot the bot took (spotWeight): 1
+	// solo, its party for a leader; the zero value is 1 (claimWeight).
+	weight int
 	// beside is set while the bot farms spot idx with no claim
 	// (SpotPolicy.Beside); it is counted in the registry's beside counts,
 	// not its held ones. held and beside are never both set.
@@ -229,7 +232,13 @@ type spotVisit struct {
 	avoid map[int]time.Time
 	// pack is the pack its deaths taught it to pass over.
 	pack packBound
+	// gatherSince is when a bot member of the party the bot leads fell
+	// behind it at its spot, zero while none is (gathering).
+	gatherSince time.Time
 }
+
+// claimWeight is how many places the spot farmed takes in the registry.
+func (v *spotVisit) claimWeight() int { return max(v.weight, 1) }
 
 // farming reports whether the bot has a spot to farm: one it holds or one
 // it farms beside.
@@ -254,12 +263,16 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	if r == nil || s.InCombat {
 		return Action{}, false
 	}
+	if b.inBotParty() && !b.leading() {
+		// A member follows its leader: it never claims nor farms beside.
+		return Action{}, false
+	}
 	if !v.farming() && b.preparing() {
 		// The town preparation gate: no spot before the errands ahead
 		// stocked the bot up.
 		return Action{}, false
 	}
-	if !now.Before(v.retryAt) && (!v.held || v.lower || b.outleveled() || b.overRisk() || r.overCap(v.idx)) {
+	if !now.Before(v.retryAt) && (!v.held || v.lower || b.outleveled() || b.misfit() || b.overRisk() || r.overCap(v.idx)) {
 		b.pickSpot(now)
 	}
 	if !v.farming() {
@@ -406,7 +419,9 @@ func (b *Brain) walkable(from, to navPoint) bool {
 // Leash of the spot's centre at, party members aside and less the other bots
 // holding the spot or farming beside it: the registry's cap already counts
 // the holders, so a spot under its cap is not crowded by its own holders,
-// and the bots beside it went there knowing it full (SpotPolicy.Beside).
+// and the bots beside it went there knowing it full (SpotPolicy.Beside). A
+// leader's own weight (its party) is no other bot's; a party farming there
+// is its players and its weight alike.
 func (b *Brain) crowded(at Point, now time.Time) bool {
 	p := &b.persona.Spots
 	if p.Crowd <= 0 {
@@ -423,7 +438,7 @@ func (b *Brain) crowded(at Point, now time.Time) bool {
 		}
 	}
 	r := b.cfg.Spots
-	return n-(r.Held(b.spot.idx)+r.Beside(b.spot.idx)-1) >= p.Crowd
+	return n-(r.Held(b.spot.idx)+r.Beside(b.spot.idx)-b.spot.claimWeight()) >= p.Crowd
 }
 
 // outleveled reports whether the bot's level is past its spot's highest
@@ -455,7 +470,10 @@ func (b *Brain) overRisk() bool {
 // Wander its bots fill least (SpotPolicy.Overflow), one with every such spot
 // at its limit farms beside one (SpotPolicy.Beside, farmBeside), and one
 // that holds a spot that fits keeps it. A spot in another SCC is never
-// claimed.
+// claimed. A leader of its bot party claims for its whole party
+// (spotWeight), fits its bot members' band (fitBand, misfit), takes no trip
+// and no fallback, and gives back a spot it no longer fits with nothing in
+// reach (docs/parties/spots.md).
 func (b *Brain) pickSpot(now time.Time) {
 	here, ok := b.locate(b.standing(now))
 	if !ok {
@@ -474,11 +492,13 @@ type spotCand struct {
 	at      Point
 }
 
-// spotCands are the spots that fit the bot standing at here, are not
+// spotCands are the spots that fit the bot (a leader: its bot members'
+// band, fitBand) standing at here, are not
 // avoided and lie in its SCC within Wander in straight line, but the one it
 // holds.
 func (b *Brain) spotCands(here navPoint, now time.Time) []spotCand {
-	return b.candsWhere(here, now, b.spotFits)
+	lo, hi, _ := b.fitBand()
+	return b.candsWhere(here, now, func(s *datapack.Spot, now time.Time) bool { return b.spotFitsBand(s, lo, hi, now) })
 }
 
 // lowerCands are the spots under the bot's level window that pass the
@@ -526,15 +546,17 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 			beyond = append(beyond, c.i)
 		}
 	}
-	n := len(order)
+	n, w, party := len(order), b.spotWeight(), b.leadsBotMembers()
 	order = append(order, beyond...)
-	i, ok := r.claim(order[:n])
+	i, ok := r.claimN(order[:n], w)
 	if !ok {
-		i, ok = r.claim(order[n:])
+		i, ok = r.claimN(order[n:], w)
 	}
 	if !ok {
 		v.retryAt = now.Add(spotRetry)
-		if here != nil {
+		if here != nil && !party {
+			// A leader takes no gatekeeper trip: its members follow by
+			// walking only.
 			b.planTrip(*here, now)
 		}
 		if b.trip.v.active() {
@@ -542,19 +564,32 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 			// spot it holds (outlevelled, or shared past its cap) rather
 			// than block a place there for the trip and walk back to it.
 			b.leaveSpot()
-		}
-		if b.trip.v.active() || (len(cands) == 0 && here != nil && b.claimLower(*here, now)) {
 			return
 		}
-		if v.held && !b.outleveled() {
+		unfit := b.outleveled() || b.misfit()
+		if len(cands) == 0 && here != nil {
+			if party {
+				// The gated trip's give-back: a leader that would have
+				// planned one gives back a spot it no longer fits rather
+				// than keep it for good; the spot fails the fit, so it is
+				// not claimed again.
+				if unfit {
+					b.leaveSpot()
+					return
+				}
+			} else if b.claimLower(*here, now) {
+				return
+			}
+		}
+		if v.held && !unfit {
 			return
 		}
 		if p.Overflow {
-			i, ok = r.claimOver(order)
+			i, ok = r.claimOverN(order, w)
 		}
 		if !ok {
 			if !v.held {
-				b.farmBeside(cands, order)
+				b.farmBeside(cands, order, w)
 			}
 			return
 		}
@@ -562,7 +597,7 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 	// A spot claimed after a landing ends the path the trip was on.
 	b.trip.onward = 0
 	b.leaveSpot()
-	v.idx, v.held, v.at = i, true, candAt(cands, i)
+	v.idx, v.held, v.at, v.weight = i, true, candAt(cands, i), w
 }
 
 // claimLower is pickSpot's fallback for a bot with no spot of its level to
@@ -612,13 +647,13 @@ func (b *Brain) claimLower(here navPoint, now time.Time) bool {
 			order = append(order, c.i)
 		}
 	}
-	i, ok := r.claimTiers(order)
+	i, ok := r.claimTiers(order, 1)
 	if !ok && keep {
 		v.lower = true
 		return true
 	}
 	if !ok && p.Overflow {
-		i, ok = r.claimOver(order)
+		i, ok = r.claimOverN(order, 1)
 	}
 	if !ok {
 		return false
@@ -631,10 +666,10 @@ func (b *Brain) claimLower(here navPoint, now time.Time) bool {
 
 // farmBeside makes a bot holding no spot, with every spot of order (the
 // candidates, best first) full, farm beside one of them with no claim
-// (SpotPolicy.Beside): the one it farms beside while that one is still a
-// candidate, else the one the bots beside fill least per monster. With
-// none, or Beside off, it farms beside none.
-func (b *Brain) farmBeside(cands []spotCand, order []int) {
+// (SpotPolicy.Beside), counting w (spotWeight): the one it farms beside
+// while that one is still a candidate, else the one the bots beside fill
+// least per monster. With none, or Beside off, it farms beside none.
+func (b *Brain) farmBeside(cands []spotCand, order []int, w int) {
 	r, v := b.cfg.Spots, &b.spot
 	if v.beside && slices.Contains(order, v.idx) {
 		return
@@ -643,8 +678,8 @@ func (b *Brain) farmBeside(cands []spotCand, order []int) {
 	if !b.persona.Spots.Beside {
 		return
 	}
-	if i, ok := r.farmBeside(order); ok {
-		v.idx, v.beside, v.at = i, true, candAt(cands, i)
+	if i, ok := r.farmBesideN(order, w); ok {
+		v.idx, v.beside, v.at, v.weight = i, true, candAt(cands, i), w
 	}
 }
 
@@ -685,16 +720,17 @@ func (b *Brain) diedAtSpot(now time.Time) {
 	b.leaveSpot()
 }
 
-// leaveSpot gives back the spot the bot holds or farms beside, if any: on a
-// move, on death and when the brain stops.
+// leaveSpot gives back the spot the bot holds or farms beside, if any, its
+// whole weight (a leader's party): on a move, on death and when the brain
+// stops.
 func (b *Brain) leaveSpot() {
 	v := &b.spot
 	switch {
 	case v.held:
-		b.cfg.Spots.release(v.idx)
+		b.cfg.Spots.releaseN(v.idx, v.claimWeight())
 	case v.beside:
-		b.cfg.Spots.leaveBeside(v.idx)
+		b.cfg.Spots.leaveBesideN(v.idx, v.claimWeight())
 	}
-	v.idx, v.held, v.beside, v.lower, v.at, v.arrived = 0, false, false, false, Point{}, false
-	v.idleSince, v.idleSeen = time.Time{}, time.Time{}
+	v.idx, v.held, v.beside, v.lower, v.at, v.arrived, v.weight = 0, false, false, false, Point{}, false, 0
+	v.idleSince, v.idleSeen, v.gatherSince = time.Time{}, time.Time{}, time.Time{}
 }
