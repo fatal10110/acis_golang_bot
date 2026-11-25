@@ -10,8 +10,8 @@ import (
 // Skill is the part of one level of a skill template (skills/*.xml) bots
 // weigh potions, buffs and builds with, and cast it from: whether it is a
 // potion's, how and on what it is cast, what it costs, the charges it needs,
-// the effects it lands, with their stack types, and the stat functions it
-// applies.
+// how it lands on a resisting target, what it cures, the effects it lands,
+// with their stack types, and the stat functions it applies.
 type Skill struct {
 	Name string
 	// Type is skillType (BUFF, CHARGEDAM, CONT, ...), OperateType is
@@ -39,6 +39,36 @@ type Skill struct {
 	Charges ChargeCond
 	// Potion is isPotion: the skill of a potion etc item.
 	Potion bool
+	// Radius is skillRadius (default 80): how far around its center an
+	// area skill reaches.
+	Radius int32
+	// Magic is isMagic: a magic skill, whose landing and damage the
+	// server rolls on M. Atk and M. Def.
+	Magic bool
+	// Debuff is isDebuff, Offensive is offensive: when the level does not
+	// set it, offensive defaults to a skill type of offensiveSkillTypes, a
+	// debuff or a CORPSE_MOB target (model/skill/definition.go NewDefinition).
+	// NextActionAttack is nextActionAttack: the caster attacks its target
+	// once the cast ends.
+	Debuff, Offensive, NextActionAttack bool
+	// MagicLevel is magicLvl and LevelDepend lvlDepend (both default 0):
+	// the level the server weighs a landing roll at and how strongly the
+	// caster's level counts in it.
+	MagicLevel, LevelDepend int
+	// AbnormalLevel is abnormalLvl and EffectAbnormalLevel
+	// effectAbnormalLvl (both default -1): the level of the abnormal the
+	// skill, or the effect it lands (a bleed, a poison), is.
+	AbnormalLevel, EffectAbnormalLevel int
+	// EffectType is effectType (default ""), the skill type the landing
+	// roll of the skill's effect is resisted as (BLEED, STUN, ...), and
+	// EffectPower effectPower (default 0) that roll's base chance.
+	EffectType  string
+	EffectPower int
+	// NegateStats are negateStats, split on white space: the skill and
+	// effect types a cure removes (POISON, BLEED, ...), nil for none; it
+	// removes them up to NegateLevel, negateLvl (default -1, any level).
+	NegateStats []string
+	NegateLevel int
 	// CastRange is castRange (default 0): how far from its target the
 	// server casts the skill without walking the caster first, before
 	// both collision radii are added (network/magic_skill.go
@@ -49,8 +79,9 @@ type Skill struct {
 	// level lands (<enchant1for>, <enchant2for>) are not read.
 	Effects []Effect
 	// Funcs are the stat functions directly in the skill's <for> blocks at
-	// this level (a passive's, a set skill's), in file order; nil for none.
-	// The functions an effect applies are not read.
+	// this level (a passive's, a set skill's, an item skill's), in file
+	// order; nil for none. The functions an effect applies are the
+	// effect's Funcs.
 	Funcs []StatFunc
 }
 
@@ -99,6 +130,29 @@ type Effect struct {
 	Time, Count int
 	// Value is the effect's val: what an over-time heal restores a tick.
 	Value float64
+	// EffectType is the effect's effectType (default ""), the skill type
+	// its own landing roll is resisted as, and EffectPower its effectPower,
+	// that roll's base chance; -1 when the effect sets none, which lands
+	// with the skill (data/xml/effectgrammar.go readEffectTemplate).
+	EffectType  string
+	EffectPower float64
+	// Funcs are the stat functions the effect applies while it lasts (a
+	// Buff's vulnerabilities), in file order; nil for none.
+	Funcs []StatFunc
+}
+
+// offensiveSkillTypes are the skill types the server deems harmful to their
+// target, the default of a level's offensive (model/skill/definition.go).
+var offensiveSkillTypes = map[string]bool{
+	"PDAM": true, "MDAM": true, "CPDAMPERCENT": true, "DOT": true, "BLEED": true,
+	"POISON": true, "AGGDAMAGE": true, "DEBUFF": true, "AGGDEBUFF": true, "STUN": true,
+	"ROOT": true, "CONFUSION": true, "ERASE": true, "BLOW": true, "FATAL": true,
+	"FEAR": true, "DRAIN": true, "SLEEP": true, "CHARGEDAM": true, "DEATHLINK": true,
+	"MANADAM": true, "MDOT": true, "MUTE": true, "SOULSHOT": true, "SPIRITSHOT": true,
+	"SPOIL": true, "WEAKNESS": true, "SWEEP": true, "PARALYZE": true, "DRAIN_SOUL": true,
+	"AGGREDUCE": true, "CANCEL": true, "MAGE_BANE": true, "WARRIOR_BANE": true,
+	"AGGREMOVE": true, "AGGREDUCE_CHAR": true, "BEAST_FEED": true, "BETRAY": true,
+	"DELUXE_KEY_UNLOCK": true, "SOW": true, "HARVEST": true, "INSTANT_JUMP": true,
 }
 
 type skillFile struct {
@@ -162,14 +216,17 @@ func LoadSkills(dir string) (map[SkillRef]Skill, error) {
 }
 
 // buildSkill reads every regular level of el into skills: id, levels and
-// name are required, isPotion defaults to false, castRange, hitTime,
-// reuseDelay, mpConsume, power, numCharges and maxCharges to 0 and
-// weaponsAllowed to none (data/xml/skill.go buildSkillDefinitionAttrs);
-// skillType, operateType and target, which the server requires, read as ""
-// when absent; an effect's name is required, its stackType defaults to
-// "none", stackOrder to 0, time and count to 1 (data/xml/effectgrammar.go
-// readEffectTemplate); a stat function's stat and val are required
-// (data/xml/skill.go funcTemplate).
+// name are required, isPotion, isMagic, isDebuff and nextActionAttack
+// default to false, castRange, hitTime, reuseDelay, mpConsume, power,
+// numCharges, maxCharges, magicLvl, lvlDepend and effectPower to 0,
+// abnormalLvl, effectAbnormalLvl and negateLvl to -1, skillRadius to 80,
+// effectType to "" and weaponsAllowed and negateStats to none
+// (data/xml/skill.go buildSkillDefinitionAttrs); skillType, operateType
+// and target, which the server requires, read as "" when absent; an
+// effect's name is required, its stackType defaults to "none", stackOrder
+// to 0, time and count to 1, effectType to "" and effectPower to -1
+// (data/xml/effectgrammar.go readEffectTemplate); a stat function's stat and
+// val are required (data/xml/skill.go funcTemplate).
 func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	a := foldAttrs(el.Attrs)
 	id, levels, name := a.int32("id"), a.int("levels"), a.str("name")
@@ -193,7 +250,9 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	for level := 1; level <= levels; level++ {
 		res := resolver{tables: tables, row: level}
 		r := res.reader(sets, "isPotion", "castRange", "skillType", "operateType", "target", "weaponsAllowed",
-			"hitTime", "reuseDelay", "mpConsume", "power", "numCharges", "maxCharges")
+			"hitTime", "reuseDelay", "mpConsume", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
+			"isDebuff", "offensive", "nextActionAttack", "magicLvl", "lvlDepend", "abnormalLvl", "effectAbnormalLvl",
+			"effectType", "effectPower", "negateStats", "negateLvl")
 		sk := Skill{
 			Name: name, Potion: r.boolDefault("isPotion", false), CastRange: r.int32Default("castRange", 0),
 			Type: r.strDefault("skillType", ""), OperateType: r.strDefault("operateType", ""), Target: r.strDefault("target", ""),
@@ -203,6 +262,16 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			MPConsume:      r.intDefault("mpConsume", 0), Power: r.floatDefault("power", 0),
 			NumCharges: r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
 			Charges: chargeCond(el.Conds, &res),
+			Radius:  r.int32Default("skillRadius", 80), Magic: r.boolDefault("isMagic", false),
+			Debuff: r.boolDefault("isDebuff", false), NextActionAttack: r.boolDefault("nextActionAttack", false),
+			MagicLevel: r.intDefault("magicLvl", 0), LevelDepend: r.intDefault("lvlDepend", 0),
+			AbnormalLevel: r.intDefault("abnormalLvl", -1), EffectAbnormalLevel: r.intDefault("effectAbnormalLvl", -1),
+			EffectType: r.strDefault("effectType", ""), EffectPower: r.intDefault("effectPower", 0),
+			NegateStats: strings.Fields(r.strDefault("negateStats", "")), NegateLevel: r.intDefault("negateLvl", -1),
+		}
+		sk.Offensive = r.boolDefault("offensive", offensiveSkillTypes[sk.Type] || sk.Debuff || sk.Target == "CORPSE_MOB")
+		if len(sk.NegateStats) == 0 {
+			sk.NegateStats = nil
 		}
 		if res.err != nil {
 			return fmt.Errorf("skill %d level %d: %w", id, level, res.err)
@@ -223,14 +292,16 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 					continue
 				}
 				vals := foldAttrs(n.Attrs).vals
-				r := res.reader(vals, "stackOrder", "time", "count", "val")
+				r := res.reader(vals, "stackOrder", "time", "count", "val", "effectPower")
 				eff := Effect{
-					Name:       r.str("name"),
-					StackType:  r.strDefault("stackType", "none"),
-					StackOrder: r.floatDefault("stackOrder", 0),
-					Time:       int(r.literalDefault("time", 1)),
-					Count:      int(r.literalDefault("count", 1)),
-					Value:      r.floatDefault("val", 0),
+					Name:        r.str("name"),
+					StackType:   r.strDefault("stackType", "none"),
+					StackOrder:  r.floatDefault("stackOrder", 0),
+					Time:        int(r.literalDefault("time", 1)),
+					Count:       int(r.literalDefault("count", 1)),
+					Value:       r.floatDefault("val", 0),
+					EffectType:  r.strDefault("effectType", ""),
+					EffectPower: r.floatDefault("effectPower", -1),
 				}
 				if eff.Name == "" {
 					r.fail("name", errMissing)
@@ -240,6 +311,15 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 				}
 				if r.err != nil {
 					return fmt.Errorf("skill %d level %d: effect: %w", id, level, r.err)
+				}
+				for _, c := range n.Children {
+					fn, ok := statFunc(c, &res)
+					if res.err != nil {
+						return fmt.Errorf("skill %d level %d: effect %s: %s: %w", id, level, eff.Name, c.XMLName.Local, res.err)
+					}
+					if ok {
+						eff.Funcs = append(eff.Funcs, fn)
+					}
 				}
 				sk.Effects = append(sk.Effects, eff)
 			}

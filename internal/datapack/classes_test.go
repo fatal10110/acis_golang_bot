@@ -24,23 +24,23 @@ func TestLoadClasses(t *testing.T) {
 		18: {
 			ID: 18, Parent: -1, Race: 1, STR: 36, CON: 36, DEX: 35, INT: 23, WIT: 14, MEN: 26,
 			PAtk: 4, PDef: 80, MAtk: 6, MDef: 41, RunSpeed: 125,
-			HPTable: []float64{89, 101.74, 114.62}, MPTable: []float64{30, 35.46, 40.98}, Skills: elfFighter,
+			HPTable: []float64{89, 101.74, 114.62}, MPTable: []float64{30, 35.46, 40.98}, CPTable: []float64{35.6, 40.696, 45.848}, Skills: elfFighter,
 		},
 		19: {
 			ID: 19, Parent: 18, Race: 1, STR: 40, CON: 21, DEX: 30, INT: 20, WIT: 43, MEN: 20,
 			PAtk: 5, PDef: 80, MAtk: 6, MDef: 41, RunSpeed: 1,
-			HPTable: []float64{89}, MPTable: []float64{30}, Skills: elfKnight,
+			HPTable: []float64{89}, MPTable: []float64{30}, CPTable: []float64{35.6}, Skills: elfKnight,
 		},
 		20: {
 			ID: 20, Parent: 19, Race: 1, STR: 40, CON: 21, DEX: 30, INT: 20, WIT: 43, MEN: 20,
 			PAtk: 4, PDef: 80, MAtk: 6, MDef: 41, RunSpeed: 1,
-			HPTable: []float64{89}, MPTable: []float64{30},
+			HPTable: []float64{89}, MPTable: []float64{30}, CPTable: []float64{35.6},
 			Skills: append([]SkillGrant{{ID: 10, Level: 1, MinLevel: 40, Cost: 25000}}, elfKnight...),
 		},
 		49: {
 			ID: 49, Parent: -1, Race: 3, STR: 40, CON: 21, DEX: 30, INT: 20, WIT: 43, MEN: 20,
 			PAtk: 3, PDef: 54, MAtk: 6, MDef: 41, RunSpeed: 1,
-			HPTable: []float64{95, 106.5}, MPTable: []float64{40, 47.4},
+			HPTable: []float64{95, 106.5}, MPTable: []float64{40, 47.4}, CPTable: []float64{47.5, 52.25},
 		},
 	}
 	if !reflect.DeepEqual(dp.Classes, want) {
@@ -49,19 +49,20 @@ func TestLoadClasses(t *testing.T) {
 }
 
 func TestLoadClassesRejects(t *testing.T) {
-	const stats = `pAtk="1" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1"`
+	const stats = `pAtk="1" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1" cpTable="1"`
 	tests := []struct {
 		name, body, want string
 	}{
 		{"no id", `<class><set ` + stats + `/></class>`, `"id"`},
 		{"unknown id", `<class><set id="60" ` + stats + `/></class>`, "class 60: unknown profession id"},
 		{"parent not loaded", `<class><set id="19" ` + stats + `/></class>`, "parent class 18 not loaded"},
-		{"no pAtk", `<class><set id="18" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1"/></class>`, `"pAtk"`},
-		{"no mDef", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" hpTable="1" mpTable="1"/></class>`, `"mDef"`},
+		{"no pAtk", `<class><set id="18" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1" cpTable="1"/></class>`, `"pAtk"`},
+		{"no mDef", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" hpTable="1" mpTable="1" cpTable="1"/></class>`, `"mDef"`},
 		{"str", `<class><set id="18" str="strong" ` + stats + `/></class>`, `"str"`},
 		{"run speed", `<class><set id="18" runSpd="fast" ` + stats + `/></class>`, `"runSpd"`},
-		{"no hpTable", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" mDef="1" mpTable="1"/></class>`, `"hpTable"`},
-		{"empty mpTable row", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1;;2"/></class>`, `"mpTable"`},
+		{"no hpTable", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" mDef="1" mpTable="1" cpTable="1"/></class>`, `"hpTable"`},
+		{"no cpTable", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1"/></class>`, `"cpTable"`},
+		{"empty mpTable row", `<class><set id="18" pAtk="1" pDef="1" mAtk="1" mDef="1" hpTable="1" mpTable="1;;2" cpTable="1"/></class>`, `"mpTable"`},
 		{"grant cost", `<class><set id="18" ` + stats + `/><skills><skill id="1" lvl="1" minLvl="1"/></skills></class>`, `"cost"`},
 		{"grant level", `<class><set id="18" ` + stats + `/><skills><skill id="1" lvl="x" minLvl="1" cost="1"/></skills></class>`, `"lvl"`},
 	}
@@ -117,8 +118,8 @@ func TestLoadShippedClassesAndCombat(t *testing.T) {
 		t.Errorf("loaded %d classes, want %d", len(dp.Classes), len(classParents))
 	}
 	for id, c := range dp.Classes {
-		if len(c.HPTable) < 80 || len(c.MPTable) < 80 {
-			t.Errorf("class %d: %d hp and %d mp table rows, want 80 or more", id, len(c.HPTable), len(c.MPTable))
+		if len(c.HPTable) < 80 || len(c.MPTable) < 80 || len(c.CPTable) < 80 {
+			t.Errorf("class %d: %d hp, %d mp and %d cp table rows, want 80 or more", id, len(c.HPTable), len(c.MPTable), len(c.CPTable))
 		}
 	}
 	if r := dp.Classes[116].Race; r != 3 {
@@ -147,8 +148,11 @@ func TestLoadShippedClassesAndCombat(t *testing.T) {
 		t.Errorf("Hurricane Assault 1 = %+v, want a dual-fist CHARGEDAM needing 2 charges", hurricane)
 	}
 	accuracy := dp.Skills[SkillRef{256, 1}]
-	drain := Effect{Name: "ManaDamOverTime", StackType: "none", Time: 5, Count: 0x7fffffff, Value: 4.8}
-	if accuracy.OperateType != "TOGGLE" || !slices.Equal(accuracy.Effects, []Effect{drain}) {
+	drain := Effect{
+		Name: "ManaDamOverTime", StackType: "none", Time: 5, Count: 0x7fffffff, Value: 4.8, EffectPower: -1,
+		Funcs: []StatFunc{{Op: "add", Stat: "accCombat", Value: 3}},
+	}
+	if accuracy.OperateType != "TOGGLE" || !reflect.DeepEqual(accuracy.Effects, []Effect{drain}) {
 		t.Errorf("Accuracy = %+v, want a toggle draining 4.8 MP every 5 s", accuracy)
 	}
 	spellcraft := StatFunc{Op: "mul", Stat: "mAtkSpd", Value: 0.5, Using: []string{"MAGIC"}, NotUsing: true}

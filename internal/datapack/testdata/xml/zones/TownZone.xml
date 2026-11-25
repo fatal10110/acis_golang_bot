@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/zones/TownZone.xml; the last one is made up. -->
+	<zone shape="NPoly" minZ="-3800" maxZ="-3300"><!-- Giran Castle Town, trimmed to a box -->
+		<stat name="townId" val="9"/>
+		<stat name="castleId" val="3"/>
+		<node x="77170" y="147420"/>
+		<node x="83120" y="147420"/>
+		<node x="83120" y="143630"/>
+		<node x="77170" y="143630"/>
+	</zone>
+	<zone shape="Cuboid" minZ="-1200" maxZ="3000"><!-- Rune Castle Town -->
+		<stat name="townId" val="14"/>
+		<stat name="castleId" val="8"/>
+		<node x="47150" y="-44815"/>
+		<node x="32531" y="-52045"/>
+	</zone>
+	<zone shape="NPoly" minZ="0" maxZ="100"><!-- a town that is no peace zone -->
+		<stat name="townId" val="20"/>
+		<stat name="isPeaceZone" val="false"/>
+		<node x="0" y="0"/>
+		<node x="100" y="0"/>
+		<node x="0" y="100"/>
+	</zone>
+</list>

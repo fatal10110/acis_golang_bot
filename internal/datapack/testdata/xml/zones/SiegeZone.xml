@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<list>
+	<!-- Samples of aCis_datapack/data/xml/zones/SiegeZone.xml: a castle and a clan hall battlefield. -->
+	<zone shape="NPoly" minZ="-4448" maxZ="3551"><!-- gludio_castle_battlefield_territory -->
+		<stat name="castleId" val="1"/>
+		<node x="-22615" y="104510"/>
+		<node x="-13290" y="104564"/>
+		<node x="-13313" y="116950"/>
+		<node x="-22638" y="116896"/>
+	</zone>
+	<zone shape="NPoly" minZ="-2344" maxZ="-1544"><!-- partisan_agit001, trimmed to a triangle -->
+		<stat name="clanHallId" val="21"/>
+		<node x="43000" y="108000"/>
+		<node x="45000" y="108000"/>
+		<node x="44000" y="110000"/>
+	</zone>
+</list>

@@ -6,8 +6,8 @@ import (
 )
 
 // Class is the part of a profession's template (classes/*.xml) bots plan a
-// character with: its line, its base stats, its HP and MP by level and the
-// skills it may learn.
+// character with: its line, its base stats, its HP, MP and CP by level and
+// the skills it may learn.
 type Class struct {
 	ID int32
 	// Parent is the profession ID upgrades from, -1 for a base class.
@@ -22,9 +22,9 @@ type Class struct {
 	PAtk, PDef, MAtk, MDef float64
 	// RunSpeed is runSpd, 1 when absent.
 	RunSpeed float64
-	// HPTable and MPTable are the base max HP and MP by character level:
-	// entry i is level i+1's.
-	HPTable, MPTable []float64
+	// HPTable, MPTable and CPTable are the base max HP, MP and CP by
+	// character level: entry i is level i+1's.
+	HPTable, MPTable, CPTable []float64
 	// Skills is the skill tree: the class's own grants in file order, then
 	// its parent's merged tree, as the server's NewTemplateTable merges it
 	// (a profession keeps what its line learned before it).
@@ -156,8 +156,8 @@ func LoadClasses(dir string) (map[int32]Class, error) {
 }
 
 // buildClass mirrors the server's buildTemplate (data/xml/classtemplate.go)
-// for the fields bots read: id, pAtk, pDef, mAtk, mDef, hpTable and mpTable
-// are required, the six base stats default to 40, 21, 30, 20, 43 and 20 and
+// for the fields bots read: id, pAtk, pDef, mAtk, mDef, hpTable, mpTable
+// and cpTable are required, the six base stats default to 40, 21, 30, 20, 43 and 20 and
 // runSpd to 1; a skill grant's id, lvl, minLvl and cost are all required.
 func buildClass(el classElement) (Class, error) {
 	a := &attrReader{vals: make(map[string]string)}
@@ -181,7 +181,7 @@ func buildClass(el classElement) (Class, error) {
 		INT: a.intDefault("int", 20), WIT: a.intDefault("wit", 43), MEN: a.intDefault("men", 20),
 		PAtk: a.float("pAtk"), PDef: a.float("pDef"), MAtk: a.float("mAtk"), MDef: a.float("mDef"),
 		RunSpeed: a.floatDefault("runSpd", 1),
-		HPTable:  a.floats("hpTable"), MPTable: a.floats("mpTable"),
+		HPTable:  a.floats("hpTable"), MPTable: a.floats("mpTable"), CPTable: a.floats("cpTable"),
 	}
 	if a.err != nil {
 		return Class{}, fmt.Errorf("class %d: %w", id, a.err)
