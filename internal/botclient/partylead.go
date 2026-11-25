@@ -221,6 +221,14 @@ func (v *partyLead) endInvite(now time.Time, d time.Duration) {
 	v.invitee, v.player = "", false
 }
 
+// dropJoins forgets the join queue of a lead slot just cleared, so a later
+// lead slot never invites a player who asked to join another party (plan
+// section 6: never unasked). A player's invitation in flight still ends on
+// its answer, but a 164 no longer puts it back on the queue.
+func (v *partyLead) dropJoins() {
+	v.queue, v.player = nil, false
+}
+
 // inviteRefused reports whether m refuses the invitation to invitee: a
 // refusal naming no one, one naming the invitee, or the 1987 text of a
 // detached or jailed invitee.

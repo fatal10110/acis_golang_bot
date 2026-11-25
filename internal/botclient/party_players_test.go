@@ -214,6 +214,28 @@ func TestPartyJoinWhisper(t *testing.T) {
 		decideAt(t, b, 57*time.Second)
 		wantList(t, "invited Beth back", invitedAll(t, out), "Beth", "Beth")
 	})
+	t.Run("queue cleared with the slot", func(t *testing.T) {
+		// Pia waits behind Abel's invitation; Quin's is in flight.
+		b, _, out := clearBrain(t, lead("Abel"), nil, Persona{})
+		decideAt(t, b, 0)
+		handleAt(t, b, at(time.Second), joinFrom(0))
+		b.unparty()
+		handleAt(t, b, at(2*time.Second), JoinParty{Response: 0})
+		b.setPartySlot(lead("Beth"))
+		decideAt(t, b, 3*time.Second)
+		wantList(t, "invited after the new slot", invitedAll(t, out), "Abel", "Beth")
+		handleAt(t, b, at(4*time.Second), JoinParty{Response: 0}, joinFrom(1))
+		decideAt(t, b, 5*time.Second)
+		wantList(t, "invited Quin", invitedAll(t, out), "Abel", "Beth", "Quin")
+		b.clearSlot()
+		handleAt(t, b, at(6*time.Second), SystemMessage{ID: msgWaitingForReply})
+		b.setPartySlot(lead("Cara"))
+		decideAt(t, b, 7*time.Second, 40*time.Second)
+		wantList(t, "invited by 40 s", invitedAll(t, out), "Abel", "Beth", "Quin", "Cara")
+		if len(b.partyLead.queue) != 0 {
+			t.Fatalf("queue %q, want empty", b.partyLead.queue)
+		}
+	})
 	t.Run("ten replies an hour", func(t *testing.T) {
 		b, _, out := clearBrain(t, lead("Abel"), ptr(slotParty(selfID, withGuests(map[int32]string{abelID: "Abel"}, 7))), chatty)
 		handleAt(t, b, at(time.Second), whisper(joinPlayerBase+0x200, "Chatter", "hi"))

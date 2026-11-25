@@ -57,10 +57,14 @@ func (b *Brain) unparty() {
 // from a dispersed bot party neither whispers its old leader nor casts
 // /unstuck. A join member the server made leader withdraws too, ending its
 // handover (docs/parties/leader.md). In any other party it does nothing: it
-// never takes a bot out of a player's party.
+// never takes a bot out of a player's party. A lead slot's join queue goes
+// with it (partyLead.dropJoins): those players asked to join that party.
 func (b *Brain) leaveSlot(slot Command) {
 	// A leader's spot weighs 1 at once, the spot kept.
 	b.reweighSpot()
+	if slot.Kind == CommandLead {
+		b.partyLead.dropJoins()
+	}
 	switch {
 	case !b.world.Party.In():
 		b.lead = leaderWatch{}
