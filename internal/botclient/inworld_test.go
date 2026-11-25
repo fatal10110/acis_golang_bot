@@ -53,21 +53,21 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 	}
 	w.WriteFloat64(mult)
 	w.WriteFloat64(1.1)
-	w.WriteFloat64(9)
+	w.WriteFloat64(u.CollisionRadius)
 	w.WriteFloat64(23.5)
 	for _, v := range []int32{1, 2, 3, wire.BoolInt32(u.IsGM)} {
 		w.WriteInt32(v)
 	}
 	w.WriteString("a title")
 	w.WriteInt32(u.ClanID)
-	for i := range int32(4) { // crest, ally, ally crest, relation
-		w.WriteInt32(601 + i)
+	for _, v := range []int32{601, u.AllyID, 603, 604} { // crest, ally, ally crest, relation
+		w.WriteInt32(v)
 	}
 	w.WriteUint8(2) // mount type
 	w.WriteUint8(u.StoreType)
 	w.WriteUint8(1)
-	w.WriteInt32(11) // PK kills
-	w.WriteInt32(12) // PvP kills
+	w.WriteInt32(u.PKKills)
+	w.WriteInt32(u.PvPKills)
 	writeCubics(w, cubics)
 	w.WriteUint8(1)
 	w.WriteInt32(u.Abnormal)
@@ -106,8 +106,11 @@ func charInfoPacket(c CharInfo, run, walk int32, mult float64, cubics int) []byt
 	w.WriteInt32(55) // boat
 	w.WriteInt32(c.ObjectID)
 	w.WriteString(c.Name)
-	for i := range int32(3 + 12) { // race, sex, base class, paperdoll template ids
-		w.WriteInt32(2000 + i)
+	// Race, sex, base class, then the paperdoll template ids in
+	// charInfoPaperdollOrder: the hands are slots 2 and 3, slot 9 the right
+	// hand again.
+	for _, v := range []int32{2000, 2001, 2002, 2003, 2004, c.RHand, c.LHand, 2007, 2008, 2009, 2010, 2011, c.RHand, 2013, 2014} {
+		w.WriteInt32(v)
 	}
 	fillUint16(w, 4)
 	w.WriteInt32(7777)
@@ -121,14 +124,14 @@ func charInfoPacket(c CharInfo, run, walk int32, mult float64, cubics int) []byt
 	}
 	w.WriteFloat64(mult)
 	w.WriteFloat64(1.1)
-	w.WriteFloat64(9)
+	w.WriteFloat64(c.CollisionRadius)
 	w.WriteFloat64(23.5)
 	for _, v := range []int32{1, 2, 3} {
 		w.WriteInt32(v)
 	}
 	w.WriteString("a title")
-	for i := range int32(4) {
-		w.WriteInt32(600 + i)
+	for _, v := range []int32{c.ClanID, 601, c.AllyID, 603} { // clan, crest, ally, ally crest
+		w.WriteInt32(v)
 	}
 	w.WriteInt32(0) // relation
 	w.WriteUint8(wire.BoolByte(!c.Sitting))
@@ -140,14 +143,14 @@ func charInfoPacket(c CharInfo, run, walk int32, mult float64, cubics int) []byt
 	w.WriteUint8(c.StoreType)
 	writeCubics(w, cubics)
 	w.WriteUint8(1)
-	w.WriteInt32(0x2000)
+	w.WriteInt32(c.Abnormal)
 	w.WriteUint8(3)
 	w.WriteUint16(4)
 	w.WriteInt32(c.ClassID)
-	w.WriteInt32(1200)
-	w.WriteInt32(1100)
+	w.WriteInt32(c.MaxCP)
+	w.WriteInt32(c.CP)
 	w.WriteUint8(16)
-	w.WriteUint8(1)
+	w.WriteUint8(c.DuelTeam)
 	w.WriteInt32(900)
 	w.WriteUint8(1)
 	w.WriteUint8(1)
@@ -176,7 +179,7 @@ func npcInfoPacket(n NPCInfo, run, walk int32, mult float64) []byte {
 	}
 	w.WriteFloat64(mult)
 	w.WriteFloat64(1.1)
-	w.WriteFloat64(9)
+	w.WriteFloat64(n.CollisionRadius)
 	w.WriteFloat64(23.5)
 	for _, v := range []int32{2369, 0, 626} { // right hand, chest, left hand
 		w.WriteInt32(v)
@@ -196,7 +199,7 @@ func npcInfoPacket(n NPCInfo, run, walk int32, mult float64) []byte {
 	}
 	w.WriteUint8(1)
 	w.WriteUint8(2)
-	w.WriteFloat64(9)
+	w.WriteFloat64(n.CollisionRadius)
 	w.WriteFloat64(23.5)
 	w.WriteInt32(3)
 	w.WriteInt32(1)
@@ -222,17 +225,20 @@ var (
 		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
 		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000,
 		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
-		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001,
+		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001, AllyID: 0x0a000002,
+		CollisionRadius: 9, PKKills: 11, PvPKills: 12,
 		STR: 40, DEX: 41, CON: 42, INT: 43, WIT: 44, MEN: 45, Critical: 305, MAtk: 306, CastSpd: 307, MDef: 309,
 	}
 	testCharInfo = CharInfo{
 		ObjectID: 0x10000002, Name: "other", Pos: Point{X: 1, Y: 2, Z: 3}, Heading: 1000, ClassID: 10,
 		PvPFlag: 1, Karma: 50, RunSpeed: 156, WalkSpeed: 104, Sitting: true, InCombat: true, StoreType: 1,
+		RHand: 2369, LHand: 626, CollisionRadius: 8.5, ClanID: 0x0a000003, AllyID: 0x0a000004,
+		Abnormal: 0x2000, CP: 1100, MaxCP: 1200, DuelTeam: 2,
 	}
 	testNPCInfo = NPCInfo{
 		ObjectID: 0x10000003, NPCID: 20001, Attackable: true, Pos: Point{X: 4, Y: 5, Z: 6}, Heading: 2000,
 		RunSpeed: 195, WalkSpeed: 60, Running: true, Dead: true, Summon: true, PvPFlag: 2, Karma: 3,
-		Name: "Gremlin", Title: "a title",
+		Name: "Gremlin", Title: "a title", CollisionRadius: 10.5,
 	}
 )
 

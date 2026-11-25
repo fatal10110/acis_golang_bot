@@ -53,17 +53,19 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	mult := r.ReadFloat64()
 	u.RunSpeed, u.WalkSpeed = effectiveSpeed(run, mult), effectiveSpeed(walk, mult)
 	u.SwimSpeed = effectiveSpeed(swim, mult)
-	r.Skip(2 * 8) // attack speed multiplier, collision radius
-	u.CollisionHeight = r.ReadFloat64()
+	r.Skip(8) // attack speed multiplier
+	u.CollisionRadius, u.CollisionHeight = r.ReadFloat64(), r.ReadFloat64()
 	r.Skip(3 * 4) // hair style, hair color, face
 	u.IsGM = r.ReadInt32() != 0
 	r.ReadString() // title
 	u.ClanID = r.ReadInt32()
-	r.Skip(4 * 4) // crest, ally, ally crest, relation
+	r.Skip(4) // crest
+	u.AllyID = r.ReadInt32()
+	r.Skip(2 * 4) // ally crest, relation
 	r.Skip(1)     // mount type
 	u.StoreType = r.ReadUint8()
-	r.Skip(1)     // can crystallize
-	r.Skip(2 * 4) // PK kills, PvP kills
+	r.Skip(1) // can crystallize
+	u.PKKills, u.PvPKills = r.ReadInt32(), r.ReadInt32()
 	skipCubics(r)
 	r.Skip(1) // party room
 	u.Abnormal = r.ReadInt32()
@@ -123,8 +125,12 @@ func decodeCharInfo(r *wire.Reader) Event {
 	r.Skip(4) // boat object id
 	c.ObjectID = r.ReadInt32()
 	c.Name = r.ReadString()
-	r.Skip(3 * 4)  // race, sex, base class
-	r.Skip(12 * 4) // paperdoll template ids
+	r.Skip(3 * 4) // race, sex, base class
+	// Paperdoll template ids in charInfoPaperdollOrder: the hair
+	// accessory, the head, then the right hand and the left hand.
+	r.Skip(2 * 4)
+	c.RHand, c.LHand = r.ReadInt32(), r.ReadInt32()
+	r.Skip(8 * 4)
 	// Augmentation block: 4 uint16, right hand, 12 uint16, left hand,
 	// 4 uint16.
 	r.Skip(4*2 + 4 + 12*2 + 4 + 4*2)
@@ -134,10 +140,15 @@ func decodeCharInfo(r *wire.Reader) Event {
 	r.Skip(6 * 4) // swim run, swim walk, run, walk, fly run, fly walk
 	mult := r.ReadFloat64()
 	c.RunSpeed, c.WalkSpeed = effectiveSpeed(run, mult), effectiveSpeed(walk, mult)
-	r.Skip(3 * 8)  // attack speed multiplier, collision radius and height
+	r.Skip(8) // attack speed multiplier
+	c.CollisionRadius = r.ReadFloat64()
+	r.Skip(8)      // collision height
 	r.Skip(3 * 4)  // hair style, hair color, face
 	r.ReadString() // title
-	r.Skip(5 * 4)  // clan, crest, ally, ally crest, relation
+	c.ClanID = r.ReadInt32()
+	r.Skip(4) // crest
+	c.AllyID = r.ReadInt32()
+	r.Skip(2 * 4) // ally crest, relation
 	c.Sitting = r.ReadUint8() == 0
 	c.Running = r.ReadUint8() != 0
 	c.InCombat = r.ReadUint8() != 0
@@ -145,10 +156,14 @@ func decodeCharInfo(r *wire.Reader) Event {
 	r.Skip(2) // hidden, mount type
 	c.StoreType = r.ReadUint8()
 	skipCubics(r)
-	r.Skip(1 + 4 + 1 + 2) // party room, abnormal effect, recommendations left and had
+	r.Skip(1) // party room
+	c.Abnormal = r.ReadInt32()
+	r.Skip(1 + 2) // recommendations left and had
 	c.ClassID = r.ReadInt32()
-	r.Skip(2 * 4)       // max CP, CP
-	r.Skip(1 + 1 + 4)   // enchant effect, team, large clan crest
+	c.MaxCP, c.CP = r.ReadInt32(), r.ReadInt32()
+	r.Skip(1) // enchant effect
+	c.DuelTeam = r.ReadUint8()
+	r.Skip(4)           // large clan crest
 	r.Skip(3 + 3*4 + 4) // noble, hero, fishing, fishing bait x, y, z, name color
 	c.Heading = r.ReadInt32()
 	r.Skip(4 * 4) // pledge class, pledge type, title color, cursed weapon stage
@@ -168,7 +183,9 @@ func decodeNPCInfo(r *wire.Reader) Event {
 	r.Skip(6 * 4) // swim, fly and fly-mounted run and walk speeds
 	mult := r.ReadFloat64()
 	n.RunSpeed, n.WalkSpeed = effectiveSpeed(run, mult), effectiveSpeed(walk, mult)
-	r.Skip(3 * 8) // attack speed multiplier, collision radius and height
+	r.Skip(8) // attack speed multiplier
+	n.CollisionRadius = r.ReadFloat64()
+	r.Skip(8)     // collision height
 	r.Skip(3 * 4) // right hand, chest, left hand
 	r.Skip(1)     // name shown
 	n.Running = r.ReadUint8() != 0
@@ -180,7 +197,7 @@ func decodeNPCInfo(r *wire.Reader) Event {
 	n.PvPFlag, n.Karma = r.ReadInt32(), r.ReadInt32()
 	r.Skip(5 * 4) // abnormal effect, clan, clan crest, ally, ally crest
 	r.Skip(2)     // move type, team
-	r.Skip(2 * 8) // collision radius and height
+	r.Skip(2 * 8) // collision radius and height again
 	r.Skip(2 * 4) // enchant effect, flying
 	return n
 }

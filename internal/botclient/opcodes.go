@@ -299,3 +299,24 @@ const (
 	opGameSetPrivateStoreMsgSell        = 0x77
 	opGameRequestPrivateStoreBuy        = 0x79
 )
+
+// Duels and the cast cancel, both directions: the extended (0xfe) duel
+// window packets (serverpackets/duel.go), MagicSkillCanceled
+// (serverpackets/magic_skill.go), the extended (0xd0) duel requests
+// (clientpackets/duel.go) and RequestTargetCancel
+// (clientpackets/targetaction.go, wiresafe.go). RequestDuelSurrender is
+// never sent (D39).
+const (
+	opGameExDuelAskStart       uint16 = 0x004b
+	opGameExDuelReady          uint16 = 0x004c
+	opGameExDuelStart          uint16 = 0x004d
+	opGameExDuelEnd            uint16 = 0x004e
+	opGameExDuelUpdateUserInfo uint16 = 0x004f
+
+	opGameMagicSkillCanceled = 0x49
+
+	opGameRequestDuelStart       uint16 = 0x0027
+	opGameRequestDuelAnswerStart uint16 = 0x0028
+
+	opGameRequestTargetCancel = 0x37
+)

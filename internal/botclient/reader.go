@@ -90,6 +90,7 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameAttack:                    decodeAttack,
 	opGameMagicSkillUse:             decodeMagicSkillUse,
 	opGameMagicSkillLaunched:        decodeMagicSkillLaunched,
+	opGameMagicSkillCanceled:        func(r *wire.Reader) Event { return MagicSkillCanceled{CasterID: r.ReadInt32()} },
 	opGameSkillList:                 decodeSkillList,
 	opGameSkillCoolTime:             decodeSkillCoolTime,
 	opGameRelationChanged:           decodeRelationChanged,
@@ -150,6 +151,12 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 // consumes, like eventDecoders; every other extended frame is dropped.
 var extEventDecoders = map[uint16]func(*wire.Reader) Event{
 	opGameExAutoSoulShot: decodeExAutoSoulShot,
+
+	opGameExDuelAskStart:       decodeExDuelAskStart,
+	opGameExDuelReady:          func(r *wire.Reader) Event { return ExDuelReady{Party: r.ReadInt32() != 0} },
+	opGameExDuelStart:          func(r *wire.Reader) Event { return ExDuelStart{Party: r.ReadInt32() != 0} },
+	opGameExDuelEnd:            func(r *wire.Reader) Event { return ExDuelEnd{Party: r.ReadInt32() != 0} },
+	opGameExDuelUpdateUserInfo: decodeExDuelUpdateUserInfo,
 }
 
 // decodeEvent decodes a non-empty frame; ok is false for an opcode, or an
