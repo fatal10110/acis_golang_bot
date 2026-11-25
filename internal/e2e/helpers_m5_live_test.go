@@ -78,7 +78,7 @@ func townData(t *testing.T, tg *Target) (*botclient.TravelMap, map[int32]datapac
 	if err != nil {
 		t.Fatal(err)
 	}
-	return botclient.NewTravelMap(dp), dp.Items
+	return botclient.NewTravelMap(dp, botclient.DefaultSupplyConfig()), dp.Items
 }
 
 // runTownBot runs a whole Bot of account, a character of class, through

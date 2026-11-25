@@ -132,7 +132,7 @@ func TestTravelMapKeepers(t *testing.T) {
 			{NPCID: 30054}, // placed at random: no fixed spawn
 		}}}},
 	}
-	if got, want := NewTravelMap(dp).keepers, map[int32]bool{30005: true}; !reflect.DeepEqual(got, want) {
+	if got, want := NewTravelMap(dp, DefaultSupplyConfig()).keepers, map[int32]bool{30005: true}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("keepers = %v, want %v", got, want)
 	}
 }

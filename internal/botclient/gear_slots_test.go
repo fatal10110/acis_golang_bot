@@ -313,7 +313,7 @@ func TestGearClassesShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := NewTravelMap(dp)
+	m := NewTravelMap(dp, DefaultSupplyConfig())
 	kinds := make(map[string]bool)
 	for _, g := range m.gear {
 		kinds[g.kind] = true

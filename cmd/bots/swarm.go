@@ -53,8 +53,10 @@ type swarmOptions struct {
 	// datapack is the server datapack's XML directory the bots pick
 	// farming spots from; empty farms nowhere. spawnMultiplier is the
 	// server's SpawnMultiplier, which scales each spot's bot cap.
+	// spawnEvents is the server's SpawnEvents (-spawn-events).
 	datapack        string
 	spawnMultiplier float64
+	spawnEvents     string
 	gm              gmOptions
 	store           storeOptions
 	geo             geoOptions
@@ -85,6 +87,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	inviters := fs.String("clan-inviters", "", "comma-separated character names whose clan invitation a crafter accepts while clanless; default: any player's")
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
+	addSpawnEventsFlag(fs, &o.spawnEvents)
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	if err := fs.Parse(args); err != nil {
@@ -214,7 +217,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		sh.nav = n
 	}
 	if o.datapack != "" {
-		if sh.spots, sh.travel, _, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+		if sh.spots, sh.travel, _, err = loadSpots(o.datapack, o.spawnMultiplier, supplyConfig(o.spawnEvents), sh.nav, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
@@ -315,8 +318,9 @@ func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry
 // spot registry and the travel map every bot of the process shares, and the
 // datapack for the caller to take what else it needs from (the panel's
 // catalog) and drop. With the navigation n the registry leaves out the
-// spots whose centre is in water (Nav.DrySpots, #275).
-func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, *datapack.Datapack, error) {
+// spots whose centre is in water (Nav.DrySpots, #275). supply is what the
+// travel map computes the items' supply with.
+func loadSpots(dir string, multiplier float64, supply botclient.SupplyConfig, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, *datapack.Datapack, error) {
 	dp, err := datapack.Load(dir)
 	if err != nil {
 		return nil, nil, nil, err
@@ -326,9 +330,29 @@ func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logge
 	}
 	spots, wet := n.DrySpots(dp.Spots())
 	log.Info("farming spots", "spots", len(spots), "wet_dropped", wet, "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
-	travel := botclient.NewTravelMap(dp)
+	travel := botclient.NewTravelMap(dp, supply)
 	log.Info("travel map", "gatekeepers", travel.Gatekeepers())
 	return botclient.NewSpotRegistry(spots, multiplier), travel, dp, nil
+}
+
+// addSpawnEventsFlag adds -spawn-events, the server's SpawnEvents the bot
+// cannot read, to fs.
+func addSpawnEventsFlag(fs *flag.FlagSet, events *string) {
+	fs.StringVar(events, "spawn-events", strings.Join(botclient.DefaultSupplyConfig().SpawnEvents, ";"),
+		"semicolon-separated SpawnEvents of the server (npcs.properties): the events whose spawns run, what the items' supply counts")
+}
+
+// supplyConfig is the default SupplyConfig with the -spawn-events list
+// events: its names split at ";", blanks trimmed and empty names dropped.
+func supplyConfig(events string) botclient.SupplyConfig {
+	cfg := botclient.DefaultSupplyConfig()
+	cfg.SpawnEvents = nil
+	for _, e := range strings.Split(events, ";") {
+		if e = strings.TrimSpace(e); e != "" {
+			cfg.SpawnEvents = append(cfg.SpawnEvents, e)
+		}
+	}
+	return cfg
 }
 
 // newBots returns one new bot per account playing preset p, each with a copy

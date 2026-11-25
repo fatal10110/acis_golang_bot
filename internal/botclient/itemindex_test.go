@@ -100,7 +100,7 @@ func TestItemIndexShipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(%s): %v", dir, err)
 	}
-	m := NewTravelMap(dp)
+	m := NewTravelMap(dp, DefaultSupplyConfig())
 	if !maps.Equal(m.shots, builtinShots) {
 		t.Errorf("shots = %v, want %v", m.shots, builtinShots)
 	}
