@@ -177,9 +177,9 @@ func TestRuleSpot(t *testing.T) {
 			wantRule: "spot", wantKind: actMove, wantMove: Point{X: 4000}, wantSpot: 3,
 		},
 		{
-			name:     "none fits: the goal's turn",
+			name:     "none of its level: the highest under it (#446)",
 			setup:    func(b *Brain) { b.world.Self.Level = 20 },
-			wantSpot: -1,
+			wantSpot: 1,
 		},
 		{
 			name:     "sitting stands up first",
