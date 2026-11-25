@@ -123,6 +123,15 @@ type orders struct {
 	// party withdrawal), sent by rule "command". It is a single slot: a
 	// later command's reply replaces one not yet sent.
 	reply Action
+	// withdraw asks rule "command" for a party withdrawal ahead of the
+	// reply. It is set only in a party (unparty), dropped unsent once the
+	// bot is found in no party or answers an invitation, and kept by the
+	// resets that keep the reply (docs/parties/orders.md, "Withdrawal and
+	// reply in order").
+	withdraw bool
+	// whispered is set while a GM's whispered follow, assist, stay or go
+	// holds the session; a panel order replaces it.
+	whispered bool
 }
 
 // heard takes a chat line at now: a whisper from another player that
@@ -174,12 +183,6 @@ func (b *Brain) obey(v verdict, now time.Time) {
 	}
 	o := &b.orders
 	switch v.cmd.kind {
-	case cmdFollow, cmdAssist, cmdStay, cmdGo:
-		// A whispered order replaces the panel's standing one for the
-		// session.
-		b.orderPending = false
-	}
-	switch v.cmd.kind {
 	case cmdFollow:
 		o.stay, o.roam, o.follow = false, false, v.sender
 	case cmdAssist:
@@ -208,6 +211,12 @@ func (b *Brain) obey(v verdict, now time.Time) {
 		if !b.logout.requested {
 			b.requestLogout(now)
 		}
+	}
+	switch v.cmd.kind {
+	case cmdFollow, cmdAssist, cmdStay, cmdGo:
+		// A whispered order replaces the panel's standing one for the
+		// session, and holds it against a lead or a join (ErrWhispered).
+		b.orderPending, o.whispered = false, true
 	}
 	b.wakeBy(now.Add(b.reactDelay()))
 }
@@ -247,9 +256,24 @@ func (b *Brain) goToSpot(name string, now time.Time) error {
 }
 
 // ruleCommand sends the one-off packet a command asked for, ahead of every
-// errand. While the pacer holds it back (a whisper inside the chat gate) it
-// passes, so the survival rules below it still run.
+// errand: a party withdrawal (orders.withdraw) first, then the reply. While
+// the pacer holds it back (a whisper inside the chat gate) it passes, so the
+// survival rules below it still run. A withdrawal the bot is found in no
+// party for is dropped, with the leader watch: the party it was for is gone.
 func (b *Brain) ruleCommand(now time.Time) (Action, bool) {
+	if b.orders.withdraw {
+		if !b.world.Party.In() {
+			b.orders.withdraw, b.lead = false, leaderWatch{}
+		} else {
+			// RequestWithdrawParty has no server gate but the frame bucket
+			// (server network/partymatch.go, withdrawParty).
+			a := leavePartyAction()
+			if !b.pace.allow(a.gate(), now) {
+				return Action{}, false
+			}
+			return a, true
+		}
+	}
 	r := b.orders.reply
 	if r.kind == actHold || !b.pace.allow(r.gate(), now) {
 		return Action{}, false

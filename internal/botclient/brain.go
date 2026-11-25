@@ -897,9 +897,14 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actLeaveParty:
 		// A party the bot left on its own loses it no leader.
 		b.lead = leaderWatch{}
+		b.orders.withdraw = false
 	case actAnswerParty:
-		// The server takes the invitation with the first answer.
+		// The server takes the invitation with the first answer. A
+		// withdrawal not sent yet was for a party the bot is no longer in.
 		b.world.Prompts.Party = PartyInvite{}
+		if b.orders.withdraw {
+			b.orders.withdraw, b.lead = false, leaderWatch{}
+		}
 	case actAnswerClan:
 		// The server takes the invitation with the first answer, or lets
 		// it lapse.

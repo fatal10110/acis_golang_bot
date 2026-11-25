@@ -271,7 +271,8 @@ sidesteps, detours, hops and the hour-long spot avoid are gone. The live scenari
 **support** (D1):
 
 - joins a party on invite from a GM commander, and from other players when its persona allows it;
-  at most one support bot per non-GM leader;
+  at most one support bot per non-GM leader; a bot party's members are not counted: they join their
+  assigned bot leader outside the claim table (D29, `docs/parties/members.md`);
 - follows from a slot behind the leader at a random angle, 150-350 units out; re-paths only when the
   leader moves more than ~250 units from the last anchor, after 200-800 ms; matches walk/run.
   Server-side follow (second `Action`, offset 70) is not used: it glues the bot to the leader;
@@ -567,11 +568,19 @@ to avoid: both would log in the same accounts and kick each other.
   `assist <player>` are a new brain-side order: the brain resolves the name to a player in sight in
   its world model and refuses when none is. No panel command ever sends a Tell: the whispered
   replies (`unknown spot`, `that spot is full`, `I know no spots`) go back to the panel as the
-  command's answer instead.
+  command's answer instead. The party commands (`docs/parties/orders.md`) are `lead <name>...` (lead
+  a party of these bots), `join <leader> <member>...` (accept that leader's invitation, ahead of the
+  persona and the claim table) and `unparty` (clear the party slot, withdrawing only from the bot
+  party the slot named); `lead` and `join` answer "held by a GM's whispered order" while a GM's
+  whispered `follow`, `assist`, `stay` or `go` holds the session. They reach a bot only through
+  `Bot.Command`: the raw command route refuses them.
 - Standing orders survive reconnects. Today orders belong to the brain and last for its session,
   and every session builds a new brain, so the `Bot` keeps the panel's standing order (`stay`,
   `go <spot>`, `follow` or `assist <player>`) next to its mailbox, re-applies it at each session
-  start, and shows it in the snapshot; `leave` and `logout` are one-off. A standing `follow` or
+  start, and shows it in the snapshot; `leave` and `logout` are one-off. `lead` and `join` are
+  standing the same way, in a party slot of their own beside the standing order, which they replace
+  as a new panel order does; the slot outlives the sessions of one run and a new run starts with
+  none. `unparty` is one-off. A standing `follow` or
   `assist` keeps its target's name and object id (stable for a character) and is re-resolved when
   that player comes in sight, since at session start the world model has not seen the player yet;
   only an order the panel sends to a running session is refused when the player is not in sight.
@@ -602,7 +611,9 @@ to avoid: both would log in the same accounts and kick each other.
   full mailbox answers "busy". Each session's brain selects on the mailbox next to its event queue,
   as it does for authority verdicts, and every packet still goes through the per-connection pacer
   (frames per second, chat, bypass and emote gates). A command that arrives between sessions waits
-  for the next one, or is refused when the bot is stopped.
+  for the next one, or is refused when the bot is stopped. The commands are `stay`, `go <spot>`,
+  `follow <player>`, `assist <player>`, `leave`, `logout`, and the party commands `lead`, `join`
+  and `unparty`.
 - Inspect (#437): opening a bot's page asks its live session once, over the mailbox
   (`GET /api/bots/{account}/inspect`), for its inventory, worn gear, penalties and effects. The
   brain sends one `RequestItemList` (no server gate: the frame bucket bounds it) and answers once

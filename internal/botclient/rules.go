@@ -590,11 +590,14 @@ func (b *Brain) ruleDead(now time.Time) (Action, bool) {
 
 // rulePrompt is rule 2: an open prompt waits for the persona's answer. A
 // party invitation still answerable is accepted or declined at once, per
-// the persona, then a clan invitation, then a trade request, and an open
-// trade holds the bot (ruleTrade); the restart prompt opens only while
-// dead, so rule 1 answers it first.
+// the party slot (slotAnswer), else the persona, then a clan invitation,
+// then a trade request, and an open trade holds the bot (ruleTrade); the
+// restart prompt opens only while dead, so rule 1 answers it first.
 func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 	if inv := b.world.Prompts.Party; inv.Pending(now) {
+		if accept, ok := b.slotAnswer(inv.Requester); ok {
+			return answerPartyAction(accept), true
+		}
 		join := b.persona.JoinParty
 		return answerPartyAction(join != nil && join(b.world, inv.Requester, now)), true
 	}
