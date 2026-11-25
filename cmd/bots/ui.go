@@ -21,6 +21,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 	"github.com/fatal10110/acis_golang_bot/internal/botpanel"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // defaultListen is the web panel's address when -listen is not given.
@@ -54,6 +55,9 @@ type uiOptions struct {
 	localAddr   string
 	allowlisted bool
 	metrics     string
+	// pprof is the loopback address of the profile endpoint; empty serves
+	// none. It never shares the panel's listener.
+	pprof string
 	// listen is the panel's loopback address.
 	listen          string
 	datapack        string
@@ -89,6 +93,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml); the presets town and merchant and farming need it")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
+	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	fs.StringVar(&o.listen, "listen", defaultListen, "loopback address the web panel serves on (open http://ADDR/ in a browser)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
@@ -153,6 +158,9 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
 		}
+	}
+	if err := checkPprofFlag(o.pprof); err != nil {
+		return o, err
 	}
 	if err := botpanel.CheckAddr(o.listen); err != nil {
 		return o, fmt.Errorf("-listen: %w", err)
@@ -317,11 +325,15 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		defer closeNav()
 		runner.shared.nav = n
 	}
+	// catalog names the items and effects of the panel's inspects.
+	var catalog *botpanel.Catalog
 	if o.datapack != "" {
 		sh := &runner.shared
-		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+		var dp *datapack.Datapack
+		if sh.spots, sh.travel, dp, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
 			return err
 		}
+		catalog = botpanel.NewCatalog(dp)
 		sh.stores = o.store.registry(sh.travel, log)
 	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
@@ -356,6 +368,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		MaxOnline:  o.maxOnline,
 		Presets:    offeredPresets(o.datapack, runner.shared.nav != nil),
 		Spots:      runner.shared.spots,
+		Catalog:    catalog,
 		Logs:       ring,
 		Log:        log,
 	})
@@ -365,13 +378,18 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	var metricsLn net.Listener
 	if o.metrics != "" {
 		if metricsLn, err = botmetrics.Listen(o.metrics); err != nil {
-			return err
+			return fmt.Errorf("metrics: %w", err)
 		}
 		log.Info("metrics serve", "addr", metricsLn.Addr().String(), "path", botmetrics.VarsPath)
 	}
 	tick := time.NewTicker(metricsPeriod)
 	defer tick.Stop()
 	defer serveMetrics(ctx, metricsLn, metrics, tick.C, log)()
+	pprofLn, err := listenPprof(o.pprof, log)
+	if err != nil {
+		return err
+	}
+	defer servePprof(ctx, pprofLn, log)()
 	ln, err := botpanel.Listen(o.listen)
 	if err != nil {
 		return err

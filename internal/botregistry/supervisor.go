@@ -893,3 +893,25 @@ func (s *Supervisor) Command(ctx context.Context, account string, c botclient.Co
 	})
 	return answer, err
 }
+
+// Inspect hands an inspect to the bot of account's live run
+// (botclient.Bot.Inspect), which answers by wait at the latest, and returns
+// the channel its one Inspection comes on. It never waits for the bot: a
+// bot with no run playing answers ErrNoRun, one between sessions
+// botclient.ErrOffline, a full mailbox botclient.ErrBusy.
+func (s *Supervisor) Inspect(ctx context.Context, account string, wait time.Duration) (<-chan botclient.Inspection, error) {
+	var answer <-chan botclient.Inspection
+	err := s.request(ctx, func() error {
+		if _, ok := s.cfg.Registry.Bot(account); !ok {
+			return ErrNoBot
+		}
+		st := s.runs[account]
+		if st == nil || st.bot == nil || st.stopping {
+			return ErrNoRun
+		}
+		var err error
+		answer, err = st.bot.Inspect(wait)
+		return err
+	})
+	return answer, err
+}

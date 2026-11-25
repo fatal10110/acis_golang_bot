@@ -92,7 +92,7 @@ const (
 
 func TestLoadSpots(t *testing.T) {
 	dir := t.TempDir()
-	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes, "armorSets.xml": spotsArmorSets, "classes/humanFighter.xml": spotsClasses, "hennas.xml": "<list/>", "zones/WaterZone.xml": "<list/>"} {
+	for name, body := range map[string]string{"npcs/20000-20999.xml": spotsNPCs, "spawnlist/19_22.xml": spotsSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes, "armorSets.xml": spotsArmorSets, "classes/humanFighter.xml": spotsClasses, "hennas.xml": "<list/>", "zones/WaterZone.xml": "<list/>", "multisell/001.xml": "<list/>", "restartPointAreas.xml": "<list/>"} {
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
@@ -102,7 +102,7 @@ func TestLoadSpots(t *testing.T) {
 		}
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	reg, travel, err := loadSpots(dir, 1, nil, log)
+	reg, travel, _, err := loadSpots(dir, 1, nil, log)
 	if err != nil {
 		t.Fatalf("loadSpots: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestLoadSpots(t *testing.T) {
 	if travel.Gatekeepers() != 1 {
 		t.Fatalf("gatekeepers = %d, want 1", travel.Gatekeepers())
 	}
-	if _, _, err := loadSpots(t.TempDir(), 1, nil, log); err == nil {
+	if _, _, _, err := loadSpots(t.TempDir(), 1, nil, log); err == nil {
 		t.Fatal("loadSpots of an empty directory: no error")
 	}
 }

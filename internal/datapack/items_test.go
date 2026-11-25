@@ -71,7 +71,7 @@ func TestLoadItemsRejects(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "a.xml"), []byte("<list>"+tt.body+"</list>"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			_, _, _, err := LoadItems(dir)
+			_, err := LoadItems(dir)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("LoadItems err = %v, want one naming %s", err, tt.want)
 			}

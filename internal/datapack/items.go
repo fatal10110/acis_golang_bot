@@ -161,52 +161,76 @@ type statElement struct {
 	Val     string `xml:"val,attr"`
 }
 
+// ItemTables are the item template tables LoadItems reads.
+type ItemTables struct {
+	// Items are the weapons, armor and arrows.
+	Items map[int32]Item
+	// Etc are the etc items bots use (buildEtcItem).
+	Etc map[int32]EtcItem
+	// Prices are the reference prices of every priced template (buildPrice).
+	Prices map[int32]int32
+	// Names are the names of the templates in Prices, whatever their type.
+	Names map[int32]string
+}
+
 // LoadItems reads every *.xml item template file directly under dir, in
-// sorted file order, keeping the weapons, armor and arrows (items), the etc
-// items bots use (etc, buildEtcItem), and the reference prices of every
-// template (buildPrice). A file that is not well-formed, or a template
-// missing or mangling a field bots read, fails the whole load. An id
-// declared twice keeps its last declaration.
-func LoadItems(dir string) (items map[int32]Item, etc map[int32]EtcItem, prices map[int32]int32, err error) {
+// sorted file order, keeping the weapons, armor and arrows, the etc items
+// bots use, and the reference price and name of every priced template. A
+// file that is not well-formed, or a template missing or mangling a field
+// bots read, fails the whole load. An id declared twice keeps its last
+// declaration.
+func LoadItems(dir string) (ItemTables, error) {
 	paths, err := xmlFiles(dir, "item")
 	if err != nil {
-		return nil, nil, nil, err
+		return ItemTables{}, err
 	}
-	items, etc, prices = make(map[int32]Item), make(map[int32]EtcItem), make(map[int32]int32)
+	t := ItemTables{
+		Items: make(map[int32]Item), Etc: make(map[int32]EtcItem),
+		Prices: make(map[int32]int32), Names: make(map[int32]string),
+	}
 	for _, path := range paths {
 		var f itemFile
 		if err := decodeFile(path, &f); err != nil {
-			return nil, nil, nil, err
+			return ItemTables{}, err
 		}
 		for _, el := range f.Items {
-			id, price, priced, err := buildPrice(el)
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
-			}
-			delete(prices, id)
-			delete(items, id)
-			delete(etc, id)
-			if priced {
-				prices[id] = price
-			}
-			it, ok, err := buildItem(el)
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
-			}
-			if ok {
-				items[id] = it
-				continue
-			}
-			e, ok, err := buildEtcItem(el)
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("datapack: %s: %w", path, err)
-			}
-			if ok {
-				etc[id] = e
+			if err := t.add(el); err != nil {
+				return ItemTables{}, fmt.Errorf("datapack: %s: %w", path, err)
 			}
 		}
 	}
-	return items, etc, prices, nil
+	return t, nil
+}
+
+// add replaces whatever t holds for el's id with el's templates.
+func (t ItemTables) add(el itemElement) error {
+	id, name, price, priced, err := buildPrice(el)
+	if err != nil {
+		return err
+	}
+	delete(t.Prices, id)
+	delete(t.Names, id)
+	delete(t.Items, id)
+	delete(t.Etc, id)
+	if priced {
+		t.Prices[id], t.Names[id] = price, name
+	}
+	it, ok, err := buildItem(el)
+	if err != nil {
+		return err
+	}
+	if ok {
+		t.Items[id] = it
+		return nil
+	}
+	e, ok, err := buildEtcItem(el)
+	if err != nil {
+		return err
+	}
+	if ok {
+		t.Etc[id] = e
+	}
+	return nil
 }
 
 // itemAttrs reads el's attributes and its <set> values into one reader.
@@ -218,16 +242,17 @@ func itemAttrs(el itemElement) *attrReader {
 	return a
 }
 
-// buildPrice reads the id and reference price of any template, reporting
-// false for one a private store never lists: no price above 0, or
-// is_tradable false (item.Instance.Tradable, privatestore ItemsToSell).
-func buildPrice(el itemElement) (id, price int32, priced bool, err error) {
+// buildPrice reads the id, name and reference price of any template (id and
+// name are required, as on the server), reporting false for one a private
+// store never lists: no price above 0, or is_tradable false
+// (item.Instance.Tradable, privatestore ItemsToSell).
+func buildPrice(el itemElement) (id int32, name string, price int32, priced bool, err error) {
 	a := itemAttrs(el)
-	id, price = a.int32("id"), a.int32Default("price", 0)
+	id, name, price = a.int32("id"), a.str("name"), a.int32Default("price", 0)
 	if a.err != nil {
-		return 0, 0, false, fmt.Errorf("item %s: %w", a.strDefault("id", "?"), a.err)
+		return 0, "", 0, false, fmt.Errorf("item %s: %w", a.strDefault("id", "?"), a.err)
 	}
-	return id, price, price > 0 && a.boolDefault("is_tradable", true), nil
+	return id, name, price, price > 0 && a.boolDefault("is_tradable", true), nil
 }
 
 // buildItem reads a weapon, armor or arrow template, reporting false for

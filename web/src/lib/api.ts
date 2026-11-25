@@ -1,4 +1,4 @@
-import type { Answer, Bot, ClassInfo, LogLine, Presets, Spot } from "./types";
+import type { Answer, Bot, ClassInfo, Inspection, LogLine, Presets, Spot } from "./types";
 
 /** ApiError is a refused request: its HTTP status and the panel's reason. */
 export class ApiError extends Error {
@@ -48,5 +48,6 @@ export const api = {
   remove: (account: string) => request<Answer>("DELETE", bot(account)),
   setPreset: (account: string, preset: string) => request<Answer>("POST", `${bot(account)}/preset`, { preset }),
   command: (account: string, command: string) => request<Answer>("POST", `${bot(account)}/command`, { command }),
+  inspect: (account: string) => request<Inspection>("GET", `${bot(account)}/inspect`),
   resumeLogins: () => request<Answer>("POST", "/api/resume-logins"),
 };

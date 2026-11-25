@@ -296,6 +296,8 @@ type Brain struct {
 	verdicts chan verdict
 	// mail is the Bot's mailbox (BrainConfig.link), nil for none.
 	mail <-chan mail
+	// inspect are the panel's inspects waiting for their answer.
+	inspect inspectState
 	// orderPending is set while the standing follow or assist waits for
 	// its player to come in sight (resolveOrder).
 	orderPending bool
@@ -395,6 +397,9 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 // connection and joins its reader afterwards in every case.
 func (b *Brain) Run(done, logout <-chan struct{}) error {
 	b.start(b.clock.Now())
+	// An inspect still waiting when the session ends gets the model as
+	// it stands.
+	defer func() { b.answerInspect(b.clock.Now(), true) }()
 	defer b.leaveSpot()
 	defer b.releaseStore()
 	defer b.releasePartyClaim()
@@ -616,6 +621,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case CreatureSay:
 			b.heard(e, now)
 		case BuyList, SellList, ItemList, InventoryUpdate:
+			if _, ok := ev.(ItemList); ok {
+				b.answerInspect(now, false)
+			}
 			b.dyeSettled()
 			b.shopEvent(ev)
 			b.marketEvent(ev)
@@ -694,6 +702,9 @@ func (b *Brain) requestLogout(now time.Time) {
 // Appearing goes out first; until it is out, the bot sends nothing else, and
 // the next decision waits for the landing it asks.
 func (b *Brain) wake(now time.Time) error {
+	if err := b.inspectWake(now); err != nil {
+		return err
+	}
 	l := &b.logout
 	if !l.giveUpAt.IsZero() && !now.Before(l.giveUpAt) {
 		return errLogoutTimeout
@@ -820,6 +831,9 @@ func (b *Brain) due() time.Time {
 	}
 	if !l.giveUpAt.IsZero() && l.giveUpAt.Before(t) {
 		t = l.giveUpAt
+	}
+	if at, ok := b.inspect.due(); ok && at.Before(t) {
+		t = at
 	}
 	return t
 }

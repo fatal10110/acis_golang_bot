@@ -87,6 +87,12 @@ type Config struct {
 	// CommandWait bounds the wait for a command's answer; zero is
 	// DefaultCommandWait.
 	CommandWait time.Duration
+	// Catalog names the items and effects of an inspect; nil without
+	// -datapack, which shows ids instead.
+	Catalog *Catalog
+	// InspectWait is how long an inspected bot waits for the server's
+	// ItemList before it answers stale; zero is DefaultInspectWait.
+	InspectWait time.Duration
 	// Log receives the commands the panel hands the bots; nil discards
 	// them.
 	Log *slog.Logger
@@ -100,6 +106,8 @@ type Panel struct {
 	// quit closes when the panel stops: event streams and command waits end.
 	quit     chan struct{}
 	quitOnce sync.Once
+	// inspects bounds the inspects (inspect.go).
+	inspects *inspectGate
 }
 
 // New returns the panel of cfg.
@@ -113,13 +121,16 @@ func New(cfg Config) (*Panel, error) {
 	if cfg.CommandWait <= 0 {
 		cfg.CommandWait = DefaultCommandWait
 	}
+	if cfg.InspectWait <= 0 {
+		cfg.InspectWait = DefaultInspectWait
+	}
 	if cfg.Logs == nil {
 		cfg.Logs = NewRing(1)
 	}
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	p := &Panel{cfg: cfg, quit: make(chan struct{})}
+	p := &Panel{cfg: cfg, quit: make(chan struct{}), inspects: newInspectGate()}
 	web, err := site(webFS)
 	if err != nil {
 		return nil, err

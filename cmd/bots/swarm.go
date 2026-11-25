@@ -47,6 +47,9 @@ type swarmOptions struct {
 	// metrics is the loopback address of the metrics endpoint; empty
 	// serves none.
 	metrics string
+	// pprof is the loopback address of the profile endpoint; empty serves
+	// none.
+	pprof string
 	// datapack is the server datapack's XML directory the bots pick
 	// farming spots from; empty farms nowhere. spawnMultiplier is the
 	// server's SpawnMultiplier, which scales each spot's bot cap.
@@ -83,6 +86,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
+	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -139,6 +143,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
 		}
+	}
+	if err := checkPprofFlag(o.pprof); err != nil {
+		return o, err
 	}
 	return o, nil
 }
@@ -207,7 +214,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		sh.nav = n
 	}
 	if o.datapack != "" {
-		if sh.spots, sh.travel, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
+		if sh.spots, sh.travel, _, err = loadSpots(o.datapack, o.spawnMultiplier, sh.nav, log); err != nil {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
@@ -242,7 +249,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		// Bound before any login: a taken port fails the run, not the bots.
 		ln, err := botmetrics.Listen(o.metrics)
 		if err != nil {
-			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			fmt.Fprintf(stderr, "bots swarm: metrics: %v\n", err)
 			return 1
 		}
 		tick := time.NewTicker(metricsPeriod)
@@ -252,6 +259,14 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		defer serveMetrics(ctx, ln, reg, tick.C, log)()
 		log.Info("metrics serve", "addr", ln.Addr().String(), "path", botmetrics.VarsPath)
 	}
+	pln, err := listenPprof(o.pprof, log)
+	if err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
+	}
+	// Deferred after the bots are joined below: the profiles stay available
+	// until every bot returned.
+	defer servePprof(ctx, pln, log)()
 	log.Info("swarm starts", "bots", len(bots), "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent, "allowlisted", o.allowlisted)
 	var wg sync.WaitGroup
 	for _, b := range bots {
@@ -297,13 +312,14 @@ func serveMetrics(ctx context.Context, ln net.Listener, reg *botmetrics.Registry
 }
 
 // loadSpots reads the datapack whose XML directory is dir and returns the
-// spot registry and the travel map every bot of the process shares. With the
-// navigation n the registry leaves out the spots whose centre is in water
-// (Nav.DrySpots, #275). The datapack itself is dropped once they are built.
-func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, error) {
+// spot registry and the travel map every bot of the process shares, and the
+// datapack for the caller to take what else it needs from (the panel's
+// catalog) and drop. With the navigation n the registry leaves out the
+// spots whose centre is in water (Nav.DrySpots, #275).
+func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logger) (*botclient.SpotRegistry, *botclient.TravelMap, *datapack.Datapack, error) {
 	dp, err := datapack.Load(dir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, w := range dp.Spawnlist.Warnings {
 		log.Debug("datapack", "warning", w)
@@ -312,7 +328,7 @@ func loadSpots(dir string, multiplier float64, n *botclient.Nav, log *slog.Logge
 	log.Info("farming spots", "spots", len(spots), "wet_dropped", wet, "makers", len(dp.Spawnlist.Makers), "warnings", len(dp.Spawnlist.Warnings))
 	travel := botclient.NewTravelMap(dp)
 	log.Info("travel map", "gatekeepers", travel.Gatekeepers())
-	return botclient.NewSpotRegistry(spots, multiplier), travel, nil
+	return botclient.NewSpotRegistry(spots, multiplier), travel, dp, nil
 }
 
 // newBots returns one new bot per account playing preset p, each with a copy

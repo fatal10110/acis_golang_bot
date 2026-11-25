@@ -140,6 +140,55 @@ export interface LogLine {
   text: string;
 }
 
+/** A carried item of an inspect; weight is the stack's, absent when unknown. */
+export interface InspectItem {
+  id: number;
+  name: string;
+  count: number;
+  enchant?: number;
+  weight?: number;
+}
+
+/** A worn item of an inspect; grade is "" when unknown. */
+export interface WornItem {
+  slot: string;
+  id: number;
+  name: string;
+  enchant?: number;
+  grade: string;
+}
+
+export interface Penalties {
+  weight_level: number;
+  grade: boolean;
+  grade_weapon: boolean;
+  grade_armor: number;
+  expertise: number;
+  death: number;
+  run_speed: number;
+  base_run_speed?: number;
+}
+
+export interface InspectEffect {
+  skill_id: number;
+  name: string;
+  level: number;
+  left_s: number;
+  no_end?: boolean;
+}
+
+export type InspectState = "fresh" | "stale" | "offline" | "unresponsive";
+
+/** An inspect of a bot (GET /api/bots/{account}/inspect): the state alone for an offline or unresponsive bot. */
+export interface Inspection {
+  state: InspectState;
+  at?: string;
+  inventory?: { items: InspectItem[]; load: number; max_load: number; percent: number };
+  equipment?: WornItem[];
+  penalties?: Penalties;
+  effects?: InspectEffect[];
+}
+
 export interface Answer {
   answer: string;
 }

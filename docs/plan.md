@@ -603,6 +603,12 @@ to avoid: both would log in the same accounts and kick each other.
   as it does for authority verdicts, and every packet still goes through the per-connection pacer
   (frames per second, chat, bypass and emote gates). A command that arrives between sessions waits
   for the next one, or is refused when the bot is stopped.
+- Inspect (#437): opening a bot's page asks its live session once, over the mailbox
+  (`GET /api/bots/{account}/inspect`), for its inventory, worn gear, penalties and effects. The
+  brain sends one `RequestItemList` (no server gate: the frame bucket bounds it) and answers once
+  the `ItemList` is applied, or with its model marked stale at the request's deadline; a bot with
+  no session answers "offline". The panel allows one inspect in flight per bot, a per-bot
+  cooldown and a global cap, names items and skills from the datapack, and stores nothing.
 - HTTP: bound to `127.0.0.1`; a JSON API plus server-sent events for live updates. The page is a
   React and TypeScript application (D12) built from `web/` by `make ui` into
   `internal/botpanel/web/app`, which git ignores, and embedded with `go:embed`. A binary built
@@ -614,7 +620,7 @@ to avoid: both would log in the same accounts and kick each other.
   next to stderr.
 - Pages: Bots (every bot of the registry with preset, class, level, HP/MP, position or town,
   activity and state; create new, spawn existing, despawn, change persona, delete from the
-  registry), Bot detail (snapshot, commands, its log), Dashboard (gate and breaker with "resume
+  registry), Bot detail (snapshot, commands, inspect, its log), Dashboard (gate and breaker with "resume
   logins", the metrics of section 7), Logs. The API adds the class names and the farming spots
   (with their caps and how many bots hold each) for the page.
 - On WSL2 the Windows browser reaches the panel through WSL's localhost forwarding.

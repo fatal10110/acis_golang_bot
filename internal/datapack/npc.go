@@ -31,6 +31,50 @@ type NPC struct {
 	// TeachTo are the class IDs a trainer teaches skills to (<teachTo
 	// classes>), in file order; nil for an NPC that teaches none.
 	TeachTo []int32
+	// Drops are its drop categories (<drops><category>) in file order; nil
+	// for an NPC that drops nothing.
+	Drops []DropCategory
+	// Privates are the escorts its template spawns with (<privates>
+	// <private>) in file order; nil for an NPC with none. A spawnlist entry's
+	// own Spawn.Privates replace them.
+	Privates []Private
+}
+
+// DropKind is a drop category's type attribute.
+type DropKind string
+
+// The drop category types (the server's item.ParseDropKind).
+const (
+	DropKindDrop     DropKind = "DROP"
+	DropKindSpoil    DropKind = "SPOIL"
+	DropKindHerb     DropKind = "HERB"
+	DropKindCurrency DropKind = "CURRENCY"
+)
+
+// DropCategory is one <category> of an NPC's <drops>: one roll of Chance
+// percent that, when it hits, yields one of Drops.
+type DropCategory struct {
+	Kind DropKind
+	// Chance is the category's chance in percent, 100 when absent.
+	Chance float64
+	Drops  []Drop
+}
+
+// Drop is one <drop> of a category: an item, its quantity range and its
+// chance in percent within the category.
+type Drop struct {
+	ItemID   int32
+	Min, Max int32
+	Chance   float64
+}
+
+// Private is one <private> escort row of an NPC template or a spawnlist
+// entry: the escort's template, how many of it spawn (weight) and its own
+// respawn delay (0 when absent on a spawnlist entry).
+type Private struct {
+	NPCID   int32
+	Weight  int
+	Respawn time.Duration
 }
 
 // Combat is an NPC template's base combat stats, at the server's defaults
@@ -51,12 +95,22 @@ type npcFile struct {
 }
 
 // npcElement is one <npc>: its own attributes (id, name, ...), its direct
-// <set> children and its <teachTo>. Nested blocks (<ai>, <drops>,
-// <skills>) are not read.
+// <set> children, its <teachTo>, its drop categories and its privates.
+// Repeated <drops> or <privates> blocks merge, as on the server. Other
+// nested blocks (<ai>, <skills>, <petdata>) are not read.
 type npcElement struct {
-	Attrs   []xml.Attr    `xml:",any,attr"`
-	Sets    []setElement  `xml:"set"`
-	TeachTo *attrsElement `xml:"teachTo"`
+	Attrs    []xml.Attr        `xml:",any,attr"`
+	Sets     []setElement      `xml:"set"`
+	TeachTo  *attrsElement     `xml:"teachTo"`
+	Drops    []categoryElement `xml:"drops>category"`
+	Privates []attrsElement    `xml:"privates>private"`
+}
+
+// categoryElement is one <drops><category>: its type and chance and its
+// <drop> rows.
+type categoryElement struct {
+	Attrs []xml.Attr     `xml:",any,attr"`
+	Drops []attrsElement `xml:"drop"`
 }
 
 // LoadNPCs reads every *.xml NPC template file directly under dir, in
@@ -101,8 +155,9 @@ func addNPCs(npcs map[int32]NPC, els []npcElement) error {
 // is required with a clan and read only then, the combat stats default as
 // the server's do (hp, pAtk, pDef, mAtk and mDef to 0, which the server
 // requires of all but hp; the six base stats to 40, 21, 30, 20, 43 and 20),
-// corpseTime defaults to 7 seconds, and a <teachTo> needs its classes, each
-// a class ID from 0 to 118.
+// corpseTime defaults to 7 seconds, a <teachTo> needs its classes, each
+// a class ID from 0 to 118, and the drops and privates read as buildDrops
+// and buildNPCPrivate do.
 func buildNPC(el npcElement) (NPC, error) {
 	a := foldAttrs(el.Attrs)
 	for _, s := range el.Sets {
@@ -142,5 +197,73 @@ func buildNPC(el npcElement) (NPC, error) {
 	if a.err != nil {
 		return NPC{}, fmt.Errorf("npc %s: %w", a.strDefault("id", "?"), a.err)
 	}
+	drops, err := buildDrops(el.Drops)
+	if err != nil {
+		return NPC{}, fmt.Errorf("npc %d: %w", npc.ID, err)
+	}
+	npc.Drops = drops
+	for _, p := range el.Privates {
+		private, err := buildNPCPrivate(p)
+		if err != nil {
+			return NPC{}, fmt.Errorf("npc %d: %w", npc.ID, err)
+		}
+		npc.Privates = append(npc.Privates, private)
+	}
 	return npc, nil
+}
+
+// dropKinds are the category types the server accepts.
+var dropKinds = map[string]DropKind{
+	"DROP": DropKindDrop, "SPOIL": DropKindSpoil, "HERB": DropKindHerb, "CURRENCY": DropKindCurrency,
+}
+
+// buildDrops mirrors the server's drops loop (data/xml/item.go
+// buildDropCategory and buildDrop): a category's type is required and one of
+// dropKinds, its chance defaults to 100; a drop's itemid, min and max are
+// required integer literals and its chance a required decimal. The server
+// also skips a drop of an item it has no template for, with a warning; the
+// bot keeps every drop, having no item table at this point. Nil for none.
+func buildDrops(els []categoryElement) ([]DropCategory, error) {
+	var cats []DropCategory
+	for _, el := range els {
+		drops := make([]Drop, 0, len(el.Drops))
+		for _, dropEl := range el.Drops {
+			a := foldAttrs(dropEl.Attrs)
+			d := Drop{ItemID: a.literal("itemid"), Min: a.literal("min"), Max: a.literal("max"), Chance: a.float("chance")}
+			if a.err != nil {
+				return nil, fmt.Errorf("drop: %w", a.err)
+			}
+			drops = append(drops, d)
+		}
+		a := foldAttrs(el.Attrs)
+		raw := a.str("type")
+		kind, ok := dropKinds[raw]
+		if a.err == nil && !ok {
+			a.fail("type", fmt.Errorf("unknown drop kind %q", raw))
+		}
+		c := DropCategory{Kind: kind, Chance: a.floatDefault("chance", 100), Drops: drops}
+		if a.err != nil {
+			return nil, fmt.Errorf("drop category: %w", a.err)
+		}
+		cats = append(cats, c)
+	}
+	return cats, nil
+}
+
+// buildNPCPrivate mirrors the server's buildNPCPrivate (data/xml/npc.go): a
+// template's <private> needs its id, weight and respawn.
+func buildNPCPrivate(el attrsElement) (Private, error) {
+	a := foldAttrs(el.Attrs)
+	p := Private{NPCID: a.int32("id"), Weight: a.int("weight")}
+	if raw := a.str("respawn"); a.err == nil {
+		d, err := parseGameDuration(raw)
+		if err != nil {
+			a.fail("respawn", err)
+		}
+		p.Respawn = d
+	}
+	if a.err != nil {
+		return Private{}, fmt.Errorf("private: %w", a.err)
+	}
+	return p, nil
 }

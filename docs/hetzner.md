@@ -142,6 +142,25 @@ keeps serving until every bot has logged out.
   `/proc/$(systemctl show -p MainPID --value acis-bots)/status`. Once every bot is in the world,
   both should stay flat over a long `-persistent` run; a steady climb is a leak.
 
+### Profiling
+
+`-pprof 127.0.0.1:6061` serves the Go profiles at `/debug/pprof/` on a listener of its own, under
+the same loopback rules as `-metrics`; it is off by default and nothing else is served on it
+(`cmdline`, which holds the flags, is not mounted). It binds before the first login and stops
+with the process. It is an owner diagnostic: heap profiles can hold strings, so keep profiles
+local, and `profile?seconds=N` costs CPU for N seconds.
+
+```bash
+go tool pprof http://127.0.0.1:6061/debug/pprof/heap
+go tool pprof 'http://127.0.0.1:6061/debug/pprof/profile?seconds=30'
+go tool pprof http://127.0.0.1:6061/debug/pprof/goroutine
+```
+
+The server has the same endpoint behind `-debug-addr` on `gameserver` and `loginserver`
+(`debughttp`, pprof and expvar). It has no loopback check, so pass `127.0.0.1:PORT` yourself, and
+take the server's CPU profile in the same window as the bots' to split network-write CPU from
+world CPU (plan S1).
+
 ## 9. GM control
 
 GMs command the bots by whisper when the swarm runs with `-commanders` or `-gm-dsn-file`. The

@@ -156,6 +156,8 @@ GOMEMLIMIT=1GiB bots swarm \
 - `-game <public host:port>` when `Hostname` is not public (section 2).
 - The bot cap (`-bots`) and `GOMEMLIMIT` bound the process on the owner's machine.
 - `-metrics` serves live counters on loopback only (`docs/hetzner.md`, section 8, still applies).
+- `-pprof 127.0.0.1:6061` serves Go profiles on loopback, off by default; recipes and the
+  server's `-debug-addr` are in `docs/hetzner.md`, "Profiling". `bots ui` takes it too.
 
 ## 5. Dead lines and reconnects
 
@@ -211,7 +213,7 @@ SHA256`). Flags and commands are the same as on Linux.
 - `bots ui` keeps its registry in `%AppData%\acis-bots` unless `-data-dir` names another
   directory. A second `bots ui` on the same directory is refused while the first runs; a killed
   panel leaves no lock behind.
-- The panel (`127.0.0.1:8090`) and the metrics endpoint listen on loopback only, so they need no
+- The panel (`127.0.0.1:8090`) and the metrics and pprof endpoints listen on loopback only, so they need no
   firewall rule; if Windows Defender Firewall asks anyway, allow nothing. The bots' outbound
   connections need no rule either.
 - The 60 s `TCP_USER_TIMEOUT` of section 5 is Linux's: on Windows the keepalive alone ends an idle
