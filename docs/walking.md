@@ -204,14 +204,30 @@ Table-driven, with an injected clock:
     `walkIdle`).
   - The cap is a constant, not a persona knob: a persona's `Repath` must not shrink melee or flee
     walks.
+- **A leader that stands still (#344).** Owner, 2026-11-25: a follow toward a leader that stands
+  still takes the long segments of #307, without the cap; the cap stays toward a leader that moves.
+  Melee and flee keep the constant cap either way.
+  - `ruleFollow` walks `walkFollowStill` (`navSegment`) while the leader stands still, else
+    `walkFollow` (`movingSegment`). `followState.still` decides at each decision: the leader stands
+    still once it was neither seen moving (`Object.Moving`) nor found more than `walkSameDest` from
+    where it was at the last decision for `followStill` (3 s) in sight, or `followReportStill`
+    (13 s) out of sight, where the server reports its position every 12 s
+    (`PartyMemberPosition`): a report that moved means the leader may still be moving until the
+    next one. A leader never seen moving stands still from the first decision.
+  - A leader that starts moving changes the walk's purpose, which resets the walk: the segment in
+    flight runs out (it cannot be cut short) and the walk replans from its end with the cap. A
+    leader that stands still again for `followStill` turns the walk back to long segments the same
+    way.
 - **Tests.**
   - The leader moves `Repath` while the bot is mid-route: during the delay, the bot is never idle
     past its segment's end + 100 ms.
-  - Follow, melee and flee routes have no segment longer than 500.
+  - Follow (toward a leader that moves), melee and flee routes have no segment longer than 500; a
+    follow toward a leader that stands still has longer ones, and a leader that starts moving
+    mid-walk caps the walk from the end of the segment in flight (#344).
   - `Hierarchy.Route` and `RouteOneWay` honor `MaxSegment`.
 - **Measured.** `TestLiveFollowMovingLeader` (a leader pacing around the end of the walk) and the
-  cost of the cap on `TestLiveWalkEfficiency` (a leader standing still) are in
-  `docs/navigation.md`, "Walking efficiency".
+  cost of the cap on `TestLiveWalkEfficiency` (a leader standing still), then its removal there
+  (#344), are in `docs/navigation.md`, "Walking efficiency".
 
 ## Longer checked segments (#307)
 
