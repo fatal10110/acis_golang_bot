@@ -585,6 +585,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			// A Fast teleport is an in-place correction with no loading
 			// screen: the server never takes the character out of the
 			// world for it (instant_teleport.go), so it asks no Appearing.
+			b.lootEvent(ev, now)
 			if e.ObjectID == self {
 				b.anchor = e.Pos
 				b.appearing = b.appearing || !e.Fast
@@ -661,6 +662,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				}
 			}
 		case DeleteObject:
+			b.lootEvent(ev, now)
 			delete(b.tries, e.ObjectID)
 			delete(b.spoils, e.ObjectID)
 			if e.ObjectID == b.opened {
