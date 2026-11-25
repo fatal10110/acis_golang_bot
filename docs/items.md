@@ -576,11 +576,31 @@ grocer lists).
     Escape would leave it as stuck in town. Shedding kept items between 66.6 % and 100 % is
     #449's.
 
+- **Slot limit (#528).** Also an operational limit, not a persona default (D6). The server
+  refuses a pickup needing a slot past the inventory limit (ActionFailed and SystemMessage 129,
+  `network/pickup.go:76-79`), counting every item held, worn ones included, but only outside a
+  party or in a finders-keepers one (`pickupNeedsRoom`). The bot reads the limit from UserInfo
+  (80, 100 for a dwarf) and counts slots as the server does (`SlotsNeededFor`): none for a herb
+  (the datapack's `etcitem_type` HERB) or for a stack of a template it holds, else one.
+  - Where the server checks room, no pickup of an item needing a slot goes out at the limit;
+    adena, herbs and stacks of held templates still do. With the limit unknown the bot picks up
+    as before.
+  - A pickup the server refuses with message 129 is given up at once, and items needing a slot
+    wait until the bot holds fewer items than it did then.
+  - `GroundFit` takes no jewelry piece for a slot its bag already fills with pieces it would
+    wear: two rings, two earrings, one necklace. Of the unworn pieces of a jewelry slot the gear
+    errand would wear, the best that the slot takes stay unsold and the rest are junk.
+  - A bag at its limit, or within 5 slots of it, makes a sell visit due for whatever junk it
+    holds (`Shop.SellAt` 0 still never sells).
+  - A loot stall never holds every decision: after 3 ground items in a row clicked for
+    `Loot.Timeout` with no pickup, the bot leaves ground items alone for 2 minutes, or until its
+    next pickup, still taking its own kills' drops, so the errands and farming run.
+
   Besides the drops of the creatures it fought, a bot picks up other ground items within
-  `Loot.Radius` (`Loot.Ground`, #435), through the same queue, weight cap and timeout. The
-  farmer and merchant presets take any item (`GroundAny`); every other persona takes only what
-  it keeps rather than sells (adena, its potions, shots, arrows, supplies and keep set, and what
-  its keep hook holds, such as a clan crafter's materials) and gear that beats what it wears
+  `Loot.Radius` (`Loot.Ground`, #435), through the same queue, weight and slot caps and timeout.
+  The farmer and merchant presets take any item (`GroundAny`); every other persona takes only
+  what it keeps rather than sells (adena, its potions, shots, arrows, supplies and keep set, and
+  what its keep hook holds, such as a clan crafter's materials) and gear that beats what it wears
   (`GroundFit`). None takes its own drops or its `Loot.Junk`. The wire
   names no loot owner, and the server lifts its 15 s lock of a kill's drops to the killer
   without a packet (`data/manager/killrewards.go`), so the bot leaves such an item alone for

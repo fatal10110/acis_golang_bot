@@ -69,8 +69,9 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	skipCubics(r)
 	r.Skip(1) // party room
 	u.Abnormal = r.ReadInt32()
-	r.Skip(1 + 4)       // 0, clan privileges
-	r.Skip(2*2 + 4 + 2) // recommendations left and had, mount NPC id, inventory limit
+	r.Skip(1 + 4)   // 0, clan privileges
+	r.Skip(2*2 + 4) // recommendations left and had, mount NPC id
+	u.InvLimit = int32(r.ReadUint16())
 	u.ClassID = r.ReadInt32()
 	r.Skip(4) // 0
 	u.MaxCP, u.CP = r.ReadInt32(), r.ReadInt32()

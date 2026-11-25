@@ -91,6 +91,9 @@ type TravelMap struct {
 	// the supplies' (SupplyPolicy.BuyLoad) and the junk's a town visit
 	// sheds (SupplyPolicy.ShedMin).
 	weights map[int32]int32
+	// herbs are the herb templates (datapack.Datapack.Herbs): a herb
+	// picked up takes no inventory slot (Brain.slotsNeeded).
+	herbs map[int32]bool
 	// recipes are the craft recipes by id (datapack.Datapack.Recipes), and
 	// craftItems every template one of them uses or makes, its scroll
 	// included: what the crafter plans with and deposits (Persona.Crafter).
@@ -179,6 +182,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)
 	m.weights = indexWeights(dp.Items, dp.EtcItems)
+	m.herbs = dp.Herbs
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
 	m.crystals = indexCrystals(dp.Items)
 	m.hennas = dp.Hennas

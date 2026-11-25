@@ -77,6 +77,9 @@ type UserInfo struct {
 	// Load and MaxLoad are the carried weight and the weight limit.
 	Load, MaxLoad  int32
 	PvPFlag, Karma int32
+	// InvLimit is the inventory limit: how many items the character may
+	// hold, worn ones included (80, 100 for a dwarf, plus bonuses).
+	InvLimit int32
 	// RunSpeed and WalkSpeed are effective speeds in world units per
 	// second: the base speed the packet carries times its movement
 	// multiplier, as the client computes them. SwimSpeed is the speed in

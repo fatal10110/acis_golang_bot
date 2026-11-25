@@ -557,7 +557,8 @@ func (b *Brain) startShop(now time.Time) bool {
 			first = append(first, w.buyRow)
 		}
 	}
-	sellDue := p.SellAt > 0 && junk >= p.SellAt
+	// A bag at or near its slot limit sells what junk it has (#528).
+	sellDue := p.SellAt > 0 && (junk >= p.SellAt || junk > 0 && b.bagFull())
 	sell := sellDue || (p.SellAt > 0 && len(want) > 0 && junk > 0)
 	if len(want) == 0 && !sell {
 		return false
@@ -647,15 +648,17 @@ func (b *Brain) carried(item int32) int32 {
 }
 
 // junk are the object ids of the stacks the bot would sell (ShopPolicy
-// SellAt). A piece the gear errand wears next is not junk, nor a weapon it
+// SellAt). A piece the gear errand wears next is not junk, past the
+// pieces its jewelry slot takes (spareJewelry), nor a weapon it
 // falls back to (fallsBack), nor a piece of the set it buys towards
 // (keepsForSet), nor a valuable (Brain.valuable); the one it replaced
 // otherwise is.
 func (b *Brain) junk() map[int32]Item {
 	out := make(map[int32]Item)
 	w := b.worn()
+	spare := b.spareJewelry(&w)
 	for id, it := range b.world.Inventory.Items {
-		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) || b.fallsBack(it, &w) || b.keepsForSet(it, &w) || b.valuable(it) {
+		if it.Equipped || it.SubCategory == subCategoryQuest || it.Augmentation != 0 || b.keepsItem(it) || b.shop.unsellable[it.TemplateID] || b.upgrade(it, &w) && !spare[id] || b.fallsBack(it, &w) || b.keepsForSet(it, &w) || b.valuable(it) {
 			continue
 		}
 		out[id] = it

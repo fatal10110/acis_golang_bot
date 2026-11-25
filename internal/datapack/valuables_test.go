@@ -265,6 +265,7 @@ func TestLoadItemNames(t *testing.T) {
 	</item>
 	<item id="4" type="EtcItem" name="Old Name"><set name="price" val="5"/></item>
 	<item id="4" type="EtcItem" name="New Name"><set name="price" val="6"/></item>
+	<item id="8600" type="EtcItem" name="Herb of Life"><set name="etcitem_type" val="HERB"/></item>
 </list>`)
 	got, err := LoadItems(dir)
 	if err != nil {
@@ -280,6 +281,9 @@ func TestLoadItemNames(t *testing.T) {
 	}
 	if want := map[int32]bool{5458: true}; !reflect.DeepEqual(got.Stackable, want) {
 		t.Errorf("Stackable = %v, want %v", got.Stackable, want)
+	}
+	if want := map[int32]bool{8600: true}; !reflect.DeepEqual(got.Herbs, want) {
+		t.Errorf("Herbs = %v, want %v", got.Herbs, want)
 	}
 }
 
@@ -342,6 +346,9 @@ func TestLoadShippedValuables(t *testing.T) {
 	}
 	if !dp.Stackable[5458] || dp.Stackable[121] {
 		t.Errorf("Stackable[5458] = %v, Stackable[121] = %v; want a stacking recipe scroll, a sword that does not", dp.Stackable[5458], dp.Stackable[121])
+	}
+	if !dp.Herbs[8600] || dp.Herbs[1060] {
+		t.Errorf("Herbs[8600] = %v, Herbs[1060] = %v; want Herb of Life, not a potion", dp.Herbs[8600], dp.Herbs[1060])
 	}
 
 	rows := 0
