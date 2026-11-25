@@ -506,7 +506,10 @@ type rule struct {
 // lasts, right after "outnumbered" so only the critical, escape, heal,
 // outnumbered and flee rules go first, and ahead of "loot". "duel" fights
 // the duel opponent and holds every rule after it while the duel is on
-// (ruleDuel), after "raise".
+// (ruleDuel), after "raise". "overweight" drops what an immobile bot
+// carries (#488) right after "attacked", so a bot fights back first, and
+// ahead of "rest", whose regeneration the immobile band cuts to a tenth,
+// and of every errand, trip and farming rule.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -523,6 +526,7 @@ var playRules = []rule{
 	{"party", (*Brain).ruleParty},
 	{"shots", (*Brain).ruleShots},
 	{"attacked", (*Brain).ruleAttacked},
+	{"overweight", (*Brain).ruleOverweight},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
 	{"buffpotion", (*Brain).ruleBuffPotion},

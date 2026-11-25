@@ -288,10 +288,12 @@ type TradePolicy struct {
 	// it; 0 never cancels.
 	Timeout time.Duration
 	// MaxLoad is the load percent above which the bot refuses an item
-	// other than adena an exempt partner offers. The wire carries no item
-	// weight, so the bot can only check the load it already carries; the
-	// server refuses an overweight trade itself at settlement
-	// (ReceiverWeightFits). Other partners may offer only adena.
+	// other than adena an exempt partner offers: the load it carries, and
+	// with the item weights known (TravelMap.weights) the load the offer
+	// would bring it to, past which it refuses the offer, as it does an
+	// item the loaded weight table lacks (#488). The server refuses an
+	// overweight trade itself at settlement (ReceiverWeightFits). Other
+	// partners may offer only adena.
 	MaxLoad int
 }
 
@@ -438,18 +440,30 @@ func (b *Brain) tradeStep(now time.Time) Action {
 
 // tradeReceivable reports whether the bot takes every item the partner
 // offered: adena only from a partner not exempt, and from an exempt one any
-// item while the bot's load is at most MaxLoad percent.
+// item while the bot's load, with the offer's weight when the item weights
+// are known, is at most MaxLoad percent. An offered item the loaded weight
+// table lacks is refused.
 func (b *Brain) tradeReceivable(exempt bool) bool {
-	s := &b.world.Self
+	s, t := &b.world.Self, b.cfg.Travel
+	weighs := t != nil && len(t.weights) > 0
+	limit := int64(b.persona.Trade.MaxLoad) * int64(s.MaxLoad)
+	load := int64(s.Load)
 	for _, it := range b.world.Trade.Other {
 		if it.TemplateID == adenaID {
 			continue
 		}
-		if !exempt || s.MaxLoad <= 0 || int64(s.Load)*100 > int64(b.persona.Trade.MaxLoad)*int64(s.MaxLoad) {
+		if !exempt || s.MaxLoad <= 0 || int64(s.Load)*100 > limit {
 			return false
 		}
+		if weighs {
+			w, ok := t.weights[it.TemplateID]
+			if !ok {
+				return false
+			}
+			load += int64(w) * int64(max(it.Count, 1))
+		}
 	}
-	return true
+	return load*100 <= limit || load == int64(s.Load)
 }
 
 // tradePrice is the unit price the bot sells carried item it at in a

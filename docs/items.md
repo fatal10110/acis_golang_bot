@@ -549,6 +549,25 @@ grocer lists).
   cannot move at all, so the bot caps itself. The gear it buys stays under the 66.6 % band too: a
   piece that would take the load there is left off the list (`gearFits`).
 
+- **Never past the limit (#488).** These are operational limits, not persona defaults (D6):
+  - No pickup takes the load to 100 %, whatever `Loot.StopAbove` sets (0 included). An item the
+    loaded weight table lacks weighs an unknown amount and is never picked up; the table holds
+    every datapack template, weightless ones at 0.
+  - An exempt trade partner's offer is weighed: the bot refuses it when the load plus the offer
+    would pass `Trade.MaxLoad` (default 50 %), or when it holds an item the table lacks.
+  - Shop buys, warehouse withdrawals, multisell exchanges and trade settlements past the limit
+    are refused by the server itself (`merchant/service.go`, `network/warehouse.go`,
+    `network/multisell.go`, `network/trade.go`).
+  - A GM grant, a quest reward, a craft or a lower limit can still put the bot over 100 %.
+    From 100 % (band 4, speed 0) rule `overweight` drops what the bot carries where it stands,
+    one stack per decision (paced by the 2 s drop gate), until the load is under the 66.6 %
+    band. It drops its `Loot.Junk` first, then the heaviest stack it would sell. Worn, kept,
+    quest, augmented, enchanted and valuable items are never dropped. With no item weights
+    known it drops only junk. The rule runs right after `attacked` and before `rest`, the
+    errands, the supply trip and farming. A town trip cannot help a bot that cannot move, and a
+    Scroll of Escape would leave it as stuck in town. Shedding kept items between 66.6 % and
+    100 % is #449's.
+
   Besides the drops of the creatures it fought, a bot picks up other ground items within
   `Loot.Radius` (`Loot.Ground`, #435), through the same queue, weight cap and timeout. The
   farmer and merchant presets take any item (`GroundAny`); every other persona takes only what
