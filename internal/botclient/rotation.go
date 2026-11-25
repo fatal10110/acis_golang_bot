@@ -157,7 +157,7 @@ func (b *Brain) castStep(id, skill int32, opens bool, now time.Time) Action {
 			return a
 		}
 	}
-	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, b.forced(id)), object: id, skill: skill, opens: opens}
+	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, b.forced(id, now)), object: id, skill: skill, opens: opens}
 }
 
 // sustain is the cast of the build's first heal or drain step

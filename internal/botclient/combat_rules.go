@@ -47,29 +47,20 @@ type PvPPolicy struct {
 	// FightFlagged lets the bot fight back on, and assist against, players
 	// who are PvP flagged or have karma.
 	FightFlagged bool
-	// ForceAttack lets the bot force-attack (AttackRequest) players who are
-	// neither, which makes it a player killer.
+	// ForceAttack is PK mode (docs/pvp/karma.md, rule 7 of MayFight): it
+	// lets no player pass until its limits ship (X11).
 	ForceAttack bool
-	// SupportFlagged lets the bot heal or buff a flagged player, which flags
-	// the bot.
+	// SupportFlagged lets the bot heal or buff a flagged or karma player,
+	// which flags the bot (character_pvpflag.go skillTargetFlagsPvP).
 	SupportFlagged bool
 }
 
-// MayFight reports whether the policy lets the bot attack o: an attackable
-// NPC, or a player the policy allows.
-func (p PvPPolicy) MayFight(o *Object) bool {
-	switch o.Kind {
-	case KindNPC:
-		return o.Attackable
-	case KindPlayer:
-		return p.ForceAttack || p.FightFlagged && flagged(o)
-	}
-	return false
-}
-
-// MaySupport reports whether the policy lets the bot heal or buff player o.
+// MaySupport reports whether the policy lets the bot heal or buff player o:
+// one with neither a PvP flag nor karma, or any with SupportFlagged. The
+// brain narrows it in a duel and widens it in a PvP zone
+// (Brain.supportAllowed).
 func (p PvPPolicy) MaySupport(o *Object) bool {
-	return p.SupportFlagged || o.PvPFlag == 0
+	return p.SupportFlagged || clean(o)
 }
 
 // selectAction clicks id to select it.
@@ -78,25 +69,46 @@ func selectAction(id int32, from Point) Action {
 }
 
 // mayFight reports whether the bot may attack id at now: in sight, alive,
-// allowed by the PvP policy and not blacklisted.
+// allowed by MayFight's rules (fightKind) and not blacklisted.
 func (b *Brain) mayFight(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && !o.Dead && b.persona.PvP.MayFight(o) && !now.Before(b.blacklist[id])
+	return o != nil && !o.Dead && b.fightKind(id, o, now) != fightNone && !now.Before(b.blacklist[id])
 }
 
 // attackers are the bot's attackers it may fight at now, the hardest hitter
-// first.
+// first (damageOf). A summon's owner in sight that the bot may fight stands
+// in for the summon (docs/pvp/targets.md "Summons and pets").
 func (b *Brain) attackers(now time.Time) []int32 {
 	var ids []int32
 	for id := range b.world.Attackers {
-		if b.world.attacking(id, now) && b.mayFight(id, now) {
+		if !b.world.attacking(id, now) {
+			continue
+		}
+		if owner := b.summonOwner(id, now); owner != 0 {
+			id = owner
+		} else if !b.mayFight(id, now) {
+			continue
+		}
+		if !slices.Contains(ids, id) {
 			ids = append(ids, id)
 		}
 	}
 	slices.SortFunc(ids, func(x, y int32) int {
-		return cmp.Or(cmp.Compare(b.world.Attackers[y].Damage, b.world.Attackers[x].Damage), cmp.Compare(x, y))
+		return cmp.Or(cmp.Compare(b.damageOf(y, now), b.damageOf(x, now)), cmp.Compare(x, y))
 	})
 	return ids
+}
+
+// damageOf is the damage attacker id's streak dealt the bot at now, with
+// that of the summons it stands in for (attackers).
+func (b *Brain) damageOf(id int32, now time.Time) int64 {
+	var d int64
+	for k, a := range b.world.Attackers {
+		if k == id || b.world.attacking(k, now) && b.summonOwner(k, now) == id {
+			d += a.Damage
+		}
+	}
+	return d
 }
 
 // unfought is the hardest hitter among the live creatures attacking the
@@ -110,6 +122,11 @@ func (b *Brain) unfought(now time.Time) int32 {
 	for k, a := range b.world.Attackers {
 		o := b.world.object(k)
 		if o == nil || o.Dead || !b.world.attacking(k, now) || !now.Before(b.blacklist[k]) {
+			continue
+		}
+		// A summon MayFight refuses is held off, not fled, while the bot
+		// has no karma (docs/pvp/targets.md "Summons and pets").
+		if o.Summon && b.world.Self.Karma == 0 && b.fightRule(k, o, now) == fightNone {
 			continue
 		}
 		if id == 0 || a.Damage > damage || a.Damage == damage && k < id {
@@ -157,7 +174,7 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 		return b.toggle(now), true
 	}
 	id, cur := hits[0], b.world.Target
-	if cur != id && slices.Contains(hits, cur) && b.world.Attackers[id].Damage <= switchFactor*b.world.Attackers[cur].Damage {
+	if cur != id && slices.Contains(hits, cur) && b.damageOf(id, now) <= switchFactor*b.damageOf(cur, now) {
 		id = cur
 	}
 	return b.fight(id, now), true
@@ -209,7 +226,7 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	if s.Casting(now) || b.castPending(now) {
 		return Action{}
 	}
-	forced := b.forced(id)
+	forced := b.forced(id, now)
 	bd := b.build()
 	if a, ok := b.toggleCast(bd.Kit.Toggles, true, now); ok {
 		return a
@@ -250,11 +267,14 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	return Action{}
 }
 
-// forced reports whether attacking id takes a forced attack: a player who
-// is neither flagged nor has karma.
-func (b *Brain) forced(id int32) bool {
+// forced reports whether attacking id at now takes a forced attack: a
+// player not attackable without force (character_social.go
+// SocialWithoutForce), so not its duel opponent while fighting, not one in
+// its arena, and neither flagged nor with karma. A summon never is: the bot
+// fights one with plain Action and casts only.
+func (b *Brain) forced(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && o.Kind == KindPlayer && !flagged(o)
+	return o != nil && o.Kind == KindPlayer && id != b.duelFoe(now) && !flagged(o) && !b.sameArena(id, now)
 }
 
 // Cast refusals: the system messages the server answers a player's cast

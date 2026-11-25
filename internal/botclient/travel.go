@@ -103,6 +103,9 @@ type TravelMap struct {
 	// hennas are the dye symbols by id (datapack.Datapack.Hennas): what
 	// the dye errand checks prices, dyes and class lists with.
 	hennas map[int32]datapack.Henna
+	// zones are the zones that decide where a character may fight
+	// (datapack.Datapack.Zones): the PvP world model's arenas.
+	zones datapack.Zones
 	// classes are the class templates (datapack.Datapack.Classes), skills
 	// every skill level (datapack.Datapack.Skills), setSkills the skills
 	// armor sets grant and refMobs the reference monster of each level
@@ -180,6 +183,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.crystals = indexCrystals(dp.Items)
 	m.hennas = dp.Hennas
 	m.classes, m.skills = dp.Classes, dp.Skills
+	m.zones = dp.Zones
 	m.setSkills = indexSetSkills(dp.ArmorSets)
 	m.refMobs = indexRefMobs(dp.NPCs)
 	m.corpseTimes = indexCorpseTimes(dp.NPCs)

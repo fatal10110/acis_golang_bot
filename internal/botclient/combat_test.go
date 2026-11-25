@@ -192,11 +192,13 @@ func TestWorldCombat(t *testing.T) {
 			},
 		},
 		{
-			name:  "a flagged player's cast at the bot is",
+			// The brain tells an offensive cast from the datapack
+			// (Brain.castSeen, TestPvPHostileCast).
+			name:  "a flagged player's cast at the bot is left to the brain",
 			steps: []step{{0, RelationChanged{ObjectID: pcID, PvPFlag: 1}}, {0, MagicSkillUse{CasterID: pcID, TargetID: selfID, SkillID: 1177}}},
 			check: func(t *testing.T, w *World) {
-				if !w.attacking(pcID, t0) || w.Objects[pcID].PvPFlag != 1 {
-					t.Fatal("flagged caster not counted")
+				if w.attacking(pcID, t0) || w.Objects[pcID].PvPFlag != 1 {
+					t.Fatal("the world counted a player's cast")
 				}
 			},
 		},

@@ -80,9 +80,9 @@ func (w *World) applyAttack(e Attack, now time.Time) {
 
 // applyMagicSkillUse starts the bot's own cast and its skill's reuse: the
 // skill is ready again hit time plus reuse after the cast starts. A cast at
-// the bot by a monster, or by a player who is flagged or has karma, counts
-// as a hit: MagicSkillUse does not tell an attack from a buff, and only
-// those casters can attack the bot without a forced attack.
+// the bot by a monster counts as a hit; a player's or a summon's counts only
+// when its skill is offensive, which the brain tells from the datapack
+// (Brain.castSeen).
 //
 // Another caster stands where it casts from when the hit time proves the
 // server stopped it first; the bot's own cast is stood by the brain, which
@@ -107,16 +107,9 @@ func (w *World) applyMagicSkillUse(e MagicSkillUse, now time.Time) {
 	if e.TargetID != w.Self.ObjectID {
 		return
 	}
-	if o := w.object(e.CasterID); o != nil && hostileCaster(o) {
+	if o := w.object(e.CasterID); o != nil && o.Kind == KindNPC && !o.Summon && o.Attackable {
 		w.hitBy(e.CasterID, 0, now)
 	}
-}
-
-func hostileCaster(o *Object) bool {
-	if o.Kind == KindNPC {
-		return o.Attackable
-	}
-	return flagged(o)
 }
 
 // flagged reports whether a player is PvP flagged or has karma: the players

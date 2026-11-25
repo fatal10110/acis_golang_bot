@@ -9,7 +9,8 @@ type ExDuelAskStart struct {
 	Party     bool
 }
 
-// ExDuelReady opens the duel window: the countdown runs.
+// ExDuelReady opens the duel window; the server sends it right before
+// ExDuelStart, once the countdown is over (network/duel.go startDuel).
 type ExDuelReady struct{ Party bool }
 
 // ExDuelStart starts the duel.

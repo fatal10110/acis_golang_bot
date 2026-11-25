@@ -100,6 +100,8 @@ type SelfState struct {
 	Charges int32
 	PvPFlag uint8
 	Karma   int32
+	// AllyID is its clan's alliance (UserInfo), 0 for none.
+	AllyID int32
 	// StoreType is the private store mode, 0 for none.
 	StoreType                        uint8
 	Sitting, InCombat, Dead, Running bool
@@ -847,6 +849,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.Race = e.Race
 	s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP = e.HP, e.MaxHP, e.MP, e.MaxMP, e.CP, e.MaxCP
 	s.Load, s.MaxLoad = e.Load, e.MaxLoad
+	s.AllyID = e.AllyID
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
 	s.SwimSpeed = e.SwimSpeed
