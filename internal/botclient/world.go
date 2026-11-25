@@ -10,7 +10,8 @@ import (
 
 // snapDrift is how far, in world units, a position the server reports for
 // a moving object may stray from the dead-reckoned one before the model
-// snaps to it. Closer reports keep the estimate.
+// snaps to it. Closer reports keep the estimate; the bot's own
+// ValidateLocation is a correction and always adopted (SelfState.correct).
 const snapDrift = 200
 
 // World is one bot's model of the game world, built from the events its
@@ -215,8 +216,23 @@ func (s *SelfState) moved(now time.Time, origin, dest Point) motion {
 // no arrival until the speed returns, then walks on to the old destination
 // (creature.go SetSpeed, retimeLocked; #488).
 func (s *SelfState) resample(now time.Time, p Point) {
+	s.continueFrom(now, s.move.sample(now, p), p)
+}
+
+// correct applies the server's ValidateLocation p at now to the bot's own
+// move: resample continuing from p itself. The server sends it only when the
+// bot's reported position strays more than the move speed from its own and
+// never adopts the report (network/movement.go validateLivePlayerPosition),
+// so p is where the server holds the character, however close to the
+// estimate (#464).
+func (s *SelfState) correct(now time.Time, p Point) {
+	s.continueFrom(now, p, p)
+}
+
+// continueFrom is resample with from, the position to continue from, chosen
+// by the caller for the server's report p.
+func (s *SelfState) continueFrom(now time.Time, from, p Point) {
 	old := s.move
-	from := old.sample(now, p)
 	if !old.moving(now) {
 		m := stopAt(from)
 		m.start = old.end()
@@ -778,7 +794,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.stop(e.ObjectID, e.Pos, e.Heading, now)
 	case ValidateLocation:
 		if e.ObjectID == w.Self.ObjectID {
-			w.Self.resample(now, e.Pos)
+			w.Self.correct(now, e.Pos)
 			w.Self.Heading = e.Heading
 		} else if m := w.motionOf(e.ObjectID); m != nil {
 			*m = m.resample(now, e.Pos)

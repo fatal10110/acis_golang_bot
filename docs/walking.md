@@ -149,6 +149,11 @@ built `Self.move` from `sample(now, e.Origin)`. Neither knew the start speed. Th
   - Counting a fresh start where the server only retargeted makes the end later: conservative.
 - **The distance timed** is the larger of |e.Origin → dest| and |sample estimate → dest|. `sample`
   keeps the estimate within `snapDrift` (200).
+- **A self `ValidateLocation` is adopted as is** (`SelfState.correct`, #464). The server sends one
+  only when the bot's reported position drifts more than its move speed from the server's, and
+  never adopts the report (`network/movement.go` `validateLivePlayerPosition`). So the bot moves to
+  it however close it is to the estimate, and the move in flight and the next segment continue
+  from it. `UserInfo` and other objects' reports keep the `snapDrift` smoothing.
 - **No eta is stored any more.**
   - `segmentDone` holds when the segment is answered and now ≥ end + positionTick: the same
     quantity the wake uses.
