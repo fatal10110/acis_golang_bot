@@ -88,6 +88,10 @@ type BrainConfig struct {
 	// the bot stores open there (rule "store"), shared by every bot of the
 	// process. Nil opens no store.
 	Stores *StoreRegistry
+	// Ads, when set, is the ad board a merchant's valuables round claims
+	// its Trade lines on (docs/valuables/ads.md "Ad board"), shared by every
+	// bot of the process. Nil says no ad.
+	Ads *AdBoard
 	// Authority, when set, decides who may command the bot by whisper,
 	// shared by every bot of the process. Nil obeys nobody.
 	Authority *Authority
@@ -270,6 +274,9 @@ type Brain struct {
 	meter useMeter
 	// wh is the clan warehouse errand (rule 9 errand "warehouse").
 	wh warehouseErrand
+	// look is the session's look at its private warehouse (rule
+	// "valuables").
+	look valuablesLook
 	// learn is the recipe learning errand (rule 9 errand "recipe").
 	learn recipeLearn
 	// craft is the clan crafter's cycle (rule "craft").
@@ -375,6 +382,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
 		verdicts: make(chan verdict, verdictQueue),
 	}
+	b.wireValuables()
 	if cfg.link != nil {
 		b.mail = cfg.link.mail
 		b.craft.resumeFrom(cfg.link.crafter)

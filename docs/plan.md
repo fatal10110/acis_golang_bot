@@ -364,7 +364,8 @@ Tunables are flags until a persona needs a file.
 - Account names are separate from character names and never shown in game.
 - Random hair and face, staggered logins, reaction delays, idle pauses and turns.
 - Chat only when answering a whisper, after a delay; rate-limited per sender and capped per bot in
-  total; never answer a name carrying the bot marker (no bot-to-bot loops); never on Shout or Trade.
+  total; never answer a name carrying the bot marker (no bot-to-bot loops); never on Shout or Trade,
+  but the merchant's valuables ads on Trade, the only unprompted lines (D30, `docs/valuables/ads.md`).
 - Uniform jitter; no seeded distributions.
 
 ### 5. Sessions, reconnect, accounts and host

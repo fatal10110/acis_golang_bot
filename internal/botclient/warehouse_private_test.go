@@ -140,7 +140,7 @@ func testPrivateLinks(t *testing.T) {
 		if got := b.wh.private.Deposit; got.Outcome != WarehouseDone || b.wh.status.Deposit.Outcome != WarehouseNone {
 			t.Fatalf("private deposit %+v clan %+v, want done in the private status only", got, b.wh.status.Deposit)
 		}
-		if len(b.wh.noClan) != 1 || b.wh.noPrivate != nil {
+		if len(b.wh.noClan) != 1 || len(b.wh.noPrivate) != 0 {
 			t.Fatalf("marks noClan %v noPrivate %v, want none set", b.wh.noClan, b.wh.noPrivate)
 		}
 	})
@@ -242,7 +242,7 @@ func testPrivateRefusedChat(t *testing.T) {
 			if !b.wh.retryAt.Equal(at(3*time.Second + warehouseOpenGap)) {
 				t.Fatalf("retryAt %v, want 60 s after the refusal", b.wh.retryAt)
 			}
-			if b.wh.noPrivate != nil || b.wh.noClan != nil {
+			if len(b.wh.noPrivate) != 0 || b.wh.noClan != nil {
 				t.Fatalf("marks noPrivate %v noClan %v, want none", b.wh.noPrivate, b.wh.noClan)
 			}
 			runTrainerSteps(t, b, []trainerStep{
