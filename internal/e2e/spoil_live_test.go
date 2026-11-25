@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -28,11 +29,12 @@ const (
 // TestLiveSpoilSweep runs a level 10 dwarven fighter farmer with its kit
 // (S10, #329): Spoil opens on a fresh monster, and once a monster it spoiled
 // dies it casts Sweeper on the corpse, which earns it the corpse's spoil
-// (#333). The GM grants both skills (the bot runs no trainer errand). It
-// farms until a spoil took and a sweep earned items, and the server never
-// refused one of its skills (113) or a sweep (343, 683). It keeps no loot,
-// so what it earned came from its sweeps, and goes back to level 1 at the
-// end.
+// (#333). The GM grants both skills (the bot runs no trainer errand). Once
+// the bot holds a spot the GM spawns a paralysed Werewolf Hunter at it, one
+// at a time, until a spoil took and a sweep earned items, and the server
+// never refused one of its skills (113) or a sweep (343, 683). It keeps no
+// loot, so what it earned came from its sweeps, and goes back to level 1 at
+// the end.
 func TestLiveSpoilSweep(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -42,13 +44,10 @@ func TestLiveSpoilSweep(t *testing.T) {
 	account, _ := tg.Account("ss", 1)
 	setup := botSetup{
 		class: &botclient.DwarvenFighter,
-		// The spots of monsters up to 5 levels under it: a monster more
-		// than 5 levels under the killer cuts its spoil chances (the
-		// server's deep blue drop rules, model/item/drop.go), and a level
-		// 2 monster's few-percent spoil items then hardly ever roll (none
-		// in 11 spoils live); the level 7 to 9 packs of the spots of its
+		// The spots of monsters up to 5 levels under it, where the GM
+		// spawns the hunters: the level 7 to 9 packs of the spots of its
 		// level are too much for a dwarf of level 10 in starter gear
-		// (packFits), which leaves it no spot by its village.
+		// (packFits, #446), which leaves it no spot by its village.
 		persona: func() botclient.Persona {
 			p := farmerPersona(spoilLevel)()
 			p.Spots.Above = 5
@@ -76,22 +75,94 @@ func TestLiveSpoilSweep(t *testing.T) {
 		}
 	})
 	start, alive := time.Now(), time.Now()
-	var r spoilRun
-	untilBy(t, ctx, f.name+" spoiling and sweeping", start.Add(22*time.Minute), func() string {
+	var (
+		r       spoilRun
+		mob     int32
+		spawned time.Time
+		hunters int
+	)
+	untilBy(t, ctx, f.name+" spoiling and sweeping", start.Add(spoilBound), func() string {
 		if time.Since(alive) > gmKeepAlive {
 			gmTeleport(t, ctx, gm, townTI)
 			alive = time.Now()
 		}
-		r = spoilRunOf(f.watch.Seen(from), f.id)
+		seen := f.watch.Seen(from)
+		r = spoilRunOf(seen, f.id)
 		if len(r.refused) > 0 {
 			t.Fatalf("%s: the server refused %v (%s)", f.name, r.refused, r)
 		}
-		return r.short()
+		if r.short() == "" {
+			return ""
+		}
+		if mob != 0 && !hunterDone(seen, mob, spawned, time.Now()) {
+			return fmt.Sprintf("hunter %d of %d: %s", hunters, spoilHunters, r)
+		}
+		s := f.bot.Status()
+		if s.Spot == "" {
+			return fmt.Sprintf("no spot held (rule %q at %v): %s", s.Rule, s.Position, r)
+		}
+		if hunters == spoilHunters {
+			t.Fatalf("%s: %d Werewolf Hunters spawned at it: %s", f.name, hunters, r)
+		}
+		mob, spawned = spawnHunter(t, ctx, gm, f), time.Now()
+		hunters++
+		alive = time.Now()
+		return fmt.Sprintf("hunter %d of %d spawned: %s", hunters, spoilHunters, r)
 	})
 	if all := spoilRunOf(f.watch.Seen(0), f.id); len(all.refused) > 0 {
 		t.Errorf("%s: the server refused %v", f.name, all.refused)
 	}
-	t.Logf("%s farmed %s: %s (%v)", f.name, time.Since(start).Round(time.Second), r, r.earned)
+	t.Logf("%s spoiled and swept in %s, %d Werewolf Hunters spawned: %s (%v)", f.name, time.Since(start).Round(time.Second), hunters, r, r.earned)
+}
+
+// werewolfHunter is the Werewolf Hunter template (data/xml/npcs, 20343): a
+// passive level 10 monster of 163 HP whose spoil rolls each of its items
+// independently (model/item/drop.go rollOrdered), at least one 82% of the
+// time. At the spoiler's own level the server's deep blue rule leaves its
+// chances whole (LevelPenaltyMultiplier), where a farming spot's monsters
+// more than 5 levels under the bot rarely give anything to sweep.
+const werewolfHunter int32 = 20343
+
+// spoilHunters is how many hunters a run spawns at most, one at a time: a
+// spoil resisted (139) is cast again while the hunter lives, so each hunter
+// most likely dies spoiled and four in five of those leave items to sweep.
+const spoilHunters = 6
+
+// spoilBound bounds the spoil step: each hunter is a walk to the spot or a
+// short fight, its kill and its sweep window.
+const spoilBound = 15 * time.Minute
+
+// hunterKill is how long a spawned hunter may live before the next one is
+// spawned: the bot may be busy with its spot's monsters first.
+const hunterKill = 3 * time.Minute
+
+// hunterDone reports whether the hunter mob spawned at spawned is done with
+// at now: dead and its sweep window over, or still alive past hunterKill.
+func hunterDone(seen []Seen, mob int32, spawned, now time.Time) bool {
+	for _, s := range seen {
+		if d, ok := s.Event.(botclient.Die); ok && d.ObjectID == mob {
+			return now.Sub(s.At) > sweepWindow
+		}
+	}
+	return now.Sub(spawned) > hunterKill
+}
+
+// spawnHunter spawns a Werewolf Hunter at f and paralyses it so that it
+// stays where f fights it and never hits back, and returns its object id.
+// The GM leaves for a peace zone out of the way.
+func spawnHunter(t *testing.T, ctx context.Context, gm *GMClient, f *farmer) int32 {
+	t.Helper()
+	gmOn(t, ctx, gm, f)
+	mob, err := gm.Spawn(ctx, werewolfHunter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { gmBackFor(t, gm, f, mob) })
+	if err := gm.OnTarget(ctx, mob, "para"); err != nil {
+		t.Fatal(err)
+	}
+	gmTeleport(t, ctx, gm, townTI)
+	return mob
 }
 
 // spoilRun is what a spoiler did: its Spoil casts and those that took, the

@@ -180,3 +180,31 @@ func TestSweepTrace(t *testing.T) {
 		t.Errorf("sweepTrace = %q", got)
 	}
 }
+
+func TestHunterDone(t *testing.T) {
+	const mob int32 = 10
+	at := time.Date(2026, 11, 25, 1, 0, 0, 0, time.UTC)
+	died := []Seen{
+		{At: at, Event: botclient.Die{ObjectID: 11}},
+		{At: at.Add(time.Minute), Event: botclient.Die{ObjectID: mob, Sweepable: true}},
+	}
+	tests := []struct {
+		name string
+		seen []Seen
+		now  time.Time
+		want bool
+	}{
+		{"alive, fresh", died[:1], at.Add(time.Minute), false},
+		{"alive past its kill bound", died[:1], at.Add(hunterKill + time.Second), true},
+		{"dead, sweep window open", died, at.Add(time.Minute + sweepWindow), false},
+		{"dead, sweep window over", died, at.Add(time.Minute + sweepWindow + time.Second), true},
+		{"dead at its kill bound, sweep window open", []Seen{{At: at.Add(hunterKill), Event: botclient.Die{ObjectID: mob}}}, at.Add(hunterKill + time.Second), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hunterDone(tt.seen, mob, at, tt.now); got != tt.want {
+				t.Errorf("hunterDone = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
