@@ -174,7 +174,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   name does **not** carry the bot marker, so the merchant answers it: the first of the fixed
   candidates `buyerNames` (`internal/e2e/valuables_buyer_test.go`) the server accepts; the
   scenario fails before it logs in when the marker marks one. It keeps the valuables it bought
-  and the adena it was given.
+  and the adena it was given. `e2evm2`, the warehouse scenario's merchant, ends each run carrying
+  its valuables, one Tears of Eva more each run.
 - The minted GMs `<prefix>mint<N>` (`e2emint1`, ...), each with one character `<prefix>mint<N>Bot` of
   access level 7, recorded in `.e2e/minted-<prefix>`; later runs lease them again. They stay
   until the owner retires them (`//set access <name> 0` from a GM, then delete the record's
@@ -280,8 +281,8 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveClassChangeDyes` | GM, datapack, class master | #178 a new fighter becomes a Warrior at the class master at 20 and a Gladiator at 40; #179 it buys and draws its two Warrior symbols in Gludin, then removes them and draws its three Gladiator symbols, each draw answered by its HennaInfo, dye InventoryUpdate and SymbolAdded before the next; fails if the master (shown as 31228 "Hasha", #343) is not at its Talking Island spawn |
 | `TestLiveNavPickUpObstacle` | GM, datapack | #239 a level 5 farmer kills wolves the GM spawns and paralyses (a spawned monster wanders) at a measured site, recalled to its spot before each one, until it turns to a drop where the straight walk from where it stands fails: its kill spot for the first drop, the drop before for each next one (no site closes every drop spot: a scatter step blocked at once leaves the item on the corpse); it walks to a `StandPickUp` stand point, picks the item up from there, and the item reaches its inventory |
 | `TestLiveValuablesTradeSale` | GM, datapack | #402 a merchant-preset mystic given a Sword of Watershadow says a Trade line the unmarked buyer hears; the buyer's offer gets a counter, the counter an agreement and the merchant's TradeRequest, which the buyer accepts and pays: settled at that price (both inventories); private links at Rolfe only, the sword never worn |
-| `TestLiveValuablesWarehouse` | GM, datapack | #402 with `RoundGap` lowered, the merchant deposits the unsold sword at Rolfe after its round (30 adena a row), the GM gives it Tears of Eva, and its next round withdraws the sword at Rolfe before one Trade line naming both; no `_DepositP`/`_WithdrawP` names Rant |
-| `TestLiveValuablesRelease` | GM, datapack | #402 with `HoldRows` 1, a round with both valuables releases them: no deposit, the store lists them first, and the buyer buys the sword there at the listed price |
+| `TestLiveValuablesWarehouse` | GM, datapack | #402 with `RoundGap` lowered, the merchant (its cap off, so what earlier runs left goes in too) deposits the unsold sword at Rolfe after its round (30 adena a row), the GM gives it Tears of Eva, and its next round withdraws the sword at Rolfe before one Trade line naming both; no `_DepositP`/`_WithdrawP` names Rant |
+| `TestLiveValuablesRelease` | GM, datapack | #402 with `HoldRows` 1, a round with both valuables releases them: no deposit, the store lists only released valuables at their floor, and the buyer buys them there at the listed prices (what earlier runs left listed too) |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
 

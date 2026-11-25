@@ -113,7 +113,11 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	}
 	b := enterBuyer(t, ctx, tg, gm, f)
 	from, sent := f.seen(), len(f.watch.Sent())
-	giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
+	// A sword an earlier run's second round withdrew serves as well, and
+	// the merchant's stock stays bounded.
+	if f.carries(swordOfWatershadow) == 0 {
+		giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
+	}
 
 	untilServedBy(t, ctx, f.name+" deposits the sword after its round", time.Now().Add(12*time.Minute), f.watch, warehouseRefused(f.watch), func() string {
 		switch {
@@ -164,8 +168,8 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 
 // TestLiveValuablesRelease: with HoldRows lowered to 1, the merchant
 // advertises the Sword of Watershadow and Tears of Eva for a round, its cap
-// then releases both to its store: it deposits nothing and lists them; the
-// buyer buys the sword there at the listed price.
+// then releases both to its store: it deposits nothing and lists only them,
+// at their floor; the buyer buys there at the listed prices.
 func TestLiveValuablesRelease(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -197,26 +201,30 @@ func TestLiveValuablesRelease(t *testing.T) {
 
 	recallClient(t, ctx, gm, b.c)
 	list := b.storeList(t, ctx, f.id)
-	var row botclient.StoreItem
-	for i, it := range list.Items {
-		if it.TemplateID == swordOfWatershadow {
-			row = it
-		}
-		if i < 2 && it.TemplateID != swordOfWatershadow && it.TemplateID != tearsOfEva {
-			t.Errorf("store row %d lists template %d ahead of a released valuable: %+v", i, it.TemplateID, list.Items)
-		}
-	}
-	if row.ObjectID == 0 {
-		t.Fatalf("%s's store lists no %s: %+v", f.name, swordName, list.Items)
-	}
-	if row.ReferencePrice > 0 && row.Price < row.ReferencePrice {
-		t.Errorf("%s lists the sword at %d, under its reference price %d", f.name, row.Price, row.ReferencePrice)
-	}
 	t.Logf("%s's store: %+v", f.name, list.Items)
-	b.buyFromStore(t, ctx, f.id, row, list.BuyerAdena)
-	waitFor(t, ctx, f.name+" is paid for the sword", func() bool {
+	// It buys every listed valuable its adena pays for, at least one: what
+	// earlier runs left with the merchant is listed too, and goes.
+	var rows []botclient.StoreItem
+	coins := list.BuyerAdena
+	for i, it := range list.Items {
+		if it.TemplateID != swordOfWatershadow && it.TemplateID != tearsOfEva {
+			t.Errorf("store row %d lists template %d, no released valuable: %+v", i, it.TemplateID, list.Items)
+			continue
+		}
+		if it.ReferencePrice > 0 && it.Price < it.ReferencePrice {
+			t.Errorf("%s lists template %d at %d, under its reference price %d", f.name, it.TemplateID, it.Price, it.ReferencePrice)
+		}
+		if it.Price <= coins {
+			rows, coins = append(rows, it), coins-it.Price
+		}
+	}
+	if len(rows) == 0 {
+		t.Fatalf("%s's store lists no valuable %s pays for with %d adena: %+v", f.name, b.c.Self.Name, list.BuyerAdena, list.Items)
+	}
+	paid := b.buyFromStore(t, ctx, f.id, rows, list.BuyerAdena)
+	waitFor(t, ctx, f.name+" is paid for its valuables", func() bool {
 		run := f.counts(adena, from)
-		return run[len(run)-1]-run[0] == row.Price
+		return run[len(run)-1]-run[0] == paid
 	})
 	wearsNeither(t, f)
 	privateLinks(t, f, 0)
@@ -447,36 +455,41 @@ func (b *valuablesBuyer) storeList(t *testing.T, ctx context.Context, owner int3
 	return ev.(botclient.PrivateStoreListSell)
 }
 
-// buyFromStore buys one unit of row from owner's sell store at its listed
-// price, the buyer holding coins adena (the list's BuyerAdena), and waits
-// until the buyer carries a new one and paid.
-func (b *valuablesBuyer) buyFromStore(t *testing.T, ctx context.Context, owner int32, row botclient.StoreItem, coins int32) {
+// buyFromStore buys rows, one unit each, from owner's sell store at their
+// listed prices, the buyer holding coins adena (the list's BuyerAdena), and
+// waits until the buyer carries each and paid. It returns the adena paid.
+func (b *valuablesBuyer) buyFromStore(t *testing.T, ctx context.Context, owner int32, rows []botclient.StoreItem, coins int32) int32 {
 	t.Helper()
-	if coins < row.Price {
-		t.Fatalf("%s holds %d adena, under the listed %d", b.c.Self.Name, coins, row.Price)
+	buy := make([]botclient.StoreBuy, len(rows))
+	want := make(map[int32]bool, len(rows))
+	var price int32
+	for i, r := range rows {
+		buy[i] = botclient.StoreBuy{ObjectID: r.ObjectID, Count: 1, Price: r.Price}
+		want[r.TemplateID] = true
+		price += r.Price
 	}
-	var added bool
-	left := coins
-	if err := b.c.Send(ctx, botclient.EncodeRequestPrivateStoreBuy(owner, []botclient.StoreBuy{{ObjectID: row.ObjectID, Count: 1, Price: row.Price}})); err != nil {
+	added, left := 0, coins
+	if err := b.c.Send(ctx, botclient.EncodeRequestPrivateStoreBuy(owner, buy)); err != nil {
 		t.Fatal(err)
 	}
-	b.await(t, ctx, b.c.Self.Name+" buys the "+swordName+" from the store", 30*time.Second, func(ev botclient.Event) bool {
+	b.await(t, ctx, fmt.Sprintf("%s buys %d valuables from the store", b.c.Self.Name, len(rows)), 30*time.Second, func(ev botclient.Event) bool {
 		if sm, ok := ev.(botclient.SystemMessage); ok && (sm.ID == msgNotEnoughAdena || sm.ID == msgNotAuthorized) {
 			t.Fatalf("the store refused the buy: system message %d", sm.ID)
 		}
 		if u, ok := ev.(botclient.InventoryUpdate); ok {
 			for _, c := range u.Changes {
 				switch {
-				case c.Item.TemplateID == row.TemplateID && c.State == botclient.ItemAdded:
-					added = true
+				case want[c.Item.TemplateID] && c.State == botclient.ItemAdded:
+					added++
 				case c.Item.TemplateID == adena && c.State != botclient.ItemRemoved:
 					left = c.Item.Count
 				}
 			}
 		}
-		return added && left == coins-row.Price
+		return added == len(rows) && left == coins-price
 	})
-	t.Logf("%s bought the %s for %d", b.c.Self.Name, swordName, row.Price)
+	t.Logf("%s bought %d valuables for %d", b.c.Self.Name, len(rows), price)
+	return price
 }
 
 // replyPrice reads the price of a whispered reply ending in tail, in the
