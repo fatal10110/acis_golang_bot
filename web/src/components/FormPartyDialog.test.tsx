@@ -96,4 +96,16 @@ describe("FormPartyDialog", () => {
     show(false);
     expect(screen.getByRole("checkbox", { name: /^Pin/ })).toBeChecked();
   });
+
+  it("reads the auto switch afresh on each opening", () => {
+    const dialog = (open: boolean, auto: boolean) => (
+      <Toaster>
+        <FormPartyDialog open={open} bots={bots} names={names} auto={auto} onClose={vi.fn()} />
+      </Toaster>
+    );
+    const { rerender } = render(dialog(false, true));
+    rerender(dialog(false, false));
+    rerender(dialog(true, false));
+    expect(screen.getByRole("checkbox", { name: /^Pin/ })).toBeChecked();
+  });
 });

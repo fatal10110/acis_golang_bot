@@ -40,11 +40,16 @@ export function FormPartyDialog({
   const [leader, setLeader] = useState("");
   const [members, setMembers] = useState<string[]>([]);
   const [pin, setPin] = useState(!auto);
+  // Each opening reads the auto switch afresh: it may have changed since.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setPin(!auto);
+  }
   const { run, busy } = useRun();
   const close = (formed: boolean) => {
     setLeader("");
     setMembers([]);
-    setPin(!auto);
     onClose(formed);
   };
   const toggle = (account: string) => {
