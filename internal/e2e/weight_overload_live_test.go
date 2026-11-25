@@ -47,7 +47,8 @@ func TestLiveWeightOverload(t *testing.T) {
 	travel, items := townData(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("wo", 1)
-	strip(t, ctx, tg, gm, items, account, &botclient.HumanFighter, stripEnd{level: 1}, squiresSword, squiresShirt, squiresPants)
+	// A chain a run left behind goes with the strip.
+	strip(t, ctx, tg, gm, with(items, anguishChain), account, &botclient.HumanFighter, stripEnd{level: 1}, squiresSword, squiresShirt, squiresPants)
 	f := runTownBot(t, ctx, tg, account, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
 		warriorGear(p)
 		// Neither buys nor sells: the chains can only go by the drop.
@@ -55,15 +56,15 @@ func TestLiveWeightOverload(t *testing.T) {
 	})
 	toTown(t, ctx, tg, gm, f)
 
-	var cur, limit int32
+	var limit int32
 	until(t, ctx, f.name+" shows its weight limit", func() string {
-		if cur, limit = f.load(); limit <= 0 {
+		if _, limit = f.load(); limit <= 0 {
 			return "no weight limit yet"
 		}
 		return ""
 	})
-	// 117 % of the limit, as hz1 carried.
-	count := (int32(int64(limit)*117/100)-cur)/anguishChainWeight + 1
+	// At least 117 % of the limit, as hz1 carried, whatever else it carries.
+	count := int32(int64(limit)*117/100)/anguishChainWeight + 1
 	from := f.seen()
 	check := dropRefused(f.watch)
 	gmGive(t, ctx, gm, f, anguishChain, count)
