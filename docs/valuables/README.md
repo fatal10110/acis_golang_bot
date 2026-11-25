@@ -1,7 +1,8 @@
 # Merchant valuables (M12)
 
-Status: draft for owner review; proposed decisions D30-D34 open. The M12 epic and issues V1-V9 (V2,
-V3 as a and b, V7 as a to c) are filed once the owner approves.
+Status: owner approved D30-D34 as proposed on 2026-11-25 (`docs/plan.md`, "Owner decisions"), the
+proposals and not the alternatives. Milestone M12 ("Merchant valuables"): epic #376, issues V1-V9
+#378-#402.
 
 ## Problem and goal
 
