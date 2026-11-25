@@ -101,6 +101,12 @@ func TestLiveSpoilSweep(t *testing.T) {
 		if s.Spot == "" {
 			return fmt.Sprintf("no spot held (rule %q at %v): %s", s.Rule, s.Position, r)
 		}
+		// The bot arrived and fights or roams within its spot's leash, where
+		// a hunter spawned at it is a farm target (Brain.mayFarm): one spawned
+		// on its walk to the spot is left behind (run 1909dce, hunter 1).
+		if !slices.Contains(farmingRules, s.Rule) {
+			return fmt.Sprintf("at spot %s, not farming it (rule %q at %v): %s", s.Spot, s.Rule, s.Position, r)
+		}
 		if len(hunters) == spoilHunters {
 			t.Fatalf("%s: %d Werewolf Hunters spawned at it: %s", f.name, len(hunters), r)
 		}
@@ -192,19 +198,31 @@ func hunterOutcomes(seen []Seen, self int32, hunters []hunterSpawn, now time.Tim
 
 // werewolfHunter is the Werewolf Hunter template (data/xml/npcs, 20343): a
 // passive level 10 monster of 163 HP whose spoil rolls each of its items
-// independently (model/item/drop.go rollOrdered), at least one 82% of the
-// time. At the spoiler's own level the server's deep blue rule leaves its
-// chances whole (LevelPenaltyMultiplier), where a farming spot's monsters
-// more than 5 levels under the bot rarely give anything to sweep.
+// independently (model/item/drop.go rollOrdered), at least one of 40.4%,
+// 68.7% and 1.3% about 82% of the time. At the spoiler's own level the
+// server's deep blue rule leaves its chances whole (LevelPenaltyMultiplier),
+// where a farming spot's monsters, more than 5 levels under the bot and with
+// spoil chances of a few percent, rarely give anything to sweep: the spoiled
+// monsters that died unsweepable in the runs so far were the spot's, and
+// the one hunter the bot fought in run 1909dce died spoiled and sweepable
+// (hunterOutcomes).
 const werewolfHunter int32 = 20343
 
-// spoilHunters is how many hunters a run spawns at most, one at a time: a
-// spoil resisted (139) is cast again while the hunter lives, so each hunter
-// most likely dies spoiled and four in five of those leave items to sweep.
+// farmingRules are the rules of a bot that arrived at its spot: it attacks
+// a farm target (farm), or has none and roams or idles within the leash
+// (goal, idle, or no rule at all). On its walk there the rule is spot.
+var farmingRules = []string{"farm", "goal", "idle", ""}
+
+// spoilHunters is how many hunters a run spawns at most, one at a time,
+// each once the bot farms its spot: a spoil resisted (139) is cast again
+// while the hunter lives, so each hunter most likely dies spoiled and four
+// in five of those leave items to sweep; six all coming up empty is about
+// one run in 30000.
 const spoilHunters = 6
 
 // spoilBound bounds the spoil step: each hunter is a walk to the spot or a
-// short fight, its kill and its sweep window.
+// short fight, its kill and its sweep window, about a minute each in the
+// runs so far, or hunterKill for one the bot never fights.
 const spoilBound = 15 * time.Minute
 
 // hunterKill is how long a spawned hunter may live before the next one is
