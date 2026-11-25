@@ -35,6 +35,9 @@ const (
 	// privateFee is the fee of a private warehouse deposit per row
 	// (network/warehouse.go).
 	privateFee int32 = 30
+	// opSetPrivateStoreListSell is the packet that lists and opens a sell
+	// store (clientpackets SetPrivateStoreListSell).
+	opSetPrivateStoreListSell byte = 0x74
 )
 
 // TestLiveValuablesTradeSale: the GM gives the merchant in town a Sword of
@@ -53,10 +56,13 @@ func TestLiveValuablesTradeSale(t *testing.T) {
 	b := enterBuyer(t, ctx, tg, gm, f)
 	swords := f.carries(swordOfWatershadow)
 	from := f.seen()
-	gmGive(t, ctx, gm, f, swordOfWatershadow, 1)
+	giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
 
 	ad := b.hearAd(t, ctx, swordName)
 	t.Logf("%s heard %s: %q", b.c.Self.Name, f.name, ad)
+	// The buyer stands by the merchant at its anchor, within InviteReach.
+	gmTo(t, ctx, gm, f)
+	recallClient(t, ctx, gm, b.c)
 	reply := b.ask(t, ctx, "watershadow 140k")
 	counter, word, ok := replyPrice(reply, " lowest")
 	if !ok {
@@ -99,10 +105,12 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 		// Persona defaults (D6): two rounds within the scenario.
 		v.RoundGap, v.RoundWait, v.Grace = 3*time.Minute, time.Minute, 30*time.Second
 	})
-	gmGiveAdena(t, ctx, gm, f, 1000)
+	if have := f.carries(adena); have < 1000 {
+		giveMerchant(t, ctx, gm, f, adena, 1000-have)
+	}
 	b := enterBuyer(t, ctx, tg, gm, f)
 	from, sent := f.seen(), len(f.watch.Sent())
-	gmGive(t, ctx, gm, f, swordOfWatershadow, 1)
+	giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
 
 	untilServedBy(t, ctx, f.name+" deposits the sword after its round", time.Now().Add(12*time.Minute), f.watch, warehouseRefused(f.watch), func() string {
 		switch {
@@ -123,9 +131,12 @@ func TestLiveValuablesWarehouse(t *testing.T) {
 	})
 	t.Logf("%s deposited %d rows: adena %v", f.name, rows, f.counts(adena, from))
 
-	gmOn(t, ctx, gm, f)
+	// The round's lines the buyer has not read yet are no next round's.
+	if err := b.c.Watch(ctx, 3*time.Second, b.note); err != nil {
+		t.Fatal(err)
+	}
 	lines, sent := len(b.ads), len(f.watch.Sent())
-	gmGive(t, ctx, gm, f, tearsOfEva, 1)
+	giveMerchant(t, ctx, gm, f, tearsOfEva, 1)
 	b.until(t, ctx, b.c.Self.Name+" hears a Trade line naming "+tearsName, 12*time.Minute, func() bool {
 		return b.adSince(lines, tearsName) != ""
 	})
@@ -166,14 +177,17 @@ func TestLiveValuablesRelease(t *testing.T) {
 	})
 	b := enterBuyer(t, ctx, tg, gm, f)
 	from, sent := f.seen(), len(f.watch.Sent())
-	gmGive(t, ctx, gm, f, swordOfWatershadow, 1)
-	gmGive(t, ctx, gm, f, tearsOfEva, 1)
+	giveMerchant(t, ctx, gm, f, swordOfWatershadow, 1)
+	giveMerchant(t, ctx, gm, f, tearsOfEva, 1)
 
 	b.until(t, ctx, b.c.Self.Name+" hears the round's Trade line", 12*time.Minute, func() bool { return b.adSince(0, swordName) != "" })
-	if _, err := gm.Await(ctx, 8*time.Minute, storeOf(f.id)); err != nil {
-		t.Fatalf("the GM sees %s's store open after the round (rule %q): %v", f.name, f.bot.Status().Rule, err)
-	}
+	waitForBy(t, ctx, f.name+" lists its store after the round", time.Now().Add(8*time.Minute), func() bool {
+		return len(sentOf(f.watch.Sent()[sent:], opSetPrivateStoreListSell)) > 0
+	})
 	gmTo(t, ctx, gm, f)
+	if _, err := gm.Await(ctx, time.Minute, storeOf(f.id)); err != nil {
+		t.Fatalf("the GM sees %s's store open: %v", f.name, err)
+	}
 	if hasLink(privateLinks(t, f, sent), "_DepositP") {
 		t.Error("the merchant deposited a released valuable")
 	}
@@ -237,8 +251,15 @@ func valuablesMerchant(t *testing.T, ctx context.Context, tg *Target, gm *GMClie
 		},
 	})
 	toTown(t, ctx, tg, gm, f)
-	gmOn(t, ctx, gm, f)
 	return f
+}
+
+// giveMerchant has the GM, brought next to f wherever it walks (a look or
+// round may have taken it to a keeper), give it count of tmpl.
+func giveMerchant(t *testing.T, ctx context.Context, gm *GMClient, f *farmer, tmpl, count int32) {
+	t.Helper()
+	gmOn(t, ctx, gm, f)
+	gmGive(t, ctx, gm, f, tmpl, count)
 }
 
 // valuablesBuyer is the buyer's client and what it heard from the merchant.
