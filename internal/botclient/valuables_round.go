@@ -73,11 +73,7 @@ func (b *Brain) roundDue(now time.Time) bool {
 	if !v.lastStart.IsZero() && now.Sub(v.lastStart) < p.RoundGap || b.valuablesLeft() <= 0 {
 		return false
 	}
-	carried := false
-	for _, e := range v.entries {
-		carried = carried || e.carried > 0
-	}
-	return carried && b.roundReady(now)
+	return v.carried() && b.roundReady(now)
 }
 
 // startRound opens a round at now anchored where the bot stands and queues
@@ -138,6 +134,7 @@ func (b *Brain) queueRound(phase roundPhase, now time.Time) bool {
 		req.Withdraw = b.storedRows()
 	} else {
 		req.Deposit = b.carriedRows()
+		b.cfg.valuables.markDeposited(req.Deposit)
 	}
 	if req.empty() {
 		return false
@@ -339,7 +336,7 @@ func (b *Brain) closeStep(now time.Time) (Action, bool) {
 				return b.closeStep(now)
 			}
 		}
-		s.phase, s.request = roundLeave, time.Time{}
+		s.phase = roundLeave
 		return b.closeStep(now)
 	case roundDeposit:
 		if w.Self.InCombat {
@@ -353,7 +350,7 @@ func (b *Brain) closeStep(now time.Time) (Action, bool) {
 	if a, st := b.backTo(s.anchor, now); st == walkWalking {
 		return a, true
 	}
-	*s = sessionRound{}
+	*s = sessionRound{request: s.request}
 	return Action{}, false
 }
 

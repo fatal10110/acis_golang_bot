@@ -144,11 +144,13 @@ func TestValuablesRoundSessions(t *testing.T) {
 		if c.cfg.valuables.round.open || !c.wh.req.Look {
 			t.Fatalf("round open %v request %+v; want the look first", c.cfg.valuables.round.open, c.wh.req)
 		}
-		if rule, a := tradeTurn(t, c, at(5*time.Second), privateList()); rule == "valuables" || a.kind == actSay {
-			t.Fatalf("look listed: rule %q action %d, want the look done and no round", rule, a.kind)
+		// The round is pending on the open: the rule holds the turn with a
+		// wait (StoreHold, V7b).
+		if rule, a := tradeTurn(t, c, at(5*time.Second), privateList()); rule != "valuables" || a.kind != actHold || c.cfg.valuables.round.open {
+			t.Fatalf("look listed: rule %q action %d, want the look done and no round, the rule waiting", rule, a.kind)
 		}
 		due := 3*time.Second + warehouseOpenGap
-		if rule, a := c.decide(at(due - time.Second)); rule == "valuables" || c.cfg.valuables.round.open {
+		if rule, a := c.decide(at(due - time.Second)); a.kind != actHold || c.cfg.valuables.round.open {
 			t.Fatalf("open not due: rule %q action %d round open %v; want no round", rule, a.kind, c.cfg.valuables.round.open)
 		}
 		line := roundLine(t, c)
