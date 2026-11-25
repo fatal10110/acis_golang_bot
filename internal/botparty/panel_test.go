@@ -1,6 +1,7 @@
 package botparty
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -73,6 +74,53 @@ func TestFormByHand(t *testing.T) {
 		f, s := farmer("Farm", 26, 0), support("Sup", 20, 100)
 		st, _ := Form(State{NextID: 1}, memberOf(f), []Member{memberOf(s)}, true, "Farm", t0)
 		run(t, st, []Candidate{f, s}, DefaultPolicy(), []step{{want: []string{"sup:join Farm"}}})
+	})
+
+	// A slotless bot in a player's party gets no unparty, so it would await forever.
+	inPlayers := func(account string) func([]Candidate) {
+		return mod(account, func(c *Candidate) { c.Leader, c.Members = "Player", []string{c.Character} })
+	}
+	for _, pin := range []bool{false, true} {
+		t.Run(fmt.Sprintf("pin %t: a member in a player's party is dropped", pin), func(t *testing.T) {
+			cs := []Candidate{farmer("Farm", 20, 0), healer("Heal", 20, 100), support("Sup", 20, 200)}
+			inPlayers("sup")(cs)
+			st, id := Form(State{NextID: 1}, memberOf(cs[0]), []Member{memberOf(cs[1]), memberOf(cs[2])}, pin, "Farm", t0)
+			check := unpin()
+			if pin {
+				check = unpin("sup")
+			}
+			st = run(t, st, cs, DefaultPolicy(), []step{{
+				want: []string{"heal:join Farm"}, parties: map[string][]string{"Farm": {"Heal"}}, check: check,
+			}})
+			if pt := partyByID(st, id); pt == nil || pt.Await["sup"] {
+				t.Errorf("party %+v still awaits sup", pt)
+			}
+			if _, ok := st.Freed["sup"]; !ok {
+				t.Errorf("the dropped bot is not freed: Freed %v", st.Freed)
+			}
+		})
+
+		t.Run(fmt.Sprintf("pin %t: a leader in a player's party breaks it", pin), func(t *testing.T) {
+			cs := []Candidate{farmer("Farm", 20, 0), support("Sup", 20, 100)}
+			inPlayers("farm")(cs)
+			st, _ := Form(State{NextID: 1}, memberOf(cs[0]), []Member{memberOf(cs[1])}, pin, "Farm", t0)
+			check := unpin()
+			if pin {
+				check = unpin("farm", "sup")
+			}
+			run(t, st, cs, DefaultPolicy(), []step{{why: WhyPlayerParty, check: check}})
+		})
+	}
+
+	t.Run("a member awaiting in a bot's party is kept", func(t *testing.T) {
+		cs := []Candidate{farmer("Farm", 20, 0), support("Sup", 20, 100), farmer("Other", 20, 200)}
+		cs[2].Mode = ModeOff
+		mod("sup", func(c *Candidate) { c.Leader, c.Members = "Other", []string{"Sup"} })(cs)
+		st, id := Form(State{NextID: 1}, memberOf(cs[0]), []Member{memberOf(cs[1])}, false, "", t0)
+		st = run(t, st, cs, DefaultPolicy(), []step{{parties: map[string][]string{"Farm": {"Sup"}}}})
+		if pt := partyByID(st, id); pt == nil || !pt.Await["sup"] {
+			t.Errorf("party %+v no longer awaits sup", pt)
+		}
 	})
 }
 

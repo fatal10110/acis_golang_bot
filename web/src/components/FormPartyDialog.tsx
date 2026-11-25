@@ -44,6 +44,7 @@ export function FormPartyDialog({
   const close = (formed: boolean) => {
     setLeader("");
     setMembers([]);
+    setPin(!auto);
     onClose(formed);
   };
   const toggle = (account: string) => {

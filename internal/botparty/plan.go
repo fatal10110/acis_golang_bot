@@ -20,6 +20,7 @@ const (
 	WhyDissolved     = "dissolved by the panel"
 	WhyAutoOff       = "auto parties off"
 	WhyTaken         = "a bot taken by the panel"
+	WhyPlayerParty   = "leader in a player's party"
 )
 
 // Plan returns the organizer's next state and the orders that move the parties toward the groups
@@ -214,6 +215,9 @@ func (pl *planner) tend(pt *Party) {
 	case pl.st.AutoOff && !pt.Pinned:
 		pl.breakParty(pt, WhyAutoOff)
 		return
+	case leader != nil && pl.strayed(pt, leader):
+		pl.breakParty(pt, WhyPlayerParty)
+		return
 	}
 	rng := int64(pl.p.Range) * int64(pl.p.Range)
 	kept := pt.Members[:0]
@@ -296,8 +300,16 @@ func (pl *planner) badCommand(pt *Party) string {
 
 // dropped reports a member pt drops this pass. An auto party drops a member that cleared its
 // slot, was gone past LeaderGone, fell behind past BehindFor (the pair banned) or was made
-// ineligible on purpose; a pin only one that left it.
+// ineligible on purpose; a pin only one that left it. Either drops an awaiting bot that strayed
+// into a player's party.
 func (pl *planner) dropped(pt *Party, m Member, c *Candidate) bool {
+	if c != nil && pl.strayed(pt, c) {
+		delete(pt.Await, m.Account)
+		if pt.Pinned {
+			pl.st.Unpin = append(pl.st.Unpin, m.Account)
+		}
+		return true
+	}
 	if pt.Pinned {
 		if c != nil && leftPin(c, pt) {
 			pl.st.Unpin = append(pl.st.Unpin, m.Account)
@@ -435,6 +447,15 @@ func (pl *planner) awaiting(pt *Party, c *Candidate) bool {
 		return false
 	}
 	return true
+}
+
+// strayed reports a bot of pt.Await online with no slot and no order pending in a party no bot
+// candidate leads: a player's party, which no unparty takes it out of, so it would await forever.
+func (pl *planner) strayed(pt *Party, c *Candidate) bool {
+	if !pt.Await[c.Account] || !c.Online || c.Slot != "" || pending(c) || c.Leader == "" {
+		return false
+	}
+	return !slices.ContainsFunc(pl.cands, func(o Candidate) bool { return o.Character == c.Leader })
 }
 
 // slotNames are the names of a slot of kind k, nil for another slot.

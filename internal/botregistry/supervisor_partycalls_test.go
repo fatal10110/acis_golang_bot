@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
@@ -127,6 +128,12 @@ func TestSupervisorPartyCalls(t *testing.T) {
 		if _, err := h.sup.FormParty(ctx, "hz2", []string{"hz3"}, false); !errors.Is(err, ErrPartyRefused) {
 			t.Errorf("a support leading an auto party: %v", err)
 		}
+		// An auto party the next pass would break at once for its spread.
+		f["hz3"].set(func(s *botclient.Status) { s.Level = 26 })
+		if _, err := h.sup.FormParty(ctx, "hz3", []string{"hz2"}, false); !errors.Is(err, ErrPartyRefused) || !strings.Contains(err.Error(), "spread") {
+			t.Errorf("an auto party at a spread of 6: %v", err)
+		}
+		f["hz3"].set(func(s *botclient.Status) { s.Level = 20 })
 
 		// Farm2 takes Heal: Farm's party breaks (Heal was its last bot
 		// member), Heal gets unparty, then join once out of the party.

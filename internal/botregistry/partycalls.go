@@ -169,7 +169,8 @@ func partyPreset(preset string) bool {
 // and the auto switch govern. It refuses a bot offline, set off, in a party
 // the organizer did not form, or of a preset other than farmer and support
 // (D26); an auto party also a leader that is no farmer, a bot with a
-// standing order and any while auto parties are off. A whispered bot is
+// standing order, a level spread over MaxSpread and any while auto parties
+// are off. A whispered bot is
 // refused either way: no pin order replaces a whispered one. Each bot
 // leaves its other party; the next pass orders the new one
 // (docs/parties/panel.md). It returns the party's id.
@@ -212,6 +213,12 @@ func (s *Supervisor) formParty(leader string, members []string, pin bool) (int, 
 			ms = append(ms, m)
 		}
 	}
+	if !pin {
+		// The next pass would break it at once, the bots' old parties already broken.
+		if sp := s.levelSpread(accounts); sp > s.cfg.Party.MaxSpread {
+			return 0, fmt.Errorf("%w: a level spread of %d, over %d for an auto party", ErrPartyRefused, sp, s.cfg.Party.MaxSpread)
+		}
+	}
 	st, id := botparty.Form(s.party, lead, ms, pin, lead.Character, s.cfg.Clock.Now())
 	s.unpin(st.Unpin)
 	st.Unpin = nil
@@ -228,6 +235,19 @@ func (s *Supervisor) formParty(leader string, members []string, pin bool) (int, 
 	}
 	s.log.Info("party formed by the panel", "id", id, "leader", leader, "members", members, "pinned", pin)
 	return id, nil
+}
+
+// levelSpread is the most levels the snapshots of accounts lie apart.
+func (s *Supervisor) levelSpread(accounts []string) int32 {
+	var lo, hi int32
+	for i, a := range accounts {
+		v, _ := s.snapshot(a)
+		if i == 0 {
+			lo, hi = v.Level, v.Level
+		}
+		lo, hi = min(lo, v.Level), max(hi, v.Level)
+	}
+	return hi - lo
 }
 
 // formable is the party member of account, or why it cannot join a
