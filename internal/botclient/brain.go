@@ -294,6 +294,9 @@ type Brain struct {
 	// gearVal is the character model the gear and dye errands last valued
 	// gear with (Brain.valuer), nil before the first.
 	gearVal *gearModel
+	// members are the models of the bot members of each class and level
+	// a leader fit spots with (Brain.memberModel), nil before the first.
+	members map[memberKey]memberModel
 	// usedAt is when the bot last used (UseItem) each item template.
 	usedAt map[int32]time.Time
 	// shotAsked is the last auto-use request of each shot template.

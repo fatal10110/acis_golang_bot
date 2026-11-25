@@ -129,7 +129,7 @@ func TestPackFit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newSquireBrain(t, tt.self, tt.potions)
 			bd := b.build()
-			kill, die, ok := b.packFight(&tt.spot, &bd, bd.Kit.SpotMargin)
+			kill, die, ok := b.packFight(&tt.spot, &bd, bd.Kit.SpotMargin, &crew{})
 			if !ok || math.Abs(kill-tt.kill) > 0.1 || math.Abs(die-tt.die) > 0.1 {
 				t.Errorf("packFight = %.2f s, %.2f s, %v; want %.1f, %.1f", kill, die, ok, tt.kill, tt.die)
 			}
@@ -266,7 +266,7 @@ func TestPackFitShipped(t *testing.T) {
 			b.cfg.Travel = m
 			if got := b.spotFits(&s, at(time.Second)); got != tt.fit {
 				bd := b.build()
-				kill, die, _ := b.packFight(&s, &bd, bd.Kit.SpotMargin)
+				kill, die, _ := b.packFight(&s, &bd, bd.Kit.SpotMargin, &crew{})
 				t.Fatalf("spotFits = %v at kill %.1f s, die %.1f s, want %v", got, kill, die, tt.fit)
 			}
 		})

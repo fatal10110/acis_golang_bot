@@ -26,8 +26,11 @@ type Skill struct {
 	// HitTime and ReuseDelay are hitTime and reuseDelay (default 0): how
 	// long the cast takes and how long until the skill may be cast again.
 	HitTime, ReuseDelay time.Duration
-	// MPConsume is mpConsume (default 0), the MP a cast costs.
-	MPConsume int
+	// MPConsume is mpConsume (default 0), the MP a cast costs when it
+	// lands, and MPInitialConsume mpInitialConsume (default 0), the MP it
+	// costs up front: the server charges a cast both (cast/controller.go
+	// CanCast).
+	MPConsume, MPInitialConsume int
 	// Power is power (default 0), the skill's base damage or heal.
 	Power float64
 	// NumCharges is numCharges, the charges a cast spends (or a charging
@@ -250,7 +253,7 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	for level := 1; level <= levels; level++ {
 		res := resolver{tables: tables, row: level}
 		r := res.reader(sets, "isPotion", "castRange", "skillType", "operateType", "target", "weaponsAllowed",
-			"hitTime", "reuseDelay", "mpConsume", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
+			"hitTime", "reuseDelay", "mpConsume", "mpInitialConsume", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
 			"isDebuff", "offensive", "nextActionAttack", "magicLvl", "lvlDepend", "abnormalLvl", "effectAbnormalLvl",
 			"effectType", "effectPower", "negateStats", "negateLvl")
 		sk := Skill{
@@ -259,7 +262,8 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			WeaponsAllowed: splitKinds(r.strDefault("weaponsAllowed", "")),
 			HitTime:        time.Duration(r.intDefault("hitTime", 0)) * time.Millisecond,
 			ReuseDelay:     time.Duration(r.intDefault("reuseDelay", 0)) * time.Millisecond,
-			MPConsume:      r.intDefault("mpConsume", 0), Power: r.floatDefault("power", 0),
+			MPConsume:      r.intDefault("mpConsume", 0), MPInitialConsume: r.intDefault("mpInitialConsume", 0),
+			Power:      r.floatDefault("power", 0),
 			NumCharges: r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
 			Charges: chargeCond(el.Conds, &res),
 			Radius:  r.int32Default("skillRadius", 80), Magic: r.boolDefault("isMagic", false),
