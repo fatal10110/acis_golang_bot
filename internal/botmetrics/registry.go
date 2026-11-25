@@ -39,6 +39,8 @@ type Registry struct {
 	partiesBroken map[string]uint64
 
 	last atomic.Pointer[Snapshot]
+	// navCache reads the nav cache's counts (SetNavCache); nil: none.
+	navCache atomic.Pointer[func() NavCache]
 }
 
 // NewRegistry returns a registry that counts hits of the named decision
@@ -126,6 +128,13 @@ type Snapshot struct {
 	// microseconds (docs/walking.md, "Plan metrics (#497)").
 	NavPlans      map[string]uint64 `json:"nav_plans_total"`
 	NavPlanMicros HistogramSnapshot `json:"nav_plan_us"`
+	// NavLocates counts the nav hierarchy's Locates by how they were
+	// answered (the Locate* names, every one present); NavLRUBytes is the
+	// bytes its cluster result LRU holds and NavPlaces the cells its place
+	// table holds (docs/navigation.md, "Cache"; #496).
+	NavLocates  map[string]uint64 `json:"nav_locate_total"`
+	NavLRUBytes int64             `json:"nav_lru_bytes"`
+	NavPlaces   int               `json:"nav_places"`
 	// The merchants' valuables (docs/valuables/preset.md "Wiring"): the
 	// Trade ad lines, the whisper replies, the sales by kind (ValuablesSold
 	// keyed by via, "trade" and "store"), the private deposits and the
@@ -228,6 +237,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.NavPlans[planNames[i]] = n
 	}
 	s.ValuablesSold = map[string]uint64{ViaTrade: soldTrade, ViaStore: soldStore}
+	r.collectNavCache(s)
 	for i, name := range r.rules {
 		s.Rules[name] = hits[i]
 	}
@@ -245,7 +255,7 @@ func (r *Registry) Last() *Snapshot {
 	for _, n := range planNames {
 		plans[n] = 0
 	}
-	return &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
+	return &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, NavLocates: navLocates(NavCache{}), ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
 }
 
 // Run collects on every tick until ctx ends. The caller owns the ticker

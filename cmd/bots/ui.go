@@ -355,6 +355,9 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	// -metrics, which only adds their endpoint.
 	metrics := botmetrics.NewRegistry(botclient.RuleNames()...)
 	gate.ReportBreaker(metrics)
+	if n := runner.shared.nav; n != nil {
+		n.ReportCache(metrics)
+	}
 	// The panel's bots form bot parties (D25): the organizer plans them
 	// every botregistry.PartyTick.
 	party := botparty.DefaultPolicy()

@@ -39,6 +39,8 @@ export function Dashboard({ dash, samples, ask }: { dash: DashboardData | undefi
   const planTime = m?.nav_plan_us;
   const planMean = planTime && planTime.count > 0 ? (planTime.sum / planTime.count / 1000).toFixed(1) : "—";
   const planMax = planTime && planTime.count > 0 ? (planTime.max / 1000).toFixed(1) : "—";
+  const locates = Object.entries(m?.nav_locate_total ?? {}).sort((a, b) => b[1] - a[1]);
+  const lruMB = ((m?.nav_lru_bytes ?? 0) / 1e6).toFixed(1);
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Dashboard</h1>
@@ -101,6 +103,29 @@ export function Dashboard({ dash, samples, ask }: { dash: DashboardData | undefi
           </thead>
           <tbody>
             {plans.map(([k, v]) => (
+              <tr key={k} className="border-t border-slate-100 dark:border-slate-800">
+                <td className="py-1">{k}</td>
+                <td className="py-1 text-right tabular-nums">{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      <Card title="Nav cache">
+        <p className="mb-2 text-sm text-slate-500">
+          LRU {lruMB} MB, {m?.nav_places ?? 0} places kept
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-slate-500 uppercase">
+              <th scope="col">Answered</th>
+              <th scope="col" className="text-right">
+                Locates
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {locates.map(([k, v]) => (
               <tr key={k} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="py-1">{k}</td>
                 <td className="py-1 text-right tabular-nums">{v}</td>

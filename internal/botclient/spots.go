@@ -341,7 +341,8 @@ type navPoint struct {
 }
 
 // locate is p on the layer nearest its Z with its place in the hierarchy;
-// false without navigation or off the nav cache.
+// false without navigation or off the nav cache. The walker's pins answer
+// for the ground it stands on and walks to.
 func (b *Brain) locate(p Point) (navPoint, bool) {
 	w := &b.walk
 	if w.nav == nil {
@@ -351,7 +352,29 @@ func (b *Brain) locate(p Point) (navPoint, bool) {
 	if !ok {
 		return navPoint{}, false
 	}
-	m, err := w.nav.Hier.Locate(c, nil)
+	m, err := w.nav.Hier.Locate(c, &w.pins)
+	if err != nil {
+		return navPoint{}, false
+	}
+	p.Z = int32(c.Z)
+	return navPoint{at: p, m: m}, true
+}
+
+// locatePlace is locate for a static place, the same for every bot (a
+// gatekeeper, a teleport's landing, a town, a spot's centre): the
+// hierarchy's place table answers it after the first time
+// (Hierarchy.LocatePlace). Never where a bot stands: the table keeps every
+// cell it is asked.
+func (b *Brain) locatePlace(p Point) (navPoint, bool) {
+	w := &b.walk
+	if w.nav == nil {
+		return navPoint{}, false
+	}
+	c, ok := w.plan.Locate(toLoc(p))
+	if !ok {
+		return navPoint{}, false
+	}
+	m, err := w.nav.Hier.LocatePlace(c)
 	if err != nil {
 		return navPoint{}, false
 	}
@@ -381,13 +404,10 @@ func (b *Brain) navDistance(from, to navPoint) (float64, bool) {
 	return float64(d) * block.CellSize / 10, true
 }
 
-// spotPoint is spot sp's centre on walkable ground inside its territory and
-// reachable from from: the centre itself, else the walkable cell nearest it
-// within spotSnap that is inside the territory and reachable; false when
-// none is.
-func (b *Brain) spotPoint(sp *datapack.Spot, from navPoint) (navPoint, bool) {
+// snapSpot is spotPoint's search.
+func (b *Brain) snapSpot(sp *datapack.Spot, from navPoint) (navPoint, bool) {
 	c := Point{X: sp.Center.X, Y: sp.Center.Y, Z: sp.Z}
-	if p, ok := b.locate(c); ok && b.walkable(from, p) {
+	if p, ok := b.locatePlace(c); ok && b.walkable(from, p) {
 		return p, true
 	}
 	var got navPoint
@@ -412,7 +432,7 @@ func (b *Brain) spotPoint(sp *datapack.Spot, from navPoint) (navPoint, bool) {
 func (b *Brain) spotDest(i int, now time.Time) Point {
 	sp := &b.cfg.Spots.spots[i]
 	if here, ok := b.locate(b.standing(now)); ok {
-		if at, ok := b.spotPoint(sp, here); ok {
+		if at, ok := b.spotPoint(i, here); ok {
 			return at.at
 		}
 	}
@@ -537,7 +557,7 @@ func (b *Brain) candsWhere(here navPoint, now time.Time, fit func(*datapack.Spot
 		if line > far {
 			continue
 		}
-		at, ok := b.spotPoint(sp, here)
+		at, ok := b.spotPoint(i, here)
 		if !ok {
 			continue
 		}

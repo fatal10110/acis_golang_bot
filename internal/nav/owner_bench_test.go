@@ -195,6 +195,27 @@ func BenchmarkOwnerNav(b *testing.B) {
 		}
 		b.Logf("LRU: %d cluster results, %.1f MB, %.0f KB each on average",
 			len(h.cache.items), float64(h.cache.used)/1e6, float64(h.cache.used)/1e3/float64(max(len(h.cache.items), 1)))
+		logLabelLayers(b, h)
+		// A static place located again once the LRU dropped its cluster
+		// (#496): LocateCold is what Locate pays for it, this what
+		// LocatePlace pays.
+		places := NewHierarchy(g, e, w, 0)
+		for i := range n {
+			if _, err := places.LocatePlace(from[i]); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.Run("LocatePlaceAgain", func(b *testing.B) {
+			computed := places.Stats().Computed
+			measure(b, n, func(i int) int64 {
+				if _, err := places.LocatePlace(from[i]); err != nil {
+					b.Fatal(err)
+				}
+				return 0
+			})
+			s := places.Stats()
+			b.Logf("place table: %d cells, %d computed again of %d places located again", s.PlaceCells, s.Computed-computed, n)
+		})
 		b.Run("LocateSameSCCWarm", func(b *testing.B) {
 			measure(b, n, func(i int) int64 {
 				ma, _ := h.Locate(from[i], nil)
