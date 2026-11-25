@@ -159,6 +159,10 @@ func EncodeAddTradeItem(objectID, count int32) []byte { return encodeAddTradeIte
 // EncodeTradeDone confirms the open trade, or cancels it.
 func EncodeTradeDone(confirm bool) []byte { return encodeTradeDone(confirm) }
 
+// EncodeAnswerTradeRequest answers the trade request the sender received:
+// accept opens the window, else it declines.
+func EncodeAnswerTradeRequest(accept bool) []byte { return encodeAnswerTradeRequest(accept) }
+
 // StoreBuy is a row of a purchase from a private sell store: the listed
 // item object, how many and the store's unit price.
 type StoreBuy struct{ ObjectID, Count, Price int32 }
