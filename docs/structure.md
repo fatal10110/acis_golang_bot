@@ -1,10 +1,13 @@
 # Hardening, route planner and brain structure
 
 Status: decided by the owner on 2026-11-26 where the "Owner decisions" table says so (D45-D48);
-two questions stay open there (the prototypes OP1 and OP2, and BR1b). Reviewed in three rounds by
-two independent reviewers before the decisions, and once more after them for the sections the
-decisions changed (HD4, Design 5); the corrections of that last round are in the text and were
-not read again.
+two questions stay open there (the prototypes OP1 and OP2, and BR1b). Filed as epic #641 with
+sub-issues #642-#661 (the Delivery table); nothing is filed for the open questions.
+
+Reviewed in three rounds by two independent reviewers before the decisions, and once more after
+them for the sections the decisions changed (HD4, Design 5). The issue texts were checked once
+against the code by the same reviewers before filing. The corrections of those last two passes are
+in the text and in the issues, and were not read again.
 
 This plan comes from a review of the whole module on 2026-11-26 (`main` at 4f17fe2). The review
 found a small set of defects, two gaps in how the route planner joins a route's ends, and a brain
@@ -165,7 +168,8 @@ no longer by each dial that connects. Two things step it:
 - a *not-ready ending*, `PlayFail`, a system `LoginFail` (`SystemError`, `AccessFailed`,
   `ServerOverloaded`, `Maintenance`) or a packet the bot cannot decode before the world (HD4),
   when the last not-ready ending since the last entry came
-  from a different bot. Two different bots in a row mean the server, not an account.
+  from a different bot. Two different bots in a row mean the server, not an account; the first
+  not-ready ending after an entry only records its bot.
 
 `Bot.after` is unchanged: a not-ready ending still waits the bot's own backoff, and a refused dial
 none. So during an outage the fleet's logins are spaced by the gate, at most one every 1-2 min at
@@ -185,12 +189,13 @@ bot.
 **HD3, panic isolation (DF6).** Two recover points, as `go-style.md` asks:
 
 - in `Bot.attempt`, around the whole attempt (the dials, `EnterGame`, `NewWorld`, `NewBrain` and
-  `play`), with `turn.Done()` moved to a `defer` so a panic cannot keep the gate's token. Inside
-  `play`, `Run`'s deferred releases have run during the unwind, and `play`'s closing of `done`,
-  the connection and the reader join become deferred too. `enter` closes a game connection it
-  opened on a panic as on an error, or the server would keep a half-entered session and answer
-  the next login `AccountInUse`. `attempt`'s named results still report that the bot entered and
-  for how long when the panic was inside `play`, so `afterSession`'s stable-session reset holds;
+  `play`), with a deferred `turn.Done()` added so a panic cannot keep the gate's token; a second
+  `Done` does nothing, and the call after `enter` stays, so the turn still ends before `play`.
+  Inside `play`, `Run`'s deferred releases have run during the unwind, and `play`'s closing of
+  `done`, the connection and the reader join become deferred too. `enter` closes a game connection
+  it opened on a panic as on an error, or the server would keep a half-entered session and answer
+  the next login `AccountInUse`. `attempt`'s named results still report that the bot entered and for
+  how long when the panic was inside `play`, so `afterSession`'s stable-session reset holds;
 - in the reader goroutine: a panic becomes the `connLost` it queues.
 
 A panic is its own class: logged with its stack, counted in `bot_panics_total`, and the bot stops
@@ -209,15 +214,22 @@ skipped; the session plays on.
   counts it in `decode_errors_total` by opcode, drops the frame and reads on. The error line is
   written for the first failure of each opcode in a session; later ones of that opcode only
   count, or one changed layout of a frequent packet (`CharInfo`, `MoveToLocation`) would write
-  hundreds of lines a second for every bot. The set of opcodes already logged is the session's:
-  `play` makes it, `NewWorld` uses it first, and the reader owns it after.
+  hundreds of lines a second for every bot. The reader has no logger and stays without one: for
+  a frame it drops it queues a brain-side event, `decodeSkipped` with the opcode, the sub-opcode
+  and the length, and the brain, which has the session's logger and metrics, writes the line and
+  counts. The set of opcodes already logged is the brain's, so one goroutine owns it.
 - Two packets are delivered on their opcode alone, with the error logged: `ServerClose` and
   `LeaveWorld`. Both have empty layouts, and skipping one that grew a byte would turn a kick into
   an abort and a commanded logout into a reconnect.
-- In the `EnterWorld` burst `NewWorld` replays: the same, a bad frame is logged, counted and
-  skipped, but for the burst's `UserInfo`. It is the only source of the bot's class, level, HP,
-  speed and collision height, so a bot without it would play an empty character: a bad `UserInfo`
-  there ends the attempt with `errDecode`, as before the world.
+- In the `EnterWorld` burst `NewWorld` replays: a bad frame is skipped. `NewWorld` returns what
+  it skipped as counts by opcode, and `play` hands them to the brain when it makes it, not
+  through the queue: a town's burst can hold more bad frames than the queue has room for, and
+  nothing drains the queue before the brain runs. The brain logs each opcode once and adds the
+  counts.
+- The burst's `UserInfo` is the exception. It is the only source of the bot's class, level, HP,
+  speed and collision height, so a bot without it would play an empty character. `EnterGame`
+  therefore decodes it with the full decoder `NewWorld` replays it with, so a bad one is an
+  `EnterGame` decode error: inside the turn, before the bot counts as entered, as below.
 - Before the world (login, `EnterGame`): those packets carry what the next step needs (the
   session keys, the character list), so there is nothing to skip to. The attempt ends with
   `errDecode`, logged as an error with the packet's name and counted the same way, never as a
@@ -420,7 +432,7 @@ The survey counted instances and read each. Adopted: three or more real instance
 | # | Shape | Instances | Mechanism |
 | --- | --- | --- | --- |
 | GM1 | Hold until a time, by key (`now.Before(m[k])`): shunned NPCs, avoided spots, retries, the blacklist | 17 maps, with their lazy-init blocks and 14 prune loops, about 120 lines | `type holds[K comparable] map[K]time.Time` with `set(k, until)`, `extend(k, until)` (keeps the later time, as `failedWalk` does), `held(k, now) bool`, `prune(now)` |
-| GM2 | The trainer's own visit | `trainer.go` repeats `npcVisit`'s clicks, talk wait and shun, keyed by object id, with no object check in `sent` | the trainer moves onto `npcVisit.approach`. It changes behavior (the object check, the shun key, the re-pick), so it has its own tests |
+| GM2 | The trainer's own visit | `trainer.go` repeats `npcVisit`'s clicks, talk wait and shun, keyed by object id, with no object check in `sent` | the trainer moves onto `npcVisit.approach`. It changes behavior in one way: its `sent` acts on the visited object's packets only. Its shun key (the object id) and its re-pick among the trainers in sight stay the trainer's |
 | GM3 | Two one-line helpers | jitter `d + rng in [0, j]` 13 times; `"npc_<obj>_<cmd>"` 10 times | `Brain.between(lo, hi)`, `npcBypass(obj, cmd)` |
 
 A map never reset to nil is made in `NewBrain` or its feature's constructor instead of lazily. A
@@ -454,13 +466,14 @@ the cost is mechanical and wide:
   and their tables. `botwire` exports three things: `DecodeEvent`, which the reader, `NewWorld`
   and the e2e harness already reach through one entry (`decodeEvent`); the constants typed by the
   moved types (the status fields, the wait types, the item changes, the enchant results; 22 of
-  them); and the opcodes, 171 constants that are unexported today. The per-packet decoders stay
+  them); and the game opcodes, 159 constants that are unexported today (the 12 login opcodes
+  are WP3's). The per-packet decoders stay
   unexported inside `botwire`. `botclient` keeps one file of forwards, so the brain's code and its
   tests do not change: a type alias per moved type (`type MoveToLocation = botwire.MoveToLocation`),
   a constant per moved constant (`const opGameLogout = botwire.OpGameLogout`: the encoders, which
   stay until WP2, `harness.go`, `brainpackets.go`, `partymatch.go` and 48 test files name
   opcodes), and `decodeEvent` itself, which 24 test files call. The interface's marker method
-  becomes exported, so the session's own event (`connLost`, the only one) can stay in
+  becomes exported, so the brain-side events (`connLost`, and HD4's `decodeSkipped`) can stay in
   `botclient`. No `botclient` test calls a per-packet game decoder, but about 20 test files use
   other unexported wire names (`errTrailingBytes`, `eventDecoders`, `readItem`, `capFor`): the
   codec tests in them (round trips, fixtures under `testdata`, the decode fuzz targets) are split
@@ -539,9 +552,11 @@ when another attacker hit the target.
 The log is off unless `-outcome-log <file>` is given. The command that opens the file (`swarm`,
 `ui`) starts the one writer goroutine and joins it at shutdown; it does not depend on the metrics
 registry, which `swarm` runs without unless `-metrics` is set. A brain hands a record to a bounded
-queue; a full queue drops the record and counts the drop, and never blocks a brain. The file is
-size-bounded JSONL. No account name, character name, password or chat text is written. #398 (a bot
-party's experience per hour against a solo farmer) needs this same measurement.
+queue of 1024 records; a full queue drops the record and counts the drop, and never blocks a
+brain. The file is JSONL, rotated once it passes 64 MiB with one old file kept. A spot is written
+as its maker's name and its centre, which stay readable when the datapack's spot order changes.
+No account name, character name, password or chat text is written. #398 (a bot party's experience
+per hour against a solo farmer) needs this same measurement.
 
 ### 7. Options: known algorithms and small models
 
@@ -616,13 +631,14 @@ asks of the M10 rewrite.
 - **HD3.** A brain whose rule panics ends its attempt with `ErrPanic`, gives the gate's token
   back, releases its spot, joins its reader, and leaves a second bot of the same registry running;
   a panic in `EnterGame` does the same and closes the game connection.
-- **HD4.** A frame one byte short in the world is logged once, counted, skipped, and the event
-  after it is applied; a second of the same opcode only counts; a `ServerClose` and a
-  `LeaveWorld` with a trailing byte still end the session as a kick and a logout; a bad frame in
-  the `EnterWorld` burst does not fail `NewWorld`, a bad `UserInfo` there does; one in
-  `EnterGame` ends the attempt with `errDecode`, counts no abort, and from two bots steps the
-  gate. Two tests pin the old rule and are rewritten: `TestReadEventsMalformedFrameEnds`
-  (`reader_test.go`) and the malformed case of `TestNewWorldReplaysBurst` (`world_test.go`).
+- **HD4.** A frame one byte short in the world is logged once, counted, skipped, and the event after
+  it is applied; a second of the same opcode only counts; a `ServerClose` and a `LeaveWorld` with a
+  trailing byte still end the session as a kick and a logout; a bad frame in the `EnterWorld` burst
+  does not fail `NewWorld` and reaches the brain as a count; a bad packet in `EnterGame`, the
+  burst's `UserInfo` included, ends the attempt with `errDecode` before the bot counts as entered,
+  counts no abort, and from two bots steps the gate. Two tests pin the old rule and are rewritten:
+  `TestReadEventsMalformedFrameEnds` (`reader_test.go`) and the malformed case of
+  `TestNewWorldReplaysBurst` (`world_test.go`).
 - **WP1-WP3.** No test changes but the moves, the splits of mixed test files and the renames;
   the suites of `internal/botclient`, `internal/botwire` and `internal/e2e` (build only) pass,
   and the fuzz targets run from their new package.
@@ -645,38 +661,40 @@ asks of the M10 rewrite.
   renames. One new test per mechanism (`alarm`, `holds`).
 - **BR1b.** Each PR lists the tests that call a rule function and then `Brain.send` for a hook it
   moves, and edits them to go through `decide` or to name the row; no assertion changes.
-- **GM2.** New tests for the trainer's object check, shun key and re-pick; the trainer tests it
-  changes are listed in the PR.
+- **GM2.** A new test: a talk click of another row during a trainer visit does not count toward
+  the trainer's clicks or arm its wait. The trainer tests for the shun and the re-pick pass
+  unchanged.
 - **OP0.** A record built from a scripted stay on the injected clock; the writer drops under a
   full queue and never blocks.
 - No `-race` run on the owner's machine; PR CI runs the unit tier with it. The live scenarios are
   unchanged.
 
-## Delivery (milestone M14, "Hardening and structure")
+## Delivery (milestone M14, "Hardening and structure", epic #641)
 
 | PR | Scope | Needs | Changes behavior |
 | --- | --- | --- | --- |
-| HD1 | `errClosedAtAccept`, the quiet period on both gates, spacing turned on for an allowlisted gate that saw one, the counter; `internal/e2e/target.go`, the other user of `Turn.Dialed` | — | reconnect timing |
-| HD2 | The gate's backoff reset on entering the world; not-ready endings of two different bots step it; `internal/e2e/target.go` | HD1 (same files) | reconnect timing |
-| HD3 | Recover in `Bot.attempt` and the reader; `ErrPanic`; deferred `turn.Done`, `enter` and `play` cleanup; the lock audit | HD2 (same file) | a panic ends one bot |
-| HD4 | Skip and log an undecodable packet in the world and the burst; `ServerClose` and `LeaveWorld` on the opcode; `errDecode` before the world and for the burst's `UserInfo`, as a not-ready ending; the counter; the two guides and the doc comments (D45) | HD3 (same file), HD2 (the not-ready ending) | a bad packet no longer ends a session |
-| HD5 | `Planner.RouteToNearest`; `walker.drop` on it | — | which drop is taken (the cheapest landing by path cost) |
-| HD6 | Fold a deleted bot's counters, drop its slot | — | no |
-| RT1 | The same-cluster cap and seated search; the same-cluster owner sample | — | same-cluster routes past the cap |
-| RT2 | `ErrDoor` for an enclosed goal | RT1 (same function) | the reason of a walk that fails today |
-| BR1a | `rule.karma`, `rule.stop` | — | no |
+| HD1 (#642) | `errClosedAtAccept`, the quiet period on both gates, spacing turned on for an allowlisted gate that saw one, the counter; `internal/e2e/target.go`, the other user of `Turn.Dialed` | — | reconnect timing |
+| HD2 (#643) | The gate's backoff reset on entering the world; not-ready endings of two different bots step it; `internal/e2e/target.go` | HD1 (same files) | reconnect timing |
+| HD3 (#644) | Recover in `Bot.attempt` and the reader; `ErrPanic`; a deferred `turn.Done` beside the one after `enter`, deferred `enter` and `play` cleanup; the lock audit | HD2 (same file) | a panic ends one bot |
+| HD4 (#645) | Skip and log an undecodable packet in the world and the burst; `ServerClose` and `LeaveWorld` on the opcode; `errDecode` before the world, the burst's `UserInfo` included (checked in `EnterGame`), as a not-ready ending; the counter; the two guides and the doc comments (D45) | HD3 (same file), HD2 (the not-ready ending) | a bad packet no longer ends a session |
+| HD5 (#646) | `Planner.RouteToNearest`; `walker.drop` on it | — | which drop is taken (the cheapest landing by path cost) |
+| HD6 (#647) | Fold a deleted bot's counters, drop its slot | — | no |
+| RT1 (#648) | The same-cluster cap and seated search; the same-cluster owner sample | — | same-cluster routes past the cap |
+| RT2 (#649) | `ErrDoor` for an enclosed goal | RT1 (same function) | the reason of a walk that fails today |
+| BR1a (#650) | `rule.karma`, `rule.stop` | — | no |
 | BR1b | `rule.sent`, one group of hooks a PR (SD5) | BR1a | no; edits tests |
-| BR2 | `alarm` | — | no |
-| GM1 | `holds[K]`; never-reset maps made at construction | — | no |
-| GM2 | The trainer on `npcVisit.approach` | — | the trainer's clicks and shuns |
-| GM3 | `between`, `npcBypass` | — | no |
-| WR1 | One wiring site for the shared set; one organizer driver | — | no |
-| WP1 | `internal/botwire`: event types, their constants, the opcodes, the decoders, `DecodeEvent`; the file of forwards in `botclient`; codec tests, fixtures and fuzz split out and moved (D46) | HD4 (the reader's decode path) | no |
-| WP2 | Encoders and their row types to `botwire`; call sites rewritten; `harness.go` and `internal/e2e` on `botwire`; the boundary test | WP1 | no |
-| WP3 | Login and handshake wire (`login.go`, `gamepackets.go`, `character.go`) and the types they share with the session | WP2 | no |
-| OP0 | Outcome log (D47) | — | no |
+| BR2 (#651) | `alarm` | — | no |
+| BR3 (#652) | The recipe errand's `sent` and the craft row's recipe-book request: a test that shows the cross-talk or closes it as not reachable, then the fix | — | only if the test shows it |
+| GM1 (#653) | `holds[K]`; never-reset maps made at construction | — | no |
+| GM2 (#654) | The trainer on `npcVisit.approach` | — | the trainer no longer counts another row's talk click |
+| GM3 (#655) | `between`, `npcBypass` | — | no |
+| WR1 (#656) | One wiring site for the shared set; one organizer driver | — | no |
+| WP1 (#657) | `internal/botwire`: event types, their constants, the opcodes, the decoders, `DecodeEvent`; the file of forwards in `botclient`; codec tests, fixtures and fuzz split out and moved (D46) | HD4 (the reader's decode path) | no |
+| WP2 (#658) | Encoders and their row types to `botwire`; call sites rewritten; `harness.go` and `internal/e2e` on `botwire`; the boundary test | WP1 | no |
+| WP3 (#659) | Login and handshake wire (`login.go`, `gamepackets.go`, `character.go`) and the types they share with the session | WP2 | no |
+| OP0 (#660) | Outcome log (D47) | — | no |
 | OP1, OP2 | Prototypes behind flags, judged on the log (SD4, open) | OP0 | behind a flag |
-| OP4 | Backlog: whisper replies from a small language model (D48) | — | not scheduled |
+| OP4 (#661) | Backlog: whisper replies from a small language model (D48) | — | not scheduled |
 
 Three lanes can run side by side: HD1-HD4 and HD6 (session, gate, supervisor), HD5 with RT1 and
 RT2 (`internal/nav` and the walker), and BR, GM (the brain). BR1 touches `brain.go` and
