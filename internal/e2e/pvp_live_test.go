@@ -664,12 +664,20 @@ func TestLivePvPHealer(t *testing.T) {
 	// sends no new UserInfo (the fifth live run).
 	heals := func(skill int32) bool { return skill == pvpHeal || skill == pvpBattleHeal }
 	healedFlagged := func() string {
-		flagged, cast := false, 0
+		flagged, cast, infos := false, 0, 0
+		hits := make(map[int32]int)
 		for i, s := range leader.watch.Seen(from) {
 			switch e := s.Event.(type) {
 			case botclient.UserInfo:
 				if e.ObjectID == leader.id {
 					flagged = e.PvPFlag != 0
+					infos++
+				}
+			case botclient.Attack:
+				if e.AttackerID == leader.id {
+					for _, h := range e.Hits {
+						hits[h.TargetID]++
+					}
 				}
 			case botclient.MagicSkillUse:
 				if from+i < healFrom || e.CasterID != cleric.id || e.TargetID != leader.id || !heals(e.SkillID) {
@@ -681,8 +689,16 @@ func TestLivePvPHealer(t *testing.T) {
 				cast++
 			}
 		}
+		// What the Cleric reads of the leader's flag, for a failure.
+		seenFlag := int32(-1)
+		for _, s := range cleric.watch.Seen(0) {
+			if r, ok := s.Event.(botclient.RelationChanged); ok && r.ObjectID == leader.id {
+				seenFlag = int32(r.PvPFlag)
+			}
+		}
 		st := leader.bot.Status()
-		return fmt.Sprintf("%s HP %d/%d, flagged %v, %d heals of it unflagged", leader.name, st.HP, st.MaxHP, flagged, cast)
+		return fmt.Sprintf("%s HP %d/%d, flagged %v in %d UserInfo (the Cleric reads flag %d), hits %v, %d heals of it unflagged",
+			leader.name, st.HP, st.MaxHP, flagged, infos, seenFlag, hits, cast)
 	}
 	untilBy(t, ctx, cleric.name+" healing the flagged "+leader.name, time.Now().Add(3*time.Minute), func() string {
 		if err := c.Watch(ctx, 300*time.Millisecond, func(botclient.Event) {}); err != nil {
