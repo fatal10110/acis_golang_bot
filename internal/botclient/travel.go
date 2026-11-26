@@ -349,6 +349,14 @@ type travelTrip struct {
 	// hopAt is when the next town hop is due (planHop), zero before the
 	// idle spell to it started.
 	hopAt time.Time
+	// follow marks a member's trip on its leader's gatekeeper teleport
+	// (partyTripEvent): refused, it leaves the party.
+	follow bool
+	// gatherSince is when the leader, its destination's link ready, began
+	// to hold it for a bot member behind (the gather gate), zero while none
+	// is; regroupUntil is when its hold at the landing for its bot members
+	// ends (regrouping), zero for none.
+	gatherSince, regroupUntil time.Time
 }
 
 // end ends the trip at now; a positive shunFor leaves its gatekeeper alone
@@ -361,6 +369,7 @@ func (tr *travelTrip) end(now time.Time, shunFor time.Duration) {
 		tr.shunned[tr.gk] = now.Add(shunFor)
 	}
 	tr.v, tr.step, tr.dest, tr.endedAt, tr.onward = npcVisit{}, tripTalk, destination{}, now, 0
+	tr.follow, tr.gatherSince = false, time.Time{}
 }
 
 // sent records a packet of the trip that went out at now.
@@ -392,21 +401,39 @@ func teleportBypass(obj int32, index int) string {
 // opens its teleport list and sends the destination's link; its own
 // teleport ends the trip (the brain sends Appearing) and the spot rule
 // picks again where it lands. A gatekeeper that takes it nowhere is
-// shunned, and so is one no route reaches. Bypasses
+// shunned, and so is one no route reaches. A leader with bot members
+// holds the destination's link for them (gatherHold) and, landed, holds
+// for them there before it hunts (regrouping); a member on its leader's
+// trip the server refuses leaves the party (leaveParty). Bypasses
 // pass the bypass gate (gateBypass); legs and clicks the frame pacer, a
 // trip spending at most visitClicks clicks.
 func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 	tr := &b.trip
 	v := &tr.v
-	if b.world.Self.InCombat || (!v.active() && !b.planHop(now)) {
+	if b.world.Self.InCombat {
 		return Action{}, false
+	}
+	if !v.active() {
+		// Regrouping, the leader plans no hop and the spot rule no trip; a
+		// trip another rule planned (supply, arena) goes on.
+		if b.regrouping(now) {
+			return Action{}, true
+		}
+		if !b.planHop(now) {
+			return Action{}, false
+		}
 	}
 	if tr.step == tripGone {
 		if now.Before(v.waitUntil) {
 			return Action{}, true
 		}
-		// No teleport: the server refused the trip.
+		// No teleport: the server refused the trip (adena short, a
+		// besieged castle).
+		follow := tr.follow
 		tr.end(now, visitShunFor)
+		if follow {
+			b.leaveParty("its leader's gatekeeper trip refused", tr.dest.price)
+		}
 		return Action{}, false
 	}
 	if tr.step != tripTalk {
@@ -418,6 +445,9 @@ func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 			cmd = teleportBypass(v.obj, tr.dest.index)
 		}
 		if v.waitUntil.IsZero() && b.world.Dialog.Has(cmd) {
+			if tr.step == tripGo && b.leadsBotMembers() && b.gatherHold(&tr.gatherSince, now) {
+				return Action{}, true
+			}
 			return bypassTo(v.obj, cmd), true
 		}
 		// Unanswered, or another page replaced the gatekeeper's: the server
@@ -463,6 +493,9 @@ func (b *Brain) tripTeleported(now time.Time) {
 	tr.end(now, 0)
 	tr.onward = onward
 	b.spot.retryAt = time.Time{}
+	if b.leadsBotMembers() {
+		tr.regroupUntil = now.Add(b.persona.Lead.withDefaults().GatherWait)
+	}
 }
 
 // Trip search bounds (docs/navigation.md, "Cost bounds").
@@ -640,13 +673,16 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 }
 
 // tripSpots pushes the walks from destination l to the spots within reach
-// (squared, straight line) of it that fit the bot's level, are not avoided,
-// have room and lie in its SCC.
+// (squared, straight line) of it that fit the bot's level (a leader: its
+// bot members' band, fitBand), are not avoided, have room for its weight
+// (spotWeight) and lie in its SCC.
 func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, now time.Time, push func(tripLabel)) {
 	r, v := b.cfg.Spots, &b.spot
+	lo, hi, _ := b.fitBand()
+	w := b.spotWeight()
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if now.Before(v.avoid[i]) || !b.spotFits(sp, now) || !r.hasRoom(i) ||
+		if now.Before(v.avoid[i]) || !b.spotFitsBand(sp, lo, hi, now) || !r.hasRoomFor(i, w) ||
 			horizontal2(l.p.at, Point{X: sp.Center.X, Y: sp.Center.Y}) > reach {
 			continue
 		}

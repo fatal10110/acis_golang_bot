@@ -507,9 +507,9 @@ func (b *Brain) overRisk(now time.Time) bool {
 // at its limit farms beside one (SpotPolicy.Beside, farmBeside), and one
 // that holds a spot that fits keeps it. A spot in another SCC is never
 // claimed. A leader of its bot party claims for its whole party
-// (spotWeight), fits its bot members' band (fitBand, misfit), takes no trip
-// and no fallback, and gives back a spot it no longer fits with nothing in
-// reach (docs/parties/spots.md).
+// (spotWeight), fits its bot members' band (fitBand, misfit), takes its trip
+// with its party (partytravel.go) and no fallback, and gives back a spot it
+// no longer fits with nothing in reach and no trip (docs/parties/spots.md).
 func (b *Brain) pickSpot(now time.Time) {
 	here, ok := b.locate(b.standing(now))
 	if !ok {
@@ -592,9 +592,8 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 		// No candidate left: the run of unreachable walks ends, its spots
 		// avoided only as long as moveOn said.
 		v.retryAt, v.failed = now.Add(spotRetry), v.failed[:0]
-		if here != nil && !party {
-			// A leader takes no gatekeeper trip: its members follow by
-			// walking only.
+		if here != nil {
+			// A leader's members take the same teleport (partytravel.go).
 			b.planTrip(*here, now)
 		}
 		if b.trip.v.active() {
@@ -607,10 +606,9 @@ func (b *Brain) claimSpot(cands []spotCand, now time.Time, here *navPoint) {
 		unfit := b.outleveled() || b.misfit()
 		if len(cands) == 0 && here != nil {
 			if party {
-				// The gated trip's give-back: a leader that would have
-				// planned one gives back a spot it no longer fits rather
-				// than keep it for good; the spot fails the fit, so it is
-				// not claimed again.
+				// The give-back: a leader with no trip either gives back a
+				// spot it no longer fits rather than keep it for good; the
+				// spot fails the fit, so it is not claimed again.
 				if unfit {
 					b.leaveSpot()
 					return

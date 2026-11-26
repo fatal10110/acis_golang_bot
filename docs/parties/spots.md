@@ -41,7 +41,7 @@ take 1, called once by `leaveSpot` (`spots.go:601-610`). The brain records `spot
 give-back (`:522`), the old spot on a new claim (`:539`), `farmBeside` moving (`:553`), `moveOn`
 (`:584`, from an unreachable walk `:274`, a crowded spot `:283`, a death with `DeathAvoid` `:593`)
 and `diedAtSpot` (`:596`); outside: `supplytrip.go:121`, `command.go:241`, `brain.go:359`. P1c adds
-the release on [joining](members.md#joining), P2a the [gated give-back](#no-gatekeeper-trip).
+the release on [joining](members.md#joining), P2a the [give-back](#gatekeeper-trip).
 
 A new claim sets `spot.weight`: `n` for `claimN`, `claimOverN`, `farmBesideN`; 1 for the `go`
 claim (`command.go:238-242`), whose order clears the slot first. A size change (formation, end of
@@ -85,24 +85,51 @@ candidate is too near its limit for `n` (as a solo bot keeps an outlevelled spot
 gives it back (below). Like `outleveled` (`spots.go:425`) it reads only a held claim; a beside spot
 leaving the fit is no candidate and `farmBeside` leaves it (`spots.go:550-553`).
 
-## No gatekeeper trip
+## Gatekeeper trip
 
-While it leads members the leader takes no gatekeeper trip (`planTrip`, `travel.go:416-431`):
-members follow by walking only (`follow.go`, the walker within the SCC). Its supply trip (D16) runs
-([members](members.md#events)). Denied the trip, it goes on down `claimSpot`.
+Changed by #397; before it a leader with members took no gatekeeper trip and its members followed by
+walking only. The leader now plans its trip as a solo bot does (`claimSpot` calls `planTrip` with
+no party gate): `tripSpots` takes only spots that fit its bot members' band (`fitBand`) with room
+for its weight (`hasRoomFor`, `spotWeight`), and the budget is its own adena. There is no party
+teleport on the server: every member talks to the gatekeeper and pays its own fee (server
+`gatekeeper.go` `Service.Teleport`, `pay`), and no bot of the party whispers another (D29). So:
 
-An `outleveled` or `misfit` holder with no candidate in reach would keep its spot for good (the
-keep is skipped, `spots.go:524`, `claimOver` gets an empty order, `:527-529`, a holder skips
-`farmBeside`, `:530-532`, `spotCands` never lists the held spot). So P2a adds the **gated trip's
-give-back**: where a solo bot calls `planTrip` (`:515-517`, `here != nil`), such a leader with
-`len(cands) == 0` gives the spot back (`leaveSpot`, the whole weight), farms beside nothing, and
-`NoSpotSince` starts; the spot fails the fit, so it is not reclaimed. It so idles only when no spot
-in reach fits its band (or own level), or with `Beside` off when every fitting one is at its limit,
-until `NoSpotFor` ([organizer](organizer.md#breaks-and-drops)) frees it to plan its trip alone.
+1. **Gather.** At the gatekeeper, its list open, the leader holds the destination's link while a
+   living bot member stands beyond `GatherRange` from it but within `FarAway` (the
+   [gather gate](#gather-gate), `gatherHold`), at most `GatherWait`. Members walk to it under rule
+   `follow`.
+2. **Same teleport.** A `join` member that sees its leader jump (`TeleportToLocation`, which the
+   server shows every player in sight, `restartpoint.go` `relocateLivePlayer`) from within 400 of a
+   gatekeeper of the travel map to within 200 of one of its destinations (the server scatters the
+   landing by 20) plans that destination of that gatekeeper (`partyTripEvent`, `travelTrip.follow`)
+   and takes it under rule `travel`; rules `leader` and `follow` and the leader-teleport supply trip
+   leave it alone meanwhile. Each bypass passes the bypass gate (`gateBypass`), each leg and click
+   the frame pacer, as a solo trip's.
+3. **Fee short.** A member that cannot pay (adena under the price or past its `MaxPrice`), has
+   karma (`KarmaPlayerCanUseGK`), or whose trip the server refuses (no teleport in
+   `tripDepartTimeout`) leaves the party cleanly (`leaveParty`): slot cleared (`PartyLeft` `left`, the
+   organizer drops and cools it down), withdrawal, leader watch reset, so no whisper or `/unstuck`; it
+   plays solo.
+4. **Regroup.** Landed, the leader hunts nothing (rule `travel` holds the spot rule, `regrouping`)
+   until every living bot member stands within `GatherRange` of it, in sight or reported, however
+   far it was, at most `GatherWait`; on a path of several teleports it regroups before each. A
+   member that missed the trip (out of sight of the jump, or no route to the gatekeeper) answers it as
+   any leader teleport ([members](members.md#events)): its Scroll of Escape, else a walk to the
+   leader's last reported position, dropped after `BehindFor`.
+
+A leader's gatekeeper supply trip (D16) is followed the same way; its Scroll of Escape recall is
+answered by the members' own recall or walk (P2b). The leader does not wait for them in town: the
+gather gate holds it at its next spot.
+
+An `outleveled` or `misfit` holder with no candidate in reach and **no trip** either (no fitting spot
+with room for its party past reach, or no adena) would keep its spot for good, so it gives the spot
+back (`leaveSpot`, the whole weight), farms beside nothing, and `NoSpotSince` starts; the spot fails
+the fit, so it is not reclaimed, until `NoSpotFor` ([organizer](organizer.md#breaks-and-drops))
+breaks the party.
 
 ## Gather gate
 
-At its spot the leader picks no new target while a living bot member stands farther than
+At its spot (and at the gatekeeper before its teleport, [above](#gatekeeper-trip)) the leader picks no new target while a living bot member stands farther than
 `GatherRange` (1200, inside the 1500 party range) from it, for at most `GatherWait` (60 s); a
 member beyond `FarAway` (10000) does not hold it.
 
@@ -134,10 +161,14 @@ member beyond `FarAway` (10000) does not hold it.
   13 (band `[12, 15]`) clears `misfit`, and it stays when the top-13 spot frees. A member 12 joining
   14 and 15 at a top-16 spot re-picks the next decision; a beside spot leaving the fit is left at
   the next re-pick; a solo held spot is kept as today.
-- `TestPartyNoGatekeeperTrip`: a leader with members plans no trip, alone it does; leader of 3 at 21
-  on a top-15 spot (past `Outlevel` 5), nothing in reach fitting band or level: no trip, spot given
-  back at the next re-pick (held -3), beside nothing, `Spot` empty, not reclaimed; one candidate in
-  reach too near its limit for 3: spot kept, re-pick every `spotRetry`; a solo bot as today (trip
-  and give-back, or no trip and keep).
+- `TestPartyGatekeeperTrip` (#397): a leader with members plans its trip as alone; none when the
+  spot past reach has no room for its party; leader of 3 at 21 on a top-15 spot (past `Outlevel` 5),
+  nothing in reach: a trip, spot given back (held -3); with no adena: no trip, spot given back, not
+  reclaimed; one candidate in reach too near its limit for 3 and no trip: spot kept, re-pick every
+  `spotRetry`; a solo bot as today.
+- `TestPartyTripGather` (#397): the destination's link held for a member at 2000 until 60 s; at
+  once for one within 1200, past 10000, or none.
+- `TestPartyTripRegroup` (#397): landed, the leader holds while its member is reported at the start
+  or not reported, until it comes within 1200 or 60 s; a solo bot hunts at once.
 - `TestPartyGatherGate`: a member at 2000 holds the leader's next target until within 1200 or 60 s;
   one at 12000 does not.

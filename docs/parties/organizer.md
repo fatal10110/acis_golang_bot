@@ -103,7 +103,7 @@ An auto party is **broken** (an `unparty` to every member, the leader first) whe
   its slot itself;
 - no living healer member has been online for 10 minutes (`NoHealerSince`);
 - the online leader has had no spot, held or beside, for `NoSpotFor` (15 minutes, longer than a
-  death, supply trip or errands; [spots](spots.md#no-gatekeeper-trip)); leader and members are then
+  death, supply trip or errands; [spots](spots.md#gatekeeper-trip)); leader and members are then
   paired no more for `RePairAfter` (30 minutes, `PairBans`);
 - no bot member is left: `unparty` to the leader alone, never an empty `lead`
   (`mailbox.go:137-139`);
