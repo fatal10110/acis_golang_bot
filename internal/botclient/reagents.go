@@ -38,7 +38,7 @@ func indexReagents(skills map[datapack.SkillRef]datapack.Skill) map[int32]map[in
 		}
 		var r reagent
 		if sk.ItemConsumeID > 0 && sk.ItemConsumeCount > 0 {
-			r = reagent{item: sk.ItemConsumeID, count: int32(sk.ItemConsumeCount)}
+			r = reagent{item: sk.ItemConsumeID, count: sk.ItemConsumeCount}
 		}
 		levels[ref.Level] = r
 	}

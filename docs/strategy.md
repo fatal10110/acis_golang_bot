@@ -721,11 +721,12 @@ type Build struct {
   `chargesRefused`. The shop errand restocks each reagent at a spawned merchant (`ShopPolicy`
   `ReagentCastsMin` 20 and `ReagentCastsMax` 100, persona defaults, D6), counted in casts per
   skill and summed per item at the skill's known level: a Bishop's Major Heal (1 Spirit Ore) and
-  Major Group Heal (4) top Spirit Ore up to 500 once under 100. It buys them in the supplies tier after
-  the potions, shots and arrows, only from the adena past that tier's floor (M8 budget), keeps
-  them out of junk sales, and a reagent carried under its minimum sends a farmer on a supply trip
-  (`runsOut`) and holds its town preparation (`prepShort`), as its shots do. Restock sizes at the defaults: Spellsinger 1500 Spirit Ore, Warcryer
-  1200, Prophet 600, Bishop 500, Elven Elder 300; Gladiator 600 Energy Stones, Tyrant 400;
+  Major Group Heal (4) top Spirit Ore up to 500 once under 100. It buys them in the supplies
+  tier after the potions, shots and arrows, only from the adena past that tier's floor (M8
+  budget), keeps them out of junk sales, and a reagent carried under its minimum sends a farmer
+  on a supply trip (`runsOut`) and holds its town preparation (`prepShort`), as its shots do.
+  Restock sizes at the defaults: Spellsinger 1500 Spirit Ore, Warcryer 1200, Prophet 600,
+  Bishop 500, Elven Elder 300; Gladiator 600 Energy Stones, Tyrant 400;
   Spellhowler 100 Cursed Bones (Death Spike; Cema, buy list 73). Crystal D, the cubics' reagent,
   is sold only by the unspawned Sales Cat: it is never bought and the gate keeps the cubic
   summons silent (S17, #636, deferred).

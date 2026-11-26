@@ -31,7 +31,7 @@ func TestLoadSkillReagents(t *testing.T) {
 	for _, tt := range []struct {
 		ref   SkillRef
 		id    int32
-		count int
+		count int32
 	}{
 		{SkillRef{1047, 1}, 3031, 7},
 		{SkillRef{1047, 2}, 3031, 9},

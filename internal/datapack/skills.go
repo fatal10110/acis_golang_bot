@@ -37,7 +37,7 @@ type Skill struct {
 	// fewer (cast/controller.go CanCast, ErrNotEnoughItems) and charges
 	// nothing unless both are above 0.
 	ItemConsumeID    int32
-	ItemConsumeCount int
+	ItemConsumeCount int32
 	// Power is power (default 0), the skill's base damage or heal.
 	Power float64
 	// NumCharges is numCharges, the charges a cast spends (or a charging
@@ -270,7 +270,7 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			HitTime:        time.Duration(r.intDefault("hitTime", 0)) * time.Millisecond,
 			ReuseDelay:     time.Duration(r.intDefault("reuseDelay", 0)) * time.Millisecond,
 			MPConsume:      r.intDefault("mpConsume", 0), MPInitialConsume: r.intDefault("mpInitialConsume", 0),
-			ItemConsumeID: r.int32Default("itemConsumeId", 0), ItemConsumeCount: r.intDefault("itemConsumeCount", 0),
+			ItemConsumeID: r.int32Default("itemConsumeId", 0), ItemConsumeCount: r.int32Default("itemConsumeCount", 0),
 			Power:      r.floatDefault("power", 0),
 			NumCharges: r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
 			Charges: chargeCond(el.Conds, &res),
