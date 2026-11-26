@@ -260,14 +260,33 @@ type buildCross struct {
 	x, y    int32
 	doorOff int32
 	z       int16
-	// side is the border side, with crossDrop set when the crossing is a
-	// drop (its edge costs costDrop more).
+	// side is the border side in its low crossSideBits bits; the bits above
+	// them are the crossing's dropCost in costDrop units (0: no drop), capped
+	// at maxCrossDrop.
 	side  uint8
 	doorN uint8
 }
 
-// crossDrop is the buildCross.side bit marking a drop.
-const crossDrop = 1 << 7
+// crossSideBits is the width of the side in buildCross.side, and
+// maxCrossDrop the most costDrop units the bits above it hold.
+const (
+	crossSideBits = 2
+	maxCrossDrop  = 1<<(8-crossSideBits) - 1
+)
+
+// packCross returns the buildCross.side of a crossing over the border side
+// whose step has the given dropCost: the side in the low bits, the dropCost
+// in costDrop units, capped at maxCrossDrop, above them.
+func packCross(side int, drop int32) uint8 {
+	return uint8(side) | uint8(min(drop/costDrop, maxCrossDrop))<<crossSideBits
+}
+
+// crossSide returns the border side of a packed buildCross.side.
+func crossSide(packed uint8) int { return int(packed & (1<<crossSideBits - 1)) }
+
+// crossCost returns the drop weight a packed buildCross.side adds to its
+// crossing edge.
+func crossCost(packed uint8) uint32 { return uint32(packed>>crossSideBits) * costDrop }
 
 func (x buildCross) to() Cell { return Cell{X: int(x.x), Y: int(x.y), Z: x.z} }
 
@@ -482,11 +501,8 @@ func (b *builder) cluster(s *buildScratch, i int) clusterOut {
 		off := len(out.crossDoors)
 		out.crossDoors = b.doorsAt(b.doorsAt(out.crossDoors, c), oc.to)
 		x := buildCross{
-			from: from, x: int32(oc.to.X), y: int32(oc.to.Y), z: oc.to.Z, side: uint8(oc.side),
+			from: from, x: int32(oc.to.X), y: int32(oc.to.Y), z: oc.to.Z, side: packCross(oc.side, dropCost(c.Z, oc.to.Z)),
 			doorOff: int32(off), doorN: uint8(len(out.crossDoors) - off),
-		}
-		if dropCost(c.Z, oc.to.Z) > 0 {
-			x.side |= crossDrop
 		}
 		out.cross = append(out.cross, x)
 	}
@@ -823,7 +839,7 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 			if ti < 0 {
 				return nil, fmt.Errorf("nav: crossing into unbuilt cluster at %d,%d", xto.X, xto.Y)
 			}
-			side := opposite(int(x.side &^ crossDrop))
+			side := opposite(crossSide(x.side))
 			ox, oy := int(b.keys[ti].X)*b.size, int(b.keys[ti].Y)*b.size
 			pos := xto.Y - oy
 			if side == sideSouth || side == sideNorth {
@@ -835,9 +851,7 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 			}
 			from := l.base[ci] + int(x.from)
 			cost := uint32(max(costCardinal, heuristic(o.nodes[x.from].rep, outs[ti].nodes[to].rep)))
-			if x.side&crossDrop != 0 {
-				cost += costDrop
-			}
+			cost += crossCost(x.side)
 			e := globalEdge{to: uint32(l.base[ti] + int(to)), open: cost, free: cost}
 			if x.doorN > 0 {
 				e.doors = slices.Clone(o.crossDoors[x.doorOff : x.doorOff+int32(x.doorN)])
