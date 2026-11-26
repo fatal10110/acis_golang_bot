@@ -77,7 +77,10 @@ not equipped, not kept for the bot's use (`keeps`: supplies, keep set, shots, ..
 persona's own keep hook, not worn next nor fallen back to (`fallsBack`, as `junk`, `shop.go:596`;
 `tradeGoods` and `carriedStock` never move an equipped item), not a set piece kept for a set, not a
 quest item, not augmented (the store excludes them, `storeLoot`; their worth is not in the
-datapack), not a shadow item, and not sold by a counted buylist. Precedence: the bot's keeps and the persona's own hook, then the gear errand, then
+datapack), not a shadow item, not a dye (`TravelMap.dyes`, `hennas.xml`; even one no shop sells: 60 of
+the 180 dyes are mob drops priced 42000-174000, and a dye is a supply of the dye errand, so the keep
+test asks the dye plan and the plan's budget asks the valuables back, which recursed without end,
+#622), and not sold by a counted buylist. Precedence: the bot's keeps and the persona's own hook, then the gear errand, then
 valuable, then the clan member's hold (M9), then loot. Rows: a
 [narrower test](ledger.md#stored-rows-with-no-entry).
 
