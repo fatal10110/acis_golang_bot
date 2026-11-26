@@ -188,7 +188,8 @@ func forgetKilled(gm *GMClient, f *farmer) {
 }
 
 // digest sums up what the farmer did, for a failed scenario: its status,
-// the packets it sent by opcode and the events it read by type.
+// what it carries (template: count), the packets it sent by opcode and the
+// events it read by type.
 func (f *farmer) digest() string {
 	s := f.bot.Status()
 	sent, read := map[string]int{}, map[string]int{}
@@ -209,8 +210,12 @@ func (f *farmer) digest() string {
 			items = len(ev.Items)
 		}
 	}
-	return fmt.Sprintf("%s: state %v, rule %q, spot %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login; sent %v; read %v; last moves %s",
-		f.name, s.State, s.Rule, s.Spot, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, sent, read, f.trail(trailLen))
+	carried := map[int32]int32{}
+	for _, it := range inventory(f.watch.Seen(0)) {
+		carried[it.TemplateID] += it.Count
+	}
+	return fmt.Sprintf("%s: state %v, rule %q, spot %q, level %d, HP %d/%d, at %v, died %d times, load %s, %d items at login, carries %v; sent %v; read %v; last moves %s",
+		f.name, s.State, s.Rule, s.Spot, s.Level, s.HP, s.MaxHP, s.Position, deaths, load, items, carried, sent, read, f.trail(trailLen))
 }
 
 // trailLen is how many lines of a failed farmer's trail its digest shows.
