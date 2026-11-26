@@ -216,6 +216,27 @@ func indexCorpseTimes(npcs map[int32]datapack.NPC) map[int32]time.Duration {
 	return out
 }
 
+// indexAggro are the aggro ranges of the NPC templates that attack on
+// sight (AggroRange above 0).
+func indexAggro(npcs map[int32]datapack.NPC) map[int32]int {
+	out := make(map[int32]int)
+	for id, n := range npcs {
+		if n.AggroRange > 0 {
+			out[id] = n.AggroRange
+		}
+	}
+	return out
+}
+
+// aggroOf is NPC template npcID's aggro range, 0 for a passive one or one
+// the map lacks.
+func (m *TravelMap) aggroOf(npcID int32) int {
+	if m == nil {
+		return 0
+	}
+	return m.aggro[npcID]
+}
+
 // corpseTime is how long a corpse of NPC template npcID lasts: its
 // template's corpseTime, defaultCorpseTime when the map lacks it.
 func (m *TravelMap) corpseTime(npcID int32) time.Duration {

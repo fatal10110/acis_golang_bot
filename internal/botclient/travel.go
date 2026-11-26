@@ -125,6 +125,9 @@ type TravelMap struct {
 	// corpseTime is not the default (indexCorpseTimes): the sweep window
 	// (corpseTime).
 	corpseTimes map[int32]time.Duration
+	// aggro are the aggro ranges of the aggressive NPC templates
+	// (indexAggro): what a duel keeps clear of (clearOfMonsters).
+	aggro map[int32]int
 	// killValues are the adena a kill of each NPC template that drops
 	// anything is worth (indexKillValues): what the earning mode ranks
 	// spots by (earnRate, #527).
@@ -198,6 +201,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.setSkills = indexSetSkills(dp.ArmorSets)
 	m.refMobs = indexRefMobs(dp.NPCs)
 	m.corpseTimes = indexCorpseTimes(dp.NPCs)
+	m.aggro = indexAggro(dp.NPCs)
 	m.killValues = indexKillValues(dp.NPCs, dp.Prices)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for id, name := range dp.Names {

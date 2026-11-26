@@ -47,6 +47,10 @@ const (
 	// cmdJoin is any player's ask to join a bot party (D28,
 	// docs/parties/players.md): it never reaches the authority.
 	cmdJoin
+	// cmdDuel is any player's ask for the bot's challenge
+	// (docs/pvp/finding.md "Sources"), for a persona that takes duels: it
+	// never reaches the authority.
+	cmdDuel
 )
 
 // command is a parsed whispered command; spot is the argument of "go",
@@ -85,6 +89,8 @@ func parseCommand(text string) (command, bool) {
 			return command{kind: cmdLogout}, true
 		case "join":
 			return command{kind: cmdJoin}, true
+		case "duel":
+			return command{kind: cmdDuel}, true
 		}
 		return command{}, false
 	}
@@ -163,7 +169,7 @@ func (b *Brain) heard(e CreatureSay, now time.Time) {
 		return
 	}
 	cmd, ok := parseCommand(e.Text)
-	if ok && cmd.kind == cmdJoin && !b.slotted() {
+	if ok && (cmd.kind == cmdJoin && !b.slotted() || cmd.kind == cmdDuel && !b.persona.PvP.Duels) {
 		ok = false
 	}
 	if !ok {
@@ -179,6 +185,9 @@ func (b *Brain) heard(e CreatureSay, now time.Time) {
 		return
 	case cmdJoin:
 		b.heardJoin(t, now)
+		return
+	case cmdDuel:
+		b.heardDuel(t, now)
 		return
 	}
 	b.askAuthority(t, now)

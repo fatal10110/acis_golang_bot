@@ -7,7 +7,7 @@ import (
 
 // TestPvPDuelDecline checks the Duels mode (docs/pvp/modes.md): without it
 // the bot declines a challenge, of either kind, at the PvP reaction; with
-// it, it leaves the challenge to the duel answer (X5).
+// it, the duel answer takes it (TestPvPDuelAccept).
 func TestPvPDuelDecline(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
@@ -28,8 +28,8 @@ func TestPvPDuelDecline(t *testing.T) {
 			}
 			rule, a := b.decide(due)
 			if tc.duels {
-				if a.kind == actDuelAnswer {
-					t.Fatal("a pvp persona declined the challenge")
+				if a.kind != actDuelAnswer || string(a.payload) != string(encodeRequestDuelAnswerStart(false, true)) {
+					t.Fatalf("kind %v payload % x, want the acceptance (TestPvPDuelAccept)", a.kind, a.payload)
 				}
 				return
 			}

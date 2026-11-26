@@ -25,6 +25,12 @@ func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 	if b.cfg.Spots == nil || !v.farming() || !v.arrived || s.InCombat {
 		return Action{}, false
 	}
+	if b.duel(now).Phase != DuelIdle {
+		// From a challenge until idle no monster fight starts: a hit
+		// on an NPC cancels the duel (docs/pvp/finding.md "Clear of
+		// monsters").
+		return Action{}, true
+	}
 	id := b.farmTarget(now)
 	if id == 0 {
 		if b.gathering(now) {
