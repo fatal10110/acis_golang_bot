@@ -575,7 +575,7 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 				if price > budget {
 					continue
 				}
-				dp, ok := b.locate(d.at)
+				dp, ok := b.locatePlace(d.at)
 				if !ok {
 					continue
 				}
@@ -603,7 +603,7 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 			}
 			at, seen := gks[gi]
 			if !seen {
-				at.p, at.ok = b.locate(g.at)
+				at.p, at.ok = b.locatePlace(g.at)
 				gks[gi] = at
 			}
 			if !at.ok {
@@ -631,7 +631,7 @@ func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, 
 			horizontal2(l.p.at, Point{X: sp.Center.X, Y: sp.Center.Y}) > reach {
 			continue
 		}
-		at, ok := b.spotPoint(sp, l.p)
+		at, ok := b.spotPoint(i, l.p)
 		if !ok {
 			continue
 		}

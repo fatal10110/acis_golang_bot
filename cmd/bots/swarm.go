@@ -251,6 +251,9 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	if o.metrics != "" {
 		reg = botmetrics.NewRegistry(botclient.RuleNames()...)
 		gate.ReportBreaker(reg)
+		if sh.nav != nil {
+			sh.nav.ReportCache(reg)
+		}
 	}
 	bots, err := newBots(cfg, p, p.brain(sh), o.marker, accounts, reg)
 	if err != nil {

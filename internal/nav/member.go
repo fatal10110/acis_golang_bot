@@ -57,6 +57,9 @@ type Hierarchy struct {
 	// survives a GC, so the largest clusters' buffers (about 10 MB) are not
 	// regrown after every collection; it keeps at most keptMemberScratch.
 	spare chan *memberScratch
+	// places is LocatePlace's table, counts the Locate counts of Stats.
+	places placeTable
+	counts cacheCounters
 }
 
 // keptMemberScratch bounds the idle scratch a Hierarchy keeps: cold Locates
@@ -110,7 +113,7 @@ func (p *Pins) lookup(cluster int32) *clusterResult {
 		return nil
 	}
 	for _, m := range [2]Member{p.Current, p.Destination} {
-		if m.res != nil && m.res.cluster == cluster {
+		if m.res != nil && !m.res.place && m.res.cluster == cluster {
 			return m.res
 		}
 	}
@@ -123,12 +126,17 @@ type clusterResult struct {
 	x0, y0  int
 	size    int
 	// labels[layer][ly*size+lx] is the entry of each cell layer; nil when
-	// every cell has entry 0 (a single local SCC).
+	// every cell has entry 0 (a single local SCC). An upper layer few cells
+	// have (a bridge, a building's floor) is in sparse16 instead, its
+	// labels16 layer nil.
 	labels16 [][]uint16
+	sparse16 []sparseLayer
 	labels32 [][]uint32
 	entries  []entry
 	sccs     []int32 // the out and in SCC lists of the entries
 	bytes    int64
+	// place marks a LocatePlace result: its one entry, no labels.
+	place bool
 }
 
 // entry is one local SCC's membership. Local SCCs in the same abstract SCC
@@ -153,6 +161,8 @@ func (r *clusterResult) entryOf(layer, lx, ly int) uint32 {
 			if v := r.labels16[layer][i]; v != noEntry16 {
 				return uint32(v)
 			}
+		} else if layer < len(r.sparse16) {
+			return r.sparse16[layer].entryOf(i)
 		}
 		return noEntry
 	case r.labels32 != nil:
@@ -177,14 +187,19 @@ func (h *Hierarchy) Locate(c Cell, pins *Pins) (Member, error) {
 		return Member{}, ErrNoNav
 	}
 	r := pins.lookup(int32(ci))
-	if r == nil {
-		r = h.cache.get(int32(ci))
-	}
-	if r == nil {
+	switch {
+	case r != nil:
+		h.counts.pinned.Add(1)
+	default:
+		if r = h.cache.get(int32(ci)); r != nil {
+			h.counts.cached.Add(1)
+			break
+		}
 		var err error
 		if r, err = h.compute(ci); err != nil {
 			return Member{}, err
 		}
+		h.counts.computed.Add(1)
 		h.cache.put(r)
 	}
 	if !h.static.hasGeo(c.X, c.Y) {
@@ -303,6 +318,12 @@ func (h *Hierarchy) putMemberScratch(s *memberScratch) {
 // for each local SCC the abstract SCCs whose entrances it reaches and those
 // reaching it, inside the cluster.
 func (h *Hierarchy) compute(ci int) (*clusterResult, error) {
+	return h.computeFill(ci, sparseFill)
+}
+
+// computeFill is compute storing sparse the upper label layers with cells
+// in fewer than one column of share (labelLayers16).
+func (h *Hierarchy) computeFill(ci, share int) (*clusterResult, error) {
 	s := h.getMemberScratch()
 	defer h.putMemberScratch(s)
 	g := &s.g
@@ -443,7 +464,8 @@ func (h *Hierarchy) compute(ci int) (*clusterResult, error) {
 		r.entries = append(r.entries, en)
 	}
 
-	r.bytes = 128 + int64(len(r.entries))*24 + int64(len(r.sccs))*4
+	// The slices grew by append: their capacity is what they hold.
+	r.bytes = 128 + int64(cap(r.entries))*24 + int64(cap(r.sccs))*4
 	if len(r.entries) > 1 {
 		layers := 0
 		for i := range n {
@@ -451,15 +473,7 @@ func (h *Hierarchy) compute(ci int) (*clusterResult, error) {
 		}
 		cols := size * size
 		if len(r.entries) < int(noEntry16) {
-			r.labels16 = make([][]uint16, layers)
-			for i := range n {
-				li := g.layer(int32(i))
-				if r.labels16[li] == nil {
-					r.labels16[li] = slices.Repeat([]uint16{noEntry16}, cols)
-					r.bytes += int64(cols) * 2
-				}
-				r.labels16[li][g.col[i]] = uint16(entryOf[label[i]])
-			}
+			r.labelLayers16(g, n, layers, cols, share, func(i int) uint16 { return uint16(entryOf[label[i]]) })
 		} else {
 			r.labels32 = make([][]uint32, layers)
 			for i := range n {
@@ -512,6 +526,13 @@ func (c *memberCache) get(cluster int32) *clusterResult {
 	}
 	c.order.MoveToFront(el)
 	return el.Value.(*clusterResult)
+}
+
+// size returns the bytes and the results the LRU holds.
+func (c *memberCache) size() (int64, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.used, len(c.items)
 }
 
 func (c *memberCache) put(r *clusterResult) {

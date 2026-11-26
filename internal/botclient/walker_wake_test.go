@@ -144,7 +144,7 @@ func TestWalkWake(t *testing.T) {
 			},
 		},
 		{
-			name: "desync replans at the end of the server's move",
+			name: "desync holds past the end of the server's move, then replans",
 			answer: func(origin, _ Point) MoveToLocation {
 				return MoveToLocation{ObjectID: selfID, Origin: origin, Dest: Point{X: 600, Z: defaultCollisionHeight}}
 			},
@@ -153,9 +153,14 @@ func TestWalkWake(t *testing.T) {
 				if got := b.world.Self.arrival(); got != end {
 					t.Fatalf("arrival at %v, want the server's move's end %v", got.Sub(t0), end.Sub(t0))
 				}
-				due := end.Add(positionTick)
+				// The hold (#501): a next leg of the server's route may still
+				// come, so no decision before the end plus a tick plus A.
+				due := end.Add(positionTick + b.world.Self.lag())
 				if got := b.decisionAt(); got != due {
-					t.Fatalf("decision at %v, want %v", got.Sub(t0), due.Sub(t0))
+					t.Fatalf("decision at %v, want the hold's end %v", got.Sub(t0), due.Sub(t0))
+				}
+				if a, _ := walkStep(t, b, dest, due.Add(-time.Millisecond)); a.kind != actHold {
+					t.Fatalf("%v sent before the hold's end", a.kind)
 				}
 				if a, _ := walkStep(t, b, dest, due); a.kind != actMove {
 					t.Fatalf("at the wake: %v, want the replan's segment", a.kind)

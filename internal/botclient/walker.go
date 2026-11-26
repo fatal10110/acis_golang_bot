@@ -223,6 +223,14 @@ type walker struct {
 	floor Point
 	// The failures of the route so far.
 	blocked, desync, watchdog, doors int
+	// held is set by a desync or door replan, and by a move of the bot's
+	// the walker did not click (#502), until the server's own move stands
+	// confirmed (Brain.holdEnd, a StopMove, a blocked correction or a
+	// teleport): the server may still be walking the route it answered with,
+	// and a click sent before its next leg arrives takes that leg for its
+	// answer (#501). It outlives a reset: the server's route does not end
+	// with the walk.
+	held bool
 	// talkTo is where the NPC stood when the bot's last talk click went
 	// out, talkAt when (zero for none pending); talkFailed is set when the
 	// server's blocked correction ended that click's straight approach short
@@ -341,6 +349,12 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 			return Action{}, walkUnreachable
 		}
 	}
+	if w.held {
+		if now.Before(b.holdEnd()) {
+			return Action{}, walkWalking
+		}
+		w.held = false
+	}
 	if w.escaping {
 		if s.Casting(now) || now.Sub(escapeWait(w.escapeAt, s.castEnd)) < escapeRetry {
 			return Action{}, walkWalking
@@ -383,6 +397,18 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 	a := moveAction(to, pos)
 	a.walk = true
 	return a, walkWalking
+}
+
+// holdEnd is when the hold after a desync or door replan ends (walker.held):
+// one position tick plus A past the modeled end of the last leg of the
+// server's move received. The server sends each next leg of a route it
+// answered with at the end of the one before (move/creature.go
+// finishLocked, controller.go segmentAdvanced), and every leg received
+// moves the modeled end, so the hold ends only once no leg came within
+// that time.
+func (b *Brain) holdEnd() time.Time {
+	s := &b.world.Self
+	return s.arrival().Add(positionTick + s.lag())
 }
 
 // walker is the bot's walker with its checks sized for the bot as it is
@@ -754,7 +780,8 @@ func (w *walker) sent(a Action, now time.Time) {
 // talk approach (targeting.go onPlayerArrivedBlocked; in range the server
 // sends StopMove and opens the page). Any other move of the bot the walker
 // did not send, a StopMove mid-segment (a stun, a stop) and a teleport drop
-// the route; a teleport also starts the next walk afresh. ActionFailed is no
+// the route; a teleport also starts the next walk afresh. Such a move that
+// goes somewhere holds the walker as a desync does (walker.held). ActionFailed is no
 // navigation signal.
 //
 // While a click-ahead is unanswered, a blocked correction or StopMove is the
@@ -812,14 +839,24 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			w.talkAt = time.Time{}
 			w.route = nil
 		default:
+			// Another rule's move, or the next leg of a route the server
+			// answered a segment with: no answer to a click of the walker's.
+			// Either may be a leg of a route the server walks, the other
+			// rule's click routed as a segment's would be, whose next leg
+			// reaches the bot about when it models this one's end: the
+			// walker holds as after a desync (#502). A blocked correction
+			// ends the server's move where it stands.
 			w.seg, w.route = segment{}, nil
+			w.held = !still
 		}
 	case StopMove:
 		if e.ObjectID != s.ObjectID {
 			return
 		}
-		// A talk click's approach in range: the page follows.
+		// A talk click's approach in range: the page follows. The server's
+		// own move stopped: a hold ends.
 		w.talkAt = time.Time{}
+		w.held = false
 		end := w.seg.to
 		if w.seg.ahead && !w.seg.answered {
 			// The previous segment's stop, sent before the server took the
@@ -840,7 +877,7 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 			if w.escaping {
 				b.escape.landed(now)
 			}
-			w.seg, w.route, w.escaping = segment{}, nil, false
+			w.seg, w.route, w.escaping, w.held = segment{}, nil, false, false
 			w.escapeRefused = false
 			w.dest = Point{}
 		}
@@ -885,11 +922,13 @@ func (b *Brain) chargeBlocked(seg segment, stop Point) {
 // state differs from the server's. A desync off a door logs the segment and
 // the server's answer, so a run names the leg its check got wrong
 // (docs/navigation.md, "Server answers to its own moves"). The walker
-// replans once the server's move ends.
+// holds until the server's move, every leg of its route, stands confirmed
+// (walker.held), then replans: a routed answer cannot be told from a
+// truncated one on the wire, so a door replan holds too.
 func (b *Brain) walkDesync(answer MoveToLocation) {
 	w := &b.walk
 	seg := w.seg
-	w.seg, w.route = segment{}, nil
+	w.seg, w.route, w.held = segment{}, nil, true
 	if seg.door {
 		b.metrics.NavDoorReplan()
 		if w.doors++; w.doors >= walkMaxDoor {

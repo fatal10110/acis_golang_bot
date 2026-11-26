@@ -259,7 +259,7 @@ func (b *Brain) onFoot(at, town Point) bool {
 	if !ok {
 		return true
 	}
-	to, ok := b.locate(town)
+	to, ok := b.locatePlace(town)
 	if !ok {
 		return true
 	}

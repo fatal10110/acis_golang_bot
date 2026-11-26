@@ -118,7 +118,9 @@ The walking presets (`support`, `town`, `merchant`) run only on both caches: `bo
 to start them, and `bots ui` does not offer them, without the run-time flags below. Both commands
 map the caches read-only, log the region-list hash at start, and never rebuild a cache: a missing
 or stale one is an error naming `bots geopack` or `bots navbuild`. `-nav-lru-bytes` bounds the
-process-wide cluster cache of the hierarchy (default 64 MB). The flags are `-geodata`,
+process-wide cluster cache of the hierarchy (default 64 MB); each walking bot pins up to two more
+results, 251 KB each on average (docs/navigation.md, "Cache"), and the dashboard's "Nav cache"
+card shows how often a cluster is computed. The flags are `-geodata`,
 `-geoengine`, `-geodata-cache` and `-nav-cache` (all four, with `-datapack` for `doors.xml`), as in
 the swarm example of section 4.
 

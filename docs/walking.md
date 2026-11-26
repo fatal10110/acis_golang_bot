@@ -114,8 +114,11 @@ Consequences:
 - It covers every case in which the walker waits for a move's end:
   - a normal segment answer;
   - a reset to a new destination, which keeps the segment in flight (`reset`, `segmentDone`);
-  - a desync or door replan: the server walks its own destination, and the walker replans once that
-    move ends;
+  - a desync or door replan: the server walks its own route, leg by leg, and the walker holds until
+    one tick plus A past the modeled end of the last leg received (`walker.held`, `holdEnd`; #501),
+    so the wake's due time is the hold's end while the walk is held;
+  - a move of the bot's the walker did not click, which may be a leg of a route the server walks for
+    another rule's click: the same hold (#502);
   - a blocked stop: `Self.move` stops at now, so the replan runs one tick later.
 - Replans stay capped by `walkMaxBlocked`, `walkMaxDesync` and `walkMaxDoor` per route.
 

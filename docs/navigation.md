@@ -400,15 +400,30 @@ server's pathfinder.
   - **Cache.**
     - A result is immutable. A cluster with a single local SCC (the common case: open ground)
       stores only that fact and its abstract SCC, a few bytes. A cluster with several stores a
-      16-bit label per cell layer plus a small per-label table, about 130 KB for one layer.
+      16-bit label per cell of its ground layer (128 KB at 256 cells a side) plus a per-label
+      table. An upper layer (a bridge, a building's floor) is stored the same way when at least
+      half its columns have a cell, else as a sorted list of its cells' columns and labels, 4 bytes
+      a cell: upper layers measured 4.4% full on the owner's geodata (#496).
     - Results live in a process-wide LRU **bounded by bytes** (default 64 MB, a flag), owned by
       one mutex. The mutex guards only the lookup and the insert; the computing bot runs Tarjan
       without holding it. Two bots can rarely compute the same cluster at the same time; the
-      second insert is dropped.
+      second insert is dropped. A result counts the capacity of its slices.
     - Each walker also holds its own references to the results for its current cluster and its
       destination's cluster, so eviction never forces a bot to recompute the ground it stands on.
-      Memory is then at most the LRU bound plus two results per bot, and most results are the
-      few-byte kind.
+      The brain's own lookups (where the bot stands, where it walks) pass the walker's pins too.
+    - Static places (a gatekeeper, a teleport's landing, a town, a spot's centre) go through
+      `LocatePlace`: a process-wide table keeps each one's answer for the life of the process, so
+      the LRU never recomputes a cluster for them. A place in an abstract SCC keeps only its SCC,
+      shared per cluster and SCC, never the labels; one off the navigation is kept as such; one in
+      no abstract SCC is not kept. The spot registry keeps each spot's walkable point per SCC the
+      asking bots stood in. Both are bounded by the datapack's places, not by the bots.
+    - Memory is then at most the LRU bound plus two results per bot plus the place tables. Measured
+      on the owner's geodata (`BenchmarkOwnerNav`, 381 results of the sampled clusters): 251 KB a
+      result on average (440 KB with dense upper layers), of which 120 KB ground labels and about
+      115 KB the per-label table of slopes; a busy walker's two pins hold about 0.5 MB.
+    - `nav_locate_total` counts the Locates by how they were answered (`pinned`, `cached`,
+      `computed`, `place`), `nav_lru_bytes` and `nav_places` are what the LRU and the place table
+      hold; the dashboard shows them.
   - **Queries.** After `Locate`, `SameSCC(a, b)` (reachable each way) is O(1). `Reachable(a, b)`
     one way is a search over the condensation, which is small.
   - **Consumers ask for `SameSCC` by default**, so a bot never walks down into a pit it cannot
@@ -985,8 +1000,8 @@ unreachable (with a reason).
     flight or the last decision called `goTo`, and only while that time is later than the last
     walk wake. The wake is derived from the bot's motion, fires once per end and re-arms when the
     end moves later (a resample, a speed change, the next answer). It covers a normal answer, a
-    reset mid-segment, a desync or door replan (once the server's own move ends) and a blocked
-    stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
+    reset mid-segment, a desync or door replan (at the end of the hold below: the last leg of the
+    server's move plus one tick plus A) and a blocked stop (one tick later). The measured idle per waypoint is in "Walking efficiency".
   - **Click-ahead at checked corners** (#308; owner, 2026-11-25). A segment that is not the
     route's last sends the next one before its own move ends, so the server turns the walk at the
     corner instead of stopping there. A click while moving retargets the server's walk: a catch-up
@@ -1049,9 +1064,50 @@ unreachable (with a reason).
   - A `MoveToLocation` answering the bot's click with another destination is a **desync**. The
     server routed or truncated, so the bot's geodata or door state differs from the server's. The
     walker counts `nav_desync_total`, logs the segment (from, to) with the server's origin and
-    destination at warn level (`nav desync`), so a run names the leg its check got wrong, and
-    replans from the server's origin. If the segment crosses a door cell, it counts
-    `nav_door_replan_total` instead, which does not count toward unreachable.
+    destination at warn level (`nav desync`), so a run names the leg its check got wrong. If the
+    segment crosses a door cell, it counts `nav_door_replan_total` instead, which does not count
+    toward unreachable.
+  - **Hold after a desync** (#501). A routed answer is the route's first waypoint: the server
+    queues the rest and sends each next leg as a new `MoveToLocation` at the end of the one before,
+    with no click (`resolvePathLocked`, `finishLocked`, `segmentAdvanced`). That leg reaches the
+    bot about when the bot models the last one's end, so a segment sent then would take the next
+    leg for its answer and click over the server's route. After every desync, door replans
+    included (a routed answer cannot be told from a truncated one on the wire), the walker holds:
+    it sends nothing until no leg of the bot's own move arrived for one position tick plus the
+    answer lag A after the modeled end of the last one received, or a `StopMove`, a blocked
+    correction or a teleport confirms the standstill. The world model follows each leg as it
+    arrives, and a leg with no click in flight is no answer, so it counts nothing. The walk wake
+    moves with the hold. When the hold ends, a bot within the walk's arrival radius of its
+    destination has arrived; otherwise the walker plans from where it stands. The hold applies
+    only after a desync, and after a move of the bot's the walker did not click (below): the normal
+    path keeps its one-tick wait.
+  - **Hold after a move the walker did not click** (#502). Another rule's click that goes somewhere
+    is resolved as a segment's is (`resolvePathLocked`), so it can be routed too, and the next leg
+    of its route then reaches the bot about when the walker models its end, exactly as after a
+    desync. Any `MoveToLocation` of the bot's that
+    answers no click of the walker's and goes somewhere (the `default` case of `observeWalk`) sets
+    the same hold; a blocked correction ends it. It costs the walk at most A after such a move.
+  - **Long lines the server closed** (#502). In the home run of 2026-11-25, 11 of 14 `nav desync`
+    lines named a segment the bot's geodata opens from the server's origin, at every collision
+    height from 0 to 48 and across no door. `TestLiveLongLines` replays each one on the live server
+    from a standstill, twice: the GM stands at the server's origin and clicks the segment's target
+    as the walker did, and the server walks straight to the click every time, which is the bot's
+    `CanMove` verdict too (the run's log is on #502). The line checks agree; what differed was the
+    server's state when the click arrived. The answer the walker logged was a leg of a route the server was already
+    walking, sent at the end of the leg before and taken for the click's answer, the race #501
+    names:
+    - hz893 then hz318 are one route through (-32168,-112056), (-30600,-112008) and
+      (-28680,-111928): each click's "answer" is the route's next corner and the next click starts
+      from it. hz387 then hz411 are another, through (-30312,-107512), (-30216,-107416) and
+      (-28664,-105464). hz545 is a leg of the server's own route over the Orc village's north wall
+      (#504): the GM's click there is a direct ground walk too.
+    - hz275, hz27, hz668, hz336, hz20 and hz897 are single legs of a route started before the logged
+      click. The home run's frames are not kept, so what started each route (a walker desync before
+      #501's hold, or another rule's click) cannot be told; hz897's leg heads for the Orc town point
+      plus the bot's collision height 23, a click of the bot's own toward it.
+    - The walker in that run had no hold: #501 (PR #544) holds after a walker desync, and the hold
+      above covers routes another rule's click started. No server gap: the live server's geodata,
+      doors and fences close none of these lines.
   - **Answers around a click-ahead.** The connection keeps the server's order, so what the server
     sent about the previous segment before it took the click arrives before the click's answer,
     and that answer always moves (a direct click toward the next waypoint):
@@ -1253,6 +1309,9 @@ geodata is committed here, and CI never sees it.**
     walk to it, `TestLiveNavPickUpObstacle` (#239) kills wolves at a measured site until the bot turns
     to a drop where the straight walk from where it stands fails, and asserts that the bot walks to a
     `StandPickUp` stand point before its pick-up and that the item reaches its inventory, and
+    `TestLiveLongLines` (#502) clicks the 11 long-line desyncs of the 2026-11-25 home run from a
+    standstill and asserts the server's answer is direct exactly where the bot's `CanMove` opens
+    the line, and
     `TestLiveNavDoor` toggles the doors of a Gludin clan hall (the GM's `//open`
     and `//close`, only on doors a scenario claims). A follower that sees a door change replans
     before it clicks, so door replans by the server's answer are rare: the door scenario asserts

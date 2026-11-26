@@ -89,8 +89,10 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) 
 }
 
 // spotAttack is the first step of bd's rotation the bot knows that deals
-// its target damage, as a charmodel.Attack; not ok without one. Its weapon
-// gate is left out: the fit takes the faster of it and the melee. priced is
+// its target damage, as a charmodel.Attack, each cast costing its
+// mpInitialConsume and mpConsume as the server charges them
+// (cast/controller.go CanCast); not ok without one. Its weapon gate is left
+// out: the fit takes the faster of it and the melee. priced is
 // false when the bot knows a step of its rotation it casts on its target
 // but has no travel map to read the skill from: its melee is no measure of
 // a caster's kills, so the fit falls back to the level (a brain given spots
@@ -107,7 +109,7 @@ func (b *Brain) spotAttack(bd *Build) (a charmodel.Attack, ok, priced bool) {
 		}
 		sk, found := m.skills[datapack.SkillRef{ID: st.Skill, Level: k.Level}]
 		if found && sk.Power > 0 && slices.Contains(damageSkillTypes, sk.Type) {
-			return charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPConsume)}, true, true
+			return charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}, true, true
 		}
 	}
 	return charmodel.Attack{}, false, true
