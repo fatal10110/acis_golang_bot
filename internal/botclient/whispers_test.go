@@ -44,7 +44,7 @@ func newWhisperBrain(t *testing.T, items ...Item) *Brain {
 		m.prices[id] = 100000 + 10000*i
 		m.supply[id] = itemSupply{perHour: 1}
 	}
-	b.syncValuables()
+	b.syncValuables(t0)
 	return b
 }
 

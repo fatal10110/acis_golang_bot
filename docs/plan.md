@@ -523,7 +523,8 @@ to avoid: both would log in the same accounts and kick each other.
   written atomically (temp file and rename). Per prefix it records the marker and an account
   counter. Per bot it records the prefix and account, the character name once known, the class, the
   "never create" flag (set for imported bots), the preset, whether it should be online, its last
-  known level and position, and when it stopped and why. It holds no secret: passwords stay derived
+  known level and position, its valuables ledger (M12, #404: `docs/valuables/ledger.md` "Across
+  restarts"), and when it stopped and why. It holds no secret: passwords stay derived
   from the secret file.
 - New bot: the panel takes the next account of its own prefix from a counter in the registry that
   only grows: an account is never handed out twice, and deleting a bot keeps a tombstone of its
@@ -638,7 +639,8 @@ to avoid: both would log in the same accounts and kick each other.
   has no zone), preset, current rule, party, session state, reconnects, last error) through the
   `Bot`'s atomic pointer at most once a second, timed by the injected clock; between sessions the
   `Bot` publishes its offline state (reconnecting, waiting for the gate, stopped and why). The panel
-  only reads the snapshots; the supervisor copies level and position into the registry.
+  only reads the snapshots; the supervisor copies level, position and the valuables ledger into the
+  registry.
 - Commands: each `Bot` has a small bounded mailbox that outlives its sessions (an event queue
   exists only during a session and its push blocks when full). The supervisor never blocks on it: a
   full mailbox answers "busy". Each session's brain selects on the mailbox next to its event queue,

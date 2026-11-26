@@ -127,6 +127,6 @@ reviewable diff. No unit test waits on the wall clock; no e2e scenario runs with
 
 ## Gaps
 
-- The ledger lives in memory, not the bot registry: a follow-up in M12 if the owner wants it kept
-  across process restarts.
+- None for the ledger: it is kept across process restarts in the bot registry (#404,
+  [ledger](ledger.md#across-restarts)); `bots swarm`, which has no registry, keeps it in memory.
 - No server gap.

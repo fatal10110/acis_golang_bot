@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"slices"
@@ -38,6 +39,25 @@ type valuableEntry struct {
 	carried int64
 	objects []int32
 	stored  int64
+	// storedAt is when a decision first saw stored units of the entry,
+	// zero while the private status reports none.
+	storedAt time.Time
+}
+
+// LedgerEntry is one valuables ledger entry as a bot's owner keeps it
+// across process restarts (docs/valuables/ledger.md "Across restarts"):
+// what the bot cannot read back, not its units, which the next session
+// derives from its inventory and its look.
+type LedgerEntry struct {
+	Template int32  `json:"template"`
+	Enchant  uint16 `json:"enchant,omitempty"`
+	// Rounds are the rounds the entry was advertised unsold, Ask the ask
+	// of one unit, Released the cap's release mark.
+	Rounds   int   `json:"rounds,omitempty"`
+	Ask      int64 `json:"ask"`
+	Released bool  `json:"released,omitempty"`
+	// StoredAt is when its units were first seen stored, zero for none.
+	StoredAt time.Time `json:"stored_at,omitzero"`
 }
 
 // valuableRound is the state of a valuables round (docs/valuables/round.md):
@@ -99,6 +119,41 @@ type valuables struct {
 
 func newValuables() *valuables {
 	return &valuables{entries: make(map[valuableKey]*valuableEntry), noPrivate: make(map[int32]bool)}
+}
+
+// restoreValuables is a new value holding the kept entries rows, with no
+// units: the first decisions merge them with what the bot carries and its
+// look finds (sync). A row the ledger could not have written (no template,
+// no ask) is left out, so its units start a new entry.
+func restoreValuables(rows []LedgerEntry) *valuables {
+	v := newValuables()
+	for _, r := range rows {
+		if r.Template <= 0 || r.Ask <= 0 {
+			continue
+		}
+		v.entries[valuableKey{template: r.Template, enchant: r.Enchant}] = &valuableEntry{
+			rounds: r.Rounds, ask: r.Ask, released: r.Released, storedAt: r.StoredAt,
+		}
+	}
+	return v
+}
+
+// ledger is the entries as kept across restarts, by template and enchant;
+// nil for none or no value.
+func (v *valuables) ledger() []LedgerEntry {
+	if v == nil || len(v.entries) == 0 {
+		return nil
+	}
+	out := make([]LedgerEntry, 0, len(v.entries))
+	for k, e := range v.entries {
+		out = append(out, LedgerEntry{
+			Template: k.template, Enchant: k.enchant, Rounds: e.rounds, Ask: e.ask, Released: e.released, StoredAt: e.storedAt,
+		})
+	}
+	slices.SortFunc(out, func(a, b LedgerEntry) int {
+		return cmp.Or(cmp.Compare(a.Template, b.Template), cmp.Compare(a.Enchant, b.Enchant))
+	})
+	return out
 }
 
 // openRound opens a round at now, anchored at anchor: every walk of the
@@ -233,8 +288,11 @@ type carriedUnits struct {
 // entry"): a carried or stored key with no entry adds one at firstAsk's
 // ask, rounds 0; an entry with none carried is dropped once the private
 // status is known with none stored, and kept with its stored units while
-// it is not known.
-func (v *valuables) sync(carried map[valuableKey]carriedUnits, firstAsk func(valuableKey) int64) {
+// it is not known. An entry kept across a restart (restoreValuables) is
+// one more entry: its units join it, and the look drops it once none are
+// left. With the status known, storedAt is set at now when stored units
+// are first seen and cleared once none are.
+func (v *valuables) sync(carried map[valuableKey]carriedUnits, firstAsk func(valuableKey) int64, now time.Time) {
 	stored, known := v.storedUnits()
 	for k, u := range carried {
 		e, ok := v.entries[k]
@@ -255,6 +313,12 @@ func (v *valuables) sync(carried map[valuableKey]carriedUnits, firstAsk func(val
 		}
 		if known {
 			e.stored = stored[k]
+			switch {
+			case e.stored == 0:
+				e.storedAt = time.Time{}
+			case e.storedAt.IsZero():
+				e.storedAt = now
+			}
 		}
 		if e.carried == 0 && e.stored == 0 && known {
 			delete(v.entries, k)
@@ -374,11 +438,11 @@ func (b *Brain) carriedValuables() map[valuableKey]carriedUnits {
 // syncValuables derives the ledger's units on each decision of a persona
 // whose ValuablePolicy is enabled (valuables.sync), and sets the held
 // valuables gauge from it.
-func (b *Brain) syncValuables() {
+func (b *Brain) syncValuables(now time.Time) {
 	if !b.persona.Valuables.Enabled || b.cfg.Travel == nil {
 		return
 	}
-	b.cfg.valuables.sync(b.carriedValuables(), b.firstAsk)
+	b.cfg.valuables.sync(b.carriedValuables(), b.firstAsk, now)
 	b.metrics.ValuablesHeld(b.cfg.valuables.heldUnits())
 }
 

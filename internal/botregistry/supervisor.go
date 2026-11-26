@@ -68,6 +68,9 @@ type Run struct {
 	// PvP is the bot's PvP mode switches (Bot.PvP), nil for its preset's
 	// defaults.
 	PvP *PvPModes
+	// Ledger is the bot's valuables ledger (Bot.Ledger), its own copy: the
+	// bot config's (botclient.BotConfig.Ledger).
+	Ledger []botclient.LedgerEntry
 	// Markers are the markers of every prefix of the registry, for the bot
 	// filter, as of the run's start.
 	Markers botnames.Markers
@@ -454,6 +457,7 @@ func (s *Supervisor) start(account string) {
 		Preset:    b.Preset,
 		Branch:    b.Branch,
 		PvP:       b.PvP,
+		Ledger:    slices.Clone(b.Ledger),
 		Markers:   s.cfg.Registry.Markers(),
 		Metrics:   slot,
 		Learned: func(name string, classID int32) {
@@ -567,10 +571,11 @@ func (s *Supervisor) handle(e event) {
 	s.ended(e.account, st, e.err)
 }
 
-// keepProgress copies the level, class and position of a run's last
-// snapshot into its registry bot (docs/plan.md section 8, "Status"), so a
-// class changed at the class master is kept; a snapshot of a bot that never
-// entered the world (level 0) keeps the stored ones.
+// keepProgress copies the level, class, position and valuables ledger of a
+// run's last snapshot into its registry bot (docs/plan.md section 8,
+// "Status"; docs/valuables/ledger.md "Across restarts"), so a class changed
+// at the class master is kept; a snapshot of a bot that never entered the
+// world (level 0) keeps the stored ones.
 func keepProgress(b *Bot, st botclient.Status) {
 	if st.Level <= 0 {
 		return
@@ -579,6 +584,7 @@ func keepProgress(b *Bot, st botclient.Status) {
 	class := st.ClassID
 	b.Class = &class
 	b.Position = &Position{X: st.Position.X, Y: st.Position.Y, Z: st.Position.Z}
+	b.Ledger = slices.Clone(st.Ledger)
 }
 
 // ended maps the end of a run the supervisor did not cancel to the bot's

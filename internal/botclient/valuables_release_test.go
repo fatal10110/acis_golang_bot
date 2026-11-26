@@ -75,7 +75,7 @@ func testReleaseTradeSold(t *testing.T) {
 				if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(103, 3)}}}}, t0); err != nil {
 					t.Fatal(err)
 				}
-				b.syncValuables()
+				b.syncValuables(t0)
 			}
 			b.endCut(t0)
 			if got := b.cfg.valuables.released(swordKey); got != !sold {
@@ -259,7 +259,7 @@ func testReleaseInRound(t *testing.T) {
 	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}}}}, now); err != nil {
 		t.Fatal(err)
 	}
-	b.syncValuables()
+	b.syncValuables(t0)
 	if keys := b.adEntries(); !reflect.DeepEqual(keys, []valuableKey{swordKey}) {
 		t.Fatalf("line entries %v, want the +0 sword only", keys)
 	}
@@ -453,7 +453,7 @@ func TestValuablesStoreSplit(t *testing.T) {
 		if b.valuablesSold != floor || b.store.sold != 700 {
 			t.Errorf("valuables sold %d store sold %d, want %d and 700", b.valuablesSold, b.store.sold, floor)
 		}
-		b.syncValuables()
+		b.syncValuables(t0)
 		if _, ok := b.cfg.valuables.entries[swordKey]; ok || b.cfg.valuables.rows(b.cfg.Travel.stackable) != 0 {
 			t.Errorf("entries %v, want the sold sword out of the ledger", b.cfg.valuables.entries)
 		}

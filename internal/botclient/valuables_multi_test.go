@@ -16,7 +16,7 @@ func multiBrain(t *testing.T) (b *Brain, keys []valuableKey, rows map[valuableKe
 	b = newAdBrain(t, NewAdBoard(DefaultAdRegionGap, DefaultAdProcessPerHour), 0, sword, staff)
 	b.wh.private.Known = true
 	openAdRound(b, t0)
-	b.syncValuables()
+	b.syncValuables(t0)
 	keys = b.adEntries()
 	if len(keys) != 2 {
 		t.Fatalf("entries by score %v, want the sword and the staff", keys)
@@ -99,7 +99,7 @@ func TestValuablesTradeMulti(t *testing.T) {
 		if b.valuablesSold != sum {
 			t.Fatalf("valuables sold %d, want the sum %d", b.valuablesSold, sum)
 		}
-		b.syncValuables()
+		b.syncValuables(t0)
 		for _, k := range keys {
 			if _, ok := b.cfg.valuables.entries[k]; ok {
 				t.Fatalf("entry %v still there after the sale", k)
