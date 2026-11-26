@@ -294,7 +294,34 @@ a set worth more. These rows keep the model as it is:
   the floor, so its value is how long it lasts (`worth`), which reads no cast speed, max MP or
   M.Atk, and the sets are model-chosen there.
 
-`TestRow<ID>SetValue` (`gear_value_rows_test.go`) holds each row of the shipped datapack to this.
+**Model-chosen sets, second professions (#626).** The same rule for the C-grade sets of the
+second-profession rows ("Gear and range" below), at 40, against a harmless target and against the
+level's reference monster. The verdicts are computed on the kits shipped with #626: until its row
+lands, a second profession compiles its first profession's kit (PL KN's, TK EK's, SK PK's, BI and
+PP CL's, EE EO's, SE SO's, and so on), and each row PR re-runs its classes' verdicts and updates
+this list.
+
+- PL, BH and WC, Composite: +5795 weight limit, which no role's value reads. Model-chosen in every
+  role, so BH's first set is model-chosen and the bounty hunter buys Full Plate where it values it.
+- PL, TK, SK, SS, GL, WL, DS, BD, BH (and WC's Support role), Full Plate; TH, PW, AW, Mithril Light:
+  max HP and evasion gain against the reference monster in either role; against a harmless target
+  they buy nothing and the sets are model-chosen there.
+- TH, HK, PW, SR, AW, PR, TY, Plated Leather: against the reference monster the CON it takes costs
+  more HP than its STR adds, in either role, and it is model-chosen (TH, PW and AW take Mithril
+  Light). Against a harmless target its STR gains for the Damage builds of TH, HK, PW and SR; for
+  AW, PR and TY's, and every Support build (a tank), it is model-chosen.
+- SN and SG, Demon: its -270 max HP and -1 WIT lose value against the reference monster in either
+  role, and Karmian's cast speed outranks its +4 INT at every max HP, over 810 too: the row's
+  "Demon once max HP covers the loss" does not hold through the model, and Demon is model-chosen
+  (the sorcerer's Damage build gains from its INT only against a harmless target). The owner's
+  call on the rule is #676.
+- SN, SG, SH and WC, Karmian, Support: the build is a tank, whose P. Def gain counts against the
+  reference monster; against a harmless target the set is model-chosen. WC's Damage build: the same.
+- BI, PP, EE and SE, Divine and Karmian: they gain in both roles against either target (at 40 the
+  naked healer lasts its survival floor), so neither is model-chosen.
+
+`TestRow<ID>SetValue` (`gear_value_rows_test.go`, `gear_value_second_test.go`) holds each row of
+the shipped datapack to this; `TestRowSNDemonRule` holds the sorcerer's Demon rule.
 
 ### Combat (columns 3-7)
 

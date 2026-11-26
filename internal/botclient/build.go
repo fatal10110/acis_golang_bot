@@ -378,9 +378,10 @@ var raceMysticArmor = map[int32][]ArmorGrant{
 	},
 }
 
-// dyeStats are the base stats each profession's dyes raise, by the
-// first-profession rows of docs/strategy.md column 11; a second profession
-// keeps its first profession's (second-profession kits are #332).
+// dyeStats are the base stats each profession's dyes raise, by the rows of
+// docs/strategy.md column 11: a second profession raises its first
+// profession's stats but the sword singer (21) and bladedancer (34), which
+// raise STR where the knights raise CON (#626).
 var dyeStats = func() map[int32][]string {
 	t := make(map[int32][]string)
 	set := func(stats []string, classes ...int32) {
@@ -388,8 +389,8 @@ var dyeStats = func() map[int32][]string {
 			t[c] = stats
 		}
 	}
-	set([]string{"STR"}, 1, 2, 3, 22, 23, 24, 35, 36, 37, 45, 46, 47, 48, 54, 55, 56, 57)
-	set([]string{"CON"}, 4, 5, 6, 19, 20, 21, 32, 33, 34)
+	set([]string{"STR"}, 1, 2, 3, 21, 22, 23, 24, 34, 35, 36, 37, 45, 46, 47, 48, 54, 55, 56, 57)
+	set([]string{"CON"}, 4, 5, 6, 19, 20, 32, 33)
 	set([]string{"DEX", "STR"}, 7, 8, 9)
 	set([]string{"INT"}, 11, 12, 13, 14, 26, 27, 28, 39, 40, 41)
 	set([]string{"WIT"}, 15, 16, 17, 29, 30)

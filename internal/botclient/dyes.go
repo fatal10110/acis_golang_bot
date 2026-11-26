@@ -52,8 +52,17 @@ type DyePolicy struct {
 // 37000-adena +1/-3 rows: fighters STR+1 CON-3 (symbol 1) and DEX+1 CON-3
 // (6); nukers INT+1 WIT-3 (8); healers, whom the INT/WIT rows leave out,
 // MEN+1 WIT-3 (10). Second professions (3 slots) wear the 87000-adena
-// rows 37+, which list only them: fighters STR+1 CON-3 (37) and DEX+1
-// CON-3 (42); nukers INT+1 WIT-3 (44); healers MEN+1 WIT-3 (46).
+// symbols 37+, which list only them, of their row's direction
+// (docs/strategy.md, "Gear and range", column 11): CON+1 DEX-3 (40) for the
+// knights; STR+1 DEX-3 (38) for the sword singer, bladedancer, plains
+// walker, silver ranger, abyss walker and phantom ranger; STR+1 CON-3 (37) for the other
+// fighters; DEX+1 CON-3 (42) twice and 37 for the treasure hunter and
+// hawkeye; WIT+1 MEN-3 (48) for the bishop, prophet and elven elder; MEN+1
+// WIT-3 (46) for the shillien elder and warcryer; INT+1 WIT-3 (44) for the
+// spellhowler, INT+1 MEN-3 (43) for the spellsinger, 44 twice and 43 for
+// the sorcerer. The professions without a row of their own (dark avenger,
+// warsmith, the servitor lines, overlord) keep the fighters' 37, 42, 37,
+// the nukers' 44 and the healers' 46.
 func defaultDyeTable() map[int32][]int32 {
 	t := make(map[int32][]int32)
 	set := func(symbols []int32, classes ...int32) {
@@ -64,9 +73,18 @@ func defaultDyeTable() map[int32][]int32 {
 	set([]int32{1, 6}, 1, 4, 7, 19, 22, 32, 35, 45, 47, 54, 56)
 	set([]int32{8, 8}, 11, 26, 39)
 	set([]int32{10, 10}, 15, 29, 42, 50)
-	set([]int32{37, 42, 37}, 2, 3, 5, 6, 8, 9, 20, 21, 23, 24, 33, 34, 36, 37, 46, 48, 55, 57)
-	set([]int32{44, 44, 44}, 12, 13, 14, 27, 28, 40, 41)
-	set([]int32{46, 46, 46}, 16, 17, 30, 43, 51, 52)
+	set([]int32{40, 40, 40}, 5, 20, 33)
+	set([]int32{38, 38, 38}, 21, 23, 24, 34, 36, 37)
+	set([]int32{37, 37, 37}, 2, 3, 46, 48, 55)
+	set([]int32{42, 37, 42}, 8, 9)
+	set([]int32{48, 48, 48}, 16, 17, 30)
+	set([]int32{46, 46, 46}, 43, 52)
+	set([]int32{44, 43, 44}, 12)
+	set([]int32{43, 43, 43}, 27)
+	set([]int32{44, 44, 44}, 40)
+	set([]int32{37, 42, 37}, 6, 57)
+	set([]int32{44, 44, 44}, 13, 14, 28, 41)
+	set([]int32{46, 46, 46}, 51)
 	return t
 }
 
