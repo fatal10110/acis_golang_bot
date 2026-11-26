@@ -125,6 +125,13 @@ func TestStepOnce(t *testing.T) {
 		b.handleOne(t, took, now.Add(castTimeout+time.Second))
 		fightCast(t, b, later, fixOnce, npcID)
 	})
+	t.Run("selecting self keeps the record", func(t *testing.T) {
+		b := cast(t)
+		b.handleOne(t, took, now.Add(100*time.Millisecond))
+		b.handleOne(t, MyTargetSelected{ObjectID: selfID}, now.Add(time.Second))
+		b.handleOne(t, MyTargetSelected{ObjectID: npcID}, now.Add(2*time.Second))
+		fightCast(t, b, later, fixHit, npcID)
+	})
 	t.Run("a new target starts afresh", func(t *testing.T) {
 		b := cast(t)
 		b.handleOne(t, took, now.Add(100*time.Millisecond))

@@ -601,7 +601,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID != b.engaged {
 				b.engaged = 0
 			}
-			if e.ObjectID != b.once.target {
+			// Selecting self for a TargetSelf step or a side cast is not a
+			// target change: the Once record stays for the enemy.
+			if e.ObjectID != self && e.ObjectID != b.once.target {
 				b.once = onceRecord{}
 			}
 		case TargetUnselected:
