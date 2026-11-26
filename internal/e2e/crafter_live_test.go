@@ -127,7 +127,7 @@ func TestLiveCrafter(t *testing.T) {
 	clan, clanID := foundBotClan(t, ctx, gm, b, botID, name, "cr", said.said)
 	// The clan warehouse needs clan level 1 (clan/warehouse.go); a look
 	// before it fails and the next check comes CheckEvery later.
-	onBot(t, ctx, gm, botID, "pledge level 1")
+	onBotJoined(t, ctx, gm, botID, name, "pledge level 1")
 	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
 		t.Fatalf("clan %s at level 1: %v", clan, err)
 	}

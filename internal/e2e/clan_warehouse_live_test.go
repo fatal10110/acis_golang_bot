@@ -157,10 +157,10 @@ func TestLiveClanWarehouse(t *testing.T) {
 	// earlier run may carry skins already.
 	waitFor(t, ctx, "the warehouse script asked", func() bool { return script.carried.Load() >= 0 })
 	left := script.carried.Load()
-	onBot(t, ctx, gm, botID, fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d %d", whSkin, whSkins))
+	onBotJoined(t, ctx, gm, botID, name, fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d %d", whSkin, whSkins))
 	waitFor(t, ctx, "the skins in the bot's bag", func() bool { return script.carried.Load() >= left+whSkins })
 	// The clan warehouse needs clan level 1 (clan/warehouse.go).
-	onBot(t, ctx, gm, botID, "pledge level 1")
+	onBotJoined(t, ctx, gm, botID, name, "pledge level 1")
 	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
 		t.Fatalf("clan %s at level 1: %v", clan, err)
 	}

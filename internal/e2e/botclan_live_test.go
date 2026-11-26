@@ -113,6 +113,29 @@ func onBot(t *testing.T, ctx context.Context, gm *GMClient, botID int32, cmds ..
 	}
 }
 
+// gmJoin teleports the GM next to the bot botID, named name, which may have
+// walked out of its sight since it was selected: the server then clears the
+// GM's target, and a click on an object out of sight is not answered.
+func gmJoin(ctx context.Context, gm *GMClient, botID int32, name string) error {
+	if err := gm.Command(ctx, "teleportto "+name); err != nil {
+		return err
+	}
+	if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(botID)); err != nil {
+		return fmt.Errorf("GM next to %s: %w", name, err)
+	}
+	return nil
+}
+
+// onBotJoined runs cmds on the bot as onBot does once the GM joined it
+// (gmJoin): the bot plays its persona once it leads its clan.
+func onBotJoined(t *testing.T, ctx context.Context, gm *GMClient, botID int32, name string, cmds ...string) {
+	t.Helper()
+	if err := gmJoin(ctx, gm, botID, name); err != nil {
+		t.Fatal(err)
+	}
+	onBot(t, ctx, gm, botID, cmds...)
+}
+
 // dismissAnswer matches the server's answer to //pledge dismiss: the clan
 // disbanded, or its target in none.
 func dismissAnswer(ev botclient.Event) bool {
@@ -186,18 +209,13 @@ func founderTold(said <-chan botclient.SystemMessage) string {
 }
 
 // dismissBotClan dissolves clan, the run's clan the bot (botID, named name)
-// leads, at the test's end: the GM joins the bot, which may have walked out
-// of its sight, and dismisses its clan, reporting a clan the server did not
-// disband.
+// leads, at the test's end: the GM joins the bot (gmJoin) and dismisses its
+// clan, reporting a clan the server did not disband.
 func dismissBotClan(t *testing.T, gm *GMClient, botID int32, name, clan string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := gm.Command(ctx, "teleportto "+name); err != nil {
+	if err := gmJoin(ctx, gm, botID, name); err != nil {
 		t.Errorf("dismiss clan %s: %v", clan, err)
-		return
-	}
-	if _, err := gm.Await(ctx, EntryTimeout, charInfoOf(botID)); err != nil {
-		t.Errorf("dismiss clan %s: GM next to %s: %v", clan, name, err)
 		return
 	}
 	if err := gm.OnTarget(ctx, botID, "pledge dismiss"); err != nil {
