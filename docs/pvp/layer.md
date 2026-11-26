@@ -79,7 +79,7 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
   a poison or bleed (skill type or resolved effect type POISON, BLEED: what the negate matches,
   `hooks_buff.go` `negateTypeMatches`; a stack type alone, like NPC Bleed 4615's, is not) with half its
   ticks left → the cure. Its level is the lower set level (`hooks_buff.go:221-233`,
-  `negateLevelAllows`): `effectAbnormalLvl` (only with an `effectType`; Sting 223 sets only this) or
+  `negateLevelAllows`): `effectAbnormalLvl` (only with a resolved effect type, which every typed skill has; Sting 223 and Ice Dagger 1237 set only this) or
   `abnormalLvl` (Poison, Curse: Poison, Venom, Bleed); neither set → no cure. Up to 3: Antidote 1831
   or Bandage 1833; 4-7: Greater Antidote 1832 or Emergency Dressing 1834 (plain first when both
   work); 8: none. One `UseItem` per effect seen, 500 ms reuse. None against monsters.

@@ -14,6 +14,7 @@ const (
 	susBleed   = int32(96)
 	susSting   = int32(223)
 	susNoLevel = int32(9310)
+	susIceDag  = int32(1237) // Ice Dagger: MDAM, its bleed effect BLEED, effectAbnormalLvl only
 )
 
 // dot is a DamOverTime effect of stack type stack ticking count times 3 s
@@ -32,6 +33,8 @@ var sustainSkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: susSting, Level: 20}:  {Type: "PDAM", EffectType: "BLEED", AbnormalLevel: -1, EffectAbnormalLevel: 5, Effects: dot("bleeding", "BLEED", 7)},
 	{ID: susSting, Level: 45}:  {Type: "PDAM", EffectType: "BLEED", AbnormalLevel: -1, EffectAbnormalLevel: 8, Effects: dot("bleeding", "BLEED", 7)},
 	{ID: susNoLevel, Level: 1}: {Type: "POISON", AbnormalLevel: -1, EffectAbnormalLevel: -1, Effects: dot("poison", "", 10)},
+	{ID: susIceDag, Level: 1}:  {Type: "MDAM", AbnormalLevel: -1, EffectAbnormalLevel: 5, Effects: dot("bleeding", "BLEED", 7)},
+	{ID: susIceDag, Level: 15}: {Type: "MDAM", AbnormalLevel: -1, EffectAbnormalLevel: 8, Effects: dot("bleeding", "BLEED", 7)},
 }
 
 // sustainBrain is layerBrain against a Warrior with the DOT levels and the
@@ -145,6 +148,8 @@ func TestPvPCure(t *testing.T) {
 		{name: "Sting level 1 (effectAbnormalLvl 3): Bandage", effect: Effect{SkillID: susSting, Level: 1, Left: 20 * time.Second}, want: itemBandage},
 		{name: "Sting level 20 (5): Emergency Dressing", effect: Effect{SkillID: susSting, Level: 20, Left: 20 * time.Second}, want: itemEmergencyDressing},
 		{name: "Sting level 45 (8): none", effect: Effect{SkillID: susSting, Level: 45, Left: 20 * time.Second}},
+		{name: "Ice Dagger level 1 (MDAM, effectAbnormalLvl 5): Emergency Dressing", effect: Effect{SkillID: susIceDag, Level: 1, Left: 20 * time.Second}, want: itemEmergencyDressing},
+		{name: "Ice Dagger level 15 (8): none", effect: Effect{SkillID: susIceDag, Level: 15, Left: 20 * time.Second}},
 		{name: "a poison with neither level: none", effect: Effect{SkillID: susNoLevel, Level: 1, Left: 28 * time.Second}},
 		{
 			name: "against a monster: none", effect: Effect{SkillID: grdPoison, Level: 1, Left: 28 * time.Second},

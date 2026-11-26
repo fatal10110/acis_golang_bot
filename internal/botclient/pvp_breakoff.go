@@ -204,10 +204,11 @@ func landingType(s datapack.Skill) string {
 
 // cureLevel is the abnormal level a cure must reach to remove s
 // (hooks_buff.go negateLevelAllows): the lower of its set levels,
-// effectAbnormalLvl counting only with an effect type. ok is false with
-// neither set: no level-limited cure removes it.
+// effectAbnormalLvl counting only with a landing type (the server's
+// candidate carries LandingEffectType, skill/effect/core.go). ok is false
+// with neither set: no level-limited cure removes it.
 func cureLevel(s datapack.Skill) (level int, ok bool) {
-	if s.EffectType != "" && s.EffectAbnormalLevel >= 0 {
+	if landingType(s) != "" && s.EffectAbnormalLevel >= 0 {
 		level, ok = s.EffectAbnormalLevel, true
 	}
 	if s.AbnormalLevel >= 0 && (!ok || s.AbnormalLevel < level) {
