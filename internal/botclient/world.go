@@ -108,6 +108,9 @@ type SelfState struct {
 	// PKKills counts the players it killed without a PvP flag or karma
 	// (UserInfo), what PK mode's cap reads.
 	PKKills int32
+	// PvPKills counts the players it killed with a PvP flag (UserInfo),
+	// the panel's PvP count.
+	PvPKills int32
 	// AllyID is its clan's alliance (UserInfo), 0 for none.
 	AllyID int32
 	// StoreType is the private store mode, 0 for none.
@@ -898,7 +901,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.Load, s.MaxLoad, s.InvLimit = e.Load, e.MaxLoad, e.InvLimit
 	s.AllyID = e.AllyID
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
-	s.PKKills = e.PKKills
+	s.PKKills, s.PvPKills = e.PKKills, e.PvPKills
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
 	s.SwimSpeed = e.SwimSpeed
 	s.PAtkSpd, s.CollisionRadius, s.CollisionHeight = e.PAtkSpd, e.CollisionRadius, e.CollisionHeight

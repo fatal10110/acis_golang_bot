@@ -277,6 +277,7 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 		return b.launchSeen(e, now)
 	case MagicSkillCanceled:
 		if r := p.opponents[e.CasterID]; r != nil {
+			b.interruptEnded(r, now)
 			r.LastCast = CastSeen{}
 		}
 		if e.CasterID == self {
@@ -421,9 +422,11 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 		if e.Text[0] == b.world.Self.Name {
 			d.Result = DuelWon
 		}
+		b.duelDecided(d.Result)
 		d.over(now)
 	case msgDuelEndedInTie:
 		d.Result = DuelTie
+		b.duelDecided(d.Result)
 		d.over(now)
 	case msgS1WithdrewS2Won, msgOtherPartyIsFrozen:
 		d.over(now)

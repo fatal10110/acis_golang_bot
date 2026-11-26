@@ -151,6 +151,14 @@ type Snapshot struct {
 	// the reason (docs/parties/panel.md, "Metrics").
 	PartiesFormed uint64            `json:"parties_formed_total"`
 	PartiesBroken map[string]uint64 `json:"parties_broken_total"`
+	// The PvP counters (docs/pvp/modes.md "Panel and metrics (X12)"),
+	// every label present: the first attack on each opponent by its kind,
+	// the deaths to a player by the killer's kind, the duels by result and
+	// the interrupts by step (cast, landed, too_late).
+	PvPFights     map[string]uint64 `json:"pvp_fights_total"`
+	PvPDeaths     map[string]uint64 `json:"pvp_deaths_total"`
+	Duels         map[string]uint64 `json:"duels_total"`
+	PvPInterrupts map[string]uint64 `json:"pvp_interrupts_total"`
 }
 
 // The via labels of Snapshot.ValuablesSold.
@@ -194,6 +202,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), Rules: make(map[string]uint64, len(r.rules))}
 	var soldTrade, soldStore uint64
 	var plans [planOutcomes]uint64
+	var pvp pvpSums
 	hits := make([]uint64, len(r.rules))
 	r.mu.Lock()
 	s.Bots = len(r.bots)
@@ -225,6 +234,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		for i := range b.navPlans {
 			plans[i] += b.navPlans[i].Load()
 		}
+		pvp.add(&b.pvp)
 		s.QueueDepth.add(&b.depth)
 		s.WakeLagMicros.add(&b.wakeLag)
 		s.NavWalkIdleMillis.add(&b.walkIdle)
@@ -237,6 +247,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.NavPlans[planNames[i]] = n
 	}
 	s.ValuablesSold = map[string]uint64{ViaTrade: soldTrade, ViaStore: soldStore}
+	pvp.fill(s)
 	r.collectNavCache(s)
 	for i, name := range r.rules {
 		s.Rules[name] = hits[i]
@@ -255,7 +266,9 @@ func (r *Registry) Last() *Snapshot {
 	for _, n := range planNames {
 		plans[n] = 0
 	}
-	return &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, NavLocates: navLocates(NavCache{}), ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
+	s := &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, NavLocates: navLocates(NavCache{}), ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
+	(&pvpSums{}).fill(s)
+	return s
 }
 
 // Run collects on every tick until ctx ends. The caller owns the ticker
@@ -284,6 +297,7 @@ type Bot struct {
 	valuablesSoldTrade, valuablesSoldStore  atomic.Uint64
 	valuablesDeposits, valuablesReleased    atomic.Uint64
 	valuablesHeld                           atomic.Int64
+	pvp                                     pvpCounters
 	rules                                   []atomic.Uint64 // indexed like reg.rules
 	depth                                   Histogram
 	wakeLag                                 Histogram // microseconds

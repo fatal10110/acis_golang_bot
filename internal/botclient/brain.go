@@ -786,6 +786,7 @@ func (b *Brain) wake(now time.Time) error {
 	if err := b.inspectWake(now); err != nil {
 		return err
 	}
+	b.interruptsDue(now)
 	l := &b.logout
 	if !l.giveUpAt.IsZero() && !now.Before(l.giveUpAt) {
 		return errLogoutTimeout
@@ -942,6 +943,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.pace.sent(g, now)
 	b.metrics.Sent()
 	b.guardSent(a, now)
+	b.fightSent(a, now)
 	switch a.kind {
 	case actAttack:
 		b.engaged, b.opened = a.object, a.object
@@ -964,6 +966,9 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
 		b.buffSent(a, now)
+		if a.interrupts {
+			b.interruptSent(a.object)
+		}
 	case actMove:
 		// A move replaces the attack intention on the server.
 		b.engaged = 0

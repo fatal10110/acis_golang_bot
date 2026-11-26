@@ -115,6 +115,9 @@ type Status struct {
 	// Build is the build the bot plays (BuildStatus), nil for a persona
 	// with no role and before the first session's entry.
 	Build *BuildStatus
+	// PvP is the bot's PvP view (PvPStatus) while online; between sessions
+	// it keeps the last session's.
+	PvP *PvPStatus
 	// Order is the standing order of the panel, the zero Command for none.
 	Order Command
 	// Party is the party slot, "lead A B" or "join L A B", "" for none
@@ -231,6 +234,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	if b.persona.Role != RoleNone {
 		st.Build = buildStatus(b.build())
 	}
+	st.PvP = b.pvpStatus()
 	st.Leader, st.Members = "", nil
 	if p := &w.Party; p.In() {
 		if p.LeaderID == s.ObjectID {

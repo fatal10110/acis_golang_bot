@@ -192,6 +192,9 @@ type botLink struct {
 	// crafter is how the crafter's last cycle ended and until when its
 	// breaker holds: the next session's brain resumes from it.
 	crafter craftEnded
+	// duels is the run's duel tally (Status.PvP), kept by each session's
+	// brain on Run's goroutine.
+	duels DuelTally
 }
 
 // Command hands c to the bot and returns the channel its one answer comes

@@ -237,10 +237,15 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 }
 
 // brain is the BrainConfig of r's bot of preset p: the preset's, with the
-// run's metrics slot and the bot's pinned branch (D22).
+// run's metrics slot, the bot's pinned branch (D22) and its PvP mode
+// switches (docs/pvp/modes.md).
 func (u uiRunner) brain(p preset, r botregistry.Run) botclient.BrainConfig {
 	cfg := p.brain(u.shared)
 	cfg.Metrics, cfg.Branch = r.Metrics, r.Branch
+	if m := r.PvP; m != nil {
+		v := &cfg.Persona.PvP
+		v.Duels, v.Hunt, v.Arenas, v.ForceAttack = m.Duels, m.Hunt, m.Arenas, m.PK
+	}
 	return cfg
 }
 

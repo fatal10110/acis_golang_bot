@@ -69,6 +69,9 @@ type Bot struct {
 	// (botclient.BranchPins), 0 for none: while its character is a base
 	// class the bot heads for it instead of its account's draw (D22).
 	Branch int32 `json:"branch,omitempty"`
+	// PvP is the bot's PvP mode switches of the panel, nil for its
+	// preset's defaults (PvPModes).
+	PvP *PvPModes `json:"pvp,omitempty"`
 	// PartyMode is the bot's party mode (docs/parties/organizer.md): ""
 	// takes part in bot parties, "off" (botparty.ModeOff) never.
 	PartyMode string `json:"party_mode,omitempty"`
@@ -88,6 +91,17 @@ type Bot struct {
 	// StoppedAt and StopReason are when and why its last run ended.
 	StoppedAt  time.Time `json:"stopped_at,omitzero"`
 	StopReason string    `json:"stop_reason,omitempty"`
+}
+
+// PvPModes are a bot's PvP mode switches (docs/pvp/modes.md, D35): duels,
+// hunting flagged and karma players, arena trips and open-world PK. Set,
+// they replace its persona's defaults of those four modes (D6: defaults,
+// not a safety boundary); fight back stays the preset's.
+type PvPModes struct {
+	Duels  bool `json:"duels"`
+	Hunt   bool `json:"hunt"`
+	Arenas bool `json:"arenas"`
+	PK     bool `json:"pk"`
 }
 
 // Tombstone is an account the registry dropped: a deleted bot's, or one
