@@ -1244,7 +1244,7 @@ unreachable (with a reason).
 | Melee and casting | `Action` or attack, with no line check | send the attack or cast only while the straight line to the target is open and within range, else walk to a stand point first; a moving monster is checked again at each decision, and a blocked stop moves the bot to a new stand point |
 | Pick-up (`loot.go`) | `Action`; the server routes the walk | send it only when `CanMove(self, item at raw Z)` holds and the step chain reaches it, and, out of the server's pick-up range, the item's cell is in the bot's SCC (a straight walk down a ledge must not leave the bot on isolated ground, #278); else walk to `StandPoint(item, r, pickup)` in the bot's SCC first |
 | Bows and spells at range | server chase | `StandPoint` with `CanSee` and the skill's or weapon's range |
-| Flee (`rules.go`), idle drift, death return | straight point | a point in the bot's SCC (death return may take one-way drops), chosen away from the attacker or inside the drift radius, as checked segments; a drift point is in the open (no roof, floor or deck over it, `walker.open`) and, within the radius, one straight checked segment away (#617) |
+| Flee (`rules.go`), idle drift, death return | straight point | a point in the bot's SCC (death return may take one-way drops), chosen away from the attacker or inside the drift radius, as checked segments; a drift point is in the open (no roof, floor or deck over it, `walker.open`) and, within the radius, one straight checked segment away; a bot standing under cover routes back out to an open point even inside the radius (#617) |
 
 ### 5. What is deleted
 
