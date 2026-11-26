@@ -301,7 +301,6 @@ func (b *Brain) dyeDraws(v *gearModel, free int, remove []datapack.Henna) []data
 	need := make(map[int32]int32)
 	var draw []datapack.Henna
 	for range free {
-		base := v.value(m, &w, true, cur)
 		var best datapack.Henna
 		var bestGain float64
 		var bestCost int64
@@ -316,7 +315,7 @@ func (b *Brain) dyeDraws(v *gearModel, free int, remove []datapack.Henna) []data
 			if cost > left {
 				continue
 			}
-			gain := v.value(m, &w, true, addDye(cur, h)) - base
+			gain := v.delta(m, &w, true, addDye(cur, h), &w, true, cur)
 			if gain <= 0 && len(stats) == 0 {
 				continue
 			}

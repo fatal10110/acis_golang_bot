@@ -268,7 +268,8 @@ type supply struct {
 
 // supplies are the trip targets in priority order: the shots of each
 // weapon of shotWeapons (buyShot), the HP potion (supplyPotion), the
-// Scrolls of Escape, then the Extra ones by template id. A Restock row
+// Scrolls of Escape, the cures (supplyCures), then the Extra ones by
+// template id. A Restock row
 // sets its item's to its Max, and ShotStock its Max for shots. Each is
 // clamped by the weight left under BuyLoad once the ones before it are
 // carried (weightCap).
@@ -296,6 +297,9 @@ func (b *Brain) supplies() []supply {
 	}
 	if b.persona.Supply.Escapes > 0 {
 		add(scrollOfEscape, b.persona.Supply.Escapes, false)
+	}
+	for _, id := range b.supplyCures() {
+		add(id, b.persona.PvP.CureStock, false)
 	}
 	if b.persona.Supply.Extra != nil {
 		extra := b.persona.Supply.Extra(b.world)
@@ -356,14 +360,14 @@ func (b *Brain) restockOf(id int32) (Restock, bool) {
 	return Restock{}, false
 }
 
-// supplyWants are the HP potion and Scrolls of Escape the shop errand
-// buys (refillRow). Shots are shotWants', and the Extra supplies
-// extraWants', bought after the bot's own.
+// supplyWants are the HP potion, Scrolls of Escape and cures
+// (supplyCures) the shop errand buys (refillRow). Shots are shotWants', and
+// the Extra supplies extraWants', bought after the bot's own.
 func (b *Brain) supplyWants() []buyRow {
 	var rows []buyRow
-	potion := b.supplyPotion()
+	potion, cures := b.supplyPotion(), b.supplyCures()
 	for _, s := range b.supplies() {
-		if s.extra || s.item != scrollOfEscape && s.item != potion {
+		if s.extra || s.item != scrollOfEscape && s.item != potion && !slices.Contains(cures, s.item) {
 			continue
 		}
 		if r, ok := b.refillRow(s); ok {

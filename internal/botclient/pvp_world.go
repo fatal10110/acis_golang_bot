@@ -177,6 +177,9 @@ type pvpWorld struct {
 	arena     arenaTrip
 	rows      charmodel.RowTable
 	rowsLevel int
+	// mix is the mix table the gear scores weigh PvP value by
+	// (pvp_gear.go).
+	mix pvpMix
 	// last is the bot's own last cast and kite its kite walk, the PvP
 	// layer's (pvp_layer.go).
 	last ownLast
@@ -204,6 +207,9 @@ type duelAsk struct {
 // for an event the PvP reaction does not cover, the next frame for a guard
 // stop (Brain.guardWake).
 func (b *Brain) pvpEvent(ev Event, now time.Time) time.Time {
+	if b.persona.PvP.GearWeight > 0 {
+		b.pvp.mix.now = now
+	}
 	at := b.pvpKeep(ev, now)
 	if g := b.guardWake(ev, now); !g.IsZero() && (at.IsZero() || g.Before(at)) {
 		at = g
@@ -330,6 +336,9 @@ func (b *Brain) charInfo(e CharInfo, now time.Time) bool {
 	_, bow := b.cfg.Travel.arrowsOf(e.RHand)
 	if row, ok := charmodel.ClassRow(e.ClassID, bow); ok {
 		r.Archetype, r.Row = row.Archetype(), row
+		if b.persona.PvP.GearWeight > 0 {
+			b.pvp.mix.see(e, row, now)
+		}
 	}
 	r.Tier = classTier(e.ClassID)
 	b.rootSeen(e.ObjectID, r, e.Abnormal, now)

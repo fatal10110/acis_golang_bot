@@ -1,6 +1,9 @@
 package botclient
 
 import (
+	"maps"
+	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -124,6 +127,21 @@ func TestPvPCPPotion(t *testing.T) {
 			}
 		})
 	}
+	// The junk set (docs/pvp/layer.md "CP", X10): with KeepCPPotions the CP
+	// potions are neither junk nor deposited (uses, what the stash reads);
+	// without it they are sold like any other item.
+	for _, keep := range []bool{true, false} {
+		t.Run("the junk set, KeepCPPotions "+strconv.FormatBool(keep), func(t *testing.T) {
+			b := sustainBrain(t, cpPotions...)
+			b.persona.PvP.KeepCPPotions = keep
+			junk := b.junk()
+			for oid, it := range b.world.Inventory.Items {
+				if _, sold := junk[oid]; sold == keep || b.uses(it.TemplateID) != keep {
+					t.Errorf("CP potion %d: junk %v, kept for use %v; want kept %v", it.TemplateID, sold, b.uses(it.TemplateID), keep)
+				}
+			}
+		})
+	}
 }
 
 // TestPvPCure checks the cures (docs/pvp/layer.md "Cures"): the cure of the
@@ -177,6 +195,68 @@ func TestPvPCure(t *testing.T) {
 			}
 		})
 	}
+	t.Run("the supply list", func(t *testing.T) {
+		const grocer = int32(30090)
+		plain := []int32{itemAntidote, itemBandage}
+		for _, tc := range []struct {
+			name   string
+			stock  int32
+			level  int32
+			grocer bool
+			want   []int32
+		}{
+			{name: "CureStock 0: none", stock: 0, level: 20, grocer: true},
+			{name: "level 19: Antidotes and Bandages", stock: 5, level: 19, grocer: true, want: plain},
+			{name: "level 20, a merchant selling the greater ones: all four", stock: 5, level: 20, grocer: true, want: allCures},
+			{name: "level 20, no merchant selling the greater ones: Antidotes and Bandages", stock: 5, level: 20, want: plain},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				b := sustainBrain(t)
+				b.persona.PvP.CureStock = tc.stock
+				b.world.Self.Level = tc.level
+				m := b.cfg.Travel
+				m.shops = map[int32][]shopList{}
+				if tc.grocer {
+					m.shops[grocer] = []shopList{{id: 1, products: []datapack.Product{{ItemID: itemGreaterAntidote, Price: 270}, {ItemID: itemEmergencyDressing, Price: 270}}}}
+				}
+				b.handleOne(t, NPCInfo{ObjectID: 0x20000090, NPCID: grocer, Pos: Point{X: 100}}, t0)
+				got := make(map[int32]int32)
+				for _, s := range b.supplies() {
+					if slices.Contains(allCures, s.item) {
+						got[s.item] = s.count
+					}
+				}
+				want := make(map[int32]int32)
+				for _, id := range tc.want {
+					want[id] = tc.stock
+				}
+				if !maps.Equal(got, want) {
+					t.Errorf("cures on the supply list %v, want %v", got, want)
+				}
+				// The shop errand buys them from a spawned merchant.
+				m.spawnedSold = map[int32]bool{}
+				for _, id := range allCures {
+					m.spawnedSold[id] = true
+				}
+				b.persona.Supply.Refill = 50
+				bought := make(map[int32]int32)
+				for _, r := range b.supplyWants() {
+					if slices.Contains(allCures, r.item) {
+						bought[r.item] = r.count
+					}
+				}
+				if !maps.Equal(bought, want) {
+					t.Errorf("cures the shop errand buys %v, want %v", bought, want)
+				}
+				// Every cure is kept while the list carries them.
+				for _, id := range allCures {
+					if b.uses(id) != (tc.stock > 0) {
+						t.Errorf("cure %d kept %v, want %v", id, b.uses(id), tc.stock > 0)
+					}
+				}
+			})
+		}
+	})
 	t.Run("one cure per effect seen", func(t *testing.T) {
 		b := sustainBrain(t, allCures...)
 		poison := Effect{SkillID: grdPoison, Level: 1, Left: 28 * time.Second}
