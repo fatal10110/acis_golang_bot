@@ -40,6 +40,8 @@ type World struct {
 	// Attackers are the creatures that hit the bot recently, by object id.
 	Attackers map[int32]*Attacker
 	Party     Party
+	// Channel is the command channel the bot's party is in (channel.go).
+	Channel Channel
 	// Clan is the bot's clan; clanInviter the inviter the last clan
 	// invitation's system message named (applyClan).
 	Clan        Clan
@@ -872,6 +874,8 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case AskJoinParty, PartySmallWindowAll, PartySmallWindowAdd, PartySmallWindowUpdate,
 		PartySmallWindowDelete, PartySmallWindowDeleteAll, PartyMemberPosition:
 		w.applyParty(ev, now)
+	case ExOpenMPCC, ExCloseMPCC, ExMPCCPartyInfoUpdate, ExMPCCShowPartyMemberInfo, ExMultiPartyCommandChannelInfo:
+		w.applyChannel(ev, now)
 	case SystemMessage:
 		w.applyDeathPenalty(e)
 		w.applyClan(ev, now)

@@ -726,13 +726,13 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 		}
 		return fightNone
 	}
-	// Rule 2: never a party member, in an arena too.
-	if o.Kind != KindPlayer || b.partyMate(id) {
+	// Rule 2: never a party member or a command channel mate, in an arena
+	// too (character_social.go SocialWithoutForce).
+	if o.Kind != KindPlayer || b.partyMate(id) || b.channelMate(id) {
 		return fightNone
 	}
 	// Rule 3: in the bot's arena anyone else, clan mates, allies and bots
-	// included (D38; character_social.go SocialWithoutForce). A command
-	// channel mate is not told apart: the bot does not track channels.
+	// included (D38; character_social.go SocialWithoutForce).
 	if b.sameArena(id, now) {
 		return FightArena
 	}
@@ -761,9 +761,9 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 	return fightNone
 }
 
-// friend reports whether player id is the bot's party member (rule 2), or
-// its clan mate or ally (rule 4).
-func (b *Brain) friend(id int32) bool { return b.partyMate(id) || b.clanMate(id) }
+// friend reports whether player id is the bot's party member or command
+// channel mate (rule 2), or its clan mate or ally (rule 4).
+func (b *Brain) friend(id int32) bool { return b.partyMate(id) || b.channelMate(id) || b.clanMate(id) }
 
 // partyMate reports whether player id is the bot's party member.
 func (b *Brain) partyMate(id int32) bool {

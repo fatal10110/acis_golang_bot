@@ -20,6 +20,13 @@ Each decoder and encoder has a recorded or server-built fixture and an exact `le
   bot's collision radius, ally id, PK and PvP kills. Dropped today: `UserInfo` at `inworld.go:56`,
   `:62`, `:66`; `CharInfo` at `:127`, `:137`, `:140`, `:148`, `:150-151`; `NPCInfo` at `:171`,
   `:183`, its title read at `:178` but not kept by `applyNPCInfo` (`world.go:888-900`).
+- Command channel (#429): `ExOpenMPCC`, `ExCloseMPCC` (0xfe subs 0x0025, 0x0026, no body),
+  `ExMultiPartyCommandChannelInfo` (0x0030: leader name, 0, member count, then per party leader
+  name, leader id, member count), `ExMPCCShowPartyMemberInfo` (0x004a: per member name, object id,
+  class id), `ExMPCCPartyInfoUpdate` (0x005a: leader name, leader id, member count, added);
+  `RequestExMPCCShowPartyMembersInfo` (0xd0 sub 0x0026, leader id) and `/channellistupdate`
+  (`RequestUserCommand` 97) ask for them (`serverpackets/party.go:21-25`, `:192-221`;
+  `serverpackets/usercommand.go:37-62`; `clientpackets/party.go:20`, `:105-117`).
 - SystemMessages: 35, 36 (damage dealt, taken), 139 (resisted), 283, 284 (combat zone in, out:
   an arena or a running siege), 84, 85 (peace refusals), 692 (frozen duel opponent), 153 (busy), the duel set 1926-2028.
 
@@ -61,6 +68,16 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   Another player in the same arena is attackable without force by [rule 3](targets.md#mayfight). The server reads positions
   live at every attack and at death, so the bot keeps its own and each arena opponent's edge
   distance (from `CharInfo` and moves).
+
+- **Command channel** (`internal/botclient/channel.go`, #429): the server pushes no member ids. A
+  party joining a channel gets only `ExOpenMPCC` (`party/channel.go:142-162`), so the bot asks for
+  the overview (`/channellistupdate`), then each other party's member list by its leader id; an
+  `ExMPCCPartyInfoUpdate` adds or removes a party. A party's joins, departures and leader changes
+  reach no other party, so in an arena the bot asks for the overview and every list again once a
+  minute old. One ask per second, an unanswered one again after 15 s; neither ask has a server
+  gate (`network/usercommand.go:180-192`, `network/party_channel.go:105-121`). Only `ExCloseMPCC`
+  ends the channel: the server sends it on every leave and disband, while a party window reset
+  alone (as on a leader change) keeps it. Its members are [rule 2](targets.md#mayfight).
 
 ## Changes to today's code (X4)
 

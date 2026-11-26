@@ -383,6 +383,9 @@ const (
 	actTargetCancel
 	actDuelAnswer
 	actDuelStart
+	// actChannelAsk asks for the bot's command channel: its overview or a
+	// party's members (channel.go).
+	actChannelAsk
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -514,7 +517,9 @@ type rule struct {
 // due reply waits for them. "announce" says the queued craft order lines
 // (answers and finished GM orders) in turn, after "chat". "party" sends a lead
 // bot's invitations and oustings and a join bot's handover after
-// "announce", ahead of every errand (docs/parties/leader.md). "leader" handles a dead or lost leader ahead of
+// "announce", ahead of every errand (docs/parties/leader.md). "channel" asks
+// for the bot's command channel's parties and members right after it, so
+// MayFight's rule 2 knows them before a fight (channel.go). "leader" handles a dead or lost leader ahead of
 // following it. The shot toggle is set-up, not a plan rule: it runs once
 // per shot template carried, ahead of the fight it serves, after the flee
 // rules so it never delays one. "buffpotion" drinks the build's buff potion
@@ -572,6 +577,7 @@ var playRules = []rule{
 	{"chat", (*Brain).ruleChat},
 	{"announce", (*Brain).ruleAnnounce},
 	{"party", (*Brain).ruleParty},
+	{"channel", (*Brain).ruleChannel},
 	{"shots", (*Brain).ruleShots},
 	{"overweight", (*Brain).ruleOverweight},
 	{"arena leave", (*Brain).ruleArenaLeave},
