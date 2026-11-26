@@ -50,7 +50,7 @@ func TestLoginGateSetSpacing(t *testing.T) {
 			if got := g.Spacing(); got < tt.lo || got >= tt.hi {
 				t.Fatalf("Spacing %s, want in [%s, %s)", got, tt.lo, tt.hi)
 			}
-			turn, err := g.Take(t.Context())
+			turn, err := g.Take(t.Context(), "bot1")
 			if err != nil {
 				t.Fatal(err)
 			}

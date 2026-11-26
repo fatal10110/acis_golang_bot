@@ -5,8 +5,10 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
+	"syscall"
 	"time"
 
 	commoncrypt "github.com/fatal10110/acis_golang_bot/internal/commons/crypt"
@@ -46,6 +48,38 @@ type LoginResult struct {
 	GameAddr string
 	// Connected is when the TCP connection and Init completed.
 	Connected time.Time
+}
+
+// ErrClosedAtAccept reports a connection the server closed before its first
+// frame: a login or game dial that connected, then ended before the server's
+// first byte. A server closes a connection at accept for the accept filter's ban
+// (server internal/commons/netutil/acceptfilter.go, filteredListener.Accept),
+// the login server's ban list (credential and admin bans, internal/
+// loginserver/clientlink.go, before Init) and the game listener's ban list
+// (internal/commons/netutil/banlist.go, RefuseBanned); a server that fails
+// between accept and its first write looks the same. The login gate goes
+// quiet for banQuiet on it.
+var ErrClosedAtAccept = errors.New("closed at accept")
+
+// closedOnRead marks err, from a connection's first read, as
+// ErrClosedAtAccept when the server closed it before any byte: EOF (no
+// byte of a frame header came) or a reset. A timeout or a partial frame is
+// not.
+func closedOnRead(err error) error {
+	if errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET) {
+		return fmt.Errorf("%w: %w", ErrClosedAtAccept, err)
+	}
+	return err
+}
+
+// closedOnWrite marks err, from a connection's first write, as
+// ErrClosedAtAccept when the server closed it before reading: a broken pipe
+// or a reset. A timeout is not.
+func closedOnWrite(err error) error {
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return fmt.Errorf("%w: %w", ErrClosedAtAccept, err)
+	}
+	return err
 }
 
 // LoginError reports a login-server rejection: the reply (LoginFail,
@@ -165,7 +199,7 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	frames := wire.NewFrameReader(conn)
 	first, err := frames.ReadFrame()
 	if err != nil {
-		return nil, res, nil, fmt.Errorf("read Init: %w", err)
+		return nil, res, nil, fmt.Errorf("read Init: %w", closedOnRead(err))
 	}
 	init, err := decodeInit(first)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"sync"
 	"syscall"
 	"time"
@@ -266,7 +267,7 @@ func (b *Bot) Run(ctx context.Context) (err error) {
 // long it stayed.
 func (b *Bot) attempt(ctx context.Context) (entered bool, played time.Duration, err error) {
 	b.publish(StateWaiting, nil)
-	turn, err := b.cfg.Gate.Take(ctx)
+	turn, err := b.cfg.Gate.Take(ctx, b.account)
 	if err != nil {
 		return false, 0, err
 	}
@@ -281,13 +282,15 @@ func (b *Bot) attempt(ctx context.Context) (entered bool, played time.Duration, 
 	return true, b.cfg.Clock.Now().Sub(start), err
 }
 
-// enter logs in and enters the world, each dial paced by turn.
+// enter logs in and enters the world, each dial paced by turn, and reports
+// how each ended and the entry to it.
 func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) {
 	if err := turn.Dial(ctx); err != nil {
 		return nil, Self{}, err
 	}
 	res, err := b.net.login(ctx, b.account, b.password)
 	turn.Dialed(err)
+	b.closedAtAccept(b.cfg.LoginAddr, err)
 	if err != nil {
 		err = fmt.Errorf("login: %w", err)
 		if credentialRefused(err) {
@@ -303,8 +306,10 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 	if err := turn.Dial(ctx); err != nil {
 		return nil, Self{}, err
 	}
-	g, err := b.net.dialGame(ctx, cmp.Or(b.cfg.GameAddr, res.GameAddr))
+	addr := cmp.Or(b.cfg.GameAddr, res.GameAddr)
+	g, err := b.net.dialGame(ctx, addr)
 	turn.Dialed(err)
+	b.closedAtAccept(addr, err)
 	if err != nil {
 		return nil, Self{}, err
 	}
@@ -313,7 +318,22 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 		g.Close()
 		return nil, Self{}, fmt.Errorf("enter game: %w", err)
 	}
+	// Reset the fleet backoff while the turn is held, before the next bot
+	// dials.
+	turn.Entered()
 	return g, self, nil
+}
+
+// closedAtAccept logs a dial to addr that err reports closed at accept. The
+// turn holder calls it once per such dial, and each starts one quiet period
+// of the gate: no dial comes before it ends.
+func (b *Bot) closedAtAccept(addr string, err error) {
+	if !errors.Is(err, ErrClosedAtAccept) {
+		return
+	}
+	_, port, _ := net.SplitHostPort(addr)
+	b.log.Warn("closed at accept: the address is banned or filtered, or the server failed",
+		"port", port, "quiet", banQuiet, "err", err)
 }
 
 // pin makes the character a session chose or created the bot's known one:
@@ -406,8 +426,8 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 		errors.Is(err, ErrAccountHasCharacters),
 		errors.Is(err, ErrNoCharacterToAdopt):
 		return 0, err
-	case isRefused(err):
-		// The gate already backs every bot off.
+	case isRefused(err), errors.Is(err, ErrClosedAtAccept):
+		// The gate already backs every bot off, or keeps every bot quiet.
 		return 0, nil
 	}
 	return b.retry.next(b.rng), nil

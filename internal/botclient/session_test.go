@@ -128,13 +128,15 @@ func (f *fakeGame) sentOpcode(op byte) bool {
 }
 
 // fakeNet scripts a bot's connections. The nth login returns logins[n] (nil
-// past the end); the nth game entry fails with enters[n] or plays games[n]
+// past the end); the nth game dial fails with dials[n] when it is set; the
+// nth game entry fails with enters[n] or plays games[n]
 // (staying in the world past the end). Once the bot has entered cancelAt
 // times, ctx is canceled. It is used by the bot's goroutine only; the test
 // reads it after Run returns.
 type fakeNet struct {
 	t        *testing.T
 	logins   []error
+	dials    []error
 	enters   []error
 	games    []gameScript
 	cancelAt int
@@ -166,6 +168,9 @@ func (n *fakeNet) login(ctx context.Context, account, password string) (LoginRes
 
 func (n *fakeNet) dialGame(ctx context.Context, addr string) (gameSession, error) {
 	n.nDial++
+	if i := n.nDial - 1; i < len(n.dials) && n.dials[i] != nil {
+		return nil, n.dials[i]
+	}
 	if k := len(n.played); k > 0 {
 		prev := n.played[k-1]
 		if prev.entered {
@@ -459,7 +464,7 @@ func TestSessionHaltsInTurn(t *testing.T) {
 	gate := NewLoginGate(clock, rand.New(rand.NewPCG(3, 4)))
 	n := &fakeNet{t: t, logins: []error{&LoginError{Packet: "LoginFail", Reason: loginFailUserOrPassWrong}}}
 	b := newTestBot(t, true, n, gate, clock)
-	turn, err := gate.Take(t.Context())
+	turn, err := gate.Take(t.Context(), "bot1")
 	if err != nil {
 		t.Fatal(err)
 	}

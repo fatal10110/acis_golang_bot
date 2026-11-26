@@ -55,13 +55,13 @@ func TestSupervisorLearnedNeverWaits(t *testing.T) {
 	b, r := h.create(t, "town", nil)
 
 	release := h.hold(t)
-	turn, err := h.gate.Take(t.Context())
+	turn, err := h.gate.Take(t.Context(), "bot1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	r.Learned("Pinned", 0) // a blocking report deadlocks here
 	turn.Done()
-	next, err := h.gate.Take(t.Context())
+	next, err := h.gate.Take(t.Context(), "bot1")
 	if err != nil {
 		t.Fatalf("second bot's turn: %v", err)
 	}
