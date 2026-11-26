@@ -111,10 +111,11 @@ func runTownBot(t *testing.T, ctx context.Context, tg *Target, account string, c
 const opBypass = 0x21
 
 // visits is f's NPC dealings in order, for a failed scenario: the clicks
-// and links it sent (an NPC as object/template), the pages, buy lists and
-// SystemMessages it read.
+// and links it sent (an NPC as object/template, a ground item as
+// object/item template), the pages, buy lists and SystemMessages it read.
 func (f *farmer) visits() string {
 	npcs := make(map[int32]int32)
+	ground := make(map[int32]int32)
 	type line struct {
 		at   time.Time
 		text string
@@ -124,6 +125,10 @@ func (f *farmer) visits() string {
 		switch ev := e.Event.(type) {
 		case botclient.NPCInfo:
 			npcs[ev.ObjectID] = ev.NPCID
+		case botclient.SpawnItem:
+			ground[ev.Item.ObjectID] = ev.Item.TemplateID
+		case botclient.DropItem:
+			ground[ev.Item.ObjectID] = ev.Item.TemplateID
 		case botclient.NpcHtmlMessage:
 			html := ev.HTML
 			if len(html) > 160 {
@@ -139,6 +144,10 @@ func (f *farmer) visits() string {
 	for _, p := range f.watch.Sent() {
 		switch p.Op {
 		case botclient.OpAction:
+			if tmpl, ok := ground[p.Target]; ok {
+				lines = append(lines, line{p.At, fmt.Sprintf("click %d/item %d", p.Target, tmpl)})
+				break
+			}
 			lines = append(lines, line{p.At, fmt.Sprintf("click %d/%d", p.Target, npcs[p.Target])})
 		case opBypass:
 			var b strings.Builder
