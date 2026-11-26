@@ -109,10 +109,11 @@ type Step struct {
 	// under it. A target whose HP the bot has not seen counts as full.
 	MinTargetHP, SelfHPBelow, SelfHPAbove int
 	MPAbove, MPBelow                      int
-	// Within casts only while the target is that close; Attackers only
-	// with at least that many attackers.
-	Within    int32
-	Attackers int
+	// Within casts only while the target is that close, Beyond only while
+	// it is farther (a row's "from beyond N"); Attackers only with at least
+	// that many attackers.
+	Within, Beyond int32
+	Attackers      int
 	// Target is whom the step is cast on.
 	Target StepTarget
 	// Idle casts only out of combat.
@@ -189,6 +190,7 @@ func (s Step) passes(st stepState) bool {
 		s.MPAbove > 0 && !above(st.mp, st.maxMP, s.MPAbove),
 		s.MPBelow > 0 && !below(st.mp, st.maxMP, s.MPBelow),
 		s.Within > 0 && st.dist > s.Within,
+		s.Beyond > 0 && st.dist <= s.Beyond,
 		s.Attackers > 0 && st.attackers < s.Attackers,
 		s.Charges > 0 && st.charges < s.Charges,
 		s.ChargeToMax && st.charges >= st.maxCharges,
@@ -250,8 +252,9 @@ type ClassKit struct {
 	Skills, Trainers []int32
 	Rotation         []Step
 	// PvP is the row's PvP row (docs/pvp/rows.md): the steps fight casts
-	// before Rotation against a player, in the PvP order
-	// (docs/pvp/layer.md); X7 and X8 ship them.
+	// against a player in the PvP order (docs/pvp/layer.md), before and in
+	// place of Rotation's steps of the same skills (pvpSteps); the fighter
+	// rows ship in kits_pvp_fighter.go (X7), the mystic rows in X8.
 	PvP   []Step
 	Buffs []Buff
 	Heals []Heal
@@ -599,7 +602,9 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 	}
 	st.spoilable = b.spoilable(id, st.fresh)
 	if o := b.world.object(id); o != nil && o.Kind == KindPlayer {
-		st.player = true
+		// No Spoil on a player: the server spoils only a monster
+		// (handler/skill/spoil.go), so it would waste the cast.
+		st.player, st.spoilable = true, false
 		if r := b.pvp.opponents[id]; r != nil {
 			st.vs = r.Archetype
 		}

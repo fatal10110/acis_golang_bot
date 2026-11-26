@@ -90,7 +90,7 @@ var professionKits = map[int32]ClassKit{
 	// under 60 % HP, Divine Heal under 40 % from 28, Ultimate Defense under
 	// 20 %; Majesty out of combat; rests with Relax.
 	4: {
-		Skills: []int32{skillAggression, skillDrainHealth, skillShieldStun, skillPowerStrike, skillDivineHeal, skillUltimateDefense, skillMajesty, skillRelax},
+		Skills: []int32{skillAggression, skillDrainHealth, skillShieldStun, skillPowerStrike, skillDivineHeal, skillUltimateDefense, skillMajesty, skillRelax, skillDeflectArrow},
 		Rotation: []Step{
 			{Skill: skillDivineHeal, From: 28, Target: TargetSelf, SelfHPBelow: 40},
 			{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20},
@@ -100,6 +100,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillShieldStun, Weapons: []string{"SHIELD"}},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
+		PvP:   knightPvP,
 		Buffs: []Buff{{Skill: skillMajesty}},
 		Relax: skillRelax,
 		Base:  []int32{skillRelax},
@@ -113,7 +114,7 @@ var professionKits = map[int32]ClassKit{
 	// with a blunt, Power Smash, Wild Sweep with a pole and two attackers;
 	// the stance toggles; rests with Relax.
 	1: {
-		Skills: []int32{skillStunAttack, skillPowerSmash, skillWildSweep, skillBattleRoar, skillWarCry, skillAccuracy, skillViciousStance, skillRelax},
+		Skills: []int32{skillStunAttack, skillPowerSmash, skillWildSweep, skillBattleRoar, skillWarCry, skillAccuracy, skillViciousStance, skillRelax, skillLionheart},
 		Rotation: []Step{
 			{Skill: skillBattleRoar, From: 28, Target: TargetSelf, SelfHPBelow: 30},
 			{Skill: skillWarCry, Target: TargetSelf},
@@ -121,6 +122,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillPowerSmash, Weapons: smashWeapons},
 			{Skill: skillWildSweep, Weapons: []string{"POLE"}, Attackers: 2},
 		},
+		PvP:     warlordPvP,
 		Toggles: stanceToggles,
 		Relax:   skillRelax,
 		Base:    []int32{skillRelax},
@@ -139,6 +141,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillUltimateEvasion, From: 28, Target: TargetSelf, SelfHPBelow: 30},
 			rapidShot,
 		}, daggerSteps, bowSteps),
+		PvP:     roguePvP,
 		Toggles: stanceToggles,
 		Flee:    skillDash,
 		Relax:   skillRelax,
@@ -152,7 +155,7 @@ var professionKits = map[int32]ClassKit{
 	// EK: Elemental Heal under 50 % HP, Ultimate Defense under 20 %;
 	// Aggression opens from 24, Entangle from 36, Power Strike; the auras.
 	19: {
-		Skills: []int32{skillAggression, skillEntangle, skillPowerStrike, skillElementalHeal, skillUltimateDefense, skillDefenseAura, skillAttackAura},
+		Skills: []int32{skillAggression, skillEntangle, skillPowerStrike, skillElementalHeal, skillUltimateDefense, skillDefenseAura, skillAttackAura, skillDeflectArrow},
 		Rotation: []Step{
 			{Skill: skillElementalHeal, Target: TargetSelf, SelfHPBelow: 50},
 			{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20},
@@ -160,6 +163,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillEntangle, From: 36, Opener: true},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
+		PvP:   elvenKnightPvP,
 		Buffs: fighterAuras,
 		Base:  []int32{skillDefenseAura, skillAttackAura},
 		Thresholds: Thresholds{
@@ -180,6 +184,7 @@ var professionKits = map[int32]ClassKit{
 			rapidShot,
 			{Skill: skillEntangle, From: 36, Opener: true},
 		}, daggerSteps, bowSteps),
+		PvP:     elvenScoutPvP,
 		Buffs:   fighterAuras,
 		Toggles: stanceToggles,
 		Flee:    skillSprint,
@@ -195,7 +200,7 @@ var professionKits = map[int32]ClassKit{
 	// Power Break from 32; Sting with its weapons from 24, Freezing Strike
 	// from 36, Power Strike; the auras.
 	32: {
-		Skills: []int32{skillAggression, skillDrainHealth, skillPowerBreak, skillSting, skillFreezingStrike, skillPowerStrike, skillUltimateDefense, skillDefenseAura, skillAttackAura},
+		Skills: []int32{skillAggression, skillDrainHealth, skillPowerBreak, skillSting, skillFreezingStrike, skillPowerStrike, skillUltimateDefense, skillDefenseAura, skillAttackAura, skillDeflectArrow, skillPoison},
 		Rotation: []Step{
 			{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20},
 			{Skill: skillDrainHealth, SelfHPBelow: 60},
@@ -206,6 +211,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillFreezingStrike, From: 36},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
+		PvP:   palusKnightPvP,
 		Buffs: fighterAuras,
 		Base:  []int32{skillDefenseAura, skillAttackAura},
 		Thresholds: Thresholds{
@@ -219,7 +225,7 @@ var professionKits = map[int32]ClassKit{
 	// Bleed, Mortal Blow and Sting from 24; the bow steps; the stance
 	// toggles; the auras.
 	35: {
-		Skills: []int32{skillDrainHealth, skillBleed, skillMortalBlow, skillSting, skillStunningShot, skillPowerShot, skillUltimateEvasion, skillRapidShot, skillAccuracy, skillViciousStance, skillDefenseAura, skillAttackAura},
+		Skills: []int32{skillDrainHealth, skillBleed, skillMortalBlow, skillSting, skillStunningShot, skillPowerShot, skillUltimateEvasion, skillRapidShot, skillAccuracy, skillViciousStance, skillDefenseAura, skillAttackAura, skillPoison, skillPowerBreak},
 		Rotation: slices.Concat([]Step{
 			{Skill: skillUltimateEvasion, From: 28, Target: TargetSelf, SelfHPBelow: 30},
 			rapidShot,
@@ -228,6 +234,7 @@ var professionKits = map[int32]ClassKit{
 		}, daggerSteps, []Step{
 			{Skill: skillSting, From: 24, Weapons: daggerBranch, Branch: true},
 		}, bowSteps),
+		PvP:     assassinPvP,
 		Buffs:   fighterAuras,
 		Toggles: stanceToggles,
 		Base:    []int32{skillDefenseAura, skillAttackAura},
@@ -242,7 +249,7 @@ var professionKits = map[int32]ClassKit{
 	// Frenzy is on), Rage in combat from 24; Stun Attack with a blunt, Power
 	// Smash; the stance toggles; rests with Relax.
 	45: {
-		Skills: []int32{skillStunAttack, skillPowerSmash, skillBattleRoar, skillRage, skillFrenzy, skillGuts, skillAccuracy, skillViciousStance, skillRelax},
+		Skills: []int32{skillStunAttack, skillPowerSmash, skillBattleRoar, skillRage, skillFrenzy, skillGuts, skillAccuracy, skillViciousStance, skillRelax, skillLionheart},
 		Rotation: []Step{
 			{Skill: skillBattleRoar, From: 28, Target: TargetSelf, SelfHPBelow: 30},
 			{Skill: skillFrenzy, From: 32, Target: TargetSelf, SelfHPBelow: 30},
@@ -251,6 +258,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillStunAttack, Weapons: stunWeapons},
 			{Skill: skillPowerSmash, Weapons: smashWeapons},
 		},
+		PvP:     overlordPvP,
 		Toggles: stanceToggles,
 		Relax:   skillRelax,
 		Base:    []int32{skillRelax},
@@ -276,6 +284,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillStunningFist, Weapons: fistWeapons},
 			{Skill: skillIronPunch, Weapons: fistWeapons},
 		},
+		PvP: monkPvP,
 		Buffs: []Buff{
 			{Skill: skillWolfTotem, Weapons: fistWeapons},
 			{Skill: skillBearTotem, From: 28, Weapons: fistWeapons, Replaces: skillWolfTotem},
@@ -296,6 +305,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillSpoil, Spoil: true},
 			{Skill: skillStunAttack, Weapons: stunWeapons},
 		},
+		PvP:   scavengerPvP,
 		Sweep: skillSweeper,
 		Thresholds: Thresholds{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30, MPReserve: 10,

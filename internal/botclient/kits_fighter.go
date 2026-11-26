@@ -26,6 +26,21 @@ var fighterAttacks = []Step{
 	{Skill: skillPowerStrike, From: 5, Weapons: meleeWeapons},
 }
 
+// darkFighterSteps are the dark elven fighter's Drain Health under 60 % HP
+// and as the opener from 15, then fighterAttacks (row DF, column 4);
+// orcFighterAttacks the orc fighter's Iron Punch with fist weapons and
+// Power Strike with a sword or blunt (row OF).
+var (
+	darkFighterSteps = append([]Step{
+		{Skill: skillDrainHealth, From: 15, SelfHPBelow: 60},
+		{Skill: skillDrainHealth, From: 15, Opener: true},
+	}, fighterAttacks...)
+	orcFighterAttacks = []Step{
+		{Skill: skillIronPunch, From: 5, Weapons: []string{"DUALFIST"}},
+		{Skill: skillPowerStrike, From: 5, Weapons: meleeWeapons},
+	}
+)
+
 // fighterAuras are the elven and dark elven fighters' out-of-combat self
 // buffs (rows EF DF, column 6): Defense Aura from 5, Attack Aura from 10.
 var fighterAuras = []Buff{{Skill: skillDefenseAura}, {Skill: skillAttackAura}}
@@ -40,6 +55,7 @@ var (
 	humanFighterKit = ClassKit{
 		Skills:   []int32{skillPowerStrike, skillMortalBlow, skillPowerShot, skillRelax},
 		Rotation: fighterAttacks,
+		PvP:      fighterAttacks,
 		Relax:    skillRelax,
 		Thresholds: Thresholds{
 			CriticalHP: 15, CrowdedHP: 60, OutmatchedHP: 30,
@@ -54,6 +70,7 @@ var (
 		Rotation: append([]Step{
 			{Skill: skillElementalHeal, From: 15, Target: TargetSelf, SelfHPBelow: 50},
 		}, fighterAttacks...),
+		PvP:   fighterAttacks,
 		Buffs: fighterAuras,
 		Thresholds: Thresholds{
 			CriticalHP: 25, CrowdedHP: 80, OutmatchedHP: 50, MPReserve: 20,
@@ -64,12 +81,10 @@ var (
 	// darkFighterKit (DF): Drain Health under 60 % HP and as the opener from
 	// 15, then HF's attacks; the auras out of combat.
 	darkFighterKit = ClassKit{
-		Skills: []int32{skillDrainHealth, skillPowerStrike, skillMortalBlow, skillPowerShot, skillDefenseAura, skillAttackAura},
-		Rotation: append([]Step{
-			{Skill: skillDrainHealth, From: 15, SelfHPBelow: 60},
-			{Skill: skillDrainHealth, From: 15, Opener: true},
-		}, fighterAttacks...),
-		Buffs: fighterAuras,
+		Skills:   []int32{skillDrainHealth, skillPowerStrike, skillMortalBlow, skillPowerShot, skillDefenseAura, skillAttackAura},
+		Rotation: darkFighterSteps,
+		PvP:      darkFighterSteps,
+		Buffs:    fighterAuras,
 		Thresholds: Thresholds{
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 20,
 			SitHP: 50, SitMP: 20, StandHP: 95, StandMP: 80,
@@ -79,12 +94,10 @@ var (
 	// orcFighterKit (OF): Iron Punch with fist weapons, Power Strike with a
 	// sword or blunt; rests on HP with Relax and fights on longest.
 	orcFighterKit = ClassKit{
-		Skills: []int32{skillIronPunch, skillPowerStrike, skillRelax},
-		Rotation: []Step{
-			{Skill: skillIronPunch, From: 5, Weapons: []string{"DUALFIST"}},
-			{Skill: skillPowerStrike, From: 5, Weapons: meleeWeapons},
-		},
-		Relax: skillRelax,
+		Skills:   []int32{skillIronPunch, skillPowerStrike, skillRelax},
+		Rotation: orcFighterAttacks,
+		PvP:      orcFighterAttacks,
+		Relax:    skillRelax,
 		Thresholds: Thresholds{
 			CriticalHP: 15, CrowdedHP: 50, OutmatchedHP: 25,
 			SitHP: 30, SitMP: 15, StandHP: 85, StandMP: 70,
