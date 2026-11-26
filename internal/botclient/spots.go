@@ -264,7 +264,8 @@ func (v *spotVisit) farming() bool { return v.held || v.beside }
 // picks a new spot once it outlevels its own or, sharing one past its cap,
 // every spotRetry. At its spot it leaves the turn to rule "farm", which
 // moves it on after Idle with nothing to fight. A bot holding none claims
-// none while the town preparation gate holds it (preparing).
+// none while the town preparation gate holds it (preparing), and a town
+// bot none in its town spell (rotate).
 //
 // Every move is the walker's (goTo): one MoveBackwardToLocation per checked
 // segment through the frame pacer (gateNone). A walk that ends unreachable
@@ -278,6 +279,10 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	}
 	if b.inBotParty() && !b.leading() {
 		// A member follows its leader: it never claims nor farms beside.
+		return Action{}, false
+	}
+	if b.rotate(now) {
+		// A town bot's town spell (townRota): no spot.
 		return Action{}, false
 	}
 	if !v.farming() && b.preparing() {

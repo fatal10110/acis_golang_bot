@@ -67,7 +67,7 @@ Every bot plays a **build**: what its race, its class and its persona's role mak
 Out of scope: servitor professions (Warlock, Elemental Summoner, Phantom Summoner, and
 Necromancer for its summons), the Overlord (no branch picks it: its seals and clan buffs serve a
 group), and kiting. Second-profession kits are planned in "Second professions (levels 40+)" and ship
-as S13-S17 (#587-#591); servitor lines are #592 (a later milestone).
+as S13a-S17 (epic #624, #625-#636); servitor lines are #592 (a later milestone).
 
 ## Race and class data
 
@@ -401,7 +401,7 @@ Classes with the same weapon play differently because of their race alone:
 ### Second professions (levels 40+)
 
 The 24 second professions of the branch table (Design section 6), in the same three tables and
-notation as the rows above (#332). Until their rows ship (Delivery: S13-S17, #587-#591), a second profession
+notation as the rows above (#332). Until their rows ship (Delivery: S13a-S17, epic #624), a second profession
 plays its first profession's row; then `professionKits` holds a row of its own, which CompileBuild
 uses from the class change at 40. A second-profession row is a whole row: it repeats the first
 profession's steps it keeps rather than inheriting them.
@@ -437,7 +437,7 @@ professions): the column lists, per direction, the +1 symbol of each price tier 
 | SK | Shillien Knight (33), Support ← PK | SWORD with a SHIELD: Judgment takes SWORD, Sting SWORD. | Heavy; Full Plate Set with its shield (+270 HP covers dark elven CON 32). | Melee; Drain Health and Life Leech 600; Aggression 400; Lightning Strike 400 | CON+1 DEX− (40, 52, 112) |
 | SS | Sword Singer (21), Damage ← EK | SWORD with a shield: the songs take no weapon, and the tree has no dual mastery. | Heavy; Full Plate Set. | Melee; Aggression 400 | STR+1 DEX− (38, 50, 110): elven DEX 35 pays |
 | GL | Gladiator (2), Damage ← WA | DUAL: Triple Slash, Double and Triple Sonic Slash take only DUAL; Dual Weapon Mastery 144. | Heavy; Full Plate Set without its shield. | Melee; Sonic Blaster 600; Sonic Storm 500 | STR+1 CON− (37, 49, 109): human CON 43 |
-| WL | Warlord (3), Damage ← WA | POLE: Whirlwind, Thunder Storm, Shock Stomp, Wild Sweep. | Heavy; Full Plate Set without its shield. | Melee (pole) | STR+1 CON− (37, 49, 109) |
+| WL | Warlord (3), Damage ← WA | POLE: Whirlwind, Thunder Storm, Wild Sweep. | Heavy; Full Plate Set without its shield. | Melee (pole) | STR+1 CON− (37, 49, 109) |
 | DS | Destroyer (46), Support and Damage ← OR | BIGBLUNT or BIGSWORD: Crush of Doom takes both; Hammer Crush only the blunt, so BIGBLUNT first. | Heavy; Full Plate Set without its shield. | Melee | STR+1 CON− (37, 49, 109): orc CON 47 |
 | BD | Bladedancer (34), Damage ← PK | DUAL: every dance and both blade dances take only DUAL; Sting takes DUAL. | Heavy; Full Plate Set without its shield. | Melee; Drain Health 600; Freezing Strike 600 | STR+1 DEX− (38, 50, 110): CON 32 is too low to pay with |
 | BH | Bounty Hunter (55), Support and Damage ← SC | BLUNT with a shield (Hammer Crush, Stun Attack). | Heavy; Composite Set (+5795 weight: the spoil haul), else Full Plate. | Melee (Spoil 40, Sweeper 20) | STR+1 CON− (37, 49, 109): dwarven CON 45 |
@@ -462,26 +462,26 @@ professions): the column lists, per direction, the +1 symbol of each price tier 
 | Row | 3. Opener | 4. Rotation (priority order, gates) | 5. Sustain | 6. Self-buffs and toggles | 7. Rest |
 | --- | --- | --- | --- | --- | --- |
 | PL | 28 Aggression from 400, a pull. | 28 Aggression open; 18 Aura of Hate A≥2; 92 Shield Stun [SHIELD]; 400 Tribunal [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (fixed); melee. Heals: 262 Holy Blessing under 50 % (party, rule 3 order). | 262 Holy Blessing S<50 (on itself); 70 Drain Health (fixed) S<60; 45 Divine Heal (fixed) S<40; 110 Ultimate Defense S<20 | 82 Majesty, 72 Iron Will @43 (out of combat); 322 Shield Fortress @64 (combat toggle, MP>30) | HP; 226 Relax (base tree) |
-| TK | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 18 Aura of Hate A≥2; 400 Tribunal [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | 91 Defense Aura, 77 Attack Aura (base); 123 Spirit Barrier; cubics 10 Storm Cubic and 67 Life Cubic @43 (kept up, S17); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
-| SK | 28 Aggression from 400, a pull. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 289 Life Leech; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 279 Lightning Strike @58; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 105 Freezing Strike; 3 Power Strike (fixed); melee. | 289 Life Leech S<70; 70 Drain Health S<60; 110 Ultimate Defense S<20 | Auras 91, 77 (base); cubics 33 Phantom Cubic and 22 Vampiric Cubic @43 (kept up, S17); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
-| SS | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 98 Sword Symphony @55 A≥2; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | Auras 91, 77 (base); 123 Spirit Barrier; party songs, out of combat: 267 Song of Warding, 268 Song of Wind @46, 269 Song of Hunter @49, 264 Song of Earth @55, 304 Song of Vitality @66 | HP; plain sit |
+| TK | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 18 Aura of Hate A≥2; 400 Tribunal [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | 91 Defense Aura, 77 Attack Aura (base); 123 Spirit Barrier; cubics 10 Storm Cubic and 67 Life Cubic @43 (kept up, S17, deferred: no cubics in M10); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
+| SK | 28 Aggression from 400, a pull. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 289 Life Leech; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 279 Lightning Strike @58; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 105 Freezing Strike; 3 Power Strike (fixed); melee. | 289 Life Leech S<70; 70 Drain Health S<60; 110 Ultimate Defense S<20 | Auras 91, 77 (base); cubics 33 Phantom Cubic and 22 Vampiric Cubic @43 (kept up, S17, deferred: no cubics in M10); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
+| SS | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | Auras 91, 77 (base); 123 Spirit Barrier; party songs, out of combat: 267 Song of Warding, 268 Song of Wind @46, 269 Song of Hunter @49, 264 Song of Earth @55, 304 Song of Vitality @66 | HP; plain sit |
 | GL | 6 Sonic Blaster @43 C≥2 from 600, a pull; before 43 walks in. | 8 Sonic Focus C<max out of combat; 6 Sonic Blaster @43 open C≥2; 261 Triple Sonic Slash [DUAL] @55 C≥4; 5 Double Sonic Slash [DUAL] @49 C≥3; 9 Sonic Buster @43 A≥2 C≥2; 7 Sonic Storm @49 A≥2 C≥2; 1 Triple Slash [DUAL]; 8 Sonic Focus C<max; melee. | 121 Battle Roar S<30 | 78 War Cry in combat; 297 Duelist Spirit [DUAL] @64 in combat; 256 Accuracy, 312 Vicious Stance and 424 War Frenzy @58 (combat toggles, MP>30) | HP; 226 Relax (base tree) |
-| WL | Walks in. | 48 Thunder Storm [POLE]; 36 Whirlwind [POLE]; 452 Shock Stomp [POLE] @55 A≥2; 245 Wild Sweep [POLE] A≥2; melee. | 121 Battle Roar S<30; 181 Revival @55 S<15 | 78 War Cry, 317 Focus Attack [POLE] and 421 Fell Swoop [POLE] @58 in combat; 256 Accuracy, 312 Vicious Stance, 422 Polearm Accuracy [POLE] @58 and 424 War Frenzy @58 (combat toggles, MP>30) | HP; 226 Relax (base tree) |
+| WL | Walks in. | 48 Thunder Storm [POLE]; 36 Whirlwind [POLE]; 245 Wild Sweep [POLE] A≥2; melee. | 121 Battle Roar S<30; 181 Revival @55 S<15 | 78 War Cry and 421 Fell Swoop [POLE] @58 in combat; 256 Accuracy, 312 Vicious Stance, 422 Polearm Accuracy [POLE] @58 and 424 War Frenzy @58 (combat toggles, MP>30) | HP; 226 Relax (base tree) |
 | DS | Walks in. | 315 Crush of Doom [BIGBLUNT, BIGSWORD] @60; 260 Hammer Crush [BLUNT, BIGBLUNT]; 190 Fatal Strike [SWORD, BLUNT, BIGBLUNT, BIGSWORD]; 100 Stun Attack [BLUNT, BIGBLUNT] (fixed); 255 Power Smash [SWORD, BLUNT, BIGBLUNT, BIGSWORD] (fixed); melee. | 121 Battle Roar S<30 | 94 Rage in combat; 176 Frenzy S<30, else 139 Guts S<30 (the pinch stack, as OR); 420 Zealot @58 S<30 in combat; 256 Accuracy, 312 Vicious Stance and 424 War Frenzy @58 (combat toggles, MP>30) | HP; 226 Relax (base tree) |
 | BD | 70 Drain Health from 600, a pull. | 70 Drain Health open; 115 Power Break open; 84 Poison Blade Dance [DUAL] @55 A≥2; 408 Demonic Blade Dance [DUAL] @55 A≥2; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 105 Freezing Strike; melee. | 70 Drain Health S<60; 110 Ultimate Defense S<20 | Auras 91, 77 (base); party dances [DUAL], out of combat: 274 Dance of Fire, 272 Dance of Inspiration @46, 271 Dance of the Warrior @55, 275 Dance of Fury @58, 310 Dance of the Vampire @74 | HP; plain sit |
 | BH | 254 Spoil, open, at melee range, until spoiled (as SC). | 254 Spoil open; 260 Hammer Crush [BLUNT, BIGBLUNT]; 100 Stun Attack [BLUNT, BIGBLUNT] (fixed); melee. After the kill: 42 Sweeper (section 8). | none | 424 War Frenzy @58 (combat toggle, MP>30) | HP; plain sit |
-| TH | 51 Lure @52 from 400, a pull; before 52 walks in. | 51 Lure @52 open; 409 Critical Blow [DAGGER] @55; 263 Deadly Blow [DAGGER]; 96 Bleed [DAGGER] T≥50; 16 Mortal Blow [DAGGER] (fixed); 412 Sand Bomb @55 A≥2; melee. | 111 Ultimate Evasion S<30 | 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30); 4 Dash only to flee | HP; 226 Relax (base tree) |
+| TH | 51 Lure @52 from 400, a pull; before 52 walks in. | 51 Lure @52 open; 409 Critical Blow [DAGGER] @55; 263 Deadly Blow [DAGGER]; 96 Bleed [DAGGER] T≥50; 16 Mortal Blow [DAGGER] (fixed); melee. | 111 Ultimate Evasion S<30 | 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30); 4 Dash only to flee | HP; 226 Relax (base tree) |
 | HK | 101 Stunning Shot [BOW] from 900, a pull. | 101 Stunning Shot [BOW] open; 19 Double Shot [BOW]; 24 Burst Shot [BOW] @46 A≥2; 101 Stunning Shot [BOW]; 56 Power Shot [BOW] (fixed); melee between. | 111 Ultimate Evasion S<30 | 131 Hawk Eye, 303 Soul of Sagittarius @46, 416 Blessing of Sagittarius @58 (out of combat); 99 Rapid Shot and 415 Spirit of Sagittarius @58 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30); 4 Dash only to flee | HP; 226 Relax (base tree) |
-| PW | 102 Entangle, else 51 Lure @52 from 400. | 102 Entangle open; 51 Lure @52 open; 321 Blinding Blow [DAGGER] @66; 263 Deadly Blow [DAGGER]; 96 Bleed [DAGGER] T≥50; 16 Mortal Blow [DAGGER] (fixed); 412 Sand Bomb @55 A≥2; melee. | 58 Elemental Heal S<50; 111 Ultimate Evasion S<30 | Auras 91, 77 (base); 123 Spirit Barrier; 410 Mortal Strike [DAGGER] @58 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30); 230 Sprint only to flee | HP; plain sit, 296 Chameleon Rest @46 |
+| PW | 102 Entangle, else 51 Lure @52 from 400. | 102 Entangle open; 51 Lure @52 open; 321 Blinding Blow [DAGGER] @66; 263 Deadly Blow [DAGGER]; 96 Bleed [DAGGER] T≥50; 16 Mortal Blow [DAGGER] (fixed); melee. | 58 Elemental Heal S<50; 111 Ultimate Evasion S<30 | Auras 91, 77 (base); 123 Spirit Barrier; 410 Mortal Strike [DAGGER] @58 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30); 230 Sprint only to flee | HP; plain sit, 296 Chameleon Rest @46 |
 | SR | 102 Entangle, else 101 Stunning Shot [BOW] from 900. | 102 Entangle open; 101 Stunning Shot [BOW] open; 19 Double Shot [BOW]; 24 Burst Shot [BOW] @46 A≥2; 101 Stunning Shot [BOW]; 56 Power Shot [BOW] (fixed); melee between. | 58 Elemental Heal S<50; 111 Ultimate Evasion S<30 | Auras 91, 77 (base); 123 Spirit Barrier, 303 Soul of Sagittarius @46, 416 Blessing of Sagittarius @58 (out of combat); 99 Rapid Shot, 415 Spirit of Sagittarius @58 and 413 Rapid Fire [BOW] @60 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30); 230 Sprint only to flee | HP; plain sit |
-| AW | 70 Drain Health from 600, a pull. | 70 Drain Health open; 321 Blinding Blow [DAGGER] @66; 263 Deadly Blow [DAGGER]; 96 Bleed [DAGGER] T≥50; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 16 Mortal Blow [DAGGER] (fixed); 412 Sand Bomb @55 A≥2; melee. | 70 Drain Health S<60; 111 Ultimate Evasion S<30 | Auras 91, 77 (base); 410 Mortal Strike [DAGGER] @58 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30) | HP; plain sit |
+| AW | 70 Drain Health from 600, a pull. | 70 Drain Health open; 321 Blinding Blow [DAGGER] @66; 263 Deadly Blow [DAGGER]; 96 Bleed [DAGGER] T≥50; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 16 Mortal Blow [DAGGER] (fixed); melee. | 70 Drain Health S<60; 111 Ultimate Evasion S<30 | Auras 91, 77 (base); 410 Mortal Strike [DAGGER] @58 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30) | HP; plain sit |
 | PR | 101 Stunning Shot [BOW] from 900, a pull. | 101 Stunning Shot [BOW] open; 314 Fatal Counter [BOW] @60 S<50; 19 Double Shot [BOW]; 101 Stunning Shot [BOW]; 56 Power Shot [BOW] (fixed); melee between. | 70 Drain Health S<60; 111 Ultimate Evasion S<30 | Auras 91, 77 (base); 303 Soul of Sagittarius @46 (out of combat); 99 Rapid Shot, 415 Spirit of Sagittarius @58 and 414 Dead Eye [BOW] @60 in combat; 256 Accuracy and 312 Vicious Stance (combat toggles, MP>30) | HP; plain sit |
 | TY | 54 Force Blaster [DUALFIST] C≥1 from 600, a pull. | 50 Focused Force [DUALFIST] C<max out of combat; 54 Force Blaster [DUALFIST] open C≥1; 95 Cripple [FIST, DUALFIST] open; 35 Force Storm [DUALFIST] @49 A≥2 C≥1; 17 Force Burst [DUALFIST] @43 A≥2 C≥1; 284 Hurricane Assault [DUALFIST] C≥2; 280 Burning Fist [DUALFIST]; 281 Soul Breaker [DUALFIST]; 54 Force Blaster [DUALFIST] C≥1; 120 Stunning Fist [DUALFIST] (fixed); 29 Iron Punch [DUALFIST] (fixed); 50 Focused Force [DUALFIST] C<max; melee. | none | 282 Puma Spirit Totem [DUALFIST] (in place of MO's 76 Bear Spirit Totem: attack speed and accuracy without Bear's ×0.7 run), replaced by 292 Bison Spirit Totem [DUALFIST] from 68 (one "possession" stack: `CompileBuild` keeps one); 420 Zealot @58 S<30 in combat; 424 War Frenzy @58 (combat toggle, MP>30) | HP; 226 Relax (base tree) |
 | BI | 1177 Wind Strike (fixed) from 600, on the leader's target in a party. | Heals: 1258 Restore Life @44 under 20 %; 1218 Greater Battle Heal under 35 %; 1402 Major Group Heal @58 with two members under 60 %, else 1219 Greater Group Heal; 1401 Major Heal @56 under 60 %, else 1217 Greater Heal, else 1020 Vitalize @48. Steps: 1177 Wind Strike above MPReserve; melee only alone and under MPReserve. Raise: 1016 Resurrection out of combat, as CL. | Its heals on itself | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk, 1085 Acumen (mystic members), 1078 Concentration; 1307 Prayer @66 | MP; plain sit |
 | PP | 1177 Wind Strike (fixed) from 600, on the leader's target in a party. | Heals and raise as CL (1015 Battle Heal, 1027 Group Heal, 1011 Heal, all fixed). Steps: 1201 Dryad Root on a second attacker A≥2; 1177 Wind Strike above MPReserve; melee only alone and under MPReserve. | Its heals on itself | Party: 1068 Might, 1040 Shield (base), 1204 Wind Walk, 1085 Acumen (mystic members), 1078 Concentration; 1243 Bless Shield, 1045 Blessed Body @44, 1036 Magic Barrier @44; fighter members: 1086 Haste @44, 1240 Guidance, 1242 Death Whisper, 1388 Greater Might @58; mystic members: 1048 Blessed Soul @44, 1389 Greater Shield @58 (Greater Might and Greater Shield share one stack) | MP; plain sit |
 | EE | 1177 Wind Strike (fixed) from 600, on the leader's target in a party. | Heals and raise as CL, then from 48: 1401 Major Heal @56 under 60 %, else 1217 Greater Heal @48, else 1020 Vitalize @48 ahead of 1011 Heal. MP: 1013 Recharge on a member other than itself under 40 % MP (S16). Steps: 1201 Dryad Root A≥2; 1177 Wind Strike above MPReserve; melee only alone and under MPReserve. | Its heals on itself | Party: as EO (1068 Might, 1040 Shield, 1204 Wind Walk, 1087 Agility, 1043 Holy Weapon); 1243 Bless Shield, 1304 Advanced Block @58; mystic members: 1397 Clarity @58, 1303 Wild Magic @62 | MP; plain sit |
 | SE | 1206 Wind Shackle from 600, once, on its target (the leader's in a party). | Heals and raise as SO, then 1219 Greater Group Heal @48 with two members under 60 % ahead of 1027 Group Heal, 1217 Greater Heal @48 under 60 % ahead of 1011 Heal. MP: 1013 Recharge as EE. Steps: 1206 Wind Shackle open; 1177 Wind Strike above MPReserve; melee only alone and under MPReserve. | Its heals on itself | Party: as SO (1068 Might, 1040 Shield, 1204 Wind Walk, 1059 Greater Empower, 1077 Focus, 1268 Vampiric Rage); fighter members: 1240 Guidance, 1242 Death Whisper; mystic members: 1303 Wild Magic @62 | MP; plain sit |
-| SN | 1230 Prominence from 900, a pull. | 1230 Prominence; 1083 Surrender To Fire T≥70 MP>50; 1296 Rain of Fire @58 A≥2; 1275 Aura Bolt ≤400; 1231 Aura Flare ≤150; 1220 Blaze (fixed); 1184 Ice Bolt (fixed); melee only under MPReserve. | 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind when MP under 30 % and S≥70 | 1078 Concentration; 1232 Blazing Skin (on itself) | MP; plain sit |
+| SN | 1230 Prominence from 900, a pull. | 1230 Prominence; 1083 Surrender To Fire T≥70 MP>50, once per target (`Step.Once`); 1296 Rain of Fire @58 A≥2; 1275 Aura Bolt ≤400; 1231 Aura Flare ≤150; 1220 Blaze (fixed); 1184 Ice Bolt (fixed); melee only under MPReserve. | 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind when MP under 30 % and S≥70 | 1078 Concentration; 1232 Blazing Skin (on itself) | MP; plain sit |
 | SG | 1206 Wind Shackle (fixed) MP>50 from 600, else 1235 Hydro Blast from 900. | 1206 Wind Shackle open MP>50; 1235 Hydro Blast; 1237 Ice Dagger @44; 1265 Solar Flare; 1295 Aqua Splash @58 A≥2; 1275 Aura Bolt ≤400; 1231 Aura Flare ≤150; 1264 Solar Spark (fixed); 1175 Aqua Swirl (fixed); melee only under MPReserve. | 1216 Self Heal (base) S<40 (no drain) | 1078 Concentration; 1047 Mana Regeneration; 1238 Freezing Skin (on itself) | MP; plain sit |
 | SH | 1168 Curse: Poison MP>60 from 600, else 1239 Hurricane from 900. | 1168 Curse: Poison open MP>60; 1239 Hurricane; 1148 Death Spike @44; 1267 Shadow Flare; 1176 Tempest @48 A≥2; 1266 Shadow Spark (fixed); 1178 Twister (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. | 1234 Vampiric Claw S<70; 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind when MP under 30 % and S≥70 | 1078 Concentration | MP; plain sit |
 | WC | 1245 Steal Essence from 900, a pull. | 1245 Steal Essence open; 1107 Frost Flame (fixed); 260 Hammer Crush [BLUNT, BIGBLUNT] ≤40; 100 Stun Attack [BLUNT, BIGBLUNT] (fixed) ≤40, else melee (always). | 1245 Steal Essence S<70; 1090 Life Drain (fixed) S<70; 1229 Chant of Life (party) with a member under 50 % | 1001 Soul Cry (base; combat toggle, on while MP>30); party chants as OS (1007 Chant of Battle, 1009 Chant of Shielding, 1006 Chant of Fire, 1002 Flame Chant), 1310 Chant of Vampire @44, 1251 Chant of Fury @48, 1390 War Chant @58; 1010 Soul Shield (base) | MP; plain sit |
@@ -503,6 +503,9 @@ cast):
 - **Holds, sleeps and roots of the bot's own target:** 402 Arrest, 403 Shackle, 404 Mass
   Shackling, 1072 Sleeping Cloud, 1394 Trance, 1064 Silence (they stop the kill they are cast
   in); 102 Entangle and 1201 Dryad Root stay as their first-profession rows use them.
+- **Dropped by the owner (2026-11-26):** 98 Sword Symphony (SS; a pack Fear, like 1272 Word of
+  Fear), 452 Shock Stomp and 317 Focus Attack (WL), 412 Sand Bomb (TH, PW, AW; a debuff recast at
+  every reuse). 1083 Surrender To Fire (SN) stays, cast once per target (`Step.Once`, S13a).
 - **Rare or self-limiting:** 60 Fake Death, 221 Silent Move, 411 Stealth (no flee rule reads
   them); 313 Snipe (roots the bot); 81 Punch of Doom (stuns the bot); 222 Fist Fury (an HP-draining
   toggle with no HP gate in Design section 9); 1430 Invocation (immobile); 320 Wrath (CP only:
@@ -526,8 +529,8 @@ cast):
 | Row | 8. MPReserve | Sit HP / MP | Stand HP / MP | Critical | Crowded | Outmatched | 10. Spot | 12. Plays like |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | PL | 20 | 35 / 20 | 90 / 80 | 15 | 60 | 30 | tank 1.5 | A holy shield tank: pulls with Aggression, holds a pack with Aura of Hate, heals itself and its party with Holy Blessing. |
-| TK | 25 | 45 / 25 | 90 / 80 | 20 | 75 | 45 | tank 1.5 | An elven tank with cubics at its side: Guard Stance, Elemental Heal and a Life Cubic keep it standing. |
-| SK | 25 | 50 / 25 | 95 / 80 | 25 | 80 | 50 | tank 1.5 | A dark tank that drains twice (Drain Health, Life Leech) and lets its cubics wear the target down. |
+| TK | 25 | 45 / 25 | 90 / 80 | 20 | 75 | 45 | tank 1.5 | An elven tank: Guard Stance and Elemental Heal keep it standing (its Life Cubic once S17 lands). |
+| SK | 25 | 50 / 25 | 95 / 80 | 25 | 80 | 50 | tank 1.5 | A dark tank that drains twice (Drain Health, Life Leech); its cubics wear the target down once S17 lands. |
 | SS | 30 | 45 / 25 | 90 / 80 | 20 | 75 | 45 | normal 2.0 | A singing swordsman: songs up before every pull, a sword and shield in the fight. |
 | GL | 10 | 35 / 20 | 90 / 80 | 15 | 60 | 30 | normal 2.0 | A dual-sword duelist: charges between fights, spends them on Sonic Slashes, Battle Roar when low. |
 | WL | 10 | 35 / 20 | 90 / 80 | 15 | 50 | 25 | normal 2.0 | A polearm sweeper that hits a whole pack with Thunder Storm and Whirlwind. |
@@ -794,7 +797,7 @@ scouts and archers, orc CON to two-handed weapons. The branch is chosen as follo
 Announced change (S8): a base-class fighter of the `support` preset that would take a melee line
 today takes its race's tank line instead, and a support-preset Elven Knight or Palus Knight takes
 Temple Knight or Shillien Knight at 40; a base-class mystic of a Damage-role preset (`merchant`,
-which today takes the healer line, and `farmer`, S9) takes its race's damage line. A second profession at 40 plays its first profession's row until S13-S17
+which today takes the healer line, and `farmer`, S9) takes its race's damage line. A second profession at 40 plays its first profession's row until S13a-S17
 ship its own ("Second professions (levels 40+)").
 
 ### 7. Combat behavior per kit
@@ -804,7 +807,8 @@ ship its own ("Second professions (levels 40+)").
   bot's MP is above the step's bound.
 - **Sustain:** the column-5 skills as steps gated by `SelfHPBelow`. `ruleCritical` tries the
   heals and drains among them: Self Heal, Elemental Heal, Divine Heal, Battle Roar (`HEAL_PERCENT`),
-  Drain Health, Vampiric Touch and Life Drain. Body To Mind, Ultimate Defense and Ultimate Evasion
+  Drain Health, Vampiric Touch and Life Drain, and for the second professions (S13a, owner
+  2026-11-26) Life Leech, Steal Essence, Vampiric Claw and Revival. Body To Mind, Ultimate Defense and Ultimate Evasion
   stay in `fight`. `ruleCritical` runs before `fight` and drinks early when two or more
   attackers have the bot under `CrowdedHP` (`rules.go`), which is at or above every row's sustain
   bound; so `ruleCritical` tries the build's ready heal and drain steps whose gates pass before either
@@ -859,8 +863,9 @@ Toggle tracking, the `ruleRest` change and Relax ship in S6; S7 adds Soul Cry.
   panel's preset change moves them.
 - `crafter` plays the Crafter role (M9).
 - `town` keeps the Support role it plays today (`TownPersona` is `DefaultPersona` with idle
-  settings): it farms nowhere, but learns, changes class, heals, buffs and fights back when
-  attacked with that kit.
+  settings). It rotates between town spells and farming spells at a spot (D44, #618), where it
+  fights with that kit as a support bot farming alone; it learns, changes class, heals, buffs and
+  fights back when attacked.
 - The panel shows a bot's build (role, branch, kit) beside its class: `live.build` of
   `GET /api/bots` (role, branch and its name, the kit's skill ids), from the brain's published
   status. `POST /api/bots/{account}/branch` with `{"branch": <class id>}` pins a branch (the
@@ -926,10 +931,16 @@ Approved by the owner on 2026-11-24, as proposed (also in `docs/plan.md`, "Owner
 
 | # | Question | Decision |
 | --- | --- | --- |
-| D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: Support (as today; it farms nowhere). |
+| D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: Support (as today; since D44 it rotates between town and farming spells). |
 | D22 | How does a bot pick its profession branch? | Weighted by race fit (section 6), drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). |
 | D23 | Which professions are out of scope? | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone; the Overlord is not picked (a group class). |
 | D24 | May the rewrite change today's behavior? | Yes, per PR: S4 lands behavior-neutral, every later PR states the behavior it changes. |
+
+Second professions (owner, 2026-11-26, epic #624): no cubics in M10 until a Crystal: D-Grade source
+exists (S17 deferred); skill reagents are bought (S13c, an amendment to this plan); Sword Symphony,
+Shock Stomp, Focus Attack and Sand Bomb are dropped and Surrender To Fire is cast once per target;
+`ruleCritical` tries Life Leech, Steal Essence, Vampiric Claw and Revival before a potion; named B-
+and A-grade sets are left to the gear model (no follow-up); the servitor issue #592 has no milestone yet.
 
 ## Testing
 
@@ -1010,11 +1021,18 @@ Approved by the owner on 2026-11-24, as proposed (also in `docs/plan.md`, "Owner
 | S10 (#329) | Dwarven spoil and sweep: rows WF and SC's Spoil opener, the `sweep` rule and Sweeper (section 8). | S2, S6b |
 | S11 (#330) | Spot choice through the model, the spot margin of every row (column 10), absorbing #294 (section 11). | S3, S4 |
 | S12 (#333) | e2e live scenarios for S5-S11 and S6b, at most 4 bots per scenario (the harness cap). | each |
-| S13 (#587) | Second-profession gear and dyes (columns 1, 2, 9 and 11 of the 24 rows): C-grade sets, the 3-slot dye rows. | S5, S8 |
-| S14 (#588) | Heavy fighter second professions PL, TK, SK, SS, GL, WL, DS, BD, BH (columns 3-8, 10 and 12): learn tables, rotations, songs and dances, the `(fixed)` tag. | S6b, S8 |
-| S15 (#589) | Light fighter second professions TH, HK, PW, SR, AW, PR, TY (columns 3-8, 10 and 12): learn tables, rotations, Chameleon Rest from 46, the totem chain. | S6b, S8 |
-| S16 (#590) | Mystic second professions BI, PP, EE, SE, SN, SG, SH, WC (columns 3-8, 10 and 12): learn tables, heals from a level, Recharge, member buffs. | S7, S8 |
-| S17 (#591) | Cubics for TK and SK: `UserInfo` keeps the cubic ids, the cubic kept up as a buff. | S14 |
+| S13a (#625) | Second-profession foundation: row start 40, the `(fixed)` tag and its one-way check, `Step.Filler` (charge steps after every attack), `Step.Once`, `critSustain` gains Life Leech, Steal Essence, Vampiric Claw and Revival. | S6b, S7, S8 |
+| S13b (#626) | Second-profession gear and dyes (columns 1, 2, 9 and 11 of the 24 rows): C-grade sets, the 3-slot dye rows. | S13a, S5 |
+| S13c (#627) | Skill reagents (owner amendment, 2026-11-26): the reagent gate and the restock of Spirit Ore, Energy Stones and Cursed Bones (`ReagentCastsMin` 20, `ReagentCastsMax` 100, after potions and shots). | — |
+| S14a (#628) | Tanks PL, TK, SK (TK and SK without cubics). | S13a |
+| S14b (#629) | Songs and dances SS, BD. | S13a |
+| S14c (#630) | GL, WL, DS, BH. | S13a, S13c |
+| S15a (#631) | Daggers TH, PW, AW; Chameleon Rest from 46. | S13a |
+| S15b (#632) | Archers HK, SR, PR. | S13a |
+| S15c (#633) | Tyrant TY: force charges, the totem chain. | S13a, S13c |
+| S16a (#634) | Nukers SN, SG, SH and the Warcryer WC. | S13a, S13c |
+| S16b (#635) | Healers and buffers BI, PP, EE, SE: heals from a level, Recharge, member buffs. | S13a, S13c |
+| S17 (#636) | Cubics for TK and SK, deferred (owner, 2026-11-26): no cubics in M10 until a Crystal: D-Grade source exists. | S14a, S13c, a crystal source |
 | Later (#592) | Servitor lines with summon control (D23). | — |
 
 Most urgent: S1, S2 and S4 unblock everything; S6 and S6b give half the bots their skills.
@@ -1037,5 +1055,5 @@ Most urgent: S1, S2 and S4 unblock everything; S6 and S6b give half the bots the
 
 ## Gaps
 
-- Second-profession rows: S13-S17 (#587-#591); servitor professions: #592, a later milestone (D23).
+- Second-profession rows: S13a-S17 (epic #624, #625-#636); S17 cubics deferred until a Crystal: D-Grade source exists; servitor professions: #592, a later milestone (D23).
 - Kiting (step back from a melee monster) is out of scope.

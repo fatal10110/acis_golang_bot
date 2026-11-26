@@ -14,10 +14,11 @@ import (
 // than the closest town, Gludin (95000; teleports.xml, npc 30006).
 const hopAway = 50000
 
-// TestLiveTownErrands runs a town bot (cmd/bots -persona town: TownPersona
-// and the travel map, no spots) in Talking Island village with adena from
-// the GM: it runs its errand cycle, a merchant visit that buys potions,
-// then a gatekeeper hop to another town once its idle spell is over (#33).
+// TestLiveTownErrands runs a town bot (TownPersona and the travel map with
+// no spot registry, so it never rotates to farming, #618) in Talking Island
+// village with adena from the GM: it runs its errand cycle, a merchant
+// visit that buys potions, then a gatekeeper hop to another town once its
+// idle spell is over (#33).
 // The hop is #32's teleport: the bot reappears at the destination, where
 // the GM, teleported to it, sees it. Next to Katerina the server refuses
 // every routed ground move of the bot, and the bot unsticks itself on the

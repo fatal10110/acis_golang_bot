@@ -293,6 +293,8 @@ type Brain struct {
 	supplyTrip supplyTrip
 	// prep is the town preparation gate.
 	prep townPrep
+	// rota is a town bot's rotation between town and farming spells.
+	rota townRota
 	// stashDue is set by a supply trip's arrival in town until the
 	// half-speed stash is queued or found not needed (queueStash).
 	stashDue bool

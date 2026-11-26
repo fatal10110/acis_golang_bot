@@ -45,7 +45,7 @@ type preset struct {
 var presets = []preset{
 	{name: "farmer", help: "damage dealer that farms the datapack's spots alone", persona: damagePersona, farms: true, walks: true, member: true},
 	{name: "support", help: "party support that farms the datapack's spots", persona: botclient.DefaultPersona, farms: true, walks: true, member: true},
-	{name: "town", help: "idles in town and runs errands: merchants, trainer, Newbie Helper, gatekeeper hops; farms nowhere (needs -datapack)", datapack: true, persona: botclient.TownPersona, walks: true},
+	{name: "town", help: "idles in town and runs errands (merchants, trainer, Newbie Helper, gatekeeper hops) for 10-20 minutes, then farms the datapack's spots for 30-60 (needs -datapack)", datapack: true, persona: botclient.TownPersona, farms: true, walks: true},
 	{name: "merchant", help: "damage dealer that farms the datapack's spots alone for loot and sells it in a town store, up to -store-budget a session; keeps its valuables in its private warehouse and sells them by Trade ads, whispers and trades, up to -valuables-budget a session (needs -datapack)", datapack: true, persona: merchantPersona, farms: true, store: true, walks: true, member: true},
 	{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
