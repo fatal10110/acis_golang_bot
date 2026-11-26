@@ -550,9 +550,6 @@ func TestLivePvPHealer(t *testing.T) {
 		p.PvP.SupportFlagged = true
 		return p
 	}, withTravel(travel))
-	ch := unmarkedCharacter(t, acc(2), pvpNames)
-	ch.Class = botclient.HumanMystic
-	c := enter(t, ctx, tg, acc(2), ch, nil)
 
 	// The class change by Talking Island's master: the human mystic's
 	// start lies over its Reach (8000) from it, so the GM first brings
@@ -565,6 +562,12 @@ func TestLivePvPHealer(t *testing.T) {
 	gmOn(t, ctx, gm, cleric, fmt.Sprintf("skill set %d 1", pvpHeal), fmt.Sprintf("skill set %d 1", pvpBattleHeal), "heal "+cleric.name)
 	waitFor(t, ctx, cleric.name+" knowing its heals", func() bool { return cleric.bot.Status().Heals })
 
+	// The client enters once the class change is done, and reads on
+	// through every later wait (pump): a client that read nothing for
+	// minutes cast no heal in the second live run.
+	ch := unmarkedCharacter(t, acc(2), pvpNames)
+	ch.Class = botclient.HumanMystic
+	c := enter(t, ctx, tg, acc(2), ch, nil)
 	pvpMeet(t, ctx, tg, gm, c, leader, cleric)
 	if err := gm.Select(ctx, c.Self.ObjectID); err != nil {
 		t.Fatal(err)
@@ -586,6 +589,9 @@ func TestLivePvPHealer(t *testing.T) {
 	pump := func() {
 		if err := gm.Watch(ctx, 200*time.Millisecond, gmSelf.note); err != nil {
 			t.Fatalf("the GM reading: %v", err)
+		}
+		if err := c.Watch(ctx, 100*time.Millisecond, func(botclient.Event) {}); err != nil {
+			t.Fatalf("%s reading: %v", c.Self.Name, err)
 		}
 	}
 	from := leader.seen()
@@ -617,11 +623,24 @@ func TestLivePvPHealer(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	var trail []string
 	if _, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+		switch e := ev.(type) {
+		case botclient.ActionFailed:
+			trail = append(trail, "action failed")
+		case botclient.SystemMessage:
+			trail = append(trail, fmt.Sprintf("system message %d %q", e.ID, e.Text))
+		case botclient.MyTargetSelected:
+			trail = append(trail, fmt.Sprintf("target %d", e.ObjectID))
+		case botclient.MagicSkillUse:
+			if e.CasterID == c.Self.ObjectID {
+				trail = append(trail, fmt.Sprintf("cast %d on %d", e.SkillID, e.TargetID))
+			}
+		}
 		m, ok := ev.(botclient.MagicSkillUse)
 		return ok && m.CasterID == c.Self.ObjectID && m.TargetID == gm.Self.ObjectID && m.SkillID == pvpHeal
 	}); err != nil {
-		t.Fatalf("%s heals the GM: %v", c.Self.Name, err)
+		t.Fatalf("%s heals the GM at %v, the GM at %v: %v; read %v", c.Self.Name, c.Pos(), gm.Pos(), err, trail)
 	}
 
 	targets := func() bool {
