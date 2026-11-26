@@ -488,6 +488,8 @@ func TestSupervisorEndStates(t *testing.T) {
 		{name: "commanded logout", err: botclient.ErrCommandedLogout, wantRun: RunNone, wantReason: botclient.ErrCommandedLogout.Error()},
 		{name: "halted", halt: true, wantRun: RunHalted, wantOnline: true, wantReason: botclient.ErrLoginsHalted.Error()},
 		{name: "repeated aborts", err: botclient.ErrRepeatedAborts, wantRun: RunCoolingDown, wantOnline: true, wantReason: botclient.ErrRepeatedAborts.Error()},
+		// A panic is a bug a restart repeats: stopped, not cooled down.
+		{name: "panicked", err: fmt.Errorf("%w (3 since the last stable session): panic in attempt: bug", botclient.ErrPanic), wantRun: RunNone, wantReason: botclient.ErrPanic.Error()},
 		{name: "account taken", err: botclient.ErrAccountTaken, wantRun: RunNone, wantReason: botclient.ErrAccountTaken.Error()},
 		{name: "character missing", err: botclient.ErrCharacterMissing, wantRun: RunNone, wantReason: botclient.ErrCharacterMissing.Error()},
 		{name: "other error", err: errors.New("login refused: banned"), wantRun: RunNone, wantReason: "banned"},

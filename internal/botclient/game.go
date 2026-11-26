@@ -61,16 +61,19 @@ func DialGame(ctx context.Context, addr string, revision int32, timeout time.Dur
 	if err != nil {
 		return nil, fmt.Errorf("dial game server: %w", err)
 	}
-	g, err := newGameConn(ctx, conn, revision, timeout)
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-	return g, nil
+	return newGameConn(ctx, conn, revision, timeout)
 }
 
-// newGameConn runs the handshake on an established connection.
+// newGameConn runs the handshake on an established connection. It owns conn
+// until it returns a GameConn: a failed handshake, or one that panics, closes
+// conn, so a panic recovered further up never leaves the socket open.
 func newGameConn(ctx context.Context, conn net.Conn, revision int32, timeout time.Duration) (*GameConn, error) {
+	ok := false
+	defer func() {
+		if !ok {
+			conn.Close()
+		}
+	}()
 	g := &GameConn{conn: conn, frames: wire.NewFrameReader(conn), timeout: timeout, logoutGrace: logoutRefusalGrace}
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Unix(1, 0)) })
 	defer stop()
@@ -80,6 +83,7 @@ func newGameConn(ctx context.Context, conn net.Conn, revision int32, timeout tim
 		}
 		return nil, err
 	}
+	ok = true
 	return g, nil
 }
 

@@ -108,6 +108,9 @@ type Snapshot struct {
 	Paced      uint64    `json:"paced"`
 	Reconnects uint64    `json:"reconnects"`
 	Aborts     uint64    `json:"aborts"`
+	// Panics counts the panics the bots recovered from: in an attempt or
+	// in a session's reader (botclient.ErrPanic).
+	Panics uint64 `json:"panics_total"`
 	// NavBlocked, NavDesync and NavDoorReplan count the server's answers
 	// to the walker's own segments that differ from its check: a blocked
 	// stop, another destination, and another destination on a segment
@@ -226,6 +229,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.Paced += b.paced.Load()
 		s.Reconnects += b.reconnects.Load()
 		s.Aborts += b.aborts.Load()
+		s.Panics += b.panics.Load()
 		s.NavBlocked += b.navBlocked.Load()
 		s.NavDesync += b.navDesync.Load()
 		s.NavDoorReplan += b.navDoorReplan.Load()
@@ -299,6 +303,7 @@ func (r *Registry) Run(ctx context.Context, tick <-chan time.Time) {
 type Bot struct {
 	reg                                     *Registry
 	events, sent, paced, reconnects, aborts atomic.Uint64
+	panics                                  atomic.Uint64
 	navBlocked, navDesync, navDoorReplan    atomic.Uint64
 	navSegments                             atomic.Uint64
 	navPlans                                [planOutcomes]atomic.Uint64
@@ -370,6 +375,13 @@ func (b *Bot) Reconnect() {
 func (b *Bot) Abort() {
 	if b != nil {
 		b.aborts.Add(1)
+	}
+}
+
+// Panic records a panic the bot recovered from (botclient.ErrPanic).
+func (b *Bot) Panic() {
+	if b != nil {
+		b.panics.Add(1)
 	}
 }
 
