@@ -54,7 +54,8 @@ the target until it dies, leaves or falls out of the tier; an attacker is fought
 The bot fights the owner: a summon in the attackers table adds its owner (the player in sight whose
 `CharInfo` name is the summon's title), fought by rules 1-8 first (the summon's hit usually flags
 its owner, `character_pvpflag.go:52-62`, `:122-136`). The summon itself only when its owner is out
-of sight or refused, and then only:
+of sight or refused, or before its owner when killing it first [pays off](#summon-first) (#428), and
+then only:
 
 - outside a duel, never as a hunting or PK target, never a party member's (title equal to a member's
   name), clan mate's or ally's (the owner's ids, when in sight);
@@ -68,6 +69,29 @@ of sight or refused, and then only:
 A refused summon is held off: `attackers` never returns it, nor does `unfought` while the bot has
 no karma (`combat_rules.go:88-120`; with karma it flees it, [with karma](karma.md#with-karma)).
 The same holds for a summon a party leader attacks ([party](party.md)).
+
+### Summon first
+
+Killing a summon before its owner in sight and fightable pays off (`summonPays`, `pvp_summon.go`)
+when:
+
+- it healed its owner within `enemyHealerFor` (60 s): a `MagicSkillUse` of the summon on its owner
+  whose skill is a heal (`HEAL`, `HOT`, `HEAL_PERCENT`, `BALANCE_LIFE`), a pet's Heal Trick (4717,
+  target `OWNER_PET`) for one; a pet's heals undo the bot's damage on the owner;
+- or both hit the bot (within `attackerWindow`) and the summon's streak dealt more than
+  `switchFactor` (2) times its owner's, more than its owner's alone once the summon is the bot's
+  target, so a close race does not flip the target: a summoner's damage is its servitor's.
+
+An owner standing back, not hitting the bot, is still fought first. Such a summon stands in for its
+owner (`standIn`): `attackers` lists it in the owner's place with the pair's damage, and a bot whose
+target is the owner turns to it (`ruleAttacked`). It passes the summon rules above on its own, so
+the kill never costs karma: the server credits a summon's death by its owner's state
+(`AwardSummonKillKarma`, `character_karma.go:83-86`), and a summon's flag and karma mirror its
+owner's, so flag 1 or karma means a karma-free kill, and a summon at flag 0 and karma 0 is never
+fought first, whatever it dealt or healed (a PK-mode victim's summon included). It is never a
+hunting or PK target, never fought in a duel, and a party fight keeps its own target rule: the
+party's hits by a summon still count for its owner ([party](party.md)). Behavior change (D24):
+before #428 the owner in sight and fightable was always fought first.
 
 ## Tests
 
@@ -93,5 +117,14 @@ The same holds for a summon a party leader attacks ([party](party.md)).
   never; any summon hitting it in its duel → not fought; in an arena, the owner inside by more than
   150 → fought, outside → not; a summon's Wind Strike at the bot → in the attackers table, a Heal →
   not.
+- `TestPvPSummonFirst` (#428): a flagged owner in sight and its flagged summon hitting the bot: the
+  owner standing back → the owner; summon 100, owner 20 → the summon selected, alone in
+  `attackers` with 120; 30 against 20 → the owner, but the summon kept with a plain `Action`, not
+  forced, once it is the target; 15 against 20 with the summon the target → the owner; a Heal
+  Trick on the owner → the summon, also when the owner was the target; a heal older than
+  `enemyHealerFor` or on another player → the owner; flag 0 and karma 0 → the owner; karma → the
+  summon; flag 2 with the summon the target → no attack on it; a clan mate's or party member's
+  summon → never; in its duel → the duel; in an arena with the owner inside by 1700 → the summon,
+  100 from the edge → not; out of combat a healing pet → not hunted.
 - e2e `TestLivePvPFightBack` (X13): a client force-attacks a `pvp` bot; it fights back; the client
   stops and unflags and the bot drops it (GM, client, bot).

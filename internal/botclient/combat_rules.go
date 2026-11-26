@@ -103,17 +103,14 @@ func (b *Brain) mayFight(id int32, now time.Time) bool {
 }
 
 // attackers are the bot's attackers it may fight at now, the hardest hitter
-// first (damageOf). A summon's owner in sight that the bot may fight stands
-// in for the summon (docs/pvp/targets.md "Summons and pets").
+// first (damageOf), each as the one it is fought as (standIn).
 func (b *Brain) attackers(now time.Time) []int32 {
 	var ids []int32
 	for id := range b.world.Attackers {
 		if !b.world.attacking(id, now) {
 			continue
 		}
-		if owner := b.summonOwner(id, now); owner != 0 {
-			id = owner
-		} else if !b.mayFight(id, now) {
+		if id = b.standIn(id, now); !b.mayFight(id, now) {
 			continue
 		}
 		if !slices.Contains(ids, id) {
@@ -127,11 +124,11 @@ func (b *Brain) attackers(now time.Time) []int32 {
 }
 
 // damageOf is the damage attacker id's streak dealt the bot at now, with
-// that of the summons it stands in for (attackers).
+// that of the summon or owner it stands in for (standIn).
 func (b *Brain) damageOf(id int32, now time.Time) int64 {
 	var d int64
 	for k, a := range b.world.Attackers {
-		if k == id || b.world.attacking(k, now) && b.summonOwner(k, now) == id {
+		if k == id || b.world.attacking(k, now) && b.standIn(k, now) == id {
 			d += a.Damage
 		}
 	}

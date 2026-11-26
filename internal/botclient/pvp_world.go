@@ -159,6 +159,9 @@ type pvpWorld struct {
 	// owners are the owners' names of the summons and pets in sight (the
 	// NPCInfo title, network/visibility.go summon NPCInfo).
 	owners map[int32]string
+	// petHeals are when the summons in sight were last seen healing their
+	// owners (petHealSeen), what makes one worth killing first.
+	petHeals map[int32]time.Time
 	// radii are the decoded collision radii of the players, summons and
 	// NPCs in sight, what the area rule reaches them by.
 	radii map[int32]float64
@@ -237,6 +240,7 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 			p.owners[e.ObjectID] = e.Title
 		} else {
 			delete(p.owners, e.ObjectID)
+			delete(p.petHeals, e.ObjectID)
 		}
 	case RelationChanged:
 		if r := p.opponents[e.ObjectID]; r != nil {
@@ -260,6 +264,7 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 	case DeleteObject:
 		delete(p.opponents, e.ObjectID)
 		delete(p.owners, e.ObjectID)
+		delete(p.petHeals, e.ObjectID)
 		delete(p.radii, e.ObjectID)
 		delete(p.hits, e.ObjectID)
 		delete(p.struck, e.ObjectID)
@@ -402,6 +407,9 @@ func (b *Brain) castSeen(e MagicSkillUse, now time.Time) time.Time {
 	player := o.Kind == KindPlayer
 	if e.TargetID == self && (player || o.Summon) && offensive {
 		b.world.hitBy(e.CasterID, 0, now)
+	}
+	if o.Summon {
+		b.petHealSeen(e, now)
 	}
 	healer := player && b.healSeen(e.CasterID, e.SkillID, e.Level, []int32{e.TargetID}, now)
 	_, member := b.world.Party.Members[e.TargetID]
@@ -697,7 +705,8 @@ func (b *Brain) clanMate(id int32) bool {
 
 // maySummon reports whether the bot may fight summon id itself at now
 // (docs/pvp/targets.md "Summons and pets"): only with its owner out of sight
-// or refused, never a party member's, clan mate's or ally's, and only while
+// or refused, or when killing it first pays off (summonPays), never a party
+// member's, clan mate's or ally's, and only while
 // the summon's own flag or karma (its owner's, refreshed by RelationChanged)
 // lets the bot attack it without force, whatever its NPCInfo's attackable
 // flag said, or in its arena while its owner is seen inside it by
@@ -714,7 +723,7 @@ func (b *Brain) maySummon(id int32, o *Object, now time.Time) bool {
 		if b.friend(owner) {
 			return false
 		}
-		if oo := b.world.object(owner); !oo.Dead && b.fightRule(owner, oo, now) != fightNone {
+		if oo := b.world.object(owner); !oo.Dead && b.fightRule(owner, oo, now) != fightNone && !b.summonPays(id, owner, now) {
 			return false
 		}
 	}

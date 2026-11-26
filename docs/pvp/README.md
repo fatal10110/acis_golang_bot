@@ -31,8 +31,9 @@ visits arenas and fights back (open-world PK exists, off); fights like a player 
 accident; and handles death and karma per the server's rules.
 
 Out of scope: the Olympiad, sieges, clan wars as targets, party duels (M11), fighting summons for
-their own sake ([summons](targets.md#summons-and-pets)), buying CP potions (Ancient Adena only),
-second-profession PvP rows (first profession's row until M10's #332), kiting monsters.
+their own sake beyond killing one before its owner when that pays off (#428,
+[summons](targets.md#summons-and-pets)), buying CP potions (Ancient Adena only), second-profession
+PvP rows (first profession's row until M10's #332), kiting monsters.
 
 ## Approach
 
@@ -108,7 +109,8 @@ with no row); **arena deaths** (the 5-death cap and stay limit).
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
 (M11); a challenge hold shared by all bots; clan wars, sieges, the Olympiad; buying CP potions;
-fighting summons for their own sake; command-channel mates in an arena (rule 3).
+fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
+command-channel mates in an arena (rule 3).
 
 ## Files
 
