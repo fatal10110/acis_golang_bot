@@ -10,7 +10,8 @@ import (
 
 // gearRow is the gear part of a row of "Behavior per class"
 // (docs/strategy.md, columns 2 and 11): the armor sets it prefers, by their
-// chest, lowest grade first, and the dye symbols of its direction. The gear
+// chest, in the row's order of preference, and the dye symbols of its
+// direction. The gear
 // and dye errands reach them through the model (gearModel); the rows are
 // what TestBehaviorRowsShipped holds the datapack and the build to.
 type gearRow struct {
@@ -18,15 +19,24 @@ type gearRow struct {
 }
 
 // The sets of the rows: Wooden, Devotion, Brigandine, Manticore Skin,
-// Reinforced Leather, Knowledge and Mithril Robe (armorSets.xml).
+// Reinforced Leather, Knowledge and Mithril Robe, and the second
+// professions' C-grade Full Plate, Composite, Plated Leather, Mithril Light,
+// Divine, Karmian and Demon (armorSets.xml).
 const (
-	setWooden     int32 = 23
-	setDevotion   int32 = 1101
-	setBrigandine int32 = 352
-	setManticore  int32 = 395
-	setReinforced int32 = 394
-	setKnowledge  int32 = 436
-	setMithril    int32 = 437
+	setWooden        int32 = 23
+	setDevotion      int32 = 1101
+	setBrigandine    int32 = 352
+	setManticore     int32 = 395
+	setReinforced    int32 = 394
+	setKnowledge     int32 = 436
+	setMithril       int32 = 437
+	setFullPlate     int32 = 356
+	setComposite     int32 = 60
+	setPlatedLeather int32 = 398
+	setMithrilLight  int32 = 397
+	setDivine        int32 = 442
+	setKarmian       int32 = 439
+	setDemon         int32 = 441
 )
 
 // gearRows are the rows' sets and dyes by class.
@@ -57,6 +67,32 @@ var gearRows = map[int32]gearRow{
 	42: {sets: []int32{setMithril}, dyes: []int32{10, 22, 34}},
 	39: {sets: []int32{setKnowledge}, dyes: []int32{8, 20, 32}},
 	50: {sets: []int32{setBrigandine, setKnowledge}, dyes: []int32{10, 22, 34}},
+	// Second professions (#626): the C-grade sets of column 2 and the
+	// three price tiers of each direction of column 11.
+	5:  {sets: []int32{setFullPlate, setComposite}, dyes: []int32{40, 52, 112}},
+	20: {sets: []int32{setFullPlate}, dyes: []int32{40, 52, 112}},
+	33: {sets: []int32{setFullPlate}, dyes: []int32{40, 52, 112}},
+	21: {sets: []int32{setFullPlate}, dyes: []int32{38, 50, 110}},
+	2:  {sets: []int32{setFullPlate}, dyes: []int32{37, 49, 109}},
+	3:  {sets: []int32{setFullPlate}, dyes: []int32{37, 49, 109}},
+	46: {sets: []int32{setFullPlate}, dyes: []int32{37, 49, 109}},
+	34: {sets: []int32{setFullPlate}, dyes: []int32{38, 50, 110}},
+	55: {sets: []int32{setComposite, setFullPlate}, dyes: []int32{37, 49, 109}},
+	8:  {sets: []int32{setPlatedLeather, setMithrilLight}, dyes: []int32{42, 54, 114, 37, 49, 109}},
+	9:  {sets: []int32{setPlatedLeather}, dyes: []int32{42, 54, 114, 37, 49, 109}},
+	23: {sets: []int32{setPlatedLeather, setMithrilLight}, dyes: []int32{38, 50, 110}},
+	24: {sets: []int32{setPlatedLeather}, dyes: []int32{38, 50, 110}},
+	36: {sets: []int32{setPlatedLeather, setMithrilLight}, dyes: []int32{38, 50, 110}},
+	37: {sets: []int32{setPlatedLeather}, dyes: []int32{38, 50, 110}},
+	48: {sets: []int32{setPlatedLeather}, dyes: []int32{37, 49, 109}},
+	16: {sets: []int32{setDivine, setKarmian}, dyes: []int32{48, 60, 120}},
+	17: {sets: []int32{setKarmian, setDivine}, dyes: []int32{48, 60, 120}},
+	30: {sets: []int32{setDivine, setKarmian}, dyes: []int32{48, 60, 120}},
+	43: {sets: []int32{setDivine, setKarmian}, dyes: []int32{46, 58, 118}},
+	12: {sets: []int32{setDemon, setKarmian}, dyes: []int32{44, 56, 116, 43, 55, 115}},
+	27: {sets: []int32{setKarmian, setDemon}, dyes: []int32{43, 55, 115}},
+	40: {sets: []int32{setKarmian}, dyes: []int32{44, 56, 116}},
+	52: {sets: []int32{setFullPlate, setComposite, setKarmian}, dyes: []int32{46, 58, 118}},
 }
 
 // checkGearRow checks class's gear row against the datapack and the

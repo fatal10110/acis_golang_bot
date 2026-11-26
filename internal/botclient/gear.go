@@ -204,29 +204,39 @@ func (w StatWeights) score(it *datapack.Item, enchant int) float64 {
 }
 
 // defaultGearClasses is the class table builds compile (CompileBuild): mystics
-// wield magical one-handed weapons and staves in robes; dagger users
+// wield magical one-handed weapons and staves in robes, the warcryer (52)
+// magical blunts alone (Hammer Crush and Stun Attack take BLUNT); dagger users
 // daggers and archers bows (the shop errand restocks their arrows,
 // ShopPolicy.ArrowsMin) in light armor; monks fists in light armor; gladiators and bladedancers
-// duals, warlords polearms and destroyers two-handed weapons, in heavy
-// armor; the warrior its lines' two-handed blunts and polearms in heavy
-// armor without a shield (CompileBuild keeps its line's one, lineWeapons);
-// the first fighter classes swords or blunts in light armor (their
-// starting set) with a shield; every other fighter swords, blunts or
-// their two-handed kinds in heavy armor with a shield (classes/*.xml,
+// duals, warlords polearms and destroyers two-handed blunts, then swords
+// (Hammer Crush takes only the blunt), in heavy armor; the warrior its
+// lines' two-handed blunts and polearms in heavy armor without a shield
+// (CompileBuild keeps its line's one, lineWeapons); the first fighter
+// classes swords or blunts in light armor (their starting set) with a
+// shield; the paladin (5) swords or blunts, the temple knight (20), sword
+// singer (21) and shillien knight (33) swords, the bounty hunter (55)
+// blunts, each with a shield in heavy armor (docs/strategy.md, "Gear and
+// range", column 1); every other fighter swords, blunts or their
+// two-handed kinds in heavy armor with a shield (classes/*.xml,
 // model/actor/player/race.go). Mystics weigh gear as casters, every other
 // class as fighters; mystics drink the Magic Haste Potion, every other
-// class the Potion of Alacrity.
+// class the Potion of Alacrity. Where two pieces score alike the type
+// listed first wins (GearClass.weaponRank).
 func defaultGearClasses() []GearClass {
 	return []GearClass{
-		{Classes: slices.Clone(mysticClasses), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC", Weights: casterWeights, BuffPotion: magicHastePotion},
+		{Classes: []int32{52}, Weapons: []string{"BLUNT/MAGIC"}, Armor: "MAGIC", Weights: casterWeights, BuffPotion: magicHastePotion},
+		{Classes: slices.DeleteFunc(slices.Clone(mysticClasses), func(c int32) bool { return c == 52 }), Weapons: []string{"BLUNT/MAGIC", "SWORD/MAGIC", "BIGBLUNT/MAGIC"}, Armor: "MAGIC", Weights: casterWeights, BuffPotion: magicHastePotion},
 		{Classes: []int32{7, 8, 22, 23, 35, 36, 93, 101, 108}, Weapons: []string{"DAGGER"}, Armor: "LIGHT", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{9, 24, 37, 92, 102, 109}, Weapons: []string{"BOW"}, Armor: "LIGHT", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{47, 48, 114}, Weapons: []string{"DUALFIST"}, Armor: "LIGHT", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{2, 34, 88, 107}, Weapons: []string{"DUAL"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{3, 89}, Weapons: []string{"POLE"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
-		{Classes: []int32{46, 113}, Weapons: []string{"BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{46, 113}, Weapons: []string{"BIGBLUNT", "BIGSWORD"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{1}, Weapons: []string{"BIGBLUNT", "POLE"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{5}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{20, 21, 33}, Weapons: []string{"SWORD"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{55}, Weapons: []string{"BLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 	}
 }
@@ -628,6 +638,17 @@ func (c *GearClass) swaps(a, b string) bool {
 		slices.Contains(c.Weapons, a) && slices.Contains(c.Weapons, b)
 }
 
+// weaponRank is where piece kind kind stands in the class's Weapons, the
+// first listed first: it breaks a tie between two pieces of one score
+// (ruleGear, planGear). A type the class does not list, and armor, rank
+// last.
+func (c *GearClass) weaponRank(kind string) int {
+	if i := slices.Index(c.Weapons, kind); i >= 0 {
+		return i
+	}
+	return len(c.Weapons)
+}
+
 // carriedShield is the score worn in w of the best shield the bot carries
 // and would wear with a one-handed weapon; 0 for none.
 func (b *Brain) carriedShield(w *worn) float64 {
@@ -705,12 +726,13 @@ func (b *Brain) ruleGear(now time.Time) (Action, bool) {
 	}
 	var best Item
 	var bestG gearItem
+	class := b.gearClass()
 	for _, it := range b.world.Inventory.Items {
 		if !b.upgrade(it, &w) || b.bowWaits(it) {
 			continue
 		}
 		gi, _ := b.gearItem(it.TemplateID)
-		if best.ObjectID == 0 || cmp.Or(cmp.Compare(slotOf(gi.part), slotOf(bestG.part)), cmp.Compare(b.pieceScore(&w, &bestG, best), b.pieceScore(&w, &gi, it)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
+		if best.ObjectID == 0 || cmp.Or(cmp.Compare(slotOf(gi.part), slotOf(bestG.part)), cmp.Compare(b.pieceScore(&w, &bestG, best), b.pieceScore(&w, &gi, it)), cmp.Compare(class.weaponRank(gi.kind), class.weaponRank(bestG.kind)), cmp.Compare(it.ObjectID, best.ObjectID)) < 0 {
 			best, bestG = it, gi
 		}
 	}
@@ -837,9 +859,10 @@ func (b *Brain) planGear(jump int64) (ids, set []int32) {
 		}
 		ids = append(ids, id)
 	}
+	class := b.gearClass()
 	slices.SortStableFunc(ids, func(x, y int32) int {
 		gx, gy := b.cfg.Travel.gear[x], b.cfg.Travel.gear[y]
-		return cmp.Or(cmp.Compare(slotOf(gx.part), slotOf(gy.part)), cmp.Compare(b.pieceScore(&w, &gy, Item{}), b.pieceScore(&w, &gx, Item{})))
+		return cmp.Or(cmp.Compare(slotOf(gx.part), slotOf(gy.part)), cmp.Compare(b.pieceScore(&w, &gy, Item{}), b.pieceScore(&w, &gx, Item{})), cmp.Compare(class.weaponRank(gx.kind), class.weaponRank(gy.kind)))
 	})
 	return ids, set
 }

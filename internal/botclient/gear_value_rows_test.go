@@ -45,6 +45,13 @@ var shippedTravel = sync.OnceValues(func() (*TravelMap, error) {
 // the role shows apart from survival. It skips without BOT_DATAPACK_XML.
 func shippedSetBonus(t *testing.T, class, level int32, role Role, chest int32, harmless bool) float64 {
 	t.Helper()
+	return shippedSetBonusHP(t, class, level, role, chest, harmless, 0)
+}
+
+// shippedSetBonusHP is shippedSetBonus with max HP maxHP reported, which
+// calibrates the model's max HP to it; 0 reports none.
+func shippedSetBonusHP(t *testing.T, class, level int32, role Role, chest int32, harmless bool, maxHP int32) float64 {
+	t.Helper()
 	if os.Getenv("BOT_DATAPACK_XML") == "" {
 		t.Skip("BOT_DATAPACK_XML not set")
 	}
@@ -66,7 +73,7 @@ func shippedSetBonus(t *testing.T, class, level int32, role Role, chest int32, h
 	b.persona.Role = role
 	s := &b.world.Self
 	s.ClassID, s.Level = class, level
-	s.MaxHP, s.MaxMP, s.PAtk, s.MAtk, s.PAtkSpd, s.CastSpd, s.Critical, s.Accuracy, s.Evasion, s.PDef, s.MDef, s.RunSpeed, s.MaxLoad = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+	s.MaxHP, s.MaxMP, s.PAtk, s.MAtk, s.PAtkSpd, s.CastSpd, s.Critical, s.Accuracy, s.Evasion, s.PDef, s.MDef, s.RunSpeed, s.MaxLoad = maxHP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	tree := make(map[int32]int)
 	for _, g := range m.classes[class].Skills {
 		if g.MinLevel <= int(level) && g.Level > tree[g.ID] {

@@ -791,13 +791,15 @@ stores.
      DEX+1 CON-3; nukers INT+1 WIT-3 or WIT+1 INT-3; healers (Cleric 15, Oracle 29, Shillien
      Oracle 42, Shaman 50), whom the INT/WIT rows exclude, MEN+1 WIT-3 (`hennas.xml:12`).
      Shipped default (`Dyes.Symbols`, by class id, drawn in order): first-profession fighters 1
-     and 6, nukers 8 twice, healers 10 twice (37000 each); second-profession fighters 37, 42, 37,
-     nukers 44 three times, healers 46 three times (87000 each). Each row is checked against the
+     and 6, nukers 8 twice, healers 10 twice (37000 each); second professions their row's 87000
+     symbol (`docs/strategy.md`, "Gear and range", column 11) three times, the treasure hunter and
+     hawkeye 42, 37, 42 and the sorcerer 44, 43, 44; the professions without a row of their own
+     fighters 37, 42, 37, nukers 44 and healers 46 three times. Each row is checked against the
      shipped `hennas.xml` class lists and prices (`TestDefaultDyeTableShipped`).
      Through the model (M10 S5, #324), with no persona table the bot draws, slot by slot, the
      symbol with the highest value gain among the symbols its class may draw that raise its row's
      stat (`ClassKit.DyeStats`, `docs/strategy.md` column 11; a second profession keeps its first
-     profession's), whose fee and missing dyes the adena past the gear floor pays (`dyeDraws`). The
+     profession's but the sword singer and bladedancer, which raise STR), whose fee and missing dyes the adena past the gear floor pays (`dyeDraws`). The
      table above is what a bot draws without the model.
 
 ### 10. Enchant to the safe level (#181)
