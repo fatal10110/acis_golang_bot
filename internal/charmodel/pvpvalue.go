@@ -3,6 +3,8 @@ package charmodel
 import (
 	"math"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // PvPWeight is the pvp preset's weight of PvP value in a gear comparison
@@ -147,6 +149,16 @@ var damageTypes = map[string]bool{
 // controlEffects are the effects that stop their target acting.
 var controlEffects = map[string]bool{
 	"Stun": true, "Sleep": true, "Root": true, "Paralyze": true, "Fear": true, "Petrification": true,
+}
+
+// SkillDamage is one cast's damage of skill s by f on target, its PvP
+// bonus included (skillDamage): its power for a damage skill type, 0 for
+// any other skill.
+func SkillDamage(f Fighter, s datapack.Skill, target Fighter) float64 {
+	if !damageTypes[typeKey(s.Type)] || s.Power <= 0 {
+		return 0
+	}
+	return skillDamage(f, s.Magic, s.Power, target)
 }
 
 // skillDamage is one cast's damage of a skill of power by f on target with

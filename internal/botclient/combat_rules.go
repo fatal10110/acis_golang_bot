@@ -217,7 +217,8 @@ func (b *Brain) knowsNuke(rot []Step) bool {
 // (sideCasting) or select id, switch a combat toggle that is due
 // (toggleCast), then cast the first ready step of the build's rotation
 // whose gates pass (rotationCast: self-target steps, sustain, then attacks
-// with MP at MPReserve or more), or click it once for melee as the kit's
+// with MP at MPReserve or more; pvpCast's PvP order against a player), or
+// click it once for melee as the kit's
 // Melee policy allows, side stepping when stuck. Either goes
 // out only while the straight line to id is open, else the bot walks to a
 // stand point first (engageWalk). A target out of attempts is blacklisted
@@ -246,7 +247,13 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 		return a
 	}
 	underReserve := below(s.MP, s.MaxMP, bd.Thresholds.MPReserve)
-	if a, ok := b.rotationCast(id, bd.Kit.Rotation, underReserve, now); ok {
+	cast := b.rotationCast
+	if o := b.world.object(id); o != nil && o.Kind == KindPlayer {
+		// Against a player: the PvP layer over the row (docs/pvp/layer.md,
+		// D35), for every preset.
+		cast = b.pvpCast
+	}
+	if a, ok := cast(id, bd.Kit.Rotation, underReserve, now); ok {
 		return a
 	}
 	if !bd.Kit.Melee.allows(underReserve, !b.world.Party.In()) && b.knowsNuke(bd.Kit.Rotation) {

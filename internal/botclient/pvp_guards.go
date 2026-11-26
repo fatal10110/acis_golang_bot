@@ -128,11 +128,13 @@ func (b *Brain) rootLasts(skill int32) (time.Duration, bool) {
 }
 
 // ownCast keeps the bot's own cast e at now: a root's landing, which a
-// later CharInfo confirms (Brain.rootSeen).
+// later CharInfo confirms (Brain.rootSeen), and the PvP layer's record of
+// it (Brain.layerCast).
 func (b *Brain) ownCast(e MagicSkillUse, now time.Time) {
 	if lasts, ok := b.rootLasts(e.SkillID); ok {
 		b.pvp.root = rootCast{target: e.TargetID, lands: now.Add(e.HitTime), lasts: lasts}
 	}
+	b.layerCast(e, now)
 }
 
 // rootLandSlack is how long after its landing a root the bot cast may
