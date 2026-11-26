@@ -66,7 +66,8 @@ Every bot plays a **build**: what its race, its class and its persona's role mak
 
 Out of scope: servitor professions (Warlock, Elemental Summoner, Phantom Summoner, and
 Necromancer for its summons), the Overlord (no branch picks it: its seals and clan buffs serve a
-group), kiting, and second-profession kits (the backlog issue in "Delivery").
+group), and kiting. Second-profession kits are planned in "Second professions (levels 40+)" and ship
+as S13-S17 (#587-#591); servitor lines are #592 (a later milestone).
 
 ## Race and class data
 
@@ -407,10 +408,13 @@ profession's steps it keeps rather than inheriting them.
 
 **Notation, second professions.** The row start is 40, so a skill with no level tag is known at 40
 (first merged `minLvl` ≤ 40), whether it comes from the base, the first or the second tree, and
-`@N` is a skill first learned past 40. `(fixed)` marks a skill of an earlier tree that the second
-profession's own tree does not raise: it stays at the level the first profession reached by 39,
-so the row ranks it behind its successor (Mortal Blow behind Deadly Blow). `TestBehaviorRowsShipped`
-checks the tag: the skill is in the merged tree and absent from the profession's own. "replaced
+`@N` is a skill first learned past 40. `(fixed)` marks an attack step the row ranks behind its
+successor because the second profession's own tree does not raise it: it stays at the level the
+first profession reached by 39 (Mortal Blow behind Deadly Blow). The tag is required only on such
+steps; other skills from earlier trees (226 Relax, 256 Accuracy, 28 Aggression, a heal or a toggle)
+are untagged even though the own tree does not raise them either. `TestBehaviorRowsShipped` checks
+the tag one way: a tagged skill is in the merged tree and absent from the profession's own tree; an
+untagged skill is not checked for it. "replaced
 by X from N" is the stack rule's "replaced by" (CompileBuild drops the earlier skill from N).
 Row ids: PL Paladin, TK Temple Knight, SK Shillien Knight, SS Sword Singer, GL Gladiator, WL
 Warlord, DS Destroyer, BD Bladedancer, BH Bounty Hunter, TH Treasure Hunter, HK Hawkeye, PW Plains
@@ -489,8 +493,9 @@ cast):
   Aura, 1028 Might of Heaven, 1034 Repose, 1042 Hold Undead, 1049 Requiem, 1400 Turn Undead
   (target `UNDEAD` or `AURA_UNDEAD`, no gate reads a monster's race); 103 Corpse Plague, 1151
   Corpse Life Drain (corpse targets).
-- **Aggro the bot does not want:** 286 Provoke, 116 Howl (auras that pull monsters not yet
-  fighting); 12 Switch, 11 Trick, 106 Veil, 1273 Serenade of Eva, 1272 Word of Fear,
+- **Aggro the bot does not want:** 286 Provoke (an `AGGDAMAGE` aura of radius 500 to 900 that
+  pulls monsters not yet fighting; 18 Aura of Hate's radius is 200 and its A≥2 gate keeps it
+  inside a fight already on); 12 Switch, 11 Trick, 106 Veil, 1273 Serenade of Eva, 1272 Word of Fear,
   1169 Curse Fear (drop or scatter the bot's own target).
 - **Front-blocked or positional:** 30 Backstab lands 3 % from the front (server
   `formulas.BlowSucceeds`, `in.Backstab && in.Front`), and a solo bot faces what it fights; a
@@ -504,7 +509,8 @@ cast):
   PvP, #421); 1159 Curse Death Link and 314 Fatal Counter outside the PR row (own-HP scaling); 417
   Pain of Sagittarius, 69 Sacrifice (cost HP); the seeds and 1288-1294 symphonies (one-hour reuse);
   1233 Decay, 1183 Freezing Shackle, 1244 Freezing Flame (DOTs the rotation would recast at reuse
-  with no target-effect gate); 122 Hex (a debuff with the same recast problem).
+  with no target-effect gate); 122 Hex and 116 Howl (debuffs with the same recast problem: Howl's
+  P. Atk debuff lasts 15 s on an 8 s reuse).
 - **Utility:** the Detect Weakness buffs (they pay against one monster race the bot does not
   pick), 419 Summon Treasure Key, the Quivers, 1050 Return, 1255 Party Recall, 1254 Mass
   Resurrection, 1311 Body Of Avatar, 1271 Benediction, 1418 Celestial Shield, 1395 Erase, 1396
