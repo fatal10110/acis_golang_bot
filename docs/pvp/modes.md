@@ -63,7 +63,8 @@ snapshot names the counters without the `bot_` prefix, as its other fields: `pvp
 `pvp_deaths_total`, `duels_total` and `pvp_interrupts_total` (`too late` as `too_late`), every
 label present. A death counts by the kind of the fight the bot started on its killer, so a hunted
 flagged player or a PK victim that fights back stays `flagged` or `pk`; a killer whose record holds
-no fight kind counts as `unfought`.
+no fight kind counts as `unfought`. An interrupt whose opponent leaves sight before the landing
+time counts `cast` only.
 
 ## Tests
 
