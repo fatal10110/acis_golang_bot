@@ -22,9 +22,9 @@ type TownPolicy struct {
 	Reach int32
 	// StayMin and StayMax bound the town spell, FarmMin and FarmMax the
 	// farming spell, of a town bot whose brain has a spot registry: it
-	// rotates between the two (townRota, #618). StayMax 0 never rotates:
-	// such a bot farms all the time where it has a spot registry, and
-	// stays in town without one.
+	// rotates between the two (townRota, #618). HopMax 0 or StayMax 0
+	// never rotates: such a bot farms all the time where it has a spot
+	// registry, and stays in town without one.
 	StayMin, StayMax time.Duration
 	FarmMin, FarmMax time.Duration
 }
@@ -33,7 +33,8 @@ type TownPolicy struct {
 // spell (#618). The town spell starts at the bot's first decision and
 // whenever the bot is in town with its farming spell over; it claims no
 // spot (ruleSpot), drifts around the nearest town (idleCenter) and may hop
-// (planHop). The farming spell starts when the town spell ends: the bot
+// (planHop). The farming spell starts when the town spell ends, or at an
+// order to a spot (goToSpot, which the bot obeys at once): the bot
 // farms as any farmer and takes no hop, and once the spell is over its
 // supply trip takes it home (causeRotation). The brain goroutine owns it.
 type townRota struct {
@@ -92,16 +93,20 @@ func (b *Brain) townLife() bool {
 }
 
 // rotates reports whether the bot rotates between town and farming spells
-// (townRota): a persona with town spells and a brain with a spot registry.
+// (townRota): a persona that hops between towns and has town spells, and a
+// brain with a spot registry.
 func (b *Brain) rotates() bool {
-	return b.persona.Town.StayMax > 0 && b.cfg.Spots != nil
+	p := &b.persona.Town
+	return p.HopMax > 0 && p.StayMax > 0 && b.cfg.Spots != nil
 }
 
 // rotate advances the rotation at now and reports whether the bot is in its
 // town spell. The first call starts a town spell; a town spell over starts
 // the farming spell; a farming spell over with the bot in town (its supply
-// trip home, a death, a hop) starts the next town spell and gives up any
-// spot still held. False for a bot that does not rotate.
+// trip home, a death) starts the next town spell, gives up any spot still
+// held and restarts the idle spell to the next hop (planHop arms it at its
+// next check), which the farming spell left due. False for a bot that does
+// not rotate.
 func (b *Brain) rotate(now time.Time) bool {
 	if !b.rotates() {
 		return false
@@ -115,8 +120,21 @@ func (b *Brain) rotate(now time.Time) bool {
 	case r.farm && !now.Before(r.until) && b.inTown(now):
 		r.farm, r.until = false, now.Add(b.spell(p.StayMin, p.StayMax))
 		b.leaveSpot()
+		b.trip.hopAt = time.Time{}
 	}
 	return !r.farm
+}
+
+// farmNow starts a rotating bot's farming spell at now, ending its town
+// spell or restarting a farming spell already over: an order to a spot
+// (goToSpot) is obeyed at once, not after the town spell, and does not
+// send the bot home on its arrival. A farming spell under way goes on.
+func (b *Brain) farmNow(now time.Time) {
+	if !b.rotates() || b.rota.farm && now.Before(b.rota.until) {
+		return
+	}
+	p := &b.persona.Town
+	b.rota.farm, b.rota.until = true, now.Add(b.spell(p.FarmMin, p.FarmMax))
 }
 
 // farmOver reports whether a rotating bot's farming spell is over at now:
