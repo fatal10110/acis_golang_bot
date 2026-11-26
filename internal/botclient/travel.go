@@ -107,8 +107,10 @@ type TravelMap struct {
 	// crystallize.
 	crystals map[int32]crystalYield
 	// hennas are the dye symbols by id (datapack.Datapack.Hennas): what
-	// the dye errand checks prices, dyes and class lists with.
+	// the dye errand checks prices, dyes and class lists with; dyes are the
+	// dye templates they draw with (setHennas).
 	hennas map[int32]datapack.Henna
+	dyes   map[int32]bool
 	// zones are the zones that decide where a character may fight
 	// (datapack.Datapack.Zones): the PvP world model's arenas.
 	zones datapack.Zones
@@ -198,7 +200,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.herbs = dp.Herbs
 	m.recipes, m.craftItems = dp.Recipes, indexCraftItems(dp.Recipes)
 	m.crystals = indexCrystals(dp.Items)
-	m.hennas = dp.Hennas
+	m.setHennas(dp.Hennas)
 	m.classes, m.skills = dp.Classes, dp.Skills
 	m.zones = dp.Zones
 	m.setSkills = indexSetSkills(dp.ArmorSets)
@@ -694,5 +696,13 @@ func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, 
 		if d, ok := b.navDistance(l.p, at); ok {
 			push(tripLabel{key: tripKey{kind: tripSpot, i: i}, p: at, cost: l.cost + walk(d), price: l.price, hops: l.hops, gk: l.gk, dest: l.dest})
 		}
+	}
+}
+
+// setHennas sets the dye symbols hs and the set of their dye templates.
+func (m *TravelMap) setHennas(hs map[int32]datapack.Henna) {
+	m.hennas, m.dyes = hs, make(map[int32]bool, len(hs))
+	for _, h := range hs {
+		m.dyes[h.DyeID] = true
 	}
 }

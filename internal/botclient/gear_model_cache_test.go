@@ -29,7 +29,7 @@ var cacheSkills = []KnownSkill{{ID: skillSpellcraft, Level: 1, Passive: true}, {
 func newCacheBrain(t *testing.T) (*Brain, *gearModel, int) {
 	t.Helper()
 	b := newModelBrain(t, classHumanMystic, 20, RoleSupport, cacheSkills, nil, wornItem(301, robeTop), carriedPiece(312, robeBottom))
-	b.cfg.Travel.hennas = map[int32]datapack.Henna{cacheSymbol: {SymbolID: cacheSymbol, INT: 1}}
+	b.cfg.Travel.setHennas(map[int32]datapack.Henna{cacheSymbol: {SymbolID: cacheSymbol, INT: 1}})
 	b.world.Apply(cacheUserInfo(20), t0)
 	v := b.valuer()
 	if v == nil {

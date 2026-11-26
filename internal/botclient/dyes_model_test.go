@@ -44,7 +44,7 @@ var modelHennas = func() map[int32]datapack.Henna {
 func newDyeModelBrain(t *testing.T, class int32, role Role, skills []KnownSkill, slots int32, worn []WornSymbol, items ...Item) *Brain {
 	t.Helper()
 	b := newModelBrain(t, class, 20, role, skills, nil, items...)
-	b.cfg.Travel.hennas = modelHennas
+	b.cfg.Travel.setHennas(modelHennas)
 	for _, h := range modelHennas {
 		b.cfg.Travel.cheapest[h.DyeID] = 100
 	}
@@ -112,4 +112,50 @@ func TestRowDyes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDyePlanWithValuables: a merchant with the valuables policy, a free
+// dye slot and a carried valuable answers its deposit fees, its valuables
+// and its dye plan. The plan's budget reads the gear floor, whose deposit
+// fees classify every carried item, whose keep set asked the plan again
+// for each of them: the swarm's bot manager died of the stack overflow.
+// A non-dye template now asks no plan; a planned dye is still kept.
+func TestDyePlanWithValuables(t *testing.T) {
+	robes := []Item{wornItem(301, robeTop), wornItem(302, robeBottom)}
+	blade := spare(20, dBlade)
+	b := newDyeModelBrain(t, 4, RoleSupport, nil, 2, nil, append(slices.Clone(robes), adenaStack(1000000), blade)...)
+	m := b.cfg.Travel
+	m.crystals = map[int32]crystalYield{dBlade: {grade: 1, crystal: crystalD, count: 200}}
+	m.weights = map[int32]int32{dBlade: 1700}
+	m.prices = map[int32]int32{dBlade: 250000}
+	m.supply = map[int32]itemSupply{dBlade: {perHour: 1}}
+	b.persona.Valuables = DefaultValuablePolicy()
+	if !b.valuableTemplate(dBlade, 0) {
+		t.Fatal("the D blade fails the valuable test's numeric part: no valuable to classify")
+	}
+	if fees := b.valuableFees(); fees <= 0 {
+		t.Errorf("deposit fees %d, want a row's", fees)
+	}
+	_, draw := b.dyePlan()
+	if len(draw) == 0 {
+		t.Fatal("no draw planned, want the free slots' symbols")
+	}
+	if !b.plannedDye(draw[0].DyeID) || !b.keeps(draw[0].DyeID) {
+		t.Errorf("planned dye %d not kept", draw[0].DyeID)
+	}
+	if b.plannedDye(dBlade) {
+		t.Error("the D blade is a planned dye")
+	}
+
+	// A dye no shop sells, priced and rare enough to pass the numeric
+	// test, is still no valuable: the keep test would ask the plan again.
+	dye := draw[0].DyeID
+	delete(m.cheapest, dye)
+	m.prices[dye], m.supply[dye] = 250000, itemSupply{perHour: 1}
+	b.world.Apply(ItemList{Items: append(slices.Clone(robes), adenaStack(1000000), blade, Item{ObjectID: 30, TemplateID: dye, Count: 1, SubCategory: 5})}, t0)
+	if b.valuableTemplate(dye, 0) {
+		t.Error("a dye passes the valuable test")
+	}
+	b.valuableFees()
+	b.dyePlan()
 }

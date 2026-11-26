@@ -393,11 +393,14 @@ func (b *Brain) valuable(it Item) bool {
 // valuableTemplate reports whether template at enchant passes the parts of
 // the valuable test that read neither the bot's carry nor the unit's own
 // classes: the persona's numeric test (ValuablePolicy.valuable), not a
-// shadow item and not sold by a counted buylist. The zero policy passes
-// none.
+// shadow item, not a dye and not sold by a counted buylist. The zero policy
+// passes none. A dye is a supply of the dye errand: the keep test asks the
+// dye plan about it (plannedDye), and the plan's budget asks the valuables
+// back (valuableFees), so a dye that passed would recurse without end
+// (#622).
 func (b *Brain) valuableTemplate(template int32, enchant uint16) bool {
 	m, p := b.cfg.Travel, b.persona.Valuables
-	if m == nil || !p.Enabled || m.shadows[template] {
+	if m == nil || !p.Enabled || m.shadows[template] || m.dyes[template] {
 		return false
 	}
 	if _, shopSells := m.cheapest[template]; shopSells {
