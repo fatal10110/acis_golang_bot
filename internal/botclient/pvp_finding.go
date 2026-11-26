@@ -260,7 +260,7 @@ func (b *Brain) ruleChallenge(now time.Time) (Action, bool) {
 	}
 	free := b.duel(now).Phase == DuelIdle && (f.lastAsk.IsZero() || now.Sub(f.lastAsk) >= challengeEvery) && !b.pvp.arena.active()
 	if w.name != "" && !now.Before(w.due) && now.Sub(w.due) <= whisperLapse {
-		if free && !b.cfg.markers.Marks(w.name) && !f.recent(w.name, now) && b.mayDuel(now) {
+		if free && !b.cfg.markers.Marks(w.name) && !f.recent(w.name, now) && !b.avoided(w.name, now) && b.mayDuel(now) {
 			if id := b.playerNamed(w.name); id != 0 && b.foeMayDuel(id, now) {
 				return b.challenge(id), true
 			}
@@ -292,7 +292,7 @@ func (b *Brain) challengeFoe(now time.Time) int32 {
 	tier := classTier(s.ClassID)
 	return b.nearestPlayer(now, func(id int32, o *Object) bool {
 		return !b.cfg.markers.Marks(o.Name) && !f.recent(o.Name, now) && !now.Before(f.held[o.Name]) &&
-			classTier(o.ClassID) == tier && b.foeMayDuel(id, now) && b.engages(id)
+			!b.avoided(o.Name, now) && classTier(o.ClassID) == tier && b.foeMayDuel(id, now) && b.engages(id)
 	})
 }
 
@@ -360,22 +360,34 @@ func (b *Brain) noHunt(p Point) bool {
 }
 
 // ruleHunt is hunting (docs/pvp/targets.md "Hunting", PvPPolicy.Hunt): out
-// of combat with no attacker, no duel and its HP and MP at its stand
-// levels, off peace, town and Derby ground, the bot attacks the nearest
-// flagged or karma player of its tier rule 6 lets it fight, off that
-// ground too, that the engage estimate passes. The fight is the fight
-// rules' (fight): the attack's own frame pacing.
+// of combat with no attacker, no duel, no karma and its HP and MP at its
+// stand levels, off peace, town and Derby ground, the bot attacks the
+// nearest flagged or karma player of its tier rule 6 lets it fight, off
+// that ground too, not avoided after a death (avoidAfterDeath), that the
+// engage estimate passes; else, in PK mode, its PK victim (pkHunt). The
+// fight is the fight rules' (fight): the attack's own frame pacing; PK
+// mode's limits bound the PKs.
 func (b *Brain) ruleHunt(now time.Time) (Action, bool) {
 	p, s := b.persona.PvP, &b.world.Self
-	if !p.Hunt || !p.FightFlagged || s.InCombat || s.Dead || b.duel(now).Phase != DuelIdle ||
+	if !(p.Hunt && p.FightFlagged || p.ForceAttack) || s.InCombat || s.Dead || s.Karma > 0 || b.duel(now).Phase != DuelIdle ||
 		len(b.attackers(now)) > 0 || !b.aboveStand() || b.noHunt(s.Position(now)) {
 		return Action{}, false
 	}
 	tier := classTier(s.ClassID)
-	id := b.nearestPlayer(now, func(id int32, o *Object) bool {
-		return b.mayFight(id, now) && b.fightRule(id, o, now) == FightFlagged && classTier(o.ClassID) == tier &&
-			!b.noHunt(o.Position(now)) && b.engages(id)
-	})
+	var id int32
+	if p.Hunt && p.FightFlagged {
+		id = b.nearestPlayer(now, func(id int32, o *Object) bool {
+			return b.mayFight(id, now) && b.fightRule(id, o, now) == FightFlagged && classTier(o.ClassID) == tier &&
+				!b.noHunt(o.Position(now)) && !b.avoided(o.Name, now) && b.engages(id)
+		})
+	}
+	if id == 0 {
+		// A victim past pkEvery, still in sight, is a new PK: its clock
+		// restarts.
+		if id = b.pkHunt(now); id != 0 && !b.pkVictim(id, now) {
+			b.pkStart(id, now)
+		}
+	}
 	if id == 0 {
 		return Action{}, false
 	}

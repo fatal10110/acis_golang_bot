@@ -171,6 +171,8 @@ type Brain struct {
 	nextTick, reactAt time.Time
 	// pvp is the PvP world model: opponent records, the duel.
 	pvp pvpWorld
+	// karma is the death and karma memory (pvp_karma.go).
+	karma karmaState
 	// anchor is where idle drift stays around: the arrival point.
 	anchor Point
 	// engaged is the target the bot already attacked; it is not clicked
@@ -521,6 +523,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.partyLeadEvent(ev, now)
 		// Before Apply: SendTradeDone clears the trade it counts.
 		b.valuableSaleEvent(ev)
+		// Before Apply: the bot's own Die clears the attackers table its
+		// killer is read from.
+		b.karmaEvent(ev, now)
 		b.world.Apply(ev, now)
 		pvpAt := b.pvpEvent(ev, now)
 		b.meter.fighting = b.world.Self.InCombat

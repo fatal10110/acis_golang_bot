@@ -36,6 +36,9 @@ type arenaTrip struct {
 	alone      time.Time
 	leaving    bool
 	stopAt     time.Time
+	// died is set by an arena death that keeps the trip (arenaDied): the
+	// restart's teleport does not end it, the bot walks back.
+	died bool
 }
 
 // active reports whether an arena trip is under way.
@@ -81,11 +84,12 @@ func (b *Brain) nearestArena(p Point) (int, Point) {
 }
 
 // arenaReady reports whether an arena trip may start at now: the bot farms
-// at its spot, leads no party nor follows one, is out of combat and on no
-// other trip.
+// at its spot, leads no party nor follows one, is out of combat, has no
+// karma (everyone's target there, docs/pvp/karma.md) and is on no other
+// trip.
 func (b *Brain) arenaReady(now time.Time) bool {
 	v := &b.spot
-	return v.farming() && v.arrived && !b.inBotParty() && !b.world.Self.InCombat &&
+	return v.farming() && v.arrived && !b.inBotParty() && !b.world.Self.InCombat && b.world.Self.Karma == 0 &&
 		!b.supplyTrip.active() && !b.trip.v.active() && b.duel(now).Phase == DuelIdle
 }
 
@@ -118,6 +122,9 @@ func (b *Brain) ruleArena(now time.Time) (Action, bool) {
 		return b.arenaLeave(now)
 	}
 	if own := b.arenaAt(b.world.Self.Position(now)); own.Arena == t.arena && own.Edge >= arenaEdge {
+		// Back on its feet inside (a resurrection): no restart to walk
+		// back from.
+		t.died = t.died && b.world.Self.Dead
 		if t.inside.IsZero() {
 			t.inside = now
 		}
@@ -213,9 +220,16 @@ func (b *Brain) planArena(now time.Time) bool {
 
 // arenaTeleported ends the arena trip on the bot's own loading-screen
 // teleport (a restart, a GM), unless it is the gatekeeper trip's landing
-// (gk), from which the walk or the next teleport goes on.
+// (gk), from which the walk or the next teleport goes on, or the restart
+// after an arena death that keeps the trip (arenaDied): from there the bot
+// walks back (docs/pvp/karma.md "By fight").
 func (b *Brain) arenaTeleported(now time.Time, gk bool) {
-	if t := &b.pvp.arena; t.active() && !(t.gate && gk) {
+	t := &b.pvp.arena
+	switch {
+	case !t.active() || t.gate && gk:
+	case t.died:
+		t.died, t.gate, t.gated, t.alone, t.leaving, t.stopAt = false, false, false, time.Time{}, false, time.Time{}
+	default:
 		b.arenaEnd(now)
 	}
 }

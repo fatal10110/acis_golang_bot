@@ -17,9 +17,15 @@ import (
 // for the points of a refused line. A route's own start and goal columns are
 // never avoided, so a set holding them cannot fail a route by itself.
 //
+// Area, when set, adds ground the caller keeps a margin from: a karma
+// bot's towns and guards (docs/pvp/karma.md "With karma"). It reports
+// whether the column whose centre is at world (x, y) is avoided. Clear
+// leaves it: the caller sets it for each plan.
+//
 // The zero Avoid avoids nothing.
 type Avoid struct {
 	cols map[column]struct{}
+	Area func(x, y int) bool
 }
 
 // column is one geodata column.
@@ -80,26 +86,35 @@ func (p *Planner) BlockedEnd(a, b, stop location.Location) location.Location {
 // Len is the number of avoided columns.
 func (v *Avoid) Len() int { return len(v.cols) }
 
-// Clear empties the set, for a new route.
+// Clear empties the set of refused columns, for a new route.
 func (v *Avoid) Clear() { clear(v.cols) }
 
+// empty reports whether v avoids nothing.
+func (v *Avoid) empty() bool { return len(v.cols) == 0 && v.Area == nil }
+
 // has reports whether the column of c is avoided.
-func (v *Avoid) has(c Cell) bool {
-	_, ok := v.cols[column{c.X, c.Y}]
-	return ok
+func (v *Avoid) has(c Cell) bool { return v.hasColumn(c.X, c.Y) }
+
+// hasColumn reports whether the geodata column (x, y) is avoided: a
+// refused column, or one in Area.
+func (v *Avoid) hasColumn(x, y int) bool {
+	if _, ok := v.cols[column{x, y}]; ok {
+		return true
+	}
+	return v.Area != nil && v.Area(engine.WorldX(x), engine.WorldY(y))
 }
 
 // skips reports whether a search toward goal must not step into c: its
 // column is avoided and it is not goal's.
 func (v *Avoid) skips(c, goal Cell) bool {
-	return len(v.cols) > 0 && (c.X != goal.X || c.Y != goal.Y) && v.has(c)
+	return !v.empty() && (c.X != goal.X || c.Y != goal.Y) && v.has(c)
 }
 
 // avoided reports whether the line from a to b crosses an avoided column
 // other than those of the route's endpoints from and to. The line cells go
 // to s.line.
 func (p *Planner) avoided(s *scratch, a, b, from, to location.Location) bool {
-	if len(p.Avoid.cols) == 0 {
+	if p.Avoid.empty() {
 		return false
 	}
 	fx, fy := engine.GeoX(from.X), engine.GeoY(from.Y)
@@ -109,7 +124,7 @@ func (p *Planner) avoided(s *scratch, a, b, from, to location.Location) bool {
 		if lc.x == fx && lc.y == fy || lc.x == tx && lc.y == ty {
 			continue
 		}
-		if _, ok := p.Avoid.cols[column{lc.x, lc.y}]; ok {
+		if p.Avoid.hasColumn(lc.x, lc.y) {
 			return true
 		}
 	}
