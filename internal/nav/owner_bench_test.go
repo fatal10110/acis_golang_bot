@@ -267,6 +267,7 @@ func BenchmarkOwnerNav(b *testing.B) {
 		})
 		reportSegments(b, segments)
 		b.Logf("routes failed: %d of %d (both passes)", failed, 2*n)
+		benchShortRoutes(b, h, p, e, g, w)
 	}
 }
 
