@@ -602,6 +602,7 @@ func TestLivePvPHealer(t *testing.T) {
 	gmSelf := &pvpSelf{id: gm.Self.ObjectID}
 	t.Cleanup(func() { pvpUnflagGM(t, gm, gmSelf, leader, cleric) })
 	var swungAt, pressedAt, rescuedAt time.Time
+	lowest := int32(-1)
 	note := func(ev botclient.Event) {
 		gmSelf.note(ev)
 		if hitOn(gm.Self.ObjectID, leader.id)(ev) {
@@ -614,6 +615,9 @@ func TestLivePvPHealer(t *testing.T) {
 		}
 		if err := c.Watch(ctx, 100*time.Millisecond, func(botclient.Event) {}); err != nil {
 			t.Fatalf("%s reading: %v", c.Self.Name, err)
+		}
+		if st := leader.bot.Status(); st.MaxHP > 0 && (lowest < 0 || st.HP < lowest) {
+			lowest = st.HP
 		}
 		if st := leader.bot.Status(); st.MaxHP > 0 && 3*st.HP < st.MaxHP && time.Since(rescuedAt) >= pvpPress {
 			rescuedAt = time.Now()
@@ -697,6 +701,7 @@ func TestLivePvPHealer(t *testing.T) {
 	healedFlagged := func() string {
 		flagged, cast, infos, flagOn := false, 0, 0, 0
 		hits, struck, karma := make(map[int32]int), 0, make(map[int32]int32)
+		missed, dealt := 0, 0
 		for i, s := range leader.watch.Seen(from) {
 			switch e := s.Event.(type) {
 			case botclient.UserInfo:
@@ -719,6 +724,15 @@ func TestLivePvPHealer(t *testing.T) {
 				}
 				if e.AttackerID == gm.Self.ObjectID {
 					struck++
+					for _, h := range e.Hits {
+						if h.TargetID != leader.id {
+							continue
+						}
+						if h.Missed() {
+							missed++
+						}
+						dealt += int(h.Damage)
+					}
 				}
 			case botclient.MagicSkillUse:
 				if from+i < healFrom || e.CasterID != cleric.id || e.TargetID != leader.id || !heals(e.SkillID) {
@@ -738,8 +752,8 @@ func TestLivePvPHealer(t *testing.T) {
 			}
 		}
 		st := leader.bot.Status()
-		return fmt.Sprintf("%s HP %d/%d, flagged %v in %d UserInfo (%d flagged; the Cleric reads flag %d), hits %v, the GM's swings at it %d, karma of the GM and client %v, %d heals of it unflagged",
-			leader.name, st.HP, st.MaxHP, flagged, infos, flagOn, seenFlag, hits, struck, karma, cast)
+		return fmt.Sprintf("%s HP %d/%d (lowest %d), flagged %v in %d UserInfo (%d flagged; the Cleric reads flag %d), hits %v, the GM's swings at it %d (%d missed, %d damage), karma of the GM and client %v, %d heals of it unflagged",
+			leader.name, st.HP, st.MaxHP, lowest, flagged, infos, flagOn, seenFlag, hits, struck, missed, dealt, karma, cast)
 	}
 	untilBy(t, ctx, cleric.name+" healing the flagged "+leader.name, time.Now().Add(3*time.Minute), func() string {
 		if err := c.Watch(ctx, 300*time.Millisecond, func(botclient.Event) {}); err != nil {
