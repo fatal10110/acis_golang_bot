@@ -2,7 +2,9 @@
 
 Status: owner approved D35-D39 as proposed on 2026-11-25 (`docs/plan.md`, "Owner decisions").
 D40-D42 (clan wars, sieges, the Olympiad; #426) are proposed, not approved: X14-X16 wait for them.
-Milestone M13 ("PvP persona"): epic #405, issues #406-#420, follow-ups #421-#429, #602-#604.
+D43 (buying CP potions; #427) is proposed, not approved: X17-X19 wait for it.
+Milestone M13 ("PvP persona"): epic #405, issues #406-#420, follow-ups #421-#429, #602-#604,
+#612-#614.
 
 ## Paths
 
@@ -33,7 +35,7 @@ accident; and handles death and karma per the server's rules.
 
 Out of scope until the owner approves D40-D42: clan wars as targets ([war](war.md)), sieges
 ([siege](siege.md)) and the Olympiad ([Olympiad](olympiad.md)). Out of scope: fighting summons for their own sake beyond killing one before its owner when that pays off (#428,
-[summons](targets.md#summons-and-pets)), buying CP potions (Ancient Adena only), second-profession
+[summons](targets.md#summons-and-pets)), buying CP potions until the owner approves D43 ([CP potions](cp-potions.md)), second-profession
 PvP rows (first profession's row until M10's #332), kiting monsters.
 
 ## Approach
@@ -75,7 +77,16 @@ PvP value blended into M10's gear score, a karma policy. No server change.
   master, bounded registration, the drawn opponent fought whoever it is (a bot too: D38 gains the
   stadium); never spectates, trades points or claims hero status. [Olympiad](olympiad.md)
 
-D40-D42 number provisionally: another plan approved first may take them, then they renumber.
+- **D43, buying CP potions (proposed).** CP potions are bought (amends D37; the keep rule stays):
+  from player sell stores for `pvp` bots; an opt-in `SevenSigns` mode (off for every preset) signs
+  up with Dusk, farms seal stones and, in a validation week its cabal won, buys them at a priest for
+  Ancient Adena. Bots never contribute stones, never pay the Dawn fee, never vote Strife; their
+  seal votes still weigh on the seals, so only the bots named in `SevenSigns.Members` join (at most
+  `SevenSigns.MaxMembers` per run, default 1, checked when the config loads), voting the seal Dusk
+  holds if any.
+  [CP potions](cp-potions.md)
+
+D40-D43 number provisionally: another plan approved first may take them, then they renumber.
 
 ## Delivery (milestone M13)
 
@@ -104,6 +115,9 @@ X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](
 | X14 | Clan-war targets (#602, D40 proposed): relation bits, war mark and its clearing, `MayFight` rule 6b, forced attack, guard. | D40, X4b, X5 | [war](war.md) |
 | X15 | Sieges (#603, D41 proposed): 283/284 by position, leave a battlefield, `UserInfo` siege state, fight the other side. | D41, X2, X4b, X11 | [siege](siege.md), [finding](finding.md#duel-ground) |
 | X16 | The Olympiad (#604, D42 proposed): noblesse, registration, the match. | D42, X4, X6, M8 #178 | [Olympiad](olympiad.md) |
+| X17 | CP potions from player sell stores (#612, D43 proposed): `CPStock`, store rows on the `pvp` list. | D43, X10, M8 store buying | [CP potions](cp-potions.md) |
+| X18 | Seven Signs member mode (#613, D43 proposed): sign-up, dungeon gatekeeper leg, catacomb spots, stone keep. | D43, M8 supply trip | [CP potions](cp-potions.md) |
+| X19 | Priest trip in Seal Validation (#614, D43 proposed): multisell wire, stones to Ancient Adena, CP potions by multisell 500. | D43, X18 | [CP potions](cp-potions.md) |
 | Backlog | Second-profession rows (with #332), the gaps below; party duels shipped with M11 (#424, [party duels](party.md#party-duels)). | X7, X8 | [Risks and gaps](#risks-and-gaps) |
 
 Most urgent: X1-X5 (X4b included) give a bot that takes duels and fights in arenas with its M10
@@ -124,7 +138,8 @@ with no row); **arena deaths** (the 5-death cap and stay limit).
 
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it (#422, shipped); party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
-(M11, #424, shipped: [party duels](party.md#party-duels)); a challenge hold shared by all bots (#425, shipped); buying CP potions;
+(M11, #424, shipped: [party duels](party.md#party-duels)); a challenge hold shared by all bots (#425, shipped); buying CP potions (#427, planned in
+[CP potions](cp-potions.md), #612-#614, pending D43);
 fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
 command-channel mates in an arena (#429, shipped: [rule 2](targets.md#mayfight)). Clan wars, sieges and the Olympiad are planned in
 [war](war.md), [siege](siege.md) and [Olympiad](olympiad.md) (#602-#604), pending D40-D42.
@@ -139,4 +154,5 @@ guard, arena edge, bystanders, duel support · [finding](finding.md) duels, aren
 [layer](layer.md) PvP order, interrupts, CP, cures, break off · [model](model.md) land rates,
 archetypes, PvP value, gear · [rows](rows.md) per-class rows · [party](party.md) party PvP ·
 [karma](karma.md) death, PK mode, karma · [war](war.md) clan-war targets ·
-[siege](siege.md) siege battlefields · [Olympiad](olympiad.md) noblesse, registration, matches.
+[siege](siege.md) siege battlefields · [Olympiad](olympiad.md) noblesse, registration, matches ·
+[CP potions](cp-potions.md) buying CP potions, Seven Signs.
