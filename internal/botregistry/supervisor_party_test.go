@@ -148,7 +148,7 @@ func (h *harness) party(t *testing.T, account string) (botparty.State, botparty.
 	if err := h.sup.do(t.Context(), func() {
 		st = h.sup.party
 		if r := h.sup.runs[account]; r != nil {
-			sent, newRun = r.sent, r.newRun
+			sent, newRun = r.party.sent, r.party.newRun
 		}
 	}); err != nil {
 		t.Fatal(err)

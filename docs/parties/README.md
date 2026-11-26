@@ -40,7 +40,8 @@ only a grouping key. The code: a pure planner on the supervisor goroutine, three
 
 - **D25, organization.** By the panel's supervisor, from the registry and the live snapshots:
   online bots of the same town within walking reach and a level band; no in-game discovery. On by
-  default in `bots ui`, with a panel switch; no organizer in `bots swarm`.
+  default in `bots ui`, with a panel switch. `bots swarm` runs the same planner over its own bots
+  ([organizer](organizer.md#swarm-wiring), #395, owner 2026-11-26).
 - **D26, composition.** A Damage-role bot (`farmer`) leads; Support-role bots (`support`) join, at
   least one healer ([composition](composition.md#healer)); a third is any other Support bot, else a
   second Damage bot with no healer to lead with. Size 3, at most 4 (persona defaults). `merchant`, `crafter` and `town`
@@ -111,8 +112,8 @@ Most urgent: P1a-P1d and P5a-P5b give parties at all; P2a-P2b make them play as 
 
 Out of scope: command channels; party matching rooms (`network/partymatch.go`) listing bot parties
 (backlog). A partyless support bot does ask to enter the rooms players open, and waits there for the
-leader's invitation ([rooms](rooms.md), #438). To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep
-today's party behavior, the home run uses the panel, D10); a party travelling by gatekeeper or
+leader's invitation ([rooms](rooms.md), #438). To be filed in M11 with the epic: `bots swarm` gets the organizer (#395, shipped:
+[swarm wiring](organizer.md#swarm-wiring)); a party travelling by gatekeeper or
 recalling together (#397, shipped: [gatekeeper trip](spots.md#gatekeeper-trip)); measuring a bot party's
 exp per hour against a solo farmer of the same level on the home run once P4 lands.
 
