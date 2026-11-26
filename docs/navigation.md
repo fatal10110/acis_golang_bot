@@ -1079,7 +1079,35 @@ unreachable (with a reason).
     arrives, and a leg with no click in flight is no answer, so it counts nothing. The walk wake
     moves with the hold. When the hold ends, a bot within the walk's arrival radius of its
     destination has arrived; otherwise the walker plans from where it stands. The hold applies
-    only after a desync: the normal path keeps its one-tick wait.
+    only after a desync, and after a move of the bot's the walker did not click (below): the normal
+    path keeps its one-tick wait.
+  - **Hold after a move the walker did not click** (#502). Another rule's click that goes somewhere
+    is resolved as a segment's is (`resolvePathLocked`), so it can be routed too, and the next leg
+    of its route then reaches the bot about when the walker models its end, exactly as after a
+    desync. Any `MoveToLocation` of the bot's that
+    answers no click of the walker's and goes somewhere (the `default` case of `observeWalk`) sets
+    the same hold; a blocked correction ends it. It costs the walk at most A after such a move.
+  - **Long lines the server closed** (#502). In the home run of 2026-11-25, 11 of 14 `nav desync`
+    lines named a segment the bot's geodata opens from the server's origin, at every collision
+    height from 0 to 48 and across no door. `TestLiveLongLines` replays each one on the live server
+    from a standstill, twice: the GM stands at the server's origin and clicks the segment's target
+    as the walker did, and the server walks straight to the click every time, which is the bot's
+    `CanMove` verdict too (the run's log is on #502). The line checks agree; what differed was the
+    server's state when the click arrived. The answer the walker logged was a leg of a route the server was already
+    walking, sent at the end of the leg before and taken for the click's answer, the race #501
+    names:
+    - hz893 then hz318 are one route through (-32168,-112056), (-30600,-112008) and
+      (-28680,-111928): each click's "answer" is the route's next corner and the next click starts
+      from it. hz387 then hz411 are another, through (-30312,-107512), (-30216,-107416) and
+      (-28664,-105464). hz545 is a leg of the server's own route over the Orc village's north wall
+      (#504): the GM's click there is a direct ground walk too.
+    - hz275, hz27, hz668, hz336, hz20 and hz897 are single legs of a route started before the logged
+      click. The home run's frames are not kept, so what started each route (a walker desync before
+      #501's hold, or another rule's click) cannot be told; hz897's leg heads for the Orc town point
+      plus the bot's collision height 23, a click of the bot's own toward it.
+    - The walker in that run had no hold: #501 (PR #544) holds after a walker desync, and the hold
+      above covers routes another rule's click started. No server gap: the live server's geodata,
+      doors and fences close none of these lines.
   - **Answers around a click-ahead.** The connection keeps the server's order, so what the server
     sent about the previous segment before it took the click arrives before the click's answer,
     and that answer always moves (a direct click toward the next waypoint):
@@ -1281,6 +1309,9 @@ geodata is committed here, and CI never sees it.**
     walk to it, `TestLiveNavPickUpObstacle` (#239) kills wolves at a measured site until the bot turns
     to a drop where the straight walk from where it stands fails, and asserts that the bot walks to a
     `StandPickUp` stand point before its pick-up and that the item reaches its inventory, and
+    `TestLiveLongLines` (#502) clicks the 11 long-line desyncs of the 2026-11-25 home run from a
+    standstill and asserts the server's answer is direct exactly where the bot's `CanMove` opens
+    the line, and
     `TestLiveNavDoor` toggles the doors of a Gludin clan hall (the GM's `//open`
     and `//close`, only on doors a scenario claims). A follower that sees a door change replans
     before it clicks, so door replans by the server's answer are rare: the door scenario asserts

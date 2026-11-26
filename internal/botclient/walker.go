@@ -223,8 +223,9 @@ type walker struct {
 	floor Point
 	// The failures of the route so far.
 	blocked, desync, watchdog, doors int
-	// held is set by a desync or door replan until the server's own move
-	// stands confirmed (Brain.holdEnd, a StopMove, a blocked correction or a
+	// held is set by a desync or door replan, and by a move of the bot's
+	// the walker did not click (#502), until the server's own move stands
+	// confirmed (Brain.holdEnd, a StopMove, a blocked correction or a
 	// teleport): the server may still be walking the route it answered with,
 	// and a click sent before its next leg arrives takes that leg for its
 	// answer (#501). It outlives a reset: the server's route does not end
@@ -779,7 +780,8 @@ func (w *walker) sent(a Action, now time.Time) {
 // talk approach (targeting.go onPlayerArrivedBlocked; in range the server
 // sends StopMove and opens the page). Any other move of the bot the walker
 // did not send, a StopMove mid-segment (a stun, a stop) and a teleport drop
-// the route; a teleport also starts the next walk afresh. ActionFailed is no
+// the route; a teleport also starts the next walk afresh. Such a move that
+// goes somewhere holds the walker as a desync does (walker.held). ActionFailed is no
 // navigation signal.
 //
 // While a click-ahead is unanswered, a blocked correction or StopMove is the
@@ -839,11 +841,13 @@ func (b *Brain) observeWalk(ev Event, now time.Time) {
 		default:
 			// Another rule's move, or the next leg of a route the server
 			// answered a segment with: no answer to a click of the walker's.
-			// A blocked correction ends the server's move where it stands.
+			// Either may be a leg of a route the server walks, the other
+			// rule's click routed as a segment's would be, whose next leg
+			// reaches the bot about when it models this one's end: the
+			// walker holds as after a desync (#502). A blocked correction
+			// ends the server's move where it stands.
 			w.seg, w.route = segment{}, nil
-			if still {
-				w.held = false
-			}
+			w.held = !still
 		}
 	case StopMove:
 		if e.ObjectID != s.ObjectID {
