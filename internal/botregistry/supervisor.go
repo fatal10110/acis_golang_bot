@@ -97,7 +97,8 @@ type Config struct {
 	Registry *Registry
 	Run      RunFunc
 	// Gate is the login gate every run passes; ResumeLogins resets its
-	// breaker.
+	// breaker, SetLoginSpacing sets its spacing, and New applies the
+	// spacing the registry kept.
 	Gate *botclient.LoginGate
 	// Clock times the cool-down, the registry flush and the stop times.
 	Clock botclient.Clock
@@ -217,7 +218,7 @@ type event struct {
 // Supervisor owns the registry, its file and every bot's run (docs/plan.md
 // section 8, "Ownership"). Run is its goroutine; the request methods (List,
 // Create, Import, Spawn, Despawn, Respawn, SetPreset, Delete, ResumeLogins,
-// Command)
+// SetLoginSpacing, Command)
 // are safe from any goroutine and answer at once, without waiting on a run.
 // It sends no packet: every run logs in through the login gate, which paces
 // it.
@@ -262,6 +263,13 @@ func New(cfg Config) (*Supervisor, error) {
 	log := cfg.Log
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
+	}
+	if d := cfg.Registry.LoginSpacing(); d > 0 {
+		// A spacing kept under an allowlisted gate may be under a spaced
+		// gate's floor: the gate keeps its own then.
+		if err := cfg.Gate.SetSpacing(d); err != nil {
+			log.Warn("kept login spacing not applied", "err", err, "spacing", cfg.Gate.Spacing())
+		}
 	}
 	return &Supervisor{
 		cfg:   cfg,
@@ -904,6 +912,20 @@ func (s *Supervisor) ResumeLogins(ctx context.Context) error {
 			}
 		}
 		return nil
+	})
+}
+
+// SetLoginSpacing sets the login gate's spacing from the next dial on
+// (botclient.LoginGate.SetSpacing, which refuses one under the gate's floor
+// with botclient.ErrSpacing) and keeps it in the registry for the next
+// start.
+func (s *Supervisor) SetLoginSpacing(ctx context.Context, d time.Duration) error {
+	return s.request(ctx, func() error {
+		if err := s.cfg.Gate.SetSpacing(d); err != nil {
+			return err
+		}
+		s.log.Info("login spacing set", "spacing", d)
+		return s.cfg.Registry.SetLoginSpacing(d)
 	})
 }
 

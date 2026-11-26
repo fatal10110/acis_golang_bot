@@ -50,6 +50,7 @@ export const api = {
   command: (account: string, command: string) => request<Answer>("POST", `${bot(account)}/command`, { command }),
   inspect: (account: string) => request<Inspection>("GET", `${bot(account)}/inspect`),
   resumeLogins: () => request<Answer>("POST", "/api/resume-logins"),
+  setLoginSpacing: (ms: number) => request<Answer>("POST", "/api/login-spacing", { ms }),
   parties: () => request<Parties>("GET", "/api/parties"),
   formParty: (leader: string, members: string[], pin: boolean) =>
     request<{ id: number }>("POST", "/api/parties", { leader, members, pin }),

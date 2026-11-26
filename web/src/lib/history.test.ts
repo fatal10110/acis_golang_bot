@@ -4,7 +4,7 @@ import type { Metrics, Update } from "./types";
 
 function update(sec: number, sent: number, events: number, running: number, metrics = true): Update {
   const m = { at: new Date(sec * 1000).toISOString(), sent, events } as Metrics;
-  return { bots: [], dashboard: { halted: false, bots: 0, running, max_online: 5, metrics: metrics ? m : null } };
+  return { bots: [], dashboard: { halted: false, login_spacing_ms: 1250, login_spacing_min_ms: 1250, login_spacing_max_ms: 60000, bots: 0, running, max_online: 5, metrics: metrics ? m : null } };
 }
 
 describe("History", () => {
