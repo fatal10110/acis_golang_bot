@@ -12,13 +12,14 @@ import (
 // that one heading back to the login point would show.
 const townIdleMoves = 6
 
-// TestLiveTownIdle logs a town bot (cmd/bots -persona town: TownPersona and
-// the travel map, no spots) in out in the field, on recoverGround about 3600
-// from Talking Island village's gatekeeper, the travel map's town point
-// there (#567). Its idle drift walks it to the village, and every move the
-// server reports for it afterwards ends near that town point: it drifts
-// around the town, never back to where it logged in. No adena, no restock,
-// no shots and an hour's idle spell: no errand or hop walks it anywhere.
+// TestLiveTownIdle logs a town bot (TownPersona and the travel map with no
+// spot registry, so it never rotates to farming, #618) in out in the field,
+// on recoverGround about 3600 from Talking Island village's gatekeeper, the
+// travel map's town point there (#567). Its idle drift walks it to the
+// village, and every move the server reports for it afterwards ends near
+// that town point: it drifts around the town, never back to where it
+// logged in. No adena, no restock, no shots and an hour's idle spell: no
+// errand or hop walks it anywhere.
 func TestLiveTownIdle(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)

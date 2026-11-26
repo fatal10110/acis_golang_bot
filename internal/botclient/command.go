@@ -297,8 +297,10 @@ func (b *Brain) goToSpot(name string, now time.Time) error {
 	b.leaveSpot()
 	b.spot.idx, b.spot.held, b.spot.at, b.spot.retryAt, b.spot.weight = i, true, b.spotDest(i, now), now, 1
 	// An order to a spot overrides the town preparation gate: a gate left
-	// armed would top supplies up to their targets at the spot.
+	// armed would top supplies up to their targets at the spot. It ends a
+	// town bot's town spell as well (farmNow).
 	b.prep = townPrep{}
+	b.farmNow(now)
 	return nil
 }
 
