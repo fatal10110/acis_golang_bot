@@ -664,20 +664,30 @@ func TestLivePvPHealer(t *testing.T) {
 	// sends no new UserInfo (the fifth live run).
 	heals := func(skill int32) bool { return skill == pvpHeal || skill == pvpBattleHeal }
 	healedFlagged := func() string {
-		flagged, cast, infos := false, 0, 0
-		hits := make(map[int32]int)
+		flagged, cast, infos, flagOn := false, 0, 0, 0
+		hits, struck, karma := make(map[int32]int), 0, make(map[int32]int32)
 		for i, s := range leader.watch.Seen(from) {
 			switch e := s.Event.(type) {
 			case botclient.UserInfo:
 				if e.ObjectID == leader.id {
 					flagged = e.PvPFlag != 0
 					infos++
+					if flagged {
+						flagOn++
+					}
+				}
+			case botclient.RelationChanged:
+				if e.ObjectID == gm.Self.ObjectID || e.ObjectID == c.Self.ObjectID {
+					karma[e.ObjectID] = e.Karma
 				}
 			case botclient.Attack:
 				if e.AttackerID == leader.id {
 					for _, h := range e.Hits {
 						hits[h.TargetID]++
 					}
+				}
+				if e.AttackerID == gm.Self.ObjectID {
+					struck++
 				}
 			case botclient.MagicSkillUse:
 				if from+i < healFrom || e.CasterID != cleric.id || e.TargetID != leader.id || !heals(e.SkillID) {
@@ -697,8 +707,8 @@ func TestLivePvPHealer(t *testing.T) {
 			}
 		}
 		st := leader.bot.Status()
-		return fmt.Sprintf("%s HP %d/%d, flagged %v in %d UserInfo (the Cleric reads flag %d), hits %v, %d heals of it unflagged",
-			leader.name, st.HP, st.MaxHP, flagged, infos, seenFlag, hits, cast)
+		return fmt.Sprintf("%s HP %d/%d, flagged %v in %d UserInfo (%d flagged; the Cleric reads flag %d), hits %v, the GM's swings at it %d, karma of the GM and client %v, %d heals of it unflagged",
+			leader.name, st.HP, st.MaxHP, flagged, infos, flagOn, seenFlag, hits, struck, karma, cast)
 	}
 	untilBy(t, ctx, cleric.name+" healing the flagged "+leader.name, time.Now().Add(3*time.Minute), func() string {
 		if err := c.Watch(ctx, 300*time.Millisecond, func(botclient.Event) {}); err != nil {
