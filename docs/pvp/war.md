@@ -30,6 +30,14 @@ Ships in X14 (#602). Decision D40 (proposed, needs owner approval). Paths per
   takes a wrong one. A war that ends while the mark is set is the danger (a kill would be a PK):
   on 1566 or 1567, on leaving or being dismissed from its clan, and on any change of its own clan
   id in `UserInfo`, every war mark is cleared until a new `RelationChanged` sets it again.
+- **The enemy leaves its clan.** When the enemy leaves, is expelled or joins another clan, the
+  server sends the players around it only its `CharInfo` with the new clan id: no
+  `RelationChanged` (`broadcastLooks` sends no relation update) and no 1566 or 1567 to the bot.
+  So the mark records the clan id the opponent record held when the mark was set (from its last
+  `CharInfo`, `internal/botclient/pvp_world.go:351`), and a `CharInfo` with a different clan id
+  (0 included) clears that player's mark until a new `RelationChanged` sets it again. Server:
+  `network/clan.go:254-262` (`sendLeftClan` → `broadcastCharacterInfo`), expel path `:330-355`;
+  `network/inventory.go:923-926`.
 - **[MayFight](targets.md#mayfight).** A new rule 6b after rule 6: `FightWar` on and `o` marked
   at war → yes. Rules 1-5 come first: no clan mate or ally can be at war with the bot's clan (the
   server refuses war on an ally and on its own clan), and a war-enemy bot is still fought only
@@ -60,10 +68,13 @@ a war enemy that hits them is flagged by its hit, rule 6). A switch on the panel
 - `TestPvPWarTarget` (X14): `FightWar` on, a clean player marked 0x8000 → `MayFight` yes, hunted
   under the preconditions with `AttackRequest` and ctrl-held casts (a debuff included); 0x10000
   only → no; `FightWar` off → no; a marked bot that has not hit → no; after 1567 or 1566 → no until
-  a new `RelationChanged` marks it; after the bot's clan id changes in `UserInfo` → no.
+  a new `RelationChanged` marks it; after the bot's clan id changes in `UserInfo` → no; a marked
+  enemy whose next `CharInfo` shows clan 0 or another clan id → no until a new `RelationChanged`
+  marks it; a `CharInfo` with the same clan id keeps the mark.
 - `TestPvPWarGuard` (X14): mid-fight on a marked clean enemy, 1567 arrives → Esc, no further
-  `Action`, `AttackRequest` or cast; the same enemy flagged → the fight goes on under the flag
-  guard.
+  `Action`, `AttackRequest` or cast; mid-fight, the enemy's `CharInfo` arrives with clan 0 (it
+  left or was expelled) → Esc, no further `Action`, `AttackRequest` or cast; the same enemy
+  flagged → the fight goes on under the flag guard.
 - `TestLivePvPClanWar` (X14, live, 4 characters: the bot, the scripted leaders of clans A and B,
   the GM): clans A (the bot's) and B at mutual war, B's leader out of town: the bot attacks it with
   force and kills it, the bot's `UserInfo` shows a PvP kill and no karma; B's leader restarts and

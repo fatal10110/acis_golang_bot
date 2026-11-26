@@ -68,7 +68,7 @@ PvP value blended into M10's gear score, a karma policy. No server change.
   small arenas). Opt-in PK mode and life with karma: [karma](karma.md).
 - **D40, clan wars (proposed).** A mutual-war enemy (`RelationChanged` 0x8000) is a target like a
   flagged player for `pvp` bots (`War` mode, D6), attacked with force; every war mark is dropped
-  when a war ends. Bots never declare, answer, stop or surrender a war. [war](war.md)
+  when a war ends, and a player's mark when its `CharInfo` shows another clan. Bots never declare, answer, stop or surrender a war. [war](war.md)
 - **D41, sieges (proposed).** Bots never register for a siege. Every bot walks out of a running
   battlefield it does not fight in; a `pvp` bot (`Siege` mode) of a clan its leader registered
   fights the other side's players there, bots only after their hit (D38). [siege](siege.md)
