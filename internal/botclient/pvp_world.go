@@ -259,6 +259,9 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 		if r := p.opponents[e.CasterID]; r != nil {
 			r.LastCast = CastSeen{}
 		}
+		if e.CasterID == self {
+			b.castCanceled(now)
+		}
 		if e.CasterID == self || b.fights(e.CasterID, now) {
 			return b.pvpReact(now)
 		}
@@ -458,9 +461,10 @@ func (m *TravelMap) offensive(skill, level int32) bool {
 
 // duelWindow keeps the duel opponent's vitals from its ExDuelUpdateUserInfo;
 // the first one of a started duel names the opponent and starts the fight
-// at the PvP reaction delay.
+// (a fresh layer record of it) at the PvP reaction delay.
 func (b *Brain) duelWindow(e ExDuelUpdateUserInfo, now time.Time) time.Time {
-	if r := b.pvp.opponents[e.ObjectID]; r != nil {
+	r := b.pvp.opponents[e.ObjectID]
+	if r != nil {
 		r.HP, r.MaxHP, r.CP, r.MaxCP, r.SeenAt = e.HP, e.MaxHP, e.CP, e.MaxCP, now
 	}
 	d := b.duel(now)
@@ -471,6 +475,11 @@ func (b *Brain) duelWindow(e ExDuelUpdateUserInfo, now time.Time) time.Time {
 		return time.Time{}
 	}
 	d.Phase, d.Name, d.Opponent = DuelFighting, e.Name, e.ObjectID
+	if r != nil {
+		// A new fight: the resists and landings of an earlier one with
+		// this player do not count (docs/pvp/layer.md "PvP order").
+		r.fight = layerFight{}
+	}
 	d.FightFrom = b.pvpReact(now)
 	return d.FightFrom
 }

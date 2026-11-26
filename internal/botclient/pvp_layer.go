@@ -90,15 +90,21 @@ func (l landing) holds(abnormal int32, now time.Time) bool {
 // skills' landings, the resists (139) per skill, and the landing of the
 // opponent's cast it last answered with an interrupt. It is owned by the
 // brain goroutine, kept in the opponent record while the player is in
-// sight.
+// sight and started anew when a duel with the player starts.
 type layerFight struct {
 	landed   map[int32]landing
 	resists  map[int32]int
 	answered time.Time
 }
 
-// ownLast is the bot's own last cast at a player: a 139 is about it.
-type ownLast struct{ target, skill int32 }
+// ownLast is the bot's own last cast at a player: a 139 is about it, and
+// a cancel of it puts back prev, the skill's landing before it (had: there
+// was one).
+type ownLast struct {
+	target, skill int32
+	prev          landing
+	had           bool
+}
 
 // skillAt is skill's datapack entry at level; ok is false with no travel
 // map or no such entry.
@@ -155,7 +161,9 @@ func (b *Brain) layerCast(e MagicSkillUse, now time.Time) {
 		b.pvp.last = ownLast{}
 		return
 	}
-	b.pvp.last = ownLast{target: e.TargetID, skill: e.SkillID}
+	f := &r.fight
+	prev, had := f.landed[e.SkillID]
+	b.pvp.last = ownLast{target: e.TargetID, skill: e.SkillID, prev: prev, had: had}
 	s, ok := b.skillAt(e.SkillID, e.Level)
 	if !ok {
 		return
@@ -164,12 +172,34 @@ func (b *Brain) layerCast(e MagicSkillUse, now time.Time) {
 	if lasts == 0 {
 		return
 	}
-	f := &r.fight
 	if f.landed == nil {
 		f.landed = make(map[int32]landing)
 	}
 	at := now.Add(e.HitTime)
 	f.landed[e.SkillID] = landing{at: at, until: at.Add(lasts), bits: bits, dot: dot, kites: kites}
+}
+
+// castCanceled takes back the bot's own last cast at a player when the
+// server cancels it before its hit (MagicSkillCanceled goes to the caster
+// too: server network/magic_skill.go broadcastCastAborted): its landing
+// never comes, the skill's earlier one is put back. A cancel at or after
+// the hit is about another cast: the landing stays.
+func (b *Brain) castCanceled(now time.Time) {
+	l := b.pvp.last
+	b.pvp.last = ownLast{}
+	r := b.pvp.opponents[l.target]
+	if r == nil {
+		return
+	}
+	g, ok := r.fight.landed[l.skill]
+	if !ok || !now.Before(g.at) {
+		return
+	}
+	if l.had {
+		r.fight.landed[l.skill] = l.prev
+		return
+	}
+	delete(r.fight.landed, l.skill)
 }
 
 // resisted keeps a 139 (the target resisted the bot's effect): the bot's
