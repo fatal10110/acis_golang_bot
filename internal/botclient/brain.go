@@ -852,6 +852,11 @@ func (b *Brain) wake(now time.Time) error {
 				return err
 			}
 		}
+		// The decision spent reactAt: an arena opponent's walk still
+		// heading for the swing margin wakes the guards again.
+		if t := b.edgeCross(now); !t.IsZero() {
+			b.wakeBy(t)
+		}
 	}
 	if !b.appearing && now.Sub(b.pace.lastSent) >= keepaliveAfter {
 		s := &b.world.Self

@@ -400,13 +400,43 @@ func (b *Brain) guardTarget(now time.Time) int32 {
 }
 
 // guardWake is when ev, received at now, wakes the brain for a guard stop:
-// at the next frame when it is an event the stop reads and one is due, zero
-// otherwise.
+// at the next frame when it is an event the stop reads and one is due, at
+// the frame a walk carries the arena opponent into the swing margin
+// (Brain.edgeCross) when none is due yet, zero otherwise.
 func (b *Brain) guardWake(ev Event, now time.Time) time.Time {
 	switch ev.(type) {
 	case RelationChanged, CharInfo, MoveToLocation, MagicSkillUse, MagicSkillCanceled, TargetUnselected, StopMove, ValidateLocation:
 		if b.guardTarget(now) != 0 {
 			return now.Add(time.Second / frameRate)
+		}
+		return b.edgeCross(now)
+	}
+	return time.Time{}
+}
+
+// edgeCross is the first frame after now at which the walk of the arena
+// opponent the bot's attack intention watches (edgeWatched) brings it
+// within the swing margin of the arena edge, or out of the arena
+// (edgeHeld), zero when it walks nowhere near. The margin is fixed while
+// the edge distance shrinks, so a walk that starts outside it crosses it
+// on the way: without this wake the stop would wait for the regular tick
+// while the server keeps swinging on the intention. The walk ends by its
+// motion's arrival, so the frames sampled are bounded by its length.
+func (b *Brain) edgeCross(now time.Time) time.Time {
+	id := b.pvp.guard.intent
+	o := b.world.object(id)
+	if !guarded(o) || o.Dead {
+		return time.Time{}
+	}
+	w, ok := b.edgeWatched(id, o, now)
+	if !ok || w == nil || !w.Moving(now) {
+		return time.Time{}
+	}
+	swing, frame := swingTime(b.world.Self.PAtkSpd), time.Second/frameRate
+	end := w.move.end().Add(frame)
+	for t := now.Add(frame); !t.After(end); t = t.Add(frame) {
+		if b.edgeHeld(0, w, swing, t) {
+			return t
 		}
 	}
 	return time.Time{}
