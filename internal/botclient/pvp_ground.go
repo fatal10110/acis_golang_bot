@@ -94,6 +94,60 @@ func (b *Brain) duelGroundOK(from, to Point, now time.Time) bool {
 	return !b.segmentNear(from, to)
 }
 
+// aggroDisc is an aggressive monster's duel clearance: where it stands and
+// its aggro range plus duelClear.
+type aggroDisc struct {
+	at Point
+	r  int64
+}
+
+// aggroDiscs are the clearances at now of the aggressive monsters in sight
+// (docs/pvp/finding.md "Clear of monsters"): every live, attackable NPC but
+// a summon whose template has an aggro range.
+func (b *Brain) aggroDiscs(now time.Time) []aggroDisc {
+	var ds []aggroDisc
+	for _, o := range b.world.Objects {
+		if o.Kind != KindNPC || o.Dead || o.Summon || !o.Attackable {
+			continue
+		}
+		if r := int64(b.cfg.Travel.aggroOf(o.NPCID)); r > 0 {
+			ds = append(ds, aggroDisc{at: o.Position(now), r: r + duelClear})
+		}
+	}
+	return ds
+}
+
+// clearMargin is how far p stands outside the nearest of ds (negative or
+// zero inside one), +Inf with none.
+func clearMargin(p Point, ds []aggroDisc) float64 {
+	m := math.Inf(1)
+	for _, d := range ds {
+		m = min(m, math.Sqrt(float64(dist2(p, d.at)))-float64(d.r))
+	}
+	return m
+}
+
+// duelClearOK reports whether the bot may step from from to to at now
+// (outside a duel always) by the monster clearance (docs/pvp/finding.md
+// "Clear of monsters"): the straight segment keeps out of every aggressive
+// monster's aggro range plus duelClear, or, from a spot already inside one,
+// the step ends further out.
+func (b *Brain) duelClearOK(from, to Point, now time.Time) bool {
+	if !b.inDuel(now) {
+		return true
+	}
+	ds := b.aggroDiscs(now)
+	if m := clearMargin(from, ds); m <= 0 {
+		return clearMargin(to, ds) > m
+	}
+	for _, d := range ds {
+		if segmentDist(float64(d.at.X), float64(d.at.Y), float64(from.X), float64(from.Y), float64(to.X), float64(to.Y)) <= float64(d.r) {
+			return false
+		}
+	}
+	return true
+}
+
 // inReach reports whether a hit of reach rng from the bot reaches id at now:
 // the 3D distance within rng and both collision radii.
 func (b *Brain) inReach(id int32, rng float64, now time.Time) bool {

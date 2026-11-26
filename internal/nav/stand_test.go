@@ -58,6 +58,14 @@ func TestStandPoint(t *testing.T) {
 			func(s location.Location) bool { return s.X > baseX },
 		},
 		{
+			"line with Accept: points north of the target skipped like blocked ones",
+			loc(geotest.UInside),
+			Target{At: loc(geotest.UBehind), Range: 300, Mode: StandLine, Accept: func(s location.Location) bool {
+				return s.Y >= loc(geotest.UBehind).Y+64
+			}},
+			func(s location.Location) bool { return s.X > baseX && s.Y >= loc(geotest.UBehind).Y+64 },
+		},
+		{
 			"pick-up on the plateau: CanMove to the raw Z needs the plateau",
 			loc(geotest.LedgeLow),
 			Target{At: at(geotest.LedgeHigh, -60, 0, 0), Range: 120, Mode: StandPickUp},
@@ -87,5 +95,15 @@ func TestStandPoint(t *testing.T) {
 				t.Fatalf("stand point %v is not a cell centre on its floor", s)
 			}
 		})
+	}
+}
+
+// TestStandPointAcceptNone checks that with every cell refused by Accept
+// there is no stand point.
+func TestStandPointAcceptNone(t *testing.T) {
+	p := testPlanner(t)
+	tgt := Target{At: loc(geotest.UBehind), Range: 300, Mode: StandLine, Accept: func(location.Location) bool { return false }}
+	if s, ok := p.StandPoint(loc(geotest.UInside), tgt); ok {
+		t.Fatalf("stand point %v, want none", s)
 	}
 }

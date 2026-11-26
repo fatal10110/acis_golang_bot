@@ -157,16 +157,8 @@ func (b *Brain) clearOfMonsters(now time.Time) bool {
 		}
 	}
 	from := b.world.Self.Position(now)
-	for _, o := range b.world.Objects {
-		if o.Kind != KindNPC || o.Dead || o.Summon || !o.Attackable {
-			continue
-		}
-		r := int64(b.cfg.Travel.aggroOf(o.NPCID))
-		if r <= 0 {
-			continue
-		}
-		r += duelClear
-		if dist2(from, o.Position(now)) <= r*r {
+	for _, d := range b.aggroDiscs(now) {
+		if dist2(from, d.at) <= d.r*d.r {
 			return false
 		}
 	}

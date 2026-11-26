@@ -588,8 +588,9 @@ func (b *Brain) kiteWalk(id int32, now time.Time) (Action, bool) {
 // first, then alternately to either side, the first that stays arenaEdge
 // inside the bot's arena when it stands in one (the arena-edge guard holds
 // damage nearer, docs/pvp/guards.md "Arena edge"), whose segment from the
-// bot passes the duel ground in a duel (duelGroundOK) and the walker's
-// straight-line check, and which sees to. ok is false when none does.
+// bot passes the duel ground and the monster clearance in a duel
+// (duelGroundOK, duelClearOK) and the walker's straight-line check, and
+// which sees to. ok is false when none does.
 func (b *Brain) kitePoint(from, to Point, rng float64, now time.Time) (Point, bool) {
 	away := 0.0
 	if from.X != to.X || from.Y != to.Y {
@@ -608,7 +609,7 @@ func (b *Brain) kitePoint(from, to Point, rng float64, now time.Time) (Point, bo
 				continue
 			}
 		}
-		if b.duelGroundOK(from, p, now) && w.lineOpen(from, p) && w.sightOpen(p, to, defaultTargetHeight) {
+		if b.duelGroundOK(from, p, now) && b.duelClearOK(from, p, now) && w.lineOpen(from, p) && w.sightOpen(p, to, defaultTargetHeight) {
 			return p, true
 		}
 	}

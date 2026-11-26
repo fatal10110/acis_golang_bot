@@ -468,7 +468,8 @@ func (b *Brain) edgeCross(now time.Time) time.Time {
 
 // moveOK reports whether the bot may step from from to to at now: inside an
 // arena the step ends at least arenaEdge inside (or, from closer, further
-// in), and in a duel it keeps off forbidden ground (duelGroundOK).
+// in), and in a duel it keeps off forbidden ground (duelGroundOK) and clear
+// of aggressive monsters (duelClearOK).
 func (b *Brain) moveOK(from, to Point, now time.Time) bool {
 	if own := b.arenaAt(from); own.Arena != 0 {
 		at := b.arenaAt(to)
@@ -476,7 +477,7 @@ func (b *Brain) moveOK(from, to Point, now time.Time) bool {
 			return false
 		}
 	}
-	return b.duelGroundOK(from, to, now)
+	return b.duelGroundOK(from, to, now) && b.duelClearOK(from, to, now)
 }
 
 // dist3 is the 3D distance between a and b.

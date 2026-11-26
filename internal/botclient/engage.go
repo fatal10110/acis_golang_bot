@@ -68,23 +68,39 @@ func (r reach) stand() (nav.StandMode, float64) {
 
 // engageState is the stand point the fight walks to before it attacks or
 // casts on target id, standFor where id stood when it was chosen, mode and
-// rng the search that chose it. It is owned by the brain goroutine.
+// rng the search that chose it. In a duel with no stand point passing
+// moveOK, stand is zero and held is when that search ran. It is owned by
+// the brain goroutine.
 type engageState struct {
 	id              int32
 	mode            nav.StandMode
 	rng             float64
 	stand, standFor Point
+	held            time.Time
 }
+
+// duelStandRetry is how long a duel's hold for want of a stand point lasts
+// before the search runs again (the monsters around move; the opponent
+// moving walkSameDest searches at once).
+const duelStandRetry = 2 * time.Second
 
 // engageWalk is the walker's packet while the bot must walk before it may
 // attack or cast on id from r: the straight line to id is closed, and id is
 // out of r or out of sight. The moving target is checked again at each
 // decision: a stand point is chosen again once id moved walkSameDest from
 // where it stood. A target with no stand point the bot can reach is
-// blacklisted for BlacklistFor, as one out of attempts. It reports false
-// when the bot may attack or cast now, and always without geodata (the bot
-// acts as it would) or while Ultimate Defense holds the bot (immobile: no
-// walk starts).
+// blacklisted for BlacklistFor, as one out of attempts. In a duel the
+// stand point and the straight segment to it pass moveOK (duel ground and
+// monster clearance, docs/pvp/finding.md): a point failing it is skipped
+// like a blocked one, one already chosen that fails it is chosen again, and
+// with none the bot holds where it stands (no walk, and no attack the
+// server would walk for) until id moves or duelStandRetry passed; a hold
+// that starts while the bot still walks a segment toward a point it dropped
+// sends one move to where it stands first, since the server walks a sent
+// segment to its end. It
+// reports false when the bot may attack or cast now, and always without
+// geodata (the bot acts as it would) or while Ultimate Defense holds the bot
+// (immobile: no walk starts).
 func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 	w := b.walker()
 	o := b.world.object(id)
@@ -100,13 +116,30 @@ func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 	}
 	e := &b.engage
 	mode, rng := r.stand()
-	if e.id != id || e.mode != mode || e.rng != rng || e.stand == (Point{}) || horizontal2(to, e.standFor) > walkSameDest*walkSameDest {
-		st, ok := w.standPoint(from, to, rng, mode, defaultTargetHeight)
-		if !ok {
+	duel := b.inDuel(now)
+	if e.id != id || e.mode != mode || e.rng != rng || horizontal2(to, e.standFor) > walkSameDest*walkSameDest ||
+		e.stand == (Point{}) && (!duel || e.held.IsZero() || now.Sub(e.held) >= duelStandRetry) ||
+		duel && e.stand != (Point{}) && !b.moveOK(from, e.stand, now) {
+		var accept func(Point) bool
+		if duel {
+			accept = func(p Point) bool { return b.moveOK(from, p, now) }
+		}
+		st, ok := w.standPointWhere(from, to, rng, mode, defaultTargetHeight, accept)
+		switch {
+		case !ok && duel:
+			*e = engageState{id: id, mode: mode, rng: rng, standFor: to, held: now}
+			if b.world.Self.Moving(now) {
+				return b.orStay(Action{}, now), true
+			}
+		case !ok:
 			b.unreachableTarget(id, now)
 			return Action{}, true
+		default:
+			*e = engageState{id: id, mode: mode, rng: rng, stand: st, standFor: to}
 		}
-		*e = engageState{id: id, mode: mode, rng: rng, stand: st, standFor: to}
+	}
+	if e.stand == (Point{}) {
+		return Action{}, true
 	}
 	purpose := walkMelee
 	if mode == nav.StandSight {
