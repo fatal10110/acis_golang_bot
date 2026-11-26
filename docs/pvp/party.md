@@ -36,8 +36,15 @@ Fighting the enemy set counts as fighting back (no hunting mode needed).
   `pvp` bot switches to the healer; the KN casts Aggression on the enemy hitting the CL or leader; a
   test sleep step skips the healer being hit and sleeps a second enemy no member hits; the CL does
   not heal the flagged damage bot with `SupportFlagged` off, does with it on, and buffs Mental
-  Shield against a caster. A `support` CL alone with a player leader → the same. The `farmer` in a
-  bot-led party cases land with M11 (X13).
+  Shield against a caster. A `support` CL alone with a player leader → the same.
+- `TestPvPTargetHealerFarmer` (#423): the same cases in an M11 bot party led by a `farmer` (fight
+  back only, `SupportFlagged` off) with a `support` KN and a `support` CL. The leading farmer assists
+  nobody, so its enemy set is the party's hitters and their healers (no leader's target; a member's
+  own hit adds nobody); a hit on the CL wakes it onto the hitter, and a Battle Heal on that enemy
+  switches it to the healer. The KN casts Aggression on the enemy hitting the CL or the farmer
+  leading. The CL (`support`, `SupportFlagged` off by default) leaves the flagged farmer unhealed and
+  unshielded and stands behind it; with `SupportFlagged` on it heals the farmer and buffs it Mental
+  Shield against a caster.
 - e2e `TestLivePvPHealer` (X13; needs M11, a bot leading the two bots within the 4-character cap):
   in the open world an M11 bot party of a `farmer` and a `support` Cleric (`SupportFlagged` on) is
   attacked by the GM and a client heals the GM (flagging the client); the farmer fights back and
