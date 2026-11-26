@@ -608,6 +608,7 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 		if r := b.pvp.opponents[id]; r != nil {
 			st.vs = r.Archetype
 		}
+		st.peel = b.peels(id, now)
 	}
 	if i := slices.IndexFunc(steps, func(x Step) bool { return x.ChargeToMax }); i >= 0 {
 		sk := steps[i].Skill

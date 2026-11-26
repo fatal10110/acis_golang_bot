@@ -545,7 +545,12 @@ type rule struct {
 // flagged players of its tier and duel challenges, after the rest and
 // buff rules so it starts them rested and buffed. "arena" is the arena
 // trip, an errand right after "supply"; "arena leave" its leave, ahead
-// of "attacked" so no attack starts the fight it stops again.
+// of "attacked" so no attack starts the fight it stops again. "party
+// buff" and "party fight" are party PvP (pvp_party.go, docs/pvp/party.md):
+// the PvP self buffs against the party's enemy set, after "duel" so a duel
+// holds them, and the fight against the party's enemy (the enemy healer
+// first), right after "sweep": "outnumbered" leaves its target to it once
+// past its flee, and it goes ahead of "attacked" and "assist".
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -556,8 +561,10 @@ var playRules = []rule{
 	{"heal", (*Brain).ruleHeal},
 	{"raise", (*Brain).ruleRaise},
 	{"duel", (*Brain).ruleDuel},
+	{"party buff", (*Brain).rulePartyBuff},
 	{"outnumbered", (*Brain).ruleOutnumbered},
 	{"sweep", (*Brain).ruleSweep},
+	{"party fight", (*Brain).rulePartyFight},
 	{"chat", (*Brain).ruleChat},
 	{"announce", (*Brain).ruleAnnounce},
 	{"party", (*Brain).ruleParty},

@@ -54,7 +54,7 @@ const (
 // it is worth one by at the bot or its party from worthyHit on.
 var (
 	healTypes     = map[string]bool{"HEAL": true, "HOT": true, "HEAL_PERCENT": true}
-	worthyHeals   = map[string]bool{"HEAL": true, "HOT": true, "HEAL_PERCENT": true, "RESURRECT": true}
+	worthyHeals   = map[string]bool{"HEAL": true, "HOT": true, "HEAL_PERCENT": true, "BALANCE_LIFE": true, "RESURRECT": true}
 	worthyHostile = map[string]bool{"SLEEP": true, "ROOT": true, "FEAR": true, "MUTE": true, "MDAM": true}
 )
 
@@ -263,14 +263,25 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 	if a, ok := b.interruptCast(id, rot, st, underReserve, now); ok {
 		return a, true
 	}
+	if st.peel {
+		if a, ok := first(func(s Step) bool { return s.Peel }); ok {
+			return a, true
+		}
+	}
 	bot, opp, fighters := b.pvpFighters(id)
 	control := func(s Step) bool {
 		sk, ok := b.skillData(s.Skill)
 		return ok && s.Target == TargetEnemy && isControl(sk)
 	}
+	// In a party fight a sleep never goes on the bot's own target, which
+	// it hits next: it goes on another enemy nobody hits (partySleep).
+	party := b.partyFight(now)
 	if a, ok := first(func(s Step) bool {
-		return s.rank() == rankAttack && control(s) && b.controlDue(id, s.Skill, bot, opp, fighters, now)
+		return s.rank() == rankAttack && control(s) && !(party && b.sleeps(s.Skill)) && b.controlDue(id, s.Skill, bot, opp, fighters, now)
 	}); ok {
+		return a, true
+	}
+	if a, ok := b.partySleep(id, rot, underReserve, now); ok {
 		return a, true
 	}
 	attack := func(s Step) bool { return s.rank() == rankAttack && !control(s) && !b.dotHolds(id, s.Skill, now) }

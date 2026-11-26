@@ -81,6 +81,10 @@ type Opponent struct {
 	// RootUntil is when the root the bot landed on it stops holding it
 	// (docs/pvp/guards.md "Arena edge"), zero for none.
 	RootUntil time.Time
+	// HealedAt is when it was last seen healing one of the party's
+	// enemies (pvp_party.go healSeen), zero for never: the enemy healer
+	// for enemyHealerFor.
+	HealedAt time.Time
 	// fight is the PvP layer's record of the bot's casts on it
 	// (pvp_layer.go), kept while it is in sight.
 	fight layerFight
@@ -180,6 +184,11 @@ type pvpWorld struct {
 	// cured are the ends of the bot's own poison and bleed effects a cure
 	// went out for, by skill id (pvp_breakoff.go).
 	cured map[int32]time.Time
+	// hits are the party's hits by attacker, a player or summon outside
+	// the party, and struck when the bot or a member last hit a creature,
+	// by its object id; both within attackerWindow (pvp_party.go).
+	hits   map[int32]partyHit
+	struck map[int32]time.Time
 }
 
 // duelAsk is an open duel challenge: when it came, whether it is a party
@@ -246,12 +255,18 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 		delete(p.opponents, e.ObjectID)
 		delete(p.owners, e.ObjectID)
 		delete(p.radii, e.ObjectID)
+		delete(p.hits, e.ObjectID)
+		delete(p.struck, e.ObjectID)
 	case TeleportToLocation:
 		if e.ObjectID == self && !e.Fast {
 			clear(p.opponents)
 			clear(p.owners)
 			clear(p.radii)
+			clear(p.hits)
+			clear(p.struck)
 		}
+	case Attack:
+		return b.partyAttack(e, now)
 	case MoveToLocation:
 		if e.ObjectID != self && b.fights(e.ObjectID, now) {
 			return b.pvpReact(now)
@@ -351,11 +366,16 @@ func classTier(id int32) int {
 
 // castSeen records e as its caster's last cast, counts an offensive cast
 // of a player or summon at the bot as a hit (the server lets it reach the
-// bot only from one that may attack it, as every Attack), and reports when
-// the PvP reaction to it is due: a cast by or at a player the bot fights,
-// or by a player at a party member.
+// bot only from one that may attack it, as every Attack), keeps the
+// party's hits and the enemy healer (pvp_party.go), and reports when the
+// PvP reaction to it is due: a cast by or at a player the bot fights, by a
+// player at a party member, or one marking the enemy healer.
 func (b *Brain) castSeen(e MagicSkillUse, now time.Time) time.Time {
 	self := b.world.Self.ObjectID
+	offensive := b.cfg.Travel.offensive(e.SkillID, e.Level)
+	if offensive {
+		b.partyStrike(e.CasterID, e.TargetID, now)
+	}
 	if e.CasterID == self {
 		b.ownCast(e, now)
 		return time.Time{}
@@ -368,11 +388,12 @@ func (b *Brain) castSeen(e MagicSkillUse, now time.Time) time.Time {
 		return time.Time{}
 	}
 	player := o.Kind == KindPlayer
-	if e.TargetID == self && (player || o.Summon) && b.cfg.Travel.offensive(e.SkillID, e.Level) {
+	if e.TargetID == self && (player || o.Summon) && offensive {
 		b.world.hitBy(e.CasterID, 0, now)
 	}
+	healer := player && b.healSeen(e, now)
 	_, member := b.world.Party.Members[e.TargetID]
-	if b.fights(e.CasterID, now) || b.fights(e.TargetID, now) || player && member {
+	if b.fights(e.CasterID, now) || b.fights(e.TargetID, now) || player && member || healer {
 		return b.pvpReact(now)
 	}
 	return time.Time{}
