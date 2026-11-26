@@ -173,7 +173,8 @@ type Brain struct {
 	pvp pvpWorld
 	// karma is the death and karma memory (pvp_karma.go).
 	karma karmaState
-	// anchor is where idle drift stays around: the arrival point.
+	// anchor is where idle drift stays around: the arrival point
+	// (Brain.idleCenter; a town bot's is its town).
 	anchor Point
 	// engaged is the target the bot already attacked; it is not clicked
 	// again until a refusal (ActionFailed), a move or a sit/stand toggle

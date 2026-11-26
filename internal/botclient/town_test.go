@@ -171,3 +171,82 @@ func TestPlanHopSpell(t *testing.T) {
 		t.Fatalf("next hop at %v, want a spell after %v", b.trip.hopAt.Sub(t0), first.Sub(t0))
 	}
 }
+
+// TestIdleCenterTown checks where idle drift goes (#567): a town bot with
+// no farming spots drifts around the travel map's town nearest it, from
+// the field as from inside the town; a town bot with farming spots, a
+// bot of another persona and a town bot without a travel map drift
+// around their anchor.
+func TestIdleCenterTown(t *testing.T) {
+	town := Point{X: 3000, Y: 2000}
+	field := Point{X: 7000, Y: 2000}
+	travel := &TravelMap{gatekeepers: []gatekeeper{
+		{npcID: 30006, at: town, dests: []destination{{index: 0, at: Point{X: 95000}, price: 1000}}},
+		{npcID: 30059, at: Point{X: 95500}, dests: []destination{{index: 0, at: town, price: 1000}}},
+	}}
+	tests := []struct {
+		name    string
+		persona Persona
+		from    Point
+		noMap   bool
+		spots   bool
+		want    Point
+	}{
+		{name: "town bot in the field drifts to its town", persona: TownPersona(), from: field, want: town},
+		{name: "town bot in town drifts around it", persona: TownPersona(), from: Point{X: 3300, Y: 2100}, want: town},
+		{name: "town bot with farming spots keeps its anchor", persona: TownPersona(), from: field, spots: true, want: field},
+		{name: "support bot keeps its anchor", persona: DefaultPersona(), from: field, want: field},
+		{name: "town bot without a travel map keeps its anchor", persona: TownPersona(), from: field, noMap: true, want: field},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := tc.persona
+			p.IdleChance = 1
+			b, _ := newTestBrain(t, p)
+			walkOn(t, b)
+			if !tc.noMap {
+				b.cfg.Travel = travel
+			}
+			if tc.spots {
+				b.cfg.Spots = NewSpotRegistry(nil, 1)
+			}
+			b.world.Self.move = stopAt(tc.from)
+			b.anchor = tc.from
+			for _, p := range []Point{tc.from, tc.want} {
+				if _, ok := b.walk.plan.Locate(toLoc(p)); !ok {
+					t.Fatalf("%+v off the test ground", p)
+				}
+			}
+			var drifts int
+			for i := range 60 {
+				b.walk = newWalker(b.walk.nav)
+				a, ok := b.ruleIdle(at(time.Duration(i) * time.Second))
+				if !ok || b.walk.purpose != walkIdle {
+					continue
+				}
+				drifts++
+				if d2 := horizontal2(b.walk.dest, tc.want); d2 > int64(p.IdleRadius+1)*int64(p.IdleRadius+1) {
+					t.Fatalf("drift %d to %+v, want within %d of %+v", i, b.walk.dest, p.IdleRadius, tc.want)
+				}
+				if a.kind == actMove && !a.walk {
+					t.Fatalf("drift %d: a move outside the walker", i)
+				}
+			}
+			if drifts < 10 {
+				t.Errorf("%d drifts in 60 draws, want about half", drifts)
+			}
+		})
+	}
+}
+
+// TestIdleCenterAfterHop checks a town bot that hopped drifts around the
+// town it landed in, not the one it left (#567).
+func TestIdleCenterAfterHop(t *testing.T) {
+	b := newTownBrain(t, 5000)
+	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 95000}}}, at(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := b.idleCenter(Point{X: 95000}), (Point{X: 95500}); got != want {
+		t.Fatalf("idle center after the hop = %+v, want the landing town %+v", got, want)
+	}
+}

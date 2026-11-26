@@ -268,6 +268,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveFarmStarters` | GM, datapack | #133 a level 1 elf, dark elf and orc farmer each claim a spot of their own newbie zone and kill a monster there |
 | `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |
 | `TestLiveTownErrands` | GM, datapack | #33 the town persona's errand cycle, a merchant visit then a gatekeeper hop; #32 the hop's teleport, the bot seen by the GM at the destination |
+| `TestLiveTownIdle` | GM, datapack | #567 a town bot logged out in the field walks to its nearest town, Talking Island village, on its idle drift and drifts around the town point there, never back to its login point |
 | `TestLiveNewbieGuideBuffs` | GM, datapack | #32 a level 8 bot asks the Newbie Guide and gets its buffs |
 | `TestLiveTradeFromBot` | GM | #34, #82 a second client buys a bot's stems by trade; short of the price the bot cancels, never confirms |
 | `TestLiveStoreSale` | GM, datapack | #35 a second client buys out a bot's private store, which closes sold out |
