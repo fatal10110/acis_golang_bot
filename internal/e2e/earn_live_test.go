@@ -104,13 +104,16 @@ func TestLiveEarn(t *testing.T) {
 		if picked.object == 0 {
 			return fmt.Sprintf("%d adena drops in sight, none picked up by %s", picked.drops, f.name)
 		}
+		// The server sends GetItem before the picker's inventory update
+		// (pickup.go takeGroundFromWorld), so a poll between the two sees
+		// the pickup but no adena yet.
+		if picked.adena <= 0 {
+			return fmt.Sprintf("%s picked up adena %d, its inventory reports no adena yet", f.name, picked.object)
+		}
 		return ""
 	})
 	st = f.bot.Status()
 	t.Logf("%s picked up adena %d, carries %d adena; at the end: spot %s earning %v, death penalty %d", f.name, picked.object, picked.adena, st.Spot, st.Earning, st.DeathPenalty)
-	if picked.adena <= 0 {
-		t.Errorf("%s picked up adena %d, but its inventory never reported adena", f.name, picked.object)
-	}
 }
 
 // earnPickup is what adenaPickup read: the adena drops in sight, the
