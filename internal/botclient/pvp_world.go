@@ -156,15 +156,15 @@ type Duel struct {
 
 // Duel timing (docs/pvp/server-duels.md): a challenge stays open
 // duelAskOpen; a duel counts down 5 s (a party duel 35 s, duel/state.go)
-// and lasts at most 2 minutes, so one still open past duelLimit
-// (partyDuelLimit) from its countdown lost its ExDuelEnd; the end messages
+// and ends 2 minutes after it begins, its countdown included (duel/duel.go
+// Begin, endsAt), so one still open past duelLimit from its countdown lost
+// its ExDuelEnd; the end messages
 // come with ExDuelEnd in one step (network/duel.go endDuel), so a duel over
 // for duelOverLimit lost it too.
 const (
-	duelAskOpen    = 15 * time.Second
-	duelLimit      = 5*time.Second + 2*time.Minute + 30*time.Second
-	partyDuelLimit = 35*time.Second + 2*time.Minute + 30*time.Second
-	duelOverLimit  = 5 * time.Second
+	duelAskOpen   = 15 * time.Second
+	duelLimit     = 5*time.Second + 2*time.Minute + 30*time.Second
+	duelOverLimit = 5 * time.Second
 )
 
 // pvpWorld is the brain's PvP world model.
@@ -476,13 +476,17 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 		b.duelDecided(d.Result)
 		d.over(now)
 	case msgOtherPartyIsFrozen:
-		// In a party duel the frozen one is the defeated foe the bot went
-		// for, its side still fighting.
+		// In a party duel the frozen one is the defeated player the bot
+		// last clicked, its side still fighting: the server answers a
+		// click on any frozen duellist so, a mate of its own side too
+		// (network/duel.go refuseFrozenDuellist).
 		if d.Party && d.Phase >= DuelCountdown {
-			if _, ok := d.Foes[d.Opponent]; ok {
-				d.Foes[d.Opponent] = true
+			if id := b.pvp.guard.clicked; id != 0 && id == d.Opponent {
+				if _, ok := d.Foes[id]; ok {
+					d.Foes[id] = true
+				}
+				d.Opponent = 0
 			}
-			d.Opponent = 0
 			return b.pvpReact(now)
 		}
 		d.over(now)
@@ -562,7 +566,9 @@ func (b *Brain) duelWindow(e ExDuelUpdateUserInfo, now time.Time) time.Time {
 		if d.Foes == nil {
 			d.Foes = make(map[int32]bool)
 		}
-		d.Foes[e.ObjectID] = d.Foes[e.ObjectID] || d.Phase == DuelFighting && e.MaxHP > 0 && e.HP <= 1
+		// The latest window decides: its HP is truncated, so a live foe
+		// at 1.x HP shows 1 until its next one.
+		d.Foes[e.ObjectID] = d.Phase == DuelFighting && e.MaxHP > 0 && e.HP <= 1
 	}
 	// The server also sends the window in the countdown, on every CP or HP
 	// gauge change (network/duel.go sendDuelVitals): only a started duel
@@ -601,12 +607,8 @@ func (b *Brain) dealt(damage int32) {
 func (b *Brain) duel(now time.Time) *Duel {
 	d := &b.pvp.duel
 	age := now.Sub(d.Since)
-	limit := duelLimit
-	if d.Party {
-		limit = partyDuelLimit
-	}
 	if d.Phase == DuelAsked && age > duelAskOpen || d.Phase == DuelOver && age > duelOverLimit ||
-		d.Phase >= DuelCountdown && age > limit {
+		d.Phase >= DuelCountdown && age > duelLimit {
 		*d = Duel{Result: d.Result}
 	}
 	return d
@@ -826,11 +828,19 @@ func (b *Brain) summonOwner(id int32, now time.Time) int32 {
 // supportAllowed reports whether the bot may heal or buff player o (object
 // id) at now (docs/pvp/guards.md "Duel support"): in its duel never the
 // opponent and never a flagged or karma player, SupportFlagged counting as
-// off (a flag cancels the duel); in a PvP zone everyone, as nothing flags it
+// off (a flag cancels the duel), and in a fighting party duel no member of
+// its own side defeated at 1 HP by the party window (the server refuses a
+// click on a frozen duellist, network/duel.go refuseFrozenDuellist); in a
+// PvP zone everyone, as nothing flags it
 // there (character_pvpflag.go skillTargetFlagsPvP); else the policy's
 // MaySupport.
 func (b *Brain) supportAllowed(id int32, o *Object, now time.Time) bool {
 	if b.inDuel(now) {
+		if d := b.duel(now); d.Party && d.Phase == DuelFighting {
+			if m, ok := b.world.Party.Members[id]; ok && m.MaxHP > 0 && m.HP <= 1 {
+				return false
+			}
+		}
 		return !b.duelFoeOf(id, now) && clean(o)
 	}
 	if b.inArena(now) {

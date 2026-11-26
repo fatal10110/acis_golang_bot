@@ -265,9 +265,12 @@ func (b *Brain) ruleChallenge(now time.Time) (Action, bool) {
 	free := b.duel(now).Phase == DuelIdle && (f.lastAsk.IsZero() || now.Sub(f.lastAsk) >= challengeEvery) && !b.pvp.arena.active()
 	if w.name != "" && !now.Before(w.due) && now.Sub(w.due) <= whisperLapse {
 		if free && !b.cfg.markers.Marks(w.name) && !f.recent(w.name, now) && !b.avoided(w.name, now) && b.mayDuel(now) {
-			party := b.leading()
-			if id := b.playerNamed(w.name); id != 0 && b.foeMayDuel(id, now) && (!party || b.partyMayDuel(now)) {
-				return b.challenge(id, party), true
+			// A party mate gets a one-on-one duel: the server refuses a
+			// party duel within one party (network/duel.go partyDuelSides).
+			if id := b.playerNamed(w.name); id != 0 && b.foeMayDuel(id, now) {
+				if party := b.leading() && !b.partyMate(id); !party || b.partyMayDuel(now) {
+					return b.challenge(id, party), true
+				}
 			}
 		}
 	}

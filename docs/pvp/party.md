@@ -47,20 +47,23 @@ every member of both sides (`duelRefusal`) and refuses the whole duel when one c
   a one-on-one whisper ([sources](finding.md#sources)); its refusals (1936 declined, 1937 not in a
   party, 1942 the other party cannot) hold that player as a decline does. It makes no party duel
   challenge of its own: it roams in no bot party. A member that does not lead challenges a whisper
-  one-on-one, as before.
+  one-on-one, as before, and so does the leader a party mate's (the server refuses a party duel
+  within one party with 1940, `network/duel.go:100-104`).
 - **Members** never see the challenge: 1944 (transported to the duel site, sent to both sides as
   the duel begins) starts their countdown, which holds them as a one-on-one countdown does. Both
   parties are teleported to the duel arena at the 33rd second of the 35 s countdown and back where
   they stood at the end (`network/duel.go:348-361`); the bot takes both as any teleport and walks
-  back to its spot afterwards. A party duel lasts at most 35 s plus 2 minutes (`duel/state.go:58-75`).
+  back to its spot afterwards. A party duel ends 2 minutes after it begins, its 35 s countdown
+  included (`duel/duel.go:82-85`, `duel/state.go:58-64`).
 - **The fight.** Every `ExDuelUpdateUserInfo` names a foe (one per opposing member). Each member,
   leader or not, fights the foe it fights while that one stays live, else the one its leader hit
   last (focus), else the nearest; never a bot-marked foe (D38). A duel never kills: a foe left at
-  1 HP is defeated and frozen (a 692 answers a hit on it, `network/duel.go:626-660`), so the bot
-  moves to the next; defeated itself (1 HP) it holds, and it never flees in a duel (a run would
+  1 HP is defeated and frozen (a 692 answers a click on it, `network/duel.go:626-660`), so the bot
+  moves to the next; the latest window decides, as its HP is truncated, and a 692 marks the foe
+  only when the bot's last click was on it; defeated itself (1 HP) it holds, and it never flees in a duel (a run would
   stray from the other side and cancel it, `duel/duel.go:203-212`). Every foe is outside its
   support ([duel support](guards.md#duel-support)) and none is an area bystander; its own members
-  are supported as before. The result is the side's: 1951 names the winning side's leader.
+  are supported as before, but for one defeated at 1 HP by the party window, frozen as a foe is. The result is the side's: 1951 names the winning side's leader.
   [Party PvP](#party-pvp) waits while the duel is on.
 
 ## Tests

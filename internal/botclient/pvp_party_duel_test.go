@@ -199,6 +199,14 @@ func TestPvPPartyDuelChallenge(t *testing.T) {
 			t.Fatalf("challenged % x with a member out of sight", a.payload)
 		}
 	})
+	t.Run("a party mate's whisper gets a one-on-one challenge", func(t *testing.T) {
+		b := duelLeader(t, nil)
+		b.handleOne(t, whisper(ptyKN, "kn", "duel"), at(time.Second))
+		now := b.pvp.find.whisper.due
+		if _, a := b.decide(now); !bytes.Equal(a.payload, encodeRequestDuelStart("kn", false)) {
+			t.Fatalf("payload % x, want the one-on-one challenge of a party mate", a.payload)
+		}
+	})
 	t.Run("a member challenges one-on-one", func(t *testing.T) {
 		b := duelMember(t)
 		b.persona.PvP.Duels = true
@@ -230,12 +238,12 @@ func TestPvPPartyDuelFight(t *testing.T) {
 			t.Fatalf("duel %+v after a countdown window, want the countdown with one foe", *d)
 		}
 		wantHold(t, b, at(20*time.Second))
-		// 35 s of countdown and 2 minutes of fight: still on where a
-		// one-on-one duel would have lapsed.
-		if !b.inDuel(at(time.Second + duelLimit + 10*time.Second)) {
-			t.Error("the party duel lapsed at the one-on-one duel's limit")
+		// The 2 minutes count from the countdown, its 35 s included
+		// (duel/duel.go Begin): the one-on-one limit holds.
+		if !b.inDuel(at(time.Second + duelLimit)) {
+			t.Error("the party duel lapsed before its limit")
 		}
-		if b.inDuel(at(time.Second + partyDuelLimit + time.Second)) {
+		if b.inDuel(at(time.Second + duelLimit + time.Second)) {
 			t.Error("the party duel outlived its limit")
 		}
 	})
@@ -249,11 +257,52 @@ func TestPvPPartyDuelFight(t *testing.T) {
 		}
 		b.handleOne(t, window(pcID, foeName, 1), from.Add(time.Second))
 		wantDecision(t, b, from.Add(time.Second), "duel", actSelect, ptyFoe2, 0)
+		// The click on the last foe answered by a 692: frozen too.
+		if _, err := b.send(Action{kind: actSelect, payload: encodeAction(ptyFoe2, Point{}), object: ptyFoe2}, from.Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
 		b.handleOne(t, SystemMessage{ID: msgOtherPartyIsFrozen}, from.Add(2*time.Second))
 		if d := b.duel(from.Add(2 * time.Second)); d.Phase != DuelFighting {
 			t.Fatalf("duel %+v after 692, want its side still fighting", *d)
 		}
 		wantHold(t, b, from.Add(2*time.Second))
+	})
+	t.Run("a foe's window decides: 1 HP, then 50, is live", func(t *testing.T) {
+		b := duelMember(t)
+		from := partyDuelUntilFight(t, b, at(time.Second))
+		b.handleOne(t, window(pcID, foeName, 1), from)
+		b.handleOne(t, window(pcID, foeName, 50), from.Add(time.Second))
+		if d := b.duel(from.Add(time.Second)); d.Foes[pcID] {
+			t.Fatalf("foes %v, want %d live after a window at 50", d.Foes, pcID)
+		}
+	})
+	t.Run("a 692 on the foe it clicked marks it defeated", func(t *testing.T) {
+		b := duelMember(t)
+		from := partyDuelUntilFight(t, b, at(time.Second))
+		_, a := b.decide(from)
+		if _, err := b.send(a, from); err != nil {
+			t.Fatal(err)
+		}
+		b.handleOne(t, SystemMessage{ID: msgOtherPartyIsFrozen}, from.Add(time.Second))
+		if d := b.duel(from.Add(time.Second)); !d.Foes[pcID] || d.Opponent != 0 {
+			t.Fatalf("duel %+v after a 692 on %d, want it defeated", *d, pcID)
+		}
+	})
+	t.Run("a 692 after a click on a mate leaves the foe live", func(t *testing.T) {
+		b := duelMember(t)
+		from := partyDuelUntilFight(t, b, at(time.Second))
+		_, a := b.decide(from)
+		if _, err := b.send(a, from); err != nil {
+			t.Fatal(err)
+		}
+		b.pvp.duel.Opponent = pcID
+		if _, err := b.send(Action{kind: actSelect, payload: encodeAction(ptyCL, Point{}), object: ptyCL}, from); err != nil {
+			t.Fatal(err)
+		}
+		b.handleOne(t, SystemMessage{ID: msgOtherPartyIsFrozen}, from.Add(time.Second))
+		if d := b.duel(from.Add(time.Second)); d.Foes[pcID] || d.Opponent != pcID {
+			t.Fatalf("duel %+v after a 692 on a mate, want %d live and fought", *d, pcID)
+		}
 	})
 	t.Run("its leader's target first", func(t *testing.T) {
 		b := duelMember(t)
@@ -283,6 +332,20 @@ func TestPvPPartyDuelFight(t *testing.T) {
 		}
 		if b.supportAllowed(ptyFoe2, b.world.object(ptyFoe2), from) {
 			t.Error("a foe may be supported")
+		}
+	})
+	t.Run("a mate defeated at 1 HP is no patient", func(t *testing.T) {
+		b := duelMember(t)
+		from := partyDuelUntilFight(t, b, at(time.Second))
+		m := b.world.Party.Members[ptyCL].PartyMember
+		m.HP = 1
+		b.handleOne(t, PartySmallWindowUpdate{Member: m}, from)
+		if b.maySupport(ptyCL, from) {
+			t.Error("a mate frozen at 1 HP may be supported")
+		}
+		b.handleOne(t, ExDuelEnd{Party: true}, from.Add(time.Second))
+		if !b.maySupport(ptyCL, from.Add(time.Second)) {
+			t.Error("the mate at 1 HP may not be supported after the duel")
 		}
 	})
 	for _, tc := range []struct {
