@@ -10,17 +10,19 @@ import (
 
 // backoffSpots are six spots west of the split navigation's wall, all in
 // the SCC of backoffSelf and nearer than Wander, none within spotArrive of
-// it.
+// it, and each farther from it than a route's straight segment reaches
+// (nav's navSegment, 2500), so a walk to one always runs the search (#565).
 var backoffSpots = []datapack.Spot{
-	testSpot("e", 3000, 2000, 3, 6, 9), testSpot("s", 2000, 3200, 3, 6, 9), testSpot("w", 800, 2000, 3, 6, 9),
-	testSpot("n", 2000, 800, 3, 6, 9), testSpot("se", 3500, 3500, 3, 6, 9), testSpot("nw", 500, 500, 3, 6, 9),
+	testSpot("e", 7000, 4000, 3, 6, 9), testSpot("s", 4000, 7000, 3, 6, 9), testSpot("w", 1000, 4000, 3, 6, 9),
+	testSpot("n", 4000, 1000, 3, 6, 9), testSpot("se", 7000, 7000, 3, 6, 9), testSpot("nw", 1000, 1000, 3, 6, 9),
 }
 
-var backoffSelf = Point{X: 2000, Y: 2000}
+var backoffSelf = Point{X: 4000, Y: 4000}
 
 // newBackoffBrain is a spot brain standing at backoffSelf among spots whose
 // every walk ends unreachable: the walker's searches get a budget of one
-// cell. It records its metrics in the registry returned.
+// cell, and every walk searches. It records its metrics in the registry
+// returned.
 func newBackoffBrain(t *testing.T, spots ...datapack.Spot) (*Brain, *botmetrics.Registry) {
 	t.Helper()
 	b := newSpotBrain(t, 5, spots...)
@@ -99,7 +101,7 @@ func TestSpotFailedRun(t *testing.T) {
 	}{
 		{name: "first failure: look again at once", self: backoffSelf, budget: 1, wantFailed: 1},
 		{name: "spotFailMax-th failure: wait spotRetry", self: backoffSelf, failed: []int{1, 2}, budget: 1, wantFailed: 3, wantRetry: now.Add(spotRetry)},
-		{name: "arrival ends the run", self: Point{X: 3000, Y: 2000}, failed: []int{1, 2}},
+		{name: "arrival ends the run", self: Point{X: 7000, Y: 4000}, failed: []int{1, 2}},
 		{name: "repeat failure: wait spotRetry, run not grown", self: backoffSelf, failed: []int{0, 1, 2, 3, 4}, expired: true, budget: 1, wantFailed: 5, wantRetry: now.Add(spotRetry)},
 		{name: "no candidate left ends the run", self: backoffSelf, failed: []int{0}, avoidAll: true, wantRetry: now.Add(spotRetry)},
 	}

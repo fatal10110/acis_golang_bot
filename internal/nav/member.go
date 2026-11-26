@@ -60,6 +60,9 @@ type Hierarchy struct {
 	// places is LocatePlace's table, counts the Locate counts of Stats.
 	places placeTable
 	counts cacheCounters
+	// searchOnly turns Route's straight segment off, so that tests compare
+	// its routes with the full search's.
+	searchOnly bool
 }
 
 // keptMemberScratch bounds the idle scratch a Hierarchy keeps: cold Locates

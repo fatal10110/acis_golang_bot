@@ -56,7 +56,11 @@ func wallCrossings(route []location.Location) []int {
 // cheapest way detours by the door-free way; a closed door that is the only
 // way gives ErrDoor, never ErrUnreachable, even when only the door state
 // says so; an open door routes through; and a budget the searches exhaust
-// is reported as ErrBudget, not as a door.
+// is reported as ErrBudget, not as a door. The pair is farther apart than
+// the planner's MaxSegment, so every case runs the search whose door
+// handling it checks: Route's straight segment reads the doors from the
+// engine alone, where the door table toggles them before it stores their
+// state (#565, TestRouteStraight).
 func TestRouteDoors(t *testing.T) {
 	closedDoor := func(d int) bool { return d == doorID }
 	from := loc(geotest.Point{CellX: 1760, CellY: 1823, Z: geotest.Ground})
@@ -86,7 +90,7 @@ func TestRouteDoors(t *testing.T) {
 			if tt.engineShut {
 				closeDoor(t, e, doors[0])
 			}
-			p := &Planner{Engine: e, Lmax: testLmax, CollisionHeight: 23, Budget: tt.budget}
+			p := &Planner{Engine: e, Lmax: testLmax, CollisionHeight: 23, Budget: tt.budget, MaxSegment: 1000}
 			route, err := th.h.Route(p, from, to, tt.closed)
 			if !errors.Is(err, tt.want) || (tt.want == nil) != (err == nil) {
 				t.Fatalf("Route = %v, want %v", err, tt.want)
