@@ -237,9 +237,14 @@ bots ui -secret-file ~/.config/acis-bots/secret -prefix home -login <server>:210
   snapshot with HP, MP and CP, persona change, spawn, despawn, delete, commands `stay`,
   `go <spot>` from a spot picker, `follow <player>`, `assist <player>`, `leave`, `logout`, each
   answered in a toast, and its log), Dashboard (login gate and breaker with "resume logins",
-  online count against `-max-online`, the metrics and their charts), Logs (filter, search,
+  login spacing, online count against `-max-online`, the metrics and their charts), Logs (filter, search,
   pause). Live state comes over server-sent events; the header shows when the stream reconnects.
   Light and dark themes follow the system until toggled.
+- Login spacing (Dashboard) is the least time between two login or game dials of the panel. It
+  only goes up from the gate's floor: 1250 ms (plus up to 500 ms jitter) without `-allowlisted`,
+  which keeps every dial out of the accept filter's burst window, and 0 with it; at most one
+  minute. The panel keeps it in `bots.json` and applies it on the next start; a kept value under
+  the floor of that start's gate leaves the floor.
 - The page is a React application (`web/`). Release binaries embed it. A binary built from source
   embeds it only after `make ui` (Node.js 22 and npm), run before `go build ./cmd/bots`; without
   it the panel serves a page that says so, and the API still works. `npm run dev` in `web/`

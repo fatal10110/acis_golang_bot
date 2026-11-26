@@ -115,6 +115,10 @@ export interface Metrics {
 export interface Dashboard {
   halted: boolean;
   halt_err?: string;
+  /** The login gate's least time between two dial starts, and its bounds. */
+  login_spacing_ms: number;
+  login_spacing_min_ms: number;
+  login_spacing_max_ms: number;
   bots: number;
   running: number;
   max_online: number;
