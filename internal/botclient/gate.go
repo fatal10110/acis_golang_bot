@@ -407,10 +407,14 @@ func jitter(rng *rand.Rand, d time.Duration) time.Duration {
 func isRefused(err error) bool { return errors.Is(err, syscall.ECONNREFUSED) }
 
 // notReady reports an attempt the servers ended because they are not ready
-// for it, after a connection: PlayFail (the game server is offline or full)
-// and the login server's system LoginFails. None counts toward an IP ban:
-// PlayFail comes after the credentials passed.
+// for it, after a connection: PlayFail (the game server is offline or full),
+// the login server's system LoginFails, and a packet before the world the
+// bot could not decode (errDecode). None counts toward an IP ban: PlayFail
+// comes after the credentials passed.
 func notReady(err error) bool {
+	if errors.Is(err, errDecode) {
+		return true
+	}
 	var le *LoginError
 	if !errors.As(err, &le) {
 		return false

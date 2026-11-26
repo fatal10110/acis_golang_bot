@@ -19,10 +19,7 @@ const (
 // sight.
 func newClaimBrain(t *testing.T, self int32, claims *PartyClaims) (*Brain, *recordSender) {
 	t.Helper()
-	w, err := NewWorld(Self{ObjectID: self, Name: "bot"}, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	w, _ := NewWorld(Self{ObjectID: self, Name: "bot"}, t0)
 	w.Apply(UserInfo{ObjectID: self, Name: "bot", RunSpeed: 100, WalkSpeed: 50, Running: true, HP: 100, MaxHP: 100, MP: 100, MaxMP: 100}, t0)
 	for id, name := range map[int32]string{claimLeaderID: "Leader", claimOtherID: "Other", claimGMID: "Gm"} {
 		w.Apply(CharInfo{ObjectID: id, Name: name, Pos: Point{Y: 1000}, RunSpeed: 100, Running: true}, t0)

@@ -13,10 +13,7 @@ import (
 // valued by the model on the model tests' travel map.
 func benchModelBrain(tb testing.TB) *Brain {
 	tb.Helper()
-	w, err := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
-	if err != nil {
-		tb.Fatal(err)
-	}
+	w, _ := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
 	p := DefaultPersona()
 	p.IdleChance, p.AutoShots, p.Role = 0, false, RoleSupport
 	p.Gear.Classes = nil

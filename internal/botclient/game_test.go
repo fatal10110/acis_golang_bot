@@ -83,9 +83,17 @@ func TestDecodeVersionCheck(t *testing.T) {
 	}
 }
 
-// userInfo is the leading part of UserInfo: x, y, z, heading, object id,
-// then the name (userinfo.go).
+// userInfo is a whole UserInfo of bot7 at x, y, z, heading, with object id
+// objectID (userinfo.go): EnterGame decodes it whole.
 func userInfo(x, y, z, heading, objectID int32) []byte {
+	u := testUserInfo
+	u.Pos, u.Heading, u.ObjectID = Point{X: x, Y: y, Z: z}, heading, objectID
+	return userInfoPacket(u, 120, 80, 1.3, 0)
+}
+
+// userInfoHead is the leading part of UserInfo alone: x, y, z, heading,
+// object id, then the name.
+func userInfoHead(x, y, z, heading, objectID int32) []byte {
 	return packet(0x04, x, y, z, heading, objectID, "bot7")
 }
 

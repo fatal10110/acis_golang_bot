@@ -23,10 +23,13 @@ type frameSource interface {
 // Teardown: the session owns done and the connection. It closes done, then
 // closes the connection so a blocked Read returns, and joins ReadEvents
 // before it dials again; a wait on a full q ends on done alone. ReadEvents
-// returns nil when it ends after done closed, else the read or decode error
-// that ended it (a malformed frame ends the session). ServerClose and LeaveWorld are
-// queued as events like any other; the read error after them is still
-// returned.
+// returns nil when it ends after done closed, else the read error that ended
+// it. A frame that fails to decode does not end it (docs/plan.md D45): it is
+// dropped and queued as decodeSkipped, its opcode and length, for the brain
+// to log and count, and the reader reads on; a ServerClose or LeaveWorld
+// that fails to decode is still queued, as its opcode alone. ServerClose and
+// LeaveWorld are queued as events like any other; the read error after them
+// is still returned.
 //
 // ReadEvents is the connection's only reader while it runs (see GameConn).
 func (g *GameConn) ReadEvents(q *Events, done <-chan struct{}) error {
@@ -46,7 +49,19 @@ func readEvents(src frameSource, q *Events, done <-chan struct{}) error {
 		}
 		ev, ok, err := decodeEvent(raw)
 		if err != nil {
-			return err
+			// The frame is dropped and the session reads on (docs/plan.md
+			// D45): the brain logs and counts it. ServerClose and
+			// LeaveWorld still end the session: both layouts are empty, so
+			// the opcode alone is the event.
+			if !q.push(decodeSkipped{key: frameKey(raw), length: len(raw), err: err}, done) {
+				return nil
+			}
+			switch raw[0] {
+			case opGameServerClose:
+				ev, ok = ServerClose{}, true
+			case opGameLeaveWorld:
+				ev, ok = LeaveWorld{}, true
+			}
 		}
 		if ok && !q.push(ev, done) {
 			return nil
@@ -196,12 +211,7 @@ func decodeEvent(raw []byte) (ev Event, ok bool, err error) {
 
 // opcodeName names a decoded frame's opcode for an error: the opcode byte,
 // and the sub-opcode of an extended frame.
-func opcodeName(raw []byte) string {
-	if raw[0] == opGameExtended {
-		return fmt.Sprintf("%#02x:%#04x", raw[0], uint16(raw[1])|uint16(raw[2])<<8)
-	}
-	return fmt.Sprintf("%#02x", raw[0])
-}
+func opcodeName(raw []byte) string { return frameKey(raw).String() }
 
 func readPoint(r *wire.Reader) Point {
 	return Point{X: r.ReadInt32(), Y: r.ReadInt32(), Z: r.ReadInt32()}

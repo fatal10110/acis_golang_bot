@@ -35,9 +35,9 @@ func TestLiveLoginEnterLogout(t *testing.T) {
 		t.Fatalf("entered as %q object %d with %d characters on the account, want one", c.Self.Name, c.Self.ObjectID, c.Self.Slots)
 	}
 	now := time.Now()
-	w, err := botclient.NewWorld(c.Self, now)
-	if err != nil {
-		t.Fatalf("world model of the burst: %v", err)
+	w, skips := botclient.NewWorld(c.Self, now)
+	if len(skips) != 0 {
+		t.Fatalf("world model of the burst: undecodable frames skipped: %v", skips)
 	}
 	pos := botclient.Point{X: c.Self.X, Y: c.Self.Y, Z: c.Self.Z}
 	if s := w.Self; s.ObjectID != c.Self.ObjectID || s.Name != c.Self.Name || s.Level < 1 || s.MaxHP <= 0 || s.HP <= 0 || s.Position(now) != pos {

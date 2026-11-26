@@ -355,7 +355,7 @@ func (g *GameConn) createCharacter(ctx context.Context, ch Character) ([]charSlo
 		}
 		slots, err := decodeCharSelectInfo(reply)
 		if err != nil {
-			return nil, "", err
+			return nil, "", gameDecodeError("CharSelectInfo", reply, err)
 		}
 		return slots, name, nil
 	}

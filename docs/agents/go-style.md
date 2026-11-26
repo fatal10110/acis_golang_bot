@@ -46,8 +46,10 @@ requirements remain in `CLAUDE.md`.
 - Use sentinel or typed errors only when callers must branch on the category; inspect with
   `errors.Is` or `errors.As`.
 - Panic only for programmer errors and impossible invariants. Invalid packets, files, or database
-  data return errors to the appropriate isolation boundary. A malformed server frame ends that
-  bot's session, never the process.
+  data return errors to the appropriate isolation boundary. A server frame in the world that
+  fails to decode is logged (once per opcode per session, never its payload), counted and
+  skipped: the session plays on (D45). Before the world a packet that fails to decode ends that
+  bot's attempt with `errDecode`, a not-ready ending, never a server abort. Never the process.
 - Recover at infrastructure isolation boundaries such as a bot's session loop or worker dispatch. Log the stack and terminate the affected unit of work.
   Do not recover merely to continue after an invariant violation, and do not require recovery in
   every short-lived goroutine.

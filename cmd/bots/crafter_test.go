@@ -53,10 +53,7 @@ func TestCrafterPresetBrain(t *testing.T) {
 		t.Fatalf("crafter preset %+v: want a Dwarven Fighter farming with the datapack", p)
 	}
 	t0 := time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
-	w, err := botclient.NewWorld(botclient.Self{ObjectID: 0x10000201, Name: "bot"}, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	w, _ := botclient.NewWorld(botclient.Self{ObjectID: 0x10000201, Name: "bot"}, t0)
 	for _, tt := range []struct {
 		inviters []string
 		want     bool

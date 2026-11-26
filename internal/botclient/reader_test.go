@@ -131,14 +131,6 @@ func TestReadEventsFiltersAndQueues(t *testing.T) {
 	}
 }
 
-func TestReadEventsMalformedFrameEnds(t *testing.T) {
-	src := &scriptedSource{frames: [][]byte{packet(opGameStopMove, 5)}, end: io.EOF}
-	err := readEvents(src, NewEvents(4), make(chan struct{}))
-	if !errors.Is(err, wire.ErrShortPacket) {
-		t.Fatalf("readEvents = %v, want ErrShortPacket", err)
-	}
-}
-
 // TestReadEventsTeardownFullQueue: a reader blocked on a full queue nobody
 // drains returns once done closes.
 func TestReadEventsTeardownFullQueue(t *testing.T) {

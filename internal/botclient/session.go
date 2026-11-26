@@ -370,6 +370,10 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 	}()
 	self, err := b.net.enterGame(ctx, g, b.account, res.Keys, b.char, b.pin)
 	if err != nil {
+		if errors.Is(err, errDecode) {
+			// A not-ready ending, like one in login or the game dial.
+			turn.Dialed(err)
+		}
 		return nil, Self{}, fmt.Errorf("enter game: %w", err)
 	}
 	// Reset the fleet backoff while the turn is held, before the next bot
@@ -423,10 +427,9 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 			<-readerDone
 		}
 	}()
-	w, err := NewWorld(self, b.cfg.Clock.Now())
-	if err != nil {
-		return err
-	}
+	// The burst's skips go to the brain through its config, not the queue:
+	// nothing drains the queue before Run.
+	w, skips := NewWorld(self, b.cfg.Clock.Now())
 	q := NewEvents(eventLimit)
 	go func() {
 		defer close(readerDone)
@@ -439,7 +442,7 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
 	cfg.markers, cfg.chat, cfg.valuables, cfg.link, cfg.log = b.cfg.Markers, b.chat, b.valuables, &b.link, b.log
-	cfg.account = b.account
+	cfg.account, cfg.burstSkips = b.account, skips
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })
 	defer stop()
@@ -472,9 +475,12 @@ func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duratio
 	}
 	var le *LoginError
 	var ge *GameStartError
+	var de *decodeError
 	switch {
 	case errors.Is(err, ErrLoginsHalted):
 		return 0, err
+	case errors.As(err, &de):
+		return b.afterDecode(de), nil
 	case errors.As(err, &le) && le.Packet == "LoginFail":
 		switch le.Reason {
 		case loginFailPasswordWrong, loginFailUserOrPassWrong:

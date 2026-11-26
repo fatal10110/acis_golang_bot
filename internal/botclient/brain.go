@@ -157,6 +157,9 @@ type BrainConfig struct {
 	// log takes the brain's diagnostics, the Bot's logger; nil discards
 	// them.
 	log *slog.Logger
+	// burstSkips counts the EnterWorld burst frames NewWorld skipped, which
+	// NewBrain logs and counts (Brain.skipped).
+	burstSkips BurstSkips
 }
 
 // Brain is one bot's decision loop. Run is its goroutine: it owns the world
@@ -383,6 +386,9 @@ type Brain struct {
 	lastRule string
 	// metrics is written only by this loop (BrainConfig.Metrics).
 	metrics *botmetrics.Bot
+	// decodeLogged holds the opcodes whose undecodable frames the session
+	// already logged (skipped); bounded by the decoder tables.
+	decodeLogged map[opcodeKey]bool
 	// walk walks the bot on checked segments (BrainConfig.Nav).
 	walk walker
 	// engage is the stand point the fight walks to (engageWalk).
@@ -466,6 +472,9 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 			b.doors = NewDoorReporter(cfg.Nav.Doors)
 		}
 	}
+	for k, s := range cfg.burstSkips {
+		b.skipped(k, s.length, s.count, "burst", s.err)
+	}
 	return b
 }
 
@@ -545,6 +554,10 @@ func (b *Brain) start(now time.Time) {
 func (b *Brain) handle(batch []Event, now time.Time) error {
 	self := b.world.Self.ObjectID
 	for _, ev := range batch {
+		if e, ok := ev.(decodeSkipped); ok {
+			b.skipped(e.key, e.length, 1, "world", e.err)
+			continue
+		}
 		b.meterEvent(ev, now)
 		b.observeWalk(ev, now)
 		if b.doors != nil {

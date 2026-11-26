@@ -30,10 +30,7 @@ func enterOnce(t *testing.T, tg *Target, account string, ch botclient.Character)
 		t.Fatal(err)
 	}
 	defer c.Close()
-	w, err := botclient.NewWorld(c.Self, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
+	w, _ := botclient.NewWorld(c.Self, time.Now())
 	if c.Self.Slots != 1 {
 		t.Errorf("account %s holds %d characters, want 1", account, c.Self.Slots)
 	}

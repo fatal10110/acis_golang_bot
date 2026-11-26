@@ -68,10 +68,7 @@ func TestLootGroundPrune(t *testing.T) {
 func BenchmarkGroundSeen(bm *testing.B) {
 	for _, n := range []int{100, 1000, 10000} {
 		bm.Run(fmt.Sprint(n), func(bm *testing.B) {
-			w, err := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
-			if err != nil {
-				bm.Fatal(err)
-			}
+			w, _ := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
 			p := lootPersona()
 			p.Loot.Ground = GroundAny
 			b := NewBrain(w, NewEvents(64), &recordSender{}, newFakeClock(t0), BrainConfig{Persona: p, Rand: rand.New(rand.NewPCG(1, 2))})

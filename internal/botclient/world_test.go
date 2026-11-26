@@ -1,7 +1,6 @@
 package botclient
 
 import (
-	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -21,10 +20,7 @@ func at(d time.Duration) time.Time { return t0.Add(d) }
 // second) stands at the origin, with an NPC and a player in sight.
 func newTestWorld(t testing.TB) *World {
 	t.Helper()
-	w, err := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	w, _ := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
 	w.Apply(UserInfo{ObjectID: selfID, Name: "bot7", RunSpeed: 100, WalkSpeed: 50, Running: true, HP: 10, MaxHP: 20}, t0)
 	w.Apply(NPCInfo{ObjectID: npcID, NPCID: 20001, Attackable: true, Pos: Point{X: 1000}, RunSpeed: 200, WalkSpeed: 50, Running: true}, t0)
 	w.Apply(CharInfo{ObjectID: pcID, Name: "other", Pos: Point{Y: 1000}, RunSpeed: 100, Running: true}, t0)
@@ -345,9 +341,9 @@ func TestNewWorldReplaysBurst(t *testing.T) {
 		},
 		UserInfo: userInfoPacket(ui, 120, 80, 1.3, 0),
 	}
-	w, err := NewWorld(self, t0)
-	if err != nil {
-		t.Fatal(err)
+	w, skips := NewWorld(self, t0)
+	if len(skips) != 0 {
+		t.Fatalf("skips = %v, want none", skips)
 	}
 	if len(w.Objects) != 2 || w.Objects[npcID].NPCID != 20001 || w.Objects[pcID].Name != "other" {
 		t.Fatalf("objects = %v", w.Objects)
@@ -357,9 +353,14 @@ func TestNewWorldReplaysBurst(t *testing.T) {
 		t.Fatalf("self = %+v", s)
 	}
 
-	self.Burst = append(self.Burst, packet(opGameDie, selfID))
-	if _, err := NewWorld(self, t0); err == nil || !strings.Contains(err.Error(), "burst") {
-		t.Fatalf("malformed burst frame: err = %v", err)
+	// A malformed frame is skipped and counted; the rest still applies.
+	self.Burst = append([][]byte{packet(opGameDie, selfID)}, self.Burst...)
+	w, skips = NewWorld(self, t0)
+	if s, ok := skips[opcodeKey{op: opGameDie}]; len(skips) != 1 || !ok || s.count != 1 || s.length != 5 {
+		t.Fatalf("malformed burst frame: skips = %v, want one Die of 5 bytes", skips)
+	}
+	if len(w.Objects) != 2 || w.Self.HP != ui.HP {
+		t.Fatalf("after a malformed burst frame: objects %v, self %+v", w.Objects, w.Self)
 	}
 }
 
