@@ -46,6 +46,21 @@ func TestPvPSelfStepTarget(t *testing.T) {
 			t.Fatalf("action %v object %#x, want the opponent %#x selected again", a.kind, a.object, pcID)
 		}
 	})
+	t.Run("a shield that landed before the select is not cast again", func(t *testing.T) {
+		b := mysticRowBrain(t, classCleric, 30, lyrMystic, false)
+		b.world.Target = pcID
+		if _, a := b.decide(rowNow); a.kind != actSelect || a.object != selfID {
+			t.Fatalf("action %v object %#x, want the bot %#x selected first", a.kind, a.object, selfID)
+		}
+		// The shield is already up when the select answer arrives: the
+		// side cast is no longer due, so the fight goes back to the opponent.
+		next := rowNow.Add(100 * time.Millisecond)
+		b.handleOne(t, AbnormalStatusUpdate{Effects: []Effect{{SkillID: skillMentalShield, Level: 1, Left: 1200 * time.Second}}}, next)
+		b.handleOne(t, MyTargetSelected{ObjectID: selfID}, next)
+		if _, a := b.decide(next); a.kind != actSelect || a.object != pcID {
+			t.Fatalf("action %v object %#x skill %d, want the opponent %#x selected with no cast", a.kind, a.object, a.skill, pcID)
+		}
+	})
 	t.Run("a SELF-target step goes with the opponent selected", func(t *testing.T) {
 		b := mysticRowBrain(t, classElvenWizard, 30, lyrWarrior, false)
 		b.world.Target = pcID
