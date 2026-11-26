@@ -2,12 +2,10 @@ package e2e
 
 import (
 	"cmp"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -95,7 +93,8 @@ func TestLiveCrafter(t *testing.T) {
 	board := botclient.NewCraftBoard()
 	class := botclient.DwarvenFighter
 	botAcc, _ := tg.Account("crf", 1)
-	b := runBotWith(t, ctx, tg, botAcc, botSetup{tap: tap, class: &class, persona: crafterPersona, brain: func(cfg *botclient.BrainConfig) {
+	said := withClanSaid(tap)
+	b := runBotWith(t, ctx, tg, botAcc, botSetup{tap: said, class: &class, persona: crafterPersona, brain: func(cfg *botclient.BrainConfig) {
 		withTravel(travel)(cfg)
 		cfg.CraftBoard = board
 	}})
@@ -110,65 +109,25 @@ func TestLiveCrafter(t *testing.T) {
 		t.Fatalf("GM next to the keeper: %v", err)
 	}
 	botID := recallBot(t, ctx, tg, gm, name)
-	if err := gm.Select(ctx, botID); err != nil {
-		t.Fatal(err)
-	}
-	if b.Status().ClanID != 0 {
-		t.Logf("%s leads a clan from an earlier run: dismissed", name)
-		if err := gm.Command(ctx, "pledge dismiss"); err != nil {
-			t.Fatal(err)
-		}
-		waitFor(t, ctx, "the bot out of its old clan", func() bool { return b.Status().ClanID == 0 })
-	}
+	leaveOldClan(t, ctx, gm, b, botID, name)
 	if b.Status().Level < clanCreateLevel {
-		if err := gm.Command(ctx, "set level "+strconv.Itoa(clanCreateLevel)); err != nil {
-			t.Fatal(err)
-		}
+		onBot(t, ctx, gm, botID, "set level "+strconv.Itoa(clanCreateLevel))
 		waitFor(t, ctx, "the bot at the founding level", func() bool { return b.Status().Level >= clanCreateLevel })
 	}
 	// The crafter's cycle waits for a clan: everything it needs is in
 	// before the clan is founded.
-	cmds := []string{
+	onBot(t, ctx, gm, botID,
 		fmt.Sprintf("skill set %d 1", createItem), fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d 1", steelScroll),
 		fmt.Sprintf("give %d %d", varnish, steelEach), fmt.Sprintf("give %d %d", ironOre, steelEach),
-	}
-	for _, cmd := range cmds {
-		if err := gm.Command(ctx, cmd); err != nil {
-			t.Fatal(err)
-		}
-	}
+	)
 	waitFor(t, ctx, "the crafter with Create Item 1", func() bool {
 		c := b.Status().Crafter
 		return c != nil && c.CreateItem >= 1
 	})
-	clan := "cr" + strconv.FormatInt(time.Now().UnixNano()%1e12, 36)
-	if err := gm.Command(ctx, "pledge create "+clan); err != nil {
-		t.Fatal(err)
-	}
-	said, err := gm.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
-		m, ok := ev.(botclient.SystemMessage)
-		return ok && (strings.HasPrefix(m.Text[0], "Clan "+clan+" ") || strings.Contains(m.Text[0], "creating the clan"))
-	})
-	if err != nil {
-		t.Fatalf("pledge create %s: %v", clan, err)
-	}
-	if m := said.(botclient.SystemMessage); !strings.HasPrefix(m.Text[0], "Clan "+clan+" have been created") {
-		t.Fatalf("pledge create %s: %q", clan, m.Text[0])
-	}
-	waitFor(t, ctx, "the bot leading its clan", func() bool { return b.Status().ClanID != 0 })
-	clanID := b.Status().ClanID
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		if err := gm.Command(ctx, "pledge dismiss"); err != nil {
-			t.Errorf("dismiss clan %s: %v", clan, err)
-		}
-	})
+	clan, clanID := foundBotClan(t, ctx, gm, b, botID, name, "cr", said.said)
 	// The clan warehouse needs clan level 1 (clan/warehouse.go); a look
 	// before it fails and the next check comes CheckEvery later.
-	if err := gm.Command(ctx, "pledge level 1"); err != nil {
-		t.Fatal(err)
-	}
+	onBotJoined(t, ctx, gm, botID, name, "pledge level 1")
 	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
 		t.Fatalf("clan %s at level 1: %v", clan, err)
 	}

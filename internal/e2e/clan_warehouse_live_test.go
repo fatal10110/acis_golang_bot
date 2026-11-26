@@ -2,12 +2,10 @@ package e2e
 
 import (
 	"cmp"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -135,7 +133,8 @@ func TestLiveClanWarehouse(t *testing.T) {
 	script := newWHScript()
 	travel := travelMap(t, tg)
 	botAcc, _ := tg.Account("wh", 1)
-	b := runBotWith(t, ctx, tg, botAcc, botSetup{tap: rec, brain: withTravel(travel), persona: func() botclient.Persona {
+	said := withClanSaid(rec)
+	b := runBotWith(t, ctx, tg, botAcc, botSetup{tap: said, brain: withTravel(travel), persona: func() botclient.Persona {
 		p := partyPersona()
 		p.Warehouse.Want = script.want
 		return p
@@ -148,60 +147,20 @@ func TestLiveClanWarehouse(t *testing.T) {
 		t.Fatalf("GM next to the keeper: %v", err)
 	}
 	botID := recallBot(t, ctx, tg, gm, name)
-	if err := gm.Select(ctx, botID); err != nil {
-		t.Fatal(err)
-	}
-	if b.Status().ClanID != 0 {
-		t.Logf("%s leads a clan from an earlier run: dismissed", name)
-		if err := gm.Command(ctx, "pledge dismiss"); err != nil {
-			t.Fatal(err)
-		}
-		waitFor(t, ctx, "the bot out of its old clan", func() bool { return b.Status().ClanID == 0 })
-	}
+	leaveOldClan(t, ctx, gm, b, botID, name)
 	if b.Status().Level < clanCreateLevel {
-		if err := gm.Command(ctx, "set level "+strconv.Itoa(clanCreateLevel)); err != nil {
-			t.Fatal(err)
-		}
+		onBot(t, ctx, gm, botID, "set level "+strconv.Itoa(clanCreateLevel))
 		waitFor(t, ctx, "the bot at the founding level", func() bool { return b.Status().Level >= clanCreateLevel })
 	}
-	clan := "wh" + strconv.FormatInt(time.Now().UnixNano()%1e12, 36)
-	if err := gm.Command(ctx, "pledge create "+clan); err != nil {
-		t.Fatal(err)
-	}
-	said, err := gm.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {
-		m, ok := ev.(botclient.SystemMessage)
-		return ok && (strings.HasPrefix(m.Text[0], "Clan "+clan+" ") || strings.Contains(m.Text[0], "creating the clan"))
-	})
-	if err != nil {
-		t.Fatalf("pledge create %s: %v", clan, err)
-	}
-	if m := said.(botclient.SystemMessage); !strings.HasPrefix(m.Text[0], "Clan "+clan+" have been created") {
-		t.Fatalf("pledge create %s: %q", clan, m.Text[0])
-	}
-	waitFor(t, ctx, "the bot leading its clan", func() bool { return b.Status().ClanID != 0 })
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		// The bot is still the GM's target: the server confirms no
-		// second click on it.
-		if err := gm.Command(ctx, "pledge dismiss"); err != nil {
-			t.Errorf("dismiss clan %s: %v", clan, err)
-		}
-	})
+	clan, _ := foundBotClan(t, ctx, gm, b, botID, name, "wh", said.said)
 	// The script asks once the bot is in a clan; a character of an
 	// earlier run may carry skins already.
 	waitFor(t, ctx, "the warehouse script asked", func() bool { return script.carried.Load() >= 0 })
 	left := script.carried.Load()
-	for _, cmd := range []string{fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d %d", whSkin, whSkins)} {
-		if err := gm.Command(ctx, cmd); err != nil {
-			t.Fatal(err)
-		}
-	}
+	onBotJoined(t, ctx, gm, botID, name, fmt.Sprintf("give 57 %d", whAdena), fmt.Sprintf("give %d %d", whSkin, whSkins))
 	waitFor(t, ctx, "the skins in the bot's bag", func() bool { return script.carried.Load() >= left+whSkins })
 	// The clan warehouse needs clan level 1 (clan/warehouse.go).
-	if err := gm.Command(ctx, "pledge level 1"); err != nil {
-		t.Fatal(err)
-	}
+	onBotJoined(t, ctx, gm, botID, name, "pledge level 1")
 	if _, err := gm.Await(ctx, EntryTimeout, clanLevelSet(clan, 1)); err != nil {
 		t.Fatalf("clan %s at level 1: %v", clan, err)
 	}
