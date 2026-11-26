@@ -385,6 +385,8 @@ func (b *Brain) castRefused(id int32, now time.Time) {
 // count; the refusal tells the right side: a ChargeToMax skill is refused at
 // its maxCharges, a Charges skill under its Charges. So a wrong count costs
 // one refused cast, not one per castRefusedHold until the charges change.
+// The server's refusal of a cast short of its reagent is the same message;
+// the bot never asks for one (castReady), so none reaches here.
 func (b *Brain) chargesRefused(skill int32) {
 	s := &b.world.Self
 	for _, st := range b.build().Kit.Rotation {

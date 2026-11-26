@@ -440,8 +440,9 @@ func (b *Brain) supplyCause() tripCause {
 // runsOut reports whether a consumable the bot carries runs out within
 // Supply.ReturnMinutes of fighting at the use meter's rate: the shots of a
 // weapon it uses or will (shotWeapons), or its HP potions when a merchant
-// sells one (supplyPotion). One it carries none of does not count: a bot
-// that could not buy it farms without it.
+// sells one (supplyPotion), or a reagent of its kit falls under its
+// ReagentCastsMin sum (reagentShort). One it carries none of does not
+// count: a bot that could not buy it farms without it.
 func (b *Brain) runsOut() bool {
 	mins := float64(b.persona.Supply.ReturnMinutes)
 	if mins <= 0 {
@@ -460,7 +461,7 @@ func (b *Brain) runsOut() bool {
 		}
 	}
 	p := &b.persona
-	return b.supplyPotion() != 0 && low(p.Potions, b.meter.rate(p.Potions, p.Supply.PotionsPerHour/60))
+	return b.supplyPotion() != 0 && low(p.Potions, b.meter.rate(p.Potions, p.Supply.PotionsPerHour/60)) || b.reagentShort()
 }
 
 // loadSendsHome reports whether the load sends the bot to town to shed it

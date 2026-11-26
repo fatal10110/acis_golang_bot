@@ -247,7 +247,7 @@ func (b *Brain) peels(id int32, now time.Time) bool {
 func (b *Brain) peelReady(now time.Time) bool {
 	kit := b.build().Kit
 	return slices.ContainsFunc(pvpSteps(kit.PvP, kit.Rotation), func(s Step) bool {
-		return s.Peel && b.world.SkillReady(s.Skill, now)
+		return s.Peel && b.castReady(s.Skill, now)
 	})
 }
 
@@ -379,7 +379,7 @@ func (b *Brain) rulePartyBuff(now time.Time) (Action, bool) {
 	self := b.world.Self.ObjectID
 	for _, step := range kit.PvP {
 		if step.Target != TargetSelf || len(step.Vs) == 0 || step.SelfHPBelow > 0 || step.SelfHPAbove > 0 ||
-			step.Idle || step.Peel || step.Break || step.Interrupt || !b.world.SkillReady(step.Skill, now) {
+			step.Idle || step.Peel || step.Break || step.Interrupt || !b.castReady(step.Skill, now) {
 			continue
 		}
 		i := slices.IndexFunc(enemies, func(id int32) bool {
@@ -421,7 +421,7 @@ func (b *Brain) partySleep(id int32, rot []Step, underReserve bool, now time.Tim
 	for _, step := range rot {
 		s, ok := b.skillData(step.Skill)
 		if !ok || step.Target != TargetEnemy || step.rank() != rankAttack || step.Idle || step.Interrupt || step.Break || step.Peel ||
-			!lands(s, "SLEEP", "Sleep") || !b.world.SkillReady(step.Skill, now) {
+			!lands(s, "SLEEP", "Sleep") || !b.castReady(step.Skill, now) {
 			continue
 		}
 		for _, e := range enemies {
