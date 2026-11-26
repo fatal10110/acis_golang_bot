@@ -5,6 +5,7 @@ import { InspectView } from "../components/InspectView";
 import type { Confirm } from "../components/ConfirmDialog";
 import { PresetOptions } from "../components/CreateDialog";
 import { LogView } from "../components/LogView";
+import { PvPCard } from "../components/PvPCard";
 import { StatusBadge } from "../components/ui/Badge";
 import { Bar } from "../components/ui/Bar";
 import { Button } from "../components/ui/Button";
@@ -199,6 +200,7 @@ export function BotDetail({ account, bots, ask }: { account: string; bots: Bot[]
           <CommandForm account={account} level={levelOf(b)} spots={spots.data} />
           {spots.error && <Failed error={spots.error} />}
         </Card>
+        <PvPCard bot={b} />
       </div>
       <InspectCard account={account} />
       <Card title="Log">

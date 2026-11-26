@@ -14,7 +14,7 @@ import (
 
 // TestPanelPvPSwitches checks the PvP switches' API (docs/pvp/modes.md):
 // refusals of a bad body and an unknown bot; switches respawn the online
-// bot with them and show in its record; null and an empty body give back
+// bot with them and show in its record; "modes": null and {} (modes absent) give back
 // the preset's defaults.
 func TestPanelPvPSwitches(t *testing.T) {
 	g := newRig(t, Config{})
