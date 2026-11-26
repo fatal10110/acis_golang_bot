@@ -37,8 +37,8 @@ var acceptedDrops = []acceptedDrop{
 // TestOwnerTownDrops is the offline probe of #504 and #514: the place routes
 // from every town point to every spot within 20000 of it, each with its
 // largest single-cell descent. The town points are the home run's
-// (TravelMap.Towns: the gatekeepers' fixed spawns, merged within 3000), and
-// the Orc village point of #504. It runs on the owner's data only
+// (TravelMap.Towns: the gatekeepers' fixed spawns, merged within 3000); the
+// Orc village's, Tamil, is the point of #504. It runs on the owner's data only
 // (ownerNav's variables, and BOT_NAV_DATAPACK for the towns and spots), and
 // fails when a place route drops past dropBound anywhere but at an accepted
 // drop (docs/navigation.md, "Drops").
@@ -52,7 +52,7 @@ func TestOwnerTownDrops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	towns := append([]probeTown{{"orc_town #504", location.Location{X: -45264, Y: -112512, Z: -240}}}, gatekeeperTowns(dp)...)
+	towns := gatekeeperTowns(dp)
 	h := NewHierarchy(g, e, w, 1<<30)
 	p := &Planner{Engine: e, Lmax: testLmax, CollisionHeight: 23, Budget: 400000, Water: w}
 	spots := dp.Spots()

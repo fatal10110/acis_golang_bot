@@ -365,7 +365,7 @@ server's pathfinder.
   steps of 49 to 96 stay one-way, as before, and cost nothing extra.
   - **Measured on the owner's data** (`TestOwnerTownDrops`, local only): the place routes from
     every town point of the home run (`TravelMap.Towns`: the gatekeepers' fixed spawns merged
-    within 3000, 22 points) and the Orc village point of #504 to every spot within 20,000 of each.
+    within 3000, 22 points, the Orc village's being #504's) to every spot within 20,000 of each.
     The Orc village's 24 routable spots: 12 dropped 312 to 376 off the north wall before #504; now
     none descends more than 72 in one cell (the 5 routes down the south slope keep its steps of 56
     to 72). Before #514's height weight, 4 towns had drops past 96:
