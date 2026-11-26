@@ -223,16 +223,17 @@ func (b *Brain) resisted() {
 // pvpCast is the PvP order over rot, the row's rotation, fighting player
 // id at now (docs/pvp/layer.md "PvP order"): a cure or CP potion (pvpItem)
 // and the break-off (breaksOff, breakAway) first, the kite walk, then the PvP
-// row's steps and rot's in groups, each under the M10 gates (tryStep):
-// self-target steps and sustain under the long-cast rule, interrupts,
-// control steps that are due, the opener, finishers once the pool estimate
-// is under their expected damage, the other attacks. ok is false when none
-// goes: fight follows the Melee policy.
+// row's steps and rot's (pvpRotation) in groups, each under the M10 gates
+// (tryStep): self-target steps and sustain under the long-cast rule,
+// interrupts, control steps that are due, the opener, finishers once the
+// pool estimate is under their expected damage, the other attacks; a DOT
+// step not while its own DOT still ticks on id (dotHolds). ok is false
+// when none goes: fight follows the Melee policy.
 func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) (Action, bool) {
 	if a, ok := b.pvpItem(id, now); ok {
 		return a, true
 	}
-	rot = append(slices.Clip(b.build().Kit.PvP), rot...)
+	rot = pvpRotation(b.build().Kit.PvP, rot)
 	st := b.stepState(id, rot, now)
 	if b.breaksOff(id, rot, st, now) {
 		return b.breakAway(id, rot, st, now), true
@@ -272,7 +273,7 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 	}); ok {
 		return a, true
 	}
-	attack := func(s Step) bool { return s.rank() == rankAttack && !control(s) }
+	attack := func(s Step) bool { return s.rank() == rankAttack && !control(s) && !b.dotHolds(id, s.Skill, now) }
 	if a, ok := first(func(s Step) bool { return attack(s) && s.Opener }); ok {
 		return a, true
 	}
@@ -285,6 +286,37 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 		}
 	}
 	return first(attack)
+}
+
+// pvpRotation is the rotation against a player (docs/pvp/rows.md): the
+// PvP row's steps, then rot's, but for rot's steps of a skill the PvP row
+// lists, which its steps replace (a Vs gate or another opener there would
+// mean nothing next to the M10 step), a side cast on another attacker
+// (TargetOtherAttacker) excepted.
+func pvpRotation(pvp, rot []Step) []Step {
+	out := slices.Clip(pvp)
+	for _, s := range rot {
+		if s.Target == TargetOtherAttacker || !slices.ContainsFunc(pvp, func(p Step) bool { return p.Skill == s.Skill }) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// dotHolds reports whether the bot's DOT of skill (an HP or MP damage
+// over time) it landed on player id still ticks at now: the step waits
+// for it to wear off (docs/pvp/layer.md "PvP order"), as a control step
+// does.
+func (b *Brain) dotHolds(id, skill int32, now time.Time) bool {
+	s, ok := b.skillData(skill)
+	r := b.pvp.opponents[id]
+	if !ok || r == nil || !slices.ContainsFunc(s.Effects, func(e datapack.Effect) bool {
+		return e.Name == "DamOverTime" || e.Name == "ManaDamOverTime"
+	}) {
+		return false
+	}
+	l, ok := r.fight.landed[skill]
+	return ok && l.holds(r.Abnormal, now)
 }
 
 // pool is the pool estimate of player id (docs/pvp/layer.md "CP, cures,
@@ -576,8 +608,8 @@ var shippedKits = []map[int32]ClassKit{lineKits, professionKits}
 // RoleDamage from level on, filtered to damage, DOT and control skills,
 // each at the highest skill level its class tree grants by level, Vs
 // copied; a scout row's bow steps go to its bow branch, its other weapon
-// steps to its dagger branch, the rest to both. Empty until the PvP rows
-// ship (X7, X8), and without a travel map.
+// steps to its dagger branch, the rest to both. A kit without PvP steps
+// adds no row; without a travel map the table is empty.
 func pvpRowTable(m *TravelMap, kits []map[int32]ClassKit, level int) charmodel.RowTable {
 	t := charmodel.RowTable{}
 	if m == nil {

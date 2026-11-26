@@ -270,9 +270,11 @@ func (b *Brain) breakAway(id int32, rot []Step, st stepState, now time.Time) Act
 }
 
 // breakDue reports whether the bot's Break step of skill goes on player id
-// at now: none while its last landing still holds id, a control step only
-// when due (controlDue: a sleep under the sleep rule, at MinLand or more),
-// and only under the break-cast gate (breakCastOK).
+// at now: none while its last landing still holds id, a slow none while
+// any slow of the bot still holds id (docs/pvp/rows.md, "Ice Bolt unless
+// the opponent is still slowed"), a control step only when due
+// (controlDue: a sleep under the sleep rule, at MinLand or more), and only
+// under the break-cast gate (breakCastOK).
 func (b *Brain) breakDue(id, skill int32, bot, opp charmodel.Fighter, fighters bool, now time.Time) bool {
 	s, ok := b.skillData(skill)
 	if !ok {
@@ -281,6 +283,13 @@ func (b *Brain) breakDue(id, skill int32, bot, opp charmodel.Fighter, fighters b
 	if r := b.pvp.opponents[id]; r != nil {
 		if l, ok := r.fight.landed[skill]; ok && l.holds(r.Abnormal, now) {
 			return false
+		}
+		if _, bits, _, kites := spanOf(s); kites && bits&rootAbnormal == 0 {
+			for _, l := range r.fight.landed {
+				if l.kites && l.bits&rootAbnormal == 0 && l.holds(r.Abnormal, now) {
+					return false
+				}
+			}
 		}
 	}
 	if isControl(s) && !b.controlDue(id, skill, bot, opp, fighters, now) {

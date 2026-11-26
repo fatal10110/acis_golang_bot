@@ -28,7 +28,7 @@ Each group under the M10 gates:
    duration passed), at a land rate of at least `MinLand` (35 %); no sleep or root on an opponent
    seen to resist that skill twice this fight (139);
 4. the opener, then damage steps, finishers first once the pool estimate is under their expected
-   damage;
+   damage; a DOT step (HP or MP over time) not while its own DOT still ticks on the opponent;
 5. the `Melee` policy.
 
 **Sleep and damage.** Every hit and DOT tick ends sleep (`character_stats.go:858-869`,

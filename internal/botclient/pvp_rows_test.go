@@ -12,8 +12,8 @@ import (
 // TestPvPRowsShipped checks the PvP rows (docs/pvp/rows.md "Tests") and the
 // skills the PvP layer names (docs/pvp/layer.md) against the shipped
 // datapack when BOT_DATAPACK_XML names its data/xml directory, and skips
-// otherwise. X6 ships no row: the row table is empty at every level; X7
-// and X8 add their rows' cases.
+// otherwise: the mystic rows (X8, checkMysticPvPRows); X7 adds the
+// fighter rows' cases.
 func TestPvPRowsShipped(t *testing.T) {
 	dir := os.Getenv("BOT_DATAPACK_XML")
 	if dir == "" {
@@ -27,12 +27,7 @@ func TestPvPRowsShipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &TravelMap{classes: classes, skills: skills}
-	for _, level := range []int{1, 20, 40, 80} {
-		if rows := pvpRowTable(m, shippedKits, level); len(rows) != 0 {
-			t.Errorf("level %d: row table %v, want none before X7 and X8", level, rows)
-		}
-	}
+	t.Run("mystic rows", func(t *testing.T) { checkMysticPvPRows(t, classes, skills) })
 	skill := func(id int32) datapack.Skill {
 		s, ok := skills[datapack.SkillRef{ID: id, Level: 1}]
 		if !ok {
