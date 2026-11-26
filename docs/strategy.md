@@ -863,8 +863,9 @@ Toggle tracking, the `ruleRest` change and Relax ship in S6; S7 adds Soul Cry.
   panel's preset change moves them.
 - `crafter` plays the Crafter role (M9).
 - `town` keeps the Support role it plays today (`TownPersona` is `DefaultPersona` with idle
-  settings): it farms nowhere, but learns, changes class, heals, buffs and fights back when
-  attacked with that kit.
+  settings). It rotates between town spells and farming spells at a spot (D44, #618), where it
+  fights with that kit as a support bot farming alone; it learns, changes class, heals, buffs and
+  fights back when attacked.
 - The panel shows a bot's build (role, branch, kit) beside its class: `live.build` of
   `GET /api/bots` (role, branch and its name, the kit's skill ids), from the brain's published
   status. `POST /api/bots/{account}/branch` with `{"branch": <class id>}` pins a branch (the
@@ -930,7 +931,7 @@ Approved by the owner on 2026-11-24, as proposed (also in `docs/plan.md`, "Owner
 
 | # | Question | Decision |
 | --- | --- | --- |
-| D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: Support (as today; it farms nowhere). |
+| D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: Support (as today; since D44 it rotates between town and farming spells). |
 | D22 | How does a bot pick its profession branch? | Weighted by race fit (section 6), drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). |
 | D23 | Which professions are out of scope? | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone; the Overlord is not picked (a group class). |
 | D24 | May the rewrite change today's behavior? | Yes, per PR: S4 lands behavior-neutral, every later PR states the behavior it changes. |

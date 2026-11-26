@@ -44,7 +44,8 @@ func TestParsePersonaFlag(t *testing.T) {
 
 // TestPresetBrain: each preset yields its persona, and the BrainConfigs of
 // every preset point at one instance of each process-wide piece they use:
-// town bots get no spot registry and only merchants the store registry and
+// every preset gets the spot registry (town bots for their farming spells)
+// and only merchants the store registry and
 // a budget.
 func TestPresetBrain(t *testing.T) {
 	sh := shared{
@@ -67,7 +68,7 @@ func TestPresetBrain(t *testing.T) {
 	}{
 		{"farmer", false, true, 0, botclient.GroundAny},
 		{"support", false, true, 0, botclient.GroundFit},
-		{"town", true, false, 0, botclient.GroundFit},
+		{"town", true, true, 0, botclient.GroundFit},
 		{"merchant", false, true, 70000, botclient.GroundAny},
 	}
 	for _, tt := range tests {

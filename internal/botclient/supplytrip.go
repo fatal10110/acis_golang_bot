@@ -43,6 +43,8 @@ const (
 	// kept items it does not use to deposit in its own warehouse
 	// (queueStash, #449).
 	causeStash
+	// causeRotation: a town bot's farming spell is over (townRota, #618).
+	causeRotation
 )
 
 // supplyTrip is a farmer's trip home to restock (rule "supply", D16,
@@ -333,7 +335,8 @@ func (b *Brain) safeToEscape(now time.Time) bool {
 // never within supplyTripGap of the last trip: the bot leader of a join
 // member with no spot teleported away (leaderTeleported); else the triggers
 // (supplyCause), read every supplyCheck at the bot's spot, or for a join
-// member of its bot party within GatherRange of its leader (nearSlotLeader).
+// member of its bot party within GatherRange of its leader (nearSlotLeader),
+// and last a town bot's farming spell over (causeRotation).
 func (b *Brain) supplyDue(now time.Time) tripCause {
 	v := &b.supplyTrip
 	if b.cfg.Travel == nil || !v.endedAt.IsZero() && now.Sub(v.endedAt) < supplyTripGap {
@@ -346,10 +349,14 @@ func (b *Brain) supplyDue(now time.Time) tripCause {
 		return causeNone
 	}
 	v.checkAt = now.Add(supplyCheck)
-	if c := b.supplyCause(); c != causeStash || b.stashOpen(now) {
-		return c
+	c := b.supplyCause()
+	if c == causeStash && !b.stashOpen(now) {
+		c = causeNone
 	}
-	return causeNone
+	if c == causeNone && b.farmOver(now) {
+		c = causeRotation
+	}
+	return c
 }
 
 // slotMember reports whether the bot is a join member of its bot party
