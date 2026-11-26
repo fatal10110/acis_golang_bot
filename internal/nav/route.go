@@ -228,6 +228,24 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 	return edgeKey{}, true
 }
 
+// straight reports whether the route from from to to, both on their
+// floors, may be the one segment between them without a search: it passes
+// what pull asks of its first candidate, the whole path at once, being
+// within the segment cap, crossing no avoided column, passing the corridor
+// test and CanMove over p's engine (where the door table toggles the doors),
+// and taking no drop, since without a cell path no drop of the path can
+// stand for one of the line (dropsAsPath). The goal is a click target
+// already. When it passes, pull would take the same segment after the
+// search; when it fails, the search decides as it always did (#565).
+func (p *Planner) straight(s *scratch, from, to location.Location) bool {
+	if segLen(from, to) > p.segmentCap() {
+		return false
+	}
+	s.grid.invalidate()
+	return !p.avoided(s, from, to, from, to) && p.corridorClear(s, from, to) &&
+		p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) && !p.lineDrops(s, from, to)
+}
+
 // dropsAsPath reports whether the segment from waypoint i to cell j may be
 // taken as far as drops go: the cell path from i to j holds a drop, or the
 // segment's line holds none. A route that weighed a ramp over a drop keeps

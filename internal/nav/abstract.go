@@ -133,7 +133,11 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 // enters ground it cannot leave, such as a pit. Between clusters it searches
 // the abstract graph of their SCC, then refines the legs between the
 // entrance nodes it chose with the cell search and string-pulls the whole
-// path (docs/navigation.md, "Routes").
+// path (docs/navigation.md, "Routes"). A goal within the segment cap whose
+// straight segment from the start passes what the string-pull's first
+// candidate must pass (Planner.straight) is that one segment, with no search
+// (#565): a follower re-plans every couple of seconds, mostly over open
+// ground a few hundred units long.
 //
 // closed is the door state (nil: every door taken as open), such as the
 // door table's: an abstract edge whose path crosses a closed door costs its
@@ -189,6 +193,9 @@ func (h *Hierarchy) route(p *Planner, from, to location.Location, closed func(do
 		if q.span, ok = h.oneWaySpan(s, ma, mb); !ok {
 			return nil, ErrUnreachable
 		}
+	}
+	if !h.searchOnly && p.straight(s, from, to) {
+		return []location.Location{from, to}, nil
 	}
 	b := routeBudget{cells: p.Budget, nodes: abstractBudget}
 	route, err := h.search(s, p, &q, closed, &b)
