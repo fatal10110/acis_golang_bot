@@ -19,7 +19,7 @@ func at(d time.Duration) time.Time { return t0.Add(d) }
 
 // newTestWorld is a world whose self (selfID, running at 100 units per
 // second) stands at the origin, with an NPC and a player in sight.
-func newTestWorld(t *testing.T) *World {
+func newTestWorld(t testing.TB) *World {
 	t.Helper()
 	w, err := NewWorld(Self{ObjectID: selfID, Name: "bot7"}, t0)
 	if err != nil {
