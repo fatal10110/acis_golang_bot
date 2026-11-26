@@ -99,20 +99,40 @@ func (b *Brain) struck(id int32, now time.Time) bool {
 	return ok && now.Sub(at) <= attackerWindow
 }
 
-// healSeen marks e's caster, a player outside the party, as the enemy
-// healer at now when e is a heal (enemyHeals) on another player of the
-// party's enemy set, and reports whether it did.
-func (b *Brain) healSeen(e MagicSkillUse, now time.Time) bool {
-	r := b.pvp.opponents[e.CasterID]
-	if r == nil || e.TargetID == e.CasterID || b.inParty(e.CasterID) {
+// healSeen marks caster, a player outside the party, as the enemy healer
+// at now when its cast of skill at level is a heal (enemyHeals) landing on
+// one of targets, another player of the party's enemy set, and reports
+// whether it did. A target ONE heal names its target in MagicSkillUse; a
+// target PARTY heal (1027 Group Heal, 1335 Balance Life) names the caster
+// there and its party only in MagicSkillLaunched's target list.
+func (b *Brain) healSeen(caster, skill, level int32, targets []int32, now time.Time) bool {
+	r := b.pvp.opponents[caster]
+	if r == nil || b.inParty(caster) {
 		return false
 	}
-	s, ok := b.skillAt(e.SkillID, e.Level)
-	if !ok || !enemyHeals[s.Type] || !slices.Contains(b.partyEnemies(now), e.TargetID) {
+	s, ok := b.skillAt(skill, level)
+	if !ok || !enemyHeals[s.Type] {
 		return false
 	}
-	r.HealedAt = now
-	return true
+	enemies := b.partyEnemies(now)
+	for _, id := range targets {
+		if id != caster && slices.Contains(enemies, id) {
+			r.HealedAt = now
+			return true
+		}
+	}
+	return false
+}
+
+// launchSeen marks the enemy healer from a player's cast landing on e's
+// targets at now (healSeen), and reports when the PvP reaction to it is
+// due.
+func (b *Brain) launchSeen(e MagicSkillLaunched, now time.Time) time.Time {
+	o := b.world.object(e.CasterID)
+	if o == nil || o.Kind != KindPlayer || !b.healSeen(e.CasterID, e.SkillID, e.Level, e.Targets, now) {
+		return time.Time{}
+	}
+	return b.pvpReact(now)
 }
 
 // hitters are the party's hits within attackerWindow of now by attacker, a

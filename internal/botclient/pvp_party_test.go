@@ -30,12 +30,15 @@ var (
 )
 
 // partySkills are the datapack entries the party tests cast or see cast:
-// 1015 Battle Heal (HEAL), 1035 Mental Shield (a target ONE buff, hit 4000)
-// and 28 Aggression (AGGDAMAGE).
+// 1015 Battle Heal (HEAL), 1027 Group Heal (HEAL, target PARTY), 1035 Mental
+// Shield (a target ONE buff, hit 4000), 28 Aggression (AGGDAMAGE) and 112
+// Deflect Arrow (a target SELF buff).
 var partySkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: skillBattleHeal, Level: 1}:   {Type: "HEAL", Target: "ONE", Magic: true, HitTime: time.Second, Power: 100},
 	{ID: skillMentalShield, Level: 1}: {Type: "BUFF", Target: "ONE", Magic: true, HitTime: 4 * time.Second},
 	{ID: skillAggression, Level: 1}:   {Type: "AGGDAMAGE", Target: "ONE", Offensive: true, HitTime: time.Second},
+	{ID: skillGroupHeal, Level: 1}:    {Type: "HEAL", Target: "PARTY", Magic: true, HitTime: time.Second, Power: 100},
+	{ID: skillDeflectArrow, Level: 1}: {Type: "BUFF", Target: "SELF", HitTime: time.Second},
 }
 
 // ptyRow is a party window row: id named name of class at hp of 100.
@@ -274,6 +277,21 @@ func TestPvPPartyFoe(t *testing.T) {
 			cleric(b, ptyFoe3Pos)
 			b.handleOne(t, ptyHit(pcID, ptyKN, ptyFoe1Pos), at(2*time.Second))
 		}, ptyFoe3},
+		{"a group heal on an enemy marks its healer", ptyParty(ptyCL), func(b *Brain) {
+			b.handleOne(t, ptyHit(pcID, ptyKN, ptyFoe1Pos), at(time.Second))
+			// The server names the caster as a target PARTY skill's target
+			// (handler/target/group.go partyHandler.FinalTarget) and its
+			// party in the launch.
+			b.handleOne(t, MagicSkillUse{CasterID: ptyFoe2, TargetID: ptyFoe2, SkillID: skillGroupHeal, Level: 1, HitTime: time.Second, CasterPos: ptyFoe2Pos}, at(2*time.Second))
+			if r := b.pvp.opponents[ptyFoe2]; !r.HealedAt.IsZero() {
+				t.Fatal("a group heal's start marked the enemy healer")
+			}
+			b.handleOne(t, MagicSkillLaunched{CasterID: ptyFoe2, SkillID: skillGroupHeal, Level: 1, Targets: []int32{ptyFoe2, pcID}}, at(2500*time.Millisecond))
+		}, ptyFoe2},
+		{"a group heal on the healer alone marks no healer", ptyParty(ptyCL), func(b *Brain) {
+			b.handleOne(t, ptyHit(pcID, ptyKN, ptyFoe1Pos), at(time.Second))
+			b.handleOne(t, MagicSkillLaunched{CasterID: ptyFoe2, SkillID: skillGroupHeal, Level: 1, Targets: []int32{ptyFoe2}}, at(2500*time.Millisecond))
+		}, pcID},
 		{"no Healer prior out of reach", ptyParty(ptyCL), func(b *Brain) {
 			cleric(b, Point{X: -3000, Y: 300})
 			b.handleOne(t, ptyHit(pcID, ptyKN, ptyFoe1Pos), at(2*time.Second))
@@ -326,5 +344,67 @@ func TestPvPHealerStand(t *testing.T) {
 	}
 	if row, _ := charmodel.ClassRow(15, false); row.Archetype() != charmodel.Healer {
 		t.Fatal("the Cleric fixture plays no Healer row")
+	}
+}
+
+// TestPvPPartyBuffSelf checks a non-healer's PvP self buff in a party fight
+// (docs/pvp/party.md "The bot's healer"): a KN puts up 112 Deflect Arrow on
+// itself while an archer of the enemy set hits a member, and casts it again
+// no sooner than buffRetry.
+func TestPvPPartyBuffSelf(t *testing.T) {
+	kit := ClassKit{PvP: []Step{{Skill: skillDeflectArrow, Target: TargetSelf, Vs: []charmodel.Archetype{charmodel.Archer}}}}
+	b := partyBrain(t, 4, nil, kit, ptyParty(ptyKN))
+	asArcher(b)
+	b.handleOne(t, ptyHit(pcID, ptyCL, ptyFoe1Pos), at(time.Second))
+	now := at(1500 * time.Millisecond)
+	got, a := b.decide(now)
+	if got != "party buff" || a.kind != actCast || a.object != selfID || a.skill != skillDeflectArrow {
+		t.Fatalf("decision rule %q kind %v object %#x skill %d, want Deflect Arrow on self", got, a.kind, a.object, a.skill)
+	}
+	if ok, err := b.send(a, now); !ok || err != nil {
+		t.Fatalf("send = %v, %v", ok, err)
+	}
+	if got := b.buffedAt[buffKey{selfID, skillDeflectArrow}]; !got.Equal(now) {
+		t.Errorf("buffedAt = %v, want the cast time %v", got, now)
+	}
+	// The cast's hold has run out, the buff did not land: buffRetry holds it.
+	later := now.Add(castTimeout + time.Second)
+	if got, a := b.decide(later); got == "party buff" {
+		t.Errorf("decision %q skill %d within buffRetry, want no party buff", got, a.skill)
+	}
+	b.handleOne(t, ptyHit(pcID, ptyCL, ptyFoe1Pos), now.Add(buffRetry-time.Second))
+	if got, a := b.decide(now.Add(buffRetry)); got != "party buff" || a.skill != skillDeflectArrow {
+		t.Errorf("decision %q skill %d after buffRetry, want Deflect Arrow", got, a.skill)
+	}
+}
+
+// TestPvPOutnumberedParty checks the outnumbered rule hands a party fight to
+// "party fight" (docs/pvp/party.md "The healer first"): two enemies hitting
+// the bot itself, the bot fights the marked enemy healer rather than its
+// hardest hitter; the bot's healer still fights back as outnumbered.
+func TestPvPOutnumberedParty(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		class  int32
+		kit    ClassKit
+		rule   string
+		object int32
+	}{
+		{"a damage bot fights the enemy healer", 10, ClassKit{Rotation: []Step{{Skill: lyrNuke}}}, "party fight", ptyFoe3},
+		{"the bot's healer fights back outnumbered", 15, ClassKit{Heals: []Heal{{Skill: skillHeal, HP: 60}}}, "outnumbered", pcID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := partyBrain(t, tc.class, pvpPolicy, tc.kit, ptyParty(selfID))
+			b.handleOne(t, CharInfo{ObjectID: ptyFoe3, Name: "foe3", ClassID: 10, Pos: ptyFoe3Pos, PvPFlag: 1}, t0)
+			b.handleOne(t, ptyHit(ptyFoe2, selfID, ptyFoe2Pos), at(time.Second))
+			b.handleOne(t, ptyHit(pcID, selfID, ptyFoe1Pos), at(time.Second))
+			b.handleOne(t, ptyHit(pcID, selfID, ptyFoe1Pos), at(1200*time.Millisecond))
+			b.handleOne(t, ptyHeal(ptyFoe3, pcID, ptyFoe3Pos), at(1500*time.Millisecond))
+			b.world.Self.InCombat = true
+			if n := len(b.attackers(at(2 * time.Second))); n < 2 {
+				t.Fatalf("%d attackers, want 2", n)
+			}
+			wantDecision(t, b, at(2*time.Second), tc.rule, actSelect, tc.object, 0)
+		})
 	}
 }

@@ -273,6 +273,8 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 		}
 	case MagicSkillUse:
 		return b.castSeen(e, now)
+	case MagicSkillLaunched:
+		return b.launchSeen(e, now)
 	case MagicSkillCanceled:
 		if r := p.opponents[e.CasterID]; r != nil {
 			r.LastCast = CastSeen{}
@@ -391,7 +393,7 @@ func (b *Brain) castSeen(e MagicSkillUse, now time.Time) time.Time {
 	if e.TargetID == self && (player || o.Summon) && offensive {
 		b.world.hitBy(e.CasterID, 0, now)
 	}
-	healer := player && b.healSeen(e, now)
+	healer := player && b.healSeen(e.CasterID, e.SkillID, e.Level, []int32{e.TargetID}, now)
 	_, member := b.world.Party.Members[e.TargetID]
 	if b.fights(e.CasterID, now) || b.fights(e.TargetID, now) || player && member || healer {
 		return b.pvpReact(now)
