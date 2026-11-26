@@ -96,7 +96,11 @@ type Status struct {
 	Rule string
 	// Spot is the npcmaker name of the farming spot the bot holds in its
 	// spot registry (BrainConfig.Spots), "" while it holds none.
-	Spot string
+	// Earning is set while that spot is an earning spot (the earning mode,
+	// #527): a bot under a death penalty that no spot fits farms it for
+	// the adena a Scroll: Recovery costs.
+	Spot    string
+	Earning bool
 	// Walk is "unreachable: <reason>" while the bot's latest walk ended
 	// with no route that holds (blocked, desync, door, watchdog, no route,
 	// isolated, no nav), "" otherwise (docs/navigation.md, "Walker").
@@ -212,9 +216,9 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 	s := &w.Self
 	st.At, st.State, st.Rule, st.Order = now, StateOnline, b.lastRule, l.order.cmd
 	st.Party, st.Whispered, st.PartyLeft = l.party.String(), b.orders.whispered, l.partyLeft
-	st.Spot, st.Walk = "", b.walk.failed()
+	st.Spot, st.Earning, st.Walk = "", false, b.walk.failed()
 	if b.spot.farming() {
-		st.Spot = b.cfg.Spots.spots[b.spot.idx].Maker
+		st.Spot, st.Earning = b.cfg.Spots.spots[b.spot.idx].Maker, b.spot.earning
 	}
 	st.Character, st.ClassID, st.Level = s.Name, s.ClassID, s.Level
 	st.HP, st.MaxHP, st.MP, st.MaxMP, st.CP, st.MaxCP = s.HP, s.MaxHP, s.MP, s.MaxMP, s.CP, s.MaxCP
