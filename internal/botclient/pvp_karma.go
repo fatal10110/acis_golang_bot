@@ -58,17 +58,6 @@ type karmaState struct {
 	keep        *karmaKeep
 }
 
-// karmaRules are the rules a bot with karma skips (docs/pvp/karma.md "With
-// karma"): its duels (a karma player cannot duel) and arena trips, and
-// every errand that takes it to a town NPC or a gatekeeper, who refuse it
-// (folk_bypass.go, players.properties KarmaPlayerCanShop, CanUseGK). Its
-// hunts are ruleHunt's own gate.
-var karmaRules = map[string]bool{
-	"challenge": true, "arena": true, "supply": true, "shop": true, "train": true, "gear": true,
-	"market": true, "warehouse": true, "dyes": true, "classchange": true, "newbie": true,
-	"valuables": true, "recipe": true, "member": true, "travel": true,
-}
-
 // karmaEvent keeps the death and karma memory with ev at now, before the
 // World applies it: the bot's own death reads the attackers table the
 // World clears on it.

@@ -190,18 +190,31 @@ func TestPvPPKCap(t *testing.T) {
 	})
 	t.Run("karma above 0: the town rules held", func(t *testing.T) {
 		for _, name := range []string{"supply", "travel", "shop", "warehouse", "train", "arena", "challenge"} {
-			if !karmaRules[name] {
+			if !karmaRule(name) {
 				t.Errorf("rule %q runs with karma", name)
 			}
 		}
 		for _, name := range []string{"dead", "attacked", "recover", "rest", "spot", "farm"} {
-			if karmaRules[name] {
+			if karmaRule(name) {
 				t.Errorf("rule %q held with karma", name)
 			}
 		}
-		for name := range karmaRules {
-			if !slices.ContainsFunc(playRules, func(r rule) bool { return r.name == name }) {
-				t.Errorf("karma holds %q, no rule", name)
+		var held []string
+		for _, r := range playRules {
+			if r.karma {
+				held = append(held, r.name)
+			}
+		}
+		want := []string{
+			"challenge", "valuables", "classchange", "train", "gear", "market", "shop", "dyes",
+			"warehouse", "member", "recipe", "supply", "arena", "newbie", "travel",
+		}
+		if !slices.Equal(held, want) {
+			t.Errorf("karma holds %q, want %q", held, want)
+		}
+		for _, r := range storeRules {
+			if r.karma {
+				t.Errorf("store rule %q held with karma", r.name)
 			}
 		}
 	})

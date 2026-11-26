@@ -9,17 +9,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
-// Class ids of the branch tables' lines the tests name (data/xml/classes).
-const (
-	classGladiator      int32 = 2
-	classWarlord        int32 = 3
-	classPaladin        int32 = 5
-	classTempleKnight   int32 = 20
-	classSwordSinger    int32 = 21
-	classShillienKnight int32 = 33
-	classBladedancer    int32 = 34
-)
-
 // accountFor is the first account name of the form "botN" whose draw for a
 // base class in role is want.
 func accountFor(t *testing.T, base int32, role Role, want line) string {

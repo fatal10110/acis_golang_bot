@@ -213,6 +213,9 @@ type Brain struct {
 	// click or an attack step's cast (Action.opens). An Opener step casts
 	// only on another (stepState.fresh).
 	opened int32
+	// once is the Once steps' record (onceRecord): the skills the server
+	// took a cast of on the bot's target.
+	once onceRecord
 	// side is a step cast on another attacker than the fight's (Dryad Root,
 	// TargetOtherAttacker) whose select went out and whose cast is due once
 	// it is the bot's target; sided is the last attacker one went to, which
@@ -475,10 +478,13 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 	// An inspect still waiting when the session ends gets the model as
 	// it stands.
 	defer func() { b.answerInspect(b.clock.Now(), true) }()
-	defer b.leaveSpot()
-	defer b.releaseStore()
-	defer b.releasePartyClaim()
-	defer b.releaseCraftBoard()
+	defer func() {
+		for _, r := range playRules {
+			if r.stop != nil {
+				r.stop(b)
+			}
+		}
+	}()
 	due := b.due()
 	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()
@@ -598,9 +604,15 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID != b.engaged {
 				b.engaged = 0
 			}
+			// Selecting self for a TargetSelf step or a side cast is not a
+			// target change: the Once record stays for the enemy.
+			if e.ObjectID != self && e.ObjectID != b.once.target {
+				b.once = onceRecord{}
+			}
 		case TargetUnselected:
 			if e.ObjectID == self {
 				b.engaged = 0
+				b.once = onceRecord{}
 			}
 		case AutoAttackStop:
 			if e.ObjectID == self {
@@ -665,6 +677,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case MagicSkillUse:
 			if e.CasterID == self {
 				b.standCaster(e)
+				b.onceCast(e, now)
 				b.castAt = time.Time{}
 				if e.TargetID == b.unseen.id {
 					// The server took a cast at it: it is in sight.
@@ -688,6 +701,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.forgetOnce(e.ObjectID)
 			b.forgetSide(e.ObjectID)
 			b.spoilEvent(ev, now)
 			// A dead bot frees its spot for another and avoids it for a
@@ -705,6 +719,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.forgetOnce(e.ObjectID)
 			b.forgetSide(e.ObjectID)
 		case NpcHtmlMessage:
 			b.trainEvent(ev, now)

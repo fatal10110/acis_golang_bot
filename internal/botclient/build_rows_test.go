@@ -42,8 +42,9 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 // the skill's castRange, every toggle is a TOGGLE skill, a Party buff and a
 // party heal (Heal.Members) are exactly the PARTY-target skills among the
 // buffs and heals, every skill tagged (base) (ClassKit.Base) is first
-// granted under 20, and the next profession is a direct child of the
-// class.
+// granted under 20, every skill tagged (fixed) (ClassKit.Fixed) is in the
+// merged tree and not in the class's own, and the next profession is a
+// direct child of the class.
 func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapack.SkillRef]datapack.Skill) []string {
 	var errs []string
 	fail := func(format string, args ...any) { errs = append(errs, r.name+": "+fmt.Sprintf(format, args...)) }
@@ -150,6 +151,17 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			fail("skill %d tagged (base) is first granted at %d, not by the base class", id, lvl)
 		}
 	}
+	// The class's own tree is the head of its merged one: its own grants
+	// in file order, then its parent's merged tree (datapack.Class.Skills).
+	own := c.Skills
+	if p, ok := classes[c.Parent]; ok {
+		own = c.Skills[:max(0, len(c.Skills)-len(p.Skills))]
+	}
+	for _, id := range r.kit.Fixed {
+		if _, ok := known(id); ok && slices.ContainsFunc(own, func(g datapack.SkillGrant) bool { return g.ID == id }) {
+			fail("skill %d tagged (fixed) is in class %d's own tree", id, r.class)
+		}
+	}
 	for _, id := range []int32{r.kit.Flee, r.kit.Relax, r.kit.Sweep} {
 		if id != 0 {
 			known(id)
@@ -161,8 +173,48 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 	return errs
 }
 
-// shippedRows are the rows of every base class (levels 1-19) and first
-// profession (20-39) in classes, for every role.
+// rowSpan is the levels a row of class plays (docs/strategy.md "Behavior
+// per class"): 1-19 for a base class, 20-39 for a first profession and
+// 40-75 for a second; ok is false for a third profession (76+, no rows)
+// and an id the profession table does not hold.
+func rowSpan(class int32) (start, end int32, ok bool) {
+	depth := 0
+	p, known := datapack.ParentClass(class)
+	for known && p >= 0 {
+		depth++
+		p, known = datapack.ParentClass(p)
+	}
+	if !known {
+		return 0, 0, false
+	}
+	switch depth {
+	case 0:
+		return 1, 19, true
+	case 1:
+		return 20, 39, true
+	case 2:
+		return 40, 75, true
+	}
+	return 0, 0, false
+}
+
+// secondRows are the second professions with a row of their own: an entry
+// in professionKits. The others play their first profession's row
+// (TestSecondProfessionFallback).
+func secondRows() []int32 {
+	var ids []int32
+	for id := range professionKits {
+		if start, _, ok := rowSpan(id); ok && start == 40 {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// shippedRows are the rows of every base class (levels 1-19), first
+// profession (20-39) and second profession with a row of its own (40-75,
+// secondRows) in classes, for every role.
 func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 	ids := make([]int32, 0, len(classes))
 	for id := range classes {
@@ -172,12 +224,9 @@ func shippedRows(classes map[int32]datapack.Class) []behaviorRow {
 	var rows []behaviorRow
 	for _, id := range ids {
 		c := classes[id]
-		start, end := int32(1), int32(19)
-		if c.Parent >= 0 {
-			if classes[c.Parent].Parent >= 0 {
-				continue
-			}
-			start, end = 20, 39
+		start, end, ok := rowSpan(id)
+		if !ok || start == 40 && !slices.Contains(secondRows(), id) {
+			continue
 		}
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
 			bd := CompileBuild(c.Race, id, end, role, BranchChoice{})
@@ -214,8 +263,8 @@ func TestBehaviorRowsShipped(t *testing.T) {
 	}
 	trainers := indexTrainers(npcs)
 	rows := shippedRows(classes)
-	if len(rows) != 3*(9+18) {
-		t.Errorf("%d rows, want every role of the 9 base classes and 18 first professions", len(rows))
+	if second := secondRows(); len(rows) != 3*(9+18+len(second)) {
+		t.Errorf("%d rows, want every role of the 9 base classes, 18 first professions and second professions %v", len(rows), second)
 	}
 	for _, r := range rows {
 		for _, e := range checkRow(r, classes, skills) {
@@ -227,7 +276,9 @@ func TestBehaviorRowsShipped(t *testing.T) {
 		if len(r.kit.Skills) > 0 && len(trainers[r.class]) == 0 {
 			t.Errorf("%s learns %v at no trainer", r.name, r.kit.Skills)
 		}
-		if r.next == 0 {
+		// A second profession takes no profession next: the third is out
+		// of scope (branch_test.go).
+		if r.next == 0 && r.start < 40 {
 			t.Errorf("%s takes no profession next (branchTables)", r.name)
 		}
 	}
@@ -271,9 +322,14 @@ func TestBehaviorRowsShipped(t *testing.T) {
 // skill that is none, a party buff or heal of a single-target skill and the
 // other way round, a skill out of the tree (a heal's, Relax), a wrong
 // charge gate, a (base) tag on a skill first granted from 20 and a
-// profession that is not a direct child each fail.
+// profession that is not a direct child each fail. In a second
+// profession's row (40/75) a (fixed) tag on a skill of the parent's tree
+// passes and one on a skill of the class's own tree or out of the tree
+// fails; an untagged skill granted at 38 passes, one granted at 43 only
+// with From 43.
 func TestBehaviorRowsCheck(t *testing.T) {
 	const sword, plain, charged, late, aura, chant = int32(100), int32(101), int32(102), int32(103), int32(104), int32(105)
+	const first38, own40, own43 = int32(106), int32(107), int32(108)
 	classes := map[int32]datapack.Class{
 		10: {ID: 10, Parent: -1, Skills: []datapack.SkillGrant{
 			{ID: sword, Level: 1, MinLevel: 1},
@@ -286,6 +342,18 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		}},
 		11: {ID: 11, Parent: 10},
 		12: {ID: 12, Parent: 11},
+	}
+	// 20 is a first profession of 10 and 21 a second, each tree its own
+	// grants and then its parent's merged one.
+	classes[20] = datapack.Class{ID: 20, Parent: 10, Skills: slices.Concat([]datapack.SkillGrant{
+		{ID: first38, Level: 1, MinLevel: 38},
+	}, classes[10].Skills)}
+	classes[21] = datapack.Class{ID: 21, Parent: 20, Skills: slices.Concat([]datapack.SkillGrant{
+		{ID: own40, Level: 1, MinLevel: 40},
+		{ID: own43, Level: 1, MinLevel: 43},
+	}, classes[20].Skills)}
+	second := func(kit ClassKit) behaviorRow {
+		return behaviorRow{name: "fixture", class: 21, start: 40, end: 75, kit: kit}
 	}
 	skills := map[datapack.SkillRef]datapack.Skill{
 		{ID: sword, Level: 1}:   {WeaponsAllowed: []string{"SWORD", "BLUNT"}},
@@ -331,6 +399,14 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{"base skill", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Relax: plain, Base: []int32{plain}}}, false},
 		{"base tag from 20", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Buffs: []Buff{{Skill: late}}, Base: []int32{late}}}, true},
 		{"profession row starts at 20", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Rotation: []Step{{Skill: plain}}}}, false},
+		{"fixed from the parent", second(ClassKit{Rotation: []Step{{Skill: first38}}, Fixed: []int32{first38}}), false},
+		{"fixed from the base", second(ClassKit{Rotation: []Step{{Skill: plain}}, Fixed: []int32{plain}}), false},
+		{"fixed in the own tree", second(ClassKit{Rotation: []Step{{Skill: own40}}, Fixed: []int32{own40}}), true},
+		{"fixed out of the tree", second(ClassKit{Fixed: []int32{999}}), true},
+		{"second row: untagged at 38", second(ClassKit{Rotation: []Step{{Skill: first38}}}), false},
+		{"second row: untagged at 40", second(ClassKit{Rotation: []Step{{Skill: own40}}}), false},
+		{"second row: 43 at its level", second(ClassKit{Rotation: []Step{{Skill: own43, From: 43}}}), false},
+		{"second row: 43 untagged", second(ClassKit{Rotation: []Step{{Skill: own43}}}), true},
 	}
 	for _, tt := range tests {
 		errs := checkRow(tt.row, classes, skills)

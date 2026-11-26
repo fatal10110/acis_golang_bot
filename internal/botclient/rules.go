@@ -483,6 +483,16 @@ func restartToVillage(w *World, _ time.Time) Action {
 type rule struct {
 	name string
 	run  func(b *Brain, now time.Time) (Action, bool)
+	// karma marks a rule a bot with karma skips (docs/pvp/karma.md "With
+	// karma"): its duels (a karma player cannot duel) and arena trips, and
+	// every errand that takes it to a town NPC or a gatekeeper, who refuse
+	// it (folk_bypass.go, players.properties KarmaPlayerCanShop, CanUseGK).
+	// Its hunts are ruleHunt's own gate.
+	karma bool
+	// stop gives back what the rule holds in a registry shared with other
+	// bots (a spot, a store place, a party claim, a craft board entry) when
+	// Run ends. Run calls it on every playRules row, karma or not.
+	stop func(b *Brain)
 }
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
@@ -561,72 +571,72 @@ type rule struct {
 // first), right after "sweep": "outnumbered" leaves its target to it once
 // past its flee, and it goes ahead of "attacked" and "assist".
 var playRules = []rule{
-	{"dead", (*Brain).ruleDead},
-	{"prompt", (*Brain).rulePrompt},
-	{"command", (*Brain).ruleCommand},
-	{"critical", (*Brain).ruleCritical},
-	{"escape", (*Brain).ruleEscape},
-	{"guard", (*Brain).ruleGuard},
-	{"heal", (*Brain).ruleHeal},
-	{"raise", (*Brain).ruleRaise},
-	{"duel", (*Brain).ruleDuel},
-	{"party buff", (*Brain).rulePartyBuff},
-	{"outnumbered", (*Brain).ruleOutnumbered},
-	{"sweep", (*Brain).ruleSweep},
-	{"party fight", (*Brain).rulePartyFight},
-	{"chat", (*Brain).ruleChat},
-	{"announce", (*Brain).ruleAnnounce},
-	{"party", (*Brain).ruleParty},
-	{"channel", (*Brain).ruleChannel},
-	{"shots", (*Brain).ruleShots},
-	{"overweight", (*Brain).ruleOverweight},
-	{"arena leave", (*Brain).ruleArenaLeave},
-	{"attacked", (*Brain).ruleAttacked},
-	{"overweight hold", (*Brain).ruleOverweightHold},
-	{"recover", (*Brain).ruleRecover},
-	{"rest", (*Brain).ruleRest},
-	{"rebuff", (*Brain).ruleRebuff},
-	{"buffpotion", (*Brain).ruleBuffPotion},
-	{"arena fight", (*Brain).ruleArenaFight},
-	{"hunt", (*Brain).ruleHunt},
-	{"challenge", (*Brain).ruleChallenge},
-	{"rooms", (*Brain).ruleRooms},
-	{"stay", (*Brain).ruleStay},
-	{"loot", (*Brain).ruleLoot},
-	{"valuables", (*Brain).ruleValuables},
-	{"store", (*Brain).ruleStore},
-	{"assist", (*Brain).ruleAssist},
-	{"classchange", (*Brain).ruleClassChange},
-	{"train", (*Brain).ruleTrain},
-	{"gear", (*Brain).ruleGear},
-	{"market", (*Brain).ruleMarket},
-	{"shop", (*Brain).ruleShop},
-	{"dyes", (*Brain).ruleDyes},
-	{"warehouse", (*Brain).ruleWarehouse},
-	{"enchant", (*Brain).ruleEnchant},
-	{"member", (*Brain).ruleMember},
-	{"recipe", (*Brain).ruleRecipe},
-	{"craft", (*Brain).ruleCraft},
-	{"supply", (*Brain).ruleSupply},
-	{"arena", (*Brain).ruleArena},
-	{"leader", (*Brain).ruleLeader},
-	{"follow", (*Brain).ruleFollow},
-	{"newbie", (*Brain).ruleNewbie},
-	{"travel", (*Brain).ruleTravel},
-	{"spot", (*Brain).ruleSpot},
-	{"farm", (*Brain).ruleFarm},
-	{"goal", (*Brain).ruleGoal},
-	{"idle", (*Brain).ruleIdle},
+	{name: "dead", run: (*Brain).ruleDead},
+	{name: "prompt", run: (*Brain).rulePrompt},
+	{name: "command", run: (*Brain).ruleCommand},
+	{name: "critical", run: (*Brain).ruleCritical},
+	{name: "escape", run: (*Brain).ruleEscape},
+	{name: "guard", run: (*Brain).ruleGuard},
+	{name: "heal", run: (*Brain).ruleHeal},
+	{name: "raise", run: (*Brain).ruleRaise},
+	{name: "duel", run: (*Brain).ruleDuel},
+	{name: "party buff", run: (*Brain).rulePartyBuff},
+	{name: "outnumbered", run: (*Brain).ruleOutnumbered},
+	{name: "sweep", run: (*Brain).ruleSweep},
+	{name: "party fight", run: (*Brain).rulePartyFight},
+	{name: "chat", run: (*Brain).ruleChat},
+	{name: "announce", run: (*Brain).ruleAnnounce},
+	{name: "party", run: (*Brain).ruleParty},
+	{name: "channel", run: (*Brain).ruleChannel},
+	{name: "shots", run: (*Brain).ruleShots},
+	{name: "overweight", run: (*Brain).ruleOverweight},
+	{name: "arena leave", run: (*Brain).ruleArenaLeave},
+	{name: "attacked", run: (*Brain).ruleAttacked},
+	{name: "overweight hold", run: (*Brain).ruleOverweightHold},
+	{name: "recover", run: (*Brain).ruleRecover},
+	{name: "rest", run: (*Brain).ruleRest},
+	{name: "rebuff", run: (*Brain).ruleRebuff},
+	{name: "buffpotion", run: (*Brain).ruleBuffPotion},
+	{name: "arena fight", run: (*Brain).ruleArenaFight},
+	{name: "hunt", run: (*Brain).ruleHunt},
+	{name: "challenge", run: (*Brain).ruleChallenge, karma: true},
+	{name: "rooms", run: (*Brain).ruleRooms, stop: (*Brain).releasePartyClaim},
+	{name: "stay", run: (*Brain).ruleStay},
+	{name: "loot", run: (*Brain).ruleLoot},
+	{name: "valuables", run: (*Brain).ruleValuables, karma: true},
+	{name: "store", run: (*Brain).ruleStore, stop: (*Brain).releaseStore},
+	{name: "assist", run: (*Brain).ruleAssist},
+	{name: "classchange", run: (*Brain).ruleClassChange, karma: true},
+	{name: "train", run: (*Brain).ruleTrain, karma: true},
+	{name: "gear", run: (*Brain).ruleGear, karma: true},
+	{name: "market", run: (*Brain).ruleMarket, karma: true},
+	{name: "shop", run: (*Brain).ruleShop, karma: true},
+	{name: "dyes", run: (*Brain).ruleDyes, karma: true},
+	{name: "warehouse", run: (*Brain).ruleWarehouse, karma: true},
+	{name: "enchant", run: (*Brain).ruleEnchant},
+	{name: "member", run: (*Brain).ruleMember, karma: true},
+	{name: "recipe", run: (*Brain).ruleRecipe, karma: true},
+	{name: "craft", run: (*Brain).ruleCraft, stop: (*Brain).releaseCraftBoard},
+	{name: "supply", run: (*Brain).ruleSupply, karma: true},
+	{name: "arena", run: (*Brain).ruleArena, karma: true},
+	{name: "leader", run: (*Brain).ruleLeader},
+	{name: "follow", run: (*Brain).ruleFollow},
+	{name: "newbie", run: (*Brain).ruleNewbie, karma: true},
+	{name: "travel", run: (*Brain).ruleTravel, karma: true},
+	{name: "spot", run: (*Brain).ruleSpot, stop: (*Brain).leaveSpot},
+	{name: "farm", run: (*Brain).ruleFarm},
+	{name: "goal", run: (*Brain).ruleGoal},
+	{name: "idle", run: (*Brain).ruleIdle},
 }
 
 // storeRules replace rules 3-10 in store mode: the bot opens its store
 // and stays seated in it, watching for it to close.
 var storeRules = []rule{
-	{"dead", (*Brain).ruleDead},
-	{"prompt", (*Brain).rulePrompt},
-	{"command", (*Brain).ruleCommand},
-	{"chat", (*Brain).ruleChat},
-	{"store", (*Brain).ruleStore},
+	{name: "dead", run: (*Brain).ruleDead},
+	{name: "prompt", run: (*Brain).rulePrompt},
+	{name: "command", run: (*Brain).ruleCommand},
+	{name: "chat", run: (*Brain).ruleChat},
+	{name: "store", run: (*Brain).ruleStore},
 }
 
 // RuleNames lists every name decide returns for a matching rule, for a
@@ -653,7 +663,7 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	b.karmaTick(now)
 	karma := b.world.Self.Karma > 0
 	for _, r := range rules {
-		if karma && karmaRules[r.name] {
+		if karma && r.karma {
 			continue
 		}
 		if a, ok := r.run(b, now); ok {

@@ -18,9 +18,6 @@ const (
 	elvenBow        int32 = 276
 	boneArrow       int32 = 1341
 	fineSteelArrow  int32 = 1342
-	// classHawkeye is a human archer; classTreasureHunter a dagger user.
-	classHawkeye        int32 = 9
-	classTreasureHunter int32 = 8
 )
 
 // arrowTemplates are gearTemplates plus bows and arrows: a C-grade bow

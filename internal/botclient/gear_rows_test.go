@@ -74,10 +74,7 @@ func checkGearRow(class int32, r gearRow, classes map[int32]datapack.Class, item
 	if !ok {
 		return []string{fmt.Sprintf("class %d not in the datapack", class)}
 	}
-	start, end := int32(1), int32(19)
-	if c.Parent >= 0 {
-		start, end = 20, 39
-	}
+	start, end, _ := rowSpan(class)
 	var kinds, stats []string
 	for _, role := range []Role{RoleDamage, RoleSupport} {
 		bd := CompileBuild(c.Race, class, end, role, BranchChoice{})
