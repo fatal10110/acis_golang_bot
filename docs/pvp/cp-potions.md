@@ -14,12 +14,12 @@ the stock runs out and stays out. A GM grant is the only source.
 
 | Topic | Server behavior | Evidence |
 | --- | --- | --- |
-| Who sells CP potions | Only multisell 500, "Purchase consumable items", at the Seven Signs priests (the list's `npcs`: Priest of Dawn 31078-31084, Dusk Priestess 31085-31091, and 31168, 31169, 31692-31695): CP Potion 5591 for 240 Ancient Adena (5575) plus 200 adena, Greater CP Potion 5592 for 600 plus 500 (the adena is the castle tax ingredient). Buy list 3001 has no merchant. No monster drops either kind. Reference prices 240 and 600, weights 25 and 100. | `multisell/500.xml:3-26`, `:58-68`; `items/5500-5599.xml:655-677`; [items](server-items.md) |
+| Who sells CP potions | Only multisell 500, "Purchase consumable items", at the Seven Signs priests (the list's `npcs`: Priest of Dawn 31078-31084, Dusk Priestess 31085-31091, and 31168, 31169, 31692-31695, 31997, 31998): CP Potion 5591 for 240 Ancient Adena (5575) plus 200 adena, Greater CP Potion 5592 for 600 plus 500 (the adena is the castle tax ingredient). Buy list 3001 has no merchant. No monster drops either kind. Reference prices 240 and 600, weights 25 and 100. | `multisell/500.xml:2-28`, `:58-68`; `items/5500-5599.xml:655-677`; [items](server-items.md) |
 | When a priest offers it | A priest greets a member of its own cabal with page `2a` or `2c` only in the Seal Validation period and only when that cabal won the competition. Those two pages link multisell 500, the stone exchange (`SevenSigns 16`) and the reward (`SevenSigns 9`). Every other case gets a page without them: `1` (competition), `5` (results), `6` (recruiting), `2b` (its cabal lost), `2d` (a tie), `3` (a member of the other cabal), `4` (a non-member while that cabal won). | `folk_chat_signs.go:119-147`; `dawn_priest_2a.htm:11-12`, `dusk_priest_2a.htm:11-12`, `*_priest_2c.htm:10-11` |
 | Links are checked | The server accepts an `npc_` bypass only when it is a link of the last page it sent the player, so a bot cannot reach multisell 500 or the exchange without that page. | `network/bypass.go:64`, `:139`; the Java reference's `validateBypass` |
 | The cycle | Recruiting (15 min), Competition (to Monday 18:00 server time), Results (15 min), Seal Validation (to the next Monday 18:00). One cycle is two weeks; a new one clears every sign-up, contribution and stone score. The winner is the cabal ahead on total score (stone score plus festival score); equal totals, 0 to 0 included, mean no winner. No GM command changes the period (Java and Go). | `sevensigns/sevensigns.go:88-95`, `:620-655`, `:695-711`; `sevensigns/players.go:153-163`; `adminCommands.xml` |
 | Signing up | At a priest during Competition (page `1`: `SevenSigns 3`, `33`, `34`, then `4 <cabal> <seal>`). Needs a first profession (page `signs_33_*_firstclass` otherwise). Dusk is free except for a castle-owning clan's member; Dawn costs 50 000 adena or a Certificate of Approval unless the clan owns a castle. A seal must be chosen: it is a vote. `SevenSignsBypassPrerequisites` is `False` shipped. | `signspriest.go:282-345`; `dusk_priest_1.htm`; `ops/docker/config/events.properties:71` |
-| Seal votes | At the end of a competition the winning cabal claims a seal when at least 35 % of its members chose it (a held seal is kept at 10 %); the losing cabal's votes count only to keep a seal it holds. A held seal changes the world for every player: Gnosis gates the catacombs and Avarice the necropolises in Seal Validation, Strife settles the castles and casts the Strife skills on everyone. | `sevensigns/score.go:82-125`, `sevensigns.go:439-450`, `:657-678`; `dungeon.go:18-24` |
+| Seal votes | Every member votes one seal at sign-up; there is no abstaining. A seal's share is its votes over the cabal's members, so every member, bot or human, is in the denominator of every seal. At the end of a competition the winning cabal claims a seal when at least 35 % of its members chose it (a held seal is kept at 10 %); the losing cabal's votes count only to keep a seal it holds. A held seal changes the world for every player: Gnosis gates the catacombs and Avarice the necropolises in Seal Validation, Strife settles the castles and casts the Strife skills on everyone. | `sevensigns/score.go:82-125`, `sevensigns.go:439-450`, `:657-679` (`sealPercentsLocked`); `dungeon.go:18-24` |
 | Seal stones | Blue 6360, Green 6361, Red 6362, worth 3, 5 and 10 points. Dropped only by the 42 catacomb and necropolis monsters 21166-21207 (levels 21-80), two or three CURRENCY categories at 70 % each, scaled by `RateDropCurrency` (1 shipped, "affects Adena and Seal Stones"). Expected per kill, in Ancient Adena at 1 per point: about 400 at level 21, 640 at 30, 1 100 at 42, 1 650 at 48, 2 400 at 57, 3 150 at 63, 4 400 at 80. | `npcs/21000-21999.xml` (e.g. `:14560-14566`); `sevensigns/score.go:7-28`; `ops/docker/config/server.properties:115-120` |
 | Where they spawn | 1 308 stone droppers in `ssq_event` makers (Recruiting and Competition), and in Seal Validation 594-714 per seal in the `ssq_seal1_*`/`ssq_seal2_*` makers of the cabal that owns that seal (none when no one owns it). | `spawnlist/*.xml` (e.g. `18_24.xml:547-606`); [valuables server facts](../valuables/server.md) "Spawns" |
 | Entering a dungeon | A Dungeon Gatekeeper at each entrance (`necro*`, `cata*` bypasses) admits a signed-up player of either cabal outside Seal Validation, and in it only a member of the winning cabal that owns the dungeon's seal (catacombs: Gnosis, necropolises: Avarice), any member after a tie; no sign-up, no entry. | `sevensigns/dungeon.go:20-45`; `model/actor/npc/folk_dungeon.go` |
@@ -45,7 +45,17 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
    of catacomb kills covers many cycles of stock); the expected payout depends on who wins:
    - **3a, never contribute (proposed).** The bots never touch the competition score; they win
      only when human players' stones and festivals carry their cabal. On a server where no human
-     plays the Seven Signs, every cycle is a 0-0 tie and the route never pays.
+     plays the Seven Signs, every cycle is a 0-0 tie and the route never pays. The bots still
+     vote: with B bots and N human Dusk members, the bots hold B/(N+B) of Dusk's seal shares.
+     When humans win for Dusk, bot votes can claim a seal (one bot alone reaches 35 % with one
+     human member, 50 %) or tip one over 35 % (three humans, one for Gnosis: 33 % without the
+     bot, 50 % with it); they dilute the human votes for the other seals (N/(N+B) of their share,
+     possibly under 35 %); and a seal Dusk holds on few votes can fall under 10 % (1 of 10
+     humans: 10 % kept, with one bot 9 % lost). So 3a decides no competition score but does
+     weigh on the seals. Bound (proposed): at most `SevenSigns.MaxMembers` bots of a run in the
+     mode (default 1), and each votes the seal Dusk holds when it holds one (it then only
+     strengthens a seal humans already keep), else `PvPPolicy.SignsSeal`. The alternative is to
+     accept the vote weight without a cap ([owner question 2](#owner-questions)).
    - **3b, contribute.** Bots also turn stones in during Competition. Their cabal then wins any
      cycle humans do not outscore, every cycle on a quiet server, and the bots' seal votes decide
      who holds Gnosis, Avarice and Strife for every player: a world change, the owner's call.
@@ -59,7 +69,8 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
 
 CP potions are bought (amends D37); the keep rule stays (never sold, deposited or drunk on
 monsters). Option 2 for `pvp` bots; option 3a as an opt-in `SevenSigns` mode, off for every preset
-(D6). Bots never contribute stones, never pay the Dawn fee and never vote Strife.
+(D6), at most `SevenSigns.MaxMembers` bots of a run (default 1), voting the seal Dusk holds if
+any. Bots never contribute stones, never pay the Dawn fee and never vote Strife.
 
 ## What the bot does
 
@@ -75,9 +86,12 @@ owner. Pacing, refusals and cool-downs are the errand's ([items](../items.md#8-b
 **X18, Seven Signs member (`SevenSigns` mode).**
 
 - *Sign-up.* In Competition, with a first profession and outside a castle-owning clan, at the
-  nearest Dusk Priestess on a supply trip: page `1`, then the sign-up links for Dusk and
-  `PvPPolicy.SignsSeal` (default Gnosis; Strife refused by config). A page the bot does not expect
-  (`signs_33_dusk_no`, `_firstclass`, `_member`) ends the errand for the cycle; `_member` means
+  nearest Dusk Priestess on a supply trip, while fewer than `SevenSigns.MaxMembers` bots of the
+  run are signed up this cycle: page `1`, then the sign-up links for Dusk and the seal Dusk holds
+  at sign-up (read from the seal status page: the `SevenSigns 20 1` link of `signs_33_dusk.htm`,
+  then `Chat 0` and the sign-up links again; `signspriest.go:622-641`; a Strife it holds is
+  skipped), else `PvPPolicy.SignsSeal` (default Gnosis; Strife refused by config). A page the
+  bot does not expect (`signs_33_dusk_no`, `_firstclass`, `_member`) ends the errand for the cycle; `_member` means
   already signed. The bot keeps no sign-up record: after a restart it reads its membership from the
   priest's page, so the server stays the only record (nothing for #404's ledger).
 - *Farming.* The catacombs and necropolises become spot candidates for a member in Competition
@@ -130,11 +144,14 @@ on a trip.
 
 1. Approve D43? Options: player stores only (2), stores plus the opt-in Seven Signs member
    (2 + 3a, proposed), or the status quo (1).
-2. Option 3: never contribute (3a, proposed: the bots never decide the Seven Signs, and on a quiet
-   server the route never pays) or contribute (3b: the bots' cabal wins every cycle humans do not
-   outscore, and their votes pick the seal owners)?
+2. Option 3: never contribute (3a, proposed: the bots never decide the competition score, and on
+   a quiet server the route never pays) or contribute (3b: the bots' cabal wins every cycle humans
+   do not outscore, and their votes pick the seal owners)? Either way bot votes weigh on the seals
+   (B/(N+B) of Dusk's shares, see 3a): cap them at `SevenSigns.MaxMembers` bots per run (default
+   1, proposed, voting the seal Dusk holds) or accept the vote weight uncapped?
 3. X19's live scenario needs the stack in Seal Validation with a known winner. Options: a GM
    command to set the Seven Signs period, filed in `fatal10110/acis_golang` as a test-stack tool
    (Java aCis has none either), or X19 ships on unit tests and recorded frames, recorded once on a
    real validation week.
-4. Seal vote: Gnosis by default (proposed) or Avarice; Strife never?
+4. Seal vote when Dusk holds none: Gnosis by default (proposed) or Avarice; Strife never? Each
+   choice adds bot weight to that seal and dilutes the others (3a).

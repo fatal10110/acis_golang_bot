@@ -80,7 +80,9 @@ PvP value blended into M10's gear score, a karma policy. No server change.
 - **D43, buying CP potions (proposed).** CP potions are bought (amends D37; the keep rule stays):
   from player sell stores for `pvp` bots; an opt-in `SevenSigns` mode (off for every preset) signs
   up with Dusk, farms seal stones and, in a validation week its cabal won, buys them at a priest for
-  Ancient Adena. Bots never contribute stones, never pay the Dawn fee, never vote Strife.
+  Ancient Adena. Bots never contribute stones, never pay the Dawn fee, never vote Strife; their
+  seal votes still weigh on the seals, so at most `SevenSigns.MaxMembers` bots of a run (default 1)
+  join, voting the seal Dusk holds if any.
   [CP potions](cp-potions.md)
 
 D40-D43 number provisionally: another plan approved first may take them, then they renumber.
