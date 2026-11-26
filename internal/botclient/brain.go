@@ -189,9 +189,10 @@ type Brain struct {
 	engaged int32
 	// castAt is the cast asked for and not yet answered by the bot's own
 	// MagicSkillUse, zero for none (castTimeout bounds the wait); castSkill
-	// is its skill.
-	castAt    time.Time
-	castSkill int32
+	// is its skill, castObject its target.
+	castAt     time.Time
+	castSkill  int32
+	castObject int32
 	// spoilTarget is the monster of the Spoil or Sweeper cast last sent
 	// (castSkill), 0 once the server answered it or another cast went
 	// out: what a spoil or sweep system message is about (spoilEvent).
@@ -376,6 +377,8 @@ type Brain struct {
 	walk walker
 	// engage is the stand point the fight walks to (engageWalk).
 	engage engageState
+	// unseen is the last cast the server refused for sight (sightWalk).
+	unseen unseenState
 	// doors reports the doors the bot sees to the door table, nil without
 	// one.
 	doors *DoorReporter
@@ -654,6 +657,10 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.CasterID == self {
 				b.standCaster(e)
 				b.castAt = time.Time{}
+				if e.TargetID == b.unseen.id {
+					// The server took a cast at it: it is in sight.
+					b.unseen = unseenState{}
+				}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 				b.spoilEvent(ev, now)
 			}
@@ -957,7 +964,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.engaged, b.opened = a.object, a.object
 		b.attempt(a.object, now)
 	case actCast:
-		b.castAt, b.castSkill = now, a.skill
+		b.castAt, b.castSkill, b.castObject = now, a.skill, a.object
 		b.spoilTarget = 0
 		if a.skill == skillSpoil || a.skill == skillSweeper {
 			b.spoilTarget = a.object

@@ -414,15 +414,21 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 type buffKey struct{ target, skill int32 }
 
 // castOn casts skill on id at now: stand up, wait out a cast in flight,
-// select id, then cast. A Party buff (selectFirst false) is cast on the
-// bot whatever it has selected.
+// walk off a stand the server refused a cast at id from for sight
+// (sightWalk), select id, then cast. A Party buff (selectFirst false) is
+// cast on the bot whatever it has selected.
 func (b *Brain) castOn(id, skill int32, selectFirst bool, now time.Time) Action {
 	s := &b.world.Self
-	switch {
-	case s.Sitting:
+	if s.Sitting {
 		return b.toggle(now)
-	case s.Casting(now) || b.castPending(now):
+	}
+	if s.Casting(now) || b.castPending(now) {
 		return Action{}
+	}
+	if a, ok := b.sightWalk(id, skill, now); ok {
+		return a
+	}
+	switch {
 	case selectFirst && b.world.Target != id:
 		return selectAction(id, s.Position(now))
 	}
