@@ -85,6 +85,25 @@ func TestPvPPKCap(t *testing.T) {
 		})
 	}
 
+	t.Run("the victim alive and in sight after the hour: a new PK, the clock restarted", func(t *testing.T) {
+		b := pkBrain(t)
+		b.pkStart(pcID, t0)
+		later := t0.Add(pkEvery + time.Minute)
+		if !fightsWith(b, "hunt", pcID, later) || b.karma.victim != pcID || !b.karma.lastPK.Equal(later) {
+			t.Fatalf("victim %d PK clock %v, want %d restarted at %v", b.karma.victim, b.karma.lastPK, pcID, later)
+		}
+		// The victim gone, another clean player is no PK within the hour.
+		b.handleOne(t, DeleteObject{ObjectID: pcID}, later)
+		b.handleOne(t, CharInfo{ObjectID: pcID + 1, Name: "Bran", ClassID: 10, Pos: Point{X: 300}, RunSpeed: 124, CollisionRadius: 9}, later)
+		b.world.object(pcID + 1).move = stopAt(Point{X: 300})
+		b.world.Self.InCombat, b.world.Target = false, 0
+		if fightsWith(b, "hunt", pcID+1, later.Add(30*time.Minute)) {
+			t.Fatal("a second PK within the hour of the first")
+		}
+		if !fightsWith(b, "hunt", pcID+1, later.Add(pkEvery+time.Second)) {
+			t.Fatal("no PK an hour after the last")
+		}
+	})
 	t.Run("WA: AttackRequest and ctrl-held Power Smash, never Stun Attack", func(t *testing.T) {
 		b := pvpRowBrain(t, 1, 36, "BIGBLUNT", lyrWarrior, skillPowerSmash, skillStunAttack)
 		pkVictimFight(t, b, lyrWarrior, Point{X: 90})
@@ -150,7 +169,26 @@ func TestPvPPKCap(t *testing.T) {
 			t.Fatal("the flag guard lets a blinking non-victim through")
 		}
 	})
-	t.Run("karma above 0: no town trip, farming", func(t *testing.T) {
+	t.Run("karma above 0: a due supply trip waits, farming", func(t *testing.T) {
+		for _, karma := range []int32{0, 240} {
+			b := newTripBrain(t)
+			b.supplyTrip.potions = true
+			b.world.Self.Karma = karma
+			b.handleOne(t, NPCInfo{ObjectID: mobObj, NPCID: mob, Attackable: true, Pos: Point{X: 100}}, t0)
+			rule, a := b.decide(at(time.Minute))
+			if karma == 0 {
+				if rule != "supply" {
+					t.Fatalf("karma 0: rule %q, want the supply trip", rule)
+				}
+				continue
+			}
+			if rule != "farm" || a.object != mobObj || !b.spot.held || b.supplyTrip.active() {
+				t.Fatalf("karma %d: rule %q action %v on %d, spot held %v, trip %v: want farming at its spot",
+					karma, rule, a.kind, a.object, b.spot.held, b.supplyTrip.active())
+			}
+		}
+	})
+	t.Run("karma above 0: the town rules held", func(t *testing.T) {
 		for _, name := range []string{"supply", "travel", "shop", "warehouse", "train", "arena", "challenge"} {
 			if !karmaRules[name] {
 				t.Errorf("rule %q runs with karma", name)

@@ -382,7 +382,9 @@ func (b *Brain) ruleHunt(now time.Time) (Action, bool) {
 		})
 	}
 	if id == 0 {
-		if id = b.pkHunt(now); id != 0 && id != b.karma.victim {
+		// A victim past pkEvery, still in sight, is a new PK: its clock
+		// restarts.
+		if id = b.pkHunt(now); id != 0 && !b.pkVictim(id, now) {
 			b.pkStart(id, now)
 		}
 	}

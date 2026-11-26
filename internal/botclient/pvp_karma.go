@@ -192,10 +192,11 @@ func (b *Brain) pkStart(id int32, now time.Time) {
 
 // pkFightBack starts the PK of a clean attacker rule 7 lets the bot fight
 // at now (a karma bot's, docs/pvp/karma.md "With karma"): the PK clock
-// restarts as the bot answers it.
+// restarts as the bot answers it, unless the attacker is the victim of a
+// PK within pkEvery (a victim past it is a new PK).
 func (b *Brain) pkFightBack(id int32, now time.Time) {
 	o := b.world.object(id)
-	if o == nil || o.Kind != KindPlayer || id == b.karma.victim || b.fightRule(id, o, now) != FightPK {
+	if o == nil || o.Kind != KindPlayer || b.pkVictim(id, now) || b.fightRule(id, o, now) != FightPK {
 		return
 	}
 	b.pkStart(id, now)

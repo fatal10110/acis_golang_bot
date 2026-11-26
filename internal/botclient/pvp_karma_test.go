@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -111,6 +112,17 @@ func TestPvPKarma(t *testing.T) {
 			t.Fatalf("action %v skill %d, want the AttackRequest, never Stun Attack", a.kind, a.skill)
 		}
 	})
+	t.Run("the victim of the PK 2 hours ago attacks again: the PK clock restarts", func(t *testing.T) {
+		b := pkRow(t, 1, 2*time.Hour)
+		b.karma.victim = pcID
+		now := at(time.Second)
+		if _, a := b.decide(now); !actsOn(a, pcID) {
+			t.Fatalf("action %v on %d, want the PK fight back", a.kind, a.object)
+		}
+		if b.karma.victim != pcID || !b.karma.lastPK.Equal(now) {
+			t.Fatalf("victim %d PK clock %v, want %d restarted at %v", b.karma.victim, b.karma.lastPK, pcID, now)
+		}
+	})
 	for _, tc := range []struct {
 		name  string
 		kills int32
@@ -155,6 +167,43 @@ func TestPvPKarma(t *testing.T) {
 		}
 		if !b.avoided(foeName, at(29*time.Minute)) {
 			t.Fatal("the clean killer is not avoided")
+		}
+	})
+	t.Run("dead with karma: restarted outside town, no town trip, a walk to its spot, farming", func(t *testing.T) {
+		for _, karma := range []int32{0, 240} {
+			b := newTripBrain(t)
+			b.persona.Death = restartToVillage
+			b.persona.Spots.DeathAvoid = 0 // its one spot stays its own
+			b.world.Self.Karma = karma
+			b.handleOne(t, Die{ObjectID: selfID, Restart: RestartPoints{Village: true}}, at(time.Second))
+			if rule, a := b.decide(at(2 * time.Second)); rule != "dead" || a.kind != actRestart {
+				t.Fatalf("karma %d: rule %q action %v, want the village restart", karma, rule, a.kind)
+			}
+			if err := b.handle([]Event{Revive{ObjectID: selfID}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 2000}}}, at(3*time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			b.appearing = false // the Appearing went out
+			b.supplyTrip.potions = true
+			rule, a := b.decide(at(4 * time.Second))
+			if rule != "spot" || a.kind != actMove {
+				t.Fatalf("karma %d: rule %q action %v, want the walk to its spot", karma, rule, a.kind)
+			}
+			b.world.Self.move = stopAt(Point{})
+			b.handleOne(t, NPCInfo{ObjectID: mobObj, NPCID: mob, Attackable: true, Pos: Point{X: 100}}, at(5*time.Second))
+			var rules []string
+			for i := range 3 {
+				rule, _ := b.decide(at(time.Duration(6+i) * time.Second))
+				rules = append(rules, rule)
+			}
+			if karma == 0 {
+				if !slices.Contains(rules, "supply") {
+					t.Fatalf("karma 0 at the spot: rules %q, want the supply trip", rules)
+				}
+				continue
+			}
+			if !slices.Contains(rules, "farm") || slices.ContainsFunc(rules, func(r string) bool { return karmaRules[r] }) {
+				t.Fatalf("karma %d at the spot: rules %q, want farming, no town trip", karma, rules)
+			}
 		}
 	})
 	t.Run("a flee heading into a town margin: the first keeping out", func(t *testing.T) {
@@ -252,11 +301,32 @@ func TestPvPKarmaRoute(t *testing.T) {
 		if d := clearOf(pts, town, guards); d < karmaClear {
 			t.Fatalf("route %v passes %.0f from the town or a guard, want at least %d", pts, d, karmaClear)
 		}
-		if got, _ := b.decide(at(time.Second)); got == "travel" {
-			t.Fatal("a gatekeeper trip with karma")
-		}
-		if b.planPath(navPoint{at: from}, at(time.Second), nil) {
-			t.Fatal("a gatekeeper path planned with karma")
+	})
+	t.Run("a gatekeeper hop shorter than the walk: walking only, the gatekeeper untouched", func(t *testing.T) {
+		for _, karma := range []int32{0, 240} {
+			b := newTravelBrain(t, 5000)
+			b.world.Self.Karma = karma
+			b.decide(at(time.Second))
+			planned := b.trip.v.active()
+			rule, a := b.decide(at(2 * time.Second))
+			if karma == 0 {
+				if !planned || rule != "travel" || a.kind != actMove {
+					t.Fatalf("karma 0: trip %v, rule %q action %v: want the leg to the gatekeeper", planned, rule, a.kind)
+				}
+				continue
+			}
+			if planned || rule == "travel" {
+				t.Fatalf("karma %d: trip %v, rule %q: want no gatekeeper trip", karma, planned, rule)
+			}
+			// The gatekeeper in sight: no Action, talk or bypass on it.
+			b.world.Self.move = stopAt(Point{X: 1900})
+			b.handleOne(t, NPCInfo{ObjectID: gkObj, NPCID: townGK, Pos: Point{X: 2000}}, at(3*time.Second))
+			for i := range 3 {
+				d := at(time.Duration(4+i) * time.Second)
+				if rule, a := b.decide(d); a.object == gkObj || a.kind == actTalk || a.kind == actBypass {
+					t.Fatalf("karma %d: rule %q action %v on %d, want the gatekeeper untouched", karma, rule, a.kind, a.object)
+				}
+			}
 		}
 	})
 	t.Run("no such route: the walk fails", func(t *testing.T) {
