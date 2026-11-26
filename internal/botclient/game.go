@@ -85,11 +85,11 @@ func newGameConn(ctx context.Context, conn net.Conn, revision int32, timeout tim
 
 func (g *GameConn) handshake(ctx context.Context, revision int32) error {
 	if err := g.send(ctx, encodeProtocolVersion(revision)); err != nil {
-		return fmt.Errorf("send ProtocolVersion: %w", err)
+		return fmt.Errorf("send ProtocolVersion: %w", closedOnWrite(err))
 	}
 	raw, err := g.read(ctx, time.Now().Add(g.timeout))
 	if err != nil {
-		return fmt.Errorf("read VersionCheck: %w", err)
+		return fmt.Errorf("read VersionCheck: %w", closedOnRead(err))
 	}
 	key, enabled, err := decodeVersionCheck(raw)
 	if err != nil {

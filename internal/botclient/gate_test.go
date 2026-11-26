@@ -54,7 +54,7 @@ func TestLoginGateSpacesDials(t *testing.T) {
 	)
 	for bot := range bots {
 		wg.Go(func() {
-			turn, err := g.Take(t.Context())
+			turn, err := g.Take(t.Context(), "bot1")
 			if err != nil {
 				t.Error(err)
 				return
@@ -99,7 +99,7 @@ func TestLoginGateSpacesDials(t *testing.T) {
 func TestAllowlistedLoginGate(t *testing.T) {
 	clock := newFakeClock(t0)
 	g := NewAllowlistedLoginGate(clock, rand.New(rand.NewPCG(1, 2)))
-	turn, err := g.Take(t.Context())
+	turn, err := g.Take(t.Context(), "bot1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestAllowlistedLoginGate(t *testing.T) {
 func TestLoginGateRefusedBackoff(t *testing.T) {
 	clock := newFakeClock(t0)
 	g := NewLoginGate(clock, rand.New(rand.NewPCG(1, 2)))
-	turn, err := g.Take(t.Context())
+	turn, err := g.Take(t.Context(), "bot1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,13 +140,20 @@ func TestLoginGateRefusedBackoff(t *testing.T) {
 			t.Errorf("refusal %d: next dial in %s, want in [%s, %s)", i+1, wait, d/2, d)
 		}
 	}
+	// A connection, AccountInUse included, no longer resets the backoff:
+	// only an entry into the world does.
+	turn.Dialed(nil)
 	turn.Dialed(&LoginError{Packet: "LoginFail", Reason: loginFailAccountInUse})
+	if g.refused.n != 8 {
+		t.Errorf("backoff step %d after connections, want 8", g.refused.n)
+	}
+	turn.Entered()
 	if g.refused.n != 0 {
-		t.Errorf("backoff step %d after a connection, want 0", g.refused.n)
+		t.Errorf("backoff step %d after an entry, want 0", g.refused.n)
 	}
 	turn.Done()
 	turn.Done() // a second Done does nothing
-	if _, err := g.Take(t.Context()); err != nil {
+	if _, err := g.Take(t.Context(), "bot1"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -155,12 +162,12 @@ func TestLoginGateHalt(t *testing.T) {
 	cause := errors.New("account bot1: refused")
 	t.Run("wakes a bot waiting for a turn", func(t *testing.T) {
 		g := NewLoginGate(newFakeClock(t0), nil)
-		if _, err := g.Take(t.Context()); err != nil {
+		if _, err := g.Take(t.Context(), "bot1"); err != nil {
 			t.Fatal(err)
 		}
 		errc := make(chan error, 1)
 		go func() {
-			_, err := g.Take(t.Context())
+			_, err := g.Take(t.Context(), "bot1")
 			errc <- err
 		}()
 		g.Halt(cause)
@@ -168,14 +175,14 @@ func TestLoginGateHalt(t *testing.T) {
 		if err := <-errc; !errors.Is(err, ErrLoginsHalted) || !errors.Is(err, cause) {
 			t.Fatalf("Take = %v, want %v of %v", err, ErrLoginsHalted, cause)
 		}
-		if _, err := g.Take(t.Context()); !errors.Is(err, cause) {
+		if _, err := g.Take(t.Context(), "bot1"); !errors.Is(err, cause) {
 			t.Fatalf("Take after Halt = %v, want %v", err, cause)
 		}
 	})
 	t.Run("wakes a bot waiting to dial", func(t *testing.T) {
 		clock := newFakeClock(t0)
 		g := NewLoginGate(clock, nil)
-		turn, err := g.Take(t.Context())
+		turn, err := g.Take(t.Context(), "bot1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -193,14 +200,14 @@ func TestLoginGateHalt(t *testing.T) {
 	t.Run("ctx ends a wait", func(t *testing.T) {
 		clock := newFakeClock(t0)
 		g := NewLoginGate(clock, nil)
-		turn, err := g.Take(t.Context())
+		turn, err := g.Take(t.Context(), "bot1")
 		if err != nil {
 			t.Fatal(err)
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		errc := make(chan error, 2)
 		go func() {
-			_, err := g.Take(ctx)
+			_, err := g.Take(ctx, "bot1")
 			errc <- err
 		}()
 		_ = turn.Dial(ctx)

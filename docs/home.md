@@ -155,6 +155,16 @@ GOMEMLIMIT=1GiB bots swarm \
 - Bots still log in one at a time. The credential breaker stops every later login at the first
   refused credential (three in a row ban the IP for 10 minutes), and the swarm then exits with
   code 3: do not restart it in a loop.
+- A connection the server closes before its first byte (a ban at accept, a credential or admin
+  ban, or a server that failed) logs "closed at accept: the address is banned or filtered, or the
+  server failed" with the port and counts in `login_accept_closed_total`. No bot dials for the
+  next 330 s (the servers' `BanTime` 300 s plus a margin; a longer `BanTime` needs `banQuiet`
+  raised in the code), then one probes. With `-allowlisted` the first such close also turns the
+  login spacing on for the rest of the run.
+- While the servers are not ready (`PlayFail`, a system `LoginFail` from two different bots in a
+  row, or a refused dial) every bot's next login waits one shared backoff, 2 s doubling to 2 min,
+  reset when a bot enters the world. Two accounts whose logins always fail keep it stepping, so a
+  healthy bot that reconnects then may wait up to 2 min.
 - `-game <public host:port>` when `Hostname` is not public (section 2).
 - The bot cap (`-bots`) and `GOMEMLIMIT` bound the process on the owner's machine.
 - Farmer and support bots form bot parties (`docs/parties/`): `-support N` makes the last N bots
@@ -245,7 +255,8 @@ bots ui -secret-file ~/.config/acis-bots/secret -prefix home -login <server>:210
   Light and dark themes follow the system until toggled.
 - Login spacing (Dashboard) is the least time between two login or game dials of the panel. It
   only goes up from the gate's floor: 1250 ms (plus up to 500 ms jitter) without `-allowlisted`,
-  which keeps every dial out of the accept filter's burst window, and 0 with it; at most one
+  which keeps every dial out of the accept filter's burst window, and 0 with it until a connection
+  is closed at accept, which raises the floor to 1250 ms for the rest of the run; at most one
   minute. The panel keeps it in `bots.json` and applies it on the next start; a kept value under
   the floor of that start's gate leaves the floor.
 - The page is a React application (`web/`). Release binaries embed it. A binary built from source
