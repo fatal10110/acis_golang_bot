@@ -1,7 +1,8 @@
 # PvP persona: bots that fight players (M13)
 
 Status: owner approved D35-D39 as proposed on 2026-11-25 (`docs/plan.md`, "Owner decisions").
-Milestone M13 ("PvP persona"): epic #405, issues #406-#420, follow-ups #421-#429.
+D40-D42 (clan wars, sieges, the Olympiad; #426) are proposed, not approved: X14-X16 wait for them.
+Milestone M13 ("PvP persona"): epic #405, issues #406-#420, follow-ups #421-#429, #602-#604.
 
 ## Paths
 
@@ -30,8 +31,9 @@ visits arenas and fights back (open-world PK exists, off); fights like a player 
 (control first, interrupts, matchups, CP, break-off); values gear for PvP too; never gets karma by
 accident; and handles death and karma per the server's rules.
 
-Out of scope: the Olympiad, sieges, clan wars as targets, party duels (M11), fighting summons for
-their own sake beyond killing one before its owner when that pays off (#428,
+Out of scope until the owner approves D40-D42: clan wars as targets ([war](war.md)), sieges
+([siege](siege.md)) and the Olympiad ([Olympiad](olympiad.md)). Out of scope: party duels (M11),
+fighting summons for their own sake beyond killing one before its owner when that pays off (#428,
 [summons](targets.md#summons-and-pets)), buying CP potions (Ancient Adena only), second-profession
 PvP rows (first profession's row until M10's #332), kiting monsters.
 
@@ -64,6 +66,17 @@ PvP value blended into M10's gear score, a karma policy. No server change.
   open world, break off by the row and avoid its killer ([by fight](karma.md#by-fight)). No karma
   by accident and, in a duel, nothing that would cancel it ([guards](guards.md), at a cost in the
   small arenas). Opt-in PK mode and life with karma: [karma](karma.md).
+- **D40, clan wars (proposed).** A mutual-war enemy (`RelationChanged` 0x8000) is a target like a
+  flagged player for `pvp` bots (`War` mode, D6), attacked with force; every war mark is dropped
+  when a war ends, and a player's mark when its `CharInfo` shows another clan. Bots never declare, answer, stop or surrender a war. [war](war.md)
+- **D41, sieges (proposed).** Bots never register for a siege. Every bot walks out of a running
+  battlefield it does not fight in; a `pvp` bot (`Siege` mode) of a clan its leader registered
+  fights the other side's players there, bots only after their hit (D38). [siege](siege.md)
+- **D42, the Olympiad (proposed).** Opt-in per bot, off for every preset: noblesse at the class
+  master, bounded registration, the drawn opponent fought whoever it is (a bot too: D38 gains the
+  stadium); never spectates, trades points or claims hero status. [Olympiad](olympiad.md)
+
+D40-D42 number provisionally: another plan approved first may take them, then they renumber.
 
 ## Delivery (milestone M13)
 
@@ -89,6 +102,9 @@ X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](
 | X11 | Death and karma: arena return loop, avoid list, PK mode (`MayFight` rule 7), karma state (flee or PK, chaotic restart, karma route, work-off) (D39). | X4, X5, X6b, X7, X8 (`TestPvPPKCap` rows) | [karma](karma.md), [targets](targets.md#hunting), [finding](finding.md) (holds) |
 | X12 | Panel switches, PvP counts, the four counters. | X4, X5, X6, X11, S9 (#331) | [modes](modes.md#panel-and-metrics-x12) |
 | X13 | e2e live scenarios for X4-X11, at most 4 characters each, GM included. | each; M11 for `TestLivePvPHealer` | the e2e cases in each file's Tests |
+| X14 | Clan-war targets (#602, D40 proposed): relation bits, war mark and its clearing, `MayFight` rule 6b, forced attack, guard. | D40, X4b, X5 | [war](war.md) |
+| X15 | Sieges (#603, D41 proposed): 283/284 by position, leave a battlefield, `UserInfo` siege state, fight the other side. | D41, X2, X4b, X11 | [siege](siege.md), [finding](finding.md#duel-ground) |
+| X16 | The Olympiad (#604, D42 proposed): noblesse, registration, the match. | D42, X4, X6, M8 #178 | [Olympiad](olympiad.md) |
 | Backlog | Second-profession rows (with #332), party duels (with M11), the gaps below. | X7, X8 | [Risks and gaps](#risks-and-gaps) |
 
 Most urgent: X1-X5 (X4b included) give a bot that takes duels and fights in arenas with its M10
@@ -108,9 +124,10 @@ with no row); **arena deaths** (the 5-death cap and stay limit).
 
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
-(M11); a challenge hold shared by all bots; clan wars, sieges, the Olympiad; buying CP potions;
+(M11); a challenge hold shared by all bots; buying CP potions;
 fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
-command-channel mates in an arena (rule 3).
+command-channel mates in an arena (rule 3). Clan wars, sieges and the Olympiad are planned in
+[war](war.md), [siege](siege.md) and [Olympiad](olympiad.md) (#602-#604), pending D40-D42.
 
 ## Files
 
@@ -121,4 +138,5 @@ packets, datapack, opponent record, states, code changes · [modes](modes.md) mo
 guard, arena edge, bystanders, duel support · [finding](finding.md) duels, arenas, duel ground ·
 [layer](layer.md) PvP order, interrupts, CP, cures, break off · [model](model.md) land rates,
 archetypes, PvP value, gear · [rows](rows.md) per-class rows · [party](party.md) party PvP ·
-[karma](karma.md) death, PK mode, karma.
+[karma](karma.md) death, PK mode, karma · [war](war.md) clan-war targets ·
+[siege](siege.md) siege battlefields · [Olympiad](olympiad.md) noblesse, registration, matches.
