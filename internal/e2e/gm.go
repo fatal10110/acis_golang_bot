@@ -156,6 +156,9 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	set sp N             the GM's target, a run character; N 0 to maxSP
 //	set karma 0          the GM's own karma, with no target only: with one
 //	                     the server sets the target's (admin_set.go)
+//	set karma N          the GM's target, a run character; N 0 to maxKarma:
+//	                     a death with karma always raises the death
+//	                     penalty (character_deathpenalty.go)
 //	skill set ID LEVEL   the GM's target, a run character; also skill set all
 //	give ID [COUNT]      items to the GM's target, a run character; COUNT
 //	                     1 to maxGive (maxAdenaGive for adena), 1 by default
@@ -200,7 +203,7 @@ func (s *Scope) check(cmd string) error {
 		ok = len(args) == 1 && s.isChar(args[0]) || len(args) == 0 && s.owns(s.target)
 	case "set":
 		ok = len(args) == 2 && (args[0] == "level" && allInts(args[1:]) || args[0] == "sp" && validSP(args[1])) && s.isCharID(s.target) ||
-			len(args) == 2 && args[0] == "karma" && args[1] == "0" && s.target == 0
+			len(args) == 2 && args[0] == "karma" && (args[1] == "0" && s.target == 0 || validKarma(args[1]) && s.isCharID(s.target))
 	case "skill":
 		ok = (len(args) == 3 && args[0] == "set" && allInts(args[1:]) ||
 			len(args) == 2 && args[0] == "set" && args[1] == "all") && s.isCharID(s.target)
@@ -254,6 +257,17 @@ const maxSP = 100000
 func validSP(sp string) bool {
 	n, err := strconv.Atoi(sp)
 	return err == nil && n >= 0 && n <= maxSP
+}
+
+// maxKarma bounds the karma of a //set karma on a run character: enough to
+// outlast what one death takes off (formulas.KarmaLoss, a level's
+// experience loss over 15 and its karma modifier), so the death penalty
+// that death raises is certain (#530).
+const maxKarma = 1000
+
+func validKarma(karma string) bool {
+	n, err := strconv.Atoi(karma)
+	return err == nil && n >= 0 && n <= maxKarma
 }
 
 // validClanName reports a clan name the server founds: 2 to 16 letters or

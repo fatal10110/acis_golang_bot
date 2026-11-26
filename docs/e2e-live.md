@@ -155,7 +155,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **GM commands** (`e2e.Scope`) touch only the scenario's characters and the monsters it spawned:
   `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N`,
   `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
-  character, `hide` (the GM's own invisibility), `set karma 0` with no target (the GM's own karma), `spawn ID`, `delete` and `para` (paralysis) on a spawned monster. The forms
+  character, `hide` (the GM's own invisibility), `set karma 0` with no target (the GM's own karma), `set karma N` (at most 1000) on a targeted run character, `spawn ID`, `delete` and `para` (paralysis) on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. `set access` is refused to
   every scenario GM; a root GM promoting a minted one may send only `set access NAME 7`, NAME a
@@ -171,7 +171,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   `e2ept1`, `e2esw1`-`e2esw3`, `e2ewh1`-`e2ewh2`, `e2ewl1`-`e2ewl2`, `e2efo1`, `e2efb1`, `e2esu1`-`e2esu3`,
   `e2erv1`-`e2erv3`, `e2ef1`, `e2ek1`, `e2en1`-`e2en2`, `e2em1`, `e2etw1`, `e2eg1`, `e2etd1`-`e2etd2`,
   `e2est1`-`e2est3`, `e2ems1`, `e2ech1`-`e2ech2`, `e2et1`, `e2egw1`, `e2egb1`-`e2egb2`, `e2ear1`,
-  `e2epn1`, `e2ewm1`, `e2evm1`-`e2evm3`) and
+  `e2epn1`, `e2ewm1`, `e2evm1`-`e2evm3`, `e2eearn1`) and
   the panel's `<prefix>p1`, `<prefix>p2`, each with one character whose name carries the bot
   marker. They stay on the server; later runs adopt the same characters.
 - The valuables scenarios' buyer `<prefix>vb1` (`e2evb1`), no GM, with one human fighter whose
@@ -203,6 +203,11 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   cleanup left above the scenario's level is set back to 1, then logs out and enters again, so its
   new brain claims a spot for level 1, #268), and `TestLiveSupplyTrip` sets its farmer to level 6 at the start (#258: past level 14 in its
   Squire's gear, every Talking Island spot that fit it was an aggressive pack that killed it).
+- `TestLiveEarn`'s orc mystic `e2eearn1` keeps its death penalty, level and loot between runs:
+  each run lifts a penalty above level 1 with Scrolls: Recovery, has it die to a GM-spawned
+  Lizardman with karma until the penalty is level 1 (a death with karma always raises it, the GM's
+  `//kill` never does), sets its karma back to 0 and its level to 5, and destroys its adena. Only
+  this scenario plays the account, so no other meets the penalty.
 - `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
   fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),
   which then fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight.
@@ -269,6 +274,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveRecoverLeaderLogout` | GM | #24 leader logout: `LeaderWait`, `/unstuck`, town |
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
+| `TestLiveEarn` | GM, datapack | #530 the earning mode (#527): a level 5 orc mystic under a death penalty a monster gave it with karma, and no adena, claims an earning spot and picks up adena |
 | `TestLiveFarmStarters` | GM, datapack | #133 a level 1 elf, dark elf and orc farmer each claim a spot of their own newbie zone and kill a monster there |
 | `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |
 | `TestLiveTownErrands` | GM, datapack | #33 the town persona's errand cycle, a merchant visit then a gatekeeper hop; #32 the hop's teleport, the bot seen by the GM at the destination |
