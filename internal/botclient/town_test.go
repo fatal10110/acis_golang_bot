@@ -190,11 +190,13 @@ func TestIdleCenterTown(t *testing.T) {
 		from    Point
 		noMap   bool
 		spots   bool
+		farm    bool
 		want    Point
 	}{
 		{name: "town bot in the field drifts to its town", persona: TownPersona(), from: field, want: town},
 		{name: "town bot in town drifts around it", persona: TownPersona(), from: Point{X: 3300, Y: 2100}, want: town},
-		{name: "town bot with farming spots keeps its anchor", persona: TownPersona(), from: field, spots: true, want: field},
+		{name: "town bot with farming spots in its town spell drifts to its town", persona: TownPersona(), from: field, spots: true, want: town},
+		{name: "town bot in its farming spell keeps its anchor", persona: TownPersona(), from: field, spots: true, farm: true, want: field},
 		{name: "support bot keeps its anchor", persona: DefaultPersona(), from: field, want: field},
 		{name: "town bot without a travel map keeps its anchor", persona: TownPersona(), from: field, noMap: true, want: field},
 	}
@@ -209,6 +211,9 @@ func TestIdleCenterTown(t *testing.T) {
 			}
 			if tc.spots {
 				b.cfg.Spots = NewSpotRegistry(nil, 1)
+			}
+			if tc.farm {
+				b.rota = townRota{farm: true, until: at(time.Hour)}
 			}
 			b.world.Self.move = stopAt(tc.from)
 			b.anchor = tc.from

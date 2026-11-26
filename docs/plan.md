@@ -84,6 +84,7 @@ the goal.
 | D37 | PvP items | One loadout scored by `Value` and `PvPValue` blended by relative gains, 50 % each for `pvp` (others 0 %); no set swap; cures bought on supply trips; CP potions kept, never sold or bought. Owner, 2026-11-25. Design: `docs/pvp/model.md` |
 | D38 | Bots against bots | Outside an arena a bot never attacks, hunts or challenges a bot and fights one back only after its hit or offensive cast; in an arena anyone but its party. No bot duels. Owner, 2026-11-25. Design: `docs/pvp/targets.md` |
 | D39 | PvP death and karma | Duels to the end, no surrender; arenas to the death under a death cap; in the open world break off by the row and avoid the killer. No karma by accident and nothing that would cancel a duel. Opt-in PK mode and life with karma as in `docs/pvp/karma.md`. Owner, 2026-11-25. Design: `docs/pvp/guards.md` |
+| D40 | Does a `town` bot farm? | It rotates: town spells of 10-20 minutes (idle drift, errands, gatekeeper hops; no spot) and farming spells of 30-60 minutes at a spot, as a support bot farms alone; the farming spell's end sends it home on a supply trip. Persona defaults (D6); still never in a bot party (D26). Owner, 2026-11-26 ("there is no point to stay only in town"). Design: `internal/botclient/town.go` `townRota` (#618) |
 
 ## Consequences of a separate repository (D5)
 
@@ -340,7 +341,9 @@ on and avoids the spot for 10 minutes; a pause of over 30 seconds in that stretc
 trip) starts it over (#360). Both durations are persona defaults (D6).
 
 **town** (PR4): idles, sits, buys potions and shots, sells loot to merchants, uses the gatekeeper,
-visits the Newbie Helper for buffs (levels 8-24).
+visits the Newbie Helper for buffs (levels 8-24). It rotates between town spells and farming spells
+at a spot (D40, #618): the town life above for 10-20 minutes, then 30-60 minutes of farming, then a
+supply trip home.
 
 **merchant** (PR4):
 
@@ -495,8 +498,8 @@ to avoid: both would log in the same accounts and kick each other.
 
 - Personas are presets in one catalog: `farmer` (the default, D21: the `damage` role, farms the
   datapack's spots alone), `support`, `town`, and `merchant` (the `damage` role with a
-  store budget, D21: it farms the datapack's spots for loot and sells it in a town store; a `town` bot loots
-  nothing, so it has nothing to sell), extended as personas land. A preset is a persona plus its
+  store budget, D21: it farms the datapack's spots for loot and sells it in a town store; a `town` bot sells
+  the loot of its farming spells to NPC merchants only), extended as personas land. A preset is a persona plus its
   options. Presets that need the datapack (`town`, `merchant`, farming spots) are offered only when
   the panel started with one. `bots swarm -persona` takes one preset name from the same catalog; `-support N` makes the last N
   bots of a `farmer` swarm play `support`.
@@ -516,8 +519,9 @@ to avoid: both would log in the same accounts and kick each other.
   with the GM authority hooks, to each preset's `BrainConfig`, so one bot per non-GM party leader
   holds across presets. The process-wide pieces stay one instance shared by every bot: the login
   gate and credential breaker, the spot registry, travel map, store registry, party claims, the GM
-  authority and the metrics registry. A preset may still leave a piece out, as `town` leaves out the
-  spot registry (farming runs only with it, `internal/botclient/farm.go` in this repository). The
+  authority and the metrics registry. A preset may still leave a piece out, as every preset but `merchant`
+  leaves out the store registry. Every preset farms with the spot registry now: `town` got it with
+  its farming spells (D40, #618). The
   metrics registry never frees a slot, so each bot of the registry gets one slot when it is first
   run, reused by every later run.
 - Bot registry. Every bot the panel creates is stored locally, in `bots.json` in a data directory
