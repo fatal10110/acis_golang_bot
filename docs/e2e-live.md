@@ -76,7 +76,11 @@ variables and `BOT_REQUIRE_E2E=1`.
 - **GM pool:** each scenario that needs a GM leases one from the pool through a lock on its lock
   file, held until the GM logs out, so two scenarios of one process, of two processes or of two
   runs never share a GM. The kernel drops the lock of a process that dies, so a killed run never
-  blocks a later one.
+  blocks a later one. A leased GM may carry karma from an earlier scenario's kills, and a karma GM
+  never flags a bot that hits it and is a hunt target of the `pvp` persona (#569), so `EnterGM`
+  sends `//set karma 0` right after login, while the GM has no target (the server then sets the
+  GM's own karma, `admin_set.go`), and fails unless the server answers that it set the GM's karma
+  to 0. A GM scenario logs the karma its GM entered with.
   - **Minting** (no `BOT_E2E_GM_FILE`, #367): the pool is the GMs minted for the prefix
     (`.e2e/minted-<prefix>`). With every one held, the scenario mints the next instead of
     waiting: account `<prefix>mint<N>` (`e2emint1`, `e2emint2`, ...; no scenario may use the
@@ -151,7 +155,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - **GM commands** (`e2e.Scope`) touch only the scenario's characters and the monsters it spawned:
   `teleport X Y Z`, `teleportto|recall|kick NAME`, `kill|res|heal|cancel [NAME]`, `set level N`,
   `set sp N` (at most 100000), `skill set` and `give ID [COUNT]` (at most 10000) on a targeted run
-  character, `hide` (the GM's own invisibility), `spawn ID`, `delete` and `para` (paralysis) on a spawned monster. The forms
+  character, `hide` (the GM's own invisibility), `set karma 0` with no target (the GM's own karma), `spawn ID`, `delete` and `para` (paralysis) on a spawned monster. The forms
   that reach others (`kick all`, `recall party|clan`, a radius) and every server-wide command
   (announce, shutdown, reload) are refused before anything is sent. `set access` is refused to
   every scenario GM; a root GM promoting a minted one may send only `set access NAME 7`, NAME a
