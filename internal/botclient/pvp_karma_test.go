@@ -201,7 +201,7 @@ func TestPvPKarma(t *testing.T) {
 				}
 				continue
 			}
-			if !slices.Contains(rules, "farm") || slices.ContainsFunc(rules, func(r string) bool { return karmaRules[r] }) {
+			if !slices.Contains(rules, "farm") || slices.ContainsFunc(rules, karmaRule) {
 				t.Fatalf("karma %d at the spot: rules %q, want farming, no town trip", karma, rules)
 			}
 		}
@@ -452,4 +452,10 @@ func TestPvPAvoidAfterDeath(t *testing.T) {
 			t.Fatal("an arena killer is avoided")
 		}
 	})
+}
+
+// karmaRule reports whether the playRules row named name is one a bot with
+// karma skips.
+func karmaRule(name string) bool {
+	return slices.ContainsFunc(playRules, func(r rule) bool { return r.name == name && r.karma })
 }
