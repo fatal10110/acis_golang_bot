@@ -53,7 +53,7 @@ func TestLiveTownIdle(t *testing.T) {
 		persona: func() botclient.Persona { return persona },
 		brain:   withTravel(travel),
 	})
-	t.Logf("%s logged in at %v, %.0f from the town point %v", f.name, f.bot.Status().Position, dist(recoverGround, town), town)
+	t.Logf("%s logs in at %v, %.0f from the town point %v", f.name, recoverGround, dist(recoverGround, town), town)
 
 	var arrived int
 	until(t, ctx, "the walk to town", func() string {
