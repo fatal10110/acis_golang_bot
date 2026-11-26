@@ -293,6 +293,9 @@ type Action struct {
 	walk bool
 	// yes marks a duel answer that accepts the challenge.
 	yes bool
+	// interrupts marks a cast that answers an opponent's cast
+	// (Brain.interruptCast), what bot_pvp_interrupts_total counts.
+	interrupts bool
 }
 
 type actionKind uint8

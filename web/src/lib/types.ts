@@ -38,6 +38,32 @@ export interface Live {
   reconnects: number;
   err?: string;
   crafter?: Crafter;
+  /** The bot's PvP view; absent before its first session. */
+  pvp?: PvPLive;
+}
+
+/** A bot's PvP mode switches (botregistry.PvPModes, docs/pvp/modes.md). */
+export interface PvPModes {
+  duels: boolean;
+  hunt: boolean;
+  arenas: boolean;
+  pk: boolean;
+}
+
+/**
+ * A bot's PvP view (docs/pvp/modes.md "Panel and metrics (X12)"): the modes
+ * it plays, fight back and its four switches, its PvP and PK kill counts and
+ * its duels this run by result; last_duel is "won", "lost" or "tie", absent
+ * for none.
+ */
+export interface PvPLive extends PvPModes {
+  fight_back: boolean;
+  pvp_kills: number;
+  pk_kills: number;
+  duels_won: number;
+  duels_lost: number;
+  duels_tied: number;
+  last_duel?: string;
 }
 
 /** A crafter's status (botclient.CrafterStatus); times are RFC 3339. */
@@ -69,6 +95,8 @@ export interface Bot {
   /** The pinned party the bot belongs to, and whether it leads it. */
   party_group?: string;
   party_lead?: boolean;
+  /** The PvP mode switches the panel set; absent plays the preset's defaults. */
+  pvp?: PvPModes;
   online: boolean;
   level?: number;
   position?: Point;

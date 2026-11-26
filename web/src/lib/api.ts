@@ -1,4 +1,4 @@
-import type { Answer, Bot, ClassInfo, Inspection, LogLine, Parties, Presets, Spot } from "./types";
+import type { Answer, Bot, ClassInfo, Inspection, LogLine, Parties, Presets, PvPModes, Spot } from "./types";
 
 /** ApiError is a refused request: its HTTP status and the panel's reason. */
 export class ApiError extends Error {
@@ -57,4 +57,6 @@ export const api = {
   dissolveParty: (id: number) => request<Answer>("DELETE", `/api/parties/${id}`),
   setPartyAuto: (on: boolean) => request<Answer>("POST", "/api/parties/auto", { on }),
   setPartyMode: (account: string, mode: "auto" | "off") => request<Answer>("POST", `${bot(account)}/party`, { mode }),
+  /** setPvP sets the bot's PvP switches, or with null gives it back its preset's defaults. */
+  setPvP: (account: string, modes: PvPModes | null) => request<Answer>("POST", `${bot(account)}/pvp`, { modes }),
 };

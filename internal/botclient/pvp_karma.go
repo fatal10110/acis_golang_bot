@@ -90,19 +90,21 @@ func (b *Brain) karmaEvent(ev Event, now time.Time) {
 }
 
 // diedPvP keeps the bot's own death at now (docs/pvp/karma.md "By fight"):
-// none in a duel; in an arena the arena death (arenaDied); in the open world
-// the player who killed it avoided for avoidAfterDeath.
+// none in a duel; else a death to a player counted by its kind
+// (deathCounted), and in an arena the arena death (arenaDied), in the open
+// world the player who killed it avoided for avoidAfterDeath.
 func (b *Brain) diedPvP(now time.Time) {
 	k := &b.karma
 	k.victim = 0
 	if b.inDuel(now) {
 		return
 	}
+	name := b.killer(now)
+	b.deathCounted(name)
 	if b.inArena(now) {
 		b.arenaDied(now)
 		return
 	}
-	name := b.killer(now)
 	if name == "" {
 		return
 	}

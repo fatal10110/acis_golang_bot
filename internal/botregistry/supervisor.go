@@ -65,6 +65,9 @@ type Run struct {
 	// Branch is the bot's pinned branch (Bot.Branch), 0 for none: the
 	// brain config's (botclient.BrainConfig.Branch).
 	Branch int32
+	// PvP is the bot's PvP mode switches (Bot.PvP), nil for its preset's
+	// defaults.
+	PvP *PvPModes
 	// Markers are the markers of every prefix of the registry, for the bot
 	// filter, as of the run's start.
 	Markers botnames.Markers
@@ -450,6 +453,7 @@ func (s *Supervisor) start(account string) {
 		Character: ch,
 		Preset:    b.Preset,
 		Branch:    b.Branch,
+		PvP:       b.PvP,
 		Markers:   s.cfg.Registry.Markers(),
 		Metrics:   slot,
 		Learned: func(name string, classID int32) {
@@ -857,6 +861,33 @@ func (s *Supervisor) SetBranch(ctx context.Context, account string, branch int32
 			return nil
 		}
 		if err := s.cfg.Registry.Update(account, func(b *Bot) { b.Branch = branch }); err != nil {
+			return err
+		}
+		if !b.Online {
+			return nil
+		}
+		return s.respawn(account)
+	})
+}
+
+// SetPvP sets a bot's PvP mode switches, or with nil gives it back its
+// preset's defaults (docs/pvp/modes.md). An online bot whose switches
+// changed respawns with them, through the login gate like any respawn.
+func (s *Supervisor) SetPvP(ctx context.Context, account string, modes *PvPModes) error {
+	return s.request(ctx, func() error {
+		b, ok := s.cfg.Registry.Bot(account)
+		if !ok {
+			return ErrNoBot
+		}
+		if b.PvP == nil && modes == nil || b.PvP != nil && modes != nil && *b.PvP == *modes {
+			return nil
+		}
+		var set *PvPModes
+		if modes != nil {
+			c := *modes
+			set = &c
+		}
+		if err := s.cfg.Registry.Update(account, func(b *Bot) { b.PvP = set }); err != nil {
 			return err
 		}
 		if !b.Online {

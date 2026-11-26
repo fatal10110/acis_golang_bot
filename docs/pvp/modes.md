@@ -54,6 +54,18 @@ and its duel results. Counters:
 - `bot_pvp_interrupts_total{result}` from X6's interrupts: `cast` per interrupt sent, then `landed`
   on the opponent's `MagicSkillCanceled` before its landing time, else `too late` at that time.
 
+The switches are stored per bot in the registry: `POST /api/bots/{account}/pvp` with
+`{"modes": {"duels": …, "hunt": …, "arenas": …, "pk": …}}` replaces the persona's four defaults
+(fight back and `SupportFlagged` stay the preset's), `{"modes": null}` gives the defaults back, and
+an online bot respawns with the change through the login gate. The bot's live view carries `pvp`
+(the modes played, `pvp_kills`, `pk_kills`, the run's duels by result, `last_duel`). The metrics
+snapshot names the counters without the `bot_` prefix, as its other fields: `pvp_fights_total`,
+`pvp_deaths_total`, `duels_total` and `pvp_interrupts_total` (`too late` as `too_late`), every
+label present. A death counts by the kind of the fight the bot started on its killer, so a hunted
+flagged player or a PK victim that fights back stays `flagged` or `pk`; a killer whose record holds
+no fight kind counts as `unfought`. An interrupt whose opponent leaves sight before the landing
+time counts `cast` only.
+
 ## Tests
 
 Modes are tested through the rules they switch.

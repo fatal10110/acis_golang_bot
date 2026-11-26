@@ -95,6 +95,13 @@ type layerFight struct {
 	landed   map[int32]landing
 	resists  map[int32]int
 	answered time.Time
+	// kind is the fight's kind at the bot's first attack, counted in
+	// bot_pvp_fights_total (Brain.fightSent), fightNone before it;
+	// interrupting is the landing time of the cast an interrupt sent
+	// answers, until its outcome counts (Brain.interruptSent), zero for
+	// none.
+	kind         FightKind
+	interrupting time.Time
 }
 
 // ownLast is the bot's own last cast at a player: a 139 is about it, and
@@ -437,6 +444,7 @@ func (b *Brain) interruptCast(id int32, rot []Step, st stepState, underReserve b
 		}
 		if a, ok := b.tryStep(id, step, st, underReserve, now); ok {
 			r.fight.answered = c.Lands
+			a.interrupts = true
 			return a, true
 		}
 	}

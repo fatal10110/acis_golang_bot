@@ -38,6 +38,7 @@ func (p *Panel) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/bots/{account}/respawn", p.act(p.cfg.Supervisor.Respawn))
 	mux.HandleFunc("POST /api/bots/{account}/preset", p.setPreset)
 	mux.HandleFunc("POST /api/bots/{account}/branch", p.setBranch)
+	mux.HandleFunc("POST /api/bots/{account}/pvp", p.setPvP)
 	mux.HandleFunc("POST /api/bots/{account}/command", p.command)
 	mux.HandleFunc("POST /api/bots/{account}/party", p.setPartyMode)
 	mux.HandleFunc("GET /api/parties", p.parties)
@@ -94,6 +95,39 @@ type live struct {
 	// Build is the build the bot plays (botclient.BuildStatus), absent for
 	// a persona with no role.
 	Build *buildLive `json:"build,omitempty"`
+	// PvP is the bot's PvP view (botclient.PvPStatus), absent before its
+	// first session.
+	PvP *pvpLive `json:"pvp,omitempty"`
+}
+
+// pvpLive is a bot's PvP view (botclient.PvPStatus, docs/pvp/modes.md
+// "Panel and metrics (X12)"): the modes it plays, fight back and the four
+// switches, its PvP and PK kill counts (UserInfo), its duels this run by
+// result and its last duel's result ("" for none).
+type pvpLive struct {
+	FightBack bool   `json:"fight_back"`
+	Duels     bool   `json:"duels"`
+	Hunt      bool   `json:"hunt"`
+	Arenas    bool   `json:"arenas"`
+	PK        bool   `json:"pk"`
+	PvPKills  int32  `json:"pvp_kills"`
+	PKKills   int32  `json:"pk_kills"`
+	DuelsWon  int    `json:"duels_won"`
+	DuelsLost int    `json:"duels_lost"`
+	DuelsTied int    `json:"duels_tied"`
+	LastDuel  string `json:"last_duel,omitempty"`
+}
+
+func pvpOf(s *botclient.PvPStatus) *pvpLive {
+	if s == nil {
+		return nil
+	}
+	m := s.Modes
+	return &pvpLive{
+		FightBack: m.FightFlagged, Duels: m.Duels, Hunt: m.Hunt, Arenas: m.Arenas, PK: m.ForceAttack,
+		PvPKills: s.PvPKills, PKKills: s.PKKills,
+		DuelsWon: s.Duels.Won, DuelsLost: s.Duels.Lost, DuelsTied: s.Duels.Tie, LastDuel: s.LastDuel.String(),
+	}
 }
 
 // buildLive is a bot's build (botclient.BuildStatus): its role, its branch
@@ -178,7 +212,7 @@ func viewOf(s botregistry.Status) botView {
 			HP: st.HP, MaxHP: st.MaxHP, MP: st.MP, MaxMP: st.MaxMP, CP: st.CP, MaxCP: st.MaxCP,
 			Position: point(st.Position), Preset: st.Preset, Rule: st.Rule, Spot: st.Spot, Walk: st.Walk, Leader: st.Leader, Members: st.Members,
 			Order: st.Order.String(), Party: st.Party, Reconnects: st.Reconnects, Crafter: crafterOf(st.Crafter),
-			Build: buildOf(st.Build),
+			Build: buildOf(st.Build), PvP: pvpOf(st.PvP),
 		}
 		if st.Town != nil {
 			t := point(*st.Town)
@@ -359,6 +393,23 @@ func (p *Panel) setBranch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.cfg.Supervisor.SetBranch(r.Context(), r.PathValue("account"), req.Branch); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, okAnswer)
+}
+
+// setPvP sets the bot's PvP mode switches, or with "modes" null or absent
+// gives it back its preset's defaults (botregistry.Supervisor.SetPvP).
+func (p *Panel) setPvP(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Modes *botregistry.PvPModes `json:"modes"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := p.cfg.Supervisor.SetPvP(r.Context(), r.PathValue("account"), req.Modes); err != nil {
 		writeErr(w, err)
 		return
 	}
