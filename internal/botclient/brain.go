@@ -852,6 +852,11 @@ func (b *Brain) wake(now time.Time) error {
 				return err
 			}
 		}
+		// The decision spent reactAt: an arena opponent's walk still
+		// heading for the swing margin wakes the guards again.
+		if t := b.edgeCross(now); !t.IsZero() {
+			b.wakeBy(t)
+		}
 	}
 	if !b.appearing && now.Sub(b.pace.lastSent) >= keepaliveAfter {
 		s := &b.world.Self
@@ -930,6 +935,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	}
 	b.pace.sent(g, now)
 	b.metrics.Sent()
+	b.guardSent(a, now)
 	switch a.kind {
 	case actAttack:
 		b.engaged, b.opened = a.object, a.object
@@ -959,6 +965,12 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		// Sitting down drops the attack intention as well.
 		b.engaged = 0
 		b.toggledAt = now
+	case actDuelAnswer:
+		// The server takes the challenge with the first answer.
+		b.pvp.asked = duelAsk{}
+		if d := &b.pvp.duel; d.Phase == DuelAsked {
+			*d = Duel{Result: d.Result}
+		}
 	case actAppear:
 		b.appearing, b.appearedAt = false, now
 	case actRestart:

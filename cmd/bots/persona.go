@@ -50,6 +50,7 @@ var presets = []preset{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
 		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
 	},
+	{name: "pvp", help: "damage dealer that farms the datapack's spots alone between fights; takes duels, fights flagged and karma players and in arenas, never PKs by default (needs -datapack: its guards read the skills and zones)", datapack: true, persona: pvpPersona, farms: true, walks: true, member: true},
 }
 
 // damagePersona is the farmer and merchant presets' persona: the default
@@ -60,6 +61,17 @@ func damagePersona() botclient.Persona {
 	p := botclient.DefaultPersona()
 	p.Role = botclient.RoleDamage
 	p.Loot.Ground = botclient.GroundAny
+	return p
+}
+
+// pvpPersona is the pvp preset's persona (docs/pvp/modes.md, D35): the
+// damage persona farming like farmer, with the duel, hunting and arena modes
+// on, open-world PK off, and SupportFlagged on (its own duel counts it off,
+// docs/pvp/guards.md "Duel support"). The other presets keep fight back
+// only, SupportFlagged off, and decline duels at once.
+func pvpPersona() botclient.Persona {
+	p := damagePersona()
+	p.PvP = botclient.PvPPolicy{FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true}
 	return p
 }
 

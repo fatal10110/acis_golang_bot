@@ -370,6 +370,11 @@ const (
 	actRoomJoin
 	actRoomExit
 	actRoomWithdraw
+	// actTargetCancel is the Esc key the guards stop the bot's own cast
+	// with (pvp_guards.go), actDuelAnswer the answer to a duel challenge
+	// (Brain.declineDuel).
+	actTargetCancel
+	actDuelAnswer
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -521,7 +526,11 @@ type rule struct {
 // lasts, right after "outnumbered" so only the critical, escape, heal,
 // outnumbered and flee rules go first, and ahead of "loot". "duel" fights
 // the duel opponent and holds every rule after it while the duel is on
-// (ruleDuel), after "raise". "overweight" drops what an immobile bot
+// (ruleDuel), after "raise", and declines a challenge the persona takes no
+// duels for. "guard" stops a fight the guards against accidental karma
+// forbid (pvp_guards.go): an Esc for the bot's own cast in its window and a
+// disengage move, right after "escape" so only the critical and escape
+// rules go first. "overweight" drops what an immobile bot
 // carries (#488) ahead of "attacked", since a drop needs no move and an
 // attacker the bot cannot reach at speed 0 would hold it in the fight; it
 // gives way to the fight while the drop gate is closed. "overweight hold"
@@ -533,6 +542,7 @@ var playRules = []rule{
 	{"command", (*Brain).ruleCommand},
 	{"critical", (*Brain).ruleCritical},
 	{"escape", (*Brain).ruleEscape},
+	{"guard", (*Brain).ruleGuard},
 	{"heal", (*Brain).ruleHeal},
 	{"raise", (*Brain).ruleRaise},
 	{"duel", (*Brain).ruleDuel},

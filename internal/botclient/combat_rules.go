@@ -42,11 +42,22 @@ const (
 )
 
 // PvPPolicy is the persona's player-versus-player defaults (D6): whom the
-// bot fights and supports. It is not a safety boundary.
+// bot fights and supports, and the PvP modes it plays (docs/pvp/modes.md,
+// D35). It is not a safety boundary.
 type PvPPolicy struct {
 	// FightFlagged lets the bot fight back on, and assist against, players
 	// who are PvP flagged or have karma.
 	FightFlagged bool
+	// Duels takes the duel challenges the bot can take and challenges
+	// players (docs/pvp/finding.md, X5); without it the bot declines every
+	// challenge at once (Brain.declineDuel).
+	Duels bool
+	// Hunt attacks the flagged and karma players in sight of its tier
+	// (docs/pvp/targets.md "Hunting", X5).
+	Hunt bool
+	// Arenas visits an arena on a timer and fights there
+	// (docs/pvp/finding.md, X5).
+	Arenas bool
 	// ForceAttack is PK mode (docs/pvp/karma.md, rule 7 of MayFight): it
 	// lets no player pass until its limits ship (X11).
 	ForceAttack bool
@@ -221,6 +232,9 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 		if b.engaged != 0 && b.engaged == t && !b.mayFight(t, now) {
 			return b.disengage(now)
 		}
+		if b.selectPending(id, now) {
+			return Action{}
+		}
 		return selectAction(id, from)
 	}
 	if s.Casting(now) || b.castPending(now) {
@@ -239,6 +253,15 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 		return Action{}
 	}
 	r := b.attackReach()
+	// The guards (docs/pvp/guards.md): a pole wielder whose swing would
+	// reach a bystander repositions or holds; no swing the flag guard, the
+	// arena edge or the duel follow holds.
+	if b.poleHeld(id, now) {
+		return b.poleReposition(id, now)
+	}
+	if b.swingHeld(id, now) {
+		return Action{}
+	}
 	if b.engaged != id {
 		if b.exhausted(id, now) {
 			return Action{}
@@ -372,7 +395,8 @@ func (b *Brain) landed(id int32, now time.Time) {
 
 // disengage drops the attack in flight with a short step: a move replaces
 // the attack intention on the server. The step goes in a random direction
-// that holds on the geodata (turnAround), else nowhere (orStay).
+// that holds on the geodata and keeps inside an arena and off a duel's
+// forbidden ground (turnAround, moveOK), else nowhere (orStay).
 func (b *Brain) disengage(now time.Time) Action {
 	return b.orStay(b.turnAround(b.rng.Float64()*2*math.Pi, now), now)
 }
@@ -412,13 +436,14 @@ func (b *Brain) orStay(step Action, now time.Time) Action {
 const turnHeadings = 8
 
 // turnAround is a turnStep step heading angle, else the first of the other
-// turnHeadings headings around it whose step holds; nothing when none does.
+// turnHeadings headings around it whose step holds and moveOK passes;
+// nothing when none does.
 func (b *Brain) turnAround(angle float64, now time.Time) Action {
 	var angles [turnHeadings]float64
 	for i := range angles {
 		angles[i] = angle + float64(i)*2*math.Pi/turnHeadings
 	}
-	return b.checkedStep(turnStep, now, angles[:]...)
+	return b.groundStep(turnStep, now, b.moveOK, angles[:]...)
 }
 
 // checkedStep is a move of dist from where the bot stands along the first
@@ -428,14 +453,29 @@ func (b *Brain) turnAround(angle float64, now time.Time) Action {
 // whose end is not in water. It is the zero Action when no angle holds. Without geodata nothing is checked
 // and the first angle goes out, as before.
 func (b *Brain) checkedStep(dist int32, now time.Time, angles ...float64) Action {
+	return b.groundStep(dist, now, nil, angles...)
+}
+
+// groundStep is checkedStep along the first of angles whose step also
+// passes accept (from the bot's spot to the step's end at now); nil accepts
+// every step.
+func (b *Brain) groundStep(dist int32, now time.Time, accept func(from, to Point, now time.Time) bool, angles ...float64) Action {
 	pos := b.world.Self.Position(now)
 	w := b.walker()
 	if w.nav == nil {
-		return moveAction(offset(pos, angles[0], dist), pos)
+		for _, angle := range angles {
+			if to := offset(pos, angle, dist); accept == nil || accept(pos, to, now) {
+				return moveAction(to, pos)
+			}
+		}
+		return Action{}
 	}
 	from := b.standing(now)
 	for _, angle := range angles {
 		to := offset(from, angle, dist)
+		if accept != nil && !accept(from, to, now) {
+			continue
+		}
 		c, ok := w.plan.Locate(toLoc(to))
 		if !ok {
 			continue

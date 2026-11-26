@@ -124,11 +124,11 @@ type SelfState struct {
 	castEnd, swingEnd time.Time
 	// PAtkSpd, CollisionHeight, the combat stats and the base stats are
 	// UserInfo's; every UserInfo replaces them.
-	PAtkSpd                       int32
-	CollisionHeight               float64
-	PAtk, PDef, Evasion, Accuracy int32
-	Critical, MAtk, CastSpd, MDef int32
-	STR, DEX, CON, INT, WIT, MEN  int32
+	PAtkSpd                          int32
+	CollisionRadius, CollisionHeight float64
+	PAtk, PDef, Evasion, Accuracy    int32
+	Critical, MAtk, CastSpd, MDef    int32
+	STR, DEX, CON, INT, WIT, MEN     int32
 	// ground, when set, is the geodata the bot's own walk is simulated on
 	// (World.SetGround).
 	ground groundHeight
@@ -897,7 +897,7 @@ func (w *World) applyUserInfo(e UserInfo, now time.Time) {
 	s.PvPFlag, s.Karma, s.StoreType = uint8(e.PvPFlag), e.Karma, e.StoreType
 	s.RunSpeed, s.WalkSpeed, s.Running = e.RunSpeed, e.WalkSpeed, e.Running
 	s.SwimSpeed = e.SwimSpeed
-	s.PAtkSpd, s.CollisionHeight = e.PAtkSpd, e.CollisionHeight
+	s.PAtkSpd, s.CollisionRadius, s.CollisionHeight = e.PAtkSpd, e.CollisionRadius, e.CollisionHeight
 	s.PAtk, s.PDef, s.Evasion, s.Accuracy = e.PAtk, e.PDef, e.Evasion, e.Accuracy
 	s.Critical, s.MAtk, s.CastSpd, s.MDef = e.Critical, e.MAtk, e.CastSpd, e.MDef
 	s.STR, s.DEX, s.CON, s.INT, s.WIT, s.MEN = e.STR, e.DEX, e.CON, e.INT, e.WIT, e.MEN
