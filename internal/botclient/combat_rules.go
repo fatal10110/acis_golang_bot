@@ -361,10 +361,14 @@ const (
 const castRefusedHold = 10 * time.Second
 
 // castRefused ends the cast in flight on the server's refusal message id
-// at now and holds its skill for castRefusedHold.
+// at now and holds its skill for castRefusedHold; a target out of sight
+// also sends the next cast at it to another stand (sightRefused).
 func (b *Brain) castRefused(id int32, now time.Time) {
 	if !b.castPending(now) {
 		return
+	}
+	if id == msgCantSeeTarget {
+		b.sightRefused(now)
 	}
 	switch id {
 	case msgCannotBeUsed:
