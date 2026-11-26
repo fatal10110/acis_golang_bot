@@ -11,10 +11,11 @@ import (
 // expands; a route's door-aware and door-open searches share it.
 const abstractBudget = 1 << 18
 
-// anode is one abstract node the search reached; index 0 is the goal.
+// anode is one abstract node the search reached; index 0 is the goal. h is
+// its bound on the cost to the goal.
 type anode struct {
 	id     int32
-	g      int32
+	g, h   int32
 	parent int32
 	closed bool
 }
@@ -56,6 +57,19 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 	s.anodes = append(s.anodes[:0], anode{id: -1, g: -1, parent: -1})
 	s.open = s.open[:0]
 	s.aindex.reset()
+	goal := func(id int) bool {
+		return sp.goal(g.nodeSCC(id)) && allows(seat.goals, int32(id))
+	}
+	var bounds goalBounds
+	bounds.reset(g)
+	if bounds.k > 0 {
+		first, end := g.clusterNodes(int(b.res.cluster))
+		for m := first; m < end; m++ {
+			if goal(m) {
+				bounds.add(g, m, heuristic(g.nodeRep(m), b.cell))
+			}
+		}
+	}
 	relax := func(id int32, ng int32, parent int32) {
 		var idx int32
 		var seen bool
@@ -70,18 +84,22 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 			}
 			s.anodes[0].g, s.anodes[0].parent = ng, parent
 		case !seen:
-			s.anodes = append(s.anodes, anode{id: id, g: ng, parent: parent})
+			hv, ok := heuristic(g.nodeRep(int(id)), b.cell), true
+			if bounds.k > 0 {
+				hv, ok = bounds.bound(g, int(id), hv)
+			}
+			// A node that reaches no goal node is closed at once.
+			s.anodes = append(s.anodes, anode{id: id, g: ng, parent: parent, h: hv, closed: !ok})
+			if !ok {
+				return
+			}
 		default:
 			if n := &s.anodes[idx]; n.closed || ng >= n.g {
 				return
 			}
 			s.anodes[idx].g, s.anodes[idx].parent = ng, parent
 		}
-		f := ng
-		if id >= 0 {
-			f += heuristic(g.nodeRep(int(id)), b.cell)
-		}
-		s.push(openItem{f: f, g: ng, idx: idx})
+		s.push(openItem{f: ng + s.anodes[idx].h, g: ng, idx: idx})
 	}
 	first, end := g.clusterNodes(int(a.res.cluster))
 	for n := first; n < end; n++ {
@@ -110,7 +128,7 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 		n.closed = true
 		id, gv := n.id, n.g
 		rep := g.nodeRep(int(id))
-		if g.nodeCluster(int(id)) == b.res.cluster && sp.goal(g.nodeSCC(int(id))) && allows(seat.goals, id) {
+		if g.nodeCluster(int(id)) == b.res.cluster && goal(int(id)) {
 			relax(-1, gv+heuristic(rep, b.cell), it.idx)
 		}
 		lo, hi := g.nodeEdges(int(id))

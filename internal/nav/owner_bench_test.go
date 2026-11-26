@@ -12,6 +12,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geodata"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
 
 // ownerNav opens the owner's geodata cache and nav cache for the local
@@ -247,12 +248,14 @@ func BenchmarkOwnerNav(b *testing.B) {
 		})
 		failed := 0
 		var segments []float64
+		routes := make([][]location.Location, n)
 		route := func(h *Hierarchy, i int) int64 {
 			used := h.cache.used
 			r, err := h.Route(p, from[i].World(), to[i].World(), nil)
 			if err != nil {
 				failed++
 			}
+			routes[i] = r
 			for k := 1; k < len(r); k++ {
 				segments = append(segments, hypot(r[k].X-r[k-1].X, r[k].Y-r[k-1].Y))
 			}
@@ -267,7 +270,10 @@ func BenchmarkOwnerNav(b *testing.B) {
 		})
 		reportSegments(b, segments)
 		b.Logf("routes failed: %d of %d (both passes)", failed, 2*n)
+		ph := benchNoLandmarks(b, h, p, from, to, routes)
 		benchShortRoutes(b, h, p, e, g, w)
+		b.Logf("short routes without landmarks:")
+		benchShortRoutes(b, ph, p, e, ph.graph, w)
 	}
 }
 
