@@ -6,6 +6,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 )
 
 // The break-off fixtures (docs/pvp/layer.md "Tests"): test-built Break
@@ -320,4 +321,78 @@ func TestPvPUltimateDefense(t *testing.T) {
 			t.Fatalf("rule %q action %v once it ended, want the walk out", rule, a.kind)
 		}
 	})
+	// The movement guards one by one, each against the same brain free to
+	// move: under Ultimate Defense the stand-point walk, the cast's walk
+	// into range, the pole's reposition and the stuck side step send no
+	// move.
+	guards := []struct {
+		name string
+		// run builds the brain, applies udOn when immobile, and reports
+		// whether the guarded move or cast went out.
+		run func(t *testing.T, immobile bool) bool
+	}{
+		{
+			name: "engageWalk: the target behind the U's base, no stand-point walk",
+			run: func(t *testing.T, immobile bool) bool {
+				b, _, _ := newNavBrain(t, testNav(t), Persona{BlacklistFor: time.Minute}, scenePoint(geotest.UInside, 0, 0))
+				b.world.Apply(NPCInfo{ObjectID: engageMob, NPCID: 20001, Attackable: true, Pos: scenePoint(geotest.UBehind, 0, 0)}, t0)
+				b.world.Target = engageMob
+				if immobile {
+					b.handleOne(t, udOn, t0)
+				}
+				a, walk := b.engageWalk(engageMob, b.attackReach(), at(time.Second))
+				return walk && a.kind == actMove
+			},
+		},
+		{
+			name: "tryStep: Wind Strike past its cast range, no cast",
+			run: func(t *testing.T, immobile bool) bool {
+				b := layerBrain(t, lyrWarrior, ws)
+				castRange(b, skillWindStrike, 100)
+				if immobile {
+					b.handleOne(t, udOn, t0)
+				}
+				now := at(time.Second)
+				a, ok := b.tryStep(pcID, ws, b.stepState(pcID, []Step{ws}, now), false, now)
+				return ok && a.kind == actCast
+			},
+		},
+		{
+			name: "poleReposition: a bystander in the pole's cone, a hold",
+			run: func(t *testing.T, immobile bool) bool {
+				b := areaBrain(t, false, false, Point{X: 90}, Step{Skill: skillWildSweep})
+				player(t, b, pvpThird, "x", Point{X: 40, Y: 10}, 1, 0, 9)
+				if immobile {
+					b.handleOne(t, udOn, t0)
+				}
+				return b.poleReposition(pcID, at(time.Second)).kind == actMove
+			},
+		},
+		{
+			name: "sideStep: stuck past stuckAfter in melee reach, no side step",
+			run: func(t *testing.T, immobile bool) bool {
+				b, _, _ := newNavBrain(t, testNav(t), Persona{BlacklistFor: time.Minute}, scenePoint(geotest.UBehind, 0, 0))
+				b.world.Apply(NPCInfo{ObjectID: engageMob, NPCID: 20001, Attackable: true, Pos: scenePoint(geotest.UBehind, 1, 0)}, t0)
+				b.world.Target, b.engaged, b.progressAt = engageMob, engageMob, t0
+				if immobile {
+					b.handleOne(t, udOn, t0)
+				}
+				now := t0.Add(stuckAfter)
+				if !b.meleeInRange(engageMob, now) {
+					t.Fatal("the target out of melee reach: the chase guard, not the side step's, holds")
+				}
+				return b.fight(engageMob, now).kind == actMove
+			},
+		},
+	}
+	for _, g := range guards {
+		t.Run("under it: "+g.name, func(t *testing.T) {
+			if !g.run(t, false) {
+				t.Fatal("free to move: no move or cast, the case does not reach the guard")
+			}
+			if g.run(t, true) {
+				t.Fatal("under Ultimate Defense: the move or cast went out")
+			}
+		})
+	}
 }

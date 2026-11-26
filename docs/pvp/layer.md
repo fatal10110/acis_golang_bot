@@ -76,7 +76,8 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
   kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (none are
   bought, and an uncancelled duel end restores CP, [duel end](server-duels.md)).
 - **Cures.** In a PvP fight, duels too (cures are cheap and a DOT decides a 2-minute duel): its own `AbnormalStatusUpdate` shows
-  a poison or bleed (stack type `poison`, `bleeding`, or effect type POISON, BLEED) with half its
+  a poison or bleed (skill type or resolved effect type POISON, BLEED: what the negate matches,
+  `hooks_buff.go` `negateTypeMatches`; a stack type alone, like NPC Bleed 4615's, is not) with half its
   ticks left → the cure. Its level is the lower set level (`hooks_buff.go:221-233`,
   `negateLevelAllows`): `effectAbnormalLvl` (only with an `effectType`; Sting 223 sets only this) or
   `abnormalLvl` (Poison, Curse: Poison, Venom, Bleed); neither set → no cure. Up to 3: Antidote 1831

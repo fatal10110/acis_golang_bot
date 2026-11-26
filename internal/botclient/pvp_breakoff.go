@@ -3,6 +3,7 @@ package botclient
 import (
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
@@ -166,25 +167,39 @@ func (b *Brain) cureSent(item int32, now time.Time) {
 	}
 }
 
-// dotKind is the negate kind of s, POISON or BLEED, or "" for neither: its
-// skill type or effect type (what a negate matches, skill/effect/
-// hooks_buff.go negateTypeMatches), else an effect's stack type (poison,
-// bleeding) or effect type.
+// dotKind is the negate kind of s, POISON or BLEED, or "" for neither:
+// what a negate matches (skill/effect/hooks_buff.go negateTypeMatches), its
+// skill type or its landing type. A DOT matched by neither, like the NPC
+// Bleed 4615 (MDAM, stack type bleeding), no cure removes.
 func dotKind(s datapack.Skill) string {
+	lt := landingType(s)
 	for _, k := range []string{"POISON", "BLEED"} {
-		if s.Type == k || s.EffectType == k {
+		if strings.EqualFold(s.Type, k) || strings.EqualFold(lt, k) {
 			return k
 		}
 	}
+	return ""
+}
+
+// landingType is the server's resolved effect type of s (model/skill/
+// landing.go LandingEffectType): its first effect's effect type, else its
+// own, else STUN for PDAM and PARALYZE for MDAM, else its skill type.
+func landingType(s datapack.Skill) string {
 	for _, e := range s.Effects {
-		switch {
-		case e.StackType == "poison" || e.EffectType == "POISON":
-			return "POISON"
-		case e.StackType == "bleeding" || e.EffectType == "BLEED":
-			return "BLEED"
+		if e.EffectType != "" {
+			return e.EffectType
 		}
 	}
-	return ""
+	if s.EffectType != "" {
+		return s.EffectType
+	}
+	switch strings.ToUpper(strings.TrimSpace(s.Type)) {
+	case "PDAM":
+		return "STUN"
+	case "MDAM":
+		return "PARALYZE"
+	}
+	return s.Type
 }
 
 // cureLevel is the abnormal level a cure must reach to remove s

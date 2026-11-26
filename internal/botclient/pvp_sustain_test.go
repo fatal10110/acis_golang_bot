@@ -198,3 +198,28 @@ func TestPvPCure(t *testing.T) {
 		}
 	})
 }
+
+// TestPvPDotKind checks the cure's DOT match against the server's negate
+// match (hooks_buff.go negateTypeMatches): skill type or landing type
+// POISON or BLEED; a stack type alone matches nothing.
+func TestPvPDotKind(t *testing.T) {
+	tests := []struct {
+		name  string
+		skill datapack.Skill
+		want  string
+	}{
+		{name: "Poison 129: skill type POISON", skill: sustainSkills[datapack.SkillRef{ID: grdPoison, Level: 1}], want: "POISON"},
+		{name: "Bleed 96: skill type BLEED", skill: sustainSkills[datapack.SkillRef{ID: susBleed, Level: 3}], want: "BLEED"},
+		{name: "Sting 223: PDAM with effect type BLEED", skill: sustainSkills[datapack.SkillRef{ID: susSting, Level: 1}], want: "BLEED"},
+		{name: "an effect's effect type POISON lands as POISON", skill: datapack.Skill{Type: "MDOT", Effects: dot("", "POISON", 10)}, want: "POISON"},
+		{name: "NPC Bleed 4615: MDAM, stack type bleeding only, lands as PARALYZE", skill: datapack.Skill{Type: "MDAM", Effects: dot("bleeding", "", 7)}, want: ""},
+		{name: "MDOT, stack type poison only", skill: datapack.Skill{Type: "MDOT", Effects: dot("poison", "", 10)}, want: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := dotKind(tc.skill); got != tc.want {
+				t.Fatalf("dotKind = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
