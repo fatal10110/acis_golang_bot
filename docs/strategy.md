@@ -163,6 +163,7 @@ Read in the Go server on 2026-11-23; every design choice below rests on these.
 | Sweeper | Only the spoiler, its party or command channel may sweep (else 683; not spoiled: 343). Items follow the party loot rule, else go to the sweeper: SystemMessage 53 or 54 and `InventoryUpdate`. | `handler/target/cast_rejection.go:156-181`, `handler/skill/spoil.go:87-117`, `network/inventory.go:889-892` |
 | Toggles | `AbnormalStatusUpdate` (0x7f), sent to the owner only, lists active toggles after the other effects with duration −1. | `network/targeting.go:1225-1240`, `serverpackets/status_effects.go:25-81` |
 | Relax | Cast standing (seated: SystemMessage 31); the effect sits the player, and each 2 s tick ends it once the player stands, dies or reaches full HP (SystemMessage 175). | `player_gate.go:109-127`, `skill/effect/hooks_status.go:197-222` |
+| Chameleon Rest | 296, a TOGGLE (CONT, abnormal "stealth") the plains walker learns at 46: it sits the player as Relax does, drains 6 MP each 3 s tick, and ends only when the player stands or its MP runs out (the player stays seated), never at full HP. The bot rests with it as with Relax, from 46 (`ClassKit.RelaxFrom`). | `skill/effect/hooks_status.go:224-241`, `skill/effect/hooks_dot.go:58-77`, `skills/0200-0299.xml` (296) |
 | `UserInfo` fields | STR, DEX, CON, INT, WIT, MEN after the experience; then, after the paperdoll, P.Atk, P.Atk speed, P.Def, evasion, accuracy, critical, M.Atk, cast speed, P.Atk speed again, M.Def, then PvP flag and karma. | `serverpackets/userinfo.go:165-170,201-213` |
 | `UserInfo` resends | Every stat function change (equip, buff, level) resends `UserInfo`. | `model/actor/player/character_effects.go` `statsModified`, `network/movement.go` `sendModifiedStats` |
 | NPC combat stats | `<set>` names `hp`, `mp`, `pAtk`, `pDef`, `mAtk`, `mDef`, `crit`, `atkSpd` (default 300), `walkSpd`, `runSpd`; no cast speed. They are **bases**: the NPC runs the same stat functions as a player (P.Atk by STR × level factor, max HP by CON, and so on) on its own `str`, `con`, `dex`, `int`, `wit`, `men` (defaults 40, 21, 30, 20, 43, 20) and level. | `data/xml/npc.go:290-311`, `model/actor/npc/hostile_stats.go:209-240`, `npcs/20000-20999.xml:14-28` |
@@ -308,8 +309,9 @@ this list.
   they buy nothing and the sets are model-chosen there.
 - TH, HK, PW, SR, AW, PR, TY, Plated Leather: against the reference monster the CON it takes costs
   more HP than its STR adds, in either role, and it is model-chosen (TH, PW and AW take Mithril
-  Light). Against a harmless target its STR gains for the Damage builds of TH, HK, PW and SR; for
-  AW, PR and TY's, and every Support build (a tank), it is model-chosen.
+  Light). Against a harmless target its STR gains for the Damage builds of HK and SR; for TH, PW
+  and AW's (their rows, #631: their first damage step at 40 is Deadly Blow, whose kill the STR does
+  not speed past the tie-break), PR and TY's, and every Support build (a tank), it is model-chosen.
 - SN and SG, Demon: its -270 max HP and -1 WIT lose value against the reference monster in either
   role, and Karmian's cast speed outranks its +4 INT at every max HP, over 810 too: the row's
   "Demon once max HP covers the loss" does not hold through the model, and Demon is model-chosen

@@ -286,9 +286,12 @@ type ClassKit struct {
 	Flee  int32
 	Melee MeleePolicy
 	// Toggles are the combat toggles; Relax is the toggle ruleRest sits
-	// with instead of a plain sit (226 Relax), 0 for none.
-	Toggles []Toggle
-	Relax   int32
+	// with instead of a plain sit (226 Relax, 296 Chameleon Rest), 0 for
+	// none; RelaxFrom is the level it starts at (the row's "@N"):
+	// CompileBuild leaves Relax 0 below it, so the bot sits plainly.
+	Toggles   []Toggle
+	Relax     int32
+	RelaxFrom int32
 	// Sweep is the dwarven spoil flag (docs/strategy.md, Design section 8):
 	// the skill ruleSweep casts on the corpse of a monster the bot spoiled
 	// (42 Sweeper), 0 for a kit that does not sweep.
@@ -500,7 +503,10 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 		}
 	}
 	plays := func(r Role) bool { return r == RoleNone || r == role }
-	k.Skills, k.Flee, k.Melee, k.Relax, k.Base, k.Fixed = line.Skills, line.Flee, line.Melee, line.Relax, line.Base, line.Fixed
+	k.Skills, k.Flee, k.Melee, k.Base, k.Fixed = line.Skills, line.Flee, line.Melee, line.Base, line.Fixed
+	if line.RelaxFrom <= level {
+		k.Relax, k.RelaxFrom = line.Relax, line.RelaxFrom
+	}
 	k.Sweep, k.SpotMargin = line.Sweep, line.SpotMargin
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds

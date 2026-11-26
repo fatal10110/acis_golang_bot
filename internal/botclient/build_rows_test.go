@@ -35,9 +35,10 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 // checkRow checks a row against the class trees and skill templates: every
 // skill is in the class's merged tree by the row's end, every step and
 // toggle starts at max(row start, the skill's first merged minLvl) (its
-// "@N"), as does every buff with a From, every bracket gate equals the
-// skill's weaponsAllowed and every branch gate (Step.Branch) fits it at each
-// level the row reaches, a skill with weaponsAllowed has a gate, every
+// "@N"), as does every buff with a From and a Relax with a RelaxFrom, every
+// bracket gate equals the skill's weaponsAllowed and every branch gate
+// (Step.Branch) fits it at each level the row reaches, a skill with
+// weaponsAllowed has a gate, every
 // charge gate equals the skill's charge condition, every Within gate equals
 // the skill's castRange, every toggle is a TOGGLE skill, a Party buff and a
 // party heal (Heal.Members) are exactly the PARTY-target skills among the
@@ -173,10 +174,16 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			fail("skill %d tagged (fixed) is in class %d's own tree", id, r.class)
 		}
 	}
-	for _, id := range []int32{r.kit.Flee, r.kit.Relax, r.kit.Sweep} {
+	for _, id := range []int32{r.kit.Flee, r.kit.Sweep} {
 		if id != 0 {
 			known(id)
 		}
+	}
+	switch {
+	case r.kit.RelaxFrom != 0:
+		starts(r.kit.Relax, r.kit.RelaxFrom)
+	case r.kit.Relax != 0:
+		known(r.kit.Relax)
 	}
 	if r.next != 0 && classes[r.next].Parent != r.class {
 		fail("profession %d is not a direct child of class %d", r.next, r.class)
@@ -398,6 +405,8 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{"party heal of a single target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: plain, HP: 60, Members: 2}}}}, true},
 		{"single heal of a party target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: chant, HP: 60}}}}, true},
 		{"relax not in the tree", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Relax: 999}}, true},
+		{"relax level", second(ClassKit{Relax: own43, RelaxFrom: 43}), false},
+		{"wrong relax level", second(ClassKit{Relax: own43, RelaxFrom: 44}), true},
 		{"no weapon gate", row(11, Step{Skill: sword}), true},
 		{"no level", row(11, Step{Skill: plain}), true},
 		{"wrong level", row(11, Step{Skill: plain, From: 9}), true},

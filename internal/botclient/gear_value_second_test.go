@@ -77,9 +77,10 @@ func TestRowBHSetValue(t *testing.T) {
 // Plated Leather (+4 STR, -1 CON): against the reference monster the CON
 // it takes costs more HP than the STR adds damage, in either role, and the
 // set is model-chosen; against a harmless target the STR gains for the
-// Damage builds of TH, HK, PW and SR (strDamage) and stays at the
-// tie-break for AW, PR and TY's and every Support build (a tank: no heal
-// the model times), model-chosen. Mithril Light (+4 evasion) gains against the
+// Damage builds of HK and SR (strDamage) and stays at the tie-break for
+// TH, PW, AW, PR and TY's (the daggers' first damage step at 40 is
+// Deadly Blow, #631) and every Support build (a tank: no heal the model
+// times), model-chosen. Mithril Light (+4 evasion) gains against the
 // reference monster and is model-chosen against a harmless one.
 func platedLeatherVerdicts(strDamage bool) [][]setGain {
 	return [][]setGain{setVerdict(RoleDamage, setPlatedLeather, strDamage, false), setVerdict(RoleSupport, setPlatedLeather, false, false)}
@@ -87,23 +88,23 @@ func platedLeatherVerdicts(strDamage bool) [][]setGain {
 
 var mithrilLightVerdicts = bothRoles(setMithrilLight, false, true)
 
-// TestRowTHSetValue: Plated Leather, else Mithril Light (kit: RO's).
+// TestRowTHSetValue: Plated Leather, else Mithril Light (kit: TH's).
 func TestRowTHSetValue(t *testing.T) {
-	checkSecondSets(t, 8, append(platedLeatherVerdicts(true), mithrilLightVerdicts)...)
+	checkSecondSets(t, 8, append(platedLeatherVerdicts(false), mithrilLightVerdicts)...)
 }
 
 // TestRowHKSetValue: Plated Leather (kit: RO's).
 func TestRowHKSetValue(t *testing.T) { checkSecondSets(t, 9, platedLeatherVerdicts(true)...) }
 
-// TestRowPWSetValue: Plated Leather, else Mithril Light (kit: ES's).
+// TestRowPWSetValue: Plated Leather, else Mithril Light (kit: PW's).
 func TestRowPWSetValue(t *testing.T) {
-	checkSecondSets(t, 23, append(platedLeatherVerdicts(true), mithrilLightVerdicts)...)
+	checkSecondSets(t, 23, append(platedLeatherVerdicts(false), mithrilLightVerdicts)...)
 }
 
 // TestRowSRSetValue: Plated Leather (kit: ES's).
 func TestRowSRSetValue(t *testing.T) { checkSecondSets(t, 24, platedLeatherVerdicts(true)...) }
 
-// TestRowAWSetValue: Plated Leather, else Mithril Light (kit: AS's).
+// TestRowAWSetValue: Plated Leather, else Mithril Light (kit: AW's).
 func TestRowAWSetValue(t *testing.T) {
 	checkSecondSets(t, 36, append(platedLeatherVerdicts(false), mithrilLightVerdicts)...)
 }
