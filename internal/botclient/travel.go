@@ -556,13 +556,14 @@ type tripLabel struct {
 // node while no other there is as cheap, as dear and as short in teleports,
 // so the budget never prunes the only path within it.
 func (b *Brain) planTrip(here navPoint, now time.Time) {
-	b.planPath(here, now, nil)
+	b.planPath(here, now, nil, 0)
 }
 
 // planPath is planTrip's search, its goal a fitting spot with room when
 // towns is nil, else a landing in one of towns: a destination within
-// storeTownRadius of it (planTown). It reports whether it planned a trip.
-func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
+// within of it (storeTownRadius for planTown, arenaLanding for planArena).
+// It reports whether it planned a trip.
+func (b *Brain) planPath(here navPoint, now time.Time, towns []Point, within float64) bool {
 	m, tr, p, s := b.cfg.Travel, &b.trip, &b.persona.Travel, &b.world.Self
 	onward := tr.onward
 	// A karma bot takes no gatekeeper (players.properties KarmaPlayerCanUseGK,
@@ -638,7 +639,7 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 				dl := tripLabel{key: tripKey{kind: tripDestination, at: d.at}, p: dp, cost: l.cost + float64(d.price), price: price, hops: l.hops + 1, gk: gk, dest: first}
 				push(dl)
 				for ti, t := range towns {
-					if dist2D(d.at, t) <= storeTownRadius {
+					if dist2D(d.at, t) <= within {
 						dl.key = tripKey{kind: tripTown, i: ti}
 						push(dl)
 					}

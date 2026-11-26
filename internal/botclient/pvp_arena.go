@@ -4,20 +4,25 @@ import (
 	"math"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // Arena trips (docs/pvp/finding.md "Sources", PvPPolicy.Arenas): every
 // arenaEvery, give or take arenaJitter, the bot walks (or takes a
-// gatekeeper) to the nearest arena, fights its arena targets while another
-// player is inside, and leaves after arenaAlone alone or arenaStay in all.
-// arenaArrive is how close to the arena's middle a walk there ends.
+// gatekeeper) to the nearest arena (a long-cast row to the deepest one,
+// pickArena), fights its arena targets while another player is inside, and
+// leaves after arenaAlone alone or arenaStay in all. arenaArrive is how
+// close to the arena's middle a walk there ends; arenaLanding how far from
+// it a gatekeeper's landing may lie: the Colosseum's (Aden's gatekeeper,
+// 146440 46723) lies about 3060 from its middle, past storeTownRadius.
 const (
-	arenaEvery  = 90 * time.Minute
-	arenaJitter = 15 * time.Minute
-	arenaAlone  = 5 * time.Minute
-	arenaStay   = 20 * time.Minute
-	arenaArrive = 100
+	arenaEvery   = 90 * time.Minute
+	arenaJitter  = 15 * time.Minute
+	arenaAlone   = 5 * time.Minute
+	arenaStay    = 20 * time.Minute
+	arenaArrive  = 100
+	arenaLanding = 3500
 )
 
 // arenaTrip is the bot's arena trip: when the next one is due, when this
@@ -83,6 +88,77 @@ func (b *Brain) nearestArena(p Point) (int, Point) {
 	return best, at
 }
 
+// deepArena is the travel map's arena whose middle lies farthest from its
+// edge (1-based, 0 for none) and that middle at height h: the Colosseum,
+// about 1370 from an edge against about 490 for Dion, Gludin and Giran
+// (docs/pvp/guards.md "Arena edge").
+func (b *Brain) deepArena(h int32) (int, Point) {
+	best, at := 0, Point{}
+	var bestEdge float64
+	for i, z := range b.cfg.Travel.zones.Arenas {
+		mid := arenaMiddle(z, h)
+		if e := zoneEdge(z, mid); best == 0 || e > bestEdge {
+			best, at, bestEdge = i+1, mid, e
+		}
+	}
+	return best, at
+}
+
+// longCastRow reports whether the bot plays a row whose damage steps the
+// arena-edge guard holds in a square arena (docs/pvp/guards.md "Arena
+// edge"): the OM row, a mystic row with no spiritshot expected charged
+// (its hit times 1/0.70 longer), or a bow branch (Power Shot, Stunning
+// Shot).
+func (b *Brain) longCastRow() bool {
+	row, ok := charmodel.ClassRow(b.world.Self.ClassID, b.bowEquipped())
+	switch {
+	case !ok || row.Archetype() == charmodel.Melee:
+		return false
+	case row.ID == "OM" || row.Bow:
+		return true
+	}
+	return !b.spiritshotCharged()
+}
+
+// pickArena sets the arena trip starting at now from from on its arena: a
+// long-cast row's the deepest arena (deepArena) when its walk reaches it
+// (walkReach) or a gatekeeper trip there plans now (planArena), else the
+// nearest arena (nearestArena).
+func (b *Brain) pickArena(from Point, now time.Time) {
+	t, tr := &b.pvp.arena, &b.trip
+	i, to := b.nearestArena(from)
+	if b.longCastRow() {
+		if d, dto := b.deepArena(from.Z); d != i {
+			t.arena, t.to = d, dto
+			if b.walkReach(from, dto) {
+				return
+			}
+			onward := tr.onward
+			if b.planArena(now) {
+				return
+			}
+			tr.onward = onward
+		}
+	}
+	t.arena, t.to = i, to
+}
+
+// walkReach reports whether the bot walks from at to to: both on the
+// navigation, within SpotPolicy.MaxTravel in a straight line, in one SCC.
+func (b *Brain) walkReach(at, to Point) bool {
+	from, ok := b.locate(at)
+	if !ok {
+		return false
+	}
+	dst, ok := b.locatePlace(to)
+	reach := int64(b.persona.Spots.MaxTravel)
+	if !ok || horizontal2(at, to) > reach*reach {
+		return false
+	}
+	_, ok = b.navDistance(from, dst)
+	return ok
+}
+
 // arenaReady reports whether an arena trip may start at now: the bot farms
 // at its spot, leads no party nor follows one, is out of combat, has no
 // karma (everyone's target there, docs/pvp/karma.md) and is on no other
@@ -95,7 +171,7 @@ func (b *Brain) arenaReady(now time.Time) bool {
 
 // ruleArena is the arena trip, a rule 9 errand after the supply trip: due
 // and ready, the bot releases its spot (as a supply trip, D16) and goes to
-// the nearest arena (arenaWalk); inside it by arenaEdge it holds every
+// its arena (pickArena, arenaWalk); inside it by arenaEdge it holds every
 // later rule while it stays (ruleArenaFight attacks), and leaves
 // (arenaLeave) after arenaAlone with no other player inside or arenaStay
 // in all. Walks are the walker's (goTo, the frame pacer); a gatekeeper trip
@@ -118,8 +194,8 @@ func (b *Brain) ruleArena(now time.Time) (Action, bool) {
 			return Action{}, false
 		}
 		from := b.world.Self.Position(now)
-		i, to := b.nearestArena(from)
-		*t = arenaTrip{due: t.due, since: now, arena: i, to: to, from: from}
+		*t = arenaTrip{due: t.due, since: now, from: from}
+		b.pickArena(from, now)
 		b.leaveSpot()
 	}
 	if t.leaving {
@@ -215,7 +291,7 @@ func (b *Brain) arenaWalk(now time.Time) (Action, bool) {
 func (b *Brain) planArena(now time.Time) bool {
 	t := &b.pvp.arena
 	here, ok := b.locate(b.world.Self.Position(now))
-	if !ok || !b.planPath(here, now, []Point{t.to}) {
+	if !ok || !b.planPath(here, now, []Point{t.to}, arenaLanding) {
 		return false
 	}
 	t.gate, t.gated = true, true
