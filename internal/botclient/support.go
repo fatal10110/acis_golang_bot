@@ -429,9 +429,12 @@ func (b *Brain) castOn(id, skill int32, selectFirst bool, now time.Time) Action 
 	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, false), object: id, skill: skill}
 }
 
-// buffSent records a buff cast going out at now, for buffRetry.
+// buffSent records a buff cast going out at now, for buffRetry: a kit
+// buff's, or a PvP self step's (rulePartyBuff).
 func (b *Brain) buffSent(a Action, now time.Time) {
-	if !slices.ContainsFunc(b.build().Kit.Buffs, func(bf Buff) bool { return bf.Skill == a.skill }) {
+	kit := b.build().Kit
+	if !slices.ContainsFunc(kit.Buffs, func(bf Buff) bool { return bf.Skill == a.skill }) &&
+		!slices.ContainsFunc(kit.PvP, func(s Step) bool { return s.Skill == a.skill && s.Target == TargetSelf }) {
 		return
 	}
 	maps.DeleteFunc(b.buffedAt, func(_ buffKey, at time.Time) bool { return now.Sub(at) >= buffRetry })
