@@ -221,7 +221,10 @@ func (b *Brain) assistTarget(now time.Time) int32 {
 // or a buff) ends. In combat rule 5 fights it.
 func (b *Brain) ruleAssist(now time.Time) (Action, bool) {
 	id := b.assistTarget(now)
-	if id == 0 {
+	if id == 0 || b.duel(now).Phase != DuelIdle {
+		// From a challenge until idle no monster fight starts: a hit on
+		// an NPC cancels the duel (docs/pvp/finding.md "Clear of
+		// monsters").
 		return Action{}, false
 	}
 	s := &b.world.Self

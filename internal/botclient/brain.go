@@ -967,9 +967,11 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.engaged = 0
 		b.toggledAt = now
 	case actDuelAnswer:
-		// The server takes the challenge with the first answer.
+		// The server takes the challenge with the first answer. An
+		// acceptance keeps the challenge, with its challenger's name, for
+		// 1930, ExDuelReady or a refusal to move on.
 		b.pvp.asked = duelAsk{}
-		if d := &b.pvp.duel; d.Phase == DuelAsked && !d.Challenged {
+		if d := &b.pvp.duel; d.Phase == DuelAsked && !d.Challenged && !a.yes {
 			*d = Duel{Result: d.Result}
 		}
 	case actDuelStart:

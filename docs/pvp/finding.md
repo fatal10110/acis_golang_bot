@@ -9,7 +9,7 @@ persona defaults.
 | --- | --- | --- |
 | A player attacks it | Fights back (today). | — |
 | A duel challenge (`ExDuelAskStart`) | Accepts after the [reaction delay](wire.md#changes-to-todays-code-x4) when it can duel (out of combat, HP and MP at least half, no flag, karma or store, not a party duel, on [allowed ground](#where-a-duel-is-allowed), [clear of monsters](#clear-of-monsters)); else declines at once. Clan mates, allies and party members are taken like anyone ([rule 1](targets.md#mayfight)); a bot-marked challenger is declined at once (D38); party duels are declined. | one answer per challenge |
-| A whispered `duel` | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did (M11's proposed `join`, D28, would too). Dropped within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered. Never held by `DeclineHold`; its decline (1931) or refusal (153, 1926, 2017-2028) starts `DeclineHold` for the bot's own challenges of that player only. | one per `ChallengeEvery` (3 min) per bot, shared; once per player per `ChallengeSameEvery` (30 min) |
+| A whispered `duel` | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did (M11's proposed `join`, D28, would too). Dropped within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered. Dropped too when heard in combat stance or one starts before its reaction, or reached 30 s late behind another rule. Never held by `DeclineHold`; its decline (1931) or refusal (153, 1926, 2017-2028) starts `DeclineHold` for the bot's own challenges of that player only. | one per `ChallengeEvery` (3 min) per bot, shared; once per player per `ChallengeSameEvery` (30 min) |
 | Its own challenge | Out of combat, clear of monsters, at its spot or on the road: challenges one non-bot player in sight within 2000, out of combat, unflagged, no karma or store, of its tier, both on allowed ground, when the [engage estimate](model.md#engage-estimate) passes against its row. A decline or refusal of any challenge to that player holds it. Holds are per bot. | one per `ChallengeEvery`, shared with whispers; once per player per `ChallengeSameEvery`; `DeclineHold` (2 h) |
 | Flagged and karma players in sight | [Hunting](targets.md#hunting). | the fight rules |
 | Arenas | Every `ArenaEvery` (90 min ± jitter) to the nearest arena reachable in its SCC or by gatekeeper (M7 trips); stays while another player is inside, attacking [arena targets](targets.md#arena-targets); leaves after `ArenaAlone` (5 min) alone or `ArenaStay` (20 min) by the [arena-edge](guards.md#arena-edge) leave. Its spot is released as for a supply trip (D16). | one trip per `ArenaEvery` |
@@ -106,10 +106,12 @@ position.
   whisper within 3 minutes of the last challenge, own or whispered → nothing, after 3 → challenge; a
   player who declined (1931) the bot's challenge whispers 31 minutes later, inside `DeclineHold` →
   challenge; the whispered challenge refused with 2019 → no own challenge of that player for 2
-  hours, its whisper 31 minutes later → challenge.
+  hours, its whisper 31 minutes later → challenge; a whisper heard in combat stance, or one a stance
+  starts after, → no challenge after `AutoAttackStop`; one reached 31 s late → none.
 - `TestPvPChallengeCooldown` (X5): one own challenge per 3 minutes; after 1931, 153 or 1926 that
   player waits 2 hours and the state is idle at once; on a test-built `charmodel.RowTable`, a
   candidate the estimate says it loses to → none, one it beats → `RequestDuelStart`; the losing
-  candidate's whisper → `RequestDuelStart`.
+  candidate's whisper → `RequestDuelStart`; no own challenge off its spot, in a bot party or under a
+  GM follow, assist or stay order.
 - e2e `TestLivePvPDuel` (X13): a client challenges a `pvp` bot; it accepts and fights, the duel ends
   without a death and both get their vitals back (GM, client, bot).

@@ -48,6 +48,7 @@ func findBrain(t *testing.T, edit func(*Persona)) *Brain {
 	s.ClassID, s.Level = 0, 20
 	s.PAtk, s.PDef, s.MAtk, s.MDef, s.PAtkSpd, s.CastSpd, s.Accuracy, s.Evasion, s.Critical = 300, 300, 100, 300, 300, 333, 40, 40, 40
 	s.MaxCP, s.CP = 100, 100
+	b.spot.held = true // on the road to its spot: own challenges allowed
 	return b
 }
 

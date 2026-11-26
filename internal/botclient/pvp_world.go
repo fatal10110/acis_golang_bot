@@ -224,6 +224,12 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 				r.MaxHP = e.MaxHP
 			}
 		}
+	case AutoAttackStart:
+		if e.ObjectID == self {
+			// A whispered duel waiting for its reaction is dropped:
+			// the bot cannot duel in combat stance.
+			p.find.whisper = duelWhisper{}
+		}
 	case DeleteObject:
 		delete(p.opponents, e.ObjectID)
 		delete(p.owners, e.ObjectID)

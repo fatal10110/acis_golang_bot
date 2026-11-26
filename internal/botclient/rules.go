@@ -291,6 +291,8 @@ type Action struct {
 	// walk marks a move that is one of the walker's segments (goTo), or
 	// the walker's own /unstuck.
 	walk bool
+	// yes marks a duel answer that accepts the challenge.
+	yes bool
 }
 
 type actionKind uint8

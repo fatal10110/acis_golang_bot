@@ -18,7 +18,9 @@ import (
 // answers and own challenges duelBlockHold or until it moved duelBlockMove
 // away. duelClear is the margin past a monster's aggro range a duel keeps
 // (any hit between a duellist and an NPC cancels it), and duelRange the
-// server's challenge range (duel.Range, 3D).
+// server's challenge range (duel.Range, 3D). A whispered duel the challenge
+// rule reaches whisperLapse past its reaction (an earlier rule held) is
+// dropped.
 const (
 	challengeEvery     = 3 * time.Minute
 	challengeSameEvery = 30 * time.Minute
@@ -27,6 +29,7 @@ const (
 	duelBlockHold      = 10 * time.Minute
 	duelBlockMove      = 2000
 	duelRange          = 2000
+	whisperLapse       = 30 * time.Second
 )
 
 // findState is the memory of the bot's duel finding: when its last
@@ -69,8 +72,12 @@ func (f *findState) hold(name string, now time.Time) {
 
 // heardDuel takes a player's whispered duel at now (docs/pvp/finding.md
 // "Sources"): the challenge rule answers it at the PvP reaction. No
-// authority is asked: anyone may whisper it, as a join (D20).
+// authority is asked: anyone may whisper it, as a join (D20). One heard in
+// combat stance is dropped, as is one waiting when a stance starts.
 func (b *Brain) heardDuel(t tell, now time.Time) {
+	if b.world.Self.InCombat {
+		return
+	}
 	b.pvp.find.whisper = duelWhisper{name: t.name, due: b.pvpReact(now)}
 }
 
@@ -226,38 +233,54 @@ func (b *Brain) answerDuel(now time.Time) (Action, bool) {
 	if yes && now.Before(a.due) {
 		return Action{}, false
 	}
-	return Action{kind: actDuelAnswer, payload: encodeRequestDuelAnswerStart(a.party, yes)}, true
+	return Action{kind: actDuelAnswer, payload: encodeRequestDuelAnswerStart(a.party, yes), yes: yes}, true
 }
 
 // ruleChallenge is the bot's RequestDuelStart (docs/pvp/finding.md
 // "Sources"), for a persona that takes duels, out of combat: first a
 // whispered duel at its PvP reaction, then its own challenge of the nearest
 // non-bot player of its tier that may duel and that the engage estimate
-// passes, not held by a decline. Both wait challengeEvery from the last
-// RequestDuelStart and challengeSameEvery per player, an idle duel and the
-// bot free to duel (mayDuel); a whisper that fails them is dropped. Its
-// sender bound is challengeEvery (the server has no gate on the packet).
+// passes, not held by a decline, only at its spot or on the road to it
+// (roams). Both wait challengeEvery from the last RequestDuelStart and
+// challengeSameEvery per player, an idle duel and the bot free to duel
+// (mayDuel); a whisper that fails them is dropped, as is one past due by
+// whisperLapse (an earlier rule held) or heard in combat stance. Its sender bound is
+// challengeEvery (the server has no gate on the packet).
 func (b *Brain) ruleChallenge(now time.Time) (Action, bool) {
 	f := &b.pvp.find
-	if !b.persona.PvP.Duels || b.world.Self.InCombat {
+	if !b.persona.PvP.Duels {
+		return Action{}, false
+	}
+	w := f.whisper
+	if w.name != "" && !now.Before(w.due) {
+		f.whisper = duelWhisper{}
+	}
+	if b.world.Self.InCombat {
 		return Action{}, false
 	}
 	free := b.duel(now).Phase == DuelIdle && (f.lastAsk.IsZero() || now.Sub(f.lastAsk) >= challengeEvery) && !b.pvp.arena.active()
-	if w := f.whisper; w.name != "" && !now.Before(w.due) {
-		f.whisper = duelWhisper{}
+	if w.name != "" && !now.Before(w.due) && now.Sub(w.due) <= whisperLapse {
 		if free && !b.cfg.markers.Marks(w.name) && !f.recent(w.name, now) && b.mayDuel(now) {
 			if id := b.playerNamed(w.name); id != 0 && b.foeMayDuel(id, now) {
 				return b.challenge(id), true
 			}
 		}
 	}
-	if !free || !b.mayDuel(now) {
+	if !free || !b.roams() || !b.mayDuel(now) {
 		return Action{}, false
 	}
 	if id := b.challengeFoe(now); id != 0 {
 		return b.challenge(id), true
 	}
 	return Action{}, false
+}
+
+// roams reports whether the bot is on its own at its spot or on the road to
+// it, where it may challenge on its own: farming a spot, on no errand, in
+// no bot party and under no GM follow, assist or stay order.
+func (b *Brain) roams() bool {
+	o := &b.orders
+	return b.spot.farming() && !b.onErrand() && !b.inBotParty() && !o.stay && o.follow == 0 && o.assist == 0
 }
 
 // challengeFoe is the player the bot challenges on its own at now, 0 for
@@ -384,7 +407,7 @@ func (b *Brain) engages(id int32) bool {
 		opp.Row = r.Row
 	}
 	bot := charmodel.Fighter{Profile: self, MaxCP: float64(s.MaxCP), Level: level, CON: int(s.CON), MEN: int(s.MEN)}
-	bot.Row, _ = charmodel.ClassRow(s.ClassID, false)
+	bot.Row, _ = charmodel.ClassRow(s.ClassID, b.bowEquipped())
 	margin := b.build().Kit.SpotMargin
 	if margin <= 0 {
 		margin = marginNormal
