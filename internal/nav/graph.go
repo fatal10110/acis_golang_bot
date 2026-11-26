@@ -20,7 +20,8 @@ import (
 //	          the CRC field, then the key (geodata cache CRC u32, cluster
 //	          side u32, doors.xml hash 8 bytes), the section counts
 //	          (clusters, nodes, edges, door refs, SCCs, condensation edges,
-//	          u32 each) and the water hash (8 bytes), navHeaderSize in all
+//	          u32 each), the water hash (8 bytes) and the landmark count
+//	          u32, navHeaderSize in all
 //	clusters  x i32, y i32, first node u32; sorted by (y, x)
 //	nodes     representative cell x i32, y i32, z i16, border side u8, pad
 //	          u8, run first and last position u16 each, cluster u32, SCC
@@ -34,14 +35,18 @@ import (
 //	doorRefs  door id i32: the doors an edge's all-open path crosses
 //	sccEdges  first condensation edge u32 per SCC, then the edge count
 //	condEdges target SCC u32
+//	landmarks node u32 per landmark, then per node its distance from each
+//	          landmark u32, then to each u32, over the all-open costs
+//	          (noDist when there is no way); at most navLandmarks
+//	          (docs/navigation.md, "Landmarks")
 //
 // The graph is read in place from the read-only mapping; nothing is decoded
 // onto the heap. A file built for another geodata cache, doors.xml, cluster
 // side or water is stale and refused, as is a corrupt one.
 const (
 	navMagic       = "ACISNAV\x00"
-	navVersion     = 5
-	navHeaderSize  = 64
+	navVersion     = 6
+	navHeaderSize  = 68
 	clusterRecSize = 12
 	nodeRecSize    = 28
 	edgeRecSize    = 20
@@ -89,10 +94,11 @@ type Graph struct {
 	counts  graphCounts
 	// section offsets
 	clusters, nodes, edges, doorRefs, sccEdges, condEdges int
+	landmarkIDs, landmarkDist                             int
 }
 
 type graphCounts struct {
-	clusters, nodes, edges, doorRefs, sccs, condEdges int
+	clusters, nodes, edges, doorRefs, sccs, condEdges, landmarks int
 }
 
 // parseGraph checks a nav cache image and returns the graph reading it.
@@ -115,6 +121,23 @@ func parseGraph(b []byte) (*Graph, error) {
 		*p = int(binary.LittleEndian.Uint32(b[32+4*i:]))
 	}
 	copy(g.key.WaterHash[:], b[56:64])
+	c.landmarks = int(binary.LittleEndian.Uint32(b[64:]))
+	if c.landmarks > navLandmarks {
+		return nil, fmt.Errorf("%d landmarks, at most %d", c.landmarks, navLandmarks)
+	}
+	if off := g.layout(); off != len(b) {
+		return nil, fmt.Errorf("size %d, sections need %d", len(b), off)
+	}
+	if g.key.ClusterCells <= 0 {
+		return nil, errors.New("bad cluster side")
+	}
+	return g, nil
+}
+
+// layout sets the section offsets from the counts and returns where the
+// image ends.
+func (g *Graph) layout() int {
+	c := &g.counts
 	off := navHeaderSize
 	for _, s := range []struct {
 		at   *int
@@ -126,17 +149,13 @@ func parseGraph(b []byte) (*Graph, error) {
 		{&g.doorRefs, c.doorRefs * 4},
 		{&g.sccEdges, (c.sccs + 1) * 4},
 		{&g.condEdges, c.condEdges * 4},
+		{&g.landmarkIDs, c.landmarks * 4},
+		{&g.landmarkDist, c.nodes * c.landmarks * 8},
 	} {
 		*s.at = off
 		off += s.size
 	}
-	if off != len(b) {
-		return nil, fmt.Errorf("size %d, sections need %d", len(b), off)
-	}
-	if g.key.ClusterCells <= 0 {
-		return nil, errors.New("bad cluster side")
-	}
-	return g, nil
+	return off
 }
 
 // OpenNavCache maps the nav cache at path read-only and checks it against

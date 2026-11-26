@@ -518,6 +518,19 @@ server's pathfinder.
   - `CanSee` with collision heights (bows and spells).
 - **Distances for ranking**: abstract-graph distance only, with no refinement. A full route is
   refined only for the destination chosen.
+- **Landmarks** (ALT, #315): the abstract search's heuristic is the larger of the octile
+  distance to the goal cell and a landmark bound. The build picks up to 8 entrance nodes of the
+  largest SCC (`navLandmarks`; the first is the node farthest from the SCC's first node, each next
+  one the node whose nearest landmark, there and back, is farthest) and stores every node's
+  distance from each and to each over the all-open edge costs, node-major so one node's 16
+  distances share a cache line (nav cache format 6, 6.4 MB per landmark on the owner's 804,918
+  nodes). The goal is reached from its cluster's goal nodes `m` at the straight-line cost `s(m)`,
+  so for landmark `L` the cost from node `v` is at least `min_m(d(L,m) + s(m)) − d(L,v)` and at
+  least `d(v,L) − max_m(d(m,L) − s(m))`; the second needs every goal node to reach `L`, and then a
+  node that does not reach `L` reaches no goal node and the search drops it. Closed doors, the
+  span and the seats only make a way dearer or absent, so the bounds hold under every door state.
+  Both are consistent, so the answer is the cheapest, as before: distances are unchanged, and a
+  route may only break a tie between equal-cost node paths another way.
 - **Cost bounds**:
   - every search takes a node budget, and running out of budget means unreachable for now;
   - searches run synchronously on the brain goroutine, at most one full route per decision. That
@@ -534,7 +547,7 @@ server's pathfinder.
     region.
 - **Build** (`bots navbuild -geodata-cache FILE -geoengine FILE -datapack DIR`): reads the packed
   geodata cache, `doors.xml` and `zones/WaterZone.xml`, never the raw region files. It writes the cluster graph, the door
-  tags, the SCC labels and the condensation to a nav cache file with the geodata cache's
+  tags, the SCC labels, the condensation and the landmark distances to a nav cache file with the geodata cache's
   discipline:
   - a magic and version, a CRC-32C, and keyed by the geodata cache's own CRC, a hash of
     `doors.xml`, the build parameters and a hash of the water zones (see "Water");
@@ -747,7 +760,8 @@ matters more than route latency at this length. The leads the reset defers are i
   legs, cost at most 1.5 times the cheapest) halved the expansions (11.9 to 6.1 million) but
   added 15% `CanMove` calls in the exact check, as the paths keep less clear of walls, for
   about 15% less route time. The owner rejected it: it trades away the wall margin the
-  clearance cost keeps. An admissible heuristic that sees the clearance is deferred (#315).
+  clearance cost keeps. An admissible heuristic that sees the clearance is deferred (#315); #315 measured
+  why it would gain little (below).
 - **The cold heap** is the scratch growing on its first long search. The owner made the heap
   target warm-only. Its max is the first search that runs out of node budget and grows the idle
   scratch to the budget's size, at most 32 MB per idle query scratch (Cost bounds). Before, that
@@ -755,7 +769,36 @@ matters more than route latency at this length. The leads the reset defers are i
   Now the first route completes, and the later one does the growing: measured route by route,
   45.2 + 30.1 MB became 29.7 + 46.8 MB. The total is the same, and p99 did not change.
 - **The distance tail** needs landmarks (ALT) on the abstract graph, a nav cache format change.
-  Deferred (#315).
+  Deferred (#315), then built by it (Landmarks, and the measurements below).
+
+**Re-measured by #315** on the format 6 cache (`nav-water-alt-v6.cache`, the format 5 graph of #514
+plus 8 landmarks: 164.3 MB, built in 8m24s with 1153 MB from the OS, against 112.8 MB, 7m37s and
+994 MB), same 200 pairs rule. The bench also runs the warm distances and routes over the same
+graph with the landmark section ignored (`DistanceWarmNoLandmarks`, `RouteWarmNoLandmarks`), so
+both sides share one process and one machine load; the box was shared with other runs, and the
+route times moved by up to 70% between runs of the same code.
+
+| Measure | Ceiling | Before (format 5, main) | After (landmarks) | Same run, no landmarks |
+| --- | --- | --- | --- | --- |
+| abstract distance warm | p99 ≤ 15 ms | p50 0.22 ms, p99 15.1 ms, max 33.3 ms | p50 0.10 ms, p99 3.65 ms, max 9.3 ms | p50 0.18 ms, p99 13.4 ms, max 30.3 ms |
+| 40000-unit route warm | p50 ≤ 75 ms, p99 ≤ 750 ms | p50 61 ms, p99 436 ms | p50 62 ms, p99 431 ms | p50 73 ms, p99 564 ms |
+| 40000-unit route cold | p50 ≤ 100 ms, p99 ≤ 800 ms | p50 94 ms, p99 481 ms | p50 86 ms, p99 449 ms | — |
+| heap per route query, warm | ≤ 4 MB | p99 0.004 MB | p99 0.004 MB | — |
+
+Distances are unchanged: 0 of the 200 differ from the octile search's. 9 of the 200 warm routes
+differ, each a tie between two equal-cost node paths broken another way; as many fail with
+landmarks as without. Routes gain little: their time is the cell search's, which the landmarks
+do not touch.
+
+The other lead, an admissible heuristic for the cell search that sees the clearance extra, was
+measured first and not built. Over the 200 warm routes the leg searches inside cluster boxes
+(7,077 of them, 13.8 million expansions for 667,000 path cells) find paths whose cost is on
+average 100 above the octile distance of their ends, and only 17 of it is clearance extra; the
+other 83 is the detour around walls and slopes. In 94% of the legs the goal has a cell with no
+extra next to it. A heuristic that saw every clearance extra on the way could close at most a
+sixth of the gap that makes A* flood, and a bound that sees it without reading the cells on the
+way sees much less. What floods the search is the obstacles, which an admissible heuristic over
+cells cannot see without per-cluster precomputed distances.
 
 ### Water
 
