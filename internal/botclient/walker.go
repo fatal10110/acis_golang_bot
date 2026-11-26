@@ -487,6 +487,9 @@ func (w *walker) segmentDone(now, end time.Time) bool {
 // took on the injected clock (botmetrics.Bot.NavPlan): the one place every
 // walk plans, whatever rule asked for it (#497).
 func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
+	// A karma bot's walk keeps karmaClear from towns and guards (its karma
+	// route, docs/pvp/karma.md); none without karma.
+	b.walk.plan.Avoid.Area = b.karmaArea(pos, b.walk.dest)
 	start := b.clock.Now()
 	a, ok := b.planRoute(pos, now)
 	b.metrics.NavPlan(b.walk.planOutcome(ok), b.clock.Now().Sub(start))

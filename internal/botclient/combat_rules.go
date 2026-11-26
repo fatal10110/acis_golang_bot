@@ -58,8 +58,10 @@ type PvPPolicy struct {
 	// Arenas visits an arena on a timer and fights there
 	// (docs/pvp/finding.md, X5).
 	Arenas bool
-	// ForceAttack is PK mode (docs/pvp/karma.md, rule 7 of MayFight): it
-	// lets no player pass until its limits ship (X11).
+	// ForceAttack is PK mode (docs/pvp/karma.md, rule 7 of MayFight): a
+	// clean player of its tier on the hunting preconditions, at most one
+	// per pkEvery and none at pkCap PK kills, and a karma bot's clean
+	// attacker under the same limits.
 	ForceAttack bool
 	// SupportFlagged lets the bot heal or buff a flagged or karma player,
 	// which flags the bot (character_pvpflag.go skillTargetFlagsPvP).
@@ -124,7 +126,10 @@ func (b *Brain) damageOf(id int32, now time.Time) int64 {
 
 // unfought is the hardest hitter among the live creatures attacking the
 // bot at now that it blacklisted, or 0 when there is none. A player the PvP
-// policy leaves alone is not one: holding is that policy's answer.
+// policy leaves alone is not one, holding is that policy's answer, but
+// while the bot has karma: then any attacker MayFight refuses is one, hits
+// and hostile casts alike, and the bot flees it (docs/pvp/karma.md "With
+// karma").
 func (b *Brain) unfought(now time.Time) int32 {
 	var (
 		id     int32
@@ -132,7 +137,11 @@ func (b *Brain) unfought(now time.Time) int32 {
 	)
 	for k, a := range b.world.Attackers {
 		o := b.world.object(k)
-		if o == nil || o.Dead || !b.world.attacking(k, now) || !now.Before(b.blacklist[k]) {
+		if o == nil || o.Dead || !b.world.attacking(k, now) {
+			continue
+		}
+		karma := b.world.Self.Karma > 0 && b.fightRule(k, o, now) == fightNone
+		if !karma && !now.Before(b.blacklist[k]) {
 			continue
 		}
 		// A summon MayFight refuses is held off, not fled, while the bot
@@ -227,6 +236,7 @@ func (b *Brain) knowsNuke(rot []Step) bool {
 func (b *Brain) fight(id int32, now time.Time) Action {
 	s := &b.world.Self
 	from := s.Position(now)
+	b.pkFightBack(id, now)
 	if t := b.world.Target; id != t {
 		if a, ok := b.sideCasting(t, now); ok {
 			return a

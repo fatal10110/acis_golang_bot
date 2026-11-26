@@ -234,6 +234,11 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 		return a, true
 	}
 	rot = pvpSteps(b.build().Kit.PvP, rot)
+	if b.forced(id, now) {
+		// A clean player: only the non-debuff direct damage goes
+		// (docs/pvp/karma.md "PK mode").
+		rot = b.pkSteps(rot)
+	}
 	st := b.stepState(id, rot, now)
 	if b.breaksOff(id, rot, st, now) {
 		return b.breakAway(id, rot, st, now), true

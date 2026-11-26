@@ -7,7 +7,7 @@ Modes and preset ship in X4b, panel and metrics in X12. Decision D35.
 `PvPPolicy` (today `FightFlagged`, `ForceAttack`, `SupportFlagged`) gains these modes, persona
 defaults (D6) shown and switched per bot on the panel. `ForceAttack` becomes the open-world PK mode
 ([rule 7](targets.md#mayfight), X11): from X4 it no longer lets any player pass `MayFight` ahead of
-rules 1-8, so until X11 it does nothing.
+rules 1-8; from X11 it attacks under the limits of [PK mode](karma.md#pk-mode).
 
 | Mode | What the bot does | `pvp` preset | Other presets |
 | --- | --- | --- | --- |
