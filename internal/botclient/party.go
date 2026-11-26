@@ -260,8 +260,10 @@ func (w *World) applyParty(ev Event, now time.Time) {
 	case PartySmallWindowDelete:
 		delete(p.Members, e.ObjectID)
 	case PartySmallWindowDeleteAll:
-		// Out of a party the bot is in no channel either.
-		*p, w.Channel = Party{}, Channel{}
+		// The channel survives: the server resets the windows on every
+		// leader change too, and ends a channel only by ExCloseMPCC
+		// (server party/party.go changeLeader, leave).
+		*p = Party{}
 	case PartyMemberPosition:
 		for _, at := range e.Members {
 			if m := p.Members[at.ObjectID]; m != nil {

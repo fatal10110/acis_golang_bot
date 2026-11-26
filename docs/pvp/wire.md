@@ -75,8 +75,9 @@ minus damage dealt since, and `SeenAt` (the [pool estimate](layer.md#cp-cures-po
   `ExMPCCPartyInfoUpdate` adds or removes a party. A party's joins, departures and leader changes
   reach no other party, so in an arena the bot asks for the overview and every list again once a
   minute old. One ask per second, an unanswered one again after 15 s; neither ask has a server
-  gate (`network/usercommand.go:180-192`, `network/party_channel.go:105-121`). `ExCloseMPCC` or
-  leaving its party ends the channel. Its members are [rule 2](targets.md#mayfight).
+  gate (`network/usercommand.go:180-192`, `network/party_channel.go:105-121`). Only `ExCloseMPCC`
+  ends the channel: the server sends it on every leave and disband, while a party window reset
+  alone (as on a leader change) keeps it. Its members are [rule 2](targets.md#mayfight).
 
 ## Changes to today's code (X4)
 

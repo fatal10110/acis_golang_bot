@@ -45,7 +45,8 @@ const (
 type ExOpenMPCC struct{}
 
 // ExCloseMPCC closes the command channel window: the bot left its party, or
-// its party left the channel, or the channel was dissolved.
+// its party left the channel, or the channel was dissolved. It alone ends
+// the channel in the world model; a party window reset does not.
 type ExCloseMPCC struct{}
 
 // ExMPCCPartyInfoUpdate adds (Added) or removes a party of the bot's

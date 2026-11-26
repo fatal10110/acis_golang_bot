@@ -193,9 +193,16 @@ func TestChannelModel(t *testing.T) {
 	if p := c.Parties[mateLeader]; !p.Members[pcID] || !p.ListedAt.IsZero() {
 		t.Errorf("recounted party: %+v, want its members kept and its list due", p)
 	}
+	// A leader change resets the party windows but keeps the channel
+	// (server party/party.go changeLeader): no ExOpenMPCC follows.
 	b.world.Apply(PartySmallWindowDeleteAll{}, at(time.Minute))
+	b.world.Apply(PartySmallWindowAll{LeaderID: 900, Members: []PartyMember{{ObjectID: 900, Name: "Mine", HP: 100, MaxHP: 100}}}, at(time.Minute))
+	if !c.Open || !c.Mate(pcID) {
+		t.Error("a leader change ended the channel")
+	}
+	b.world.Apply(ExCloseMPCC{}, at(time.Minute))
 	if c.Open || c.Mate(pcID) {
-		t.Error("out of the party the bot is still in a channel")
+		t.Error("after ExCloseMPCC the bot is still in a channel")
 	}
 	b.world.Apply(ExMPCCPartyInfoUpdate{LeaderID: 600, Count: 1, Added: true}, at(time.Minute))
 	if c.Mate(600) {
