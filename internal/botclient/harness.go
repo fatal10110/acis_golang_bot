@@ -72,6 +72,9 @@ const (
 	OpRequestPrivateStoreBuy byte = opGameRequestPrivateStoreBuy
 	OpRequestHennaEquip      byte = opGameRequestHennaEquip
 	OpRequestHennaUnequip    byte = opGameRequestHennaUnequip
+	// OpRequestJoinPartyRoom's first field is the room it enters
+	// (encodeRequestJoinPartyRoom).
+	OpRequestJoinPartyRoom byte = opGameRequestJoinPartyRoom
 	// OpRequestEnchantItem's first field is the item it enchants
 	// (encodeRequestEnchantItem).
 	OpRequestEnchantItem byte = opGameRequestEnchantItem
@@ -130,6 +133,25 @@ func EncodeWalkRunToggle() []byte { return encodeRequestActionUse(actionWalkRun)
 func EncodeRequestJoinParty(target string, loot int32) []byte {
 	return encodeRequestJoinParty(target, loot)
 }
+
+// EncodeRequestListPartyWaiting opens the sender's rooms window, which puts
+// it on the party-matching waiting list (see encodeRequestListPartyWaiting).
+func EncodeRequestListPartyWaiting(location, levelMode int32) []byte {
+	return encodeRequestListPartyWaiting(1, location, levelMode)
+}
+
+// EncodeRequestManagePartyRoom opens a room (roomID 0) or revises the room
+// roomID the sender leads (see encodeRequestManagePartyRoom).
+func EncodeRequestManagePartyRoom(roomID, maxMembers, minLevel, maxLevel, loot int32, title string) []byte {
+	return encodeRequestManagePartyRoom(roomID, maxMembers, minLevel, maxLevel, loot, title)
+}
+
+// RoomsAnywhere and RoomsAnyLevel are the rooms window's widest filters
+// (partymatch AnyLocation, and a level mode other than LevelsMine).
+const (
+	RoomsAnywhere int32 = -1
+	RoomsAnyLevel int32 = 1
+)
 
 // EncodeRequestJoinPledge invites the player whose object id is target
 // into the sender's main clan (see encodeRequestJoinPledge).

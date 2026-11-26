@@ -108,7 +108,8 @@ Most urgent: P1a-P1d and P5a-P5b give parties at all; P2a-P2b make them play as 
   model only comparing spots under the leader's row margin.
 
 Out of scope: command channels; party matching rooms (`network/partymatch.go`) listing bot parties
-(backlog). To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep
+(backlog). A partyless support bot does ask to enter the rooms players open, and waits there for the
+leader's invitation ([rooms](rooms.md), #438). To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep
 today's party behavior, the home run uses the panel, D10); a party travelling by gatekeeper or
 recalling together (P2b covers only the teleport answer; until then a party with no spot in
 reach, a given-back outgrown spot included, is broken at `NoSpotFor`, P5a); measuring a bot party's
@@ -122,4 +123,5 @@ slots, healer, band, grouping. [orders](orders.md): commands, status fields, slo
 `withdraw`. [leader](leader.md): invitations, oust, handover. [members](members.md): joining,
 events, errands, join hold. [spots](spots.md): claim weight, beside, release, crowd, fit, misfit,
 trips, gather gate. [model](model.md): party danger. [players](players.md): `join`, handover to a
-player, `invite me`. [panel](panel.md): supervisor calls, API, page. [e2e](e2e.md): live scenarios.
+player, `invite me`. [rooms](rooms.md): entering the party-matching rooms players open.
+[panel](panel.md): supervisor calls, API, page. [e2e](e2e.md): live scenarios.

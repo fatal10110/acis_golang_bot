@@ -110,6 +110,9 @@ type Persona struct {
 	// Lead times a lead bot's invitations and a join bot's handover (rule
 	// "party").
 	Lead LeadPolicy
+	// Rooms is how a partyless support bot volunteers for the
+	// party-matching rooms players open (rule "rooms").
+	Rooms RoomPolicy
 	// Answer answers an open prompt (rule 2); a zero Action waits.
 	Answer func(w *World, now time.Time) Action
 	// JoinParty decides whether to accept the party invitation of the
@@ -233,6 +236,7 @@ func DefaultPersona() Persona {
 		Death:          restartToVillage,
 		Recover:        defaultRecoverPolicy(),
 		Lead:           defaultLeadPolicy(),
+		Rooms:          defaultRoomPolicy(),
 		JoinParty:      acceptParty,
 		FleeOutrun:     true,
 		FleeDistance:   600,
@@ -359,6 +363,13 @@ const (
 	actInviteParty
 	actOustParty
 	actChangeLeader
+	// actRoomList lists the party-matching rooms, actRoomJoin asks to
+	// enter one, actRoomExit leaves the waiting list and actRoomWithdraw a
+	// room (partymatch.go).
+	actRoomList
+	actRoomJoin
+	actRoomExit
+	actRoomWithdraw
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -538,6 +549,7 @@ var playRules = []rule{
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
 	{"buffpotion", (*Brain).ruleBuffPotion},
+	{"rooms", (*Brain).ruleRooms},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
 	{"valuables", (*Brain).ruleValuables},

@@ -241,6 +241,8 @@ type Brain struct {
 	// partyLead is the lead bot's invitations and oustings and the join
 	// bot's handover (rule "party").
 	partyLead partyLead
+	// rooms is the bot's party-matching volunteering (rule "rooms").
+	rooms roomVolunteer
 	// partyAnswered is set when the bot sends RequestAnswerJoinParty and
 	// cleared on each party window after it (slotPartyEvent): a window
 	// with it clear reached the bot by no invitation of its own.
@@ -527,6 +529,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.spotJoinEvent(ev, inParty)
 		b.partyClaimEvent(ev)
 		b.inviteEvent(ev)
+		b.roomEvent(ev, now)
 		b.reweighSpot()
 		switch e := ev.(type) {
 		case LeaveWorld:
@@ -1011,6 +1014,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.meterSegment(now)
 	}
 	b.walk.sent(a, now)
+	b.roomSent(a, now)
 	b.tradeSent(a, now)
 	b.train.sent(a, now)
 	b.trip.sent(a, now)
