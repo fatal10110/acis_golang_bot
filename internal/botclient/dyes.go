@@ -433,8 +433,16 @@ func (b *Brain) dyeWants() (rows []buyRow, fee int64) {
 }
 
 // plannedDye reports whether template id is the dye of a symbol the bot
-// draws next (dyePlan): the keep set holds it until it is drawn.
+// draws next (dyePlan): the keep set holds it until it is drawn. A template
+// that is no dye never is, and asks no plan: the plan's budget reads the
+// gear floor, whose valuables deposit fees (valuableFees) ask the keep set
+// of every carried item, so asking the plan for each of them recursed
+// without end and overflowed the stack (a merchant with valuables and a
+// free dye slot; dyes are never valuables, as shops sell them).
 func (b *Brain) plannedDye(id int32) bool {
+	if m := b.cfg.Travel; m == nil || !m.dyes[id] {
+		return false
+	}
 	_, draw := b.dyePlan()
 	return slices.ContainsFunc(draw, func(h datapack.Henna) bool { return h.DyeID == id })
 }
