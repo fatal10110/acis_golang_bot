@@ -35,6 +35,9 @@ func TownPersona() Persona {
 	// greet, yes, bow, waiting, laugh, applaud, dance
 	p.Emotes = []int32{2, 6, 7, 9, 10, 11, 12}
 	p.Town = TownPolicy{HopMin: 10 * time.Minute, HopMax: 30 * time.Minute, MaxPrice: 50000, Reach: 8000}
+	// A town bot stays in town: it takes a player's invitation, but asks
+	// to enter no party-matching room (docs/parties/rooms.md).
+	p.Rooms.Join = false
 	return p
 }
 

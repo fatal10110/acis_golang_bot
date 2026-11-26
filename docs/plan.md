@@ -277,7 +277,9 @@ sidesteps, detours, hops and the hour-long spot avoid are gone. The live scenari
 
 - joins a party on invite from a GM commander, and from other players when its persona allows it;
   at most one support bot per non-GM leader; a bot party's members are not counted: they join their
-  assigned bot leader outside the claim table (D29, `docs/parties/members.md`);
+  assigned bot leader outside the claim table (D29, `docs/parties/members.md`); a partyless one asks
+  to enter a party-matching room a player opened near it, one bot per room leader under the same
+  claim table, and waits there for the leader's invitation (`docs/parties/rooms.md`, #438);
 - follows from a slot behind the leader at a random angle, 150-350 units out; re-paths only when the
   leader moves more than ~250 units from the last anchor, after 200-800 ms; matches walk/run.
   Server-side follow (second `Action`, offset 70) is not used: it glues the bot to the leader;

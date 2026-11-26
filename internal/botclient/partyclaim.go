@@ -18,6 +18,9 @@ type PartyClaims struct {
 	mu       sync.Mutex
 	byLeader map[string]partyClaim
 	byBot    map[int32]string
+	// listed is when a bot of the process last asked for the
+	// party-matching rooms (listTurn).
+	listed time.Time
 }
 
 // partyClaim is the bot holding a leader, and when it last claimed it.
@@ -114,6 +117,22 @@ func (c *PartyClaims) held(bot int32) (string, time.Time, bool) {
 	return leader, c.byLeader[leader].at, true
 }
 
+// listTurn reports whether a bot may ask for the party-matching rooms at
+// now, and takes the turn: at most one list per roomListGap across the
+// bots of the process. A nil table gives no turn.
+func (c *PartyClaims) listTurn(now time.Time) bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if d := now.Sub(c.listed); !c.listed.IsZero() && d >= 0 && d < roomListGap {
+		return false
+	}
+	c.listed = now
+	return true
+}
+
 // release gives back the leader bot holds, if any.
 func (c *PartyClaims) release(bot int32) {
 	c.mu.Lock()
@@ -134,7 +153,9 @@ func (b *Brain) tidyPartyClaim(now time.Time) {
 	if c == nil || b.world.Party.In() {
 		return
 	}
-	if _, at, ok := c.held(self); ok && now.Sub(at) >= partyInviteTimeout {
+	// A room join waits RoomPolicy.Wait for its invitation and gives its
+	// claim back itself (ruleRooms).
+	if leader, at, ok := c.held(self); ok && leader != b.rooms.asked.leader && now.Sub(at) >= partyInviteTimeout {
 		c.release(self)
 	}
 }

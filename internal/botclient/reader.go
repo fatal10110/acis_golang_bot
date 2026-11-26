@@ -98,6 +98,8 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	opGameEtcStatusUpdate:           decodeEtcStatusUpdate,
 	opGamePartySpelled:              decodePartySpelled,
 	opGameAskJoinParty:              decodeAskJoinParty,
+	opGamePartyMatchList:            decodePartyMatchList,
+	opGamePartyMatchDetail:          decodePartyMatchDetail,
 	opGameConfirmDlg:                decodeConfirmDlg,
 	opGameJoinParty:                 func(r *wire.Reader) Event { return JoinParty{Response: r.ReadInt32()} },
 	opGamePartySmallWindowAll:       decodePartySmallWindowAll,
@@ -150,7 +152,8 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 // extEventDecoders holds a decoder per extended (0xfe) sub-opcode the brain
 // consumes, like eventDecoders; every other extended frame is dropped.
 var extEventDecoders = map[uint16]func(*wire.Reader) Event{
-	opGameExAutoSoulShot: decodeExAutoSoulShot,
+	opGameExAutoSoulShot:   decodeExAutoSoulShot,
+	opGameExClosePartyRoom: func(*wire.Reader) Event { return ExClosePartyRoom{} },
 
 	opGameExDuelAskStart:       decodeExDuelAskStart,
 	opGameExDuelReady:          func(r *wire.Reader) Event { return ExDuelReady{Party: r.ReadInt32() != 0} },

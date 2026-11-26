@@ -147,6 +147,21 @@ const (
 	opGameRequestOustPartyMember = 0x2c
 )
 
+// Party matching, both directions (internal/gameserver/network/serverpackets/
+// partymatch.go and clientpackets/partymatch.go). The uint16 server
+// sub-opcodes follow opGameExtended, the client ones opGameClientExtended.
+const (
+	opGamePartyMatchList          = 0x96
+	opGamePartyMatchDetail        = 0x97
+	opGameExClosePartyRoom uint16 = 0x000f
+
+	opGameRequestListPartyWaiting                    = 0x6f
+	opGameRequestManagePartyRoom                     = 0x70
+	opGameRequestJoinPartyRoom                       = 0x71
+	opGameRequestWithdrawPartyRoom            uint16 = 0x0003
+	opGameRequestExitPartyMatchingWaitingRoom uint16 = 0x0017
+)
+
 // Clan, both directions (internal/gameserver/network/serverpackets/pledge.go,
 // pledgememberlist.go and clientpackets/pledge.go).
 const (
