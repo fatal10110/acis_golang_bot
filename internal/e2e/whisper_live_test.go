@@ -24,7 +24,8 @@ func TestLiveWhisperCommands(t *testing.T) {
 	ctx := scenarioCtx(t, 6*time.Minute)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("wh", 1)
-	b := runBotWith(t, ctx, tg, account, botSetup{persona: partyPersona, brain: commandedBy(gm)})
+	f := runWatched(t, ctx, tg, account, botSetup{persona: partyPersona, brain: commandedBy(gm)})
+	b := f.bot
 	name := botOnline(t, ctx, tg, b)
 	acc, _ := tg.Account("wh", 2)
 	other := enter(t, ctx, tg, acc, character(t, acc, &botclient.HumanFighter), nil)
@@ -51,10 +52,8 @@ func TestLiveWhisperCommands(t *testing.T) {
 		speed = ui.WalkSpeed
 	}
 	l := lead(t, ctx, gm.Client, b, awayFrom(gm.Pos(), 600, 0), speed)
-	at := settled(t, ctx, gm.Client, b)
-	if d := dist(at, l.stop); d > followReach {
-		t.Fatalf("%s settled %.0f from the GM, want at most %d", name, d, followReach)
-	}
+	at := settledNear(t, ctx, gm.Client, f, l.stop, name+" by the GM")
+	t.Logf("%s settled at %v, %.0f from the GM's stop %v", name, at, dist(at, l.stop), l.stop)
 
 	// The GM stands still from here: a bot that ignores the player keeps
 	// its slot, one that obeyed would trail the player far off.
@@ -68,7 +67,7 @@ func TestLiveWhisperCommands(t *testing.T) {
 	if err := gm.Watch(ctx, 15*time.Second, func(botclient.Event) {}); err != nil {
 		t.Fatal(err)
 	}
-	end := settled(t, ctx, gm.Client, b)
+	end := settledNear(t, ctx, gm.Client, f, gm.Pos(), name+" after a non-commander's follow")
 	if d := dist(end, at); d > followRepath {
 		t.Fatalf("%s moved %.0f from its slot by the GM after a non-commander's follow, want at most %d (%.0f from %s)", name, d, followRepath, dist(end, other.Pos()), other.Self.Name)
 	}
