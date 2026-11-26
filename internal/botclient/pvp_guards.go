@@ -195,6 +195,10 @@ func (b *Brain) blinking(o *Object, now time.Time) bool {
 	if o.Karma > 0 || o.PvPFlag != 2 || b.inDuel(now) {
 		return false
 	}
+	if v := b.karma.victim; b.pkVictim(v, now) && b.world.object(v) == o {
+		// The guards are off for PK mode's victim (docs/pvp/karma.md).
+		return false
+	}
 	return !b.inArena(now) || b.arenaAt(o.Position(now)).Arena == 0
 }
 

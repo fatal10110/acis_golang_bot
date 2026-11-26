@@ -112,6 +112,9 @@ type TravelMap struct {
 	// zones are the zones that decide where a character may fight
 	// (datapack.Datapack.Zones): the PvP world model's arenas.
 	zones datapack.Zones
+	// guards are the fixed spawns of the NPCs of template type Guard: what
+	// a karma bot keeps karmaClear from (docs/pvp/karma.md).
+	guards []Point
 	// classes are the class templates (datapack.Datapack.Classes), skills
 	// every skill level (datapack.Datapack.Skills), setSkills the skills
 	// armor sets grant and refMobs the reference monster of each level
@@ -236,6 +239,16 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 		if dp.NPCs[id].Type == npcTypeWarehouseKeeper {
 			m.keepers[id] = true
 		}
+	}
+	guardIDs := make([]int32, 0)
+	for id := range m.spawns {
+		if dp.NPCs[id].Type == npcTypeGuard {
+			guardIDs = append(guardIDs, id)
+		}
+	}
+	slices.Sort(guardIDs)
+	for _, id := range guardIDs {
+		m.guards = append(m.guards, m.spawns[id]...)
 	}
 	ids := make([]int32, 0, len(dp.Teleports))
 	for id := range dp.Teleports {
@@ -519,7 +532,9 @@ func (b *Brain) planTrip(here navPoint, now time.Time) {
 func (b *Brain) planPath(here navPoint, now time.Time, towns []Point) bool {
 	m, tr, p, s := b.cfg.Travel, &b.trip, &b.persona.Travel, &b.world.Self
 	onward := tr.onward
-	if m == nil || tr.v.active() || p.MaxPrice <= 0 || (onward == 0 && !tr.endedAt.IsZero() && now.Sub(tr.endedAt) < p.Gap) {
+	// A karma bot takes no gatekeeper (players.properties KarmaPlayerCanUseGK,
+	// folk_bypass.go): it walks its karma route (docs/pvp/karma.md).
+	if m == nil || tr.v.active() || p.MaxPrice <= 0 || s.Karma > 0 || (onward == 0 && !tr.endedAt.IsZero() && now.Sub(tr.endedAt) < p.Gap) {
 		return false
 	}
 	tr.onward = 0

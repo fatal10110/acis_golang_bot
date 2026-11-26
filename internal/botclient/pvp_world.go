@@ -618,8 +618,7 @@ func (b *Brain) fightKind(id int32, o *Object, now time.Time) FightKind {
 	return k
 }
 
-// fightRule applies MayFight's rules to o at now. Rule 7 (PK mode) is
-// X11's: until then ForceAttack lets nobody pass.
+// fightRule applies MayFight's rules to o at now.
 func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 	// Rule 1: from the countdown to the end only the duel opponent, and
 	// only while fighting, even a clan mate or a party member.
@@ -666,6 +665,12 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 			return FightBack
 		}
 		return FightFlagged
+	}
+	// Rule 7: PK mode (docs/pvp/karma.md): its victim, or a clean attacker
+	// of a karma bot with the limits passing.
+	if b.persona.PvP.ForceAttack && (b.pkVictim(id, now) ||
+		clean(o) && attacking && b.world.Self.Karma > 0 && b.pkAllowed(now)) {
+		return FightPK
 	}
 	return fightNone
 }

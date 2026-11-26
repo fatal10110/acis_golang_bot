@@ -640,7 +640,12 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	}
 	b.syncValuables()
 	b.endStaleRound(now)
+	b.karmaTick(now)
+	karma := b.world.Self.Karma > 0
 	for _, r := range rules {
+		if karma && karmaRules[r.name] {
+			continue
+		}
 		if a, ok := r.run(b, now); ok {
 			return r.name, a
 		}
@@ -818,7 +823,9 @@ func (b *Brain) flee(id int32, now time.Time) Action {
 
 // fleePoint is where the bot flees to from id: FleeDistance away from it, on
 // ground of the bot's SCC, in the first of fleeTurns off straight away that
-// leaves at least half that distance, else the farthest of them.
+// leaves at least half that distance, else the farthest of them. With
+// karma a heading whose line enters the karma margin is skipped like a
+// blocked one (karmaLine), unless every heading does.
 func (b *Brain) fleePoint(id int32, now time.Time) Point {
 	from := b.world.Self.Position(now)
 	angle := b.rng.Float64() * 2 * math.Pi
@@ -828,18 +835,26 @@ func (b *Brain) fleePoint(id int32, now time.Time) Point {
 		}
 	}
 	w, dist := b.walker(), b.persona.FleeDistance
-	best, bestD := from, int64(-1)
-	for _, turn := range fleeTurns {
-		to := w.inSCC(from, offset(from, angle+turn, dist))
-		d := horizontal2(from, to)
-		if 4*d >= int64(dist)*int64(dist) {
-			return to
+	for _, karma := range []bool{true, false} {
+		best, bestD := from, int64(-1)
+		for _, turn := range fleeTurns {
+			to := w.inSCC(from, offset(from, angle+turn, dist))
+			if karma && b.karmaLine(from, to) {
+				continue
+			}
+			d := horizontal2(from, to)
+			if 4*d >= int64(dist)*int64(dist) {
+				return to
+			}
+			if d > bestD {
+				best, bestD = to, d
+			}
 		}
-		if d > bestD {
-			best, bestD = to, d
+		if bestD >= 0 {
+			return best
 		}
 	}
-	return best
+	return from
 }
 
 // ruleAttacked is rule 5: in combat, stand up and fight back. The selected

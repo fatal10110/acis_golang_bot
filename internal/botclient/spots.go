@@ -757,6 +757,7 @@ func (b *Brain) moveOn(now time.Time, d time.Duration) {
 // run holds each spot once; the candidates are cycling, so it waits too.
 func (b *Brain) failedWalk(now time.Time) {
 	v := &b.spot
+	b.karmaWalkFailed()
 	repeat := slices.Contains(v.failed, v.idx)
 	if !repeat {
 		v.failed = append(v.failed, v.idx)
