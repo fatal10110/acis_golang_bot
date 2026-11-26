@@ -2,10 +2,12 @@
 
 Status: decided by the owner on 2026-11-26 where the "Owner decisions" table says so (D45-D48);
 two questions stay open there (the prototypes OP1 and OP2, and BR1b). Filed as epic #641 with
-sub-issues #642-#661 (the Delivery table); nothing is filed for the open questions. Reviewed in three rounds by
-two independent reviewers before the decisions, and once more after them for the sections the
-decisions changed (HD4, Design 5); the corrections of that last round are in the text and were
-not read again.
+sub-issues #642-#661 (the Delivery table); nothing is filed for the open questions.
+
+Reviewed in three rounds by two independent reviewers before the decisions, and once more after
+them for the sections the decisions changed (HD4, Design 5). The issue texts were checked once
+against the code by the same reviewers before filing. The corrections of those last two passes are
+in the text and in the issues, and were not read again.
 
 This plan comes from a review of the whole module on 2026-11-26 (`main` at 4f17fe2). The review
 found a small set of defects, two gaps in how the route planner joins a route's ends, and a brain
