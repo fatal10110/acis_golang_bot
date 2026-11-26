@@ -47,6 +47,7 @@ func (p *Panel) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/import", p.importBots)
 	mux.HandleFunc("GET /api/dashboard", p.dashboard)
 	mux.HandleFunc("POST /api/resume-logins", p.resumeLogins)
+	mux.HandleFunc("POST /api/login-spacing", p.setLoginSpacing)
 	mux.HandleFunc("GET /api/logs", p.logs)
 	mux.HandleFunc("GET /api/events", p.events)
 }
@@ -195,12 +196,18 @@ func viewOf(s botregistry.Status) botView {
 type dashboardView struct {
 	// Halted is set while the credential breaker holds every login;
 	// HaltErr is why.
-	Halted    bool                 `json:"halted"`
-	HaltErr   string               `json:"halt_err,omitempty"`
-	Bots      int                  `json:"bots"`
-	Running   int                  `json:"running"`
-	MaxOnline int                  `json:"max_online"`
-	Metrics   *botmetrics.Snapshot `json:"metrics"`
+	Halted  bool   `json:"halted"`
+	HaltErr string `json:"halt_err,omitempty"`
+	// LoginSpacing is the login gate's least time between two dial
+	// starts, in milliseconds; POST /api/login-spacing sets it from
+	// LoginSpacingMin to LoginSpacingMax.
+	LoginSpacing    int64                `json:"login_spacing_ms"`
+	LoginSpacingMin int64                `json:"login_spacing_min_ms"`
+	LoginSpacingMax int64                `json:"login_spacing_max_ms"`
+	Bots            int                  `json:"bots"`
+	Running         int                  `json:"running"`
+	MaxOnline       int                  `json:"max_online"`
+	Metrics         *botmetrics.Snapshot `json:"metrics"`
 }
 
 func (p *Panel) presets(w http.ResponseWriter, _ *http.Request) {
@@ -452,7 +459,14 @@ func (p *Panel) importBots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Panel) dashboardOf(l []botView) dashboardView {
-	d := dashboardView{Bots: len(l), MaxOnline: p.cfg.MaxOnline, Metrics: p.cfg.Metrics.Last()}
+	d := dashboardView{
+		LoginSpacing:    p.cfg.Gate.Spacing().Milliseconds(),
+		LoginSpacingMin: p.cfg.Gate.MinSpacing().Milliseconds(),
+		LoginSpacingMax: botclient.MaxLoginSpacing.Milliseconds(),
+		Bots:            len(l),
+		MaxOnline:       p.cfg.MaxOnline,
+		Metrics:         p.cfg.Metrics.Last(),
+	}
 	for _, v := range l {
 		if v.Run == botregistry.RunActive {
 			d.Running++
@@ -529,7 +543,7 @@ func statusOf(err error) int {
 	var re requestError
 	switch {
 	case errors.As(err, &re), errors.Is(err, botclient.ErrBadCommand), errors.Is(err, botregistry.ErrBranch),
-		errors.Is(err, botregistry.ErrBadParty):
+		errors.Is(err, botregistry.ErrBadParty), errors.Is(err, botclient.ErrSpacing):
 		return http.StatusBadRequest
 	case errors.Is(err, botregistry.ErrNoBot), errors.Is(err, botregistry.ErrNoParty):
 		return http.StatusNotFound

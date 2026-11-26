@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,8 +28,11 @@ const (
 	// tries left by an earlier `bots accounts` run never add up. The 250 ms
 	// above the window absorb timer and scheduling lag; dialJitter is added on
 	// top. An allowlisted gate skips the spacing (NewAllowlistedLoginGate).
+	// It is the floor of a spaced gate's spacing: SetSpacing only raises it.
 	dialSpacing = 1250 * time.Millisecond
 	dialJitter  = 500 * time.Millisecond
+	// MaxLoginSpacing is the most SetSpacing raises a gate's spacing to.
+	MaxLoginSpacing = time.Minute
 	// refusedBase and refusedMax bound the process-wide backoff while the
 	// servers refuse connections (down or restarting).
 	refusedBase = 2 * time.Second
@@ -38,6 +42,9 @@ const (
 // ErrLoginsHalted reports that the credential breaker tripped: no bot of the
 // process logs in again until the breaker is reset (LoginGate.Reset).
 var ErrLoginsHalted = errors.New("all logins halted by the credential breaker")
+
+// ErrSpacing reports a spacing outside a gate's bounds (LoginGate.SetSpacing).
+var ErrSpacing = errors.New("login spacing out of bounds")
 
 // LoginGate is the process-wide gate every bot passes to dial the login and
 // game servers. A bot takes a turn, during which no other bot dials, and
@@ -49,6 +56,10 @@ type LoginGate struct {
 	clock Clock
 	// spaced is set at construction and never changes.
 	spaced bool
+	// spacing is the least time between two dial starts, in nanoseconds:
+	// MinSpacing to MaxLoginSpacing. SetSpacing stores it from any
+	// goroutine; the turn holder loads it in Dial.
+	spacing atomic.Int64
 	// turn holds one token: taking it starts a turn, putting it back ends it.
 	turn chan struct{}
 
@@ -74,6 +85,7 @@ type LoginGate struct {
 func NewLoginGate(clock Clock, rng *rand.Rand) *LoginGate {
 	g := newLoginGate(clock, rng)
 	g.spaced = true
+	g.spacing.Store(int64(dialSpacing))
 	return g
 }
 
@@ -132,9 +144,9 @@ func (g *LoginGate) Take(ctx context.Context) (*Turn, error) {
 	}
 }
 
-// Dial waits until the turn may start its next dial: on a spaced gate
-// dialSpacing plus a jitter after the previous dial start of the process,
-// and past the refused backoff. It fails once the breaker has tripped or ctx
+// Dial waits until the turn may start its next dial: the gate's spacing
+// after the previous dial start of the process, plus a jitter on a spaced
+// gate, and past the refused backoff. It fails once the breaker has tripped or ctx
 // ends; a breaker that trips and is reset while Dial waits does not fail it.
 func (t *Turn) Dial(ctx context.Context) error {
 	g := t.g
@@ -145,9 +157,9 @@ func (t *Turn) Dial(ctx context.Context) error {
 		}
 		now := g.clock.Now()
 		if !now.Before(g.next) {
-			g.next = now
+			g.next = now.Add(g.Spacing())
 			if g.spaced {
-				g.next = now.Add(dialSpacing + jitter(g.rng, dialJitter))
+				g.next = g.next.Add(jitter(g.rng, dialJitter))
 			}
 			return nil
 		}
@@ -161,6 +173,33 @@ func (t *Turn) Dial(ctx context.Context) error {
 		}
 		timer.Stop()
 	}
+}
+
+// MinSpacing is the floor of the gate's spacing: dialSpacing on a spaced
+// gate, which keeps every dial out of the accept filter's burst window, and
+// none on an allowlisted gate, which the filter skips.
+func (g *LoginGate) MinSpacing() time.Duration {
+	if g.spaced {
+		return dialSpacing
+	}
+	return 0
+}
+
+// Spacing is the least time between two dial starts of the process; a
+// spaced gate adds a jitter of up to dialJitter on top.
+func (g *LoginGate) Spacing() time.Duration {
+	return time.Duration(g.spacing.Load())
+}
+
+// SetSpacing sets the gate's spacing from the next dial on. It refuses a
+// spacing under MinSpacing or over MaxLoginSpacing with ErrSpacing, so the
+// spacing never drops under the accept filter's limit.
+func (g *LoginGate) SetSpacing(d time.Duration) error {
+	if d < g.MinSpacing() || d > MaxLoginSpacing {
+		return fmt.Errorf("%w: %s, want %s to %s", ErrSpacing, d, g.MinSpacing(), MaxLoginSpacing)
+	}
+	g.spacing.Store(int64(d))
+	return nil
 }
 
 // Dialed reports how the turn's last dial ended. A refused connection pushes

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Chart, type Series } from "../components/Chart";
 import type { Confirm } from "../components/ConfirmDialog";
+import { LoginSpacing } from "../components/LoginSpacing";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -69,6 +70,9 @@ export function Dashboard({ dash, samples, ask }: { dash: DashboardData | undefi
         ) : (
           <Badge tone="green">logins open</Badge>
         )}
+        <div className="mt-3">
+          <LoginSpacing dash={dash} />
+        </div>
       </Card>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Online" value={`${dash.running} / ${dash.max_online}`} hint="running of the online cap" />

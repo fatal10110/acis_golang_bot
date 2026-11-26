@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
+	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 )
 
@@ -102,10 +103,14 @@ type file struct {
 	Version int `json:"version"`
 	// Panel is the prefix new bots take their accounts from; empty until
 	// the panel sets it (SetPanel).
-	Panel      string      `json:"panel,omitempty"`
-	Prefixes   []Prefix    `json:"prefixes"`
-	Bots       []Bot       `json:"bots"`
-	Tombstones []Tombstone `json:"tombstones,omitempty"`
+	Panel string `json:"panel,omitempty"`
+	// LoginSpacing is the login gate's spacing the panel set, in
+	// milliseconds (SetLoginSpacing); 0 until set, which keeps the gate's
+	// own.
+	LoginSpacing int64       `json:"login_spacing_ms,omitempty"`
+	Prefixes     []Prefix    `json:"prefixes"`
+	Bots         []Bot       `json:"bots"`
+	Tombstones   []Tombstone `json:"tombstones,omitempty"`
 }
 
 // Registry is the open registry of one data directory, locked for the
@@ -228,6 +233,9 @@ func (f file) validate() error {
 		}
 		held[t.Account] = true
 	}
+	if f.LoginSpacing < 0 || f.LoginSpacing > botclient.MaxLoginSpacing.Milliseconds() {
+		return fmt.Errorf("login spacing %d ms: want 0 to %d", f.LoginSpacing, botclient.MaxLoginSpacing.Milliseconds())
+	}
 	return nil
 }
 
@@ -284,6 +292,26 @@ func (r *Registry) Panel() (Prefix, bool) {
 		return Prefix{}, false
 	}
 	return r.prefix(r.data.Panel)
+}
+
+// LoginSpacing is the login gate's spacing the panel set (SetLoginSpacing),
+// 0 until set.
+func (r *Registry) LoginSpacing() time.Duration {
+	return time.Duration(r.data.LoginSpacing) * time.Millisecond
+}
+
+// SetLoginSpacing keeps the login gate's spacing, whole milliseconds, for
+// the next start. It does not check the gate's bounds: the caller set the
+// spacing on the gate first (Supervisor.SetLoginSpacing).
+func (r *Registry) SetLoginSpacing(d time.Duration) error {
+	if d < 0 || d > botclient.MaxLoginSpacing {
+		return fmt.Errorf("login spacing %s: want 0 to %s", d, botclient.MaxLoginSpacing)
+	}
+	if ms := d.Milliseconds(); ms != r.data.LoginSpacing {
+		r.data.LoginSpacing = ms
+		return r.save()
+	}
+	return nil
 }
 
 // SetPanel sets the panel's own prefix and its marker, once: a registry
