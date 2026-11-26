@@ -60,7 +60,9 @@ func buildHier(tb testing.TB, e *engine.Engine, size int, doors []*door.Template
 	if err != nil {
 		tb.Fatal(err)
 	}
-	return &testHier{h: NewHierarchy(g, e, cfg.Water, DefaultMemberCacheBytes), g: g, image: image, stats: stats, cfg: cfg}
+	h := NewHierarchy(g, e, cfg.Water, DefaultMemberCacheBytes)
+	h.sameCap = testSameCap(tb)
+	return &testHier{h: h, g: g, image: image, stats: stats, cfg: cfg}
 }
 
 // The scene windows at 32-cell clusters: the ledge, pit, bridge and pocket;
