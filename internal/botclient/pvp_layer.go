@@ -221,21 +221,28 @@ func (b *Brain) resisted() {
 }
 
 // pvpCast is the PvP order over rot, the row's rotation, fighting player
-// id at now (docs/pvp/layer.md "PvP order"): the kite walk, then the PvP
+// id at now (docs/pvp/layer.md "PvP order"): a cure or CP potion (pvpItem)
+// and the break-off (breaksOff, breakAway) first, the kite walk, then the PvP
 // row's steps and rot's in groups, each under the M10 gates (tryStep):
 // self-target steps and sustain under the long-cast rule, interrupts,
 // control steps that are due, the opener, finishers once the pool estimate
 // is under their expected damage, the other attacks. ok is false when none
 // goes: fight follows the Melee policy.
 func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) (Action, bool) {
-	if a, ok := b.kiteWalk(id, now); ok {
+	if a, ok := b.pvpItem(id, now); ok {
 		return a, true
 	}
 	rot = append(slices.Clip(b.build().Kit.PvP), rot...)
+	st := b.stepState(id, rot, now)
+	if b.breaksOff(id, rot, st, now) {
+		return b.breakAway(id, rot, st, now), true
+	}
+	if a, ok := b.kiteWalk(id, now); ok {
+		return a, true
+	}
 	if len(rot) == 0 {
 		return Action{}, false
 	}
-	st := b.stepState(id, rot, now)
 	first := func(pick func(Step) bool) (Action, bool) {
 		for _, step := range rot {
 			if !pick(step) {
@@ -480,13 +487,13 @@ func (b *Brain) kiting(id int32, now time.Time) (skill int32, ok bool) {
 // slow holds melee player id at now (kiting) and id stands kiteSlack closer
 // than that skill's cast range, a walk to a stand point at the cast range
 // (kitePoint) before the next cast; a hold while that walk is on. ok is
-// false when no walk is due or no stand point passes: the bot casts where
-// it stands.
+// false when no walk is due, no stand point passes or Ultimate Defense
+// holds the bot (immobile): the bot casts where it stands.
 func (b *Brain) kiteWalk(id int32, now time.Time) (Action, bool) {
 	skill, ok := b.kiting(id, now)
 	o := b.world.object(id)
 	r, approach := b.castReach(skill)
-	if !ok || o == nil || !approach {
+	if !ok || o == nil || !approach || b.immobile(now) {
 		b.pvp.kite = Point{}
 		return Action{}, false
 	}

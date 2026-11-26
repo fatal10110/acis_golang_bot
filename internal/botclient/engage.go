@@ -83,11 +83,12 @@ type engageState struct {
 // where it stood. A target with no stand point the bot can reach is
 // blacklisted for BlacklistFor, as one out of attempts. It reports false
 // when the bot may attack or cast now, and always without geodata (the bot
-// acts as it would).
+// acts as it would) or while Ultimate Defense holds the bot (immobile: no
+// walk starts).
 func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 	w := b.walker()
 	o := b.world.object(id)
-	if w.nav == nil || o == nil {
+	if w.nav == nil || o == nil || b.immobile(now) {
 		return Action{}, false
 	}
 	from, to := b.world.Self.Position(now), o.Position(now)

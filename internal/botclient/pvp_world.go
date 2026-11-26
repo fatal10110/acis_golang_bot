@@ -177,6 +177,9 @@ type pvpWorld struct {
 	// layer's (pvp_layer.go).
 	last ownLast
 	kite Point
+	// cured are the ends of the bot's own poison and bleed effects a cure
+	// went out for, by skill id (pvp_breakoff.go).
+	cured map[int32]time.Time
 }
 
 // duelAsk is an open duel challenge: when it came, whether it is a party

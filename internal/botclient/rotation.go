@@ -70,12 +70,14 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 // gates pass, its skill is ready and the guards do not hold it, a
 // self-target step only under the stack rule, a step on the leader's target
 // only on that target, a step on another attacker on one the bot is not
-// fighting. ok is false when it does not.
+// fighting, and, while Ultimate Defense holds the bot (immobile), a step on
+// another only in cast range. ok is false when it does not.
 func (b *Brain) tryStep(id int32, step Step, st stepState, underReserve bool, now time.Time) (Action, bool) {
 	r := step.rank()
 	if step.Idle || r == rankAttack && underReserve ||
 		!step.passes(st) || !b.world.SkillReady(step.Skill, now) ||
-		step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) {
+		step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) ||
+		step.Target != TargetSelf && b.immobile(now) && !b.castInRange(id, step.Skill, now) {
 		return Action{}, false
 	}
 	switch step.Target {
