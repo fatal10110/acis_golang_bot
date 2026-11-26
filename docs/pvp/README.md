@@ -59,7 +59,7 @@ PvP value blended into M10's gear score, a karma policy. No server change.
 - **D37, items.** One loadout scored by M10's `Value` and `PvPValue` blended by relative gains,
   50 % each for `pvp` (others 0 %); no set swap; Mithril Heavy (D) bought like any M10 gear,
   B-and-up PvP sets, PvP weapons and boss jewels only worn; cures bought on M8 trips; CP potions
-  kept, never sold or bought. [model](model.md)
+  kept, never sold or bought (buying amended by D43). [model](model.md)
 - **D38, bots vs bots.** Outside an arena a bot never attacks, hunts or challenges a bot and fights
   one back only after its hit or offensive cast; in an arena anyone but its party. No bot duels.
   [targets](targets.md)
@@ -83,7 +83,7 @@ PvP value blended into M10's gear score, a karma policy. No server change.
   Ancient Adena. Bots never contribute stones, never pay the Dawn fee, never vote Strife; their
   seal votes still weigh on the seals, so only the bots named in `SevenSigns.Members` join (at most
   `SevenSigns.MaxMembers` per run, default 1, checked when the config loads), voting the seal Dusk
-  holds if any.
+  holds if any, else Gnosis.
   [CP potions](cp-potions.md)
 
 ## Delivery (milestone M13)

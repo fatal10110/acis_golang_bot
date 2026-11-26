@@ -68,12 +68,11 @@ Ships in X16 (#604). Decision D42 (owner approved 2026-11-26). Paths per
   window (18:00-24:00 server time): [owner question 1](#owner-questions). A live match needs 5
   nobles of one class, over X13's 4 characters: [owner question 2](#owner-questions).
 
-## Owner questions (answered 2026-11-26)
+## Owner questions
 
-The owner took the proposed answers: the match is covered by unit tests and recorded frames (no
+Answered by the owner on 2026-11-26, with the proposed answers: the match is covered by unit tests and recorded frames (no
 5-character scenario, no change to `OlyStartTime`); any `Olympiad` bot takes noblesse at the class
 master.
-
 
 1. No GM command opens the competition window. Run the live scenario only in the evening window,
    or give the test stack an `OlyStartTime` that keeps it open (a server setting)?

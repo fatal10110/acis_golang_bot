@@ -462,8 +462,8 @@ professions): the column lists, per direction, the +1 symbol of each price tier 
 | Row | 3. Opener | 4. Rotation (priority order, gates) | 5. Sustain | 6. Self-buffs and toggles | 7. Rest |
 | --- | --- | --- | --- | --- | --- |
 | PL | 28 Aggression from 400, a pull. | 28 Aggression open; 18 Aura of Hate A≥2; 92 Shield Stun [SHIELD]; 400 Tribunal [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (fixed); melee. Heals: 262 Holy Blessing under 50 % (party, rule 3 order). | 262 Holy Blessing S<50 (on itself); 70 Drain Health (fixed) S<60; 45 Divine Heal (fixed) S<40; 110 Ultimate Defense S<20 | 82 Majesty, 72 Iron Will @43 (out of combat); 322 Shield Fortress @64 (combat toggle, MP>30) | HP; 226 Relax (base tree) |
-| TK | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 18 Aura of Hate A≥2; 400 Tribunal [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | 91 Defense Aura, 77 Attack Aura (base); 123 Spirit Barrier; cubics 10 Storm Cubic and 67 Life Cubic @43 (kept up, S17); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
-| SK | 28 Aggression from 400, a pull. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 289 Life Leech; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 279 Lightning Strike @58; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 105 Freezing Strike; 3 Power Strike (fixed); melee. | 289 Life Leech S<70; 70 Drain Health S<60; 110 Ultimate Defense S<20 | Auras 91, 77 (base); cubics 33 Phantom Cubic and 22 Vampiric Cubic @43 (kept up, S17); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
+| TK | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 18 Aura of Hate A≥2; 400 Tribunal [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | 91 Defense Aura, 77 Attack Aura (base); 123 Spirit Barrier; cubics 10 Storm Cubic and 67 Life Cubic @43 (kept up, S17, deferred: no cubics in M10); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
+| SK | 28 Aggression from 400, a pull. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 289 Life Leech; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 279 Lightning Strike @58; 223 Sting [SWORD, DAGGER, DUAL, BIGSWORD]; 105 Freezing Strike; 3 Power Strike (fixed); melee. | 289 Life Leech S<70; 70 Drain Health S<60; 110 Ultimate Defense S<20 | Auras 91, 77 (base); cubics 33 Phantom Cubic and 22 Vampiric Cubic @43 (kept up, S17, deferred: no cubics in M10); 288 Guard Stance @43 and 322 Shield Fortress @64 (combat toggles, MP>30) | HP; plain sit |
 | SS | 28 Aggression from 400, a pull. | 28 Aggression open; 102 Entangle open; 3 Power Strike (fixed); melee. | 58 Elemental Heal S<50; 110 Ultimate Defense S<20 | Auras 91, 77 (base); 123 Spirit Barrier; party songs, out of combat: 267 Song of Warding, 268 Song of Wind @46, 269 Song of Hunter @49, 264 Song of Earth @55, 304 Song of Vitality @66 | HP; plain sit |
 | GL | 6 Sonic Blaster @43 C≥2 from 600, a pull; before 43 walks in. | 8 Sonic Focus C<max out of combat; 6 Sonic Blaster @43 open C≥2; 261 Triple Sonic Slash [DUAL] @55 C≥4; 5 Double Sonic Slash [DUAL] @49 C≥3; 9 Sonic Buster @43 A≥2 C≥2; 7 Sonic Storm @49 A≥2 C≥2; 1 Triple Slash [DUAL]; 8 Sonic Focus C<max; melee. | 121 Battle Roar S<30 | 78 War Cry in combat; 297 Duelist Spirit [DUAL] @64 in combat; 256 Accuracy, 312 Vicious Stance and 424 War Frenzy @58 (combat toggles, MP>30) | HP; 226 Relax (base tree) |
 | WL | Walks in. | 48 Thunder Storm [POLE]; 36 Whirlwind [POLE]; 245 Wild Sweep [POLE] A≥2; melee. | 121 Battle Roar S<30; 181 Revival @55 S<15 | 78 War Cry and 421 Fell Swoop [POLE] @58 in combat; 256 Accuracy, 312 Vicious Stance, 422 Polearm Accuracy [POLE] @58 and 424 War Frenzy @58 (combat toggles, MP>30) | HP; 226 Relax (base tree) |
@@ -529,8 +529,8 @@ cast):
 | Row | 8. MPReserve | Sit HP / MP | Stand HP / MP | Critical | Crowded | Outmatched | 10. Spot | 12. Plays like |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | PL | 20 | 35 / 20 | 90 / 80 | 15 | 60 | 30 | tank 1.5 | A holy shield tank: pulls with Aggression, holds a pack with Aura of Hate, heals itself and its party with Holy Blessing. |
-| TK | 25 | 45 / 25 | 90 / 80 | 20 | 75 | 45 | tank 1.5 | An elven tank with cubics at its side: Guard Stance, Elemental Heal and a Life Cubic keep it standing. |
-| SK | 25 | 50 / 25 | 95 / 80 | 25 | 80 | 50 | tank 1.5 | A dark tank that drains twice (Drain Health, Life Leech) and lets its cubics wear the target down. |
+| TK | 25 | 45 / 25 | 90 / 80 | 20 | 75 | 45 | tank 1.5 | An elven tank: Guard Stance and Elemental Heal keep it standing (its Life Cubic once S17 lands). |
+| SK | 25 | 50 / 25 | 95 / 80 | 25 | 80 | 50 | tank 1.5 | A dark tank that drains twice (Drain Health, Life Leech); its cubics wear the target down once S17 lands. |
 | SS | 30 | 45 / 25 | 90 / 80 | 20 | 75 | 45 | normal 2.0 | A singing swordsman: songs up before every pull, a sword and shield in the fight. |
 | GL | 10 | 35 / 20 | 90 / 80 | 15 | 60 | 30 | normal 2.0 | A dual-sword duelist: charges between fights, spends them on Sonic Slashes, Battle Roar when low. |
 | WL | 10 | 35 / 20 | 90 / 80 | 15 | 50 | 25 | normal 2.0 | A polearm sweeper that hits a whole pack with Thunder Storm and Whirlwind. |
@@ -807,7 +807,8 @@ ship its own ("Second professions (levels 40+)").
   bot's MP is above the step's bound.
 - **Sustain:** the column-5 skills as steps gated by `SelfHPBelow`. `ruleCritical` tries the
   heals and drains among them: Self Heal, Elemental Heal, Divine Heal, Battle Roar (`HEAL_PERCENT`),
-  Drain Health, Vampiric Touch and Life Drain. Body To Mind, Ultimate Defense and Ultimate Evasion
+  Drain Health, Vampiric Touch and Life Drain, and for the second professions (S13a, owner
+  2026-11-26) Life Leech, Steal Essence, Vampiric Claw and Revival. Body To Mind, Ultimate Defense and Ultimate Evasion
   stay in `fight`. `ruleCritical` runs before `fight` and drinks early when two or more
   attackers have the bot under `CrowdedHP` (`rules.go`), which is at or above every row's sustain
   bound; so `ruleCritical` tries the build's ready heal and drain steps whose gates pass before either
@@ -1021,7 +1022,7 @@ and A-grade sets are left to the gear model (no follow-up); the servitor issue #
 | S12 (#333) | e2e live scenarios for S5-S11 and S6b, at most 4 bots per scenario (the harness cap). | each |
 | S13a (#625) | Second-profession foundation: row start 40, the `(fixed)` tag and its one-way check, `Step.Filler` (charge steps after every attack), `Step.Once`, `critSustain` gains Life Leech, Steal Essence, Vampiric Claw and Revival. | S6b, S7, S8 |
 | S13b (#626) | Second-profession gear and dyes (columns 1, 2, 9 and 11 of the 24 rows): C-grade sets, the 3-slot dye rows. | S13a, S5 |
-| S13c (#627) | Skill reagents (owner amendment, 2026-11-26): the reagent gate and the restock of Spirit Ore, Energy Stones and Cursed Bones (`ReagentCastsMin` 20, `ReagentCastsMax` 100, after potions and shots). | S13a |
+| S13c (#627) | Skill reagents (owner amendment, 2026-11-26): the reagent gate and the restock of Spirit Ore, Energy Stones and Cursed Bones (`ReagentCastsMin` 20, `ReagentCastsMax` 100, after potions and shots). | — |
 | S14a (#628) | Tanks PL, TK, SK (TK and SK without cubics). | S13a |
 | S14b (#629) | Songs and dances SS, BD. | S13a |
 | S14c (#630) | GL, WL, DS, BH. | S13a, S13c |
