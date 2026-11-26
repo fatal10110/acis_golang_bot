@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 )
 
 // preset is one entry of the persona catalog: a persona plus its options
@@ -67,12 +68,21 @@ func damagePersona() botclient.Persona {
 // pvpPersona is the pvp preset's persona (docs/pvp/modes.md, D35): the
 // damage persona farming like farmer, with the duel, hunting and arena modes
 // on, open-world PK off, and SupportFlagged on (its own duel counts it off,
-// docs/pvp/guards.md "Duel support"). The other presets keep fight back
-// only, SupportFlagged off, and decline duels at once.
+// docs/pvp/guards.md "Duel support"), and its PvP gear (D37): gear
+// compared by Value and PvP value blended at charmodel.PvPWeight, five of
+// each cure on the supply list, CP potions kept. The other presets keep
+// fight back only, SupportFlagged off, decline duels at once, and compare
+// gear by Value alone.
 func pvpPersona() botclient.Persona {
 	p := damagePersona()
-	p.PvP = botclient.PvPPolicy{FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true}
+	p.PvP = pvpPolicy
 	return p
+}
+
+// pvpPolicy is the pvp preset's PvP policy.
+var pvpPolicy = botclient.PvPPolicy{
+	FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true,
+	GearWeight: charmodel.PvPWeight, CureStock: 5, KeepCPPotions: true,
 }
 
 // merchantPersona is the merchant preset's persona: the damage persona

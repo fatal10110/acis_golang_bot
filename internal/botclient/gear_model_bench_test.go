@@ -38,24 +38,43 @@ func benchModelBrain(tb testing.TB) *Brain {
 // BenchmarkGearValuer scores the model tests' armor against what the bot
 // wears (pieceScore, as the gear, shop and shots rules do) after each of a
 // stream of events: own HP updates, which change none of the model's
-// inputs (#494), and MaxHP changes, which rebuild it every time.
+// inputs (#494), and MaxHP changes, which rebuild it every time. The pvp
+// cases give PvP value a weight (PvPPolicy.GearWeight): own HP updates with
+// nobody seen and with one player seen, which keep the PvP side, and own HP
+// updates each after the one player seen changed class, which make it
+// again every time.
 func BenchmarkGearValuer(bm *testing.B) {
 	candidates := []int32{lightTop, lightBottom, demonChest, demonLegs, doomChest, doomLegs}
+	ownHP := func(i int) Event { return StatusUpdate{ObjectID: selfID, Set: StatusHP, HP: int32(1 + i%20)} }
+	foe := func(i int) Event {
+		return CharInfo{ObjectID: 0x1000, Name: "Foe", ClassID: int32(i%2) * classHumanMystic, Pos: Point{Y: 900}}
+	}
 	for _, bc := range []struct {
-		name string
-		ev   func(i int) Event
+		name   string
+		weight float64
+		seen   func(i int) Event // a player seen before ev, or nil
+		ev     func(i int) Event
 	}{
-		{"own-hp", func(i int) Event { return StatusUpdate{ObjectID: selfID, Set: StatusHP, HP: int32(1 + i%20)} }},
-		{"max-hp", func(i int) Event { return StatusUpdate{ObjectID: selfID, Set: StatusMaxHP, MaxHP: int32(20 + i%2)} }},
+		{name: "own-hp", ev: ownHP},
+		{name: "max-hp", ev: func(i int) Event { return StatusUpdate{ObjectID: selfID, Set: StatusMaxHP, MaxHP: int32(20 + i%2)} }},
+		{name: "pvp-own-hp", weight: 0.5, ev: ownHP},
+		{name: "pvp-seen-own-hp", weight: 0.5, seen: func(int) Event { return foe(1) }, ev: ownHP},
+		{name: "pvp-mix-change", weight: 0.5, seen: foe, ev: ownHP},
 	} {
 		bm.Run(bc.name, func(bm *testing.B) {
 			b := benchModelBrain(bm)
+			b.persona.PvP.GearWeight = bc.weight
 			if b.valuer() == nil {
 				bm.Fatal("no gear model")
 			}
 			gear := b.cfg.Travel.gear
 			bm.ReportAllocs()
 			for i := 0; bm.Loop(); i++ {
+				if bc.seen != nil {
+					ev := bc.seen(i)
+					b.world.Apply(ev, t0)
+					b.pvpEvent(ev, t0)
+				}
 				b.world.Apply(bc.ev(i), t0)
 				w := b.rawWorn()
 				for k, id := range candidates {

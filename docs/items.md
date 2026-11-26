@@ -405,7 +405,11 @@ picks one per persona.
   index; never above `Supply.BuyLoad`, default 45 %, below the server's first weight-penalty band at
   50 %) and by the budget (section 5).
 - The default list: shots (section 3); the best HP potion a merchant sells (1061 over 1060); 1-2
-  Scrolls of Escape; the class's buff potion only when the budget's comfort tier allows it.
+  Scrolls of Escape; the class's buff potion only when the budget's comfort tier allows it. The
+  `pvp` preset adds `PvPPolicy.CureStock` (5) Antidotes (1831) and Bandages (1833), from level 20
+  as many Greater Antidotes (1832) and Emergency Dressings (1834) where a merchant the shop errand
+  can visit sells them, and keeps every cure and its CP potions (5591, 5592; none bought)
+  (`docs/pvp/model.md` "Gear and consumables", D37).
 - **HP potions** keep rule 3, with a persona threshold (`CrowdedHP`, default 80 %, above
   `OutmatchedHP`) that also allows drinking early when two or more attackers are on the bot; the
   heal and the flee stay under `CriticalHP`. Rules 3 and 4 do not flee while an attacker runs as
