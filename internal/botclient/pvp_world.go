@@ -180,6 +180,10 @@ type pvpWorld struct {
 	arena     arenaTrip
 	rows      charmodel.RowTable
 	rowsLevel int
+	// refs are the engage estimate's reference opponents by class and
+	// bow at character level refsLevel (Brain.pvpRef).
+	refs      map[refKey]charmodel.Fighter
+	refsLevel int
 	// mix is the mix table the gear scores weigh PvP value by
 	// (pvp_gear.go).
 	mix pvpMix
