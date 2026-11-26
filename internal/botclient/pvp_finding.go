@@ -14,9 +14,10 @@ import (
 // (network/duel.go requestDuelStart), so challengeEvery bounds it, shared by
 // its own and its whispered challenges, and challengeSameEvery bounds the
 // challenges of one player; a decline or refusal of its challenge holds its
-// own challenges of that player declineHold. An unexplained 1940 holds its
-// answers and own challenges duelBlockHold or until it moved duelBlockMove
-// away. duelClear is the margin past a monster's aggro range a duel keeps
+// own challenges of that player declineHold. With Challenges set, both
+// per-player holds also hold every other bot's own challenges (#425). An
+// unexplained 1940 holds its answers and own challenges duelBlockHold or
+// until it moved duelBlockMove away. duelClear is the margin past a monster's aggro range a duel keeps
 // (any hit between a duellist and an NPC cancels it), and duelRange the
 // server's challenge range (duel.Range, 3D). A whispered duel the challenge
 // rule reaches whisperLapse past its reaction (an earlier rule held) is
@@ -278,13 +279,15 @@ func (b *Brain) roams() bool {
 // challengeFoe is the player the bot challenges on its own at now, 0 for
 // none: the nearest one in sight of its class tier, no bot, not held by a
 // decline nor challenged within challengeSameEvery, that may duel and that
-// the engage estimate passes.
+// the engage estimate passes. The process-wide holds (Challenges) are
+// claimed last, so only the player chosen is recorded there.
 func (b *Brain) challengeFoe(now time.Time) int32 {
 	f, s := &b.pvp.find, &b.world.Self
 	tier := classTier(s.ClassID)
 	return b.nearestPlayer(now, func(id int32, o *Object) bool {
 		return !b.cfg.markers.Marks(o.Name) && !f.recent(o.Name, now) && !now.Before(f.held[o.Name]) &&
-			!b.avoided(o.Name, now) && classTier(o.ClassID) == tier && b.foeMayDuel(id, now) && b.engages(id)
+			!b.avoided(o.Name, now) && classTier(o.ClassID) == tier && b.foeMayDuel(id, now) && b.engages(id) &&
+			b.cfg.Challenges.claim(o.Name, s.ObjectID, now)
 	})
 }
 
@@ -318,7 +321,8 @@ func (b *Brain) challenge(id int32) Action {
 }
 
 // challengeSent keeps the bot's challenge a sent at now: the shared and
-// per-player challenge clocks, and its duel asked with the player named.
+// per-player challenge clocks, the process-wide one (Challenges), and its
+// duel asked with the player named.
 func (b *Brain) challengeSent(a Action, now time.Time) {
 	o := b.world.object(a.object)
 	if o == nil {
@@ -329,6 +333,7 @@ func (b *Brain) challengeSent(a Action, now time.Time) {
 		f.asked = make(map[string]time.Time)
 	}
 	f.lastAsk, f.asked[o.Name] = now, now
+	b.cfg.Challenges.sent(o.Name, b.world.Self.ObjectID, now)
 	b.pvp.duel = Duel{Phase: DuelAsked, Name: o.Name, Since: now, Challenged: true, Result: b.pvp.duel.Result}
 }
 

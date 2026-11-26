@@ -113,7 +113,8 @@ rotation; X6-X8 make it fight like its class.
 ## Risks and gaps
 
 Risks: **annoying players** (challenge pop-ups, bounded by the holds and tier match, switchable per
-bot; per-bot holds let N bots each challenge one player per 30 minutes, one pop-up at a time);
+bot; the holds are shared by the bots of a process, so one player gets one own challenge per 30
+minutes from all of them, #425, though bots of separate processes still hold apart);
 **accidental PK** only from what the guards cannot see ([left over](guards.md#arena-edge)); the
 **arena cost** (D39); **duels cancelled** with nothing restored by what the bot cannot prevent (a
 wandering monster, the opponent's own move, a siege starting, a server follow leg between checks;
@@ -124,7 +125,7 @@ with no row); **arena deaths** (the 5-death cap and stay limit).
 
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
-(M11); a challenge hold shared by all bots; buying CP potions;
+(M11); a challenge hold shared by all bots (#425, shipped); buying CP potions;
 fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
 command-channel mates in an arena (rule 3). Clan wars, sieges and the Olympiad are planned in
 [war](war.md), [siege](siege.md) and [Olympiad](olympiad.md) (#602-#604), pending D40-D42.

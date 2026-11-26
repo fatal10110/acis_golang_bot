@@ -118,6 +118,11 @@ type BrainConfig struct {
 	// after (GroundClaims), shared by every bot of the process, so no two
 	// chase one item. Nil leaves that to the server.
 	Ground *GroundClaims
+	// Challenges, when set, are the challenge holds of the process
+	// (ChallengeHolds), shared by every bot of the process, so one player
+	// gets at most one own challenge per challengeSameEvery from all of
+	// them and a decline holds them all. Nil holds per bot only.
+	Challenges *ChallengeHolds
 	// Nav, when set, is the navigation data the bot walks on, shared by
 	// every bot of the process (D13). Nil walks nowhere: only the
 	// non-walking personas run without it (D13a).
