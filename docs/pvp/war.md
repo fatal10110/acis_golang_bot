@@ -1,6 +1,6 @@
 # Clan-war enemies as targets
 
-Ships in X14 (#602). Decision D40 (proposed, needs owner approval). Paths per
+Ships in X14 (#602). Decision D40 (owner approved 2026-11-26). Paths per
 [README](README.md#paths). Today a clan-war enemy is a clean player to the bot
 ([MayFight](targets.md#mayfight) rule 8): it is never attacked unless flagged or with karma.
 
@@ -80,10 +80,13 @@ a war enemy that hits them is flagged by its hit, rule 6). A switch on the panel
   force and kills it, the bot's `UserInfo` shows a PvP kill and no karma; B's leader restarts and
   comes back, A's leader stops the war (0x4f) while the bot approaches → the bot stops. Seed: scripted clan leaders
   (`internal/e2e/pledge.go`) declare with 0x4d and answer with 0x4e; the GM raises both clans to
-  level 3 (`network/admin_pledge.go:110`). Open: each clan needs 15 members (`ClanMembersForWar`),
-  which no 4-character scenario has: [owner question 1](#owner-questions).
+  level 3 (`network/admin_pledge.go:110`). Not run for now: each clan needs 15 members (`ClanMembersForWar`), which no 4-character
+  scenario has, so X14 ships on unit tests and recorded frames ([owner question 1](#owner-questions)).
 
 ## Owner questions
+
+Answered by the owner on 2026-11-26, with the proposed answers: X14 ships on unit tests and recorded frames (no fixture
+clans, no change to `ClanMembersForWar`); `War` is on by default for `pvp` bots.
 
 1. The live war scenario needs two clans of 15 members. Options: fixture clans created once on
    the stack and reused by name (their extra members stay offline), or a test stack with a lower

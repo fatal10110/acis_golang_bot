@@ -1,6 +1,6 @@
 # Sieges
 
-Ships in X15 (#603). Decision D41 (proposed, needs owner approval). Paths per
+Ships in X15 (#603). Decision D41 (owner approved 2026-11-26). Paths per
 [README](README.md#paths). Today a running siege is only [forbidden duel
 ground](finding.md#duel-ground); a bot farming or walking in a battlefield when a siege starts stays
 there.

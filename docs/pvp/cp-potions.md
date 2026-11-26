@@ -1,7 +1,6 @@
 # Buying CP potions
 
-Plan for #427. Ships in X17-X19 (#612, #613, #614). Decision D43 (proposed, needs owner
-approval): it amends D37's "CP potions kept, never sold or bought". Paths per
+Plan for #427. Ships in X17-X19 (#612, #613, #614). Decision D43 (owner approved 2026-11-26): it amends D37's "CP potions kept, never sold or bought". Paths per
 [README](README.md#paths); Seven Signs server code is under `internal/gameserver/sevensigns/`,
 `internal/gameserver/signspriest/` and `model/actor/npc/folk_chat_signs.go`, its pages under
 `aCis_datapack/data/html/seven_signs/`.
@@ -34,16 +33,16 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
 
 1. **Status quo.** CP potions from GM grants only; no work. A `pvp` bot runs dry and fights without
    them.
-2. **Player stores (proposed, `pvp` default).** Buy 5591 and 5592 from private sell stores with the
+2. **Player stores (approved, `pvp` default).** Buy 5591 and 5592 from private sell stores with the
    M8 market errand ([items](../items.md#8-buying-from-player-stores)): no Ancient Adena, no Seven
    Signs, no world effect. It works only while players sell them, which a quiet server may never
    see; the bot just finds none.
-3. **Seven Signs member (proposed, opt-in `SevenSigns` mode, off for every preset).** Sign up with
+3. **Seven Signs member (approved, opt-in `SevenSigns` mode, off for every preset).** Sign up with
    Dusk in Competition, farm seal stones in the catacombs and necropolises, hold them; in a
    validation week its cabal won, turn them into Ancient Adena at a priest and buy CP potions with
    multisell 500. A losing or tied cycle costs nothing: the stones wait. Volume is ample (an hour
    of catacomb kills covers many cycles of stock); the expected payout depends on who wins:
-   - **3a, never contribute (proposed).** The bots never touch the competition score; they win
+   - **3a, never contribute (approved).** The bots never touch the competition score; they win
      only when human players' stones and festivals carry their cabal. On a server where no human
      plays the Seven Signs, every cycle is a 0-0 tie and the route never pays. The bots still
      vote: with B bots and N human Dusk members, the bots hold B/(N+B) of Dusk's seal shares.
@@ -52,7 +51,7 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
      bot, 50 % with it); they dilute the human votes for the other seals (N/(N+B) of their share,
      possibly under 35 %); and a seal Dusk holds on few votes can fall under 10 % (1 of 10
      humans: 10 % kept, with one bot 9 % lost). So 3a decides no competition score but does
-     weigh on the seals. Bound (proposed): the mode is enabled per named bot in the run's config,
+     weigh on the seals. Bound (approved): the mode is enabled per named bot in the run's config,
      `SevenSigns.Members` (a list of character names), and config loading refuses a list longer
      than `SevenSigns.MaxMembers` (default 1). The cap is static, so it needs no sign-up count:
      no counter resets on a restart, and no two bots race to the priest for the last place. Each
@@ -68,7 +67,7 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
 5. **Festival of Darkness.** Party timed instance content for Ancient Adena; far more work than
    option 3 for the same gate. Not proposed.
 
-## Proposed decision D43
+## Decision D43 (approved 2026-11-26)
 
 CP potions are bought (amends D37); the keep rule stays (never sold, deposited or drunk on
 monsters). Option 2 for `pvp` bots; option 3a as an opt-in `SevenSigns` mode, off for every preset
@@ -145,6 +144,12 @@ on a trip.
   ([owner question 3](#owner-questions)).
 
 ## Owner questions
+
+Answered by the owner on 2026-11-26, with the proposed answers: D43 as written (option 2 for `pvp` bots plus the opt-in
+SevenSigns member, 3a: never contribute); the vote weight is capped by the named-member list,
+`SevenSigns.MaxMembers` default 1, voting the seal Dusk holds; X19 ships on unit tests and
+recorded frames, recorded once on a real validation week (no server GM command); with no Dusk
+seal the bots vote Gnosis, never Strife.
 
 1. Approve D43? Options: player stores only (2), stores plus the opt-in Seven Signs member
    (2 + 3a, proposed), or the status quo (1).
