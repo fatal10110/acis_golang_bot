@@ -58,7 +58,8 @@ func newDyeBrain(t *testing.T, class, level, slots int32, worn []WornSymbol, ite
 	b, _ := newTestBrain(t, p)
 	b.world.Self.ClassID, b.world.Self.Level = class, level
 	b.train.doneLevel = level
-	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{makerNPC: {{X: 5000}}}, hennas: testHennas()}
+	b.cfg.Travel = &TravelMap{spawns: map[int32][]Point{makerNPC: {{X: 5000}}}}
+	b.cfg.Travel.setHennas(testHennas())
 	b.world.Apply(ItemList{Items: items}, t0)
 	b.world.Apply(HennaInfo{MaxSlots: slots, Worn: worn}, t0)
 	return walkOn(t, b)
@@ -420,7 +421,7 @@ func newDyeBudgetBrain(t *testing.T, class, adena int32, items ...Item) *Brain {
 	b.persona.Supply = SupplyPolicy{}
 	b.world.Self.ClassID, b.world.Self.Level = class, 30
 	m := b.cfg.Travel
-	m.hennas = testHennas()
+	m.setHennas(testHennas())
 	m.cheapest[dyeStr], m.cheapest[dyeDex] = dyePrice, dyePrice
 	slots := int32(2)
 	if class == classHumanFight {
