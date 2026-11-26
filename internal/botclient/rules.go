@@ -942,8 +942,8 @@ func (b *Brain) ruleGoal(now time.Time) (Action, bool) {
 	return b.persona.Goal(b.world, now)
 }
 
-// ruleIdle is rule 10: now and then a small move, a turn, an emote or a
-// sit; a bot sitting idle stands up instead.
+// ruleIdle is rule 10: now and then a small move around idleCenter, a turn,
+// an emote or a sit; a bot sitting idle stands up instead.
 func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 	s, p := &b.world.Self, &b.persona
 	if s.InCombat || s.Moving(now) {
@@ -966,7 +966,7 @@ func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 	switch r := b.rng.IntN(10); {
 	case r < 5:
 		dist := int32(float64(p.IdleRadius) * math.Sqrt(b.rng.Float64()))
-		to := offset(b.anchor, angle, dist)
+		to := offset(b.idleCenter(from), angle, dist)
 		to.Z = from.Z
 		to = b.walker().inSCC(from, to)
 		if a, st := b.goTo(to, walkSlop, walkIdle, now); st == walkWalking {
