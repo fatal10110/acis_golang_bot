@@ -382,12 +382,19 @@ func (q *Events) Ready() <-chan struct{} { return q.ready }
 // Drain appends every queued event to dst in arrival order, empties the
 // queue and returns dst.
 func (q *Events) Drain(dst []Event) []Event {
+	dst = q.take(dst)
+	signal(q.space)
+	return dst
+}
+
+// take moves the queued events to dst under the lock, which a panic gives
+// back too.
+func (q *Events) take(dst []Event) []Event {
 	q.mu.Lock()
+	defer q.mu.Unlock()
 	dst = append(dst, q.queue...)
 	clear(q.queue)
 	q.queue = q.queue[:0]
-	q.mu.Unlock()
-	signal(q.space)
 	return dst
 }
 
@@ -395,10 +402,7 @@ func (q *Events) Drain(dst []Event) []Event {
 // queue is full. It reports false when done closed first.
 func (q *Events) push(ev Event, done <-chan struct{}) bool {
 	for {
-		q.mu.Lock()
-		ok := q.put(ev)
-		q.mu.Unlock()
-		if ok {
+		if q.tryPut(ev) {
 			signal(q.ready)
 			return true
 		}
@@ -408,6 +412,14 @@ func (q *Events) push(ev Event, done <-chan struct{}) bool {
 			return false
 		}
 	}
+}
+
+// tryPut is put under the lock, which a panic gives back too: the reader
+// still queues its connLost after a panic in put.
+func (q *Events) tryPut(ev Event) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.put(ev)
 }
 
 // put queues ev unless the queue is full. A MoveToLocation first drops the

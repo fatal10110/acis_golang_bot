@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -46,7 +47,8 @@ const (
 	// with no ServerClose: the 2 MiB outbound cap of a slow reader, server
 	// internal/gameserver/network/conn.go outboundHighWater; or a reset or
 	// EOF) before the bot stops. A dead line the dialer's timeouts end
-	// (deadLine) is no abort.
+	// (deadLine) is no abort. It also bounds the panics a bot recovers
+	// from since its last stable session, counted apart (ErrPanic).
 	maxAborts = 3
 	// inUseWindow is how long a bot keeps retrying AccountInUse, from the
 	// first one after a run start or an end that was not a kick. After a
@@ -79,6 +81,9 @@ var (
 	// ErrRepeatedAborts stops a bot the server aborted maxAborts times in a
 	// row.
 	ErrRepeatedAborts = errors.New("server aborted the session repeatedly")
+	// ErrPanic stops a bot whose attempts panicked maxAborts times since
+	// its last stable session: a bug in the bot, which a restart repeats.
+	ErrPanic = errors.New("bot panicked repeatedly")
 	// ErrCommandedLogout stops a bot a GM's whispered "logout" logged out:
 	// it stays out until the swarm restarts, and the session is no abort.
 	ErrCommandedLogout = errors.New("logged out on a GM command")
@@ -92,6 +97,27 @@ var (
 type connLost struct{ err error }
 
 func (connLost) event() {}
+
+// panicError is a panic recovered at one of a bot's isolation boundaries:
+// its attempt (Bot.attempt) or its session's reader. It ends that attempt
+// only; the bot reconnects as after an abort, up to maxAborts (ErrPanic).
+type panicError struct {
+	where string
+	value any
+	stack []byte
+}
+
+func (e *panicError) Error() string { return fmt.Sprintf("panic in %s: %v", e.where, e.value) }
+
+// recovered turns the panic value v recovered in where into a panicError,
+// logging it with its stack and counting it. Run's goroutine and the
+// session's reader call it.
+func (b *Bot) recovered(where string, v any) error {
+	e := &panicError{where: where, value: v, stack: debug.Stack()}
+	b.log.Error("bot panicked", "in", where, "panic", fmt.Sprint(v), "stack", string(e.stack))
+	b.brain.Metrics.Panic()
+	return e
+}
 
 // SessionConfig is what every bot of a process shares.
 type SessionConfig struct {
@@ -173,6 +199,8 @@ type Bot struct {
 	inUseSince time.Time
 	// aborts counts sessions aborted since the last stable one.
 	aborts int
+	// panics counts attempts that panicked since the last stable session.
+	panics int
 	// kicked is set while the last session ended on the server's
 	// ServerClose and no login has succeeded since.
 	kicked bool
@@ -235,8 +263,8 @@ func (b *Bot) Account() string { return b.account }
 // character, a character that cannot be created, a character choice that
 // stops (ErrCharacterMissing, ErrAccountHasCharacters,
 // ErrNoCharacterToAdopt), ErrAccountTaken,
-// ErrRepeatedAborts, ErrCommandedLogout, or, for a bot not persistent, the
-// end of its session. It publishes the bot's state on the way (Status);
+// ErrRepeatedAborts, ErrPanic, ErrCommandedLogout, or, for a bot not
+// persistent, the end of its session. It publishes the bot's state on the way (Status);
 // once it returns the bot is stopped and refuses commands.
 func (b *Bot) Run(ctx context.Context) (err error) {
 	defer func() {
@@ -265,19 +293,37 @@ func (b *Bot) Run(ctx context.Context) (err error) {
 // attempt runs one session: a login and a game entry in a turn of the gate,
 // then play. entered reports a session that reached the world, played how
 // long it stayed.
+//
+// It is the bot's isolation boundary: a panic anywhere in it ends the
+// attempt with a panicError, after the deferred cleanup ran (the turn
+// given back, the entry's connection closed, the session's holds released
+// and its reader joined), and leaves every other bot playing.
 func (b *Bot) attempt(ctx context.Context) (entered bool, played time.Duration, err error) {
+	var start time.Time
+	defer func() {
+		if v := recover(); v != nil {
+			err = b.recovered("attempt", v)
+			if entered {
+				played = b.cfg.Clock.Now().Sub(start)
+			}
+		}
+	}()
 	b.publish(StateWaiting, nil)
 	turn, err := b.cfg.Gate.Take(ctx, b.account)
 	if err != nil {
 		return false, 0, err
 	}
+	// A panic in enter gives the turn back; Done is idempotent.
+	defer turn.Done()
 	b.publish(StateEntering, nil)
 	g, self, err := b.enter(ctx, turn)
+	// The turn ends before play: a bot in the world must not hold every
+	// other bot in Take.
 	turn.Done()
 	if err != nil {
 		return false, 0, err
 	}
-	start := b.cfg.Clock.Now()
+	entered, start = true, b.cfg.Clock.Now()
 	err = b.play(ctx, g, self)
 	return true, b.cfg.Clock.Now().Sub(start), err
 }
@@ -313,14 +359,23 @@ func (b *Bot) enter(ctx context.Context, turn *Turn) (gameSession, Self, error) 
 	if err != nil {
 		return nil, Self{}, err
 	}
+	// The connection is closed unless the entry is handed to play, on an
+	// error or a panic alike: a session left open would answer the next
+	// login AccountInUse.
+	handed := false
+	defer func() {
+		if !handed {
+			g.Close()
+		}
+	}()
 	self, err := b.net.enterGame(ctx, g, b.account, res.Keys, b.char, b.pin)
 	if err != nil {
-		g.Close()
 		return nil, Self{}, fmt.Errorf("enter game: %w", err)
 	}
 	// Reset the fleet backoff while the turn is held, before the next bot
 	// dials.
 	turn.Entered()
+	handed = true
 	return g, self, nil
 }
 
@@ -355,22 +410,31 @@ func (b *Bot) pin(name string, classID int32) {
 // play runs one session in the world: a fresh world model and event queue,
 // the reader goroutine and the brain, until the brain ends. Once ctx ends it
 // asks the brain to log out, which takes at most shutdownGrace. It closes
-// the connection and joins the reader before it returns.
+// the connection and joins the reader before it returns, a panic included:
+// the brain's own deferred releases (Brain.Run) run first.
 func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
+	done, logout := make(chan struct{}), make(chan struct{})
+	readerDone := make(chan struct{})
+	reading := false
+	defer func() {
+		close(done)
+		g.Close()
+		if reading {
+			<-readerDone
+		}
+	}()
 	w, err := NewWorld(self, b.cfg.Clock.Now())
 	if err != nil {
-		g.Close()
 		return err
 	}
 	q := NewEvents(eventLimit)
-	done, logout := make(chan struct{}), make(chan struct{})
-	readerDone := make(chan struct{})
 	go func() {
 		defer close(readerDone)
-		if err := g.ReadEvents(q, done); err != nil {
+		if err := b.read(g, q, done); err != nil {
 			q.push(connLost{err: err}, done)
 		}
 	}()
+	reading = true
 	cfg := b.brain
 	cfg.Rand = rand.New(rand.NewPCG(b.rng.Uint64(), b.rng.Uint64()))
 	cfg.LogoutLimit = shutdownGrace
@@ -378,19 +442,31 @@ func (b *Bot) play(ctx context.Context, g gameSession, self Self) error {
 	cfg.account = b.account
 	brain := NewBrain(w, q, g, b.cfg.Clock, cfg)
 	stop := context.AfterFunc(ctx, func() { close(logout) })
+	defer stop()
 	b.setInSession(true)
-	err = brain.Run(done, logout)
-	b.setInSession(false)
-	stop()
-	close(done)
-	g.Close()
-	<-readerDone
-	return err
+	defer b.setInSession(false)
+	return brain.Run(done, logout)
+}
+
+// read runs the session's reader: g's events into q until done closes or
+// the connection ends. A panic in it is the read error the reader queues as
+// connLost, so the brain ends the session as after a lost connection. It
+// runs on the reader goroutine play starts and joins.
+func (b *Bot) read(g gameSession, q *Events, done <-chan struct{}) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			err = b.recovered("reader", v)
+		}
+	}()
+	return g.ReadEvents(q, done)
 }
 
 // after decides what follows an attempt that ended with err: the delay
 // before the next one, or why the bot stops.
 func (b *Bot) after(entered bool, played time.Duration, err error) (time.Duration, error) {
+	if _, ok := errors.AsType[*panicError](err); ok {
+		return b.afterPanic(entered, played, err)
+	}
 	if entered {
 		return b.afterSession(played, err)
 	}
@@ -459,8 +535,7 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 		return 0, err
 	}
 	if played >= stableSession {
-		b.retry.reset()
-		b.aborts = 0
+		b.resetStable()
 	}
 	b.kicked = errors.Is(err, errServerClose) || errors.Is(err, errLeftWorld)
 	dead := deadLine(err)
@@ -481,6 +556,34 @@ func (b *Bot) afterSession(played time.Duration, err error) (time.Duration, erro
 		d = max(d, kickWait+jitter(b.rng, kickJitter))
 	}
 	return d, nil
+}
+
+// afterPanic decides after an attempt that panicked (panicError), in the
+// attempt or in its session's reader: a class of its own, counted apart from
+// the aborts. A bug a restart repeats stops the bot with ErrPanic after
+// maxAborts since its last stable session; until then the bot reconnects
+// on its own backoff, through the gate. recovered already logged and
+// counted the panic.
+func (b *Bot) afterPanic(entered bool, played time.Duration, err error) (time.Duration, error) {
+	if entered && played >= stableSession {
+		b.resetStable()
+	}
+	b.panics++
+	switch {
+	case entered && !b.cfg.Persistent:
+		return 0, fmt.Errorf("session ended: %w: %w", ErrPanic, err)
+	case b.panics >= maxAborts:
+		b.log.Error("bot panicked repeatedly: bot stops", "panics", b.panics)
+		return 0, fmt.Errorf("%w (%d since the last stable session): %w", ErrPanic, b.panics, err)
+	}
+	return b.retry.next(b.rng), nil
+}
+
+// resetStable is what a stable session resets: the backoff and the abort
+// and panic counts.
+func (b *Bot) resetStable() {
+	b.retry.reset()
+	b.aborts, b.panics = 0, 0
 }
 
 // deadLine reports a connection the kernel ended because the dialer's
