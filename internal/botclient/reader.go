@@ -155,6 +155,12 @@ var extEventDecoders = map[uint16]func(*wire.Reader) Event{
 	opGameExAutoSoulShot:   decodeExAutoSoulShot,
 	opGameExClosePartyRoom: func(*wire.Reader) Event { return ExClosePartyRoom{} },
 
+	opGameExOpenMPCC:                     func(*wire.Reader) Event { return ExOpenMPCC{} },
+	opGameExCloseMPCC:                    func(*wire.Reader) Event { return ExCloseMPCC{} },
+	opGameExMPCCPartyInfoUpdate:          decodeExMPCCPartyInfoUpdate,
+	opGameExMPCCShowPartyMemberInfo:      decodeExMPCCShowPartyMemberInfo,
+	opGameExMultiPartyCommandChannelInfo: decodeExMultiPartyCommandChannelInfo,
+
 	opGameExDuelAskStart:       decodeExDuelAskStart,
 	opGameExDuelReady:          func(r *wire.Reader) Event { return ExDuelReady{Party: r.ReadInt32() != 0} },
 	opGameExDuelStart:          func(r *wire.Reader) Event { return ExDuelStart{Party: r.ReadInt32() != 0} },

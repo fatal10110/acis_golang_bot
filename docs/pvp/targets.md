@@ -19,10 +19,11 @@ For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summ
    ([guards](guards.md#area-hits-and-bystanders)). A monster that hits the bot is held off until
    the cancel arrives (1952, then `ExDuelEnd`), then fought, then the bot rests. What cancels a
    duel: [duel end, duel opponent attackable](server-duels.md);
-2. never a party member, in an arena too (`character_social.go:204-206`, `:233-235`);
+2. never a party member or a member of its command channel, in an arena too
+   (`character_social.go:204-209`, `:233-239`; the channel's members as the bot keeps them,
+   [wire](wire.md#world-model-x4), #429);
 3. in the same arena: anyone else, clan mates, allies and bots included (D38;
-   `character_social.go:206`, `:235`), but a member of its command channel (`:205`), which the bot
-   does not track ([gap](README.md#risks-and-gaps));
+   `character_social.go:206`, `:235`);
 4. never a clan mate (`CharInfo` clan id equal to its own non-zero one; clanless players are not
    clan mates, `IsInSameClan`, `character_social.go:120-122`, `charinfo.go:121`) or ally (equal
    non-zero ally id, its own from `UserInfo`);

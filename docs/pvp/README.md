@@ -126,7 +126,7 @@ To file in the M13 backlog: second-profession rows (#332); a Colosseum preferenc
 shot-less mystics and bow rows, when a gatekeeper reaches it (#422, shipped); party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
 (M11, #424, shipped: [party duels](party.md#party-duels)); a challenge hold shared by all bots (#425, shipped); buying CP potions;
 fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
-command-channel mates in an arena (rule 3). Clan wars, sieges and the Olympiad are planned in
+command-channel mates in an arena (#429, shipped: [rule 2](targets.md#mayfight)). Clan wars, sieges and the Olympiad are planned in
 [war](war.md), [siege](siege.md) and [Olympiad](olympiad.md) (#602-#604), pending D40-D42.
 
 ## Files
