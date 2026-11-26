@@ -10,12 +10,13 @@ import (
 )
 
 // The reference gear tests' templates: grade D swords at four prices, a C
-// sword, a D two-handed sword and magic blunt, three shields, three light
+// sword, a D two-handed sword, magic blunt, dagger and bow, three shields, three light
 // sets (the middle one with a shield and a skill), a heavy and a robe set,
 // and jewelry.
 const (
 	refSword1, refSword2, refSword3, refSword4 int32 = 9101, 9102, 9103, 9104
 	refSwordC, refBigSword, refWand            int32 = 9105, 9106, 9107
+	refDagger, refBow                          int32 = 9108, 9109
 	refShield1, refShield2, refShield3         int32 = 9201, 9202, 9203
 	refLight1, refLight1Legs                   int32 = 9301, 9302
 	refLight2, refLight2Legs                   int32 = 9303, 9304
@@ -45,6 +46,8 @@ var refItems = func() map[int32]datapack.Item {
 	weapon(refSwordC, "rhand", "SWORD", false, 2, 1000, 150)
 	weapon(refBigSword, "lrhand", "BIGSWORD", false, 1, 500, 110)
 	weapon(refWand, "rhand", "BLUNT", true, 1, 150, 50)
+	weapon(refDagger, "rhand", "DAGGER", false, 1, 250, 70)
+	weapon(refBow, "lrhand", "BOW", false, 1, 350, 150)
 	armor(refShield1, "lhand", "", 50, datapack.Stats{SDef: 100})
 	armor(refShield2, "lhand", "", 70, datapack.Stats{SDef: 120})
 	armor(refShield3, "lhand", "", 90, datapack.Stats{SDef: 140})
@@ -117,6 +120,21 @@ func TestRefGear(t *testing.T) {
 			GearClass{Weapons: []string{"BIGSWORD"}, Armor: "HEAVY", Shield: true},
 			1,
 			append([]int32{refBigSword, refHeavy, refHeavyLegs}, jewels...), nil,
+		},
+		{
+			"rogue: dagger and middle light set, its skill without the shield",
+			refGearClass(7, false), 1,
+			append([]int32{refDagger, refLight2, refLight2Legs}, jewels...), refSkillFuncs,
+		},
+		{
+			"rogue with a bow row: the bow",
+			refGearClass(7, true), 1,
+			append([]int32{refBow, refLight2, refLight2Legs}, jewels...), refSkillFuncs,
+		},
+		{
+			"a bow row of a shield build: the bow, no shield",
+			refGearClass(0, true), 1,
+			append([]int32{refBow, refLight2, refLight2Legs}, jewels...), refSkillFuncs,
 		},
 		{"a grade with only a weapon", gearClassOf(defaultGearClasses(), 0), 2, []int32{refSwordC}, nil},
 	}
@@ -192,12 +210,32 @@ func TestPvPEngageRefGear(t *testing.T) {
 			}
 		})
 	}
+	t.Run("a bow row's reference wields the bow", func(t *testing.T) {
+		b := findBrain(t, nil)
+		ref := refTravel()
+		b.cfg.Travel.gear, b.cfg.Travel.sets, b.cfg.Travel.skills = ref.gear, ref.sets, ref.skills
+		b.cfg.Travel.classes[7] = findFighter // Rogue
+		b.world.object(pcID).ClassID = 7
+		b.pvp.opponents = map[int32]*Opponent{pcID: {Row: charmodel.Row{Bow: true}}}
+		_, opp, ok := b.pvpFighters(pcID)
+		if !ok {
+			t.Fatal("no fighters")
+		}
+		dagger, _ := b.pvpRef(b.cfg.Travel, 7, false, int(b.world.Self.Level))
+		bow, _ := b.pvpRef(b.cfg.Travel, 7, true, int(b.world.Self.Level))
+		if !opp.Row.Bow || opp.Profile.PAtk != bow.Profile.PAtk {
+			t.Errorf("opponent row bow %v, P. Atk %v, want the bow reference's %v", opp.Row.Bow, opp.Profile.PAtk, bow.Profile.PAtk)
+		}
+		if bow.Profile.PAtk <= dagger.Profile.PAtk {
+			t.Errorf("bow reference P. Atk %v, want above the dagger reference's %v", bow.Profile.PAtk, dagger.Profile.PAtk)
+		}
+	})
 	t.Run("a new level rebuilds the reference", func(t *testing.T) {
 		b := findBrain(t, nil)
 		ref := refTravel()
 		b.cfg.Travel.gear, b.cfg.Travel.sets, b.cfg.Travel.skills = ref.gear, ref.sets, ref.skills
-		naked, _ := b.pvpRef(b.cfg.Travel, 0, 19)
-		at20, _ := b.pvpRef(b.cfg.Travel, 0, 20)
+		naked, _ := b.pvpRef(b.cfg.Travel, 0, false, 19)
+		at20, _ := b.pvpRef(b.cfg.Travel, 0, false, 20)
 		if at20.Profile.PAtk <= naked.Profile.PAtk || at20.Profile.PDef <= naked.Profile.PDef {
 			t.Errorf("level 20 reference P. Atk %v, P. Def %v, want above level 19's naked %v, %v", at20.Profile.PAtk, at20.Profile.PDef, naked.Profile.PAtk, naked.Profile.PDef)
 		}

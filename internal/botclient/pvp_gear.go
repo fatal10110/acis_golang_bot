@@ -178,9 +178,10 @@ func (b *Brain) gearPvP(m *TravelMap, v *gearModel) {
 }
 
 // mixShares are the shares of the mix rows, each of the players playing
-// it, with its reference opponent: its class template at character level
-// (docs/pvp/model.md "Engage estimate"), no gear. A class the travel map
-// lacks is left out.
+// it, with its reference opponent: its class template at character level,
+// no gear (docs/pvp/model.md "PvP value"). Unlike the engage estimate's
+// reference opponent (Brain.pvpRef) it is not geared yet (#600). A class
+// the travel map lacks is left out.
 func mixShares(m *TravelMap, rows map[mixRow]int, level int) []charmodel.Share {
 	known := slices.SortedFunc(maps.Keys(rows), func(x, y mixRow) int {
 		return cmp.Or(cmp.Compare(x.class, y.class), cmp.Compare(x.row.ID, y.row.ID), boolCmp(x.row.Bow, y.row.Bow))

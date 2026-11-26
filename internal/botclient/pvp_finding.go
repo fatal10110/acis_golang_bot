@@ -416,7 +416,8 @@ func (b *Brain) engages(id int32) bool {
 
 // pvpFighters are the bot, by its reported stats, and the reference
 // opponent of player id's row: its class template at the bot's level in
-// the grade-typical gear of that level (Brain.pvpRef, docs/pvp/model.md).
+// the grade-typical gear of that level, a bow where the row shoots
+// (Brain.pvpRef, docs/pvp/model.md).
 // ok is false without the bot's stats, the opponent's class template or a
 // travel map.
 func (b *Brain) pvpFighters(id int32) (bot, opp charmodel.Fighter, ok bool) {
@@ -429,12 +430,14 @@ func (b *Brain) pvpFighters(id int32) (bot, opp charmodel.Fighter, ok bool) {
 		return bot, opp, false
 	}
 	level := max(int(s.Level), 1)
-	if opp, ok = b.pvpRef(m, o.ClassID, level); !ok {
+	var row charmodel.Row
+	if r := b.pvp.opponents[id]; r != nil {
+		row = r.Row
+	}
+	if opp, ok = b.pvpRef(m, o.ClassID, row.Bow, level); !ok {
 		return bot, opp, false
 	}
-	if r := b.pvp.opponents[id]; r != nil {
-		opp.Row = r.Row
-	}
+	opp.Row = row
 	bot = charmodel.Fighter{Profile: self, MaxCP: float64(s.MaxCP), Level: level, CON: int(s.CON), MEN: int(s.MEN)}
 	bot.Row, _ = charmodel.ClassRow(s.ClassID, b.bowEquipped())
 	return bot, opp, true

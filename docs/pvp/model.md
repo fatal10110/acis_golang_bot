@@ -76,7 +76,8 @@ row's M10 spot margin (tank 1.5, normal 2.0, glass cannon 3.0).
 Grade-typical gear (#553) is the loadout of the Expertise grade of the bot's level (none below 20)
 for the opponent class's default gear build (`defaultGearClasses`: weapon type, armor type,
 shield): the median-priced complete armor set of that armor type, the median-priced weapon of the
-build's first weapon type, with a one-handed weapon on a shield build the set's shield (else the
+build's first weapon type (a bow where the opponent's row shoots: a scout line seen wielding a bow,
+`ClassRow`), with a one-handed weapon on a shield build the set's shield (else the
 grade's median-priced shield), and the grade's median-priced necklace, two earrings and two rings;
 the complete set's skills count, enchants, dyes and passive skills do not. The median (the lower of
 an even count) skips both the grade's common items and its raid jewelry.
@@ -85,6 +86,8 @@ an even count) skips both the grade's common items and its raid jewelry.
 
 The expected share of won fights over the mix (row `r`, share `s_r`). A **reference opponent**
 plays its row's damage, DOT and control steps under their `Vs` gates against the bot's archetype.
+The mix's reference opponent is the class template at the character's level without gear; giving it
+the engage estimate's grade-typical gear is #600.
 Every poison step is gated `vs C, H` (`vs H` on HM; [rows](rows.md)), so melee, archer and
 battle-caster bots are never poisoned; bleeds (Bleed 96, Sting 223) are ungated.
 

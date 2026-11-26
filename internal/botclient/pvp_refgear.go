@@ -112,27 +112,44 @@ func median(ids []int32, price func(int32) int64) int32 {
 	return ids[(len(ids)-1)/2]
 }
 
+// refGearClass is the build the reference opponent of class wears gear
+// for: its default build (defaultGearClasses, not the bot persona's
+// table), with a bow and no shield where its row shoots (bow, a scout
+// line seen wielding a bow, charmodel.ClassRow).
+func refGearClass(class int32, bow bool) GearClass {
+	gc := gearClassOf(defaultGearClasses(), class)
+	if bow {
+		gc.Weapons, gc.Shield = []string{"BOW"}, false
+	}
+	return gc
+}
+
+// refKey keys the engage estimate's reference opponents (Brain.pvpRef).
+type refKey struct {
+	class int32
+	bow   bool
+}
+
 // pvpRef is the reference opponent of class at level (docs/pvp/model.md
 // "Engage estimate"): its class template at level wearing the
-// grade-typical gear (refGear) of its default build (defaultGearClasses,
-// not the bot persona's table) at the Expertise grade of level, no dyes,
-// no passive skills. The caller sets Row. Cached per class while level
-// holds, as engages runs per candidate each tick; ok is false without
-// class's template.
-func (b *Brain) pvpRef(m *TravelMap, class int32, level int) (charmodel.Fighter, bool) {
-	p := &b.pvp
+// grade-typical gear (refGear) of its build (refGearClass, a bow one where
+// bow) at the Expertise grade of level, no dyes, no passive skills. The
+// caller sets Row. Cached per class and bow while level holds, as engages
+// runs per candidate each tick; ok is false without class's template.
+func (b *Brain) pvpRef(m *TravelMap, class int32, bow bool, level int) (charmodel.Fighter, bool) {
+	p, key := &b.pvp, refKey{class, bow}
 	if p.refs == nil || p.refsLevel != level {
-		p.refs, p.refsLevel = make(map[int32]charmodel.Fighter), level
+		p.refs, p.refsLevel = make(map[refKey]charmodel.Fighter), level
 	}
-	if f, ok := p.refs[class]; ok {
+	if f, ok := p.refs[key]; ok {
 		return f, true
 	}
 	cl, ok := m.classes[class]
 	if !ok {
 		return charmodel.Fighter{}, false
 	}
-	items, funcs := m.refGear(gearClassOf(defaultGearClasses(), class), expertiseGrade(level))
+	items, funcs := m.refGear(refGearClass(class, bow), expertiseGrade(level))
 	f := charmodel.ModelFighter(charmodel.Build{Class: cl, Level: level, Mage: charmodel.MageClass(m.classes, class), Worn: items, Funcs: funcs})
-	p.refs[class] = f
+	p.refs[key] = f
 	return f, true
 }
