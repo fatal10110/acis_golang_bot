@@ -38,8 +38,8 @@ func bpRun(t *testing.T, ctx context.Context, tg *Target, account string, class 
 	t.Cleanup(func() {
 		if t.Failed() {
 			s := f.bot.Status()
-			t.Logf("%s: state %v class %d level %d HP %d/%d MP %d/%d rule %q party %q leader %q members %v left %q at %v",
-				f.name, s.State, s.ClassID, s.Level, s.HP, s.MaxHP, s.MP, s.MaxMP, s.Rule, s.Party, s.Leader, s.Members, s.PartyLeft, s.Position)
+			t.Logf("%s: state %v class %d level %d HP %d/%d MP %d/%d rule %q spot %q walk %q party %q leader %q members %v left %q at %v",
+				f.name, s.State, s.ClassID, s.Level, s.HP, s.MaxHP, s.MP, s.MaxMP, s.Rule, s.Spot, s.Walk, s.Party, s.Leader, s.Members, s.PartyLeft, s.Position)
 			t.Log(f.digest())
 			t.Log(f.visits())
 		}
@@ -234,6 +234,11 @@ func TestLiveBotPartyLeaderDeath(t *testing.T) {
 		// No member can raise it: the restart need not wait the
 		// party's two minutes (a persona default, D6).
 		p.Recover.ResurrectWait = 10 * time.Second
+		// The GM's kill, not the spot's monsters: a death holding a spot
+		// would pass over it and every spot of a like pack for 30
+		// minutes (SpotPolicy.DeathAvoid, PackShare), which left the
+		// restarted leader of a live run no spot of its party's band.
+		p.Spots.DeathAvoid = 0
 		return p
 	})
 	bpGains(t, ctx, "the party farming", leader, bpExpAll(leader), leader)
