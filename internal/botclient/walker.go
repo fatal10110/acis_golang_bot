@@ -435,6 +435,9 @@ func (b *Brain) standing(now time.Time) Point {
 	if w.floor.X == pos.X && w.floor.Y == pos.Y {
 		return w.floor
 	}
+	if b.walker().nav == nil {
+		return pos
+	}
 	if c, ok := w.plan.Locate(toLoc(pos)); ok {
 		pos.Z = int32(c.Z)
 	}

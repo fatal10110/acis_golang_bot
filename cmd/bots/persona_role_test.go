@@ -9,12 +9,12 @@ import (
 )
 
 // TestPresetRoles checks the role each preset's persona compiles its build
-// for (#323, #328, #331, D21): support and town are Support, farmer and
-// merchant are Damage (they farm alone), crafter is Crafter.
+// for (#323, #328, #331, D21): support and town are Support, farmer,
+// merchant and pvp are Damage (they farm alone), crafter is Crafter.
 func TestPresetRoles(t *testing.T) {
 	want := map[string]botclient.Role{
 		"farmer": botclient.RoleDamage, "support": botclient.RoleSupport, "merchant": botclient.RoleDamage,
-		"town": botclient.RoleSupport, "crafter": botclient.RoleCrafter,
+		"town": botclient.RoleSupport, "crafter": botclient.RoleCrafter, "pvp": botclient.RoleDamage,
 	}
 	for _, p := range presets {
 		if got := p.persona().Role; got != want[p.name] {

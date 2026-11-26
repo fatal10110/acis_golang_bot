@@ -57,7 +57,8 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 		for _, step := range rot {
 			r := step.rank()
 			if r != pass || step.Idle || r == rankAttack && underReserve ||
-				!step.passes(st) || !b.world.SkillReady(step.Skill, now) {
+				!step.passes(st) || !b.world.SkillReady(step.Skill, now) ||
+				step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) {
 				continue
 			}
 			switch step.Target {
@@ -138,7 +139,7 @@ func (b *Brain) sideCasting(t int32, now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	b.side = sideCast{}
-	if !b.world.SkillReady(sc.skill, now) || !b.mayFight(t, now) {
+	if !b.world.SkillReady(sc.skill, now) || !b.mayFight(t, now) || b.stepHeld(t, sc.skill, now) {
 		return Action{}, false
 	}
 	return b.castStep(t, sc.skill, false, now), true
@@ -179,7 +180,7 @@ func (b *Brain) sustain(now time.Time) (Action, bool) {
 		case TargetSelf:
 			return b.castOn(s.ObjectID, step.Skill, false, now), true
 		case TargetEnemy:
-			if id == 0 || id == s.ObjectID || !b.mayFight(id, now) {
+			if id == 0 || id == s.ObjectID || !b.mayFight(id, now) || b.stepHeld(id, step.Skill, now) {
 				continue
 			}
 			// The server refuses a seated cast (magic_skill.go, ErrSitting):

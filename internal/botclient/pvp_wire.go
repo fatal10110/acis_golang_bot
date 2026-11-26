@@ -83,7 +83,8 @@ func encodeRequestDuelAnswerStart(party, accepted bool) []byte {
 
 // encodeRequestTargetCancel is the Esc key: unselect 0 stops the bot's cast
 // inside its interrupt window and keeps the target, else clears the target
-// (network/targeting.go). Its pacing lands with the guards (X4b).
+// (network/targeting.go). The guards send one per own cast (guardState
+// escFor), within the per-connection frame limits (network/floodprotector.go).
 func encodeRequestTargetCancel() []byte {
 	w := wire.NewPacketWriter(opGameRequestTargetCancel)
 	w.WriteUint16(0) // unselect

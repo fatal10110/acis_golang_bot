@@ -74,6 +74,9 @@ type Opponent struct {
 	SeenAt         time.Time
 	LastCast       CastSeen
 	Kind           FightKind
+	// RootUntil is when the root the bot landed on it stops holding it
+	// (docs/pvp/guards.md "Arena edge"), zero for none.
+	RootUntil time.Time
 	// flag is the flag state last seen, what FlagBlinkAt and a change of
 	// CharInfo are told from.
 	flag uint8
@@ -141,24 +144,54 @@ type pvpWorld struct {
 	// owners are the owners' names of the summons and pets in sight (the
 	// NPCInfo title, network/visibility.go summon NPCInfo).
 	owners map[int32]string
-	duel   Duel
+	// radii are the decoded collision radii of the players, summons and
+	// NPCs in sight, what the area rule reaches them by.
+	radii map[int32]float64
+	duel  Duel
+	// asked is the duel challenge open for an answer, of either kind
+	// (Brain.declineDuel).
+	asked duelAsk
+	// root, guard and stand are the guards' (pvp_guards.go, pvp_area.go).
+	root  rootCast
+	guard guardState
+	stand poleStand
+}
+
+// duelAsk is an open duel challenge: when it came and whether it is a party
+// duel's.
+type duelAsk struct {
+	at    time.Time
+	party bool
 }
 
 // pvpEvent keeps the PvP world model with ev, received at now after the
 // World applied it, and reports when the PvP reaction to it is due: zero
-// for an event the PvP reaction does not cover.
+// for an event the PvP reaction does not cover, the next frame for a guard
+// stop (Brain.guardWake).
 func (b *Brain) pvpEvent(ev Event, now time.Time) time.Time {
+	at := b.pvpKeep(ev, now)
+	if g := b.guardWake(ev, now); !g.IsZero() && (at.IsZero() || g.Before(at)) {
+		at = g
+	}
+	return at
+}
+
+// pvpKeep keeps the PvP world model with ev, received at now, and reports
+// when the PvP reaction to it is due.
+func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 	p := &b.pvp
 	if p.opponents == nil {
-		p.opponents, p.owners = make(map[int32]*Opponent), make(map[int32]string)
+		p.opponents, p.owners, p.radii = make(map[int32]*Opponent), make(map[int32]string), make(map[int32]float64)
 	}
 	self := b.world.Self.ObjectID
 	switch e := ev.(type) {
 	case CharInfo:
+		p.radii[e.ObjectID] = e.CollisionRadius
 		if b.charInfo(e, now) {
 			return b.pvpReact(now)
 		}
 	case NPCInfo:
+		p.radii[e.ObjectID] = e.CollisionRadius
 		if e.Summon {
 			p.owners[e.ObjectID] = e.Title
 		} else {
@@ -180,10 +213,12 @@ func (b *Brain) pvpEvent(ev Event, now time.Time) time.Time {
 	case DeleteObject:
 		delete(p.opponents, e.ObjectID)
 		delete(p.owners, e.ObjectID)
+		delete(p.radii, e.ObjectID)
 	case TeleportToLocation:
 		if e.ObjectID == self && !e.Fast {
 			clear(p.opponents)
 			clear(p.owners)
+			clear(p.radii)
 		}
 	case MoveToLocation:
 		if e.ObjectID != self && b.fights(e.ObjectID, now) {
@@ -201,6 +236,7 @@ func (b *Brain) pvpEvent(ev Event, now time.Time) time.Time {
 	case SystemMessage:
 		return b.duelMessage(e, now)
 	case ExDuelAskStart:
+		p.asked = duelAsk{at: now, party: e.Party}
 		if d := b.duel(now); d.Phase == DuelIdle && !e.Party {
 			*d = Duel{Phase: DuelAsked, Name: e.Requester, Since: now, Result: d.Result}
 		}
@@ -242,6 +278,7 @@ func (b *Brain) charInfo(e CharInfo, now time.Time) bool {
 		r.Archetype = row.Archetype()
 	}
 	r.Tier = classTier(e.ClassID)
+	b.rootSeen(e.ObjectID, r, e.Abnormal, now)
 	r.ClanID, r.AllyID, r.Abnormal = e.ClanID, e.AllyID, e.Abnormal
 	r.CP, r.MaxCP, r.SeenAt = e.CP, e.MaxCP, now
 	r.blink(uint8(e.PvPFlag), now)
@@ -284,6 +321,7 @@ func classTier(id int32) int {
 func (b *Brain) castSeen(e MagicSkillUse, now time.Time) time.Time {
 	self := b.world.Self.ObjectID
 	if e.CasterID == self {
+		b.ownCast(e, now)
 		return time.Time{}
 	}
 	if r := b.pvp.opponents[e.CasterID]; r != nil {
@@ -312,6 +350,9 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 	switch e.ID {
 	case msgYouDidS1Dmg:
 		b.dealt(e.Number)
+		return time.Time{}
+	case msgResisted:
+		b.pvp.root.resisted = true
 		return time.Time{}
 	case msgS1AcceptedYourDuel, msgYouAcceptedS1Duel:
 		*d = Duel{Phase: DuelCountdown, Name: e.Text[0], Since: now}
@@ -492,9 +533,8 @@ func (b *Brain) fightKind(id int32, o *Object, now time.Time) FightKind {
 	return k
 }
 
-// fightRule applies MayFight's rules to o at now. Rule 3 (arena) is the
-// guards' (X4b), rule 7 (PK mode) X11's: until then ForceAttack lets nobody
-// pass.
+// fightRule applies MayFight's rules to o at now. Rule 7 (PK mode) is
+// X11's: until then ForceAttack lets nobody pass.
 func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 	// Rule 1: from the countdown to the end only the duel opponent, and
 	// only while fighting, even a clan mate or a party member.
@@ -516,7 +556,18 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 		}
 		return fightNone
 	}
-	if o.Kind != KindPlayer || b.friend(id) {
+	// Rule 2: never a party member, in an arena too.
+	if o.Kind != KindPlayer || b.partyMate(id) {
+		return fightNone
+	}
+	// Rule 3: in the bot's arena anyone else, clan mates, allies and bots
+	// included (D38; character_social.go SocialWithoutForce). A command
+	// channel mate is not told apart: the bot does not track channels.
+	if b.sameArena(id, now) {
+		return FightArena
+	}
+	// Rule 4.
+	if b.clanMate(id) {
 		return fightNone
 	}
 	attacking := b.world.attacking(id, now)
@@ -535,12 +586,18 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 }
 
 // friend reports whether player id is the bot's party member (rule 2), or
-// its clan mate or ally by its record (rule 4: an equal non-zero clan or
-// alliance id).
-func (b *Brain) friend(id int32) bool {
-	if _, mate := b.world.Party.Members[id]; mate {
-		return true
-	}
+// its clan mate or ally (rule 4).
+func (b *Brain) friend(id int32) bool { return b.partyMate(id) || b.clanMate(id) }
+
+// partyMate reports whether player id is the bot's party member.
+func (b *Brain) partyMate(id int32) bool {
+	_, mate := b.world.Party.Members[id]
+	return mate
+}
+
+// clanMate reports whether player id is the bot's clan mate or ally by its
+// record: an equal non-zero clan or alliance id.
+func (b *Brain) clanMate(id int32) bool {
 	r := b.pvp.opponents[id]
 	return r != nil && (r.ClanID != 0 && r.ClanID == b.world.Clan.ID || r.AllyID != 0 && r.AllyID == b.world.Self.AllyID)
 }
@@ -550,7 +607,9 @@ func (b *Brain) friend(id int32) bool {
 // or refused, never a party member's, clan mate's or ally's, and only while
 // the summon's own flag or karma (its owner's, refreshed by RelationChanged)
 // lets the bot attack it without force, whatever its NPCInfo's attackable
-// flag said. A flag of 2 is the flag guard's (X4b).
+// flag said, or in its arena while its owner is seen inside it by
+// arenaEdge (the server credits the summon's death by its owner's zone). A
+// flag of 2 is the flag guard's.
 func (b *Brain) maySummon(id int32, o *Object, now time.Time) bool {
 	name := b.pvp.owners[id]
 	for _, m := range b.world.Party.Members {
@@ -565,6 +624,14 @@ func (b *Brain) maySummon(id int32, o *Object, now time.Time) bool {
 		if oo := b.world.object(owner); !oo.Dead && b.fightRule(owner, oo, now) != fightNone {
 			return false
 		}
+	}
+	if own := b.arenaAt(b.world.Self.Position(now)); own.Arena != 0 {
+		oo := b.world.object(b.playerNamed(name))
+		if oo == nil {
+			return false
+		}
+		at := b.arenaAt(oo.Position(now))
+		return at.Arena == own.Arena && at.Edge > arenaEdge
 	}
 	return b.persona.PvP.FightFlagged && (o.Karma > 0 || o.PvPFlag != 0)
 }
@@ -689,6 +756,9 @@ func segmentDist(x, y, ax, ay, bx, by float64) float64 {
 // the duel (docs/pvp/server-duels.md). The critical, heal and raise rules
 // still go first.
 func (b *Brain) ruleDuel(now time.Time) (Action, bool) {
+	if a, ok := b.declineDuel(now); ok {
+		return a, true
+	}
 	if !b.inDuel(now) {
 		return Action{}, false
 	}
@@ -700,4 +770,18 @@ func (b *Brain) ruleDuel(now time.Time) (Action, bool) {
 		return b.toggle(now), true
 	}
 	return b.fight(id, now), true
+}
+
+// declineDuel declines the open duel challenge, of either kind, at once (at
+// the PvP reaction to ExDuelAskStart) when the persona takes no duels
+// (PvPPolicy.Duels, docs/pvp/modes.md): one RequestDuelAnswerStart per
+// challenge, bounded by the per-connection frame limits
+// (network/floodprotector.go), as the server takes the first answer. A
+// challenge left open lapses after duelAskOpen.
+func (b *Brain) declineDuel(now time.Time) (Action, bool) {
+	a := b.pvp.asked
+	if b.persona.PvP.Duels || a.at.IsZero() || now.Sub(a.at) > duelAskOpen {
+		return Action{}, false
+	}
+	return Action{kind: actDuelAnswer, payload: encodeRequestDuelAnswerStart(a.party, false)}, true
 }
