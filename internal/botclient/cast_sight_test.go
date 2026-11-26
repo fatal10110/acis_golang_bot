@@ -47,9 +47,11 @@ func sightBrain(t *testing.T, geodata bool, class, level int32, self, at Point, 
 // stand point the bot's geodata sees the leader from within the cast's
 // range, or, where it sees the leader from where it stands though the
 // server did not, to a melee stand point with the straight line open. With
-// no geodata, a leader that moved, or the server taking a cast at the leader
-// meanwhile, the cast goes out again from where the bot stands once its
-// castRefusedHold ends, as before.
+// no geodata, a leader that moved, the bot moved off its stand, no stand
+// point the bot reaches, the bot held in place by Ultimate Defense, or the
+// server taking a cast at the leader meanwhile, the cast goes out again from
+// where the bot stands once its castRefusedHold ends, as before, and the
+// refusal is forgotten.
 func TestCastSight(t *testing.T) {
 	// inU is inside the U's west mouth, 208 from behindBase past the U's
 	// base: in cast range, out of sight. open and openFar stand on open
@@ -98,6 +100,24 @@ func TestCastSight(t *testing.T) {
 			},
 		},
 		{
+			name: "the bot moved off its stand: casts again", cast: raise, raise: true, geodata: true, self: inU, at: behindBase,
+			between: func(b *Brain, now time.Time) {
+				b.world.Apply(StopMove{ObjectID: selfID, Pos: scenePoint(geotest.UInside, 0, 3)}, now)
+			},
+		},
+		{
+			// Every point in sight of the leader inside the pocket lies in
+			// it, past a ring of wall the bot cannot cross.
+			name: "no stand point the bot reaches: casts again", cast: raise, raise: true, geodata: true,
+			self: scenePoint(geotest.PocketOutside, 5, 0), at: scenePoint(geotest.PocketInside, 0, 0),
+		},
+		{
+			name: "immobile under Ultimate Defense: casts again", cast: heal, geodata: true, self: inU, at: behindBase,
+			between: func(b *Brain, now time.Time) {
+				b.world.Buffs = Buffs{skillUltimateDefense: time.Time{}}
+			},
+		},
+		{
 			name: "a cast at the leader taken meanwhile: casts again", cast: raise, raise: true, geodata: true, self: inU, at: behindBase,
 			between: func(b *Brain, now time.Time) {
 				if err := b.handle([]Event{MagicSkillUse{CasterID: selfID, TargetID: pcID, SkillID: skillResurrection, Level: 1}}, now); err != nil {
@@ -135,6 +155,9 @@ func TestCastSight(t *testing.T) {
 			if !tt.wantWalk {
 				if !ok || a.kind != actCast || a.object != pcID {
 					t.Fatalf("next cast = kind %d object %#x walk %v, %v; want a cast at the leader", a.kind, a.object, a.walk, ok)
+				}
+				if b.unseen != (unseenState{}) {
+					t.Fatalf("refusal record %+v kept, want it cleared", b.unseen)
 				}
 				return
 			}
