@@ -138,10 +138,12 @@ type Step struct {
 	// opponent is a caster or healer, cast only as such an answer, and at
 	// reuse against any other opponent; Break only while breaking off
 	// (X6b) and Peel only on an enemy attacking the bot's healer or leader
-	// (X9): neither is cast before those land.
+	// (X9): neither is cast before those land. Sighted also puts a TargetSelf
+	// step up out of combat once a player of Vs the bot may fight comes
+	// within sightedReach (ruleRebuff, sightedBuff; #557).
 	Vs                   []charmodel.Archetype
 	PvP, Interrupt, Hold bool
-	Break, Peel          bool
+	Break, Peel, Sighted bool
 }
 
 // stepState is what a step's gates read at one decision.

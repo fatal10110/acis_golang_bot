@@ -58,9 +58,9 @@ profession's row until #332.
 | KN | Stuns at reuse; heavy armor. | Holds Shield Stun for heals and long casts. | 45 Divine Heal @28 S<40 (long-cast rule); 70 Drain Health S<60; 110 Ultimate Defense S<20 vs M, only where it will not break off ([Ultimate Defense](layer.md#ultimate-defense)). vs A: 112 Deflect Arrow @24 buffed out of combat once an archer is in sight. | tank 20 |
 | WA | Stuns, smashes. | Lionheart, then holds Stun Attack for casts. | 121 Battle Roar @28 S<30. | normal 30 |
 | RO | Bleeds and blows; Ultimate Evasion. | Dashes in; bow: Stunning Shot on long casts. | 111 Ultimate Evasion @28 S<30 vs M, A (no help against magic). | normal 30 |
-| EK | Trades blows behind a shield. | Entangle a kiting caster, closes in. | 58 Elemental Heal @20 S<50 (long-cast rule); 110 Ultimate Defense S<20 vs M, as KN; 112 Deflect Arrow vs A. | normal 30 |
+| EK | Trades blows behind a shield. | Entangle a kiting caster, closes in. | 58 Elemental Heal @20 S<50 (long-cast rule); 110 Ultimate Defense S<20 vs M, as KN; 112 Deflect Arrow vs A, as KN. | normal 30 |
 | ES | Bow: Entangle, kite and shoot. Dagger: blows. | Closes in (dagger) or shoots (bow). | 58 Elemental Heal S<50 (long-cast rule); 111 Ultimate Evasion S<30 vs M, A. | normal 30 |
-| PK | Power Break, Freezing Strike, Sting. | Drains and poisons, closes in. | 70 Drain Health S<60; 110 Ultimate Defense S<20 vs M, as KN; 112 Deflect Arrow vs A. | normal 30 |
+| PK | Power Break, Freezing Strike, Sting. | Drains and poisons, closes in. | 70 Drain Health S<60; 110 Ultimate Defense S<20 vs M, as KN; 112 Deflect Arrow vs A, as KN. | normal 30 |
 | AS | Power Break, then blows. | Drains and poisons, hardest blows. | 70 Drain Health S<60; 111 Ultimate Evasion S<30 vs M, A. | glass 40 |
 | OR | Smashes; no Rage. | Rage and Lionheart, holds Stun Attack. | 176 Frenzy @32 S<30, else 139 Guts @36; 121 Battle Roar S<30. | tank 20 |
 | MO | Stunning Fist at reuse, Hurricane Assault. | Cripples a kiter, holds Stunning Fist. | none | normal 30 |
