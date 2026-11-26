@@ -11,7 +11,6 @@ import (
 // Skills and reagents of the reagent tests (aCis_datapack/data/xml skills
 // and items ids).
 const (
-	skillSonicBuster    int32 = 9
 	skillStormCubic     int32 = 10
 	skillDeathSpike     int32 = 1148
 	skillGreaterMight   int32 = 1388

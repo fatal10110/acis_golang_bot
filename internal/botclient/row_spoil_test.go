@@ -28,6 +28,7 @@ var spoilRows = []struct {
 }{
 	{"WF", DwarvenFighter.ID, 10, "BLUNT", []int32{skillSpoil, skillSweeper}, 0},
 	{"SC", classScavenger, 20, "BLUNT", []int32{skillSpoil, skillStunAttack, skillSweeper}, skillStunAttack},
+	{"BH", classBountyHunter, 40, "BLUNT", []int32{skillSpoil, skillHammerCrush, skillStunAttack, skillSweeper}, skillHammerCrush},
 }
 
 // mustSend sends a at now through the brain's own send path.
