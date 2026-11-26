@@ -225,7 +225,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	}
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
 	sh := shared{
-		claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters,
+		claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), challenges: botclient.NewChallengeHolds(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters,
 		ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
 	}
 	// The navigation opens before the spots: the registry drops the spots in

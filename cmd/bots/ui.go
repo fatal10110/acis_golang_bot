@@ -320,7 +320,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 			Log:        log,
 		},
 		shared: shared{
-			claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget,
+			claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), challenges: botclient.NewChallengeHolds(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget,
 			ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
 		},
 		secret:   secret,
