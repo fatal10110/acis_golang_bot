@@ -181,6 +181,10 @@ func (b *Brain) ruleOutnumbered(now time.Time) (Action, bool) {
 	if below(s.HP, s.MaxHP, b.build().Thresholds.OutmatchedHP) && b.mayFlee(now) {
 		return b.flee(hits[0], now), true
 	}
+	if !b.selfHealer() && b.partyFoe(now) != 0 {
+		// A party fight picks its own target ("party fight").
+		return Action{}, false
+	}
 	if s.Sitting {
 		return b.toggle(now), true
 	}
