@@ -272,6 +272,7 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 		if e.ObjectID == self && !e.Fast {
 			clear(p.opponents)
 			clear(p.owners)
+			clear(p.petHeals)
 			clear(p.radii)
 			clear(p.hits)
 			clear(p.struck)

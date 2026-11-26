@@ -112,10 +112,18 @@ func TestPvPSummonFirst(t *testing.T) {
 		{
 			name: "a heal older than enemyHealerFor no longer counts",
 			setup: func(t *testing.T, b *Brain) {
-				healed(t, b, now.Add(-enemyHealerFor-time.Second))
 				pair(t, b, Point{Y: -300}, 5, 40)
+				healed(t, b, now.Add(-enemyHealerFor-time.Second))
 			},
 			wantRule: "attacked", wantKind: actSelect, wantObject: pvpThird,
+		},
+		{
+			name: "a heal exactly enemyHealerFor ago still counts",
+			setup: func(t *testing.T, b *Brain) {
+				pair(t, b, Point{Y: -300}, 5, 40)
+				healed(t, b, now.Add(-enemyHealerFor))
+			},
+			wantRule: "attacked", wantKind: actSelect, wantObject: pvpSummon,
 		},
 		{
 			name: "a pet's heal on another player does not count",
@@ -214,6 +222,35 @@ func TestPvPSummonFirst(t *testing.T) {
 			}
 			if tc.check != nil {
 				tc.check(t, b)
+			}
+		})
+	}
+}
+
+// TestPvPSummonHealForgotten checks that a recorded pet heal is dropped when
+// the pet leaves sight and when the bot teleports, so no heal outlives the
+// objects it was seen on.
+func TestPvPSummonHealForgotten(t *testing.T) {
+	tests := []struct {
+		name  string
+		event Event
+	}{
+		{name: "the pet is deleted", event: DeleteObject{ObjectID: pvpSummon}},
+		{name: "the bot teleports", event: TeleportToLocation{ObjectID: selfID, Pos: Point{X: 5000}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b := pvpBrain(t, false, nil)
+			b.cfg.Travel.skills[datapack.SkillRef{ID: skillHealTrick, Level: 1}] = datapack.Skill{Type: "HEAL"}
+			b.handleOne(t, CharInfo{ObjectID: pvpThird, Name: "caller", PvPFlag: 1, Pos: Point{Y: -300}, RunSpeed: 100}, t0)
+			b.handleOne(t, NPCInfo{ObjectID: pvpSummon, NPCID: 12077, Summon: true, Attackable: true, PvPFlag: 1, Title: "caller", Pos: Point{X: -400}}, t0)
+			b.handleOne(t, MagicSkillUse{CasterID: pvpSummon, TargetID: pvpThird, SkillID: skillHealTrick, Level: 1}, t0)
+			if _, ok := b.pvp.petHeals[pvpSummon]; !ok {
+				t.Fatal("the pet's heal on its owner was not recorded")
+			}
+			b.handleOne(t, tc.event, t0)
+			if _, ok := b.pvp.petHeals[pvpSummon]; ok {
+				t.Errorf("the pet's heal is still recorded after %s", tc.name)
 			}
 		})
 	}
