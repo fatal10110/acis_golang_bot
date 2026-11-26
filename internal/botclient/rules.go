@@ -956,8 +956,9 @@ func (b *Brain) ruleGoal(now time.Time) (Action, bool) {
 	return b.persona.Goal(b.world, now)
 }
 
-// ruleIdle is rule 10: now and then a small move around idleCenter, a turn,
-// an emote or a sit; a bot sitting idle stands up instead.
+// ruleIdle is rule 10: now and then a small move around idleCenter (a
+// stroll in the open, driftPoint), a turn, an emote or a sit; a bot sitting
+// idle stands up instead.
 func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 	s, p := &b.world.Self, &b.persona
 	if s.InCombat || s.Moving(now) {
@@ -979,12 +980,10 @@ func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 	angle := b.rng.Float64() * 2 * math.Pi
 	switch r := b.rng.IntN(10); {
 	case r < 5:
-		dist := int32(float64(p.IdleRadius) * math.Sqrt(b.rng.Float64()))
-		to := offset(b.idleCenter(from), angle, dist)
-		to.Z = from.Z
-		to = b.walker().inSCC(from, to)
-		if a, st := b.goTo(to, walkSlop, walkIdle, now); st == walkWalking {
-			return a, true
+		if to, ok := b.driftPoint(from, angle); ok {
+			if a, st := b.goTo(to, walkSlop, walkIdle, now); st == walkWalking {
+				return a, true
+			}
 		}
 		// No drift from here (no geodata, or nowhere to go): a turn, or
 		// nothing when no turn step holds on the geodata.
@@ -996,6 +995,43 @@ func (b *Brain) ruleIdle(now time.Time) (Action, bool) {
 	default:
 		return b.toggle(now), true
 	}
+}
+
+// driftTries is how many drift points driftPoint draws before the drift
+// gives up for a turn.
+const driftTries = 4
+
+// driftPoint is where an idle drift from from walks: a point within
+// IdleRadius of idleCenter, first along angle, then along fresh random
+// angles, up to driftTries of them. On geodata the point is ground of the
+// bot's SCC (inSCC) in the open (walker.open: no roof, upper floor or deck
+// over it), and, while the bot is within the radius, one straight checked
+// segment away (walker.segmentOK): a drift is a stroll in the open, never a
+// route into a building or round a wall (#617). A bot beyond the radius
+// (out in the field, or just landed) routes back toward the centre.
+// Without geodata the first point is taken as it is.
+func (b *Brain) driftPoint(from Point, angle float64) (Point, bool) {
+	p, w := &b.persona, b.walker()
+	center := b.idleCenter(from)
+	r := int64(p.IdleRadius)
+	near := horizontal2(from, center) <= r*r
+	for i := range driftTries {
+		if i > 0 {
+			angle = b.rng.Float64() * 2 * math.Pi
+		}
+		dist := int32(float64(p.IdleRadius) * math.Sqrt(b.rng.Float64()))
+		to := offset(center, angle, dist)
+		to.Z = from.Z
+		to = w.inSCC(from, to)
+		if w.nav == nil {
+			return to, true
+		}
+		if !w.open(to) || near && !w.segmentOK(from, to) {
+			continue
+		}
+		return to, true
+	}
+	return Point{}, false
 }
 
 // toggle is the sit/stand toggle, or nothing while an earlier toggle waits

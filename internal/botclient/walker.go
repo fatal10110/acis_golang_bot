@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
@@ -735,6 +736,27 @@ func (w *walker) target(dest Point) (to location.Location, same, ok bool) {
 		l.X, l.Y = engine.WorldX(c.X), engine.WorldY(c.Y)
 	}
 	return l, same, ok
+}
+
+// openClear is how far over a point a layer of its geodata cell may lie
+// with the point still in the open (walker.open): more than a step's climb,
+// less than a storey.
+const openClear = 64
+
+// open reports whether p, on its cell's layer, is in the open: no layer of
+// the cell lies more than openClear over it, so no roof, upper floor or
+// deck covers it. Every point is open without geodata.
+func (w *walker) open(p Point) bool {
+	if w.nav == nil {
+		return true
+	}
+	var buf [block.MaxLayers]block.Cell
+	for _, c := range w.nav.Engine.AppendLayers(buf[:0], engine.GeoX(int(p.X)), engine.GeoY(int(p.Y))) {
+		if int32(c.Height) > p.Z+openClear {
+			return false
+		}
+	}
+	return true
 }
 
 // inSCC is p moved toward at onto ground of at's SCC: the first point of the
