@@ -128,11 +128,13 @@ func pvpMeet(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, c *Cli
 	}
 }
 
-// pvpSelf follows a client's own HP and PvP flag from what it reads: its
-// UserInfo carries the flag (character_pvpflag.go), StatusUpdate the HP.
+// pvpSelf follows a client's own CP, HP, MP and PvP flag from what it
+// reads: its UserInfo carries the flag (character_pvpflag.go) and the
+// vitals, StatusUpdate the vitals.
 type pvpSelf struct {
 	id           int32
 	hp, maxHP    int32
+	cp, mp       int32
 	flagged      bool
 	flaggedAt    time.Time
 	unflaggedAt  time.Time
@@ -146,7 +148,7 @@ func (s *pvpSelf) note(ev botclient.Event) {
 		if e.ObjectID != s.id {
 			return
 		}
-		s.hp, s.maxHP = e.HP, e.MaxHP
+		s.hp, s.maxHP, s.cp, s.mp = e.HP, e.MaxHP, e.CP, e.MP
 		switch {
 		case e.PvPFlag != 0 && !s.flagged:
 			s.flagged, s.flaggedAt, s.unflaggedAt = true, time.Now(), time.Time{}
@@ -162,6 +164,12 @@ func (s *pvpSelf) note(ev botclient.Event) {
 		}
 		if e.Set&botclient.StatusMaxHP != 0 {
 			s.maxHP = e.MaxHP
+		}
+		if e.Set&botclient.StatusCP != 0 {
+			s.cp = e.CP
+		}
+		if e.Set&botclient.StatusMP != 0 {
+			s.mp = e.MP
 		}
 	default:
 		return
@@ -255,9 +263,10 @@ func TestLivePvPDuel(t *testing.T) {
 	if self.maxHP == 0 {
 		t.Fatalf("%s read none of its own HP before the duel", c.Self.Name)
 	}
-	start := self.hp
+	start, startCP, startMP := self.hp, self.cp, self.mp
 	self.lowest, self.lowestFollow = start, true
-	t.Logf("%s accepted the duel; %s HP %d/%d, %s HP %d/%d", bot.name, c.Self.Name, start, self.maxHP, bot.name, botStart.HP, botStart.MaxHP)
+	t.Logf("%s accepted the duel; %s CP %d HP %d/%d MP %d, %s CP %d HP %d/%d MP %d", bot.name,
+		c.Self.Name, startCP, start, self.maxHP, startMP, bot.name, botStart.CP, botStart.HP, botStart.MaxHP, botStart.MP)
 
 	// Duellists attack each other without force once both are Duelling;
 	// a ctrl-click is as good and raises no flag in the same duel.
@@ -283,9 +292,13 @@ func TestLivePvPDuel(t *testing.T) {
 	// The end restores the CP, HP and MP saved at the start
 	// (network/duel.go restoreDuelCondition), each player told by a
 	// StatusUpdate.
-	watchUntilBy(t, ctx, c, c.Self.Name+"'s and "+bot.name+"'s HP back", time.Now().Add(30*time.Second), func() bool {
-		return self.hp >= start && bot.bot.Status().HP >= botStart.HP
+	watchUntilBy(t, ctx, c, c.Self.Name+"'s and "+bot.name+"'s CP, HP and MP back", time.Now().Add(30*time.Second), func() bool {
+		s := bot.bot.Status()
+		return self.cp >= startCP && self.hp >= start && self.mp >= startMP &&
+			s.CP >= botStart.CP && s.HP >= botStart.HP && s.MP >= botStart.MP
 	}, track)
+	s := bot.bot.Status()
+	t.Logf("vitals back: %s CP %d HP %d MP %d, %s CP %d HP %d MP %d", c.Self.Name, self.cp, self.hp, self.mp, bot.name, s.CP, s.HP, s.MP)
 }
 
 // TestLivePvPFightBack has a client force-attack a pvp bot
