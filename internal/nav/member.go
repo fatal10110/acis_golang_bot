@@ -63,6 +63,10 @@ type Hierarchy struct {
 	// searchOnly turns Route's straight segment off, so that tests compare
 	// its routes with the full search's.
 	searchOnly bool
+	// sameCap, when set, replaces the cell cap of a route between two ends
+	// of one cluster (sameClusterCap), so that tests and the owner sample
+	// compare routes under another cap: math.MaxInt is the free search alone.
+	sameCap int
 }
 
 // keptMemberScratch bounds the idle scratch a Hierarchy keeps: cold Locates
