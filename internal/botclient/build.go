@@ -256,10 +256,14 @@ func (m MeleePolicy) allows(underReserve, alone bool) bool {
 // Toggle is a combat toggle (docs/strategy.md, Design section 9): fight
 // turns it on at engage while the bot's MP is above MPAbove and off once MP
 // falls under it; out of combat and before the bot sits it goes off. From
-// is the level it starts at, as Step.From.
+// is the level it starts at, as Step.From. Weapons keeps it on only while
+// the worn weapon's datapack kind is one of them, as Step.Weapons (WL's
+// Polearm Accuracy, whose bonus applies only <using kind="POLE"/>); it goes
+// off with another weapon.
 type Toggle struct {
 	Skill, From int32
 	MPAbove     int
+	Weapons     []string
 }
 
 // ClassKit is what one class plays (docs/strategy.md, Design section 4): the
