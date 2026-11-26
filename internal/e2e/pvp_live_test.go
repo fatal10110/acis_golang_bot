@@ -616,9 +616,11 @@ func TestLivePvPHealer(t *testing.T) {
 	})
 
 	// The client's Heal on the flagged GM flags the client
-	// (character_pvpflag.go skillTargetFlagsPvP).
+	// (character_pvpflag.go skillTargetFlagsPvP). A beneficial cast on a
+	// flagged player outside the caster's party needs ctrl, else the
+	// server answers 109 (character_social.go beneficialCastAllowed).
 	healFrom := leader.seen()
-	for _, p := range [][]byte{botclient.EncodeAction(gm.Self.ObjectID, c.Pos()), botclient.EncodeRequestMagicSkillUse(pvpHeal, false)} {
+	for _, p := range [][]byte{botclient.EncodeAction(gm.Self.ObjectID, c.Pos()), botclient.EncodeRequestMagicSkillUse(pvpHeal, true)} {
 		if err := c.Send(ctx, p); err != nil {
 			t.Fatal(err)
 		}
