@@ -51,36 +51,48 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 	if len(rot) == 0 {
 		return Action{}, false
 	}
-	self := b.world.Self.ObjectID
 	st := b.stepState(id, rot, now)
 	for pass := rankSelf; pass <= rankAttack; pass++ {
 		for _, step := range rot {
-			r := step.rank()
-			if r != pass || step.Idle || r == rankAttack && underReserve ||
-				!step.passes(st) || !b.world.SkillReady(step.Skill, now) ||
-				step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) {
+			if step.rank() != pass {
 				continue
 			}
-			switch step.Target {
-			case TargetSelf:
-				if !b.buffDue(self, step.Skill, now) {
-					continue
-				}
-				return b.castOn(self, step.Skill, false, now), true
-			case TargetLeaderTarget:
-				if !b.leaderTarget(id) {
-					continue
-				}
-			case TargetOtherAttacker:
-				if a, ok := b.otherCast(id, step.Skill, now); ok {
-					return a, true
-				}
-				continue
+			if a, ok := b.tryStep(id, step, st, underReserve, now); ok {
+				return a, true
 			}
-			return b.castStep(id, step.Skill, r == rankAttack, now), true
 		}
 	}
 	return Action{}, false
+}
+
+// tryStep is the cast of step, fighting id at now with gate state st, when
+// it goes: not Idle, an attack only with MP at the reserve or more, its
+// gates pass, its skill is ready and the guards do not hold it, a
+// self-target step only under the stack rule, a step on the leader's target
+// only on that target, a step on another attacker on one the bot is not
+// fighting. ok is false when it does not.
+func (b *Brain) tryStep(id int32, step Step, st stepState, underReserve bool, now time.Time) (Action, bool) {
+	r := step.rank()
+	if step.Idle || r == rankAttack && underReserve ||
+		!step.passes(st) || !b.world.SkillReady(step.Skill, now) ||
+		step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) {
+		return Action{}, false
+	}
+	switch step.Target {
+	case TargetSelf:
+		self := b.world.Self.ObjectID
+		if !b.buffDue(self, step.Skill, now) {
+			return Action{}, false
+		}
+		return b.castOn(self, step.Skill, false, now), true
+	case TargetLeaderTarget:
+		if !b.leaderTarget(id) {
+			return Action{}, false
+		}
+	case TargetOtherAttacker:
+		return b.otherCast(id, step.Skill, now)
+	}
+	return b.castStep(id, step.Skill, r == rankAttack, now), true
 }
 
 // leaderTarget reports whether id is the target of a TargetLeaderTarget
@@ -173,7 +185,7 @@ func (b *Brain) sustain(now time.Time) (Action, bool) {
 	id, rot := b.world.Target, b.build().Kit.Rotation
 	st := b.stepState(id, rot, now)
 	for _, step := range rot {
-		if step.SelfHPBelow == 0 || !slices.Contains(critSustain, step.Skill) || !step.passes(st) || !b.world.SkillReady(step.Skill, now) {
+		if step.SelfHPBelow == 0 || !slices.Contains(critSustain, step.Skill) || !step.passes(st) || !b.world.SkillReady(step.Skill, now) || b.longCastHeld(step.Skill, now) {
 			continue
 		}
 		switch step.Target {

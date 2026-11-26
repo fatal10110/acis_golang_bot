@@ -386,31 +386,42 @@ func (b *Brain) ruleHunt(now time.Time) (Action, bool) {
 }
 
 // engages is the engage estimate against player id (docs/pvp/model.md
-// "Engage estimate"): the bot, by its reported stats, against the reference
-// opponent of id's row, its class template at the bot's level, with the
-// bot row's spot margin (marginNormal without one), over the PvP row table
-// (empty until X6). False without the bot's stats, the opponent's class
-// template or a travel map.
+// "Engage estimate"): the bot against the reference opponent of id's row
+// (pvpFighters), with the bot row's spot margin (marginNormal without one),
+// over the PvP row table (Brain.pvpRows). False without the bot's stats,
+// the opponent's class template or a travel map.
 func (b *Brain) engages(id int32) bool {
-	m, o, s := b.cfg.Travel, b.world.object(id), &b.world.Self
-	if m == nil || o == nil {
+	bot, opp, ok := b.pvpFighters(id)
+	if !ok {
 		return false
 	}
-	self := b.reported()
-	cl, ok := m.classes[o.ClassID]
-	if !ok || self.MaxHP <= 0 || self.PAtkSpd <= 0 {
-		return false
-	}
-	level := max(int(s.Level), 1)
-	opp := charmodel.ModelFighter(charmodel.Build{Class: cl, Level: level, Mage: charmodel.MageClass(m.classes, o.ClassID)})
-	if r := b.pvp.opponents[id]; r != nil {
-		opp.Row = r.Row
-	}
-	bot := charmodel.Fighter{Profile: self, MaxCP: float64(s.MaxCP), Level: level, CON: int(s.CON), MEN: int(s.MEN)}
-	bot.Row, _ = charmodel.ClassRow(s.ClassID, b.bowEquipped())
 	margin := b.build().Kit.SpotMargin
 	if margin <= 0 {
 		margin = marginNormal
 	}
-	return charmodel.Engage(bot, opp, b.pvp.rows, margin)
+	return charmodel.Engage(bot, opp, b.pvpRows(), margin)
+}
+
+// pvpFighters are the bot, by its reported stats, and the reference
+// opponent of player id's row: its class template at the bot's level
+// (docs/pvp/model.md). ok is false without the bot's stats, the
+// opponent's class template or a travel map.
+func (b *Brain) pvpFighters(id int32) (bot, opp charmodel.Fighter, ok bool) {
+	m, o, s := b.cfg.Travel, b.world.object(id), &b.world.Self
+	if m == nil || o == nil {
+		return bot, opp, false
+	}
+	self := b.reported()
+	cl, ok := m.classes[o.ClassID]
+	if !ok || self.MaxHP <= 0 || self.PAtkSpd <= 0 {
+		return bot, opp, false
+	}
+	level := max(int(s.Level), 1)
+	opp = charmodel.ModelFighter(charmodel.Build{Class: cl, Level: level, Mage: charmodel.MageClass(m.classes, o.ClassID)})
+	if r := b.pvp.opponents[id]; r != nil {
+		opp.Row = r.Row
+	}
+	bot = charmodel.Fighter{Profile: self, MaxCP: float64(s.MaxCP), Level: level, CON: int(s.CON), MEN: int(s.MEN)}
+	bot.Row, _ = charmodel.ClassRow(s.ClassID, b.bowEquipped())
+	return bot, opp, true
 }

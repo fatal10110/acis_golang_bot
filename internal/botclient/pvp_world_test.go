@@ -139,7 +139,7 @@ func TestPvPOpponentRecord(t *testing.T) {
 
 	// The last cast lands at arrival plus hit time; a cancel clears it.
 	b.handleOne(t, castAt(pcID, pvpThird, skillHeal), t2)
-	if want := (CastSeen{Skill: skillHeal, Target: pvpThird, Lands: t2.Add(4 * time.Second)}); f.LastCast != want {
+	if want := (CastSeen{Skill: skillHeal, Level: 1, Target: pvpThird, At: t2, Lands: t2.Add(4 * time.Second)}); f.LastCast != want {
 		t.Errorf("last cast %+v, want %+v", f.LastCast, want)
 	}
 	b.handleOne(t, MagicSkillCanceled{CasterID: pcID}, t3)

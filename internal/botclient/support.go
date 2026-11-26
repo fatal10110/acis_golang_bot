@@ -287,7 +287,7 @@ func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 		if h.Members > 0 && held {
 			continue
 		}
-		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
+		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
 			return h, true
 		}
 	}

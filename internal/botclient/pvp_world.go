@@ -49,11 +49,12 @@ func (k FightKind) String() string {
 	return ""
 }
 
-// CastSeen is a player's last cast: its skill, its target and when it
-// lands (the MagicSkillUse's arrival plus its hit time).
+// CastSeen is a player's last cast: its skill and skill level, its target,
+// when its MagicSkillUse arrived and when it lands (the arrival plus its
+// hit time).
 type CastSeen struct {
-	Skill, Target int32
-	Lands         time.Time
+	Skill, Level, Target int32
+	At, Lands            time.Time
 }
 
 // Opponent is what the bot knows of one player in sight for PvP: its
@@ -80,6 +81,9 @@ type Opponent struct {
 	// RootUntil is when the root the bot landed on it stops holding it
 	// (docs/pvp/guards.md "Arena edge"), zero for none.
 	RootUntil time.Time
+	// fight is the PvP layer's record of the bot's casts on it
+	// (pvp_layer.go), kept while it is in sight.
+	fight layerFight
 	// flag is the flag state last seen, what FlagBlinkAt and a change of
 	// CharInfo are told from.
 	flag uint8
@@ -163,11 +167,16 @@ type pvpWorld struct {
 	guard guardState
 	stand poleStand
 	// find and arena are the fight finding's (pvp_finding.go,
-	// pvp_arena.go); rows is the engage estimate's row table, empty (plain
-	// attacks) until X6 sets it.
-	find  findState
-	arena arenaTrip
-	rows  charmodel.RowTable
+	// pvp_arena.go); rows is the engage estimate's row table at character
+	// level rowsLevel (Brain.pvpRows).
+	find      findState
+	arena     arenaTrip
+	rows      charmodel.RowTable
+	rowsLevel int
+	// last is the bot's own last cast and kite its kite walk, the PvP
+	// layer's (pvp_layer.go).
+	last ownLast
+	kite Point
 }
 
 // duelAsk is an open duel challenge: when it came, whether it is a party
@@ -249,6 +258,9 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 	case MagicSkillCanceled:
 		if r := p.opponents[e.CasterID]; r != nil {
 			r.LastCast = CastSeen{}
+		}
+		if e.CasterID == self {
+			b.castCanceled(now)
 		}
 		if e.CasterID == self || b.fights(e.CasterID, now) {
 			return b.pvpReact(now)
@@ -346,7 +358,7 @@ func (b *Brain) castSeen(e MagicSkillUse, now time.Time) time.Time {
 		return time.Time{}
 	}
 	if r := b.pvp.opponents[e.CasterID]; r != nil {
-		r.LastCast = CastSeen{Skill: e.SkillID, Target: e.TargetID, Lands: now.Add(e.HitTime)}
+		r.LastCast = CastSeen{Skill: e.SkillID, Level: e.Level, Target: e.TargetID, At: now, Lands: now.Add(e.HitTime)}
 	}
 	o := b.world.object(e.CasterID)
 	if o == nil {
@@ -374,6 +386,7 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 		return time.Time{}
 	case msgResisted:
 		b.pvp.root.resisted = true
+		b.resisted()
 		return time.Time{}
 	case msgS1AcceptedYourDuel, msgYouAcceptedS1Duel:
 		*d = Duel{Phase: DuelCountdown, Name: e.Text[0], Since: now}
@@ -448,9 +461,10 @@ func (m *TravelMap) offensive(skill, level int32) bool {
 
 // duelWindow keeps the duel opponent's vitals from its ExDuelUpdateUserInfo;
 // the first one of a started duel names the opponent and starts the fight
-// at the PvP reaction delay.
+// (a fresh layer record of it) at the PvP reaction delay.
 func (b *Brain) duelWindow(e ExDuelUpdateUserInfo, now time.Time) time.Time {
-	if r := b.pvp.opponents[e.ObjectID]; r != nil {
+	r := b.pvp.opponents[e.ObjectID]
+	if r != nil {
 		r.HP, r.MaxHP, r.CP, r.MaxCP, r.SeenAt = e.HP, e.MaxHP, e.CP, e.MaxCP, now
 	}
 	d := b.duel(now)
@@ -461,6 +475,11 @@ func (b *Brain) duelWindow(e ExDuelUpdateUserInfo, now time.Time) time.Time {
 		return time.Time{}
 	}
 	d.Phase, d.Name, d.Opponent = DuelFighting, e.Name, e.ObjectID
+	if r != nil {
+		// A new fight: the resists and landings of an earlier one with
+		// this player do not count (docs/pvp/layer.md "PvP order").
+		r.fight = layerFight{}
+	}
 	d.FightFrom = b.pvpReact(now)
 	return d.FightFrom
 }

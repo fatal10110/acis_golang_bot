@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -128,6 +129,18 @@ type Step struct {
 	// Role puts the step in that role's rotation only; RoleNone in every
 	// role's. CompileBuild leaves the other roles' steps out.
 	Role Role
+	// The PvP gates (docs/pvp/layer.md "Step fields"): Vs casts only
+	// against a player of one of those archetypes (any player when empty;
+	// never a monster); PvP only against a player; Interrupt only as the
+	// answer to an interrupt-worthy cast landing later than the step would
+	// (pvp_layer.go interruptCast); Hold keeps the step ready while the
+	// opponent is a caster or healer, cast only as such an answer, and at
+	// reuse against any other opponent; Break only while breaking off
+	// (X6b) and Peel only on an enemy attacking the bot's healer or leader
+	// (X9): neither is cast before those land.
+	Vs                   []charmodel.Archetype
+	PvP, Interrupt, Hold bool
+	Break, Peel          bool
 }
 
 // stepState is what a step's gates read at one decision.
@@ -152,6 +165,13 @@ type stepState struct {
 	// (Brain.opened); spoilable whether a Spoil step may cast on it
 	// (Brain.spoilable).
 	fresh, spoilable bool
+	// player is whether the target is a player, vs its archetype (Melee
+	// when unknown); interrupt is set in the PvP order's interrupt pass,
+	// breaking while the bot breaks off (X6b), peel on an enemy attacking
+	// the bot's healer or leader (X9).
+	player                    bool
+	vs                        charmodel.Archetype
+	interrupt, breaking, peel bool
 }
 
 // passes reports whether every gate of the step holds in st. Target is not
@@ -174,7 +194,13 @@ func (s Step) passes(st stepState) bool {
 		s.ChargeToMax && st.charges >= st.maxCharges,
 		s.Idle && st.inCombat,
 		s.Opener && !st.fresh,
-		s.Spoil && !st.spoilable:
+		s.Spoil && !st.spoilable,
+		len(s.Vs) > 0 && (!st.player || !slices.Contains(s.Vs, st.vs)),
+		s.PvP && !st.player,
+		s.Interrupt && !st.interrupt,
+		s.Hold && st.player && !st.interrupt && (st.vs == charmodel.Caster || st.vs == charmodel.Healer),
+		s.Break && !st.breaking,
+		s.Peel && !st.peel:
 		return false
 	}
 	return true
@@ -223,8 +249,12 @@ type ClassKit struct {
 	// listed first; Trainers the NPC template ids of the class's trainers.
 	Skills, Trainers []int32
 	Rotation         []Step
-	Buffs            []Buff
-	Heals            []Heal
+	// PvP is the row's PvP row (docs/pvp/rows.md): the steps fight casts
+	// before Rotation against a player, in the PvP order
+	// (docs/pvp/layer.md); X7 and X8 ship them.
+	PvP   []Step
+	Buffs []Buff
+	Heals []Heal
 	// Flee is the skill flee casts first when ready (Dash, Sprint); 0 none.
 	Flee  int32
 	Melee MeleePolicy
@@ -452,6 +482,11 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 			k.Rotation = append(k.Rotation, st)
 		}
 	}
+	for _, st := range line.PvP {
+		if st.From <= level && plays(st.Role) {
+			k.PvP = append(k.PvP, st)
+		}
+	}
 	for _, h := range line.Heals {
 		if plays(h.Role) {
 			k.Heals = append(k.Heals, h)
@@ -563,6 +598,12 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 		charges: int(s.Charges),
 	}
 	st.spoilable = b.spoilable(id, st.fresh)
+	if o := b.world.object(id); o != nil && o.Kind == KindPlayer {
+		st.player = true
+		if r := b.pvp.opponents[id]; r != nil {
+			st.vs = r.Archetype
+		}
+	}
 	if i := slices.IndexFunc(steps, func(x Step) bool { return x.ChargeToMax }); i >= 0 {
 		sk := steps[i].Skill
 		st.maxCharges = b.cfg.Travel.maxChargesOf(sk, b.world.Skills[sk].Level)

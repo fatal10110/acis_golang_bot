@@ -330,6 +330,7 @@ func TestPvPChallengeCooldown(t *testing.T) {
 		b := findBrain(t, nil)
 		mystic, _ := charmodel.ClassRow(10, false)
 		b.pvp.rows = charmodel.RowTable{mystic: {{Skill: datapack.Skill{Type: "MDAM", Magic: true, Power: 1e6, HitTime: time.Second}}}}
+		b.pvp.rowsLevel = max(int(b.world.Self.Level), 1)
 		b.handleOne(t, CharInfo{ObjectID: pcID, Name: foeName, ClassID: 10, Pos: Point{Y: 300}}, t0)
 		if got := challenged(t, b, at(time.Second)); got != "" {
 			t.Fatalf("challenged %q, a candidate it loses to", got)
