@@ -127,6 +127,19 @@ type Step struct {
 	// only on a target nobody spoiled as far as the bot knows: a fresh one,
 	// or one its last Spoil was resisted on (Brain.spoils).
 	Opener, Spoil bool
+	// Once casts at most once per target, whatever attacks went out on it
+	// before (Brain.once): unlike Opener, an earlier attack does not use it
+	// up. A cast counts once the server took it (the bot's own
+	// MagicSkillUse within castTimeout); a refused one does not, and a new
+	// target starts afresh.
+	Once bool
+	// Filler casts only when no self, sustain or attack step passes (a
+	// fourth pass, rankFiller, whatever its Target): a charging self skill
+	// fed between the attacks it charges (GL's Sonic Focus, TY's Focused
+	// Force). Like an attack it waits for MP at the reserve; unlike one it
+	// never uses up the opener, and a TargetSelf filler goes out on the
+	// bot. The PvP order casts no filler (docs/pvp/layer.md "PvP order").
+	Filler bool
 	// Role puts the step in that role's rotation only; RoleNone in every
 	// role's. CompileBuild leaves the other roles' steps out.
 	Role Role
@@ -175,6 +188,10 @@ type stepState struct {
 	player                    bool
 	vs                        charmodel.Archetype
 	interrupt, breaking, peel bool
+	// onced are the skills the server took a cast of on the target since
+	// the bot took it as its target (Brain.once): a Once step's skill
+	// among them does not go again.
+	onced []int32
 }
 
 // passes reports whether every gate of the step holds in st. Target is not
@@ -198,6 +215,7 @@ func (s Step) passes(st stepState) bool {
 		s.ChargeToMax && st.charges >= st.maxCharges,
 		s.Idle && st.inCombat,
 		s.Opener && !st.fresh,
+		s.Once && slices.Contains(st.onced, s.Skill),
 		s.Spoil && !st.spoilable,
 		len(s.Vs) > 0 && (!st.player || !slices.Contains(s.Vs, st.vs)),
 		s.PvP && !st.player,
@@ -294,6 +312,12 @@ type ClassKit struct {
 	// minLvl under 20), which TestBehaviorRowsShipped checks; the brain does
 	// not read it.
 	Base []int32
+	// Fixed are the skills a second-profession row tags "(fixed)": an
+	// attack step ranked behind its successor because the profession's own
+	// tree does not raise it, so it stays at the level the first profession
+	// reached by 39. TestBehaviorRowsShipped checks each is in the merged
+	// tree and absent from the class's own; the brain does not read it.
+	Fixed []int32
 	// Roles are the row's parts that differ by role (docs/strategy.md,
 	// "Numbers and summary": "Support / Damage"); a role without one plays
 	// the row's own.
@@ -471,7 +495,7 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 		}
 	}
 	plays := func(r Role) bool { return r == RoleNone || r == role }
-	k.Skills, k.Flee, k.Melee, k.Relax, k.Base = line.Skills, line.Flee, line.Melee, line.Relax, line.Base
+	k.Skills, k.Flee, k.Melee, k.Relax, k.Base, k.Fixed = line.Skills, line.Flee, line.Melee, line.Relax, line.Base, line.Fixed
 	k.Sweep, k.SpotMargin = line.Sweep, line.SpotMargin
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
@@ -603,6 +627,9 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 		charges: int(s.Charges),
 	}
 	st.spoilable = b.spoilable(id, st.fresh)
+	if b.once.target == id {
+		st.onced = b.once.skills
+	}
 	if o := b.world.object(id); o != nil && o.Kind == KindPlayer {
 		// No Spoil on a player: the server spoils only a monster
 		// (handler/skill/spoil.go), so it would waste the cast.

@@ -524,12 +524,4 @@ func TestCompileMysticBuild(t *testing.T) {
 	if k := CompileBuild(RaceOrc, classOrcMystic, 19, RoleDamage, BranchChoice{}).Kit; slices.Contains(k.Skills, skillHeavyArmorMastery) {
 		t.Errorf("orc mystic Damage learns %v, want no armor mastery but the robe's", k.Skills)
 	}
-	// Second professions play their first profession's row (#332).
-	for _, tt := range []struct{ class, first int32 }{{16, classCleric}, {12, classHumanWizard}, {30, classElvenOracle}, {41, classDarkWizard}, {52, classOrcShaman}} {
-		race, _ := datapack.ClassRace(tt.class)
-		bd, want := CompileBuild(race, tt.class, 45, RoleSupport, BranchChoice{}), CompileBuild(race, tt.first, 45, RoleSupport, BranchChoice{})
-		if !slices.Equal(stepSkills(bd.Kit.Rotation), stepSkills(want.Kit.Rotation)) || bd.Thresholds != want.Thresholds {
-			t.Errorf("class %d rotation %v, want class %d's %v", tt.class, stepSkills(bd.Kit.Rotation), tt.first, stepSkills(want.Kit.Rotation))
-		}
-	}
 }
