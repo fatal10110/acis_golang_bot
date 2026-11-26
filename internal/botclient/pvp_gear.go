@@ -61,6 +61,10 @@ type pvpMix struct {
 	// now is the time of the last event the brain handled, what the table
 	// ages by.
 	now time.Time
+	// version changes whenever the mix rows may have: a player new to the
+	// table or playing another class or row or under another name, one
+	// aged out. The gear model's PvP side is made again only when it moved.
+	version uint64
 }
 
 // mixSeen is one player of the mix table.
@@ -81,18 +85,26 @@ type mixRow struct {
 // see records player e, playing row, as seen at now; a player new to the
 // table first drops the ones seen longer than mixAge ago.
 func (x *pvpMix) see(e CharInfo, row charmodel.Row, now time.Time) {
-	if _, ok := x.seen[e.ObjectID]; !ok {
+	old, ok := x.seen[e.ObjectID]
+	if !ok {
 		x.prune(now)
 		if x.seen == nil {
 			x.seen = make(map[int32]mixSeen)
 		}
+	}
+	if !ok || old.class != e.ClassID || old.row != row || old.name != e.Name {
+		x.version++
 	}
 	x.seen[e.ObjectID] = mixSeen{class: e.ClassID, row: row, name: e.Name, at: now}
 }
 
 // prune drops the players seen longer than mixAge before now.
 func (x *pvpMix) prune(now time.Time) {
+	n := len(x.seen)
 	maps.DeleteFunc(x.seen, func(_ int32, s mixSeen) bool { return now.Sub(s.at) > mixAge })
+	if len(x.seen) != n {
+		x.version++
+	}
 }
 
 // mixRows are the rows of the mix and how many players play each: the
@@ -122,29 +134,44 @@ func (b *Brain) mixRows() map[mixRow]int {
 // (docs/pvp/model.md "Blend"): the persona's weight, the mix rows it was
 // made for and their shares with their reference opponents (the class
 // template at the bot's level), the PvP row table, and the PvP value of
-// what the bot wears now (norm) and of each arrangement asked for.
+// what the bot wears now (norm) and of each arrangement asked for. version
+// and tier are the mix table's version and the bot's profession tier it
+// was last checked at.
 type gearPvP struct {
-	weight float64
-	rows   map[mixRow]int
-	mix    []charmodel.Share
-	table  charmodel.RowTable
-	norm   float64
-	values map[gearValueKey]float64
+	weight  float64
+	version uint64
+	tier    int
+	rows    map[mixRow]int
+	mix     []charmodel.Share
+	table   charmodel.RowTable
+	norm    float64
+	values  map[gearValueKey]float64
 }
 
 // gearPvP keeps v's PvP side: none while PvPPolicy.GearWeight is 0; made
-// again when the mix rows change (mixRows).
+// again when the mix rows change (mixRows). The rows are read again only
+// when the mix table's version or the bot's profession tier (the rows with
+// nobody seen) moved since the last check, so an own event that bumps the
+// world's generation costs no more than with no PvP side (#494). A player
+// seen in a CharInfo reaches the PvP side at the next event that does.
 func (b *Brain) gearPvP(m *TravelMap, v *gearModel) {
 	weight := b.persona.PvP.GearWeight
 	if weight <= 0 {
 		v.pvp = nil
 		return
 	}
-	rows := b.mixRows()
-	if v.pvp != nil && maps.Equal(v.pvp.rows, rows) {
+	x := &b.pvp.mix
+	x.prune(x.now)
+	tier := classTier(b.world.Self.ClassID)
+	if p := v.pvp; p != nil && p.weight == weight && p.version == x.version && p.tier == tier {
 		return
 	}
-	p := &gearPvP{weight: weight, rows: rows, mix: mixShares(m, rows, v.build.Level), table: b.pvpRows(), values: make(map[gearValueKey]float64)}
+	rows := b.mixRows()
+	if p := v.pvp; p != nil && p.weight == weight && maps.Equal(p.rows, rows) {
+		p.version, p.tier = x.version, tier
+		return
+	}
+	p := &gearPvP{weight: weight, version: x.version, tier: tier, rows: rows, mix: mixShares(m, rows, v.build.Level), table: b.pvpRows(), values: make(map[gearValueKey]float64)}
 	v.pvp = p
 	now := b.rawWorn()
 	p.norm = v.pvpValue(m, &now, true, v.build.Dyes)
