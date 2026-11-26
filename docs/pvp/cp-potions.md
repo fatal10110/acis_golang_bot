@@ -52,10 +52,12 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
      bot, 50 % with it); they dilute the human votes for the other seals (N/(N+B) of their share,
      possibly under 35 %); and a seal Dusk holds on few votes can fall under 10 % (1 of 10
      humans: 10 % kept, with one bot 9 % lost). So 3a decides no competition score but does
-     weigh on the seals. Bound (proposed): at most `SevenSigns.MaxMembers` bots of a run in the
-     mode (default 1), and each votes the seal Dusk holds when it holds one (it then only
-     strengthens a seal humans already keep), else `PvPPolicy.SignsSeal`. The alternative is to
-     accept the vote weight without a cap ([owner question 2](#owner-questions)).
+     weigh on the seals. Bound (proposed): the mode is enabled per named bot in the run's config,
+     `SevenSigns.Members` (a list of character names), and config loading refuses a list longer
+     than `SevenSigns.MaxMembers` (default 1). The cap is static, so it needs no sign-up count:
+     no counter resets on a restart, and no two bots race to the priest for the last place. Each
+     member votes the seal Dusk holds when it holds one (it then only strengthens a seal humans
+     already keep), else `PvPPolicy.SignsSeal`. The alternative is to accept the vote weight without a cap ([owner question 2](#owner-questions)).
    - **3b, contribute.** Bots also turn stones in during Competition. Their cabal then wins any
      cycle humans do not outscore, every cycle on a quiet server, and the bots' seal votes decide
      who holds Gnosis, Avarice and Strife for every player: a world change, the owner's call.
@@ -69,7 +71,8 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
 
 CP potions are bought (amends D37); the keep rule stays (never sold, deposited or drunk on
 monsters). Option 2 for `pvp` bots; option 3a as an opt-in `SevenSigns` mode, off for every preset
-(D6), at most `SevenSigns.MaxMembers` bots of a run (default 1), voting the seal Dusk holds if
+(D6), enabled only for the bots named in `SevenSigns.Members`, at most `SevenSigns.MaxMembers`
+(default 1) per run, checked when the config loads, voting the seal Dusk holds if
 any. Bots never contribute stones, never pay the Dawn fee and never vote Strife.
 
 ## What the bot does
@@ -86,8 +89,8 @@ owner. Pacing, refusals and cool-downs are the errand's ([items](../items.md#8-b
 **X18, Seven Signs member (`SevenSigns` mode).**
 
 - *Sign-up.* In Competition, with a first profession and outside a castle-owning clan, at the
-  nearest Dusk Priestess on a supply trip, while fewer than `SevenSigns.MaxMembers` bots of the
-  run are signed up this cycle: page `1`, then the sign-up links for Dusk and the seal Dusk holds
+  nearest Dusk Priestess on a supply trip, only for a bot named in `SevenSigns.Members` (the
+  static cap; no run-wide counter): page `1`, then the sign-up links for Dusk and the seal Dusk holds
   at sign-up (read from the seal status page: the `SevenSigns 20 1` link of `signs_33_dusk.htm`,
   then `Chat 0` and the sign-up links again; `signspriest.go:622-641`; a Strife it holds is
   skipped), else `PvPPolicy.SignsSeal` (default Gnosis; Strife refused by config). A page the
@@ -147,8 +150,9 @@ on a trip.
 2. Option 3: never contribute (3a, proposed: the bots never decide the competition score, and on
    a quiet server the route never pays) or contribute (3b: the bots' cabal wins every cycle humans
    do not outscore, and their votes pick the seal owners)? Either way bot votes weigh on the seals
-   (B/(N+B) of Dusk's shares, see 3a): cap them at `SevenSigns.MaxMembers` bots per run (default
-   1, proposed, voting the seal Dusk holds) or accept the vote weight uncapped?
+   (B/(N+B) of Dusk's shares, see 3a): cap them with a config list of named member bots, at most
+   `SevenSigns.MaxMembers` per run (default 1, proposed, voting the seal Dusk holds), or accept
+   the vote weight uncapped?
 3. X19's live scenario needs the stack in Seal Validation with a known winner. Options: a GM
    command to set the Seven Signs period, filed in `fatal10110/acis_golang` as a test-stack tool
    (Java aCis has none either), or X19 ships on unit tests and recorded frames, recorded once on a
