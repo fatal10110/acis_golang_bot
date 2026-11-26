@@ -18,6 +18,10 @@ const (
 	followMaxDist  = 350
 	followRepath   = 250
 	followDelayMax = 800 * time.Millisecond
+	// followTickMax is the longest wait for the bot's next decision
+	// (botclient defaultTick plus defaultTickJitter): a leader passing
+	// Repath is noticed only there, followDelayMax before the re-path.
+	followTickMax = 1500 * time.Millisecond
 	// followReach is the farthest a settled bot stands from its leader:
 	// the leader's stop may land within Repath of the bot's last anchor,
 	// where the bot keeps its old slot (#5, the #18 correction).
@@ -33,19 +37,29 @@ type leg struct {
 
 // lead moves leader toward to at speed (world units per second, its walk
 // or run) and reads its connection until it should have arrived, sampling
-// how far b stands from where the leader is on its path.
+// how far b stands from where the leader is on its path. The server walks
+// a click it routes around an obstacle one leg at a time, each next leg's
+// MoveToLocation sent as the one before ends (move/controller.go
+// segmentAdvanced): the leader stops only once the last leg it was sent is
+// over, and its stop is that leg's end, not the first one's (#486).
 func lead(t *testing.T, ctx context.Context, leader *Client, b *botclient.Bot, to botclient.Point, speed int32) leg {
 	t.Helper()
 	m, err := moveToward(ctx, leader, to)
 	if err != nil {
 		t.Fatal(err)
 	}
-	length := dist(m.Origin, m.Dest)
 	start := time.Now()
-	travel := time.Duration(length / float64(speed) * float64(time.Second))
 	var gap float64
-	for time.Since(start) < travel+time.Second {
-		if err := leader.Watch(ctx, 250*time.Millisecond, func(botclient.Event) {}); err != nil {
+	for {
+		length := dist(m.Origin, m.Dest)
+		if time.Since(start) >= time.Duration(length/float64(speed)*float64(time.Second))+time.Second {
+			break
+		}
+		if err := leader.Watch(ctx, 250*time.Millisecond, func(ev botclient.Event) {
+			if next, ok := ev.(botclient.MoveToLocation); ok && next.ObjectID == leader.Self.ObjectID {
+				m, start, length = next, time.Now(), dist(next.Origin, next.Dest)
+			}
+		}); err != nil {
 			t.Fatal(err)
 		}
 		f := math.Min(1, time.Since(start).Seconds()*float64(speed)/math.Max(length, 1))
@@ -135,7 +149,7 @@ func TestLiveFollow(t *testing.T) {
 		}
 	})
 	t.Logf("%s back in the GM's sight at %v", name, b.Status().Position)
-	at := settledNear(t, ctx, gm.Client, b, gm.Pos(), name+" after the travel")
+	at := settledNear(t, ctx, gm.Client, f, gm.Pos(), name+" after the travel")
 	t.Logf("%s settled %.0f from the GM after the travel", name, dist(at, gm.Pos()))
 
 	// Walk, then run.
@@ -155,11 +169,11 @@ func TestLiveFollow(t *testing.T) {
 		}
 		for i := range 2 {
 			l := lead(t, ctx, gm.Client, b, awayFrom(gm.Pos(), 700, float64(i)*math.Pi), speed)
-			bound := followReach + float64(speed)*followDelayMax.Seconds()*2
+			bound := followReach + float64(speed)*(followTickMax+2*followDelayMax).Seconds()
 			if l.gap > bound {
 				t.Fatalf("walk=%v leg %d: %s fell %.0f behind the GM's path, want at most %.0f", walk, i, name, l.gap, bound)
 			}
-			at := settledNear(t, ctx, gm.Client, b, l.stop, fmt.Sprintf("walk=%v leg %d: %s", walk, i, name))
+			at := settledNear(t, ctx, gm.Client, f, l.stop, fmt.Sprintf("walk=%v leg %d: %s", walk, i, name))
 			d := dist(at, l.stop)
 			t.Logf("walk=%v leg %d: at most %.0f behind on the way, settled %.0f from the GM", walk, i, l.gap, d)
 		}
@@ -172,19 +186,23 @@ func TestLiveFollow(t *testing.T) {
 // party forms, then runs a few thousand units.
 const followSettle = time.Minute
 
-// settledNear reads c until b's position stays put for settleFor within
-// followReach of stop and returns it; what names the wait in a failure. A
-// pause on the way is not the end of the trip: the bot walks a server path
-// one segment at a time, and a segment the server is late to start leaves
-// it standing at a waypoint (#131). Only a bot that has not settled near
-// stop after followSettle fails, with where it stands then.
-func settledNear(t *testing.T, ctx context.Context, c *Client, b *botclient.Bot, stop botclient.Point, what string) botclient.Point {
+// settledNear reads c until f's bot stays put for settleFor within
+// followReach of stop and returns where it stands; what names the wait in a
+// failure. A pause on the way is not the end of the trip: the bot walks a
+// server path one segment at a time, and a segment the server is late to
+// start leaves it standing at a waypoint (#131). A click the bot sends
+// restarts the wait as a move does: its position is read from its status,
+// published at its decisions at most once a second, which shows a re-path
+// only a decision after the one that sent it (#486). Only a bot that has
+// not settled near stop after followSettle fails, with where it stands
+// then.
+func settledNear(t *testing.T, ctx context.Context, c *Client, f *farmer, stop botclient.Point, what string) botclient.Point {
 	t.Helper()
 	deadline := time.Now().Add(followSettle)
-	last, since := b.Status().Position, time.Now()
+	last, clicks, since := f.bot.Status().Position, f.clicks(), time.Now()
 	for {
-		if p := b.Status().Position; p != last {
-			last, since = p, time.Now()
+		if p, n := f.bot.Status().Position, f.clicks(); p != last || n != clicks {
+			last, clicks, since = p, n, time.Now()
 		}
 		d := dist(last, stop)
 		if d <= followReach && time.Since(since) >= settleFor {
@@ -197,4 +215,15 @@ func settledNear(t *testing.T, ctx context.Context, c *Client, b *botclient.Bot,
 			t.Fatalf("%s: %v", what, err)
 		}
 	}
+}
+
+// clicks is how many moves f's bot has sent (MoveBackwardToLocation).
+func (f *farmer) clicks() int {
+	n := 0
+	for _, p := range f.watch.Sent() {
+		if p.Op == botclient.OpMoveBackwardToLocation {
+			n++
+		}
+	}
+	return n
 }

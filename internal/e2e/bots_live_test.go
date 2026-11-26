@@ -230,20 +230,6 @@ func watchUntilBy(t *testing.T, ctx context.Context, c *Client, what string, due
 // counts as settled.
 const settleFor = 3 * time.Second
 
-// settled reads c until b's position stays put for settleFor and returns
-// it.
-func settled(t *testing.T, ctx context.Context, c *Client, b *botclient.Bot) botclient.Point {
-	t.Helper()
-	last, since := b.Status().Position, time.Now()
-	watchUntil(t, ctx, c, "the bot settled", func() bool {
-		if p := b.Status().Position; p != last {
-			last, since = p, time.Now()
-		}
-		return time.Since(since) >= settleFor
-	}, nil)
-	return last
-}
-
 // dist is the ground distance between a and b.
 func dist(a, b botclient.Point) float64 {
 	return math.Hypot(float64(a.X)-float64(b.X), float64(a.Y)-float64(b.Y))
