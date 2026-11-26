@@ -14,9 +14,8 @@ import (
 // The PvP scenarios (docs/pvp/README.md, X13, #420): bots playing the pvp
 // persona against a scenario's own client on the real server, at most four
 // characters each, the GM included. The duel, fight-back and healer
-// scenarios meet at recoverGround, open ground in no peace, town or water
-// zone, where duels and attacks are allowed; the arena scenario fights in
-// the Gludin arena.
+// scenarios meet at pvpGround; the arena scenario fights in the Gludin
+// arena.
 
 const (
 	// pvpHeal and pvpBattleHeal are Heal (1011) and Battle Heal (1015).
@@ -43,6 +42,13 @@ const (
 )
 
 var (
+	// pvpGround is open ground west of Gludin village, in no peace, town,
+	// arena or water zone, where duels and attacks are allowed, and over
+	// 1300 from every spawn of a monster or guard with an aggro range: the
+	// datapack gives Talking Island's keltirs and guards one of 1000, and a
+	// bot takes no duel within that range plus 300 of one
+	// (Brain.clearOfMonsters), which left no such ground on the island.
+	pvpGround = botclient.Point{X: -86026, Y: 148575, Z: -3064}
 	// gludinArenaMiddle is the middle of the Gludin arena (ArenaZone.xml
 	// gludin_pvp); its Z is the geodata floor's (arenaFloor).
 	gludinArenaMiddle = botclient.Point{X: -87920, Y: 142220, Z: -3600}
@@ -89,12 +95,20 @@ func seenSince(f *farmer, from int, match func(botclient.Event) bool) bool {
 	return slices.ContainsFunc(f.watch.Seen(from), func(s Seen) bool { return match(s.Event) })
 }
 
-// pvpMeet brings the GM to recoverGround, recalls the bots fs and the
-// client c to it and has the GM heal them all: a duel wants HP and MP at
-// least half, and a heal starts every scenario from full bars.
+// pvpMeet brings the GM to pvpGround, recalls the bots fs and the client c
+// to it and has the GM heal them all: a duel wants HP and MP at least
+// half, and a heal starts every scenario from full bars.
 func pvpMeet(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, c *Client, fs ...*farmer) {
 	t.Helper()
-	bpGather(t, ctx, tg, gm, fs...)
+	gmTeleport(t, ctx, gm, pvpGround)
+	for _, f := range fs {
+		recallBot(t, ctx, tg, gm, f.name)
+	}
+	for _, f := range fs {
+		waitForBy(t, ctx, f.name+" at pvpGround", time.Now().Add(time.Minute), func() bool {
+			return dist(f.bot.Status().Position, pvpGround) <= 300
+		})
+	}
 	recallClient(t, ctx, gm, c)
 	names := []string{c.Self.Name}
 	for _, f := range fs {
@@ -540,7 +554,12 @@ func TestLivePvPHealer(t *testing.T) {
 	ch.Class = botclient.HumanMystic
 	c := enter(t, ctx, tg, acc(2), ch, nil)
 
-	// The class change where the new character entered, by the master.
+	// The class change by Talking Island's master: the human mystic's
+	// start lies over its Reach (8000) from it, so the GM first brings
+	// the new character to recoverGround, about 4300 from the master, as
+	// TestLiveBotPartyRaise does (the first live run waited 9m on a bot
+	// that never left its start).
+	bpGather(t, ctx, tg, gm, cleric)
 	levelTo(t, ctx, gm, cleric, 20)
 	becomes(t, ctx, cleric, bpCleric)
 	gmOn(t, ctx, gm, cleric, fmt.Sprintf("skill set %d 1", pvpHeal), fmt.Sprintf("skill set %d 1", pvpBattleHeal), "heal "+cleric.name)
