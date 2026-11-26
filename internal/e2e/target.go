@@ -278,7 +278,7 @@ func (t *Target) enter(ctx context.Context, account, password string, ch botclie
 	if err := checkHalt(t.cfg.HaltFile()); err != nil {
 		return nil, botclient.Self{}, err
 	}
-	turn, err := t.gate.Take(ctx)
+	turn, err := t.gate.Take(ctx, account)
 	if err != nil {
 		return nil, botclient.Self{}, err
 	}
@@ -309,6 +309,8 @@ func (t *Target) enter(ctx context.Context, account, password string, ch botclie
 		conn.Close()
 		return nil, botclient.Self{}, fmt.Errorf("enter game: %w", err)
 	}
+	// Reset the fleet backoff while the turn is held, as a Bot does.
+	turn.Entered()
 	return conn, self, nil
 }
 
@@ -322,7 +324,7 @@ func (t *Target) CheckCredentials(ctx context.Context, account, password string)
 // checkCredentials is CheckCredentials; a refusal leaves the breaker's
 // marker only when persist is set.
 func (t *Target) checkCredentials(ctx context.Context, account, password string, persist bool) error {
-	turn, err := t.gate.Take(ctx)
+	turn, err := t.gate.Take(ctx, account)
 	if err != nil {
 		return err
 	}

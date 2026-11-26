@@ -22,12 +22,12 @@ func TestLoginGateResetStaleHalt(t *testing.T) {
 		{
 			name: "take",
 			wait: func(t *testing.T, g *LoginGate, _ *fakeClock, errc chan<- error) func() {
-				first, err := g.Take(t.Context())
+				first, err := g.Take(t.Context(), "bot1")
 				if err != nil {
 					t.Fatal(err)
 				}
 				go func() {
-					turn, err := g.Take(t.Context())
+					turn, err := g.Take(t.Context(), "bot1")
 					if err == nil && turn == nil {
 						err = errors.New("Take = nil turn, nil error")
 					}
@@ -39,7 +39,7 @@ func TestLoginGateResetStaleHalt(t *testing.T) {
 		{
 			name: "dial",
 			wait: func(t *testing.T, g *LoginGate, clock *fakeClock, errc chan<- error) func() {
-				turn, err := g.Take(t.Context())
+				turn, err := g.Take(t.Context(), "bot1")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -100,7 +100,7 @@ func TestLoginGateReset(t *testing.T) {
 	}
 
 	g.Halt(first)
-	if _, err := g.Take(t.Context()); !errors.Is(err, first) {
+	if _, err := g.Take(t.Context(), "bot1"); !errors.Is(err, first) {
 		t.Fatalf("Take after Halt = %v, want %v", err, first)
 	}
 	g.Reset()
@@ -110,7 +110,7 @@ func TestLoginGateReset(t *testing.T) {
 	if reg.Collect(t0).BreakerOpen {
 		t.Fatal("breaker open after Reset")
 	}
-	turn, err := g.Take(t.Context())
+	turn, err := g.Take(t.Context(), "bot1")
 	if err != nil {
 		t.Fatalf("Take after Reset = %v, want a turn", err)
 	}
@@ -121,7 +121,7 @@ func TestLoginGateReset(t *testing.T) {
 
 	g.Halt(second)
 	g.Halt(first)
-	if _, err := g.Take(t.Context()); !errors.Is(err, ErrLoginsHalted) || !errors.Is(err, second) || errors.Is(err, first) {
+	if _, err := g.Take(t.Context(), "bot1"); !errors.Is(err, ErrLoginsHalted) || !errors.Is(err, second) || errors.Is(err, first) {
 		t.Fatalf("Take after the second Halt = %v, want %v of %v", err, ErrLoginsHalted, second)
 	}
 	if !reg.Collect(t0).BreakerOpen {
@@ -148,7 +148,7 @@ func TestLoginGateResetRace(t *testing.T) {
 	for range bots {
 		wg.Go(func() {
 			for range rounds {
-				turn, err := g.Take(t.Context())
+				turn, err := g.Take(t.Context(), "bot1")
 				switch {
 				case err != nil && turn != nil:
 					t.Errorf("Take = a turn and %v", err)
@@ -169,7 +169,7 @@ func TestLoginGateResetRace(t *testing.T) {
 	}
 	wg.Wait()
 	g.Reset()
-	if _, err := g.Take(t.Context()); err != nil {
+	if _, err := g.Take(t.Context(), "bot1"); err != nil {
 		t.Fatalf("Take after the last Reset = %v", err)
 	}
 }

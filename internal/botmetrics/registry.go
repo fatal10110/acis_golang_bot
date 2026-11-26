@@ -30,6 +30,8 @@ type Registry struct {
 	ruleIndex map[string]int
 
 	breakerOpen atomic.Bool
+	// acceptClosed counts the login gate's dials closed at accept.
+	acceptClosed atomic.Uint64
 
 	mu   sync.Mutex
 	bots []*Bot // guarded by mu
@@ -73,6 +75,10 @@ func (r *Registry) NewBot() *Bot {
 // once it has halted every login.
 func (r *Registry) SetBreaker(open bool) { r.breakerOpen.Store(open) }
 
+// AcceptClosed counts a login or game dial the server closed at accept: each
+// starts one quiet period of the process's login gate.
+func (r *Registry) AcceptClosed() { r.acceptClosed.Add(1) }
+
 // PartyFormed counts a bot party the organizer formed.
 func (r *Registry) PartyFormed() {
 	r.mu.Lock()
@@ -112,8 +118,11 @@ type Snapshot struct {
 	// NavSegments counts the moves a blocked stop can end: the walker's
 	// segments and its talk clicks, the base of the blocked rate
 	// (docs/navigation.md, Testing).
-	NavSegments   uint64            `json:"nav_segments_total"`
-	BreakerOpen   bool              `json:"breaker_open"`
+	NavSegments uint64 `json:"nav_segments_total"`
+	BreakerOpen bool   `json:"breaker_open"`
+	// AcceptClosed counts the dials the server closed at accept (a ban,
+	// or a server that failed before its first write).
+	AcceptClosed  uint64            `json:"login_accept_closed_total"`
 	Rules         map[string]uint64 `json:"rules"`
 	QueueDepth    HistogramSnapshot `json:"queue_depth"`
 	WakeLagMicros HistogramSnapshot `json:"wake_lag_us"`
@@ -199,7 +208,7 @@ func (o PlanOutcome) String() string {
 // Collect sums every Bot as of at, stores the sum as the latest and returns
 // it.
 func (r *Registry) Collect(at time.Time) *Snapshot {
-	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), Rules: make(map[string]uint64, len(r.rules))}
+	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), AcceptClosed: r.acceptClosed.Load(), Rules: make(map[string]uint64, len(r.rules))}
 	var soldTrade, soldStore uint64
 	var plans [planOutcomes]uint64
 	var pvp pvpSums
