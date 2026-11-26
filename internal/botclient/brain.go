@@ -604,6 +604,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					// reaction to it.
 					b.landingUntil = time.Time{}
 					gk := b.trip.v.active() && b.trip.step == tripGone
+					b.arenaTeleported(now, gk)
 					b.tripTeleported(now)
 					if b.supplyTrip.teleported(now, gk, b.trip.onward) {
 						b.townArrival()
@@ -968,9 +969,11 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actDuelAnswer:
 		// The server takes the challenge with the first answer.
 		b.pvp.asked = duelAsk{}
-		if d := &b.pvp.duel; d.Phase == DuelAsked {
+		if d := &b.pvp.duel; d.Phase == DuelAsked && !d.Challenged {
 			*d = Duel{Result: d.Result}
 		}
+	case actDuelStart:
+		b.challengeSent(a, now)
 	case actAppear:
 		b.appearing, b.appearedAt = false, now
 	case actRestart:

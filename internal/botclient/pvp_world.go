@@ -64,7 +64,10 @@ type CastSeen struct {
 // window) less the damage the bot dealt it since (SystemMessage 35), when
 // they were reported, its last cast, and the rule that let the bot fight it.
 type Opponent struct {
-	Archetype      charmodel.Archetype
+	Archetype charmodel.Archetype
+	// Row is its behavior row by class and weapon, the engage estimate's
+	// reference opponent (Brain.engages).
+	Row            charmodel.Row
 	Tier           int
 	ClanID, AllyID int32
 	Abnormal       int32
@@ -124,6 +127,10 @@ type Duel struct {
 	Since, FightFrom time.Time
 	// Result is the last duel's, kept after it ends.
 	Result DuelResult
+	// Challenged marks a challenge the bot sent (asked phase): its decline
+	// or refusal holds the bot's own challenges of that player
+	// (Brain.unasked).
+	Challenged bool
 }
 
 // Duel timing (docs/pvp/server-duels.md): a challenge stays open
@@ -155,13 +162,20 @@ type pvpWorld struct {
 	root  rootCast
 	guard guardState
 	stand poleStand
+	// find and arena are the fight finding's (pvp_finding.go,
+	// pvp_arena.go); rows is the engage estimate's row table, empty (plain
+	// attacks) until X6 sets it.
+	find  findState
+	arena arenaTrip
+	rows  charmodel.RowTable
 }
 
-// duelAsk is an open duel challenge: when it came and whether it is a party
-// duel's.
+// duelAsk is an open duel challenge: when it came, whether it is a party
+// duel's, and when the PvP reaction to it is due (an acceptance waits for
+// it, Brain.answerDuel).
 type duelAsk struct {
-	at    time.Time
-	party bool
+	at, due time.Time
+	party   bool
 }
 
 // pvpEvent keeps the PvP world model with ev, received at now after the
@@ -236,11 +250,12 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 	case SystemMessage:
 		return b.duelMessage(e, now)
 	case ExDuelAskStart:
-		p.asked = duelAsk{at: now, party: e.Party}
+		due := b.pvpReact(now)
+		p.asked = duelAsk{at: now, due: due, party: e.Party}
 		if d := b.duel(now); d.Phase == DuelIdle && !e.Party {
 			*d = Duel{Phase: DuelAsked, Name: e.Requester, Since: now, Result: d.Result}
 		}
-		return b.pvpReact(now)
+		return due
 	case ExDuelReady:
 		if d := b.duel(now); d.Phase < DuelCountdown {
 			*d = Duel{Phase: DuelCountdown, Name: d.Name, Since: now, Result: d.Result}
@@ -275,7 +290,7 @@ func (b *Brain) charInfo(e CharInfo, now time.Time) bool {
 	changed := seen && (r.Abnormal != e.Abnormal || r.flag != uint8(e.PvPFlag))
 	_, bow := b.cfg.Travel.arrowsOf(e.RHand)
 	if row, ok := charmodel.ClassRow(e.ClassID, bow); ok {
-		r.Archetype = row.Archetype()
+		r.Archetype, r.Row = row.Archetype(), row
 	}
 	r.Tier = classTier(e.ClassID)
 	b.rootSeen(e.ObjectID, r, e.Abnormal, now)
@@ -367,11 +382,17 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 		d.over(now)
 	case msgS1WithdrewS2Won, msgOtherPartyIsFrozen:
 		d.over(now)
-	case msgS1DeclinedYourDuel, msgS1IsBusyTryLater, msgNoOpponentForDuel, msgUnableToRequestDuel:
-		return b.unasked(d, now)
+	case msgEnteredCombatZone, msgLeftCombatZone:
+		b.siegeSeen(e.ID == msgEnteredCombatZone, now)
+		return time.Time{}
+	case msgUnableToRequestDuel:
+		b.unableSeen(now)
+		return b.unasked(d, now, false)
+	case msgS1DeclinedYourDuel, msgS1IsBusyTryLater, msgNoOpponentForDuel:
+		return b.unasked(d, now, true)
 	default:
 		if e.ID >= msgS1CannotDuelPrivateStore && e.ID <= msgS1CannotReceiveDuelTooFar {
-			return b.unasked(d, now)
+			return b.unasked(d, now, true)
 		}
 		return time.Time{}
 	}
@@ -388,10 +409,14 @@ func (d *Duel) over(now time.Time) {
 
 // unasked drops a challenge refused or declined at now, and reports when
 // the PvP reaction to it is due: zero with no challenge open, as 153 also
-// answers other requests.
-func (b *Brain) unasked(d *Duel, now time.Time) time.Time {
+// answers other requests. A decline or refusal (held) of the bot's own
+// challenge holds its own challenges of that player declineHold.
+func (b *Brain) unasked(d *Duel, now time.Time, held bool) time.Time {
 	if d.Phase != DuelAsked {
 		return time.Time{}
+	}
+	if held && d.Challenged {
+		b.pvp.find.hold(d.Name, now)
 	}
 	*d = Duel{Result: d.Result}
 	return b.pvpReact(now)
@@ -757,6 +782,9 @@ func segmentDist(x, y, ax, ay, bx, by float64) float64 {
 // still go first.
 func (b *Brain) ruleDuel(now time.Time) (Action, bool) {
 	if a, ok := b.declineDuel(now); ok {
+		return a, true
+	}
+	if a, ok := b.answerDuel(now); ok {
 		return a, true
 	}
 	if !b.inDuel(now) {

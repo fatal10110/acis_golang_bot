@@ -372,9 +372,11 @@ const (
 	actRoomWithdraw
 	// actTargetCancel is the Esc key the guards stop the bot's own cast
 	// with (pvp_guards.go), actDuelAnswer the answer to a duel challenge
-	// (Brain.declineDuel).
+	// (Brain.declineDuel), actDuelStart the bot's challenge
+	// (Brain.ruleChallenge).
 	actTargetCancel
 	actDuelAnswer
+	actDuelStart
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -536,6 +538,12 @@ type rule struct {
 // gives way to the fight while the drop gate is closed. "overweight hold"
 // then holds "rest", whose regeneration the immobile band cuts to a tenth,
 // and every errand, trip and farming rule until the bot has shed.
+// "arena fight", "hunt" and "challenge" find fights (pvp_finding.go,
+// pvp_arena.go, docs/pvp/finding.md): arena targets on an arena trip,
+// flagged players of its tier and duel challenges, after the rest and
+// buff rules so it starts them rested and buffed. "arena" is the arena
+// trip, an errand right after "supply"; "arena leave" its leave, ahead
+// of "attacked" so no attack starts the fight it stops again.
 var playRules = []rule{
 	{"dead", (*Brain).ruleDead},
 	{"prompt", (*Brain).rulePrompt},
@@ -553,12 +561,16 @@ var playRules = []rule{
 	{"party", (*Brain).ruleParty},
 	{"shots", (*Brain).ruleShots},
 	{"overweight", (*Brain).ruleOverweight},
+	{"arena leave", (*Brain).ruleArenaLeave},
 	{"attacked", (*Brain).ruleAttacked},
 	{"overweight hold", (*Brain).ruleOverweightHold},
 	{"recover", (*Brain).ruleRecover},
 	{"rest", (*Brain).ruleRest},
 	{"rebuff", (*Brain).ruleRebuff},
 	{"buffpotion", (*Brain).ruleBuffPotion},
+	{"arena fight", (*Brain).ruleArenaFight},
+	{"hunt", (*Brain).ruleHunt},
+	{"challenge", (*Brain).ruleChallenge},
 	{"rooms", (*Brain).ruleRooms},
 	{"stay", (*Brain).ruleStay},
 	{"loot", (*Brain).ruleLoot},
@@ -577,6 +589,7 @@ var playRules = []rule{
 	{"recipe", (*Brain).ruleRecipe},
 	{"craft", (*Brain).ruleCraft},
 	{"supply", (*Brain).ruleSupply},
+	{"arena", (*Brain).ruleArena},
 	{"leader", (*Brain).ruleLeader},
 	{"follow", (*Brain).ruleFollow},
 	{"newbie", (*Brain).ruleNewbie},

@@ -338,7 +338,7 @@ func (b *Brain) mayVolunteer(now time.Time) bool {
 // or supply trip, or a valuables round.
 func (b *Brain) onErrand() bool {
 	return b.errandRunning() || b.train.npc != 0 || b.shop.v.active() || b.class.v.active() ||
-		b.dyes.v.active() || b.newbie.v.active() || b.trip.v.active() || b.supplyTrip.active() ||
+		b.dyes.v.active() || b.newbie.v.active() || b.trip.v.active() || b.supplyTrip.active() || b.pvp.arena.active() ||
 		b.round.phase != roundIdle
 }
 

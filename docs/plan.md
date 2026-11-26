@@ -473,7 +473,9 @@ These keep the server and the bot host working; they are operational, not player
   unasked; it asks the GM to invite it, so the GM stays leader; `invite me` from a player takes a
   Support member of a bot party out, under the claim table, and is ignored by any other bot),
   `leave`, `logout`. `join` from any player to a bot party's leader with a free place invites the
-  player (D28, `docs/parties/players.md`). A GM's `invite me` and `leave` take the
+  player (D28, `docs/parties/players.md`). `duel` from any player to a bot whose persona takes
+  duels (`PvPPolicy.Duels`) asks for its challenge, and like `join` never reaches the authority
+  (D36, `docs/pvp/finding.md`); other bots take it as chat. A GM's `invite me` and `leave` take the
   bot out of its bot party and clear its party slot first, as its `follow`, `assist`, `stay` and
   `go <spot>` do (`docs/parties/orders.md`, "Slot clearing").
 
