@@ -27,20 +27,13 @@ func (b *Brain) slotted() bool {
 // is asked: the whisper costs no database query.
 func (b *Brain) heardJoin(t tell, now time.Time) {
 	v, slot := &b.partyLead, b.cfg.link.party
-	if now.Before(v.heard[t.name]) || slices.Contains(v.queue, t.name) ||
+	if v.heard.held(t.name, now) || slices.Contains(v.queue, t.name) ||
 		v.player && v.invitee == t.name || b.partyNamed(t.name) {
 		return
 	}
 	pol := b.persona.Lead.withDefaults()
-	for n, until := range v.heard {
-		if !until.After(now) {
-			delete(v.heard, n)
-		}
-	}
-	if v.heard == nil {
-		v.heard = make(map[string]time.Time)
-	}
-	v.heard[t.name] = now.Add(pol.InviteRetry)
+	v.heard.prune(now)
+	v.heard.set(t.name, now.Add(pol.InviteRetry))
 	if slot.Kind == CommandJoin {
 		b.joinReply(t.name, replyAskPrefix+slotLeader(slot), now)
 		return

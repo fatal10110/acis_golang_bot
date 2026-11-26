@@ -187,7 +187,7 @@ func (b *Brain) attackReach() reach {
 // unreachableTarget blacklists id for BlacklistFor: no walk reaches a
 // stand point to fight it from.
 func (b *Brain) unreachableTarget(id int32, now time.Time) {
-	b.blacklist[id] = now.Add(b.persona.BlacklistFor)
+	b.blacklist.set(id, now.Add(b.persona.BlacklistFor))
 	b.engage = engageState{}
 }
 

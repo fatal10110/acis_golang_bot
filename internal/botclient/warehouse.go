@@ -320,7 +320,7 @@ type warehouseErrand struct {
 	// noClan the ones whose pages link no clan warehouse, noPrivate no
 	// private one. noPrivate may be handed in: it is read and filled in
 	// place.
-	shunned   map[int32]time.Time
+	shunned   holds[int32]
 	noClan    map[int32]bool
 	noPrivate map[int32]bool
 	// retryAt is when a request may start after one that ended before an
@@ -537,10 +537,7 @@ func (b *Brain) stepWarehouse(now time.Time) (Action, bool) {
 	}
 	a, ok := b.approach(v, now)
 	if !ok {
-		if e.shunned == nil {
-			e.shunned = make(map[int32]time.Time)
-		}
-		e.shunned[v.npcID] = now.Add(visitShunFor)
+		e.shunned.set(v.npcID, now.Add(visitShunFor))
 		e.fail(WarehouseUnreachable, 0, now)
 		return Action{}, false
 	}
@@ -745,7 +742,7 @@ func (b *Brain) startWarehouse(now time.Time) bool {
 	from := b.world.Self.Position(now)
 	reach, anchorReach := int64(p.Reach)*int64(p.Reach), int64(req.Reach)*int64(req.Reach)
 	usable := func(npcID int32, at Point) bool {
-		if !m.keepers[npcID] || now.Before(e.shunned[npcID]) {
+		if !m.keepers[npcID] || e.shunned.held(npcID, now) {
 			return false
 		}
 		if req.Private {

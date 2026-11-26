@@ -352,7 +352,7 @@ type shopVisit struct {
 	rounds int
 	// shunned are the merchants, by template id, not at their spawn or
 	// whose page had none of the links the bot needed, until a time.
-	shunned map[int32]time.Time
+	shunned holds[int32]
 	// unsellable are the item templates a sell window left out.
 	unsellable map[int32]bool
 	// books are the spellbooks a trainer asked for and the bot lacks.
@@ -366,10 +366,7 @@ type shopVisit struct {
 // visit starts before shopRetry, unless the visit is armed.
 func (sh *shopVisit) end(now time.Time, shun bool) {
 	if shun {
-		if sh.shunned == nil {
-			sh.shunned = make(map[int32]time.Time)
-		}
-		sh.shunned[sh.v.npcID] = now.Add(visitShunFor)
+		sh.shunned.set(sh.v.npcID, now.Add(visitShunFor))
 	}
 	next := now.Add(shopRetry)
 	if sh.armed {
@@ -519,10 +516,7 @@ func (b *Brain) endShop(now time.Time, shun bool) {
 	if shun || !b.wantsElsewhere(npcID) {
 		return
 	}
-	if sh.shunned == nil {
-		sh.shunned = make(map[int32]time.Time)
-	}
-	sh.shunned[npcID] = now.Add(shopRetry)
+	sh.shunned.set(npcID, now.Add(shopRetry))
 	sh.nextAt = now
 }
 
@@ -584,7 +578,7 @@ func (b *Brain) startShop(now time.Time) bool {
 	// false for a merchant the visit has no use for: one selling none of
 	// need, unless anyMerchant and selling is due on its own.
 	lists := func(npcID int32, need []buyRow, anyMerchant bool) (ids []int32, ok bool) {
-		if now.Before(sh.shunned[npcID]) {
+		if sh.shunned.held(npcID, now) {
 			return nil, false
 		}
 		for _, l := range shops[npcID] {
