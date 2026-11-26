@@ -107,7 +107,11 @@ func (b *Brain) ruleArena(now time.Time) (Action, bool) {
 	}
 	if !t.active() {
 		if t.due.IsZero() {
-			b.arenaArm(now)
+			if d := b.cfg.ArenaFirst; d > 0 {
+				t.due = now.Add(d)
+			} else {
+				b.arenaArm(now)
+			}
 			return Action{}, false
 		}
 		if now.Before(t.due) || !b.arenaReady(now) {

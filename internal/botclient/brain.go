@@ -91,6 +91,13 @@ type BrainConfig struct {
 	// shared by every bot of
 	// the process. Nil travels nowhere and visits only NPCs in sight.
 	Travel *TravelMap
+	// ArenaFirst, when above 0, is how long after the brain first looks
+	// at an arena trip (PvPPolicy.Arenas) the first one falls due, in
+	// place of arenaEvery give or take arenaJitter; later trips keep that
+	// timer. Zero keeps the timer for the first trip too: it is the live
+	// arena scenario's seam (TestLivePvPArena), which cannot wait over an
+	// hour, and no preset sets it.
+	ArenaFirst time.Duration
 	// Stores, when set, are the towns a merchant opens its store in and
 	// the bot stores open there (rule "store"), shared by every bot of the
 	// process. Nil opens no store.

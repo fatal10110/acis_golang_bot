@@ -171,6 +171,12 @@ const (
 // EncodeSay2Tell.
 func EncodeSay2(text string, channel int32) []byte { return encodeSay2(text, channel) }
 
+// EncodeRequestDuelStart challenges the player named name to a one-on-one
+// duel, or its party to a party duel (see encodeRequestDuelStart).
+func EncodeRequestDuelStart(name string, party bool) []byte {
+	return encodeRequestDuelStart(name, party)
+}
+
 // EncodeTradeRequest asks the player objectID to trade.
 func EncodeTradeRequest(objectID int32) []byte { return encodeTradeRequest(objectID) }
 
