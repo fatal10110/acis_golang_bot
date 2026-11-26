@@ -415,8 +415,9 @@ type buffKey struct{ target, skill int32 }
 
 // castOn casts skill on id at now: stand up, wait out a cast in flight,
 // walk off a stand the server refused a cast at id from for sight
-// (sightWalk), select id, then cast. A Party buff (selectFirst false) is
-// cast on the bot whatever it has selected.
+// (sightWalk), select id, then cast. With selectFirst false (a Party buff,
+// a self step of a SELF-target skill) the cast goes out whatever the bot
+// has selected: the server casts a SELF skill on the caster.
 func (b *Brain) castOn(id, skill int32, selectFirst bool, now time.Time) Action {
 	s := &b.world.Self
 	if s.Sitting {

@@ -19,7 +19,8 @@ var rowNow = at(5 * time.Second)
 
 // pvpRowCase is one decision of a mystic PvP row: the bot of class at
 // level against a player of class opp (with a bow when bow), after setup,
-// casts skill, or moves (the flee or the kite) with move set.
+// casts skill, or moves (the flee or the kite) with move set. A skill of
+// target ONE cast on the bot (onSelf) goes once the bot selected itself.
 type pvpRowCase struct {
 	name         string
 	class, level int32
@@ -28,6 +29,7 @@ type pvpRowCase struct {
 	setup        func(t *testing.T, b *Brain)
 	skill        int32
 	move         bool
+	onSelf       bool
 }
 
 func runPvPRowCases(t *testing.T, cases []pvpRowCase) {
@@ -39,6 +41,9 @@ func runPvPRowCases(t *testing.T, cases []pvpRowCase) {
 				tc.setup(t, b)
 			}
 			_, a := b.decide(rowNow)
+			if tc.onSelf {
+				a = castOnSelf(t, b, a, rowNow)
+			}
 			switch {
 			case tc.move && a.kind != actMove:
 				t.Fatalf("action %v skill %d, want a move", a.kind, a.skill)
@@ -181,7 +186,7 @@ func TestPvPRowCL(t *testing.T) {
 	runPvPRowCases(t, []pvpRowCase{
 		{name: "vs melee: Dryad Root", class: classCleric, level: 30, opp: lyrWarrior, skill: skillDryadRoot},
 		{name: "@22 vs melee: Ice Bolt", class: classCleric, level: 22, opp: lyrWarrior, skill: skillIceBolt},
-		{name: "vs a caster: Mental Shield", class: classCleric, level: 30, opp: lyrMystic, skill: skillMentalShield},
+		{name: "vs a caster: Mental Shield", class: classCleric, level: 30, opp: lyrMystic, skill: skillMentalShield, onSelf: true},
 		{name: "vs a caster, shielded: Wind Strike", class: classCleric, level: 30, opp: lyrMystic, setup: shielded, skill: skillWindStrike},
 		{name: "vs a healer: no Mental Shield, Wind Strike", class: classCleric, level: 30, opp: lyrCleric, skill: skillWindStrike},
 		{name: "breaking off: Dryad Root", class: classCleric, level: 30, opp: lyrWarrior, setup: breaking, skill: skillDryadRoot},
@@ -213,7 +218,7 @@ func TestPvPRowEO(t *testing.T) {
 	runPvPRowCases(t, []pvpRowCase{
 		{name: "vs melee: Wind Shackle", class: classElvenOracle, level: 30, opp: lyrWarrior, skill: skillWindShackle},
 		{name: "vs melee, shackled: Dryad Root", class: classElvenOracle, level: 30, opp: lyrWarrior, setup: landedOn(skillWindShackle), skill: skillDryadRoot},
-		{name: "vs a battle caster: Mental Shield", class: classElvenOracle, level: 30, opp: rowOrcMy, skill: skillMentalShield},
+		{name: "vs a battle caster: Mental Shield", class: classElvenOracle, level: 30, opp: rowOrcMy, skill: skillMentalShield, onSelf: true},
 		{name: "breaking off: Dryad Root", class: classElvenOracle, level: 30, opp: lyrWarrior, setup: breaking, skill: skillDryadRoot},
 	})
 }
