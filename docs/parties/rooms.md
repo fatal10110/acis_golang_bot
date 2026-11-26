@@ -41,6 +41,8 @@ no other claim, and on no errand or trip (`onErrand`).
    int). Both give the claim back and put the leader in the retry list for `Retry` (default 15 min);
    the next list waits a whole `ListEvery`. A room closed on the bot (`ExClosePartyRoom`, `fe:000f`)
    ends in an exit too, as the server may have put it back on the waiting list.
+   A bot in the room that joins a party its leader does not lead (it took another invitation)
+   withdraws too: the server takes a room member out only when it leaves its party.
 
 ## Pacing
 

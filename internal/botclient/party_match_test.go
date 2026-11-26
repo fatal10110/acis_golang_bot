@@ -352,3 +352,31 @@ func TestRoomListPacing(t *testing.T) {
 		t.Fatalf("withDefaults = %+v, want the floors", got)
 	}
 }
+
+// TestRoomOtherInvitation checks a bot that waits in Lea's room and takes
+// another player's invitation: it leaves Lea's room once, as the server
+// keeps it there for the whole party otherwise.
+func TestRoomOtherInvitation(t *testing.T) {
+	const monID = int32(0x30000020)
+	claims := NewPartyClaims()
+	b, out := roomBrain(t, selfID, claims)
+	asked := roomList(t, b, matchRoom)
+	handleAt(t, b, asked.Add(time.Second), PartyMatchDetail{RoomID: matchRoom.ID, MaxMembers: 4, MinLevel: 1, MaxLevel: 20})
+	inv := asked.Add(10 * time.Second)
+	handleAt(t, b, inv, AskJoinParty{Requester: "Mon", Loot: 1})
+	a, ok := b.rulePrompt(inv)
+	if !ok || !bytes.Equal(a.payload, acceptFrame) {
+		t.Fatalf("prompt answer % x %v, want accept", a.payload, ok)
+	}
+	if _, err := b.send(a, inv); err != nil {
+		t.Fatal(err)
+	}
+	handleAt(t, b, inv.Add(time.Second), PartySmallWindowAll{LeaderID: monID, Members: []PartyMember{{ObjectID: monID, Name: "Mon"}}})
+	for _, d := range []time.Duration{2 * time.Second, 3 * time.Second, 2 * time.Minute, time.Hour} {
+		roomStep(t, b, inv.Add(d))
+	}
+	wantFrames(t, out, roomListFrame, roomJoinFrame, acceptFrame, roomWithdrawFrame)
+	if leader, _, ok := claims.held(selfID); !ok || leader != "Mon" {
+		t.Fatalf("claim %q %v in Mon's party, want Mon", leader, ok)
+	}
+}

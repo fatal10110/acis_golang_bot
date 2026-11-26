@@ -215,8 +215,11 @@ type roomVolunteer struct {
 	// came or its wait ran out.
 	pick  PartyRoom
 	asked roomAsk
-	// inRoom is the room the bot entered (PartyMatchDetail), 0 for none.
-	inRoom int32
+	// inRoom is the room the bot entered (PartyMatchDetail), 0 for none;
+	// roomLeader is the leader of the room the bot asked to enter there,
+	// empty for a room it did not ask.
+	inRoom     int32
+	roomLeader string
 	// retry holds each leader the bot asked, until it may ask again.
 	retry map[string]time.Time
 }
@@ -262,7 +265,10 @@ func (b *Brain) ruleRooms(now time.Time) (Action, bool) {
 	if v.asked.leader != "" {
 		return Action{}, false
 	}
-	if v.inRoom != 0 && !inParty {
+	// The bot leaves its room once it is in no party, or in one its room's
+	// leader does not lead (it took another invitation): the server takes
+	// it out only when it leaves the party (partymatch LeaveWithParty).
+	if v.inRoom != 0 && (!inParty || v.roomLeader != "" && b.ledByOther(v.roomLeader)) {
 		return Action{kind: actRoomWithdraw, payload: encodeRequestWithdrawPartyRoom(v.inRoom)}, true
 	}
 	if !v.listedAt.IsZero() && (v.got || now.Sub(v.listedAt) >= roomListAnswer) {
@@ -290,6 +296,21 @@ func (b *Brain) ruleRooms(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	return roomListAction(), true
+}
+
+// ledByOther reports whether the bot's party has a leader of a known name
+// other than leader.
+func (b *Brain) ledByOther(leader string) bool {
+	p, self := &b.world.Party, &b.world.Self
+	name := self.Name
+	if p.LeaderID != self.ObjectID {
+		m := p.Members[p.LeaderID]
+		if m == nil || m.Name == "" {
+			return false
+		}
+		name = m.Name
+	}
+	return !strings.EqualFold(name, leader)
 }
 
 // mayVolunteer reports whether the bot may list rooms and ask to enter one
@@ -383,12 +404,19 @@ func (b *Brain) roomEvent(ev Event, now time.Time) {
 		}
 	case PartyMatchDetail:
 		// Entering a room takes the bot off the waiting list
-		// (partymatch join).
+		// (partymatch join). A detail of the room the bot is in revises its
+		// terms and keeps its leader.
+		switch {
+		case v.asked.leader != "" && v.asked.room == e.RoomID:
+			v.roomLeader = v.asked.leader
+		case e.RoomID != v.inRoom:
+			v.roomLeader = ""
+		}
 		v.inRoom, v.waiting = e.RoomID, false
 	case ExClosePartyRoom:
 		// Ousted, or the room disbanded: the server may have put the bot
 		// back on the waiting list, which an exit leaves at no cost.
-		v.inRoom, v.waiting = 0, true
+		v.inRoom, v.roomLeader, v.waiting = 0, "", true
 	case SystemMessage:
 		if e.ID == msgCantEnterPartyRoom && v.asked.leader != "" {
 			// A refused join leaves the bot on the waiting list.
@@ -411,6 +439,6 @@ func (b *Brain) roomSent(a Action, now time.Time) {
 	case actRoomExit:
 		v.waiting = false
 	case actRoomWithdraw:
-		v.inRoom = 0
+		v.inRoom, v.roomLeader = 0, ""
 	}
 }
