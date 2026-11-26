@@ -18,6 +18,10 @@ const (
 	followMaxDist  = 350
 	followRepath   = 250
 	followDelayMax = 800 * time.Millisecond
+	// followTickMax is the longest wait for the bot's next decision
+	// (botclient defaultTick plus defaultTickJitter): a leader passing
+	// Repath is noticed only there, followDelayMax before the re-path.
+	followTickMax = 1500 * time.Millisecond
 	// followReach is the farthest a settled bot stands from its leader:
 	// the leader's stop may land within Repath of the bot's last anchor,
 	// where the bot keeps its old slot (#5, the #18 correction).
@@ -165,7 +169,7 @@ func TestLiveFollow(t *testing.T) {
 		}
 		for i := range 2 {
 			l := lead(t, ctx, gm.Client, b, awayFrom(gm.Pos(), 700, float64(i)*math.Pi), speed)
-			bound := followReach + float64(speed)*followDelayMax.Seconds()*2
+			bound := followReach + float64(speed)*(followTickMax+2*followDelayMax).Seconds()
 			if l.gap > bound {
 				t.Fatalf("walk=%v leg %d: %s fell %.0f behind the GM's path, want at most %.0f", walk, i, name, l.gap, bound)
 			}
