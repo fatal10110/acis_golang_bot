@@ -291,7 +291,8 @@ type Action struct {
 	// walk marks a move that is one of the walker's segments (goTo), or
 	// the walker's own /unstuck.
 	walk bool
-	// yes marks a duel answer that accepts the challenge.
+	// yes marks a duel answer that accepts the challenge, or a
+	// challenge to a party duel.
 	yes bool
 	// interrupts marks a cast that answers an opponent's cast
 	// (Brain.interruptCast), what bot_pvp_interrupts_total counts.
@@ -721,6 +722,9 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 // potion goes out over a heal or drain in flight (sustaining), and no heal
 // or drain during a recall (escaping). Against a player it fights (pvpFoe)
 // it does not flee: the PvP layer's break-off decides (docs/pvp/layer.md).
+// Nor in a duel, which never kills: a run would stray from the other side
+// and cancel it (duel/duel.go disturbed), as a party duel's defeated
+// member, frozen at 1 HP until its side's end, would.
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
@@ -763,7 +767,7 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	if a, ok := b.heal(s.ObjectID, now); ok {
 		return a, true
 	}
-	if !b.mayFlee(now) || b.pvpFoe(now) {
+	if !b.mayFlee(now) || b.pvpFoe(now) || b.inDuel(now) {
 		return Action{}, false
 	}
 	return b.flee(b.world.Target, now), true

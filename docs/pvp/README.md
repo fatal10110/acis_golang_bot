@@ -32,8 +32,7 @@ visits arenas and fights back (open-world PK exists, off); fights like a player 
 accident; and handles death and karma per the server's rules.
 
 Out of scope until the owner approves D40-D42: clan wars as targets ([war](war.md)), sieges
-([siege](siege.md)) and the Olympiad ([Olympiad](olympiad.md)). Out of scope: party duels (M11),
-fighting summons for their own sake beyond killing one before its owner when that pays off (#428,
+([siege](siege.md)) and the Olympiad ([Olympiad](olympiad.md)). Out of scope: fighting summons for their own sake beyond killing one before its owner when that pays off (#428,
 [summons](targets.md#summons-and-pets)), buying CP potions (Ancient Adena only), second-profession
 PvP rows (first profession's row until M10's #332), kiting monsters.
 
@@ -105,7 +104,7 @@ X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](
 | X14 | Clan-war targets (#602, D40 proposed): relation bits, war mark and its clearing, `MayFight` rule 6b, forced attack, guard. | D40, X4b, X5 | [war](war.md) |
 | X15 | Sieges (#603, D41 proposed): 283/284 by position, leave a battlefield, `UserInfo` siege state, fight the other side. | D41, X2, X4b, X11 | [siege](siege.md), [finding](finding.md#duel-ground) |
 | X16 | The Olympiad (#604, D42 proposed): noblesse, registration, the match. | D42, X4, X6, M8 #178 | [Olympiad](olympiad.md) |
-| Backlog | Second-profession rows (with #332), party duels (with M11), the gaps below. | X7, X8 | [Risks and gaps](#risks-and-gaps) |
+| Backlog | Second-profession rows (with #332), the gaps below; party duels shipped with M11 (#424, [party duels](party.md#party-duels)). | X7, X8 | [Risks and gaps](#risks-and-gaps) |
 
 Most urgent: X1-X5 (X4b included) give a bot that takes duels and fights in arenas with its M10
 rotation; X6-X8 make it fight like its class.
@@ -124,7 +123,7 @@ with no row); **arena deaths** (the 5-death cap and stay limit).
 
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
-(M11); a challenge hold shared by all bots; buying CP potions;
+(M11, #424, shipped: [party duels](party.md#party-duels)); a challenge hold shared by all bots; buying CP potions;
 fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
 command-channel mates in an arena (rule 3). Clan wars, sieges and the Olympiad are planned in
 [war](war.md), [siege](siege.md) and [Olympiad](olympiad.md) (#602-#604), pending D40-D42.

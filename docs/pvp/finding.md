@@ -8,7 +8,7 @@ persona defaults.
 | Source | What the bot does | Bound |
 | --- | --- | --- |
 | A player attacks it | Fights back (today). | — |
-| A duel challenge (`ExDuelAskStart`) | Accepts after the [reaction delay](wire.md#changes-to-todays-code-x4) when it can duel (out of combat, HP and MP at least half, no flag, karma or store, not a party duel, on [allowed ground](#where-a-duel-is-allowed), [clear of monsters](#clear-of-monsters)); else declines at once. Clan mates, allies and party members are taken like anyone ([rule 1](targets.md#mayfight)); a bot-marked challenger is declined at once (D38); party duels are declined. | one answer per challenge |
+| A duel challenge (`ExDuelAskStart`) | Accepts after the [reaction delay](wire.md#changes-to-todays-code-x4) when it can duel (out of combat, HP and MP at least half, no flag, karma or store, on [allowed ground](#where-a-duel-is-allowed), [clear of monsters](#clear-of-monsters)); else declines at once. Clan mates, allies and party members are taken like anyone ([rule 1](targets.md#mayfight)); a bot-marked challenger is declined at once (D38); a party duel only by the bot leading its party with every member ready ([party duels](party.md#party-duels)). | one answer per challenge |
 | A whispered `duel` | Challenges that player (`RequestDuelStart` with its name) when both can duel and it is within 2000. Extends D3 for this whisper, as D20 did (M11's proposed `join`, D28, would too). Dropped within `ChallengeEvery` of the bot's last `RequestDuelStart`, own or whispered. Dropped too when heard in combat stance or one starts before its reaction, or reached 30 s late behind another rule. Never held by `DeclineHold`; its decline (1931) or refusal (153, 1926, 2017-2028) starts `DeclineHold` for the bot's own challenges of that player only. | one per `ChallengeEvery` (3 min) per bot, shared; once per player per `ChallengeSameEvery` (30 min) |
 | Its own challenge | Out of combat, clear of monsters, at its spot or on the road: challenges one non-bot player in sight within 2000, out of combat, unflagged, no karma or store, of its tier, both on allowed ground, when the [engage estimate](model.md#engage-estimate) passes against its row. A decline or refusal of any challenge to that player holds it. Holds are per bot. | one per `ChallengeEvery`, shared with whispers; once per player per `ChallengeSameEvery`; `DeclineHold` (2 h) |
 | Flagged and karma players in sight | [Hunting](targets.md#hunting). | the fight rules |
@@ -76,7 +76,8 @@ position.
 ## Tests
 
 - `TestPvPDuelAccept` (X5): a challenge at full HP and MP out of combat → accepted after the delay;
-  MP under half → declined at once; a `farmer` → declined; a party duel → declined; in a town, an
+  MP under half → declined at once; a `farmer` → declined; a party duel in no party → declined (a
+  leader's: `TestPvPPartyDuelAnswer`); in a town, an
   arena, water or a no-restart zone → declined at once; an aggressive monster within its aggro range
   plus 300, or a monster in its attackers table → declined at once, no own challenge; after a 1940
   with the pre-checks passing → declined, no own challenge, until 2000 moved or 10 minutes; after a

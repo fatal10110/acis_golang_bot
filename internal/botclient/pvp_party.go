@@ -48,7 +48,8 @@ type partyHit struct {
 func (b *Brain) inParty(id int32) bool { return id == b.world.Self.ObjectID || b.partyMate(id) }
 
 // partyFight reports whether the bot fights as a party at now: in a party
-// and out of a duel (a duel is one-on-one, docs/pvp/guards.md).
+// and out of a duel (a duel fights only its other side, docs/pvp/guards.md;
+// a party duel's members each fight it by ruleDuel, pvp_party_duel.go).
 func (b *Brain) partyFight(now time.Time) bool { return b.world.Party.In() && !b.inDuel(now) }
 
 // partyAttack keeps the party's hits from e at now, and reports when the

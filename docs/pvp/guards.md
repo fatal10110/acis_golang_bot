@@ -113,7 +113,8 @@ apply only to a swing at a player or summon.
   (named by its title) is not seen inside by `ArenaEdge`. The target falls under
   [Arena edge](#arena-edge).
 - **Duel**: from the countdown to the end, no offensive area or aura skill (Wild Sweep, Seal of
-  Binding 1208, AURA) and no pole swing while any player but the opponent, any summon or pet, or any
+  Binding 1208, AURA) and no pole swing while any player but the opponent (in a party duel any but
+  the foes), any summon or pet, or any
   attackable NPC is in reach (radii included): a hit on any of them can cancel the duel
   ([duel end](server-duels.md); area reach: [area skills](server-casts.md)). Every summon counts
   (duel team unread). A pole wielder repositions or holds; a swing under way still lands.
@@ -124,8 +125,8 @@ From the countdown to the end `SupportFlagged` counts as off through the new `Ma
 ([wire](wire.md#changes-to-todays-code-x4)): supporting a flagged or karma player flags the bot
 (`character_pvpflag.go:88-93`), which cancels the duel (`duel/duel.go:205-207`). So no beneficial
 skill on such a player but itself, and no party skill (Chant of Life 1229, Chant of Fire 1006) while
-such a member is in its radius (`character_pvpflag.go:65-95`). Nor on its duel opponent, a clean
-party member included ([rule 1](targets.md#mayfight)): `MaySupport`
+such a member is in its radius (`character_pvpflag.go:65-95`). Nor on its duel opponent (in a party
+duel any foe), a clean party member included ([rule 1](targets.md#mayfight)): `MaySupport`
 refuses it, and a party skill waits while it is a member in the radius.
 
 ## Tests
