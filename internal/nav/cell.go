@@ -167,10 +167,11 @@ const (
 // a fall off a wall or a cliff, past twice the climb limit, where a steep
 // slope's steps stay within it. CanMove takes it (the server limits a
 // descent by fall damage only), but a bot walking it looks like one jumping
-// off a wall (#504). Each drop costs costDrop more, in the cell search and
-// in the nav build's edge costs, so a route goes down a ramp or through a
-// gate whenever that way is less than costDrop/costCardinal cells longer,
-// and takes a drop only where no such way exists, as a one-way drop toward
+// off a wall (#504). Each drop costs costDrop more per whole dropBound it
+// falls (dropCost), in the cell search and in the nav build's edge costs, so
+// a route goes down a ramp or through a gate whenever that way is less than
+// costDrop/costCardinal cells longer per dropBound of the fall, and takes a
+// drop only where no such way exists, as a one-way drop toward
 // a leader below does (docs/navigation.md, "Drops"). A larger cost makes a
 // leg that must drop flood more cells before it does.
 const (
@@ -178,11 +179,15 @@ const (
 	costDrop  = 1000
 )
 
-// dropCost returns costDrop when a step from a floor at z down to one at to
-// is a drop, else 0.
+// dropCost returns costDrop for each whole dropBound a step from a floor at
+// z down to one at to falls, when it is a drop, else 0: a fall's cost grows
+// with its height, as its fall damage does (the server's FallDamageBase,
+// the whole height times max HP over 1000 once the fall passes the safe
+// fall height), so a high cliff weighs a longer way round than a ledge
+// (#514).
 func dropCost(z, to int16) int32 {
-	if int(to) < int(z)-dropBound {
-		return costDrop
+	if fall := int(z) - int(to); fall > dropBound {
+		return costDrop * int32(fall/dropBound)
 	}
 	return 0
 }
