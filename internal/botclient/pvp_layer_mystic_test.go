@@ -111,7 +111,7 @@ func TestPvPKiteCL(t *testing.T) {
 // resist rule (docs/pvp/layer.md "PvP order"): after two 139s on it this
 // fight no third, Ice Bolt instead.
 func TestPvPControlLandRateCL(t *testing.T) {
-	b := pvpRowBrain(t, classCleric, 30, lyrWarrior, false)
+	b := mysticRowBrain(t, classCleric, 30, lyrWarrior, false)
 	resist := SystemMessage{ID: msgResisted}
 	play(t, b, []beat{
 		{at: 0, kind: actCast, skill: skillDryadRoot},
@@ -145,7 +145,7 @@ func TestPvPBreakOffOM(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			b := pvpRowBrain(t, classOrcMystic, tc.level, lyrWarrior, false)
+			b := mysticRowBrain(t, classOrcMystic, tc.level, lyrWarrior, false)
 			breaking(t, b)
 			hold(b, rowNow, skillLifeDrain)
 			if tc.setup != nil {
@@ -171,7 +171,7 @@ func TestPvPBreakOffOM(t *testing.T) {
 	}
 }
 
-// TestPvPRotation checks pvpRotation: the PvP row's steps first, the M10
+// TestPvPRotation checks pvpSteps: the PvP row's steps first, the M10
 // steps of a skill it lists left out but for a side cast on another
 // attacker, the other M10 steps kept in order.
 func TestPvPRotation(t *testing.T) {
@@ -182,7 +182,7 @@ func TestPvPRotation(t *testing.T) {
 		{Skill: skillDryadRoot, Target: TargetOtherAttacker, Attackers: 2},
 		{Skill: skillWindStrike, Target: TargetLeaderTarget},
 	}
-	got := pvpRotation(pvp, rot)
+	got := pvpSteps(pvp, rot)
 	want := []int32{skillWindShackle, skillDryadRoot, skillSelfHeal, skillDryadRoot, skillWindStrike}
 	if len(got) != len(want) {
 		t.Fatalf("%d steps %+v, want %v", len(got), got, want)
@@ -198,7 +198,7 @@ func TestPvPRotation(t *testing.T) {
 	if len(pvp) != 2 {
 		t.Errorf("the PvP row grew to %d steps", len(pvp))
 	}
-	if got := pvpRotation(nil, rot); len(got) != len(rot) {
+	if got := pvpSteps(nil, rot); len(got) != len(rot) {
 		t.Errorf("no PvP row: %d steps, want the M10 row's %d", len(got), len(rot))
 	}
 }
@@ -213,7 +213,7 @@ func TestPvPAuraCastAt(t *testing.T) {
 	lands := rowNow.Add(seal.HitTime)
 	cast := func(t *testing.T) *Brain {
 		t.Helper()
-		b := pvpRowBrain(t, classOrcShaman, 30, lyrWarrior, false)
+		b := mysticRowBrain(t, classOrcShaman, 30, lyrWarrior, false)
 		b.handleOne(t, MyTargetSelected{ObjectID: pcID}, rowNow)
 		b.handleOne(t, seal, rowNow)
 		if _, ok := b.pvp.opponents[pcID].fight.landed[skillSealBinding]; !ok {

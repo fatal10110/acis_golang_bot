@@ -34,7 +34,7 @@ func runPvPRowCases(t *testing.T, cases []pvpRowCase) {
 	t.Helper()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			b := pvpRowBrain(t, tc.class, tc.level, tc.opp, tc.bow)
+			b := mysticRowBrain(t, tc.class, tc.level, tc.opp, tc.bow)
 			if tc.setup != nil {
 				tc.setup(t, b)
 			}
@@ -49,10 +49,6 @@ func runPvPRowCases(t *testing.T, cases []pvpRowCase) {
 	}
 }
 
-// opened has the bot's first attack on pcID gone out: the opponent is no
-// longer fresh.
-func opened(_ *testing.T, b *Brain) { b.opened = pcID }
-
 // landedOn plays the bot's casts of skills on pcID, each landing 1 s after
 // its MagicSkillUse at 1 s.
 func landedOn(skills ...int32) func(t *testing.T, b *Brain) {
@@ -61,15 +57,6 @@ func landedOn(skills ...int32) func(t *testing.T, b *Brain) {
 			b.handleOne(t, selfCast(sk, time.Second), at(time.Second))
 		}
 		b.opened = pcID
-	}
-}
-
-// both runs the setups in order.
-func both(setups ...func(t *testing.T, b *Brain)) func(t *testing.T, b *Brain) {
-	return func(t *testing.T, b *Brain) {
-		for _, f := range setups {
-			f(t, b)
-		}
 	}
 }
 
@@ -108,8 +95,8 @@ func breaking(t *testing.T, b *Brain) {
 	r.HP, r.MaxHP = 800, 1000
 }
 
-// cooling keeps skills on reuse past rowNow.
-func cooling(skills ...int32) func(t *testing.T, b *Brain) {
+// reusing keeps skills on reuse past rowNow.
+func reusing(skills ...int32) func(t *testing.T, b *Brain) {
 	return func(_ *testing.T, b *Brain) { hold(b, rowNow, skills...) }
 }
 
@@ -180,7 +167,7 @@ func TestPvPRowOM(t *testing.T) {
 		{name: "vs a caster, both ticking: Life Drain", class: classOrcMystic, level: 15, opp: lyrMystic, setup: landedOn(skillVenom, skillChillFlame), skill: skillLifeDrain},
 		{name: "vs a Cleric's Heal (5 s): Dreaming Spirit", class: classOrcMystic, level: 15, opp: lyrCleric, setup: both(opened, healCast(5*time.Second)), skill: skillDreamingSpirit},
 		{name: "vs a Cleric's Heal with a spiritshot (3.5 s): no Int", class: classOrcMystic, level: 15, opp: lyrCleric, setup: both(opened, healCast(3500*time.Millisecond)), skill: skillVenom},
-		{name: "breaking off, no DOT, out of reach: Dreaming Spirit", class: classOrcMystic, level: 15, opp: lyrWarrior, setup: both(breaking, far, cooling(skillLifeDrain)), skill: skillDreamingSpirit},
+		{name: "breaking off, no DOT, out of reach: Dreaming Spirit", class: classOrcMystic, level: 15, opp: lyrWarrior, setup: both(breaking, far, reusing(skillLifeDrain)), skill: skillDreamingSpirit},
 	})
 }
 
@@ -214,9 +201,9 @@ func TestPvPRowHW(t *testing.T) {
 		{name: "@35 vs an archer: Curse Chaos first", class: classHumanWizard, level: 35, opp: rowRogue, bow: true, skill: skillCurseChaos},
 		{name: "vs a Cleric's Heal, a strong hit: Energy Bolt", class: classHumanWizard, level: 25, opp: lyrCleric, setup: both(opened, matk(5000), healCast(5*time.Second)), skill: skillEnergyBolt},
 		{name: "vs a Cleric's Heal, a weak hit: no Int", class: classHumanWizard, level: 25, opp: lyrCleric, setup: both(opened, healCast(5*time.Second)), skill: skillBlaze},
-		{name: "breaking off: Ice Bolt", class: classHumanWizard, level: 25, opp: lyrWarrior, setup: both(breaking, cooling(skillVampiricTouch)), skill: skillIceBolt},
-		{name: "breaking off, still slowed: the flee", class: classHumanWizard, level: 25, opp: lyrWarrior, setup: both(breaking, cooling(skillVampiricTouch), landedOn(skillIceBolt)), move: true},
-		{name: "@35 breaking off, slowed by Slow: the flee", class: classHumanWizard, level: 35, opp: lyrWarrior, setup: both(breaking, cooling(skillVampiricTouch), landedOn(skillSlow)), move: true},
+		{name: "breaking off: Ice Bolt", class: classHumanWizard, level: 25, opp: lyrWarrior, setup: both(breaking, reusing(skillVampiricTouch)), skill: skillIceBolt},
+		{name: "breaking off, still slowed: the flee", class: classHumanWizard, level: 25, opp: lyrWarrior, setup: both(breaking, reusing(skillVampiricTouch), landedOn(skillIceBolt)), move: true},
+		{name: "@35 breaking off, slowed by Slow: the flee", class: classHumanWizard, level: 35, opp: lyrWarrior, setup: both(breaking, reusing(skillVampiricTouch), landedOn(skillSlow)), move: true},
 	})
 }
 
@@ -240,7 +227,7 @@ func TestPvPRowEW(t *testing.T) {
 		{name: "vs a caster: Solar Spark", class: classElvenWizard, level: 30, opp: lyrMystic, skill: skillSolarSpark},
 		{name: "@22 vs a caster: Aqua Swirl", class: classElvenWizard, level: 22, opp: lyrMystic, skill: skillAquaSwirl},
 		{name: "vs a Cleric's Heal, a strong hit: Energy Bolt", class: classElvenWizard, level: 30, opp: lyrCleric, setup: both(opened, matk(5000), healCast(5*time.Second)), skill: skillEnergyBolt},
-		{name: "breaking off: Ice Bolt", class: classElvenWizard, level: 30, opp: lyrWarrior, setup: both(breaking, cooling(skillSelfHeal)), skill: skillIceBolt},
+		{name: "breaking off: Ice Bolt", class: classElvenWizard, level: 30, opp: lyrWarrior, setup: both(breaking, reusing(skillSelfHeal)), skill: skillIceBolt},
 	})
 }
 
@@ -249,9 +236,9 @@ func TestPvPRowEW(t *testing.T) {
 func TestPvPRowSO(t *testing.T) {
 	runPvPRowCases(t, []pvpRowCase{
 		{name: "vs melee: Wind Shackle", class: classShillienOracle, level: 30, opp: lyrWarrior, skill: skillWindShackle},
-		{name: "vs a caster, shielded: Curse: Poison", class: classShillienOracle, level: 30, opp: lyrMystic, setup: cooling(skillMentalShield), skill: skillCursePoison},
+		{name: "vs a caster, shielded: Curse: Poison", class: classShillienOracle, level: 30, opp: lyrMystic, setup: reusing(skillMentalShield), skill: skillCursePoison},
 		{name: "under 60 % HP: Vampiric Touch", class: classShillienOracle, level: 30, opp: lyrWarrior, setup: func(_ *testing.T, b *Brain) { b.world.Self.HP = 500 }, skill: skillVampiricTouch},
-		{name: "breaking off: Dryad Root", class: classShillienOracle, level: 30, opp: lyrWarrior, setup: both(breaking, cooling(skillVampiricTouch)), skill: skillDryadRoot},
+		{name: "breaking off: Dryad Root", class: classShillienOracle, level: 30, opp: lyrWarrior, setup: both(breaking, reusing(skillVampiricTouch)), skill: skillDryadRoot},
 	})
 }
 
@@ -267,7 +254,7 @@ func TestPvPRowDW(t *testing.T) {
 		{name: "@36 vs melee, shackled: Slow", class: classDarkWizard, level: 36, opp: lyrWarrior, setup: landedOn(skillWindShackle), skill: skillSlow},
 		{name: "vs a Cleric's Heal within 150, a strong hit: Aura Burn", class: classDarkWizard, level: 30, opp: lyrCleric, setup: both(opened, foeSeen(lyrCleric, Point{Y: 50}, 0), matk(5000), healCast(5*time.Second)), skill: skillAuraBurn},
 		{name: "vs a Cleric's Heal at 300, a strong hit: no Aura Burn", class: classDarkWizard, level: 30, opp: lyrCleric, setup: both(opened, matk(5000), healCast(5*time.Second)), skill: skillShadowSpark},
-		{name: "breaking off: Ice Bolt", class: classDarkWizard, level: 30, opp: lyrWarrior, setup: both(breaking, cooling(skillVampiricTouch)), skill: skillIceBolt},
+		{name: "breaking off: Ice Bolt", class: classDarkWizard, level: 30, opp: lyrWarrior, setup: both(breaking, reusing(skillVampiricTouch)), skill: skillIceBolt},
 	})
 }
 
@@ -286,11 +273,11 @@ func TestPvPRowOS(t *testing.T) {
 	runPvPRowCases(t, []pvpRowCase{
 		{name: "vs melee at 300: Frost Flame", class: classOrcShaman, level: 30, opp: lyrWarrior, setup: wield("BLUNT"), skill: skillFrostFlame},
 		{name: "vs melee in reach: Stun Attack", class: classOrcShaman, level: 30, opp: lyrWarrior, setup: both(wield("BLUNT"), near), skill: skillStunAttack},
-		{name: "vs a Cleric in reach: no Stun Attack at reuse", class: classOrcShaman, level: 30, opp: lyrCleric, setup: both(wield("BLUNT"), opened, foeSeen(lyrCleric, Point{Y: 50}, 0), cooling(skillAuraSink, skillFrostFlame)), skill: skillLifeDrain},
+		{name: "vs a Cleric in reach: no Stun Attack at reuse", class: classOrcShaman, level: 30, opp: lyrCleric, setup: both(wield("BLUNT"), opened, foeSeen(lyrCleric, Point{Y: 50}, 0), reusing(skillAuraSink, skillFrostFlame)), skill: skillLifeDrain},
 		{name: "vs a Cleric's Heal in reach: Stun Attack", class: classOrcShaman, level: 30, opp: lyrCleric, setup: both(wield("BLUNT"), opened, foeSeen(lyrCleric, Point{Y: 50}, 0), healCast(5*time.Second)), skill: skillStunAttack},
 		{name: "vs a caster: Chant of Fire", class: classOrcShaman, level: 30, opp: lyrMystic, skill: skillChantFire},
 		{name: "vs a caster, chanted, opened: Aura Sink", class: classOrcShaman, level: 30, opp: lyrMystic, setup: both(chanted, opened), skill: skillAuraSink},
-		{name: "breaking off, a stunned melee opponent next to it: Seal of Binding", class: classOrcShaman, level: 30, opp: lyrWarrior, setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 50}, 0x40), cooling(skillLifeDrain), matk(2000)), skill: skillSealBinding},
-		{name: "breaking off, a melee opponent next to it: the flee", class: classOrcShaman, level: 30, opp: lyrWarrior, setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 50}, 0), cooling(skillLifeDrain)), move: true},
+		{name: "breaking off, a stunned melee opponent next to it: Seal of Binding", class: classOrcShaman, level: 30, opp: lyrWarrior, setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 50}, 0x40), reusing(skillLifeDrain), matk(2000)), skill: skillSealBinding},
+		{name: "breaking off, a melee opponent next to it: the flee", class: classOrcShaman, level: 30, opp: lyrWarrior, setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 50}, 0), reusing(skillLifeDrain)), move: true},
 	})
 }

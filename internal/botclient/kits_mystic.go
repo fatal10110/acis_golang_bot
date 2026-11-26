@@ -446,7 +446,7 @@ var (
 
 // The mystic PvP rows (docs/pvp/rows.md, rows HM EM DM OM CL HW EO EW SO
 // DW OS), ClassKit.PvP: against a player they replace the M10 row's steps
-// of every skill they list (pvpRotation), so each lists its skills' whole
+// of every skill they list (pvpSteps), so each lists its skills' whole
 // PvP play; the M10 steps of the other skills (Self Heal, Vampiric Touch,
 // Body To Mind) and the kit's heals and buffs stay. pvpCast runs them in
 // the PvP order (docs/pvp/layer.md): self and sustain steps, Int, control

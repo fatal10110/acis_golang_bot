@@ -136,29 +136,31 @@ func rowSteps(steps []charmodel.RefStep, ids map[string]int32) string {
 }
 
 // mysticRowTable is the mystic rows' row table at a level: each row's
-// damage, DOT and control steps (Int and Break ones included) in its PvP
-// row's order, the level each starts at and its vs gate. Sustain buffs,
-// Mental Shield, Chant of Fire and Aura Sink (MP damage) are left out.
+// damage, DOT and control steps against a player (pvpSteps: the PvP row's,
+// then the M10 steps of the skills it does not name) in that order, the
+// level each starts at and its vs gate. Int, Break and side-cast steps,
+// sustain buffs, Mental Shield, Chant of Fire and Aura Sink (MP damage)
+// are left out.
 var mysticRowTable = map[int]map[string]string{
 	10: {
 		"HM": "1184@7[M A] 1177@1[C H B] 1168@7[H] 1184@7[M] 1177@1",
 		"EM": "1184@7 1184@7[M] 1177@1",
 		"DM": "1168@7[C H] 1184@7[M] 1177@1",
-		"OM": "1090@7 1100@7 1095@7[C H] 1100@7 1090@7 1097@7 1097@7",
+		"OM": "1090@7 1100@7 1095@7[C H] 1100@7 1090@7",
 		"CL": "1184@7[M] 1177@1",
 	},
 	40: {
-		"HM": "1184@7[M A] 1177@1[C H B] 1164@14[M] 1168@7[H] 1184@7[M] 1177@1",
+		"HM": "1184@7[M A] 1177@1[C H B] 1164@14[M] 1168@7[H] 1184@7[M] 1177@1 1147@14",
 		"EM": "1206@14[M] 1206@14[A] 1164@14[M] 1184@7 1184@7[M] 1177@1",
-		"DM": "1206@14[M] 1206@14[A] 1168@7[C H] 1184@7[M] 1177@1",
-		"OM": "1090@7 1100@7 1095@7[C H] 1100@7 1090@7 1097@7 1097@7 1092@14",
-		"CL": "1201@25[M] 1184@7[M] 1177@1 1201@25",
-		"EO": "1206@14[M] 1201@25[M] 1184@7[M] 1177@1 1201@25",
-		"SO": "1147@14 1206@14[M] 1201@25[M] 1168@7[C H] 1184@7[M] 1177@1 1201@25",
-		"HW": "1184@7[M A] 1220@20[C H] 1160@35[M] 1222@35[M A] 1184@7[M] 1220@20 1274@20 1172@20 1274@20 1172@20 1184@7",
-		"EW": "1206@14[M] 1206@14[A] 1264@25 1175@20 1184@7[M] 1264@25 1175@20 1274@20 1172@20 1274@20 1172@20 1184@7",
-		"DW": "1206@14[M] 1206@14[A] 1168@7[C H] 1266@25 1160@35[M] 1184@7[M] 1266@25 1178@20 1172@20 1172@20 1184@7",
-		"OS": "1090@7 1107@20 1107@20 1090@7 100@20 1097@7 1208@25[M] 1097@7 1092@14",
+		"DM": "1206@14[M] 1206@14[A] 1168@7[C H] 1184@7[M] 1177@1 1147@14",
+		"OM": "1090@7 1100@7 1095@7[C H] 1100@7 1090@7",
+		"CL": "1201@25[M] 1184@7[M] 1177@1",
+		"EO": "1206@14[M] 1201@25[M] 1184@7[M] 1177@1",
+		"SO": "1147@14 1206@14[M] 1201@25[M] 1168@7[C H] 1184@7[M] 1177@1",
+		"HW": "1184@7[M A] 1220@20[C H] 1160@35[M] 1222@35[M A] 1184@7[M] 1220@20 1274@20 1172@20 1147@14",
+		"EW": "1206@14[M] 1206@14[A] 1264@25 1175@20 1184@7[M] 1264@25 1175@20 1274@20 1172@20",
+		"DW": "1206@14[M] 1206@14[A] 1168@7[C H] 1266@25 1160@35[M] 1184@7[M] 1266@25 1178@20 1172@20 1147@14",
+		"OS": "1090@7 1107@20 1107@20 1090@7 100@20",
 	},
 }
 
@@ -205,12 +207,12 @@ var mysticPvPSkills = map[int32]datapack.Skill{
 	skillBodyToMind:     {Type: "MANAHEAL", Target: "SELF", Magic: true, HitTime: 4 * time.Second, Power: 22},
 }
 
-// pvpRowBrain is layerBrain for a bot of class at level in the Damage
+// mysticRowBrain is layerBrain for a bot of class at level in the Damage
 // role with its real compiled build, knowing the skills of its PvP and
 // rotation steps at level 1 with their datapack entries (mysticPvPSkills)
 // and nothing else (no buff, toggle or heal goes first), against pcID of
 // class opp (a bow in its right hand when bow) 300 away.
-func pvpRowBrain(t *testing.T, class, level, opp int32, bow bool) *Brain {
+func mysticRowBrain(t *testing.T, class, level, opp int32, bow bool) *Brain {
 	t.Helper()
 	b := layerBrain(t, opp)
 	m := b.cfg.Travel

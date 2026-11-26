@@ -95,7 +95,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			}
 		}
 	}
-	for _, st := range r.kit.Rotation {
+	for _, st := range slices.Concat(r.kit.Rotation, r.kit.PvP) {
 		if !starts(st.Skill, st.From) {
 			continue
 		}
@@ -122,7 +122,10 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			if st.Charges != wantCharges || st.ChargeToMax != wantToMax {
 				fail("skill %d level %d charge condition %+v, the step has charges %d to max %v", g.ID, g.Level, sk.Charges, st.Charges, st.ChargeToMax)
 			}
-			if st.Within != 0 && st.Within != sk.CastRange {
+			// A Within is the castRange; an aura's (castRange 0) is its
+			// radius, the OS Stun Attack's its padded reach (X8).
+			aura := sk.CastRange <= 0 && st.Within == sk.Radius
+			if st.Within != 0 && st.Within != sk.CastRange && !aura && (st.Skill != skillStunAttack || st.Within != stunAttackReach) {
 				fail("skill %d level %d castRange %d, the step's Within is %d", g.ID, g.Level, sk.CastRange, st.Within)
 			}
 		}
