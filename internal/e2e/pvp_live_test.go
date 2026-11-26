@@ -541,7 +541,10 @@ func TestLivePvPHealer(t *testing.T) {
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	acc := func(n int) string { a, _ := tg.Account("pvh", n); return a }
-	leader := bpRun(t, ctx, tg, acc(1), &botclient.HumanFighter, bpLeaderPersona, nil)
+	// The leader reads skill types from the travel map's skill table
+	// (Brain.skillAt): without it, no cast is a heal and the client never
+	// becomes the enemy healer (the fourth live run).
+	leader := bpRun(t, ctx, tg, acc(1), &botclient.HumanFighter, bpLeaderPersona, withTravel(travel))
 	cleric := bpRun(t, ctx, tg, freshAccount(tg, "pvhc"), &botclient.HumanMystic, func() botclient.Persona {
 		p := partyPersona()
 		errandsOff(&p)
