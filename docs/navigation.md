@@ -470,6 +470,16 @@ server's pathfinder.
   - Only after the real search fails, a second search ignores doors. If that one succeeds, the
     result is `unreachable: door`, never plain unreachable. Both searches count against the same
     node budget.
+  - A goal behind a closed door (#649) never gets there: the last leg finds no entrance node
+    that reaches the goal inside its cluster, and its search anywhere floods until the cell budget
+    runs out. So when the last leg seats no goal, and neither the walk avoids a column nor the
+    route an edge, the leg checks the static engine (every door open) before that search: first
+    the same search inside the cluster's box from the last node to the goal, then the seating. If
+    either finds a way, the answer is `unreachable: door`; if neither does, the search anywhere
+    runs as before. For two ends of one cluster, a start that reaches no entrance node runs the
+    first of these only, from the start to the goal inside the box. The check costs at most two
+    passes over one box, and changes no route found; a walk to a closed room ends for the door,
+    not for the route budget.
 - **Routes**:
   - **a straight segment first** (#565): a goal within the segment cap whose straight segment from
     the start passes what the string-pull asks of its first candidate (no avoided column but the
@@ -500,6 +510,17 @@ server's pathfinder.
     first (#504): the straight line joining the start to a node of its cluster does not see a
     drop off the walkway the start stands on, so the start seats on the nodes it reaches
     without one, and only an end that reaches none that way seats with drops;
+  - **two ends of one cluster** (#648): the abstract search answers no node for them, so the free
+    cell search runs between them first, as before, but with at most the cluster's columns
+    (`ClusterCells` squared, 65,536 cells) of the route's budget. A route it finds is the route it
+    always was. Once the cap is spent, the route is planned as between two clusters: the first
+    leg's search inside the cluster's box finds the goal there or seats the start on the entrance
+    nodes it reaches, the abstract search runs from those seats without the same-cluster shortcut,
+    and the last leg seats the goal as above. In the worst case this spends the cap and about three
+    floods of the box before a leg is refined, so a budget at or under the cap is the free search
+    alone. A pair whose free search ran out of the budget gets a route (or still `ErrBudget`); one
+    the free search routed past the cap gets the hierarchy's route, which may be longer. `Distance`
+    keeps the straight line for two ends of one cluster;
   - string pulling with the copied `CanMove`, where a segment drops past `dropBound` only when
     the cell path it stands for drops: a straight line from a wall's walkway passes `CanMove`
     over its edge even when the cell path went down the ramp (#504);

@@ -47,10 +47,12 @@ func (h *Hierarchy) distance(a, b Member, closed func(door int) bool) (int, erro
 // from a's cell to b's, expanding at most budget nodes, and leaves the node
 // path, first node first, in s.apath. It returns the cost and the nodes it
 // expanded. Cells of one cluster answer their straight-line distance and an
-// empty path.
+// empty path, unless seat seats an end: a route between two ends of one
+// cluster is seated only once its free search spent the cap (sameCluster),
+// and then runs over the entrance nodes as between two clusters.
 func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed func(door int) bool, budget int, seat *seating) (int32, int, error) {
 	s.apath = s.apath[:0]
-	if a.res.cluster == b.res.cluster {
+	if a.res.cluster == b.res.cluster && seat.starts == nil && seat.goals == nil {
 		return heuristic(a.cell, b.cell), 0, nil
 	}
 	g := h.graph
@@ -164,7 +166,14 @@ func (h *Hierarchy) abstractSearch(s *scratch, a, b Member, sp *span, closed fun
 // run with every door open, over the static engine; if it finds a way the
 // answer is ErrDoor, never ErrUnreachable (docs/navigation.md, "Doors in the
 // hierarchy"). The two share one budget: p.Budget cells and abstractBudget
-// abstract nodes.
+// abstract nodes. A goal that no entrance node reaches inside its cluster,
+// or the start of two ends of one cluster that reaches none, is checked
+// over the static engine before its leg's free search floods the budget
+// away (lastLeg, firstLeg): a way there is ErrDoor too (#649).
+//
+// Two ends of one cluster keep the free cell search, up to the cluster's
+// columns; past them the route is seated and runs over the entrance nodes
+// as between two clusters (sameCluster, #648).
 func (h *Hierarchy) Route(p *Planner, from, to location.Location, closed func(door int) bool) ([]location.Location, error) {
 	return h.route(p, from, to, closed, false)
 }
@@ -223,8 +232,7 @@ func (h *Hierarchy) route(p *Planner, from, to location.Location, closed func(do
 	if !errors.Is(err, ErrUnreachable) {
 		return nil, err
 	}
-	open := *p
-	open.Engine = h.static.Engine
+	open := h.openPlanner(p)
 	q.seat = seating{} // seated under the door state closed
 	switch _, err := h.search(s, &open, &q, nil, &b); {
 	case err == nil:
@@ -304,6 +312,8 @@ func (h *Hierarchy) searchSeated(s *scratch, p *Planner, q *routeQuery, closed f
 				cells, used, err = h.lastLeg(s, p, q, a, c, b.cells, avoid)
 			case i > 0 && i < legs-1:
 				cells, used, err = h.middleLeg(s, p, a, c, b.cells, avoid)
+			case legs == 1 && avoid == nil && !q.seat.startDone && q.a.res.cluster == q.b.res.cluster:
+				cells, used, err = h.sameCluster(s, p, q, a, c, b.cells)
 			default:
 				cells, used, err = p.search(s, a, c, b.cells, avoid, anywhere)
 			}
@@ -361,6 +371,13 @@ func allows(nodes []int32, n int32) bool {
 // it seats the start there and answers errReseat. Only a start that reaches
 // no node without a drop looks again with drops, and seats the same way; a
 // start that reaches no node at all keeps the free search.
+//
+// For two ends of one cluster (sameCluster), c is the goal. A start that
+// reaches no node there may stand behind a closed door: unless the route
+// avoids a column or an edge, the leg's search runs once more over the
+// static engine, every door open, and a way found there answers ErrDoor
+// (#649). The goal's seating is not checked: under the door state it was
+// never tried.
 func (h *Hierarchy) firstLeg(s *scratch, p *Planner, q *routeQuery, a, c Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
 	q.seat.startDone = true
 	box := h.clusterBox(a)
@@ -378,6 +395,14 @@ func (h *Hierarchy) firstLeg(s *scratch, p *Planner, q *routeQuery, a, c Cell, b
 			return nil, used, errReseat
 		}
 	}
+	if q.a.res.cluster == q.b.res.cluster && h.doorCheck(p, avoid) {
+		open := h.openPlanner(p)
+		_, n, err := open.search(s, a, c, budget-used, nil, box)
+		used += n
+		if err == nil {
+			return nil, used, ErrDoor
+		}
+	}
 	cells, more, err := p.search(s, a, c, budget-used, avoid, anywhere)
 	return cells, used + more, err
 }
@@ -386,6 +411,12 @@ func (h *Hierarchy) firstLeg(s *scratch, p *Planner, q *routeQuery, a, c Cell, b
 // when they do not join inside the goal's cluster, without a drop and then
 // with drops, it walks back from the goal over the cluster to the nodes that
 // reach it and seats the goal there.
+//
+// A goal no node reaches may stand behind a closed door, where the free
+// search would flood until the budget runs out. Unless the route avoids a
+// column or an edge, the leg checks the static engine, every door open,
+// before it falls back: the same search inside the box, then the seating.
+// Either way found answers ErrDoor (#649); neither keeps the fall back.
 func (h *Hierarchy) lastLeg(s *scratch, p *Planner, q *routeQuery, c, goal Cell, budget int, avoid map[edgeKey]struct{}) ([]Cell, int, error) {
 	q.seat.goalDone = true
 	box := h.clusterBox(goal)
@@ -404,7 +435,68 @@ func (h *Hierarchy) lastLeg(s *scratch, p *Planner, q *routeQuery, c, goal Cell,
 			return nil, used, errReseat
 		}
 	}
+	if h.doorCheck(p, avoid) {
+		open := h.openPlanner(p)
+		_, n, err := open.search(s, c, goal, budget-used, nil, box)
+		used += n
+		if err == nil {
+			return nil, used, ErrDoor
+		}
+		used += open.reachers(s, goal, box)
+		if len(h.seats(s, q.b, q.span.goal)) > 0 {
+			return nil, used, ErrDoor
+		}
+	}
 	cells, more, err := p.search(s, c, goal, budget-used, avoid, anywhere)
+	return cells, used + more, err
+}
+
+// doorCheck reports whether a leg that found no seat checks the static
+// engine for a closed door (firstLeg, lastLeg): only when p reads another
+// engine than the static one, and neither p nor the route avoids anything,
+// so that a way the static engine finds is cut by a door alone.
+func (h *Hierarchy) doorCheck(p *Planner, avoid map[edgeKey]struct{}) bool {
+	return p.Engine != h.static.Engine && p.Avoid.Len() == 0 && len(avoid) == 0
+}
+
+// openPlanner is p over the static engine, every door open.
+func (h *Hierarchy) openPlanner(p *Planner) Planner {
+	open := *p
+	open.Engine = h.static.Engine
+	return open
+}
+
+// sameClusterCap is the cells the free search of a route between two ends
+// of one cluster may expand before the route is seated: the cluster's
+// columns, ClusterCells squared (#648).
+func (h *Hierarchy) sameClusterCap() int {
+	if h.sameCap > 0 {
+		return h.sameCap
+	}
+	size := h.graph.key.ClusterCells
+	return size * size
+}
+
+// sameCluster refines a route between two ends of one cluster, whose
+// abstract search answered no node (#648, docs/structure.md "Routes"). The
+// free cell search runs first, as before, but with at most sameClusterCap
+// cells: a route it finds is the route it always was. Once the cap is
+// spent, the route is planned as between two clusters: firstLeg searches
+// the cluster's box from the start to the goal, and finds the goal there or
+// seats the start on the entrance nodes it reaches (errReseat), after which
+// the abstract search runs between seats, the goal seated by lastLeg. The
+// cap is charged to budget, so a budget at or under the cap is the free
+// search alone, as before.
+func (h *Hierarchy) sameCluster(s *scratch, p *Planner, q *routeQuery, start, goal Cell, budget int) ([]Cell, int, error) {
+	limit := h.sameClusterCap()
+	if budget <= limit {
+		return p.search(s, start, goal, budget, nil, anywhere)
+	}
+	cells, used, err := p.search(s, start, goal, limit, nil, anywhere)
+	if !errors.Is(err, ErrBudget) {
+		return cells, used, err
+	}
+	cells, more, err := h.firstLeg(s, p, q, start, goal, budget-used, nil)
 	return cells, used + more, err
 }
 
