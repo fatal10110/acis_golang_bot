@@ -232,7 +232,7 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 	if a, ok := b.pvpItem(id, now); ok {
 		return a, true
 	}
-	rot = append(slices.Clip(b.build().Kit.PvP), rot...)
+	rot = pvpSteps(b.build().Kit.PvP, rot)
 	st := b.stepState(id, rot, now)
 	if b.breaksOff(id, rot, st, now) {
 		return b.breakAway(id, rot, st, now), true
@@ -285,6 +285,21 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 		}
 	}
 	return first(attack)
+}
+
+// pvpSteps are the steps a row plays against a player (docs/pvp/rows.md:
+// a row lists only what differs from M10): its PvP row's steps, then its
+// rotation's steps of the skills the PvP row does not name. A PvP row
+// naming a skill plays it only as its own steps say (KN's Aggression only
+// as a Peel, Ultimate Defense only vs M).
+func pvpSteps(pvp, rot []Step) []Step {
+	out := slices.Clip(pvp)
+	for _, st := range rot {
+		if !slices.ContainsFunc(pvp, func(p Step) bool { return p.Skill == st.Skill }) {
+			out = append(out, st)
+		}
+	}
+	return out
 }
 
 // pool is the pool estimate of player id (docs/pvp/layer.md "CP, cures,
@@ -572,12 +587,13 @@ func (b *Brain) pvpRows() charmodel.RowTable {
 var shippedKits = []map[int32]ClassKit{lineKits, professionKits}
 
 // pvpRowTable is the PvP row table of kits at character level
-// (docs/pvp/model.md "Row table"): per row, its kit's PvP steps (ClassKit.PvP) of RoleNone or
-// RoleDamage from level on, filtered to damage, DOT and control skills,
-// each at the highest skill level its class tree grants by level, Vs
-// copied; a scout row's bow steps go to its bow branch, its other weapon
-// steps to its dagger branch, the rest to both. Empty until the PvP rows
-// ship (X7, X8), and without a travel map.
+// (docs/pvp/model.md "Row table"): per row whose PvP row ships
+// (ClassKit.PvP: the fighter rows from X7, the mystic rows from X8), the
+// steps it plays against a player (pvpSteps) of RoleNone or RoleDamage
+// from level on, filtered to damage, DOT and control skills, each at the
+// highest skill level its class tree grants by level, Vs copied; a scout
+// row's bow steps go to its bow branch, its other weapon steps to its
+// dagger branch, the rest to both. Empty without a travel map.
 func pvpRowTable(m *TravelMap, kits []map[int32]ClassKit, level int) charmodel.RowTable {
 	t := charmodel.RowTable{}
 	if m == nil {
@@ -594,7 +610,7 @@ func pvpRowTable(m *TravelMap, kits []map[int32]ClassKit, level int) charmodel.R
 			if !ok {
 				continue
 			}
-			for _, st := range kit.PvP {
+			for _, st := range pvpSteps(kit.PvP, kit.Rotation) {
 				ref, ok := m.refStep(class, st, level)
 				if !ok {
 					continue
@@ -631,9 +647,10 @@ func rowClass(class int32) bool {
 // character level: its skill at the highest level class's tree grants by
 // level, from the later of st.From and the first grant's level; ok is
 // false for a step not played at level, of another role, not granted by
-// then, or neither damage, DOT nor control.
+// then, neither damage, DOT nor control, or not cast in a plain fight (a
+// Break, Peel or Interrupt step).
 func (m *TravelMap) refStep(class int32, st Step, level int) (charmodel.RefStep, bool) {
-	if int(st.From) > level || st.Role != RoleNone && st.Role != RoleDamage {
+	if int(st.From) > level || st.Role != RoleNone && st.Role != RoleDamage || st.Break || st.Peel || st.Interrupt {
 		return charmodel.RefStep{}, false
 	}
 	skill, first := 0, 0

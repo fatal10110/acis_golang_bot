@@ -95,7 +95,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			}
 		}
 	}
-	for _, st := range r.kit.Rotation {
+	for _, st := range slices.Concat(r.kit.Rotation, r.kit.PvP) {
 		if !starts(st.Skill, st.From) {
 			continue
 		}
