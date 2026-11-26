@@ -223,11 +223,12 @@ func (b *Brain) resisted() {
 // pvpCast is the PvP order over rot, the row's rotation, fighting player
 // id at now (docs/pvp/layer.md "PvP order"): a cure or CP potion (pvpItem)
 // and the break-off (breaksOff, breakAway) first, the kite walk, then the PvP
-// row's steps and rot's in groups, each under the M10 gates (tryStep):
-// self-target steps and sustain under the long-cast rule, interrupts,
-// control steps that are due, the opener, finishers once the pool estimate
-// is under their expected damage, the other attacks. ok is false when none
-// goes: fight follows the Melee policy.
+// row's steps and rot's (pvpSteps) in groups, each under the M10 gates
+// (tryStep): self-target steps and sustain under the long-cast rule,
+// interrupts, control steps that are due, the opener, finishers once the
+// pool estimate is under their expected damage, the other attacks; a DOT
+// step not while its own DOT still ticks on id (dotHolds). ok is false
+// when none goes: fight follows the Melee policy.
 func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) (Action, bool) {
 	if a, ok := b.pvpItem(id, now); ok {
 		return a, true
@@ -272,7 +273,7 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 	}); ok {
 		return a, true
 	}
-	attack := func(s Step) bool { return s.rank() == rankAttack && !control(s) }
+	attack := func(s Step) bool { return s.rank() == rankAttack && !control(s) && !b.dotHolds(id, s.Skill, now) }
 	if a, ok := first(func(s Step) bool { return attack(s) && s.Opener }); ok {
 		return a, true
 	}
@@ -289,17 +290,34 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 
 // pvpSteps are the steps a row plays against a player (docs/pvp/rows.md:
 // a row lists only what differs from M10): its PvP row's steps, then its
-// rotation's steps of the skills the PvP row does not name. A PvP row
-// naming a skill plays it only as its own steps say (KN's Aggression only
-// as a Peel, Ultimate Defense only vs M).
+// rotation's steps of the skills the PvP row does not name, and its side
+// casts on another attacker (TargetOtherAttacker, EO's Dryad Root). A PvP
+// row naming a skill plays it only as its own steps say (KN's Aggression
+// only as a Peel, Ultimate Defense only vs M; a mystic opener's Vs gate).
 func pvpSteps(pvp, rot []Step) []Step {
 	out := slices.Clip(pvp)
 	for _, st := range rot {
-		if !slices.ContainsFunc(pvp, func(p Step) bool { return p.Skill == st.Skill }) {
+		if st.Target == TargetOtherAttacker || !slices.ContainsFunc(pvp, func(p Step) bool { return p.Skill == st.Skill }) {
 			out = append(out, st)
 		}
 	}
 	return out
+}
+
+// dotHolds reports whether the bot's DOT of skill (an HP or MP damage
+// over time) it landed on player id still ticks at now: the step waits
+// for it to wear off (docs/pvp/layer.md "PvP order"), as a control step
+// does.
+func (b *Brain) dotHolds(id, skill int32, now time.Time) bool {
+	s, ok := b.skillData(skill)
+	r := b.pvp.opponents[id]
+	if !ok || r == nil || !slices.ContainsFunc(s.Effects, func(e datapack.Effect) bool {
+		return e.Name == "DamOverTime" || e.Name == "ManaDamOverTime"
+	}) {
+		return false
+	}
+	l, ok := r.fight.landed[skill]
+	return ok && l.holds(r.Abnormal, now)
 }
 
 // pool is the pool estimate of player id (docs/pvp/layer.md "CP, cures,
@@ -648,9 +666,9 @@ func rowClass(class int32) bool {
 // level, from the later of st.From and the first grant's level; ok is
 // false for a step not played at level, of another role, not granted by
 // then, neither damage, DOT nor control, or not cast in a plain fight (a
-// Break, Peel or Interrupt step).
+// Break, Peel or Interrupt step, a side cast on another attacker).
 func (m *TravelMap) refStep(class int32, st Step, level int) (charmodel.RefStep, bool) {
-	if int(st.From) > level || st.Role != RoleNone && st.Role != RoleDamage || st.Break || st.Peel || st.Interrupt {
+	if int(st.From) > level || st.Role != RoleNone && st.Role != RoleDamage || st.Break || st.Peel || st.Interrupt || st.Target == TargetOtherAttacker {
 		return charmodel.RefStep{}, false
 	}
 	skill, first := 0, 0

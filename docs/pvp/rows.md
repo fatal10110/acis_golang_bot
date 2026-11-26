@@ -6,6 +6,8 @@ professions with its row ids and notation (`docs/strategy.md` "Behavior per clas
 `vs M`, `vs A`, `vs C`, `vs H`, `vs B` and `Int`, `Hold`, `Break`, `Peel`
 ([step fields](layer.md#step-fields)). Skill ids are in the row's class tree at that level
 (`classes/*.xml`), land bases from `skills/*.xml`; a row lists only what differs from M10.
+Against a player a row's steps replace the M10 row's steps of every skill they list (a side cast
+on another attacker stays), so the shipped row lists each such skill's whole PvP play.
 [Who plays which row](modes.md#who-plays-which-row); second professions use their first
 profession's row until #332.
 

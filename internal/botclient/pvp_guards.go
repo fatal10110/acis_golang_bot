@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"math"
+	"strings"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -129,12 +130,29 @@ func (b *Brain) rootLasts(skill int32) (time.Duration, bool) {
 
 // ownCast keeps the bot's own cast e at now: a root's landing, which a
 // later CharInfo confirms (Brain.rootSeen), and the PvP layer's record of
-// it (Brain.layerCast).
+// it (Brain.layerCast), both at the player it was cast at (castTarget).
 func (b *Brain) ownCast(e MagicSkillUse, now time.Time) {
+	e.TargetID = b.castTarget(e)
 	if lasts, ok := b.rootLasts(e.SkillID); ok {
 		b.pvp.root = rootCast{target: e.TargetID, lands: now.Add(e.HitTime), lasts: lasts}
 	}
 	b.layerCast(e, now)
+}
+
+// castTarget is the object the bot's own cast e is at: its MagicSkillUse
+// target, but for an offensive aura skill (Seal of Binding), whose
+// MagicSkillUse names the caster (server
+// handler/target/target_handlers_area.go: every aura handler's
+// FinalTarget), the bot's selected target, the one it cast the step at.
+func (b *Brain) castTarget(e MagicSkillUse) int32 {
+	if e.TargetID != e.CasterID {
+		return e.TargetID
+	}
+	s, ok := b.skillAt(e.SkillID, e.Level)
+	if !ok || !s.Offensive || !strings.Contains(s.Target, "AURA") {
+		return e.TargetID
+	}
+	return b.world.Target
 }
 
 // rootLandSlack is how long after its landing a root the bot cast may

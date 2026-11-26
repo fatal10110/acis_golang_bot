@@ -18,9 +18,9 @@ import (
 // TestPvPRowsShipped checks the PvP rows (docs/pvp/rows.md "Tests") and the
 // skills the PvP layer names (docs/pvp/layer.md) against the shipped
 // datapack when BOT_DATAPACK_XML names its data/xml directory, and skips
-// otherwise: the fighter rows' steps in the row table (X7; the mystic rows
-// stay out until X8), every PvP step's skill learned at a trainer, and the
-// rows' skill fixture (rowSkills) as the datapack has it.
+// otherwise: the fighter rows' steps in the row table (X7), the mystic
+// rows (X8, checkMysticPvPRows), every PvP step's skill learned at a
+// trainer, and the rows' skill fixture (rowSkills) as the datapack has it.
 func TestPvPRowsShipped(t *testing.T) {
 	dir := os.Getenv("BOT_DATAPACK_XML")
 	if dir == "" {
@@ -61,6 +61,9 @@ func TestPvPRowsShipped(t *testing.T) {
 	} {
 		got := map[charmodel.Row]string{}
 		for r, refs := range pvpRowTable(m, shippedKits, tc.level) {
+			if _, mystic := mysticRowTable[40][r.ID]; mystic {
+				continue // checkMysticPvPRows
+			}
 			var ids []string
 			for _, ref := range refs {
 				id := strconv.Itoa(int(skillOf(t, skills, ref.Skill)))
@@ -99,6 +102,7 @@ func TestPvPRowsShipped(t *testing.T) {
 			t.Errorf("skill %d level %d: fixture\n%+v\ndatapack\n%+v", ref.ID, ref.Level, want, rowView(got))
 		}
 	}
+	t.Run("mystic rows", func(t *testing.T) { checkMysticPvPRows(t, classes, skills) })
 	skill := func(id int32) datapack.Skill {
 		s, ok := skills[datapack.SkillRef{ID: id, Level: 1}]
 		if !ok {
