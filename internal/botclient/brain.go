@@ -213,6 +213,9 @@ type Brain struct {
 	// click or an attack step's cast (Action.opens). An Opener step casts
 	// only on another (stepState.fresh).
 	opened int32
+	// once is the Once steps' record (onceRecord): the skills the server
+	// took a cast of on the bot's target.
+	once onceRecord
 	// side is a step cast on another attacker than the fight's (Dryad Root,
 	// TargetOtherAttacker) whose select went out and whose cast is due once
 	// it is the bot's target; sided is the last attacker one went to, which
@@ -598,9 +601,13 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID != b.engaged {
 				b.engaged = 0
 			}
+			if e.ObjectID != b.once.target {
+				b.once = onceRecord{}
+			}
 		case TargetUnselected:
 			if e.ObjectID == self {
 				b.engaged = 0
+				b.once = onceRecord{}
 			}
 		case AutoAttackStop:
 			if e.ObjectID == self {
@@ -665,6 +672,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		case MagicSkillUse:
 			if e.CasterID == self {
 				b.standCaster(e)
+				b.onceCast(e, now)
 				b.castAt = time.Time{}
 				if e.TargetID == b.unseen.id {
 					// The server took a cast at it: it is in sight.
@@ -688,6 +696,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.forgetOnce(e.ObjectID)
 			b.forgetSide(e.ObjectID)
 			b.spoilEvent(ev, now)
 			// A dead bot frees its spot for another and avoids it for a
@@ -705,6 +714,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}
+			b.forgetOnce(e.ObjectID)
 			b.forgetSide(e.ObjectID)
 		case NpcHtmlMessage:
 			b.trainEvent(ev, now)

@@ -6,7 +6,7 @@ import (
 )
 
 // The rotation runner (docs/strategy.md, Design sections 4, 7 and 9): fight
-// casts the build's steps in three passes, combat toggles follow the bot's
+// casts the build's steps in four passes, combat toggles follow the bot's
 // MP and its fights, ruleCritical tries the heal and drain steps before its
 // potions, ruleRest sits with Relax, and every buff obeys the stack rule.
 // Each cast goes through the one cast path (castOn, castStep): one at a
@@ -15,17 +15,20 @@ import (
 
 // Pass ranks of a rotation step: fight casts every self-target step that
 // passes first, then the enemy sustain steps (a SelfHPBelow step on the
-// target), then the attacks.
+// target), then the attacks, then the fillers (Step.Filler).
 const (
 	rankSelf = iota
 	rankSustain
 	rankAttack
+	rankFiller
 )
 
-// rank is the step's pass in fight: a step on another attacker or on the
-// leader's target is an attack.
+// rank is the step's pass in fight: a filler's whatever its target, and a
+// step on another attacker or on the leader's target is an attack.
 func (s Step) rank() int {
 	switch {
+	case s.Filler:
+		return rankFiller
 	case s.Target == TargetSelf:
 		return rankSelf
 	case s.Target == TargetEnemy && s.SelfHPBelow > 0:
@@ -36,13 +39,18 @@ func (s Step) rank() int {
 
 // critSustain are the heals and drains ruleCritical tries before its
 // potions (docs/strategy.md, Design section 7): Self Heal, Elemental Heal,
-// Divine Heal, Battle Roar, Drain Health, Vampiric Touch and Life Drain.
-var critSustain = []int32{skillSelfHeal, skillElementalHeal, skillDivineHeal, skillBattleRoar, skillDrainHealth, skillVampiricTouch, skillLifeDrain}
+// Divine Heal, Battle Roar, Drain Health, Vampiric Touch and Life Drain,
+// and the second professions' Life Leech (SK), Steal Essence (WC),
+// Vampiric Claw (SH) and Revival (WL).
+var critSustain = []int32{
+	skillSelfHeal, skillElementalHeal, skillDivineHeal, skillBattleRoar, skillDrainHealth, skillVampiricTouch, skillLifeDrain,
+	skillLifeLeech, skillStealEssence, skillVampiricClaw, skillRevival,
+}
 
 // rotationCast is the cast of the first step of rot, fighting id at now,
 // whose gates pass and whose skill is ready, in rank order: a self-target
-// step only under the stack rule (buffDue), an attack only with MP at the
-// reserve or more (underReserve false), a step on the leader's target only
+// step only under the stack rule (buffDue), an attack or a filler only with
+// MP at the reserve or more (underReserve false), a step on the leader's target only
 // on that target in a party (leaderTarget), a step on another attacker on
 // one the bot is not fighting (otherCast). Idle steps are ruleRebuff's. ok
 // is false when none is; a hold (Action{}, true) when id ran out of
@@ -52,7 +60,7 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 		return Action{}, false
 	}
 	st := b.stepState(id, rot, now)
-	for pass := rankSelf; pass <= rankAttack; pass++ {
+	for pass := rankSelf; pass <= rankFiller; pass++ {
 		for _, step := range rot {
 			if step.rank() != pass {
 				continue
@@ -66,16 +74,17 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 }
 
 // tryStep is the cast of step, fighting id at now with gate state st, when
-// it goes: not Idle, an attack only with MP at the reserve or more, its
-// gates pass, its skill is ready and the guards do not hold it, a
+// it goes: not Idle, an attack or a filler only with MP at the reserve or
+// more, its gates pass, its skill is ready and the guards do not hold it, a
 // self-target step only under the stack rule (on a skill not
 // casterCentered, once the bot selected itself), a step on the leader's target
 // only on that target, a step on another attacker on one the bot is not
 // fighting, and, while Ultimate Defense holds the bot (immobile), a step on
-// another only in cast range. ok is false when it does not.
+// another only in cast range. Only an attack uses up the opener. ok is false
+// when it does not.
 func (b *Brain) tryStep(id int32, step Step, st stepState, underReserve bool, now time.Time) (Action, bool) {
 	r := step.rank()
-	if step.Idle || r == rankAttack && underReserve ||
+	if step.Idle || (r == rankAttack || r == rankFiller) && underReserve ||
 		!step.passes(st) || !b.world.SkillReady(step.Skill, now) ||
 		step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) ||
 		step.Target != TargetSelf && b.immobile(now) && !b.castInRange(id, step.Skill, now) {
@@ -204,6 +213,39 @@ func (b *Brain) castStep(id, skill int32, opens bool, now time.Time) Action {
 		}
 	}
 	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, b.forced(id, now)), object: id, skill: skill, opens: opens}
+}
+
+// onceRecord is what Step.Once reads (stepState.onced): the target the
+// bot's last cast the server took went to, and the skills the server took
+// a cast of on it. A new target of the bot's, the target's death (its
+// object id goes to its respawn) or its leaving forgets them (Brain.handle).
+type onceRecord struct {
+	target int32
+	skills []int32
+}
+
+// onceCast records the bot's own MagicSkillUse e answering its cast in
+// flight at now (castPending: sent within castTimeout and not refused) on
+// another creature than the bot. A cast the server refused, or answered
+// only after castTimeout, is not recorded, so a Once step may go again.
+func (b *Brain) onceCast(e MagicSkillUse, now time.Time) {
+	if !b.castPending(now) || e.SkillID != b.castSkill || e.TargetID != b.castObject || e.TargetID == b.world.Self.ObjectID {
+		return
+	}
+	if b.once.target != e.TargetID {
+		b.once = onceRecord{target: e.TargetID}
+	}
+	if !slices.Contains(b.once.skills, e.SkillID) {
+		b.once.skills = append(b.once.skills, e.SkillID)
+	}
+}
+
+// forgetOnce drops the Once record of id: the bot took another target, or
+// id died or left.
+func (b *Brain) forgetOnce(id int32) {
+	if b.once.target == id {
+		b.once = onceRecord{}
+	}
 }
 
 // sustain is the cast of the build's first heal or drain step

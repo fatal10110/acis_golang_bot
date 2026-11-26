@@ -14,14 +14,13 @@ import (
 // The dye tests' Symbol Maker (Marsden, NPC 31046) once in sight, and the
 // dyes of the symbols they draw (hennas.xml).
 const (
-	makerObj  = int32(0x20000060)
-	makerNPC  = int32(31046)
-	dyeStr    = int32(4445) // symbol 1, STR+1 CON-3
-	dyeDex    = int32(4450) // symbol 6, DEX+1 CON-3
-	dyeStr2   = int32(4481) // symbol 37, STR+1 CON-3
-	dyeDex2   = int32(4486) // symbol 42, DEX+1 CON-3
-	dyePrice  = int32(5610) // buyLists.xml <product id="4445" price="5610"/>
-	classGlad = int32(2)    // Gladiator
+	makerObj = int32(0x20000060)
+	makerNPC = int32(31046)
+	dyeStr   = int32(4445) // symbol 1, STR+1 CON-3
+	dyeDex   = int32(4450) // symbol 6, DEX+1 CON-3
+	dyeStr2  = int32(4481) // symbol 37, STR+1 CON-3
+	dyeDex2  = int32(4486) // symbol 42, DEX+1 CON-3
+	dyePrice = int32(5610) // buyLists.xml <product id="4445" price="5610"/>
 )
 
 var (
@@ -127,18 +126,18 @@ func TestDyePlan(t *testing.T) {
 		{name: "elven oracle", class: 29, slots: 2, wantDr: []int32{10, 10}},
 		{name: "shillien oracle", class: 42, slots: 2, wantDr: []int32{10, 10}},
 		{name: "orc shaman", class: 50, slots: 2, wantDr: []int32{10, 10}},
-		{name: "gladiator", class: classGlad, slots: 3, wantDr: []int32{37, 42, 37}},
+		{name: "gladiator", class: classGladiator, slots: 3, wantDr: []int32{37, 42, 37}},
 		{name: "bishop", class: 16, slots: 3, wantDr: []int32{46, 46, 46}},
 		{name: "one worn: the other", class: 1, slots: 2, worn: []WornSymbol{{1, 1}}, wantDr: []int32{6}},
 		{name: "a worn symbol off the table keeps its slot", class: 1, slots: 2, worn: []WornSymbol{{8, 8}}, wantDr: []int32{1}},
 		{name: "full slots", class: 1, slots: 2, worn: []WornSymbol{{1, 1}, {6, 6}}},
 		{name: "base class: no slot", class: classHumanFight, slots: 0},
 		{
-			name: "second profession: inactive first-profession symbols go", class: classGlad, slots: 3,
+			name: "second profession: inactive first-profession symbols go", class: classGladiator, slots: 3,
 			worn: []WornSymbol{{1, 0}, {6, 0}}, wantRemove: []int32{1, 6}, wantDr: []int32{37, 42, 37},
 		},
 		{
-			name: "an inactive symbol the datapack lacks keeps its slot", class: classGlad, slots: 3,
+			name: "an inactive symbol the datapack lacks keeps its slot", class: classGladiator, slots: 3,
 			worn: []WornSymbol{{99, 0}}, wantDr: []int32{37, 42},
 		},
 		{
@@ -192,8 +191,8 @@ func TestDyesDue(t *testing.T) {
 		{name: "fee past the reserve short", class: 1, slots: 2, items: []Item{adenaStack(37000), dyeStack(200, dyeStr, 10)}},
 		{name: "base class", class: classHumanFight, slots: 0, items: both},
 		{name: "full slots", class: 1, slots: 2, worn: []WornSymbol{{1, 1}, {6, 6}}, items: both},
-		{name: "removal only", class: classGlad, slots: 3, worn: []WornSymbol{{1, 0}}, items: []Item{adenaStack(rich)}, want: true},
-		{name: "removal fee short", class: classGlad, slots: 3, worn: []WornSymbol{{1, 0}}, items: []Item{adenaStack(1000)}},
+		{name: "removal only", class: classGladiator, slots: 3, worn: []WornSymbol{{1, 0}}, items: []Item{adenaStack(rich)}, want: true},
+		{name: "removal fee short", class: classGladiator, slots: 3, worn: []WornSymbol{{1, 0}}, items: []Item{adenaStack(1000)}},
 		{name: "backing off", class: 1, slots: 2, items: both, edit: func(b *Brain) { b.dyes.retryAt = at(time.Minute) }},
 		{name: "maker out of reach", class: 1, slots: 2, items: both, edit: func(b *Brain) { b.persona.Dyes.Reach = 4000 }},
 		{
@@ -270,7 +269,7 @@ func TestBrainDyesInventoryFirst(t *testing.T) {
 // profession's inactive symbols to the maker: it removes both, one per
 // answer, then draws the second profession's rows into all 3 slots.
 func TestBrainDyesSecondProfession(t *testing.T) {
-	b := newDyeBrain(t, classGlad, 40, 3, []WornSymbol{{1, 0}, {6, 0}},
+	b := newDyeBrain(t, classGladiator, 40, 3, []WornSymbol{{1, 0}, {6, 0}},
 		adenaStack(1000000), dyeStack(200, dyeStr2, 20), dyeStack(201, dyeDex2, 10))
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "talk", at: time.Second, setup: makerInSight, wantRule: "dyes", wantKind: actTalk},

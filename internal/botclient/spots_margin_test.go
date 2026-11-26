@@ -1,6 +1,8 @@
 package botclient
 
 import (
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -8,8 +10,9 @@ import (
 )
 
 // rowSpotMargins are the spot margins of the rows (docs/strategy.md
-// column 10) by class: the base rows and first professions, the artisan
-// playing the dwarven fighter's.
+// column 10) by class: the base rows, first professions and second
+// professions with a row of their own, the artisan playing the dwarven
+// fighter's.
 var rowSpotMargins = map[int32]float64{
 	HumanFighter.ID: marginNormal, ElvenFighter.ID: marginNormal, DarkFighter.ID: marginGlassCannon,
 	OrcFighter.ID: marginTank, DwarvenFighter.ID: marginNormal,
@@ -20,14 +23,19 @@ var rowSpotMargins = map[int32]float64{
 	42: marginGlassCannon, 39: marginGlassCannon, 50: marginNormal,
 }
 
-// TestSpotMarginRows checks every role of every base class and first
-// profession compiles its row's spot margin, and a persona's own replaces
-// it.
+// TestSpotMarginRows checks every role of every class of rowSpotMargins
+// compiles its row's spot margin at its row's start (1, 20 or 40), and a
+// persona's own replaces it.
 func TestSpotMarginRows(t *testing.T) {
-	for _, class := range []int32{0, 1, 4, 7, 10, 11, 15, 18, 19, 22, 25, 26, 29, 31, 32, 35, 38, 39, 42, 44, 45, 47, 49, 50, 53, 54, 56} {
+	for _, class := range slices.Sorted(maps.Keys(rowSpotMargins)) {
 		race, _ := datapack.ClassRace(class)
+		start, _, ok := rowSpan(class)
+		if !ok {
+			t.Errorf("class %d has a spot margin and no row", class)
+			continue
+		}
 		for _, role := range []Role{RoleDamage, RoleSupport, RoleCrafter} {
-			if got, want := CompileBuild(race, class, 20, role, BranchChoice{}).Kit.SpotMargin, rowSpotMargins[class]; got != want {
+			if got, want := CompileBuild(race, class, start, role, BranchChoice{}).Kit.SpotMargin, rowSpotMargins[class]; got != want {
 				t.Errorf("class %d %v: SpotMargin %v, want %v", class, role, got, want)
 			}
 		}
