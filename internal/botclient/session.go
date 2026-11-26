@@ -142,6 +142,10 @@ type BotConfig struct {
 	Learned func(name string, classID int32)
 	// Preset names the persona preset the bot plays, for its status.
 	Preset string
+	// Ledger is the valuables ledger its owner kept from the bot's last
+	// run (Status.Ledger), nil for none: the Bot starts its ledger from it
+	// (docs/valuables/ledger.md "Across restarts").
+	Ledger []LedgerEntry
 }
 
 // Bot is one account's player: a loop of session attempts, one at a time,
@@ -213,11 +217,11 @@ func NewBot(cfg SessionConfig, account, password string, bot BotConfig, rng *ran
 		log:       log.With("account", account),
 		retry:     backoff{base: retryBase, max: retryMax},
 		chat:      newChatLog(),
-		valuables: newValuables(),
+		valuables: restoreValuables(bot.Ledger),
 	}
 	b.net = netDialer{cfg: &b.cfg}
 	b.link.mail = make(chan mail, mailboxSize)
-	b.link.board.store(Status{State: StateNew, Character: ch.Name, Preset: bot.Preset})
+	b.link.board.store(Status{State: StateNew, Character: ch.Name, Preset: bot.Preset, Ledger: b.valuables.ledger()})
 	return b, nil
 }
 

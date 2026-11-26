@@ -86,6 +86,29 @@ stepper matching only while a round is open (only tests call `openRound` before 
 back](round.md#back-to-the-anchor) (`anchorArrive`), and a stored-units accessor reporting none
 stored and the status known until V3b wires it to V3a's private status.
 
+## Across restarts
+
+The ledger outlives the process in the bot registry (#404, owner 2026-11-26), so the
+[cap](release.md#the-cap)'s rounds (D33) do not start again from 0 after a restart.
+
+- **Kept, per entry:** template, `Enchant`, rounds, ask, the release mark and the **storage time**:
+  when a decision first saw its units stored, cleared once none are (all withdrawn). Not units: the
+  next session derives them as above. The ask and the mark are kept too, so a released entry is not
+  put back on offer and an ask lowered by its rounds is not raised again. The storage time is
+  information for the owner (registry file, status); no rule reads it. `botclient.LedgerEntry`.
+- **Out:** the brain publishes the ledger in each status snapshot (`Status.Ledger`), and the `Bot`
+  once more when the session's brain has returned. The supervisor copies the last snapshot's into
+  the registry bot (`Bot.Ledger`, `keepProgress`) when a run ends, deferred like the level and
+  position (`UpdateLater`, flushed at the latest on close): a crash or kill loses only the rounds of
+  the run it ends, which the look rebuilds at rounds 0, as before. A bot that never entered the
+  world keeps the stored ledger. A bot deleted and created again starts with none.
+- **In:** the next run carries it (`Run.Ledger`, `BotConfig.Ledger`), and `NewBot` starts its
+  ledger from it with no units. The first decisions merge it as above: carried units join their
+  entry with its rounds; until the session's look every kept entry stays; the look then drops a
+  kept entry with no unit carried or stored (sold, or its row now fails the warehouse row test), and
+  a stored row with no kept entry starts one at rounds 0. A row with no template or ask is ignored.
+- `bots swarm` has no registry: its ledger stays in memory, rebuilt by each process's looks.
+
 A round open when its session ends is ended by the next session's first decision as a
 [cut-off](round-end.md#cut-off), its cap (V7c) waiting for that session's look. Its reply queue, partners
 and trade request are dropped; nothing is deposited.
@@ -113,3 +136,8 @@ and trade request are dropped; nothing is deposited.
   fixtures](warehouse.md#tests), marks survive the session: the next goes straight to Rolfe, and at
   Teranu Mardui no look runs again. A `follow` on the walk to the keeper ends the look (no `_WithdrawP`, no walk back, the next
   legs rule "follow"'s); it runs on the next town visit.
+- `TestValuablesLedgerKept`, `TestValuablesLedgerMerge`, `TestValuablesLedgerLookAfterRestart`
+  (#404): kept rows round trip and a new `Bot` publishes them; the merge keeps entries while the
+  status is unknown and then drops the gone ones, keeps a stored one's rounds, ask, mark and storage
+  time, and starts a new one at rounds 0. In `botregistry`: `TestRegistryLedgerRoundTrip`,
+  `TestKeepProgressLedger`, `TestSupervisorRunLedger`.

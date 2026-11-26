@@ -35,7 +35,7 @@ func TestValuablesMetrics(t *testing.T) {
 			name: "ad line, the next held by AdEvery", items: []Item{swordUnit(101, 0)},
 			step: func(t *testing.T, b *Brain) {
 				openAdRound(b, t0)
-				b.syncValuables()
+				b.syncValuables(t0)
 				if _, ok := b.adTurn(t0); !ok {
 					t.Fatal("adTurn said no line")
 				}
@@ -114,7 +114,7 @@ func TestValuablesMetrics(t *testing.T) {
 		{
 			name: "cap releases two entries once", items: []Item{swordUnit(101, 0), swordUnit(102, 3)},
 			step: func(_ *testing.T, b *Brain) {
-				b.syncValuables()
+				b.syncValuables(t0)
 				for _, e := range b.cfg.valuables.entries {
 					e.rounds = b.persona.Valuables.MaxRounds
 				}
@@ -157,7 +157,7 @@ func TestValuablesHeldView(t *testing.T) {
 	b.cfg.valuables.stored = func() (map[valuableKey]int64, bool) {
 		return map[valuableKey]int64{{template: ledgerSword, enchant: 3}: 2}, true
 	}
-	b.syncValuables()
+	b.syncValuables(t0)
 	if got := reg.Collect(t0).ValuablesHeld; got != 5 {
 		t.Fatalf("held gauge = %d, want 5 (3 carried, 2 stored)", got)
 	}
@@ -181,7 +181,7 @@ func TestValuablesHeldView(t *testing.T) {
 
 	// The ledger follows a sold unit: the gauge on the next decision.
 	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(103, 0)}}}, t0)
-	b.syncValuables()
+	b.syncValuables(t0)
 	if got := reg.Collect(t0).ValuablesHeld; got != 4 {
 		t.Errorf("held gauge after a sale = %d, want 4", got)
 	}

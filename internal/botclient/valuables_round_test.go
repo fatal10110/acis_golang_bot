@@ -35,7 +35,7 @@ func newRoundBrain(t *testing.T, keeper Point, stored []WarehouseItem, items ...
 	}
 	roundTown(b)
 	b.wh.private = WarehouseStatus{Known: true, Contents: slices.Clone(stored)}
-	b.syncValuables()
+	b.syncValuables(t0)
 	return b
 }
 
@@ -64,7 +64,7 @@ func keeperSteps(start time.Duration, cmd string) []trainerStep {
 // order.
 func roundLine(t *testing.T, b *Brain) []byte {
 	t.Helper()
-	b.syncValuables()
+	b.syncValuables(t0)
 	return encodeSay2(adLine(t, b, b.adEntries()...), chatTrade)
 }
 

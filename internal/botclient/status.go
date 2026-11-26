@@ -138,6 +138,10 @@ type Status struct {
 	// mystic, Cleric, Elven Oracle or Shillien Oracle line, 1229 for an
 	// Orc Shaman line. Between sessions it keeps the last session's.
 	Heals bool
+	// Ledger is the bot's valuables ledger, by template and enchant, as its
+	// owner keeps it across process restarts (BotConfig.Ledger): the last
+	// session's between sessions, the restored one before the first.
+	Ledger []LedgerEntry
 	// Reconnects counts the bot's attempts after its first.
 	Reconnects int
 	// Err is why the latest attempt ended, or why the bot stopped; nil
@@ -198,6 +202,8 @@ func (b *Bot) publish(state BotState, err error) {
 	st.At, st.State, st.Rule, st.Spot, st.Walk, st.Crafter = b.cfg.Clock.Now(), state, "", "", "", nil
 	st.Character, st.Order, st.Reconnects = cmp.Or(b.char.Name, st.Character), b.link.order.cmd, b.reconnects
 	st.Party, st.Whispered, st.PartyLeft = b.link.party.String(), false, b.link.partyLeft
+	// The session's brain, which owned the ledger, has returned.
+	st.Ledger = b.valuables.ledger()
 	if err != nil {
 		st.Err = err
 	}
@@ -239,6 +245,7 @@ func (b *Brain) publishStatus(now time.Time, force bool) {
 		st.Build = buildStatus(b.build())
 	}
 	st.PvP = b.pvpStatus()
+	st.Ledger = b.cfg.valuables.ledger()
 	st.Leader, st.Members = "", nil
 	if p := &w.Party; p.In() {
 		if p.LeaderID == s.ObjectID {
