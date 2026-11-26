@@ -204,6 +204,7 @@ func TestScopeCheckRootGM(t *testing.T) {
 		{root, "set access 7", false},
 		{root, "set access e2emint1Bot 7 x", false},
 		{root, "set level 5", false},
+		{root, "set karma 0", false},
 		{root, "teleport 1 2 3", false},
 		{root, "kick e2eBot", false},
 		{scenario, "set access e2emint1Bot 7", false},

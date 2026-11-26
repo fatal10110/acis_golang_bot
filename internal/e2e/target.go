@@ -631,12 +631,15 @@ type GMClient struct {
 	t *Target
 	// file is the pool's GM file the scenario holds.
 	file string
+	// karmaIn is the karma the GM entered with, which EnterGM cleared.
+	karmaIn int32
 }
 
 // EnterGM logs in a GM of the run's pool that no other scenario, of this
 // process or another, holds: with every one held, a minting run mints
 // another (Target.mintGM), a pinned one waits. The GM is the scenario's
-// until it logs out or its connection closes.
+// until it logs out or its connection closes. It enters with karma 0
+// (resetKarma).
 func (t *Target) EnterGM(ctx context.Context) (*GMClient, error) {
 	lease, err := t.gms.take(ctx, t.mintGM)
 	if err != nil {
@@ -661,7 +664,50 @@ func (t *Target) EnterGM(ctx context.Context) (*GMClient, error) {
 	t.mu.Lock()
 	delete(t.scope.chars, strings.ToLower(gm.Character))
 	t.mu.Unlock()
-	return &GMClient{Client: c, t: t, file: lease.file}, nil
+	g := &GMClient{Client: c, t: t, file: lease.file}
+	if err := g.resetKarma(ctx); err != nil {
+		_ = c.Leave(ctx)
+		return nil, fmt.Errorf("GM %s: %w", gm.Character, err)
+	}
+	return g, nil
+}
+
+// karmaWait bounds the wait for the server's answer to //set karma.
+const karmaWait = 10 * time.Second
+
+// resetKarma clears the karma the GM may carry in from an earlier
+// scenario's kills (#569): a bot's hit on a GM with karma never flags the
+// bot, and the pvp persona hunts it. Fresh from login the GM has no
+// target, so the server sets the GM's own karma, and answers with its name
+// and the value set even when the karma was 0 already (admin_set.go). It
+// records the karma the GM entered with in karmaIn.
+func (g *GMClient) resetKarma(ctx context.Context) error {
+	ev, ok, err := botclient.DecodeEvent(g.Self.UserInfo)
+	ui, isUI := ev.(botclient.UserInfo)
+	if err != nil || !ok || !isUI {
+		return fmt.Errorf("decode the GM's UserInfo: %v", err)
+	}
+	g.karmaIn = ui.Karma
+	if err := g.Command(ctx, "set karma 0"); err != nil {
+		return err
+	}
+	ev, err = g.Await(ctx, karmaWait, func(ev botclient.Event) bool {
+		m, ok := ev.(botclient.SystemMessage)
+		return ok && m.ID == sysMsgS1 && strings.Contains(m.Text[0], "karma")
+	})
+	if err != nil {
+		return fmt.Errorf("reset karma: no answer: %w", err)
+	}
+	return karmaReset(g.Self.Name, ev.(botclient.SystemMessage).Text[0])
+}
+
+// karmaReset checks answer, the server's answer to //set karma 0: it set
+// the karma of the GM itself, name, to 0.
+func karmaReset(name, answer string) error {
+	if want := "You successfully set " + name + "'s karma to 0."; !strings.EqualFold(answer, want) {
+		return fmt.Errorf("reset karma: the server answered %q, want %q", answer, want)
+	}
+	return nil
 }
 
 // Command sends cmd (without "//") once the scenario's filter accepts it.

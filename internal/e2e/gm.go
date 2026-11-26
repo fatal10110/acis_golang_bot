@@ -154,6 +154,8 @@ func (s *Scope) owns(objectID int32) bool { return s.npcs[objectID] || s.isCharI
 //	kill|res|heal|cancel [NAME] a run character, or with no name the GM's target
 //	set level N          the GM's target, a run character
 //	set sp N             the GM's target, a run character; N 0 to maxSP
+//	set karma 0          the GM's own karma, with no target only: with one
+//	                     the server sets the target's (admin_set.go)
 //	skill set ID LEVEL   the GM's target, a run character; also skill set all
 //	give ID [COUNT]      items to the GM's target, a run character; COUNT
 //	                     1 to maxGive (maxAdenaGive for adena), 1 by default
@@ -197,7 +199,8 @@ func (s *Scope) check(cmd string) error {
 	case "kill", "res", "heal", "cancel":
 		ok = len(args) == 1 && s.isChar(args[0]) || len(args) == 0 && s.owns(s.target)
 	case "set":
-		ok = len(args) == 2 && (args[0] == "level" && allInts(args[1:]) || args[0] == "sp" && validSP(args[1])) && s.isCharID(s.target)
+		ok = len(args) == 2 && (args[0] == "level" && allInts(args[1:]) || args[0] == "sp" && validSP(args[1])) && s.isCharID(s.target) ||
+			len(args) == 2 && args[0] == "karma" && args[1] == "0" && s.target == 0
 	case "skill":
 		ok = (len(args) == 3 && args[0] == "set" && allInts(args[1:]) ||
 			len(args) == 2 && args[0] == "set" && args[1] == "all") && s.isCharID(s.target)
