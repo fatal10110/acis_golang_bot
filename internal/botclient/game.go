@@ -97,7 +97,7 @@ func (g *GameConn) handshake(ctx context.Context, revision int32) error {
 	}
 	key, enabled, err := decodeVersionCheck(raw)
 	if err != nil {
-		return err
+		return gameDecodeError("VersionCheck", raw, err)
 	}
 	if enabled {
 		c, err := gamecipher.NewCipher(key)
@@ -236,7 +236,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 	}
 	slots, err := decodeCharSelectInfo(reply)
 	if err != nil {
-		return Self{}, err
+		return Self{}, gameDecodeError("CharSelectInfo", reply, err)
 	}
 	slot, slots, err := g.chooseSlot(ctx, slots, ch)
 	if err != nil {
@@ -270,9 +270,14 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 		}
 		switch raw[0] {
 		case opGameUserInfo:
+			// The whole UserInfo decodes here, before the world: NewWorld
+			// replays it last, and a bad one ends the attempt (errDecode).
 			self, err := decodeUserInfo(raw)
+			if err == nil {
+				_, _, err = decodeEvent(raw)
+			}
 			if err != nil {
-				return Self{}, err
+				return Self{}, gameDecodeError("UserInfo", raw, err)
 			}
 			self.Name = name
 			self.Slots = len(slots)

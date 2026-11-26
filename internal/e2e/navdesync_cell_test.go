@@ -48,10 +48,7 @@ func TestDesyncTalkStandCell(t *testing.T) {
 		spot   = botclient.Point{X: -86024, Y: 244424, Z: -3728} // the next click: toward the newbie spots
 	)
 	t0 := time.Date(2026, 11, 25, 11, 14, 35, 555_000_000, time.UTC)
-	w, err := botclient.NewWorld(botclient.Self{ObjectID: self, Name: "FisuBot", X: stand.X, Y: stand.Y, Z: stand.Z}, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	w, _ := botclient.NewWorld(botclient.Self{ObjectID: self, Name: "FisuBot", X: stand.X, Y: stand.Y, Z: stand.Z}, t0)
 	w.SetGround(c.Engine)
 	w.Apply(botclient.UserInfo{ObjectID: self, Name: "FisuBot", RunSpeed: 126, WalkSpeed: 88, Running: true, HP: 520, MaxHP: 520, CollisionHeight: collision}, t0)
 	w.Apply(botclient.NPCInfo{ObjectID: guide, NPCID: 30598, Pos: guided}, t0)

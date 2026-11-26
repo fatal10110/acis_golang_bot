@@ -1,7 +1,6 @@
 package botclient
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -668,11 +667,13 @@ func short(from, to Point, dist int32) Point {
 
 // NewWorld returns the model of a character that just entered the world:
 // self as EnterGame returned it, then every frame of its EnterWorld burst
-// and its UserInfo applied in arrival order at now. A malformed frame is an
-// error, as it is for the reader.
-func NewWorld(self Self, now time.Time) (*World, error) {
+// and its UserInfo applied in arrival order at now. A frame that fails to
+// decode is skipped, as the reader skips it (docs/plan.md D45), and counted
+// in skips by opcode for the brain to log and count; the UserInfo does not
+// fail, EnterGame decoded it whole.
+func NewWorld(self Self, now time.Time) (w *World, skips BurstSkips) {
 	pos := Point{X: self.X, Y: self.Y, Z: self.Z}
-	w := &World{
+	w = &World{
 		Self:       SelfState{ObjectID: self.ObjectID, Name: self.Name, Heading: self.Heading, move: stopAt(pos)},
 		Objects:    make(map[int32]*Object),
 		Skills:     make(map[int32]KnownSkill),
@@ -686,13 +687,14 @@ func NewWorld(self Self, now time.Time) (*World, error) {
 		}
 		ev, ok, err := decodeEvent(raw)
 		if err != nil {
-			return nil, fmt.Errorf("replay EnterWorld burst: %w", err)
+			skips = skips.add(raw, err)
+			continue
 		}
 		if ok {
 			w.Apply(ev, now)
 		}
 	}
-	return w, nil
+	return w, skips
 }
 
 // object is the record of id, nil for the bot's own character or an

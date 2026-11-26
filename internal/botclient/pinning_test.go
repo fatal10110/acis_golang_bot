@@ -34,7 +34,7 @@ func TestPinningEnterGame(t *testing.T) {
 			recvStep(packet(0x0d, slot, uint16(0), 0, 0, 0)),
 			sendStep(packet(0x15, name, objectID)),
 			recvStep([]byte{0x03}),
-			sendStep(packet(0x04, -71000, 258000, -3100, 49152, objectID, name)),
+			sendStep(userInfo(-71000, 258000, -3100, 49152, objectID)),
 		}
 	}
 	// noClass is no starting class: a known-name or imported bot carries

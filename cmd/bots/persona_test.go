@@ -125,10 +125,7 @@ func TestPresetClaimsAcrossPresets(t *testing.T) {
 	const playerID = int32(0x20000202)
 	t0 := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
 	world := func(self int32) *botclient.World {
-		w, err := botclient.NewWorld(botclient.Self{ObjectID: self, Name: "bot"}, t0)
-		if err != nil {
-			t.Fatal(err)
-		}
+		w, _ := botclient.NewWorld(botclient.Self{ObjectID: self, Name: "bot"}, t0)
 		w.Apply(botclient.CharInfo{ObjectID: playerID, Name: "Player"}, t0)
 		return w
 	}

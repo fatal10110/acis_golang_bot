@@ -203,7 +203,7 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	}
 	init, err := decodeInit(first)
 	if err != nil {
-		return nil, res, nil, err
+		return nil, res, nil, loginDecodeError("Init", opLoginInit, len(first), err)
 	}
 	cr, err := logincrypt.NewClientLoginCrypt(init.blowfishKey)
 	if err != nil {
@@ -233,7 +233,7 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	// ServerList itself and does not check the session keys afterwards.
 	if len(reply) > 0 && reply[0] == opLoginOk {
 		if res.Keys.LoginKey1, res.Keys.LoginKey2, err = decodeKeyPair(reply); err != nil {
-			return nil, res, nil, fmt.Errorf("decode LoginOk: %w", err)
+			return nil, res, nil, loginDecodeError("LoginOk", opLoginOk, len(reply), err)
 		}
 		if err := c.send(ctx, encodeRequestServerList(res.Keys.LoginKey1, res.Keys.LoginKey2)); err != nil {
 			return nil, res, nil, fmt.Errorf("send RequestServerList: %w", err)
@@ -247,7 +247,7 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	}
 	servers, err := decodeServerList(reply)
 	if err != nil {
-		return nil, res, nil, err
+		return nil, res, nil, loginDecodeError("ServerList", opLoginServerList, len(reply), err)
 	}
 	return c, res, servers, nil
 }
@@ -277,7 +277,7 @@ func loginSession(ctx context.Context, conn net.Conn, account, password string, 
 		return res, err
 	}
 	if res.Keys.PlayKey1, res.Keys.PlayKey2, err = decodeKeyPair(reply); err != nil {
-		return res, fmt.Errorf("decode PlayOk: %w", err)
+		return res, loginDecodeError("PlayOk", opLoginPlayOk, len(reply), err)
 	}
 	return res, nil
 }

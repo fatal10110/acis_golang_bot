@@ -134,11 +134,13 @@ func (f *fakeGame) sentOpcode(op byte) bool {
 // times, ctx is canceled. It is used by the bot's goroutine only; the test
 // reads it after Run returns.
 type fakeNet struct {
-	t        *testing.T
-	logins   []error
-	dials    []error
-	enters   []error
-	games    []gameScript
+	t      *testing.T
+	logins []error
+	dials  []error
+	enters []error
+	games  []gameScript
+	// burst is the EnterWorld burst of every entry.
+	burst    [][]byte
 	cancelAt int
 	cancel   context.CancelFunc
 	// onLogin, when set, runs at the start of every login.
@@ -217,7 +219,7 @@ func (n *fakeNet) enterGame(ctx context.Context, g gameSession, account string, 
 	if n.entered == n.cancelAt {
 		n.cancel()
 	}
-	return Self{ObjectID: selfID, Name: name}, nil
+	return Self{ObjectID: selfID, Name: name, Burst: n.burst}, nil
 }
 
 // newTestBot returns a bot over net sharing gate, timed by clock.

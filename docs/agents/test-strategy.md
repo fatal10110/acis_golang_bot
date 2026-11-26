@@ -20,8 +20,9 @@ Table-driven, no shared fixtures, no network, no wall clock, no build tags.
 - **Process-wide registries and limiters** (spot registry, store registry, login rate limiter,
   credential breaker): their contracts under concurrency, driving the concurrent callers directly
   (PR CI runs them under `-race`; locally only when the owner asks).
-- **Fuzz targets** for decoders of server frames: a malformed frame must end one session with an
-  error, never panic or allocate without bound.
+- **Fuzz targets** for decoders of server frames: a decoder consumes exactly `len(payload)` and
+  a malformed frame is a decode error, never a panic or an allocation without bound. The bot logs
+  and skips such a frame in the world, and ends the attempt with `errDecode` before it (D45).
 
 ## Tier 2: e2e scenarios (local and nightly, not gated by PR CI)
 

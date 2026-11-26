@@ -111,6 +111,11 @@ type Snapshot struct {
 	// Panics counts the panics the bots recovered from: in an attempt or
 	// in a session's reader (botclient.ErrPanic).
 	Panics uint64 `json:"panics_total"`
+	// DecodeErrors counts the server packets the bots could not decode, by
+	// opcode, only the opcodes seen (Bot.DecodeErrors): a frame in the
+	// world or in the EnterWorld burst the bot skipped, or a packet before
+	// the world that ended its attempt (docs/plan.md D45).
+	DecodeErrors map[string]uint64 `json:"decode_errors_total"`
 	// NavBlocked, NavDesync and NavDoorReplan count the server's answers
 	// to the walker's own segments that differ from its check: a blocked
 	// stop, another destination, and another destination on a segment
@@ -214,6 +219,7 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), AcceptClosed: r.acceptClosed.Load(), Rules: make(map[string]uint64, len(r.rules))}
 	var soldTrade, soldStore uint64
 	var plans [planOutcomes]uint64
+	var decode [decodeSlots]uint64
 	var pvp pvpSums
 	hits := make([]uint64, len(r.rules))
 	r.mu.Lock()
@@ -247,6 +253,9 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		for i := range b.navPlans {
 			plans[i] += b.navPlans[i].Load()
 		}
+		for i := range b.decodeErrors {
+			decode[i] += b.decodeErrors[i].Load()
+		}
 		pvp.add(&b.pvp)
 		s.QueueDepth.add(&b.depth)
 		s.WakeLagMicros.add(&b.wakeLag)
@@ -260,6 +269,12 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 		s.NavPlans[planNames[i]] = n
 	}
 	s.ValuablesSold = map[string]uint64{ViaTrade: soldTrade, ViaStore: soldStore}
+	s.DecodeErrors = make(map[string]uint64)
+	for i, n := range decode {
+		if n != 0 {
+			s.DecodeErrors[decodeSlotName(i)] = n
+		}
+	}
 	pvp.fill(s)
 	r.collectNavCache(s)
 	for i, name := range r.rules {
@@ -279,7 +294,7 @@ func (r *Registry) Last() *Snapshot {
 	for _, n := range planNames {
 		plans[n] = 0
 	}
-	s := &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, NavLocates: navLocates(NavCache{}), ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}}
+	s := &Snapshot{Rules: map[string]uint64{}, NavPlans: plans, NavLocates: navLocates(NavCache{}), ValuablesSold: map[string]uint64{ViaTrade: 0, ViaStore: 0}, DecodeErrors: map[string]uint64{}}
 	(&pvpSums{}).fill(s)
 	return s
 }
@@ -304,6 +319,7 @@ type Bot struct {
 	reg                                     *Registry
 	events, sent, paced, reconnects, aborts atomic.Uint64
 	panics                                  atomic.Uint64
+	decodeErrors                            [decodeSlots]atomic.Uint64
 	navBlocked, navDesync, navDoorReplan    atomic.Uint64
 	navSegments                             atomic.Uint64
 	navPlans                                [planOutcomes]atomic.Uint64
