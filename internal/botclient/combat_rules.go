@@ -64,6 +64,20 @@ type PvPPolicy struct {
 	// SupportFlagged lets the bot heal or buff a flagged or karma player,
 	// which flags the bot (character_pvpflag.go skillTargetFlagsPvP).
 	SupportFlagged bool
+	// GearWeight is the weight of PvP value in every gear comparison (gear,
+	// sets, jewels, dyes, purchases, grade-jump saving; docs/pvp/model.md
+	// "Blend", D37), 0 to 1: 0 compares gear by its value against monsters
+	// alone; above 0 the bot keeps the mix table (pvp_gear.go).
+	GearWeight float64
+	// CureStock is how many of each cure the supply list carries
+	// (docs/pvp/model.md "Gear and consumables"): Antidotes and Bandages,
+	// from cureGreaterLevel also Greater Antidotes and Emergency Dressings
+	// where a merchant the shop errand can visit sells them. While it is
+	// above 0 the bot keeps every cure it carries.
+	CureStock int32
+	// KeepCPPotions keeps the CP potions the bot carries for its PvP fights
+	// (docs/pvp/layer.md "CP"): never sold or deposited; none are bought.
+	KeepCPPotions bool
 }
 
 // MaySupport reports whether the policy lets the bot heal or buff player o:

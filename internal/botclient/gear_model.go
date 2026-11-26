@@ -44,6 +44,9 @@ type gearModel struct {
 	// of the arrangement it models, reused from one call to the next.
 	worn  []datapack.Item
 	funcs []datapack.StatFunc
+	// pvp is the PvP side of its comparisons (pvp_gear.go), nil while
+	// PvPPolicy.GearWeight is 0.
+	pvp *gearPvP
 }
 
 // gearValueKey is an arrangement the model valued: the template and
@@ -103,6 +106,7 @@ func (b *Brain) valuer() *gearModel {
 	in := gearInputs{key: key, worn: keyOf(&now), reported: b.reported(), dyes: b.wornDyes()}
 	if v != nil && v.in == in && maps.Equal(v.skills, b.world.Skills) {
 		v.gen, b.gearVal = b.world.gen, v
+		b.gearPvP(m, v)
 		return v
 	}
 	cl, ok := m.classes[s.ClassID]
@@ -121,12 +125,20 @@ func (b *Brain) valuer() *gearModel {
 		v.norm = n
 	}
 	b.gearVal = v
+	b.gearPvP(m, v)
 	return v
 }
 
 // profile is the calibrated profile of arrangement w with dyes, a
 // complete set's skills counted when sets is set.
 func (v *gearModel) profile(m *TravelMap, w *worn, sets bool, dyes charmodel.Attrs) charmodel.Profile {
+	return v.calib.Apply(charmodel.Model(v.buildOf(m, w, sets, dyes)))
+}
+
+// buildOf is the model's build wearing arrangement w with dyes, a complete
+// set's skills counted when sets is set; its gear and stat functions are
+// v's buffers, valid until the next call.
+func (v *gearModel) buildOf(m *TravelMap, w *worn, sets bool, dyes charmodel.Attrs) charmodel.Build {
 	bd := v.build
 	bd.Dyes = dyes
 	v.worn = v.worn[:0]
@@ -142,7 +154,7 @@ func (v *gearModel) profile(m *TravelMap, w *worn, sets bool, dyes charmodel.Att
 			bd.Funcs = v.funcs
 		}
 	}
-	return v.calib.Apply(charmodel.Model(bd))
+	return bd
 }
 
 // value is the model's value of arrangement w with dyes (charmodel.Value).
@@ -176,11 +188,12 @@ func (v *gearModel) worth(p charmodel.Profile) float64 {
 	return -charmodel.TimeToKill(p, v.role.Attack, v.target).Seconds() / ttd
 }
 
-// gain is the value w2 adds over w1, as a fraction of the value of what
-// the bot wears now.
+// gain is the value w2 adds over w1 (delta: PvP value blended in for a
+// persona that weighs it), as a fraction of the value of what the bot
+// wears now.
 func (v *gearModel) gain(m *TravelMap, w2, w1 *worn, sets2, sets1 bool) float64 {
 	d := v.build.Dyes
-	return (v.value(m, w2, sets2, d) - v.value(m, w1, sets1, d)) / v.norm
+	return v.delta(m, w2, sets2, d, w1, sets1, d) / v.norm
 }
 
 // enchantedTmpl is template t at enchant level enchant: its P. Atk, M. Atk,

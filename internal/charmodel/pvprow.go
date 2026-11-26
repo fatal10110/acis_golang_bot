@@ -1,6 +1,7 @@
 package charmodel
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -97,6 +98,26 @@ func ClassRow(id int32, bow bool) (Row, bool) {
 		}
 		id = parent
 	}
+}
+
+// RowClasses are one class id per row a fighter of profession tier tier
+// meets when nobody has been seen (docs/pvp/model.md "Row table", the mix):
+// the base classes' rows for tier 0, the first professions' for any other
+// (second and third professions play their first's), the lowest class id
+// for a row two classes share (Scavenger and Artisan, SC), in class id
+// order. A scout row is its dagger branch.
+func RowClasses(tier int) []int32 {
+	var out []int32
+	seen := make(map[string]bool)
+	for _, id := range slices.Sorted(maps.Keys(classRows)) {
+		parent, ok := datapack.ClassParent(id)
+		if base := !ok || parent < 0; base != (tier == 0) || seen[classRows[id]] {
+			continue
+		}
+		seen[classRows[id]] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 // RefStep is one damage, DOT or control step a reference opponent plays

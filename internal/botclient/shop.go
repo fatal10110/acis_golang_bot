@@ -672,9 +672,10 @@ func (b *Brain) junk() map[int32]Item {
 // keeps reports whether the bot keeps item template id rather than sell
 // it: adena, Shop.Keep, Potions, Shots, Restock items, the keep set
 // (inKeepSet), every template with a trip target (supplies, the Extra
-// ones included), the arrows the wielded bow and the one worn next shoot,
-// the shots keepsShot keeps, spellbooks wanted or held for a learn and the
-// enchant scrolls of a grade the bot wears (keepsScroll).
+// ones included), the PvP cures and CP potions (keepsPvPItem), the arrows
+// the wielded bow and the one worn next shoot, the shots keepsShot keeps,
+// spellbooks wanted or held for a learn and the enchant scrolls of a grade
+// the bot wears (keepsScroll).
 func (b *Brain) keeps(id int32) bool {
 	return id == adenaID || slices.Contains(b.persona.Shop.Keep, id) || b.uses(id)
 }
@@ -690,7 +691,7 @@ func (b *Brain) uses(id int32) bool {
 	return b.inKeepSet(id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
-		id == b.bowArrows() || id == b.nextBowArrows() || b.keepsScroll(id) ||
+		id == b.bowArrows() || id == b.nextBowArrows() || b.keepsScroll(id) || b.keepsPvPItem(id) ||
 		slices.ContainsFunc(b.supplies(), func(s supply) bool { return s.item == id })
 }
 

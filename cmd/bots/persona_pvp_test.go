@@ -8,10 +8,15 @@ import (
 
 // TestPresetPvPModes checks the PvP modes of every preset (docs/pvp/modes.md,
 // D35): pvp fights back, takes duels, hunts and visits arenas with
-// SupportFlagged on and PK off; every other preset fights back only, with
-// SupportFlagged off, and so declines duels.
+// SupportFlagged on and PK off, weighs PvP value in its gear at 0.5,
+// carries five of each cure and keeps its CP potions (D37); every other
+// preset fights back only, with SupportFlagged off, and so declines duels,
+// and compares gear by Value alone.
 func TestPresetPvPModes(t *testing.T) {
-	pvp := botclient.PvPPolicy{FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true}
+	pvp := botclient.PvPPolicy{
+		FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true,
+		GearWeight: 0.5, CureStock: 5, KeepCPPotions: true,
+	}
 	other := botclient.PvPPolicy{FightFlagged: true}
 	for _, p := range presets {
 		want := other
