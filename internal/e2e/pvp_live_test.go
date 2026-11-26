@@ -18,9 +18,9 @@ import (
 // arena.
 
 const (
-	// pvpPress is how long the healer scenario's GM goes without a swing
-	// at the leader before it attacks again, and the least time between
-	// two of its rescue heals.
+	// pvpPress is how long the healer scenario's GM, later its client,
+	// goes without a swing at the leader before it attacks again, and the
+	// least time between two of the GM's rescue heals.
 	pvpPress = 3 * time.Second
 	// pvpHeal and pvpBattleHeal are Heal (1011) and Battle Heal (1015).
 	pvpHeal       int32 = 1011
@@ -597,11 +597,20 @@ func TestLivePvPHealer(t *testing.T) {
 	// once the leader turned on the client (the eighth live run). Pump
 	// sends the GM's attack again when it has not swung at the leader for
 	// pvpPress, at most once per pvpPress (one frame in 3 s, far under the
-	// frame limit), and the GM's admin heal, which touches no flag, keeps
-	// the leader alive under a third of its HP.
-	gmSelf := &pvpSelf{id: gm.Self.ObjectID}
+	// frame limit), until the leader turns on the client; from then the
+	// client presses its own melee attack on the leader the same way: the
+	// GM's fists (about 5 a hit) never got through the leader's CP, which
+	// a player's hits wear down first (the tenth live run: 112 damage, HP
+	// never under full), and the leader hitting the client, who has no
+	// karma, keeps it flagged, where its hits on the GM, who has, do not
+	// (character_pvpflag.go). The GM's admin heal, which touches no flag,
+	// keeps the leader alive under a third of its HP and the client
+	// (keepAlive) under half.
+	gmSelf, cSelf := &pvpSelf{id: gm.Self.ObjectID}, &pvpSelf{id: c.Self.ObjectID}
 	t.Cleanup(func() { pvpUnflagGM(t, gm, gmSelf, leader, cleric) })
-	var swungAt, pressedAt, rescuedAt time.Time
+	keepClient := keepAlive(t, ctx, gm, c, cSelf)
+	var swungAt, pressedAt, rescuedAt, cSwungAt, cPressedAt time.Time
+	clientPress, cPresses := false, 0
 	lowest := int32(-1)
 	note := func(ev botclient.Event) {
 		gmSelf.note(ev)
@@ -609,11 +618,17 @@ func TestLivePvPHealer(t *testing.T) {
 			swungAt = time.Now()
 		}
 	}
+	cNote := func(ev botclient.Event) {
+		cSelf.note(ev)
+		if hitOn(c.Self.ObjectID, leader.id)(ev) {
+			cSwungAt = time.Now()
+		}
+	}
 	pump := func() {
 		if err := gm.Watch(ctx, 200*time.Millisecond, note); err != nil {
 			t.Fatalf("the GM reading: %v", err)
 		}
-		if err := c.Watch(ctx, 100*time.Millisecond, func(botclient.Event) {}); err != nil {
+		if err := c.Watch(ctx, 100*time.Millisecond, cNote); err != nil {
 			t.Fatalf("%s reading: %v", c.Self.Name, err)
 		}
 		if st := leader.bot.Status(); st.MaxHP > 0 && (lowest < 0 || st.HP < lowest) {
@@ -625,7 +640,24 @@ func TestLivePvPHealer(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if !swungAt.IsZero() && time.Since(swungAt) >= pvpPress && time.Since(pressedAt) >= pvpPress {
+		keepClient()
+		switch {
+		case clientPress:
+			if time.Since(cSwungAt) < pvpPress || time.Since(cPressedAt) < pvpPress {
+				break
+			}
+			cPressedAt = time.Now()
+			ps := [][]byte{botclient.EncodeAttackRequest(leader.id, c.Pos())}
+			if cPresses == 0 {
+				ps = append([][]byte{botclient.EncodeAction(leader.id, c.Pos())}, ps...)
+			}
+			cPresses++
+			for _, p := range ps {
+				if err := c.Send(ctx, p); err != nil {
+					t.Fatal(err)
+				}
+			}
+		case !swungAt.IsZero() && time.Since(swungAt) >= pvpPress && time.Since(pressedAt) >= pvpPress:
 			pressedAt = time.Now()
 			if err := gm.Send(ctx, botclient.EncodeAttackRequest(leader.id, gm.Pos())); err != nil {
 				t.Fatal(err)
@@ -689,8 +721,9 @@ func TestLivePvPHealer(t *testing.T) {
 			return (s.Op == botclient.OpAction || s.Op == botclient.OpAttackRequest) && s.Target == c.Self.ObjectID
 		})
 	}
-	watchUntilBy(t, ctx, c, leader.name+" turning on "+c.Self.Name+", the enemy healer", time.Now().Add(time.Minute), targets, nil)
+	watchUntilBy(t, ctx, c, leader.name+" turning on "+c.Self.Name+", the enemy healer", time.Now().Add(time.Minute), targets, cNote)
 	t.Logf("%s turned on %s", leader.name, c.Self.Name)
+	clientPress = true
 
 	// The Cleric's heal on the leader, since the client's heal, while the
 	// leader's own UserInfo shows it flagged: its hits on the flagged GM
@@ -701,7 +734,7 @@ func TestLivePvPHealer(t *testing.T) {
 	healedFlagged := func() string {
 		flagged, cast, infos, flagOn := false, 0, 0, 0
 		hits, struck, karma := make(map[int32]int), 0, make(map[int32]int32)
-		missed, dealt := 0, 0
+		missed, dealt, cHits, cDealt := 0, 0, 0, 0
 		for i, s := range leader.watch.Seen(from) {
 			switch e := s.Event.(type) {
 			case botclient.UserInfo:
@@ -720,6 +753,14 @@ func TestLivePvPHealer(t *testing.T) {
 				if e.AttackerID == leader.id {
 					for _, h := range e.Hits {
 						hits[h.TargetID]++
+					}
+				}
+				if e.AttackerID == c.Self.ObjectID {
+					for _, h := range e.Hits {
+						if h.TargetID == leader.id {
+							cHits++
+							cDealt += int(h.Damage)
+						}
 					}
 				}
 				if e.AttackerID == gm.Self.ObjectID {
@@ -752,11 +793,11 @@ func TestLivePvPHealer(t *testing.T) {
 			}
 		}
 		st := leader.bot.Status()
-		return fmt.Sprintf("%s HP %d/%d (lowest %d), flagged %v in %d UserInfo (%d flagged; the Cleric reads flag %d), hits %v, the GM's swings at it %d (%d missed, %d damage), karma of the GM and client %v, %d heals of it unflagged",
-			leader.name, st.HP, st.MaxHP, lowest, flagged, infos, flagOn, seenFlag, hits, struck, missed, dealt, karma, cast)
+		return fmt.Sprintf("%s HP %d/%d (lowest %d), flagged %v in %d UserInfo (%d flagged; the Cleric reads flag %d), hits %v, the GM's swings at it %d (%d missed, %d damage), %s's hits on it %d (%d damage, %d presses), karma of the GM and client %v, %d heals of it unflagged",
+			leader.name, st.HP, st.MaxHP, lowest, flagged, infos, flagOn, seenFlag, hits, struck, missed, dealt, c.Self.Name, cHits, cDealt, cPresses, karma, cast)
 	}
 	untilBy(t, ctx, cleric.name+" healing the flagged "+leader.name, time.Now().Add(3*time.Minute), func() string {
-		if err := c.Watch(ctx, 300*time.Millisecond, func(botclient.Event) {}); err != nil {
+		if err := c.Watch(ctx, 300*time.Millisecond, cNote); err != nil {
 			return err.Error()
 		}
 		pump()
