@@ -1,7 +1,6 @@
 # Buying CP potions
 
-Plan for #427. Ships in X17-X19 (#612, #613, #614). Decision D43 (proposed, needs owner
-approval): it amends D37's "CP potions kept, never sold or bought". Paths per
+Plan for #427. Ships in X17-X19 (#612, #613, #614). Decision D43 (owner approved 2026-11-26): it amends D37's "CP potions kept, never sold or bought". Paths per
 [README](README.md#paths); Seven Signs server code is under `internal/gameserver/sevensigns/`,
 `internal/gameserver/signspriest/` and `model/actor/npc/folk_chat_signs.go`, its pages under
 `aCis_datapack/data/html/seven_signs/`.
@@ -68,7 +67,7 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
 5. **Festival of Darkness.** Party timed instance content for Ancient Adena; far more work than
    option 3 for the same gate. Not proposed.
 
-## Proposed decision D43
+## Decision D43 (approved 2026-11-26)
 
 CP potions are bought (amends D37); the keep rule stays (never sold, deposited or drunk on
 monsters). Option 2 for `pvp` bots; option 3a as an opt-in `SevenSigns` mode, off for every preset
@@ -144,7 +143,14 @@ on a trip.
   stop. E2e: possible only while the stack is in a validation week its test character's cabal won
   ([owner question 3](#owner-questions)).
 
-## Owner questions
+## Owner questions (answered 2026-11-26)
+
+The owner took the proposed answers: D43 as written (option 2 for `pvp` bots plus the opt-in
+SevenSigns member, 3a: never contribute); the vote weight is capped by the named-member list,
+`SevenSigns.MaxMembers` default 1, voting the seal Dusk holds; X19 ships on unit tests and
+recorded frames, recorded once on a real validation week (no server GM command); with no Dusk
+seal the bots vote Gnosis, never Strife.
+
 
 1. Approve D43? Options: player stores only (2), stores plus the opt-in Seven Signs member
    (2 + 3a, proposed), or the status quo (1).

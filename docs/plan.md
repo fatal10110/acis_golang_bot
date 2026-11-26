@@ -27,7 +27,7 @@ repository.
 | M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332); second professions #587-#591; servitor lines #592 (later) |
 | M11 - Bot parties | #371 | #373-#392 (`docs/parties/`, PRs P1a-P8, 13 PRs, D25-D29); follow-ups #395, #397, #398, #438 |
 | M12 - Merchant valuables | #376 | #378-#402 (`docs/valuables/`, PRs V1-V9, 13 PRs, D30-D34); follow-ups #403, #404 |
-| M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42 proposed, not approved); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43 proposed, not approved) |
+| M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43) |
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
 fatal10110/acis_golang#4527, fatal10110/acis_golang#4528. The PR numbers in "PR breakdown" map to
@@ -81,9 +81,13 @@ the goal.
 | D34 | Valuables budget | A per-session `-valuables-budget`, default 2000000, apart from `-store-budget`; valuables are offered and listed while sales are under it. Owner, 2026-11-25 |
 | D35 | PvP modes | A new `pvp` preset (Damage role, farms between fights): duels, flagged and karma players, arenas on; open-world PK off (opt-in per bot). Other presets fight back only and decline duels, but every preset fights players with the PvP layer. PvP events wake the brain after 200-600 ms. Persona defaults (D6). Owner, 2026-11-25. Design: `docs/pvp/modes.md` |
 | D36 | How a `pvp` bot finds fights | Takes any duel it can; challenges a player who whispers `duel` (extends D3 as D20 did); challenges non-bot players and hunts flagged and karma players of its tier when the engage estimate passes; visits the nearest arena on a timer. Owner, 2026-11-25. Design: `docs/pvp/finding.md` |
-| D37 | PvP items | One loadout scored by `Value` and `PvPValue` blended by relative gains, 50 % each for `pvp` (others 0 %); no set swap; cures bought on supply trips; CP potions kept, never sold or bought. Owner, 2026-11-25. Design: `docs/pvp/model.md` |
+| D37 | PvP items | One loadout scored by `Value` and `PvPValue` blended by relative gains, 50 % each for `pvp` (others 0 %); no set swap; cures bought on supply trips; CP potions kept, never sold or bought (buying amended by D43). Owner, 2026-11-25. Design: `docs/pvp/model.md` |
 | D38 | Bots against bots | Outside an arena a bot never attacks, hunts or challenges a bot and fights one back only after its hit or offensive cast; in an arena anyone but its party. No bot duels. Owner, 2026-11-25. Design: `docs/pvp/targets.md` |
 | D39 | PvP death and karma | Duels to the end, no surrender; arenas to the death under a death cap; in the open world break off by the row and avoid the killer. No karma by accident and nothing that would cancel a duel. Opt-in PK mode and life with karma as in `docs/pvp/karma.md`. Owner, 2026-11-25. Design: `docs/pvp/guards.md` |
+| D40 | Clan wars | A mutual-war enemy is a target like a flagged player for `pvp` bots (`War` mode, on by default for `pvp`), attacked with force; marks drop when a war ends or the enemy's `CharInfo` shows another clan. Bots never declare, answer, stop or surrender a war. Owner, 2026-11-26. Design: `docs/pvp/war.md` |
+| D41 | Sieges | Bots never register for a siege; every bot walks out of a running battlefield it does not fight in; a `pvp` bot of a clan its leader registered fights the other side's players there, bots only after their hit (D38). Owner, 2026-11-26. Design: `docs/pvp/siege.md` |
+| D42 | The Olympiad | Opt-in per bot, off for every preset: noblesse at the class master for any `Olympiad` bot, bounded registration, the drawn opponent fought whoever it is; never spectates, trades points or claims hero status. Owner, 2026-11-26. Design: `docs/pvp/olympiad.md` |
+| D43 | Buying CP potions | Amends D37: CP potions are bought (still never sold), from player sell stores for `pvp` bots, and by an opt-in `SevenSigns` Dusk member (named bots only, `SevenSigns.MaxMembers` default 1) at a priest for Ancient Adena in a validation week its cabal won; never contributes stones, pays the Dawn fee or votes Strife; votes the seal Dusk holds, else Gnosis. Owner, 2026-11-26. Design: `docs/pvp/cp-potions.md` |
 
 ## Consequences of a separate repository (D5)
 

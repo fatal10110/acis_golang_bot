@@ -1,6 +1,6 @@
 # Clan-war enemies as targets
 
-Ships in X14 (#602). Decision D40 (proposed, needs owner approval). Paths per
+Ships in X14 (#602). Decision D40 (owner approved 2026-11-26). Paths per
 [README](README.md#paths). Today a clan-war enemy is a clean player to the bot
 ([MayFight](targets.md#mayfight) rule 8): it is never attacked unless flagged or with karma.
 
@@ -83,7 +83,11 @@ a war enemy that hits them is flagged by its hit, rule 6). A switch on the panel
   level 3 (`network/admin_pledge.go:110`). Open: each clan needs 15 members (`ClanMembersForWar`),
   which no 4-character scenario has: [owner question 1](#owner-questions).
 
-## Owner questions
+## Owner questions (answered 2026-11-26)
+
+The owner took the proposed answers: X14 ships on unit tests and recorded frames (no fixture
+clans, no change to `ClanMembersForWar`); `War` is on by default for `pvp` bots.
+
 
 1. The live war scenario needs two clans of 15 members. Options: fixture clans created once on
    the stack and reused by name (their extra members stay offline), or a test stack with a lower
