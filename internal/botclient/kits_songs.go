@@ -47,7 +47,7 @@ var (
 		},
 		PvP: elvenKnightPvP,
 		Buffs: append(append([]Buff{}, fighterAuras...),
-			Buff{Skill: skillSpiritBarrier},
+			Buff{Skill: skillSpiritBarrier, Self: true},
 			Buff{Skill: skillSongOfWarding, Party: true},
 			Buff{Skill: skillSongOfWind, Party: true, From: 46},
 			Buff{Skill: skillSongOfHunter, Party: true, From: 49},

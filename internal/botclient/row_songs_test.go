@@ -27,7 +27,8 @@ func wantNoRebuff(t *testing.T, b *Brain, now time.Time) {
 // Wind and Hunter, one per decision, each on itself, none while all three
 // are on with more than RebuffBefore left, and Earth only from 55; under
 // 30 % MP (MPReserve) no attack step goes out, but a missing song does;
-// Aggression opens and Power Strike follows with a sword.
+// in a party Spirit Barrier (SELF) is never cast on a member; Aggression
+// opens and Power Strike follows with a sword.
 func TestRowSS(t *testing.T) {
 	now := at(time.Second)
 	songs := []int32{skillSongOfWarding, skillSongOfWind, skillSongOfHunter, skillSongOfEarth, skillSongOfVitality}
@@ -60,11 +61,26 @@ func TestRowSS(t *testing.T) {
 
 	b = idle(49)
 	effectsOn(b, selfBuffs...)
-	b.world.Self.MP, b.world.Self.MaxMP = 20, 100
+	b.world.Self.MP, b.world.Self.MaxMP = 80, 300
 	a, _ = b.ruleRebuff(now)
 	wantCast(t, a, skillSongOfWarding, selfID)
 	b.world.Self.InCombat = true
 	fightCast(t, b, now, 0, 0)
+
+	b = idle(49)
+	inParty(b, 100, 100)
+	b.world.Target = pcID
+	effectsOn(b, append(selfBuffs, songs[:3]...)...)
+	for range 2 * len(all) {
+		a, ok := b.ruleRebuff(now)
+		if !ok {
+			break
+		}
+		if a.skill == skillSpiritBarrier && a.object != selfID {
+			t.Fatalf("ruleRebuff casts Spirit Barrier on %#x, want it on the bot only", a.object)
+		}
+		b.buffSent(a, now)
+	}
 
 	b = rowBrain(t, classSwordSinger, 49, "SWORD", all...)
 	if a := fightCast(t, b, now, skillAggression, npcID); !a.opens {
