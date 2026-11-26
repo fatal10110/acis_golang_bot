@@ -34,7 +34,7 @@ func openAdRound(b *Brain, now time.Time) {
 // adLine is the ad line naming the carried units of each key, in order.
 func adLine(t *testing.T, b *Brain, keys ...valuableKey) string {
 	t.Helper()
-	b.syncValuables()
+	b.syncValuables(t0)
 	labels := make([]string, len(keys))
 	for i, k := range keys {
 		e := entryOf(t, b, k.template, k.enchant)

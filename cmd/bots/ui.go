@@ -226,7 +226,7 @@ func (u uiRunner) run(ctx context.Context, r botregistry.Run) error {
 		// Used only when the bot creates its character.
 		ch.Class = *p.class
 	}
-	b, err := botclient.NewBot(cfg, r.Account, u.secret.Password(r.Account), botclient.BotConfig{Character: ch, Brain: brain, Learned: r.Learned, Preset: r.Preset}, rng)
+	b, err := botclient.NewBot(cfg, r.Account, u.secret.Password(r.Account), botclient.BotConfig{Character: ch, Brain: brain, Learned: r.Learned, Preset: r.Preset, Ledger: r.Ledger}, rng)
 	if err != nil {
 		return err
 	}

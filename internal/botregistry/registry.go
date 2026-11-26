@@ -72,6 +72,10 @@ type Bot struct {
 	// PvP is the bot's PvP mode switches of the panel, nil for its
 	// preset's defaults (PvPModes).
 	PvP *PvPModes `json:"pvp,omitempty"`
+	// Ledger is the bot's valuables ledger as its last run ended
+	// (botclient.Status.Ledger), nil for none: the next run starts from it
+	// (docs/valuables/ledger.md "Across restarts").
+	Ledger []botclient.LedgerEntry `json:"ledger,omitempty"`
 	// PartyMode is the bot's party mode (docs/parties/organizer.md): ""
 	// takes part in bot parties, "off" (botparty.ModeOff) never.
 	PartyMode string `json:"party_mode,omitempty"`
@@ -475,7 +479,8 @@ func (r *Registry) Update(account string, fn func(*Bot)) error {
 // marks the registry dirty, and Flush, Close or the next save writes it. A
 // crash before then loses the change, so it is only for state a restart can
 // do without: the online flag, the stop time and reason, the level and the
-// position. A name, class, account or tombstone is saved at once.
+// position and the valuables ledger. A name, class, account or tombstone is
+// saved at once.
 func (r *Registry) UpdateLater(account string, fn func(*Bot)) error {
 	if err := r.apply(account, fn); err != nil {
 		return err

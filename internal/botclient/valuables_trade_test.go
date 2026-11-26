@@ -239,7 +239,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		if round {
 			openAdRound(b, t0)
 		}
-		b.syncValuables()
+		b.syncValuables(t0)
 		return b
 	}
 	agree := func(b *Brain, k valuableKey, price int64, agreed bool) {
@@ -293,7 +293,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		if b.valuablesSold != 150000 || b.store.sold != 0 {
 			t.Fatalf("valuables sold %d, store sold %d; want 150000 and 0", b.valuablesSold, b.store.sold)
 		}
-		b.syncValuables()
+		b.syncValuables(t0)
 		if _, ok := b.cfg.valuables.entries[swordKey]; ok {
 			t.Fatal("sword entry still there after the sale")
 		}
@@ -347,7 +347,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 	t.Run("budget: offered while under it, ceil(left/unit) units", func(t *testing.T) {
 		b := newAdBrain(t, NewAdBoard(DefaultAdRegionGap, DefaultAdProcessPerHour), 0, recipes)
 		openAdRound(b, t0)
-		b.syncValuables()
+		b.syncValuables(t0)
 		unit := entryOf(t, b, ledgerRecipe, 0).ask
 		budget := b.persona.Valuables.Budget
 		for _, tt := range []struct {

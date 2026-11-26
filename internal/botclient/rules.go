@@ -641,7 +641,7 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	if b.store.active() || b.world.Self.StoreType != 0 {
 		rules = storeRules
 	}
-	b.syncValuables()
+	b.syncValuables(now)
 	b.endStaleRound(now)
 	b.karmaTick(now)
 	karma := b.world.Self.Karma > 0
