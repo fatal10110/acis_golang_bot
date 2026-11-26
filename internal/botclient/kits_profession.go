@@ -321,4 +321,7 @@ var professionKits = map[int32]ClassKit{
 	classShillienOracle: shillienOracleKit,
 	classDarkWizard:     darkWizardKit,
 	classOrcShaman:      orcShamanKit,
+	// The singers and dancers (kits_songs.go).
+	classSwordSinger: swordSingerKit,
+	classBladedancer: bladedancerKit,
 }
