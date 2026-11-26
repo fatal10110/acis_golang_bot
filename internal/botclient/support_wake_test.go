@@ -93,7 +93,7 @@ func TestBrainAssistWake(t *testing.T) {
 	if err := b.wake(at(4 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if b.assist.wake || !b.decisionAt().After(at(4*time.Second)) {
+	if b.assist.armed || !b.decisionAt().After(at(4*time.Second)) {
 		t.Fatalf("assist wake-up not spent: decision at %v", b.decisionAt().Sub(t0))
 	}
 }

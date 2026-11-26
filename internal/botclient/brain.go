@@ -853,17 +853,11 @@ func (b *Brain) wake(now time.Time) error {
 		}
 	}
 	if !now.Before(b.decisionAt()) {
-		// The assist's, the re-path's, the whisper's and the walk's
-		// wake-ups are spent here, before Appearing may postpone the
-		// decision, so they cannot keep decisionAt past due.
-		if !now.Before(b.assist.at) {
-			b.assist.wake = false
-		}
-		if !now.Before(b.follow.dueAt) {
-			b.follow.wake = false
-		}
-		if !now.Before(b.chat.at) {
-			b.chat.wake = false
+		// The alarms', the whisper's and the walk's wake-ups are spent
+		// here, before Appearing may postpone the decision, so they cannot
+		// keep decisionAt past due.
+		for _, a := range b.alarms() {
+			a.spend(now)
 		}
 		b.whispers.spendWake(now)
 		b.spendWalkWake(now)
@@ -923,14 +917,10 @@ func (b *Brain) decisionAt() time.Time {
 	if !b.reactAt.IsZero() {
 		t = b.reactAt
 	}
-	if b.assist.wake && b.assist.at.Before(t) {
-		t = b.assist.at
-	}
-	if b.follow.wake && b.follow.dueAt.Before(t) {
-		t = b.follow.dueAt
-	}
-	if b.chat.wake && b.chat.at.Before(t) {
-		t = b.chat.at
+	for _, a := range b.alarms() {
+		if at, ok := a.due(); ok && at.Before(t) {
+			t = at
+		}
 	}
 	if at, ok := b.whispers.wakeAt(); ok && at.Before(t) {
 		t = at
@@ -942,6 +932,12 @@ func (b *Brain) decisionAt() time.Time {
 		t = b.landingUntil
 	}
 	return t
+}
+
+// alarms are the wake-ups of the leader's assist, the follow re-path and
+// the canned whisper reply, which decisionAt reads and wake spends.
+func (b *Brain) alarms() [3]*alarm {
+	return [3]*alarm{&b.assist.alarm, &b.follow.alarm, &b.chat.alarm}
 }
 
 // due is when the loop must wake next.

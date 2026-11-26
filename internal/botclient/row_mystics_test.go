@@ -252,7 +252,7 @@ func TestRowCL(t *testing.T) {
 	checkHealerHeals(t, classCleric, 20)
 	assisting := func(b *Brain, now time.Time) {
 		inParty(b, 100, 100)
-		b.assist = assistPlan{target: npcID, at: t0, seen: now}
+		b.assist = assistPlan{alarm: alarm{at: t0}, target: npcID, seen: now}
 	}
 	cl := func(name string, setup func(b *Brain, now time.Time), skill, object int32) mysticCase {
 		return mysticCase{name: name, class: classCleric, level: 20, role: RoleSupport, skills: []int32{skillWindStrike}, setup: setup, skill: skill, object: object}
@@ -375,7 +375,7 @@ func TestRowSO(t *testing.T) {
 	checkHealerHeals(t, classShillienOracle, 20)
 	assisting := func(b *Brain, now time.Time) {
 		inParty(b, 100, 100)
-		b.assist = assistPlan{target: npcID, at: t0, seen: now}
+		b.assist = assistPlan{alarm: alarm{at: t0}, target: npcID, seen: now}
 	}
 	all := []int32{skillWindShackle, skillWindStrike}
 	runMysticCases(t, "", []mysticCase{

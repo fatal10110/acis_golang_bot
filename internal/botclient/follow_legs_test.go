@@ -22,9 +22,9 @@ func TestFollowHoldsThroughLeaderLegInsideRepath(t *testing.T) {
 
 	b.world.Apply(MoveToLocation{ObjectID: gmID, Origin: followGM(0, 0), Dest: followGM(240, 0)}, at(2*time.Second))
 	for now := at(2500 * time.Millisecond); !now.After(at(6 * time.Second)); now = now.Add(500 * time.Millisecond) {
-		b.follow.wake = false
+		b.follow.armed = false
 		followHold(t, b, now)
-		if !b.follow.dueAt.IsZero() {
+		if !b.follow.at.IsZero() {
 			lead := b.world.Objects[gmID].Position(now)
 			t.Fatalf("re-path scheduled at %v with the leader at %v, %.0f from the anchor", now.Sub(t0), lead, math.Sqrt(float64(dist2(lead, followGM(0, 0)))))
 		}

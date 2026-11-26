@@ -127,12 +127,12 @@ func (l *chatLog) expire(now time.Time, p *ChatPolicy) {
 type chatReply struct {
 	// reply is the Say2 Tell (actChatReply), zero for none.
 	reply Action
-	// to is the sender's object id, at when the reply is due.
+	// to is the sender's object id.
 	to int32
-	at time.Time
-	// wake brings a decision forward to at (decisionAt) until one runs
-	// there; past it the regular tick retries a reply the chat gate held.
-	wake bool
+	// alarm's at is when the reply is due; it brings a decision forward to
+	// at (decisionAt) until one runs there; past it the regular tick
+	// retries a reply the chat gate held.
+	alarm
 }
 
 // chatReplyAction whispers text back to the player named target. It
@@ -154,8 +154,7 @@ func (b *Brain) chatHeard(e CreatureSay, now time.Time) {
 	b.chat = chatReply{
 		reply: chatReplyAction(e.Name, p.Replies[b.rng.IntN(len(p.Replies))]),
 		to:    e.ObjectID,
-		at:    now.Add(b.chatDelay()),
-		wake:  true,
+		alarm: alarm{at: now.Add(b.chatDelay()), armed: true},
 	}
 }
 
