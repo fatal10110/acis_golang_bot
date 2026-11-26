@@ -438,7 +438,7 @@ func (b *Brain) dyeWants() (rows []buyRow, fee int64) {
 // gear floor, whose valuables deposit fees (valuableFees) ask the keep set
 // of every carried item, so asking the plan for each of them recursed
 // without end and overflowed the stack (a merchant with valuables and a
-// free dye slot; dyes are never valuables, as shops sell them).
+// free dye slot; a dye is never a valuable, valuableTemplate).
 func (b *Brain) plannedDye(id int32) bool {
 	if m := b.cfg.Travel; m == nil || !m.dyes[id] {
 		return false

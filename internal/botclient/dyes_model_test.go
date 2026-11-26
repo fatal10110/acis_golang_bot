@@ -146,4 +146,16 @@ func TestDyePlanWithValuables(t *testing.T) {
 	if b.plannedDye(dBlade) {
 		t.Error("the D blade is a planned dye")
 	}
+
+	// A dye no shop sells, priced and rare enough to pass the numeric
+	// test, is still no valuable: the keep test would ask the plan again.
+	dye := draw[0].DyeID
+	delete(m.cheapest, dye)
+	m.prices[dye], m.supply[dye] = 250000, itemSupply{perHour: 1}
+	b.world.Apply(ItemList{Items: append(slices.Clone(robes), adenaStack(1000000), blade, Item{ObjectID: 30, TemplateID: dye, Count: 1, SubCategory: 5})}, t0)
+	if b.valuableTemplate(dye, 0) {
+		t.Error("a dye passes the valuable test")
+	}
+	b.valuableFees()
+	b.dyePlan()
 }
