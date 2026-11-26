@@ -68,7 +68,8 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 // tryStep is the cast of step, fighting id at now with gate state st, when
 // it goes: not Idle, an attack only with MP at the reserve or more, its
 // gates pass, its skill is ready and the guards do not hold it, a
-// self-target step only under the stack rule, a step on the leader's target
+// self-target step only under the stack rule (on a skill not
+// casterCentered, once the bot selected itself), a step on the leader's target
 // only on that target, a step on another attacker on one the bot is not
 // fighting, and, while Ultimate Defense holds the bot (immobile), a step on
 // another only in cast range. ok is false when it does not.
@@ -86,7 +87,17 @@ func (b *Brain) tryStep(id int32, step Step, st stepState, underReserve bool, no
 		if !b.buffDue(self, step.Skill, now) {
 			return Action{}, false
 		}
-		return b.castOn(self, step.Skill, false, now), true
+		// A skill of datapack target ONE (Mental Shield) lands on the
+		// selected creature, the opponent mid-fight (server
+		// handler/target/cast_rejection.go oneCastRejection): the bot
+		// selects itself first and casts it once selected (sideCasting).
+		// A skill without datapack data goes as it is.
+		sk, ok := b.skillData(step.Skill)
+		a := b.castOn(self, step.Skill, ok && !casterCentered(sk.Target), now)
+		if a.kind == actSelect {
+			b.side = sideCast{target: self, skill: step.Skill}
+		}
+		return a, true
 	case TargetLeaderTarget:
 		if !b.leaderTarget(id) {
 			return Action{}, false
@@ -95,6 +106,19 @@ func (b *Brain) tryStep(id int32, step Step, st stepState, underReserve bool, no
 		return b.otherCast(id, step.Skill, now)
 	}
 	return b.castStep(id, step.Skill, r == rankAttack, now), true
+}
+
+// casterCentered reports whether the server casts a skill of datapack
+// target t on or around the caster whatever it has selected: the SELF,
+// PARTY, ALLY and CLAN handlers ignore the selection (server
+// handler/target/target_handlers_single.go selfHandler, group.go). Any
+// other target (ONE, PARTY_MEMBER) takes the selected creature.
+func casterCentered(t string) bool {
+	switch t {
+	case "SELF", "PARTY", "ALLY", "CLAN":
+		return true
+	}
+	return false
 }
 
 // leaderTarget reports whether id is the target of a TargetLeaderTarget
@@ -142,7 +166,8 @@ func (b *Brain) forgetSide(id int32) {
 // sideCasting is the side cast due on target t, the bot's target, at now,
 // which fight sends before it selects its own target again: a hold while a
 // cast is in flight. ok is false when none is due on t, or its skill is
-// not ready or t may no longer be fought.
+// not ready or t may no longer be fought. A side cast on the bot itself is
+// a self step of target ONE (tryStep), cast while its buff is still due.
 func (b *Brain) sideCasting(t int32, now time.Time) (Action, bool) {
 	sc := b.side
 	if sc.target == 0 || sc.target != t {
@@ -153,6 +178,12 @@ func (b *Brain) sideCasting(t int32, now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	b.side = sideCast{}
+	if t == s.ObjectID {
+		if !b.world.SkillReady(sc.skill, now) || !b.buffDue(t, sc.skill, now) {
+			return Action{}, false
+		}
+		return b.castOn(t, sc.skill, true, now), true
+	}
 	if !b.world.SkillReady(sc.skill, now) || !b.mayFight(t, now) || b.stepHeld(t, sc.skill, now) {
 		return Action{}, false
 	}

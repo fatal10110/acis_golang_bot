@@ -14,6 +14,11 @@ while the opponent is a caster or healer; against melee and archers cast at reus
 while breaking off); `Peel` (only on an enemy attacking the bot's healer or leader,
 [party](party.md)).
 
+A self step (`TargetSelf`) of a skill whose datapack target is ONE (Mental Shield) lands on the
+selected creature, the opponent mid-fight (server `handler/target/cast_rejection.go`
+`oneCastRejection`): the bot selects itself, casts it once `MyTargetSelected` names it, then selects
+its opponent again. A SELF, PARTY, ALLY or CLAN skill goes with the opponent still selected.
+
 ## PvP order
 
 Each group under the M10 gates:
