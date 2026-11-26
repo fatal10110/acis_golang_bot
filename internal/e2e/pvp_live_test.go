@@ -32,6 +32,9 @@ const (
 	// pvpHealerLevel is the healer scenario's client's level: a level 1
 	// mystic falls to the farmer's blows before the Cleric's heal.
 	pvpHealerLevel = 10
+	// pvpSword is the Long Sword (2), the healer scenario's client's
+	// weapon: no grade, 24 P.Atk.
+	pvpSword int32 = 2
 	// pvpFlagBound bounds the wait for a PvP flag to run out: 40 s after
 	// the last hit or heal (PvPVsNormalTime), its blink and the reaction.
 	pvpFlagBound = 90 * time.Second
@@ -583,6 +586,37 @@ func TestLivePvPHealer(t *testing.T) {
 		if err := gm.OnTarget(ctx, c.Self.ObjectID, cmd); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The client's sword (24 P.Atk against a mystic's fists' 3): its
+	// fists dealt about 3 a hit, which the leader's CP regeneration
+	// outlasted (the eleventh live run). A hit of about 20, a critical
+	// one twice that, cannot kill a 126 HP leader from the Cleric's 60 %
+	// before the GM's rescue under a third.
+	if err := gm.Give(ctx, c.Self.ObjectID, pvpSword, 1); err != nil {
+		t.Fatal(err)
+	}
+	sword := int32(0)
+	if _, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+		u, ok := ev.(botclient.InventoryUpdate)
+		for _, ch := range u.Changes {
+			if ok && ch.State != botclient.ItemRemoved && ch.Item.TemplateID == pvpSword {
+				sword = ch.Item.ObjectID
+			}
+		}
+		return sword != 0
+	}); err != nil {
+		t.Fatalf("%s receiving the GM's sword: %v", c.Self.Name, err)
+	}
+	if err := c.Send(ctx, botclient.EncodeUseItem(sword)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
+		u, ok := ev.(botclient.InventoryUpdate)
+		return ok && slices.ContainsFunc(u.Changes, func(ch botclient.ItemChange) bool {
+			return ch.Item.ObjectID == sword && ch.Item.Equipped
+		})
+	}); err != nil {
+		t.Fatalf("%s wielding the sword: %v", c.Self.Name, err)
 	}
 	bpForm(t, ctx, leader, cleric)
 	waitFor(t, ctx, cleric.name+" by "+leader.name, func() bool {
