@@ -34,7 +34,7 @@ func followRun(t *testing.T, b *Brain, now time.Time, sent func(seg segment, pre
 // pending.
 func arrivedAtSlot(b *Brain) bool {
 	v := &b.follow
-	return v.anchored && !v.traveling && v.dueAt.IsZero() && b.walk.status == walkArrived
+	return v.anchored && !v.traveling && v.at.IsZero() && b.walk.status == walkArrived
 }
 
 // TestFollowKeepsWalkingThroughDelay: the leader moving Repath on while the
@@ -64,10 +64,10 @@ func TestFollowKeepsWalkingThroughDelay(t *testing.T) {
 		if sends > 0 {
 			if idle := seg.sentAt.Sub(prevEnd); idle > positionTick {
 				t.Fatalf("segment %d at %v: idle %v after the last one ended (re-path at %v), want at most %v",
-					sends, seg.sentAt.Sub(t0), idle, b.follow.dueAt.Sub(t0), positionTick)
+					sends, seg.sentAt.Sub(t0), idle, b.follow.at.Sub(t0), positionTick)
 			}
 		}
-		if !movedAt.IsZero() && b.follow.dueAt.After(seg.sentAt) {
+		if !movedAt.IsZero() && b.follow.at.After(seg.sentAt) {
 			pending++
 		}
 		if sends++; sends == 2 {

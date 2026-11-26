@@ -141,8 +141,8 @@ func TestFollowRoutes(t *testing.T) {
 				// same slot.
 				for range 5 {
 					now = now.Add(time.Second)
-					if a := followDecide(t, b)(now); a.kind != actHold || !b.follow.dueAt.IsZero() {
-						t.Fatalf("kind %d, re-path at %v; want holding with the leader put", a.kind, b.follow.dueAt.Sub(t0))
+					if a := followDecide(t, b)(now); a.kind != actHold || !b.follow.at.IsZero() {
+						t.Fatalf("kind %d, re-path at %v; want holding with the leader put", a.kind, b.follow.at.Sub(t0))
 					}
 				}
 				return
