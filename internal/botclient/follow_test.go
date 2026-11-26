@@ -41,13 +41,13 @@ func followHold(t *testing.T, b *Brain, now time.Time) {
 // until just before, and returns the decision at the due time.
 func repath(t *testing.T, b *Brain, now time.Time) (Action, time.Time) {
 	t.Helper()
-	b.follow.wake = false
+	b.follow.armed = false
 	followHold(t, b, now)
-	due := b.follow.dueAt
+	due := b.follow.at
 	if d := due.Sub(now); d < 200*time.Millisecond || d > 800*time.Millisecond {
 		t.Fatalf("re-path due %v after noticing, want 200-800 ms", d)
 	}
-	if !b.follow.wake {
+	if !b.follow.armed {
 		t.Fatalf("re-path at %v without its wake-up", due.Sub(t0))
 	}
 	followHold(t, b, due.Add(-time.Millisecond))
@@ -122,9 +122,9 @@ func TestFollowRepathCadence(t *testing.T) {
 	b.world.Apply(StopMove{ObjectID: selfID, Pos: slot}, due)
 	gm = followGM(200, 0)
 	b.world.Apply(StopMove{ObjectID: gmID, Pos: gm}, at(3*time.Second))
-	b.follow.wake = false
+	b.follow.armed = false
 	followHold(t, b, at(4*time.Second))
-	if !b.follow.dueAt.IsZero() || b.follow.wake {
+	if !b.follow.at.IsZero() || b.follow.armed {
 		t.Fatalf("re-path scheduled with the leader 200 units from the anchor")
 	}
 
@@ -149,7 +149,7 @@ func TestFollowOutOfSight(t *testing.T) {
 	b := newFollowBrain(t)
 	b.world.Apply(DeleteObject{ObjectID: gmID}, t0)
 	followHold(t, b, at(time.Second))
-	if !b.follow.dueAt.IsZero() {
+	if !b.follow.at.IsZero() {
 		t.Fatal("re-path scheduled before any leader position")
 	}
 

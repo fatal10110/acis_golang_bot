@@ -174,14 +174,12 @@ type Buff struct {
 }
 
 // assistPlan is the creature the party leader last attacked: the bot
-// attacks it from at, while the leader's last hit on it (seen) is within
-// attackerWindow.
+// attacks it from the alarm's at, while the leader's last hit on it (seen)
+// is within attackerWindow. The alarm is the plan's own wake-up.
 type assistPlan struct {
-	target   int32
-	at, seen time.Time
-	// wake is set until a decision runs at or after at: the plan's own
-	// wake-up, which pulls decisionAt earlier and never later.
-	wake bool
+	alarm
+	target int32
+	seen   time.Time
 }
 
 // leaderHit records the attack or hostile cast on target at now of the one
@@ -200,7 +198,7 @@ func (b *Brain) leaderHit(attacker, target int32, now time.Time) {
 	}
 	lo := b.persona.AssistMin
 	delay := lo + time.Duration(b.rng.Int64N(int64(max(b.persona.AssistMax-lo, 0))+1))
-	b.assist = assistPlan{target: target, at: now.Add(delay), seen: now, wake: true}
+	b.assist = assistPlan{alarm: alarm{at: now.Add(delay), armed: true}, target: target, seen: now}
 }
 
 // assistTarget is the creature to assist the leader against at now, or 0.
@@ -287,7 +285,7 @@ func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 		if h.Members > 0 && held {
 			continue
 		}
-		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
+		if below(hp, maxHP, h.HP) && b.castReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
 			return h, true
 		}
 	}
@@ -405,7 +403,7 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 				}
 			}
 			if bf.Self && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
-				!b.world.SkillReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
+				!b.castReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
 				continue
 			}
 			return b.castOn(on, bf.Skill, !bf.Party, now), true

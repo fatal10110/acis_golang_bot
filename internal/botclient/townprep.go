@@ -55,12 +55,12 @@ func (b *Brain) preparing() bool {
 }
 
 // prepShort reports whether a supply of the bot's own is short of its trip
-// target (shotWants, supplyWants: the Extra ones count not) and a spawned
+// target (shotWants, supplyWants, reagentWants: the Extra ones count not) and a spawned
 // merchant within reach sells it (soldNear) at a base price the adena
 // past the supplies tier's floor pays.
 func (b *Brain) prepShort() bool {
 	adena := int64(b.carried(adenaID)) - b.floor(tierSupplies)
-	for _, r := range slices.Concat(b.shotWants(), b.supplyWants()) {
+	for _, r := range slices.Concat(b.shotWants(), b.supplyWants(), b.reagentWants()) {
 		if price, ok := b.cfg.Travel.cheapest[r.item]; ok && int64(price) <= adena && b.soldNear(r.item) {
 			return true
 		}

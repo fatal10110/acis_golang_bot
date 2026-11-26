@@ -18,11 +18,11 @@ func followNotice(t *testing.T, b *Brain, notice time.Time, delay time.Duration)
 	if err := b.wake(notice); err != nil {
 		t.Fatal(err)
 	}
-	if b.lastRule != "follow" || b.follow.dueAt != notice.Add(delay) || !b.follow.wake {
+	if b.lastRule != "follow" || b.follow.at != notice.Add(delay) || !b.follow.armed {
 		t.Fatalf("after the leader moved: rule %q, re-path at %v (wake %v), want follow scheduling it at %v",
-			b.lastRule, b.follow.dueAt.Sub(t0), b.follow.wake, notice.Add(delay).Sub(t0))
+			b.lastRule, b.follow.at.Sub(t0), b.follow.armed, notice.Add(delay).Sub(t0))
 	}
-	return b.follow.dueAt
+	return b.follow.at
 }
 
 // TestBrainFollowWake: the leader moving wakes the bot for the re-path
@@ -65,7 +65,7 @@ func TestBrainFollowWake(t *testing.T) {
 		t.Fatalf("at the re-path: rule %q, last sent %v (was %v), want follow moving at %v",
 			b.lastRule, b.pace.lastSent.Sub(t0), sent.Sub(t0), due.Sub(t0))
 	}
-	if b.follow.wake || !b.decisionAt().After(due) {
+	if b.follow.armed || !b.decisionAt().After(due) {
 		t.Fatalf("re-path wake-up not spent: decision at %v", b.decisionAt().Sub(t0))
 	}
 }
@@ -85,7 +85,7 @@ func TestBrainFollowWakeAppearing(t *testing.T) {
 	if !b.appearing {
 		t.Fatal("Appearing went out with no pacer token")
 	}
-	if got := b.decisionAt(); b.follow.wake || !got.After(due) {
-		t.Fatalf("re-path wake-up not spent: wake %v, decision at %v, want after %v", b.follow.wake, got.Sub(t0), due.Sub(t0))
+	if got := b.decisionAt(); b.follow.armed || !got.After(due) {
+		t.Fatalf("re-path wake-up not spent: wake %v, decision at %v, want after %v", b.follow.armed, got.Sub(t0), due.Sub(t0))
 	}
 }

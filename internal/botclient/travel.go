@@ -76,6 +76,10 @@ type TravelMap struct {
 	// (indexMaxCharges): what a ChargeToMax step stops at
 	// (Brain.stepState).
 	maxCharges map[datapack.SkillRef]int
+	// reagents are the item every level of a skill consuming one costs a
+	// cast (indexReagents), by skill id then level: what the reagent gate
+	// and restock read (Brain.affords, Brain.reagentWants).
+	reagents map[int32]map[int32]reagent
 	// trainers are the trainers of each class (indexTrainers): what the
 	// build learns at (Brain.build).
 	trainers map[int32][]int32
@@ -175,7 +179,7 @@ type destination struct {
 // destinations (the ones its list page shows), and the fixed spawn points
 // of every NPC template, the merchants' buylists, the gear bots wear and
 // its armor sets, the arrows each bow shoots, the items' reference prices, the healing
-// and buff potions and shots, the skills' cast ranges, the items' weights, the aggressive NPCs' aggro
+// and buff potions and shots, the skills' cast ranges and reagents, the items' weights, the aggressive NPCs' aggro
 // ranges, the warehouse keepers, the craft recipes, the crystals gear
 // breaks into and the dye symbols, and the supply of every priced template,
 // computed with supply, the restart regions, and the priced templates'
@@ -193,6 +197,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.castRanges = indexCastRanges(dp.Skills)
 	m.skillStacks = indexSkillStacks(dp.Skills)
 	m.maxCharges = indexMaxCharges(dp.Skills)
+	m.reagents = indexReagents(dp.Skills)
 	m.trainers = indexTrainers(dp.NPCs)
 	m.shots = indexShots(dp.EtcItems)
 	m.weapons = indexWeapons(dp.Items)

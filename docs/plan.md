@@ -95,6 +95,7 @@ the goal.
 | D46 | Where the wire code lives | In its own package, `internal/botwire` (events, decoders, encoders, opcodes), so the brain boundary is compiled. Owner, 2026-11-26. Design: `docs/structure.md` (WP1-WP3) |
 | D47 | Outcome log | The bots write what they measure at their spots (experience, adena, deaths, kill times against the model's) to a bounded JSONL file, off unless `-outcome-log` is given; no names or text. Owner, 2026-11-26. Design: `docs/structure.md` (OP0) |
 | D48 | Human-looking delays; a language model for whispers | No log-normal delays: the bots are not meant to pass for people. A small language model for whisper replies is a backlog issue, not scheduled. Owner, 2026-11-26. Design: `docs/structure.md` (Options) |
+| D49 | Skill reagents | Amends `docs/strategy.md` (S13c): a skill is never cast without the item its level consumes (`itemConsumeId`/`itemConsumeCount`; the server's refusal, SystemMessage 113, is not a charge refusal), and the shop errand restocks reagents at spawned merchants, `ReagentCastsMin` 20 / `ReagentCastsMax` 100 casts per skill summed per item (persona defaults, D6), only from the adena past the supplies tier's floor (M8 tiers), after potions, shots and arrows. Crystal D has no spawned seller: the cubic summons stay silent (#636 deferred). Owner, 2026-11-26 (epic #624, decision 3). Design: `docs/strategy.md` Design 4 "Skill reagents" (#627) |
 
 ## Consequences of a separate repository (D5)
 

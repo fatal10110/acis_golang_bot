@@ -55,11 +55,10 @@ type followState struct {
 	// anchored is false until the first time.
 	anchor   Point
 	anchored bool
-	// dueAt is when the pending re-path goes out, zero for none.
-	dueAt time.Time
-	// wake is set until a decision runs at or after dueAt: the re-path's
-	// own wake-up, which pulls decisionAt earlier and never later.
-	wake bool
+	// alarm is the re-path's own wake-up. Its at is when the pending
+	// re-path goes out, zero for none: spending the alarm disarms it but
+	// leaves at set until the re-path goes out.
+	alarm
 	// dest is the slot the bot walks to while traveling; stuck is set once
 	// the walk there ended unreachable, until the leader moves on.
 	dest      Point
@@ -163,19 +162,19 @@ func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	moved := !v.anchored || dist2(lead.pos, v.anchor) > int64(p.Repath)*int64(p.Repath)
 	far := max(int64(p.MaxDist)+int64(p.Repath), 0)
 	drifted := !v.traveling && !v.stuck && !s.Moving(now) && dist2(from, lead.pos) > far*far
-	if (moved || drifted) && v.dueAt.IsZero() {
-		v.dueAt, v.wake = now.Add(b.followDelay()), true
+	if (moved || drifted) && v.at.IsZero() {
+		v.alarm = alarm{at: now.Add(b.followDelay()), armed: true}
 	}
 	// A re-path pending while the bot travels keeps it walking to the old
 	// slot, so its next segment goes out; the new slot resets the walk once
 	// the delay ends. Only a bot standing still waits the delay out.
-	if !v.dueAt.IsZero() && !now.Before(v.dueAt) {
+	if !v.at.IsZero() && !now.Before(v.at) {
 		if s.Sitting {
 			return b.toggle(now), true
 		}
 		slot := offset(lead.pos, b.behind(lead, from, now)+v.angle, v.radius)
 		v.dest = b.walker().inSCC(lead.pos, slot)
-		v.dueAt, v.anchor, v.anchored = time.Time{}, lead.pos, true
+		v.at, v.anchor, v.anchored = time.Time{}, lead.pos, true
 		v.traveling, v.stuck = true, false
 	}
 	if !v.traveling {

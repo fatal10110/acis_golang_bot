@@ -108,6 +108,13 @@ type ShopPolicy struct {
 	// no bow without its arrows. They are never junk; a zero ArrowsMax
 	// buys none.
 	ArrowsMin, ArrowsMax int32
+	// ReagentCastsMin and ReagentCastsMax restock the reagents of the kit's
+	// skills (reagentWants), after the potions, shots and arrows, counted
+	// in casts per skill at the level the bot knows it and summed per item:
+	// under the ReagentCastsMin sum carried, the bot buys up to the
+	// ReagentCastsMax sum at a spawned merchant (docs/strategy.md, "Skill
+	// reagents"). They are never junk; a zero ReagentCastsMax buys none.
+	ReagentCastsMin, ReagentCastsMax int32
 	// Books buys the spellbooks a trainer asked for and the bot lacks
 	// (AcquireSkillInfo requirements), ahead of Restock.
 	Books bool
@@ -115,7 +122,7 @@ type ShopPolicy struct {
 	// visit to buy sells any junk too. 0 never sells. Junk is what the bot
 	// carries unequipped, past Keep, adena, quest items, augmented items,
 	// Persona.Potions, Persona.Shots, Restock items, its supplies and the
-	// keep set (keeps), the wielded bow's arrows, the shots it keeps
+	// keep set (keeps), the wielded bow's arrows, its skills' reagents, the shots it keeps
 	// (keepsShot), wanted books and what the keep hook keeps
 	// (Persona.Holds); only what the merchant's sell window lists is sold.
 	SellAt int
@@ -143,11 +150,14 @@ func defaultShopPolicy() ShopPolicy {
 	return ShopPolicy{
 		ArrowsMin: 200,
 		ArrowsMax: 1000,
-		Books:     true,
-		SellAt:    5,
-		KeepAdena: 1000,
-		Comfort:   true,
-		Reach:     8000,
+		// docs/strategy.md, "Skill reagents" (#627).
+		ReagentCastsMin: 20,
+		ReagentCastsMax: 100,
+		Books:           true,
+		SellAt:          5,
+		KeepAdena:       1000,
+		Comfort:         true,
+		Reach:           8000,
 	}
 }
 
@@ -691,7 +701,7 @@ func (b *Brain) uses(id int32) bool {
 	return b.inKeepSet(id) || slices.Contains(p.Potions, id) ||
 		slices.Contains(p.Shots, id) || b.shop.books[id] || b.shop.held[id] ||
 		slices.ContainsFunc(p.Shop.Restock, func(r Restock) bool { return r.Item == id }) ||
-		id == b.bowArrows() || id == b.nextBowArrows() || b.keepsScroll(id) || b.keepsPvPItem(id) ||
+		id == b.bowArrows() || id == b.nextBowArrows() || b.keepsScroll(id) || b.keepsPvPItem(id) || b.usesReagent(id) ||
 		slices.ContainsFunc(b.supplies(), func(s supply) bool { return s.item == id })
 }
 
