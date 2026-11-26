@@ -28,7 +28,7 @@ repository.
 | M11 - Bot parties | #371 | #373-#392 (`docs/parties/`, PRs P1a-P8, 13 PRs, D25-D29); follow-ups #395, #397, #398, #438 |
 | M12 - Merchant valuables | #376 | #378-#402 (`docs/valuables/`, PRs V1-V9, 13 PRs, D30-D34); follow-ups #403, #404 |
 | M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42 proposed, not approved); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43 proposed, not approved) |
-| M14 - Hardening and structure | to be filed | to be filed (`docs/structure.md`; D45-D48; OP1, OP2 and BR1b open) |
+| M14 - Hardening and structure | #641 | #642-#661 (`docs/structure.md`, PRs HD1-HD6, RT1-RT2, BR1a-BR3, GM1-GM3, WR1, WP1-WP3, OP0, D45-D48; #661 is the backlog issue OP4; OP1, OP2 and BR1b open, not filed) |
 
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,

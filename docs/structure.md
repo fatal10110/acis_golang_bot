@@ -1,7 +1,8 @@
 # Hardening, route planner and brain structure
 
 Status: decided by the owner on 2026-11-26 where the "Owner decisions" table says so (D45-D48);
-two questions stay open there (the prototypes OP1 and OP2, and BR1b). Reviewed in three rounds by
+two questions stay open there (the prototypes OP1 and OP2, and BR1b). Filed as epic #641 with
+sub-issues #642-#661 (the Delivery table); nothing is filed for the open questions. Reviewed in three rounds by
 two independent reviewers before the decisions, and once more after them for the sections the
 decisions changed (HD4, Design 5); the corrections of that last round are in the text and were
 not read again.
@@ -666,32 +667,32 @@ asks of the M10 rewrite.
 - No `-race` run on the owner's machine; PR CI runs the unit tier with it. The live scenarios are
   unchanged.
 
-## Delivery (milestone M14, "Hardening and structure")
+## Delivery (milestone M14, "Hardening and structure", epic #641)
 
 | PR | Scope | Needs | Changes behavior |
 | --- | --- | --- | --- |
-| HD1 | `errClosedAtAccept`, the quiet period on both gates, spacing turned on for an allowlisted gate that saw one, the counter; `internal/e2e/target.go`, the other user of `Turn.Dialed` | — | reconnect timing |
-| HD2 | The gate's backoff reset on entering the world; not-ready endings of two different bots step it; `internal/e2e/target.go` | HD1 (same files) | reconnect timing |
-| HD3 | Recover in `Bot.attempt` and the reader; `ErrPanic`; a deferred `turn.Done` beside the one after `enter`, deferred `enter` and `play` cleanup; the lock audit | HD2 (same file) | a panic ends one bot |
-| HD4 | Skip and log an undecodable packet in the world and the burst; `ServerClose` and `LeaveWorld` on the opcode; `errDecode` before the world, the burst's `UserInfo` included (checked in `EnterGame`), as a not-ready ending; the counter; the two guides and the doc comments (D45) | HD3 (same file), HD2 (the not-ready ending) | a bad packet no longer ends a session |
-| HD5 | `Planner.RouteToNearest`; `walker.drop` on it | — | which drop is taken (the cheapest landing by path cost) |
-| HD6 | Fold a deleted bot's counters, drop its slot | — | no |
-| RT1 | The same-cluster cap and seated search; the same-cluster owner sample | — | same-cluster routes past the cap |
-| RT2 | `ErrDoor` for an enclosed goal | RT1 (same function) | the reason of a walk that fails today |
-| BR1a | `rule.karma`, `rule.stop` | — | no |
+| HD1 (#642) | `errClosedAtAccept`, the quiet period on both gates, spacing turned on for an allowlisted gate that saw one, the counter; `internal/e2e/target.go`, the other user of `Turn.Dialed` | — | reconnect timing |
+| HD2 (#643) | The gate's backoff reset on entering the world; not-ready endings of two different bots step it; `internal/e2e/target.go` | HD1 (same files) | reconnect timing |
+| HD3 (#644) | Recover in `Bot.attempt` and the reader; `ErrPanic`; a deferred `turn.Done` beside the one after `enter`, deferred `enter` and `play` cleanup; the lock audit | HD2 (same file) | a panic ends one bot |
+| HD4 (#645) | Skip and log an undecodable packet in the world and the burst; `ServerClose` and `LeaveWorld` on the opcode; `errDecode` before the world, the burst's `UserInfo` included (checked in `EnterGame`), as a not-ready ending; the counter; the two guides and the doc comments (D45) | HD3 (same file), HD2 (the not-ready ending) | a bad packet no longer ends a session |
+| HD5 (#646) | `Planner.RouteToNearest`; `walker.drop` on it | — | which drop is taken (the cheapest landing by path cost) |
+| HD6 (#647) | Fold a deleted bot's counters, drop its slot | — | no |
+| RT1 (#648) | The same-cluster cap and seated search; the same-cluster owner sample | — | same-cluster routes past the cap |
+| RT2 (#649) | `ErrDoor` for an enclosed goal | RT1 (same function) | the reason of a walk that fails today |
+| BR1a (#650) | `rule.karma`, `rule.stop` | — | no |
 | BR1b | `rule.sent`, one group of hooks a PR (SD5) | BR1a | no; edits tests |
-| BR2 | `alarm` | — | no |
-| BR3 | The recipe errand's `sent` and the craft row's recipe-book request: a test that shows the cross-talk or closes it as not reachable, then the fix | — | only if the test shows it |
-| GM1 | `holds[K]`; never-reset maps made at construction | — | no |
-| GM2 | The trainer on `npcVisit.approach` | — | the trainer no longer counts another row's talk click |
-| GM3 | `between`, `npcBypass` | — | no |
-| WR1 | One wiring site for the shared set; one organizer driver | — | no |
-| WP1 | `internal/botwire`: event types, their constants, the opcodes, the decoders, `DecodeEvent`; the file of forwards in `botclient`; codec tests, fixtures and fuzz split out and moved (D46) | HD4 (the reader's decode path) | no |
-| WP2 | Encoders and their row types to `botwire`; call sites rewritten; `harness.go` and `internal/e2e` on `botwire`; the boundary test | WP1 | no |
-| WP3 | Login and handshake wire (`login.go`, `gamepackets.go`, `character.go`) and the types they share with the session | WP2 | no |
-| OP0 | Outcome log (D47) | — | no |
+| BR2 (#651) | `alarm` | — | no |
+| BR3 (#652) | The recipe errand's `sent` and the craft row's recipe-book request: a test that shows the cross-talk or closes it as not reachable, then the fix | — | only if the test shows it |
+| GM1 (#653) | `holds[K]`; never-reset maps made at construction | — | no |
+| GM2 (#654) | The trainer on `npcVisit.approach` | — | the trainer no longer counts another row's talk click |
+| GM3 (#655) | `between`, `npcBypass` | — | no |
+| WR1 (#656) | One wiring site for the shared set; one organizer driver | — | no |
+| WP1 (#657) | `internal/botwire`: event types, their constants, the opcodes, the decoders, `DecodeEvent`; the file of forwards in `botclient`; codec tests, fixtures and fuzz split out and moved (D46) | HD4 (the reader's decode path) | no |
+| WP2 (#658) | Encoders and their row types to `botwire`; call sites rewritten; `harness.go` and `internal/e2e` on `botwire`; the boundary test | WP1 | no |
+| WP3 (#659) | Login and handshake wire (`login.go`, `gamepackets.go`, `character.go`) and the types they share with the session | WP2 | no |
+| OP0 (#660) | Outcome log (D47) | — | no |
 | OP1, OP2 | Prototypes behind flags, judged on the log (SD4, open) | OP0 | behind a flag |
-| OP4 | Backlog: whisper replies from a small language model (D48) | — | not scheduled |
+| OP4 (#661) | Backlog: whisper replies from a small language model (D48) | — | not scheduled |
 
 Three lanes can run side by side: HD1-HD4 and HD6 (session, gate, supervisor), HD5 with RT1 and
 RT2 (`internal/nav` and the walker), and BR, GM (the brain). BR1 touches `brain.go` and
