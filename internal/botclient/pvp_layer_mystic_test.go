@@ -202,3 +202,44 @@ func TestPvPRotation(t *testing.T) {
 		t.Errorf("no PvP row: %d steps, want the M10 row's %d", len(got), len(rot))
 	}
 }
+
+// TestPvPAuraCastAt checks that Seal of Binding, an AURA root whose own
+// MagicSkillUse names the bot (server handler/target/target_handlers_area.go
+// auraHandler.FinalTarget), counts at the opponent the bot selected: its
+// landing and root are kept there, the root bit after the landing holds
+// it, and a 139 after it is a resist of Seal.
+func TestPvPAuraCastAt(t *testing.T) {
+	seal := MagicSkillUse{CasterID: selfID, TargetID: selfID, SkillID: skillSealBinding, Level: 1, HitTime: 4 * time.Second}
+	lands := rowNow.Add(seal.HitTime)
+	cast := func(t *testing.T) *Brain {
+		t.Helper()
+		b := pvpRowBrain(t, classOrcShaman, 30, lyrWarrior, false)
+		b.handleOne(t, MyTargetSelected{ObjectID: pcID}, rowNow)
+		b.handleOne(t, seal, rowNow)
+		if _, ok := b.pvp.opponents[pcID].fight.landed[skillSealBinding]; !ok {
+			t.Fatal("no Seal of Binding landing on the opponent")
+		}
+		if b.pvp.root.target != pcID {
+			t.Fatalf("root cast at %d, want the opponent %d", b.pvp.root.target, pcID)
+		}
+		return b
+	}
+	t.Run("root holds", func(t *testing.T) {
+		b := cast(t)
+		b.handleOne(t, rowFoe(lyrWarrior, false, Point{Y: 300}, rootAbnormal), lands.Add(500*time.Millisecond))
+		if got := b.rootHold(pcID, lands.Add(time.Second)); got != 29*time.Second {
+			t.Fatalf("root hold %v, want 29s", got)
+		}
+	})
+	t.Run("139 is a resist", func(t *testing.T) {
+		b := cast(t)
+		b.handleOne(t, SystemMessage{ID: msgResisted}, lands.Add(100*time.Millisecond))
+		f := b.pvp.opponents[pcID].fight
+		if f.resists[skillSealBinding] != 1 {
+			t.Fatalf("Seal resists %d, want 1", f.resists[skillSealBinding])
+		}
+		if _, ok := f.landed[skillSealBinding]; ok {
+			t.Fatal("a resisted Seal still landed")
+		}
+	})
+}
