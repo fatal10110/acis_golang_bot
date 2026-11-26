@@ -24,7 +24,7 @@ const switches: { key: keyof PvPModes; label: string }[] = [
 /**
  * modesOf is the switches the bot plays: the panel's, else the ones its
  * last session reported (its preset's defaults), else all off before its
- * first session.
+ * first session (PvPCard disables them then).
  */
 export function modesOf(b: Bot): PvPModes {
   const m = b.pvp ?? b.live?.pvp;
@@ -40,6 +40,9 @@ export function PvPCard({ bot: b }: { bot: Bot }) {
   const { run, busy } = useRun();
   const modes = modesOf(b);
   const p = b.live?.pvp;
+  // Before the first session the preset's defaults are unknown: a flip
+  // would post them as off, so the switches wait for a snapshot.
+  const known = b.pvp !== undefined || p !== undefined;
   const flip = (key: keyof PvPModes) => {
     const next = { ...modes, [key]: !modes[key] };
     void run(`${b.account}: pvp ${key} ${next[key] ? "on" : "off"}`, () => api.setPvP(b.account, next));
@@ -64,7 +67,7 @@ export function PvPCard({ bot: b }: { bot: Bot }) {
             <input
               type="checkbox"
               checked={modes[s.key]}
-              disabled={busy}
+              disabled={busy || !known}
               onChange={() => {
                 flip(s.key);
               }}
@@ -74,7 +77,7 @@ export function PvPCard({ bot: b }: { bot: Bot }) {
         ))}
       </div>
       <dl className="divide-y divide-slate-100 dark:divide-slate-800">
-        <Row label="Switches">{b.pvp ? "set in the panel" : "preset defaults"}</Row>
+        <Row label="Switches">{b.pvp ? "set in the panel" : known ? "preset defaults" : "preset defaults, shown after the bot's first session"}</Row>
         {p ? (
           <>
             <Row label="Fight back">{p.fight_back ? "on" : "off"}</Row>

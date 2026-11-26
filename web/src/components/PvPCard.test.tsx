@@ -76,4 +76,13 @@ describe("PvPCard", () => {
     await user.click(screen.getByRole("button", { name: "Defaults" }));
     expect(calls).toEqual([{ url: "/api/bots/hz1/pvp", method: "POST", body: { modes: null } }]);
   });
+
+  it("disables the switches until the bot's first session reports its defaults", () => {
+    show(bot("hz1"));
+    for (const name of ["Duels", "Hunt", "Arenas", "PK"]) {
+      expect(screen.getByRole("checkbox", { name })).toBeDisabled();
+    }
+    expect(screen.getByText("preset defaults, shown after the bot's first session")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Defaults" })).toBeDisabled();
+  });
 });
