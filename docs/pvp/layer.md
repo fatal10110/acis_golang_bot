@@ -12,7 +12,9 @@ against a player: Lionheart, Mental Shield, Aggression as a peel); `Interrupt` (
 interrupt-worthy cast landing later than this step would); `Hold` (kept ready, not cast at reuse,
 while the opponent is a caster or healer; against melee and archers cast at reuse); `Break` (only
 while breaking off); `Peel` (only on an enemy attacking the bot's healer or leader,
-[party](party.md)).
+[party](party.md)); `Sighted` (a self step with `Vs` also put up out of combat, by the rebuff rule,
+once a player of those archetypes the bot may fight is within 1000, twice a bow's reach: the
+knights' 112 Deflect Arrow vs A, #557).
 
 A self step (`TargetSelf`) of a skill whose datapack target is ONE (Mental Shield) lands on the
 selected creature, the opponent mid-fight (server `handler/target/cast_rejection.go`

@@ -32,12 +32,14 @@ var (
 var (
 	// knightPvP (KN): Ultimate Defense under 20 % HP only vs M (and only
 	// where it will not break off: the break-off runs first), Deflect
-	// Arrow vs A, Drain Health under 60 % and as the opener vs C, A,
-	// Shield Stun held for a caster's or healer's cast (Hold: also its
-	// interrupt), at reuse otherwise; Aggression only as a Peel.
+	// Arrow vs A (put up out of combat too once an archer the bot may
+	// fight is in sight: Sighted), Drain Health under 60 % and as the
+	// opener vs C, A, Shield Stun held for a caster's or healer's cast
+	// (Hold: also its interrupt), at reuse otherwise; Aggression only as a
+	// Peel.
 	knightPvP = []Step{
 		{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20, Vs: vsM},
-		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA},
+		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA, Sighted: true},
 		{Skill: skillDrainHealth, SelfHPBelow: 60},
 		{Skill: skillDrainHealth, Opener: true, Vs: vsCA},
 		{Skill: skillShieldStun, Weapons: []string{"SHIELD"}, Hold: true},
@@ -58,12 +60,12 @@ var (
 		{Skill: skillDash, Target: TargetSelf, Break: true},
 		{Skill: skillStunningShot, From: 36, Weapons: bowBranch, Branch: true, Hold: true},
 	}
-	// elvenKnightPvP (EK): Ultimate Defense as KN, Deflect Arrow vs A,
+	// elvenKnightPvP (EK): Ultimate Defense as KN, Deflect Arrow vs A as KN,
 	// Entangle vs C, A from 36 and to break off; Aggression only as a
 	// Peel.
 	elvenKnightPvP = []Step{
 		{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20, Vs: vsM},
-		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA},
+		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA, Sighted: true},
 		{Skill: skillEntangle, From: 36, Vs: vsCA},
 		{Skill: skillEntangle, From: 36, Break: true},
 		{Skill: skillAggression, From: 24, Peel: true},
@@ -80,12 +82,12 @@ var (
 		{Skill: skillSprint, From: 32, Target: TargetSelf, Break: true},
 		{Skill: skillStunningShot, From: 36, Weapons: bowBranch, Branch: true, Hold: true},
 	}
-	// palusKnightPvP (PK): Ultimate Defense as KN, Deflect Arrow vs A,
+	// palusKnightPvP (PK): Ultimate Defense as KN, Deflect Arrow vs A as KN,
 	// Poison vs C, H, Power Break vs M, A from 32, Freezing Strike only
 	// vs M from 36; Aggression only as a Peel.
 	palusKnightPvP = []Step{
 		{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20, Vs: vsM},
-		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA},
+		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA, Sighted: true},
 		{Skill: skillPoison, Vs: vsCH},
 		{Skill: skillPowerBreak, From: 32, Vs: vsMA},
 		{Skill: skillFreezingStrike, From: 36, Vs: vsM},
