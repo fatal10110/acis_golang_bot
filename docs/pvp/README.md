@@ -83,7 +83,7 @@ X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](
 | X6b | CP potions, cures, break-off, the break-cast gate and Ultimate Defense. | X6 | [layer](layer.md#cp-cures-pool-break-off) (and its tests) |
 | X7 | Fighter PvP rows (HF, EF, DF, OF, WF, KN, WA, RO, EK, ES, PK, AS, OR, MO, SC) and their `TestPvPRowsShipped` cases. | X6, X6b (Ultimate Defense), S6b (#326) | [rows](rows.md), [layer](layer.md), [guards](guards.md#tests) |
 | X8 | Mystic PvP rows (HM, EM, DM, OM, CL, HW, EO, EW, SO, DW, OS) and their `TestPvPRowsShipped` cases. | X6, X6b (OM break-off), S7 (#327) | [rows](rows.md), [layer](layer.md), [guards](guards.md#tests) |
-| X9 | Party PvP for every preset in any party: enemy set, healer marking, peel, healer buffs under its own `SupportFlagged`. | X6, X7 (KN peel), X8 (Mental Shield); `farmer` in bot parties needs M11 | [party](party.md), [layer](layer.md) (step fields, sleep rule) |
+| X9 | Party PvP for every preset in any party: enemy set, healer marking, peel, healer buffs under its own `SupportFlagged`. | X6, X7 (KN peel), X8 (Mental Shield); `farmer` in bot parties needs M11 (cases: #423) | [party](party.md), [layer](layer.md) (step fields, sleep rule) |
 | X10 | PvP gear: mix table, `PvPValue` in gear, set, jewel and dye scores, shipped-row model tests, cures on the supply list, CP potion and cure keep rule (D37). | X3, X6b, X7, X8, S5 (#324), M8 I3 (#170, supply list), I4 (#171, `keeps`) | [model](model.md), [layer](layer.md#tests) (supply-list and junk cases) |
 | X11 | Death and karma: arena return loop, avoid list, PK mode (`MayFight` rule 7), karma state (flee or PK, chaotic restart, karma route, work-off) (D39). | X4, X5, X6b, X7, X8 (`TestPvPPKCap` rows) | [karma](karma.md), [targets](targets.md#hunting), [finding](finding.md) (holds) |
 | X12 | Panel switches, PvP counts, the four counters. | X4, X5, X6, X11, S9 (#331) | [modes](modes.md#panel-and-metrics-x12) |
@@ -106,7 +106,7 @@ assumes equal level; hunting only flagged and karma players keeps this fair); **
 with no row); **arena deaths** (the 5-death cap and stay limit).
 
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
-shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11); party duels
+shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
 (M11); a challenge hold shared by all bots; clan wars, sieges, the Olympiad; buying CP potions;
 fighting summons for their own sake; command-channel mates in an arena (rule 3).
 
