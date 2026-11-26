@@ -9,7 +9,8 @@ For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summ
 [Summons and pets](#summons-and-pets)):
 
 1. **Duel.** From the countdown to the end, only the duel opponent, and only while fighting
-   ([wire](wire.md#world-model-x4)). In the countdown nobody; an opponent's countdown hit cancels
+   ([wire](wire.md#world-model-x4)); in a party duel any live foe of the other side
+   ([party duels](party.md#party-duels)). In the countdown nobody; an opponent's countdown hit cancels
    the duel and is not answered, and after the cancel (1952, `ExDuelEnd`) it is a clean player.
    While fighting, the opponent is fought even as a clan mate or party member (duel hits come before
    party and clan checks, `character_social.go:201`, `:230`; one-on-one duels check no party, clan

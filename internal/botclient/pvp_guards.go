@@ -298,6 +298,9 @@ type guardState struct {
 	// selectAt.
 	selecting int32
 	selectAt  time.Time
+	// clicked is the creature of the last Action packet, a select or an
+	// attack: the one a 692 (frozen duellist) answers.
+	clicked int32
 	// stopping is the opponent of a stop under way: its disengage move
 	// still goes once the Esc ended the cast, even with the cause gone.
 	stopping int32
@@ -319,7 +322,7 @@ func (b *Brain) guardSent(a Action, now time.Time) {
 	g := &b.pvp.guard
 	switch a.kind {
 	case actAttack:
-		g.intent = a.object
+		g.intent, g.clicked = a.object, a.object
 	case actCast:
 		g.castOn = a.object
 		g.castDamage = a.object != b.world.Self.ObjectID && b.damageStep(a.skill) && b.mayFight(a.object, now)
@@ -329,7 +332,7 @@ func (b *Brain) guardSent(a Action, now time.Time) {
 	case actMove, actSitStand:
 		g.intent, g.stopping = 0, 0
 	case actSelect:
-		g.selecting, g.selectAt = a.object, now
+		g.selecting, g.selectAt, g.clicked = a.object, now, a.object
 	case actTargetCancel:
 		g.escFor = b.world.Self.castEnd
 	}

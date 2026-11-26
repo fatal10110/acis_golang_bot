@@ -136,7 +136,7 @@ func (b *Brain) bystanderCounts(id int32, o *Object, now time.Time) bool {
 	if b.inDuel(now) {
 		switch {
 		case o.Kind == KindPlayer:
-			return id != b.duelOpponent(now)
+			return !b.duelFoeOf(id, now)
 		case o.Summon:
 			return true
 		}

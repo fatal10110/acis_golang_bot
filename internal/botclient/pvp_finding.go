@@ -210,10 +210,11 @@ func (b *Brain) foeMayDuel(id int32, now time.Time) bool {
 	return b.duelGround(p) && dist3(b.world.Self.Position(now), p) <= duelRange
 }
 
-// answerDuel answers the open one-on-one challenge when the persona takes
-// duels (docs/pvp/finding.md "Sources"): yes at the PvP reaction when the
-// bot may duel, the challenger is no bot (D38) and the bot has no challenge
-// of its own out; else no at once. A party duel is declined. One
+// answerDuel answers the open challenge when the persona takes duels
+// (docs/pvp/finding.md "Sources"): yes at the PvP reaction when the bot may
+// duel, the challenger is no bot (D38) and the bot has no challenge of its
+// own out; else no at once. A party duel's yes also needs the bot leading a
+// party that may duel (partyMayDuel, docs/pvp/party.md "Party duels"). One
 // RequestDuelAnswerStart per challenge (the server takes the first),
 // bounded by the frame limits.
 func (b *Brain) answerDuel(now time.Time) (Action, bool) {
@@ -222,7 +223,8 @@ func (b *Brain) answerDuel(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	d := b.duel(now)
-	yes := !a.party && d.Phase == DuelAsked && !d.Challenged && !b.cfg.markers.Marks(d.Name) && b.mayDuel(now)
+	yes := d.Phase == DuelAsked && d.Party == a.party && !d.Challenged && !b.cfg.markers.Marks(d.Name) && b.mayDuel(now) &&
+		(!a.party || b.partyMayDuel(now))
 	if yes && now.Before(a.due) {
 		return Action{}, false
 	}
@@ -238,7 +240,9 @@ func (b *Brain) answerDuel(now time.Time) (Action, bool) {
 // challengeSameEvery per player, an idle duel and the bot free to duel
 // (mayDuel); a whisper that fails them is dropped, as is one past due by
 // whisperLapse (an earlier rule held) or heard in combat stance. Its sender bound is
-// challengeEvery (the server has no gate on the packet).
+// challengeEvery (the server has no gate on the packet). The bot leading
+// a party challenges a whisper to a party duel, once its party may duel
+// (partyMayDuel, docs/pvp/party.md "Party duels").
 func (b *Brain) ruleChallenge(now time.Time) (Action, bool) {
 	f := &b.pvp.find
 	if !b.persona.PvP.Duels {
@@ -254,8 +258,12 @@ func (b *Brain) ruleChallenge(now time.Time) (Action, bool) {
 	free := b.duel(now).Phase == DuelIdle && (f.lastAsk.IsZero() || now.Sub(f.lastAsk) >= challengeEvery) && !b.pvp.arena.active()
 	if w.name != "" && !now.Before(w.due) && now.Sub(w.due) <= whisperLapse {
 		if free && !b.cfg.markers.Marks(w.name) && !f.recent(w.name, now) && !b.avoided(w.name, now) && b.mayDuel(now) {
+			// A party mate gets a one-on-one duel: the server refuses a
+			// party duel within one party (network/duel.go partyDuelSides).
 			if id := b.playerNamed(w.name); id != 0 && b.foeMayDuel(id, now) {
-				return b.challenge(id), true
+				if party := b.leading() && !b.partyMate(id); !party || b.partyMayDuel(now) {
+					return b.challenge(id, party), true
+				}
 			}
 		}
 	}
@@ -263,7 +271,7 @@ func (b *Brain) ruleChallenge(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	if id := b.challengeFoe(now); id != 0 {
-		return b.challenge(id), true
+		return b.challenge(id, false), true
 	}
 	return Action{}, false
 }
@@ -315,14 +323,15 @@ func (b *Brain) nearestPlayer(now time.Time, ok func(id int32, o *Object) bool) 
 	return 0
 }
 
-// challenge is the RequestDuelStart of player id, a one-on-one duel.
-func (b *Brain) challenge(id int32) Action {
-	return Action{kind: actDuelStart, payload: encodeRequestDuelStart(b.world.object(id).Name, false), object: id}
+// challenge is the RequestDuelStart of player id, a one-on-one duel or a
+// party duel (yes marks it).
+func (b *Brain) challenge(id int32, party bool) Action {
+	return Action{kind: actDuelStart, payload: encodeRequestDuelStart(b.world.object(id).Name, party), object: id, yes: party}
 }
 
 // challengeSent keeps the bot's challenge a sent at now: the shared and
 // per-player challenge clocks, the process-wide one (Challenges), and its
-// duel asked with the player named.
+// duel asked with the player named, a party duel's when a.yes.
 func (b *Brain) challengeSent(a Action, now time.Time) {
 	o := b.world.object(a.object)
 	if o == nil {
@@ -334,7 +343,7 @@ func (b *Brain) challengeSent(a Action, now time.Time) {
 	}
 	f.lastAsk, f.asked[o.Name] = now, now
 	b.cfg.Challenges.sent(o.Name, b.world.Self.ObjectID, now)
-	b.pvp.duel = Duel{Phase: DuelAsked, Name: o.Name, Since: now, Challenged: true, Result: b.pvp.duel.Result}
+	b.pvp.duel = Duel{Phase: DuelAsked, Name: o.Name, Since: now, Challenged: true, Result: b.pvp.duel.Result, Party: a.yes}
 }
 
 // aboveStand reports whether the bot's HP and MP are at least its stand
