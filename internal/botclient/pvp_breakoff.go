@@ -353,7 +353,7 @@ func (b *Brain) sustainReady(rot []Step, st stepState, now time.Time) bool {
 	}
 	return slices.ContainsFunc(rot, func(step Step) bool {
 		return step.SelfHPBelow > 0 && slices.Contains(critSustain, step.Skill) && step.passes(st) &&
-			b.world.SkillReady(step.Skill, now) && !b.longCastHeld(step.Skill, now)
+			b.castReady(step.Skill, now) && !b.longCastHeld(step.Skill, now)
 	})
 }
 

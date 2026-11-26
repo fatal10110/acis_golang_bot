@@ -191,7 +191,7 @@ func (b *Brain) ruleSweep(now time.Time) (Action, bool) {
 	switch {
 	case s.Sitting:
 		return b.toggle(now), true
-	case s.Casting(now) || b.castPending(now) || !b.world.SkillReady(skill, now):
+	case s.Casting(now) || b.castPending(now) || !b.castReady(skill, now):
 		return Action{}, true
 	case b.world.Target != id:
 		return selectAction(id, s.Position(now)), true

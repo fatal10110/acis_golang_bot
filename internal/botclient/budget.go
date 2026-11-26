@@ -58,7 +58,7 @@ func (b *Brain) floor(t tier) int64 {
 // wants are the shop errand's planned purchases in budget order: the
 // supplies tier (recoveryWants, the wanted spellbooks it lacks, by id, the
 // restocks of its class under their minimum, in persona order, then
-// shotWants, supplyWants, arrowWants and extraWants), then the gear tier
+// shotWants, supplyWants, arrowWants, reagentWants and extraWants), then the gear tier
 // (gearWants, then dyeWants), then, with comfort, the comfort tier
 // (comfortWants).
 func (b *Brain) wants(comfort bool) []want {
@@ -92,6 +92,7 @@ func (b *Brain) wants(comfort bool) []want {
 	add(tierSupplies, b.shotWants())
 	add(tierSupplies, b.supplyWants())
 	add(tierSupplies, b.arrowWants())
+	add(tierSupplies, b.reagentWants())
 	add(tierSupplies, b.extraWants())
 	add(tierGear, b.gearWants())
 	dyes, fee := b.dyeWants()

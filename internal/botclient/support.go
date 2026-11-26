@@ -287,7 +287,7 @@ func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 		if h.Members > 0 && held {
 			continue
 		}
-		if below(hp, maxHP, h.HP) && b.world.SkillReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
+		if below(hp, maxHP, h.HP) && b.castReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
 			return h, true
 		}
 	}
@@ -405,7 +405,7 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 				}
 			}
 			if bf.Self && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
-				!b.world.SkillReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
+				!b.castReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
 				continue
 			}
 			return b.castOn(on, bf.Skill, !bf.Party, now), true

@@ -23,7 +23,7 @@ const sightedReach = 2 * bowRange
 func (b *Brain) sightedBuff(steps []Step, now time.Time) (Action, bool) {
 	self := b.world.Self.ObjectID
 	for _, step := range steps {
-		if !step.Sighted || step.Target != TargetSelf || len(step.Vs) == 0 || !b.world.SkillReady(step.Skill, now) ||
+		if !step.Sighted || step.Target != TargetSelf || len(step.Vs) == 0 || !b.castReady(step.Skill, now) ||
 			!b.buffDue(self, step.Skill, now) || now.Sub(b.buffedAt[buffKey{self, step.Skill}]) < buffRetry {
 			continue
 		}

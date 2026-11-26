@@ -711,6 +711,24 @@ type Build struct {
   over Chant of Shielding level 1, both `pd_up`; Shield level 1 on a knight with Defense Aura
   level 2). In-combat self buffs (Rapid Shot, Rage, Frenzy, War Cry) are self-target rotation
   steps under the same rule ("Behavior per class", column 6).
+- **Skill reagents** (S13c, owner decision 3 of 2026-11-26, an amendment to this plan, D49): a
+  skill level whose `itemConsumeId` and `itemConsumeCount` are both above 0 consumes that many of
+  the item per cast, and the server refuses the cast of a caster carrying fewer with
+  SystemMessage 113 (`cast/controller.go` `CanCast`, `ErrNotEnoughItems`), the message of a failed
+  `Charges` condition too. So no rotation step, `Idle` step, buff, heal, toggle or flee skill is
+  cast while the bot carries fewer than its known level consumes (`Brain.castReady`): the step is
+  skipped as if not ready, the bot melees or casts the next one, and the refusal never reaches
+  `chargesRefused`. The shop errand restocks each reagent at a spawned merchant (`ShopPolicy`
+  `ReagentCastsMin` 20 and `ReagentCastsMax` 100, persona defaults, D6), counted in casts per
+  skill and summed per item at the skill's known level: a Bishop's Major Heal (1 Spirit Ore) and
+  Major Group Heal (4) top Spirit Ore up to 500 once under 100. It buys them in the supplies tier after
+  the potions, shots and arrows, only from the adena past that tier's floor (M8 budget), keeps
+  them out of junk sales, and a reagent carried under its minimum sends a farmer on a supply trip
+  (`runsOut`) and holds its town preparation (`prepShort`), as its shots do. Restock sizes at the defaults: Spellsinger 1500 Spirit Ore, Warcryer
+  1200, Prophet 600, Bishop 500, Elven Elder 300; Gladiator 600 Energy Stones, Tyrant 400;
+  Spellhowler 100 Cursed Bones (Death Spike; Cema, buy list 73). Crystal D, the cubics' reagent,
+  is sold only by the unspawned Sales Cat: it is never bought and the gate keeps the cubic
+  summons silent (S17, #636, deferred).
 - **Role:** `Support` plays for a party: mystics take the healer and buffer professions, fighters
   the tank line where their race has one (Knight, Elven Knight, Palus Knight); the orc and dwarven
   fighters, which have none, take Orc Raider and Scavenger. `Damage` farms alone and takes the

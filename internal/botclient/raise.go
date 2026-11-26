@@ -27,7 +27,7 @@ func (b *Brain) ruleRaise(now time.Time) (Action, bool) {
 		return Action{}, false
 	case s.Casting(now) || b.castPending(now):
 		return Action{}, true
-	case !b.world.SkillReady(skillResurrection, now) || below(s.MP, s.MaxMP, b.build().Thresholds.SitMP):
+	case !b.castReady(skillResurrection, now) || below(s.MP, s.MaxMP, b.build().Thresholds.SitMP):
 		return Action{}, false
 	}
 	return b.castOn(dead[0], skillResurrection, true, now), true

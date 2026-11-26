@@ -822,7 +822,7 @@ func (b *Brain) flee(id int32, now time.Time) Action {
 		// Ultimate Defense: a move would only idle the bot.
 		return Action{}
 	}
-	if f := b.build().Kit.Flee; f != 0 && b.world.SkillReady(f, now) {
+	if f := b.build().Kit.Flee; f != 0 && b.castReady(f, now) {
 		return b.castOn(s.ObjectID, f, false, now)
 	}
 	if s.Moving(now) {

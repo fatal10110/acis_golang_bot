@@ -75,7 +75,8 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 
 // tryStep is the cast of step, fighting id at now with gate state st, when
 // it goes: not Idle, an attack or a filler only with MP at the reserve or
-// more, its gates pass, its skill is ready and the guards do not hold it, a
+// more, its gates pass, its skill is ready with its reagent carried
+// (castReady) and the guards do not hold it, a
 // self-target step only under the stack rule (on a skill not
 // casterCentered, once the bot selected itself), a step on the leader's target
 // only on that target, a step on another attacker on one the bot is not
@@ -85,7 +86,7 @@ func (b *Brain) rotationCast(id int32, rot []Step, underReserve bool, now time.T
 func (b *Brain) tryStep(id int32, step Step, st stepState, underReserve bool, now time.Time) (Action, bool) {
 	r := step.rank()
 	if step.Idle || (r == rankAttack || r == rankFiller) && underReserve ||
-		!step.passes(st) || !b.world.SkillReady(step.Skill, now) ||
+		!step.passes(st) || !b.castReady(step.Skill, now) ||
 		step.Target != TargetSelf && b.stepHeld(id, step.Skill, now) ||
 		step.Target != TargetSelf && b.immobile(now) && !b.castInRange(id, step.Skill, now) {
 		return Action{}, false
@@ -188,12 +189,12 @@ func (b *Brain) sideCasting(t int32, now time.Time) (Action, bool) {
 	}
 	b.side = sideCast{}
 	if t == s.ObjectID {
-		if !b.world.SkillReady(sc.skill, now) || !b.buffDue(t, sc.skill, now) {
+		if !b.castReady(sc.skill, now) || !b.buffDue(t, sc.skill, now) {
 			return Action{}, false
 		}
 		return b.castOn(t, sc.skill, true, now), true
 	}
-	if !b.world.SkillReady(sc.skill, now) || !b.mayFight(t, now) || b.stepHeld(t, sc.skill, now) {
+	if !b.castReady(sc.skill, now) || !b.mayFight(t, now) || b.stepHeld(t, sc.skill, now) {
 		return Action{}, false
 	}
 	return b.castStep(t, sc.skill, false, now), true
@@ -260,7 +261,7 @@ func (b *Brain) sustain(now time.Time) (Action, bool) {
 	id, rot := b.world.Target, b.build().Kit.Rotation
 	st := b.stepState(id, rot, now)
 	for _, step := range rot {
-		if step.SelfHPBelow == 0 || !slices.Contains(critSustain, step.Skill) || !step.passes(st) || !b.world.SkillReady(step.Skill, now) || b.longCastHeld(step.Skill, now) {
+		if step.SelfHPBelow == 0 || !slices.Contains(critSustain, step.Skill) || !step.passes(st) || !b.castReady(step.Skill, now) || b.longCastHeld(step.Skill, now) {
 			continue
 		}
 		switch step.Target {
@@ -320,7 +321,7 @@ func (b *Brain) toggleCast(toggles []Toggle, fighting bool, now time.Time) (Acti
 		switch {
 		case on && fighting && !below(s.MP, s.MaxMP, t.MPAbove),
 			!on && (!fighting || !above(s.MP, s.MaxMP, t.MPAbove)),
-			b.toggleSettling(t.Skill, now) || !b.world.SkillReady(t.Skill, now):
+			b.toggleSettling(t.Skill, now) || !b.castReady(t.Skill, now):
 			continue
 		}
 		return b.castOn(s.ObjectID, t.Skill, false, now), true
@@ -340,7 +341,7 @@ func (b *Brain) relax(now time.Time) (Action, bool) {
 		return Action{}, false
 	case b.toggleSettling(r, now):
 		return Action{}, true
-	case b.toggleOn(r) || !b.world.SkillReady(r, now) || below(s.MP, s.MaxMP, bd.Thresholds.SitMP):
+	case b.toggleOn(r) || !b.castReady(r, now) || below(s.MP, s.MaxMP, bd.Thresholds.SitMP):
 		return Action{}, false
 	}
 	return b.castOn(s.ObjectID, r, false, now), true
@@ -371,7 +372,7 @@ func (b *Brain) idleStep(rot []Step, now time.Time) (Action, bool) {
 	self := b.world.Self.ObjectID
 	st := b.stepState(0, rot, now)
 	for _, step := range rot {
-		if step.Idle && step.Target == TargetSelf && step.passes(st) && b.world.SkillReady(step.Skill, now) {
+		if step.Idle && step.Target == TargetSelf && step.passes(st) && b.castReady(step.Skill, now) {
 			return b.castOn(self, step.Skill, false, now), true
 		}
 	}
