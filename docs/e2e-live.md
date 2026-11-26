@@ -291,6 +291,10 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveValuablesTradeSale` | GM, datapack | #402 a merchant-preset mystic given a Sword of Watershadow says a Trade line the unmarked buyer hears; the buyer's offer gets a counter, the counter an agreement and the merchant's TradeRequest, which the buyer accepts and pays: settled at that price (both inventories); private links at Rolfe only, the sword never worn |
 | `TestLiveValuablesWarehouse` | GM, datapack | #402 with `RoundGap` lowered, the merchant (its cap off, so what earlier runs left goes in too) deposits the unsold sword at Rolfe after its round (30 adena a row), the GM gives it Tears of Eva, and its next round withdraws the sword at Rolfe before one Trade line naming both; no `_DepositP`/`_WithdrawP` names Rant |
 | `TestLiveValuablesRelease` | GM, datapack | #402 with `HoldRows` 1, a round with both valuables releases them: no deposit, the store lists only released valuables at their floor, and the buyer buys them there at the listed prices (what earlier runs left listed too) |
+| `TestLivePvPDuel` | GM, datapack | #420 (X5) GM, client, `pvp` bot on open ground west of Gludin: the bot accepts the client's duel and fights it, the duel ends without a death and both get their CP, HP and MP back |
+| `TestLivePvPFightBack` | GM, datapack | #420 (X4) GM, client, `pvp` bot: the client force-attacks the bot, which fights back; the client stops, its flag runs out, and the bot leaves it be |
+| `TestLivePvPArena` | GM, datapack | #420 (X4b, X5, X11) GM, client, two `pvp` fighter bots sent on their arena trip into the Gludin arena: a bot that dies there keeps its experience, restarts in Gludin village and walks back into the arena |
+| `TestLivePvPHealer` | GM, datapack, class master | #420 (X9, M11) GM, client, an M11 bot party of a `farmer` leader and a `support` Cleric (`SupportFlagged`): the GM attacks the leader and the client heals the GM (flagging itself); the leader fights back and targets the client, and the Cleric heals the flagged leader |
 
 CharCreateFail 2 is exercised on the run that creates `e2ec6`'s character; later runs adopt it.
 
