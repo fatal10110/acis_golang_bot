@@ -41,6 +41,22 @@ func TownPersona() Persona {
 	return p
 }
 
+// idleCenter is where the idle drift from from stays around. A bot that
+// lives in town (a persona that hops between towns, run with no farming
+// spots: the town preset) drifts around the travel map's town nearest it,
+// so one that logged in out in the field walks to town on its first drift
+// and an errand's end does not send it back (#567). Any other bot, or a
+// town bot without a travel map, drifts around its anchor: where it
+// logged in, arrived at its spot or landed from a teleport.
+func (b *Brain) idleCenter(from Point) Point {
+	if b.persona.Town.HopMax > 0 && b.cfg.Spots == nil {
+		if t := b.nearestTown(from); t != nil {
+			return *t
+		}
+	}
+	return b.anchor
+}
+
 // hopSpell is a random idle spell between town hops.
 func (b *Brain) hopSpell() time.Duration {
 	p := &b.persona.Town
