@@ -18,6 +18,10 @@ import (
 // arena.
 
 const (
+	// pvpPress is how long the healer scenario's GM goes without a swing
+	// at the leader before it attacks again, and the least time between
+	// two of its rescue heals.
+	pvpPress = 3 * time.Second
 	// pvpHeal and pvpBattleHeal are Heal (1011) and Battle Heal (1015).
 	pvpHeal       int32 = 1011
 	pvpBattleHeal int32 = 1015
@@ -587,14 +591,41 @@ func TestLivePvPHealer(t *testing.T) {
 
 	// The GM's force attack flags it (PvPVsNormalTime). The GM reads on
 	// through every later wait (pump): its fight sends it frames.
+	//
+	// The GM keeps the leader under pressure: the Cleric heals only a
+	// leader losing HP, and the GM's auto attack ended after one swing
+	// once the leader turned on the client (the eighth live run). Pump
+	// sends the GM's attack again when it has not swung at the leader for
+	// pvpPress, at most once per pvpPress (one frame in 3 s, far under the
+	// frame limit), and the GM's admin heal, which touches no flag, keeps
+	// the leader alive under a third of its HP.
 	gmSelf := &pvpSelf{id: gm.Self.ObjectID}
 	t.Cleanup(func() { pvpUnflagGM(t, gm, gmSelf, leader, cleric) })
+	var swungAt, pressedAt, rescuedAt time.Time
+	note := func(ev botclient.Event) {
+		gmSelf.note(ev)
+		if hitOn(gm.Self.ObjectID, leader.id)(ev) {
+			swungAt = time.Now()
+		}
+	}
 	pump := func() {
-		if err := gm.Watch(ctx, 200*time.Millisecond, gmSelf.note); err != nil {
+		if err := gm.Watch(ctx, 200*time.Millisecond, note); err != nil {
 			t.Fatalf("the GM reading: %v", err)
 		}
 		if err := c.Watch(ctx, 100*time.Millisecond, func(botclient.Event) {}); err != nil {
 			t.Fatalf("%s reading: %v", c.Self.Name, err)
+		}
+		if st := leader.bot.Status(); st.MaxHP > 0 && 3*st.HP < st.MaxHP && time.Since(rescuedAt) >= pvpPress {
+			rescuedAt = time.Now()
+			if err := gm.Command(ctx, "heal "+leader.name); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if !swungAt.IsZero() && time.Since(swungAt) >= pvpPress && time.Since(pressedAt) >= pvpPress {
+			pressedAt = time.Now()
+			if err := gm.Send(ctx, botclient.EncodeAttackRequest(leader.id, gm.Pos())); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	from := leader.seen()
@@ -604,7 +635,7 @@ func TestLivePvPHealer(t *testing.T) {
 		}
 	}
 	if _, err := gm.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
-		gmSelf.note(ev)
+		note(ev)
 		return hitOn(gm.Self.ObjectID, leader.id)(ev)
 	}); err != nil {
 		t.Fatalf("the GM hits %s: %v", leader.name, err)
