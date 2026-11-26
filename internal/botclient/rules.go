@@ -876,6 +876,10 @@ func (b *Brain) ruleAttacked(now time.Time) (Action, bool) {
 		return b.toggle(now), true
 	}
 	id := b.world.Target
+	if s := b.firstSummon(id, now); s != 0 {
+		// Its summon stands in for the target (standIn).
+		id = s
+	}
 	fightable := b.mayFight(id, now)
 	hits := b.attackers(now)
 	switch {
