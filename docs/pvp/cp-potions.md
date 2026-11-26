@@ -57,7 +57,8 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
      than `SevenSigns.MaxMembers` (default 1). The cap is static, so it needs no sign-up count:
      no counter resets on a restart, and no two bots race to the priest for the last place. Each
      member votes the seal Dusk holds when it holds one (it then only strengthens a seal humans
-     already keep), else `PvPPolicy.SignsSeal`. The alternative is to accept the vote weight without a cap ([owner question 2](#owner-questions)).
+     already keep), else `PvPPolicy.SignsSeal`. The alternative is to accept
+     the vote weight without a cap ([owner question 2](#owner-questions)).
    - **3b, contribute.** Bots also turn stones in during Competition. Their cabal then wins any
      cycle humans do not outscore, every cycle on a quiet server, and the bots' seal votes decide
      who holds Gnosis, Avarice and Strife for every player: a world change, the owner's call.
