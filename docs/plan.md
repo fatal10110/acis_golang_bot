@@ -24,7 +24,7 @@ repository.
 | M7 - Own navigation | #151 | #152-#162 (`docs/navigation.md`, PRs N0-N8 and two gap issues) |
 | M8 - Items and loadout | #166 | #167-#182 (`docs/items.md`, PRs I0-I13 with I8b, and the enchant backlog issue) |
 | M9 - Clan crafter | #184 | #185-#194 (`docs/crafting.md`, PRs C1-C10) |
-| M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332); second professions #587-#591; servitor lines #592 (later) |
+| M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332); second professions epic #624 (#625-#636, S17 deferred); servitor lines #592 (later) |
 | M11 - Bot parties | #371 | #373-#392 (`docs/parties/`, PRs P1a-P8, 13 PRs, D25-D29); follow-ups #395, #397, #398, #438 |
 | M12 - Merchant valuables | #376 | #378-#402 (`docs/valuables/`, PRs V1-V9, 13 PRs, D30-D34); follow-ups #403, #404 |
 | M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43) |
