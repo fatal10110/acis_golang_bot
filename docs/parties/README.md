@@ -102,17 +102,18 @@ Most urgent: P1a-P1d and P5a-P5b give parties at all; P2a-P2b make them play as 
   gains only killing over twice as fast or resting less (the healer, P4's spots); no test measures
   it; without P4 parties may level slower than solo farmers.
 - **Fewer bots for players** (`join` and D28 give them back); **churn**, bounded by cool-downs,
-  hysteresis, one invitation at a time and `FormPerPass`; **walking members** stranded by a straying
-  leader, bounded by no gatekeeper trips and the fall-behind break, a band that outgrew its town
-  idling until `NoSpotFor` frees the leader; **model error** from uncalibrated member profiles, the
+  hysteresis, one invitation at a time and `FormPerPass`; **members left behind** by a straying
+  leader, bounded by the gather gate at the gatekeeper, the regroup after the teleport and the
+  fall-behind break ([gatekeeper trip](spots.md#gatekeeper-trip), #397), a member short of the fee
+  leaving the party; a band with no fitting spot in reach or by gatekeeper idling until `NoSpotFor`
+  frees the leader; **model error** from uncalibrated member profiles, the
   model only comparing spots under the leader's row margin.
 
 Out of scope: command channels; party matching rooms (`network/partymatch.go`) listing bot parties
 (backlog). A partyless support bot does ask to enter the rooms players open, and waits there for the
 leader's invitation ([rooms](rooms.md), #438). To be filed in M11 with the epic: `bots swarm` has no organizer (D25; headless runs keep
 today's party behavior, the home run uses the panel, D10); a party travelling by gatekeeper or
-recalling together (P2b covers only the teleport answer; until then a party with no spot in
-reach, a given-back outgrown spot included, is broken at `NoSpotFor`, P5a); measuring a bot party's
+recalling together (#397, shipped: [gatekeeper trip](spots.md#gatekeeper-trip)); measuring a bot party's
 exp per hour against a solo farmer of the same level on the home run once P4 lands.
 
 ## Files

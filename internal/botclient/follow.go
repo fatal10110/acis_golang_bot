@@ -133,7 +133,9 @@ type leaderView struct {
 func (b *Brain) ruleFollow(now time.Time) (Action, bool) {
 	p, w, v := &b.persona.Follow, b.world, &b.follow
 	id := b.followed()
-	if p.MaxDist <= 0 || id == 0 || id == w.Self.ObjectID {
+	// On its leader's gatekeeper trip the member walks to that gatekeeper
+	// under rule "travel" (partyTrip).
+	if p.MaxDist <= 0 || id == 0 || id == w.Self.ObjectID || b.partyTrip() {
 		v.leader = 0
 		return Action{}, false
 	}

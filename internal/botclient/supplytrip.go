@@ -362,13 +362,14 @@ func (b *Brain) slotMember(now time.Time) bool {
 }
 
 // leaderTeleported reports whether a join member's bot leader teleported
-// away (leaderWatch.teleported, not seen since, the bot not yet landed) and
+// away (leaderWatch.teleported, not seen since, the bot not yet landed and
+// not on the leader's gatekeeper trip, partyTrip) and
 // the member can recall at now: it carries a Scroll of Escape and nothing
 // attacks it (safeToEscape). Without either it follows the leader's last
 // reported position instead (rule "follow").
 func (b *Brain) leaderTeleported(now time.Time) bool {
 	v := &b.lead
-	if !b.slotMember(now) || v.lost.IsZero() || !v.teleported || v.seen || v.home || v.name != slotLeader(b.cfg.link.party) {
+	if !b.slotMember(now) || b.partyTrip() || v.lost.IsZero() || !v.teleported || v.seen || v.home || v.name != slotLeader(b.cfg.link.party) {
 		return false
 	}
 	if _, ok := b.world.Inventory.ByTemplate(scrollOfEscape); !ok {

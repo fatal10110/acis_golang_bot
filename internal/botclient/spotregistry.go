@@ -209,11 +209,12 @@ func (r *SpotRegistry) overCap(i int) bool {
 	return r.held[i] > r.caps[i]
 }
 
-// hasRoom reports whether spot i is below its cap.
-func (r *SpotRegistry) hasRoom(i int) bool {
+// hasRoomFor reports whether n more fit spot i under its cap, as claimN
+// takes them.
+func (r *SpotRegistry) hasRoomFor(i, n int) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.held[i] < r.caps[i]
+	return r.held[i]+n <= r.caps[i]
 }
 
 // release gives back one claim took.

@@ -7,8 +7,9 @@ import (
 )
 
 // A leader's spot for its bot party (docs/parties/spots.md): it claims room
-// for the whole party, fits spots to its bot members' levels, takes no
-// gatekeeper trip and waits at its spot for far members. A bot that leads
+// for the whole party, fits spots to its bot members' levels, takes its
+// gatekeeper trips with its party (partytravel.go) and waits at its spot
+// for far members. A bot that leads
 // no bot party is a solo bot: weight 1, its own level, its trips.
 
 // leadsBotParty reports whether the bot leads its bot party: its slot is a
@@ -95,8 +96,8 @@ func (b *Brain) misfit() bool {
 }
 
 // leadsBotMembers reports whether the bot leads its bot party with a bot
-// member in it: such a leader takes no gatekeeper trip, its members follow
-// by walking only.
+// member in it: such a leader gathers them before its gatekeeper teleport
+// and regroups them after it (docs/parties/spots.md, "Gatekeeper trip").
 func (b *Brain) leadsBotMembers() bool {
 	_, _, ok := b.botLevels()
 	return ok
@@ -106,15 +107,22 @@ func (b *Brain) leadsBotMembers() bool {
 // target for a bot member behind (memberBehind): at most GatherWait from
 // when the member fell behind.
 func (b *Brain) gathering(now time.Time) bool {
-	v, pol := &b.spot, b.persona.Lead.withDefaults()
+	return b.gatherHold(&b.spot.gatherSince, now)
+}
+
+// gatherHold reports whether the leader holds for a bot member behind
+// (memberBehind), at most GatherWait from since, when it fell behind: at its
+// spot (gathering) and at the gatekeeper before its teleport (ruleTravel).
+func (b *Brain) gatherHold(since *time.Time, now time.Time) bool {
+	pol := b.persona.Lead.withDefaults()
 	if !b.memberBehind(now, pol) {
-		v.gatherSince = time.Time{}
+		*since = time.Time{}
 		return false
 	}
-	if v.gatherSince.IsZero() {
-		v.gatherSince = now
+	if since.IsZero() {
+		*since = now
 	}
-	return now.Sub(v.gatherSince) < pol.GatherWait
+	return now.Sub(*since) < pol.GatherWait
 }
 
 // memberBehind reports whether a living bot member of the party the bot

@@ -537,6 +537,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		// Before Apply: the bot's own Die clears the attackers table its
 		// killer is read from.
 		b.karmaEvent(ev, now)
+		// Before Apply: the leader's jump is read from where it stood.
+		b.partyTripEvent(ev, now)
 		b.world.Apply(ev, now)
 		pvpAt := b.pvpEvent(ev, now)
 		b.meter.fighting = b.world.Self.InCombat

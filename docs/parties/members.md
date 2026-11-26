@@ -29,6 +29,7 @@ assist, heals and buffs; under rule 3 every member may pick up loot.
 | A member dies | A Support member with Resurrection (Cleric, Elven Oracle, Shillien Oracle, from 20) casts it out of combat on a dead member in sight, the leader first (a new rule `raise` after `heal`; 1016 joins their learn tables, P3). The dead bot accepts (`AcceptResurrection`) within `ResurrectWait` (2 min in a party). Unraised, it restarts in the village and follows the leader's reported position back. |
 | The leader dies | Members sit by the body as today (`byLeaderBody`), and a raiser raises it. Unraised, the leader restarts in the village (a teleport). |
 | The leader teleports away (a restart, its supply trip) | The member skips `ruleLeader`'s wait, whisper and `/unstuck`, and starts its own supply trip when it has a Scroll of Escape and nothing attacks it, else walks to the leader's last reported position. `supplyDue` (`supplytrip.go:322-324`) needs a spot farmed, held or beside (`farming()`, `spots.go:229`), and reached, so P2b adds a trip cause, the bot leader's teleport, for a `join` member with no spot, skipping that test; the trip is today's. The gather gate holds the leader at its next spot. |
+| The leader teleports by gatekeeper (#397) | A member that saw the jump from a gatekeeper to one of its destinations takes the same destination of the same gatekeeper and pays its own fee, under rule `travel`, skipping the answer above; short of the fee (or past `MaxPrice`, or with karma) or refused, it leaves the party cleanly: slot cleared (`left`), withdrawal, no whisper or `/unstuck`. The leader gathers it before and regroups it after ([gatekeeper trip](spots.md#gatekeeper-trip)). |
 | A member runs low on its own | P2b reads `supplyDue`'s own causes (`supplytrip.go:19-33`: a consumable running out, potions gone, load, gear) for a `join` bot in its bot party within `GatherRange` (1200) of its leader's reported position (`Party.Members`, `follow.go:154-161`) instead of at a reached spot. `supplyCheck`, `supplyTripGap` and the trip are today's. It keeps its slot and follows back by the window's positions; the gather gate waits for it at most `GatherWait`, not beyond `FarAway`; a trip that keeps it out of party range past `BehindFor` drops it as fallen behind. |
 | A member falls behind | Out of the 1500 party range for `BehindFor` (10 min): dropped, ousted, the pair banned for `RePairAfter` (30 min) ([organizer](organizer.md#breaks-and-drops)). |
 | A member logs out | The server takes it out (a party of two disperses). Its slot stays with its `Bot`; the leader re-invites it, `InviteRetry` after it left at the earliest; a new run gets the slot from the organizer, which keeps its place for `LeaderGone`. |
@@ -93,6 +94,12 @@ or the dropped `withdraw` flag, each resetting the watch
 - `TestPartyLeaderTeleported` (P2b): a member of a teleporting bot leader: no whisper or `/unstuck`;
   no spot, a Scroll of Escape, no attacker: supply trip; no scroll: walks to the last
   `PartyMemberPosition`; a bot with no `join` slot and no spot: no trip.
+- `TestPartyTripMember` (#397): a member of a leader jumping by gatekeeper walks to it, talks, sends
+  the same destination's link under rule `travel`, no recall, whisper or `/unstuck`; landed, it
+  follows with slot and party kept. `TestPartyTripMemberLeaves`: short of the fee, past `MaxPrice`,
+  with karma or refused: slot cleared `left`, withdrawal, no whisper, `/unstuck` or recall after.
+  `TestPartyTripMemberOther`: a recall in the field, a landing at no destination, the leader out of
+  sight, no slot: no trip.
 - `TestPartyMemberSupply` (P2b): a Damage and a Support member, no spot, within 1200 of the leader,
   potions gone (or a consumable out, or load past `ReturnLoad`): a trip at the next `supplyCheck`,
   slot and party kept, following after; beyond 1200, within `supplyTripGap`, or no slot and no
