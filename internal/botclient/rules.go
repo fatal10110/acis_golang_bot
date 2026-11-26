@@ -1005,16 +1005,18 @@ const driftTries = 4
 // IdleRadius of idleCenter, first along angle, then along fresh random
 // angles, up to driftTries of them. On geodata the point is ground of the
 // bot's SCC (inSCC) in the open (walker.open: no roof, upper floor or deck
-// over it), and, while the bot is within the radius, one straight checked
-// segment away (walker.segmentOK): a drift is a stroll in the open, never a
-// route into a building or round a wall (#617). A bot beyond the radius
-// (out in the field, or just landed) routes back toward the centre.
+// over it), and, while the bot stands in the open within the radius, one
+// straight checked segment away (walker.segmentOK): a drift is a stroll in
+// the open, never a route into a building or round a wall (#617). A bot
+// beyond the radius (out in the field, or just landed) routes back toward
+// the centre, and a bot under a roof (logged in or sent indoors) routes out
+// to the open.
 // Without geodata the first point is taken as it is.
 func (b *Brain) driftPoint(from Point, angle float64) (Point, bool) {
 	p, w := &b.persona, b.walker()
 	center := b.idleCenter(from)
 	r := int64(p.IdleRadius)
-	near := horizontal2(from, center) <= r*r
+	near := horizontal2(from, center) <= r*r && w.open(from)
 	for i := range driftTries {
 		if i > 0 {
 			angle = b.rng.Float64() * 2 * math.Pi
