@@ -351,8 +351,8 @@ server's pathfinder.
   but a bot walking off a wall's top looks like nothing a player does: the Orc village's place
   routes went up a ramp onto the wall's walkway and dropped 312 off its outer edge. Each drop costs
   `costDrop` (100 cells) more for each whole 96 it falls (#514): a cliff weighs more than a ledge,
-  as its fall damage does (height × max HP / 1000 past the safe fall height of 180 to 380,
-  `formulas/fall.go`). The weight is added in the cell search, in the build's intra-cluster edge
+  as its fall damage does (the whole height × max HP / 1000 once the fall passes the safe fall
+  height of 180 to 380, `formulas/fall.go`). The weight is added in the cell search, in the build's intra-cluster edge
   costs and on a border crossing that drops (its multiple is kept in `buildCross.side`, at most 63).
   So a route goes down a ramp or through a gate whenever that way is less than about 1600 units
   longer per 96 of the fall. The cost is a weight, not a ban, so a one-way drop toward a leader

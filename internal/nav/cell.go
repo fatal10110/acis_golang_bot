@@ -182,8 +182,9 @@ const (
 // dropCost returns costDrop for each whole dropBound a step from a floor at
 // z down to one at to falls, when it is a drop, else 0: a fall's cost grows
 // with its height, as its fall damage does (the server's FallDamageBase,
-// height times max HP over 1000, past the safe fall height), so a high
-// cliff weighs a longer way round than a ledge (#514).
+// the whole height times max HP over 1000 once the fall passes the safe
+// fall height), so a high cliff weighs a longer way round than a ledge
+// (#514).
 func dropCost(z, to int16) int32 {
 	if fall := int(z) - int(to); fall > dropBound {
 		return costDrop * int32(fall/dropBound)
