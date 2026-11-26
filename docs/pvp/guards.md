@@ -64,7 +64,9 @@ Against any karma-free arena opponent, flagged or not:
   arenas with roots (CL, EO, SO, OS), DOTs, non-damage control, short steps (Energy Bolt 2 s, Aura
   Burn 1.5 s), plain shots and melee; the RO, ES and AS Stunning Shot `Hold` and `Int` steps wait
   with Power Shot. The Colosseum (up to about 1370 from an edge, about 9 s) lets every step start
-  near its middle.
+  near its middle: those rows (OM, mystics with no spiritshot charged, bow branches) take their
+  arena trips there when a walk or a gatekeeper trip reaches it (Aden's gatekeeper lands about 3060
+  from its middle), else to the nearest arena (#422, [arenas](finding.md#sources)).
 
 Left over (accidental PK the guards cannot see): a `RelationChanged` or `CharInfo` delayed past
 about 3.5 s, a move delayed past the arena margin, a Dash, Sprint or root cure taking the opponent

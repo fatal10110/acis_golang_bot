@@ -123,7 +123,7 @@ assumes equal level; hunting only flagged and karma players keeps this fair); **
 with no row); **arena deaths** (the 5-death cap and stay limit).
 
 To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
-shot-less mystics and bow rows, when a gatekeeper reaches it; party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
+shot-less mystics and bow rows, when a gatekeeper reaches it (#422, shipped); party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
 (M11, #424, shipped: [party duels](party.md#party-duels)); a challenge hold shared by all bots (#425, shipped); buying CP potions;
 fighting a summon first when that pays off (#428, shipped: [summons](targets.md#summons-and-pets));
 command-channel mates in an arena (rule 3). Clan wars, sieges and the Olympiad are planned in

@@ -284,9 +284,9 @@ func (b *Brain) planTown(now time.Time) bool {
 		return false
 	}
 	onward := tr.onward
-	if !b.planPath(here, now, []Point{v.town}) {
+	if !b.planPath(here, now, []Point{v.town}, storeTownRadius) {
 		tr.onward = onward
-		if !b.planPath(here, now, b.towns) {
+		if !b.planPath(here, now, b.towns, storeTownRadius) {
 			return false
 		}
 	}
