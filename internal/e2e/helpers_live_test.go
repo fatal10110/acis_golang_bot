@@ -76,7 +76,7 @@ func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("GM of the pool: %s", filepath.Base(gm.file))
+	t.Logf("GM of the pool: %s, karma %d at entry, reset to 0", filepath.Base(gm.file), gm.karmaIn)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
