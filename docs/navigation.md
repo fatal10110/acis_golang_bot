@@ -455,9 +455,10 @@ server's pathfinder.
     the start passes what the string-pull asks of its first candidate (no avoided column but the
     ends', the corridor test, `CanMove` over the planner's engine, where the door table toggles the
     doors, and no drop, as no cell path stands for one) is that one segment, with no search. The
-    string-pull would take the same segment after the search, so the routes do not change; on the
-    owner's geodata 88% of pairs 160-480 units apart are one segment, and those cost about a tenth
-    of the search;
+    string-pull would take the same segment after the search, so the routes the search finds do
+    not change; a short straight walk now routes even where the search would run out of its cell
+    or node budget. On the owner's geodata 88% of pairs 160-480 units apart are one segment, and
+    those cost about a tenth of the search;
   - an abstract search over the condensation-restricted graph: the edges inside the start's SCC
     (`Route`), or inside the SCCs on a way to the destination's and the one-way edges between
     them (`RouteOneWay`);
