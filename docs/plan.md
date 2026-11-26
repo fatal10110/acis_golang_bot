@@ -28,7 +28,7 @@ repository.
 | M11 - Bot parties | #371 | #373-#392 (`docs/parties/`, PRs P1a-P8, 13 PRs, D25-D29); follow-ups #395, #397, #398, #438 |
 | M12 - Merchant valuables | #376 | #378-#402 (`docs/valuables/`, PRs V1-V9, 13 PRs, D30-D34); follow-ups #403, #404 |
 | M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42 proposed, not approved); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43 proposed, not approved) |
-| M14 - Hardening and structure (proposed) | to be filed | to be filed (`docs/structure.md`; decisions SD1-SD5 proposed, not approved) |
+| M14 - Hardening and structure | to be filed | to be filed (`docs/structure.md`; D45-D48; OP1, OP2 and BR1b open) |
 
 
 Server-side prerequisites: fatal10110/acis_golang#4525, fatal10110/acis_golang#4526,
@@ -91,6 +91,10 @@ the goal.
 | D42 | The Olympiad | Opt-in per bot, off for every preset: noblesse at the class master for any `Olympiad` bot, bounded registration, the drawn opponent fought whoever it is; never spectates, trades points or claims hero status. Owner, 2026-11-26. Design: `docs/pvp/olympiad.md` |
 | D43 | Buying CP potions | Amends D37: CP potions are bought (still never sold), from player sell stores for `pvp` bots, and by an opt-in `SevenSigns` Dusk member (named bots only, `SevenSigns.MaxMembers` default 1) at a priest for Ancient Adena in a validation week its cabal won; never contributes stones, pays the Dawn fee or votes Strife; votes the seal Dusk holds, else Gnosis. Owner, 2026-11-26. Design: `docs/pvp/cp-potions.md` |
 | D44 | Does a `town` bot farm? | It rotates: town spells of 10-20 minutes (idle drift, errands, gatekeeper hops; no spot) and farming spells of 30-60 minutes at a spot, as a support bot farms alone; the farming spell's end sends it home on a supply trip. Persona defaults (D6); still never in a bot party (D26). Owner, 2026-11-26 ("there is no point to stay only in town"). Design: `internal/botclient/town.go` `townRota` (#618) |
+| D45 | What a bot does on a packet it cannot decode | It logs an error and skips the packet; the session plays on. Before the world the attempt ends with the error logged. Never counted as a server abort. Owner, 2026-11-26. Design: `docs/structure.md` (HD4) |
+| D46 | Where the wire code lives | In its own package, `internal/botwire` (events, decoders, encoders, opcodes), so the brain boundary is compiled. Owner, 2026-11-26. Design: `docs/structure.md` (WP1-WP3) |
+| D47 | Outcome log | The bots write what they measure at their spots (experience, adena, deaths, kill times against the model's) to a bounded JSONL file, off unless `-outcome-log` is given; no names or text. Owner, 2026-11-26. Design: `docs/structure.md` (OP0) |
+| D48 | Human-looking delays; a language model for whispers | No log-normal delays: the bots are not meant to pass for people. A small language model for whisper replies is a backlog issue, not scheduled. Owner, 2026-11-26. Design: `docs/structure.md` (Options) |
 
 ## Consequences of a separate repository (D5)
 
