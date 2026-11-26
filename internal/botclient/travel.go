@@ -352,7 +352,7 @@ type travelTrip struct {
 	onward int
 	// shunned are the gatekeepers that took the bot nowhere, by index in
 	// the travel map, until a time.
-	shunned map[int]time.Time
+	shunned holds[int]
 	// hopAt is when the next town hop is due (planHop), zero before the
 	// idle spell to it started.
 	hopAt time.Time
@@ -370,10 +370,7 @@ type travelTrip struct {
 // for that long.
 func (tr *travelTrip) end(now time.Time, shunFor time.Duration) {
 	if shunFor > 0 {
-		if tr.shunned == nil {
-			tr.shunned = make(map[int]time.Time)
-		}
-		tr.shunned[tr.gk] = now.Add(shunFor)
+		tr.shunned.set(tr.gk, now.Add(shunFor))
 	}
 	tr.v, tr.step, tr.dest, tr.endedAt, tr.onward = npcVisit{}, tripTalk, destination{}, now, 0
 	tr.follow, tr.gatherSince = false, time.Time{}
@@ -658,7 +655,7 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point, within flo
 		// reach, and from a destination to the spots.
 		for gi := range m.gatekeepers {
 			g := &m.gatekeepers[gi]
-			if now.Before(tr.shunned[gi]) || horizontal2(l.p.at, g.at) > reach {
+			if tr.shunned.held(gi, now) || horizontal2(l.p.at, g.at) > reach {
 				continue
 			}
 			at, seen := gks[gi]
@@ -690,7 +687,7 @@ func (b *Brain) tripSpots(l tripLabel, reach int64, walk func(float64) float64, 
 	w := b.spotWeight()
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if now.Before(v.avoid[i]) || !b.spotFitsBand(sp, lo, hi, now) || !r.hasRoomFor(i, w) ||
+		if v.avoid.held(i, now) || !b.spotFitsBand(sp, lo, hi, now) || !r.hasRoomFor(i, w) ||
 			horizontal2(l.p.at, Point{X: sp.Center.X, Y: sp.Center.Y}) > reach {
 			continue
 		}

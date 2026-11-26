@@ -45,15 +45,12 @@ type newbieVisit struct {
 	doneLevel int32
 	// shunned are the guides, by template id, that buffed the bot nothing,
 	// until a time.
-	shunned map[int32]time.Time
+	shunned holds[int32]
 }
 
 // shun ends the visit and leaves its guide alone for visitShunFor.
 func (n *newbieVisit) shun(now time.Time) {
-	if n.shunned == nil {
-		n.shunned = make(map[int32]time.Time)
-	}
-	n.shunned[n.v.npcID] = now.Add(visitShunFor)
+	n.shunned.set(n.v.npcID, now.Add(visitShunFor))
 	n.v = npcVisit{}
 }
 
@@ -111,7 +108,7 @@ func (b *Brain) startNewbie(now time.Time) bool {
 	var best npcVisit
 	bestDist := int64(math.MaxInt64)
 	for _, npcID := range p.Guides {
-		if now.Before(n.shunned[npcID]) {
+		if n.shunned.held(npcID, now) {
 			continue
 		}
 		if id := b.nearestNPC(npcID, from, now); id != 0 {

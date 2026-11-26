@@ -69,7 +69,7 @@ type marketVisit struct {
 	clicks int
 	// cooled are the owners visited, by object id, until when they are
 	// left alone (MarketPolicy.Cooldown).
-	cooled map[int32]time.Time
+	cooled holds[int32]
 }
 
 // active reports whether a visit runs.
@@ -78,15 +78,8 @@ func (m *marketVisit) active() bool { return m.v.obj != 0 }
 // end ends the visit and leaves its owner alone for cooldown; owners whose
 // cool-down is over are forgotten.
 func (m *marketVisit) end(now time.Time, cooldown time.Duration) {
-	if m.cooled == nil {
-		m.cooled = make(map[int32]time.Time)
-	}
-	for id, until := range m.cooled {
-		if !now.Before(until) {
-			delete(m.cooled, id)
-		}
-	}
-	m.cooled[m.v.obj] = now.Add(cooldown)
+	m.cooled.prune(now)
+	m.cooled.set(m.v.obj, now.Add(cooldown))
 	*m = marketVisit{cooled: m.cooled}
 }
 
@@ -186,7 +179,7 @@ func (b *Brain) startMarket(now time.Time) bool {
 	var best int32
 	bestDist := int64(math.MaxInt64)
 	for id, o := range b.world.Objects {
-		if !sellsToBot(o) || now.Before(m.cooled[id]) {
+		if !sellsToBot(o) || m.cooled.held(id, now) {
 			continue
 		}
 		if d := dist2(from, o.Position(now)); d < bestDist {

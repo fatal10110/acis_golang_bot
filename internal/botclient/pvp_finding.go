@@ -42,7 +42,7 @@ const (
 type findState struct {
 	lastAsk  time.Time
 	asked    map[string]time.Time
-	held     map[string]time.Time
+	held     holds[string]
 	blockAt  time.Time
 	blockPos Point
 	whisper  duelWhisper
@@ -65,10 +65,7 @@ func (f *findState) recent(name string, now time.Time) bool {
 
 // hold holds the bot's own challenges of name declineHold from now.
 func (f *findState) hold(name string, now time.Time) {
-	if f.held == nil {
-		f.held = make(map[string]time.Time)
-	}
-	f.held[name] = now.Add(declineHold)
+	f.held.set(name, now.Add(declineHold))
 }
 
 // heardDuel takes a player's whispered duel at now (docs/pvp/finding.md
@@ -293,7 +290,7 @@ func (b *Brain) challengeFoe(now time.Time) int32 {
 	f, s := &b.pvp.find, &b.world.Self
 	tier := classTier(s.ClassID)
 	return b.nearestPlayer(now, func(id int32, o *Object) bool {
-		return !b.cfg.markers.Marks(o.Name) && !f.recent(o.Name, now) && !now.Before(f.held[o.Name]) &&
+		return !b.cfg.markers.Marks(o.Name) && !f.recent(o.Name, now) && !f.held.held(o.Name, now) &&
 			!b.avoided(o.Name, now) && classTier(o.ClassID) == tier && b.foeMayDuel(id, now) && b.engages(id) &&
 			b.cfg.Challenges.claim(o.Name, s.ObjectID, now)
 	})

@@ -128,11 +128,11 @@ type partyLead struct {
 	// queue are the players who whispered join, in order (heardJoin), and
 	// heard when each sender may be answered again, by name.
 	queue []string
-	heard map[string]time.Time
+	heard holds[string]
 	// next is when the next invitation may go after a 164.
 	next time.Time
 	// retry is when each member may be invited again, by name.
-	retry map[string]time.Time
+	retry holds[string]
 	// ousted are the members expelled whose window has not dropped them.
 	ousted   map[string]bool
 	handover handover
@@ -156,17 +156,8 @@ func (v *partyLead) waitFor(name string, now time.Time, d time.Duration) {
 	if name == "" {
 		return
 	}
-	if v.retry == nil {
-		v.retry = make(map[string]time.Time)
-	}
-	for n, t := range v.retry {
-		if !t.After(now) {
-			delete(v.retry, n)
-		}
-	}
-	if t := now.Add(d); t.After(v.retry[name]) {
-		v.retry[name] = t
-	}
+	v.retry.prune(now)
+	v.retry.extend(name, now.Add(d))
 }
 
 // partyLeadEvent ends the invitation in flight on its answer or refusal and
@@ -330,7 +321,7 @@ func (b *Brain) nextInvitee(slot Command, now time.Time) (name string, player bo
 		return v.queue[0], true
 	}
 	for _, name := range strings.Fields(slot.Arg) {
-		if name == b.world.Self.Name || b.partyNamed(name) || now.Before(v.retry[name]) {
+		if name == b.world.Self.Name || b.partyNamed(name) || v.retry.held(name, now) {
 			continue
 		}
 		return name, false
