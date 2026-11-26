@@ -1108,10 +1108,20 @@ func (w *walker) pickUpOpen(from, item Point) bool {
 // standPoint is a point within rng of target at offering mode toward it,
 // the nearest to the bot at from, in the bot's SCC.
 func (w *walker) standPoint(from, at Point, rng float64, mode nav.StandMode, height float64) (Point, bool) {
+	return w.standPointWhere(from, at, rng, mode, height, nil)
+}
+
+// standPointWhere is standPoint skipping, like a blocked one, every point
+// accept (when set) rejects.
+func (w *walker) standPointWhere(from, at Point, rng float64, mode nav.StandMode, height float64, accept func(Point) bool) (Point, bool) {
 	if w.nav == nil {
 		return Point{}, false
 	}
-	l, ok := w.plan.StandPoint(toLoc(from), nav.Target{At: toLoc(at), Range: rng, Mode: mode, CollisionHeight: height})
+	t := nav.Target{At: toLoc(at), Range: rng, Mode: mode, CollisionHeight: height}
+	if accept != nil {
+		t.Accept = func(l location.Location) bool { return accept(fromLoc(l)) }
+	}
+	l, ok := w.plan.StandPoint(toLoc(from), t)
 	if !ok {
 		return Point{}, false
 	}

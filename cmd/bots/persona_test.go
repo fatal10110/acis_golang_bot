@@ -53,6 +53,7 @@ func TestPresetBrain(t *testing.T) {
 		stores:      botclient.NewStoreRegistry(nil, 5, 150),
 		claims:      botclient.NewPartyClaims(),
 		ground:      botclient.NewGroundClaims(),
+		challenges:  botclient.NewChallengeHolds(),
 		auth:        botclient.NewAuthority(botclient.AuthorityConfig{}),
 		board:       botclient.NewCraftBoard(),
 		storeBudget: 70000,
@@ -93,6 +94,9 @@ func TestPresetBrain(t *testing.T) {
 			}
 			if cfg.Ground != sh.ground || cfg.Persona.Loot.Ground != tt.wantGround {
 				t.Errorf("ground claims %p (want the shared %p), ground loot %d, want %d", cfg.Ground, sh.ground, cfg.Persona.Loot.Ground, tt.wantGround)
+			}
+			if cfg.Challenges != sh.challenges {
+				t.Errorf("challenge holds %p, want the shared %p", cfg.Challenges, sh.challenges)
 			}
 			if cfg.CraftBoard != sh.board {
 				t.Errorf("craft board %p, want the shared %p", cfg.CraftBoard, sh.board)

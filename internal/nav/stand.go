@@ -94,6 +94,10 @@ type Target struct {
 	Mode  StandMode
 	// CollisionHeight is the target's own, for StandSight.
 	CollisionHeight float64
+	// Accept, when set, must also pass for a stand point (the consumer's
+	// own rules on where it may stand); a cell it rejects is skipped like
+	// a blocked one.
+	Accept func(location.Location) bool
 }
 
 // standCandidate is a cell considered for a stand point, with its horizontal
@@ -104,8 +108,8 @@ type standCandidate struct {
 }
 
 // StandPoint returns the walkable cell nearest from (horizontally) within
-// t.Range of t.At that offers t.Mode toward it, as a world point on its
-// floor. Restricting it to the walker's strongly connected component needs
+// t.Range of t.At that offers t.Mode toward it and passes t.Accept, as a
+// world point on its floor. Restricting it to the walker's strongly connected component needs
 // the hierarchy (N3, #155).
 func (p *Planner) StandPoint(from location.Location, t Target) (location.Location, bool) {
 	s := getScratch()
@@ -133,7 +137,7 @@ func (p *Planner) StandPoint(from location.Location, t Target) (location.Locatio
 			continue
 		}
 		w := c.cell.World()
-		if p.offers(w, t) {
+		if p.offers(w, t) && (t.Accept == nil || t.Accept(w)) {
 			return w, true
 		}
 	}

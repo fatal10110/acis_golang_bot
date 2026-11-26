@@ -147,6 +147,8 @@ type shared struct {
 	board  *botclient.CraftBoard
 	// ground are the ground items the bots are after (#435).
 	ground *botclient.GroundClaims
+	// challenges are the challenge holds every bot's duels share (#425).
+	challenges *botclient.ChallengeHolds
 	// nav is the navigation the walking presets walk on.
 	nav *botclient.Nav
 	// storeBudget is a merchant's store budget per session.
@@ -165,13 +167,13 @@ type shared struct {
 // Metrics. A preset leaves out the pieces it does not use: only farming
 // presets get the spot registry, only merchants the store registry and,
 // with their valuables policy, the ad board and valuables budget; every
-// preset gets the craft board and the ground item claims, and the farmer,
+// preset gets the craft board, the ground item claims and the challenge holds, and the farmer,
 // support and merchant presets the
 // clan member option that orders from it (preset.member). With
 // the travel map the persona drinks and shoots the datapack's healing
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
-	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board, Ground: s.ground}
+	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board, Ground: s.ground, Challenges: s.challenges}
 	cfg.Persona.ClanMember = p.member
 	if p.walks {
 		cfg.Nav = s.nav

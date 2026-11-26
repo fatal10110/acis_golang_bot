@@ -521,13 +521,15 @@ func (d *Duel) over(now time.Time) {
 // unasked drops a challenge refused or declined at now, and reports when
 // the PvP reaction to it is due: zero with no challenge open, as 153 also
 // answers other requests. A decline or refusal (held) of the bot's own
-// challenge holds its own challenges of that player declineHold.
+// challenge holds its own challenges of that player declineHold, and every
+// bot's of the process with Challenges set.
 func (b *Brain) unasked(d *Duel, now time.Time, held bool) time.Time {
 	if d.Phase != DuelAsked {
 		return time.Time{}
 	}
 	if held && d.Challenged {
 		b.pvp.find.hold(d.Name, now)
+		b.cfg.Challenges.hold(d.Name, now)
 	}
 	*d = Duel{Result: d.Result}
 	return b.pvpReact(now)
