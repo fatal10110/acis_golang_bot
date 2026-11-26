@@ -94,7 +94,10 @@ const duelStandRetry = 2 * time.Second
 // monster clearance, docs/pvp/finding.md): a point failing it is skipped
 // like a blocked one, one already chosen that fails it is chosen again, and
 // with none the bot holds where it stands (no walk, and no attack the
-// server would walk for) until id moves or duelStandRetry passed. It
+// server would walk for) until id moves or duelStandRetry passed; a hold
+// that starts while the bot still walks a segment toward a point it dropped
+// sends one move to where it stands first, since the server walks a sent
+// segment to its end. It
 // reports false when the bot may attack or cast now, and always without
 // geodata (the bot acts as it would) or while Ultimate Defense holds the bot
 // (immobile: no walk starts).
@@ -125,6 +128,9 @@ func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 		switch {
 		case !ok && duel:
 			*e = engageState{id: id, mode: mode, rng: rng, standFor: to, held: now}
+			if b.world.Self.Moving(now) {
+				return b.orStay(Action{}, now), true
+			}
 		case !ok:
 			b.unreachableTarget(id, now)
 			return Action{}, true

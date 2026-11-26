@@ -127,18 +127,6 @@ func clearMargin(p Point, ds []aggroDisc) float64 {
 	return m
 }
 
-// segmentDist2 is the squared plane distance from c to the straight
-// segment from a to b.
-func segmentDist2(a, b, c Point) float64 {
-	dx, dy := float64(b.X-a.X), float64(b.Y-a.Y)
-	t := 0.0
-	if l := dx*dx + dy*dy; l > 0 {
-		t = min(max((float64(c.X-a.X)*dx+float64(c.Y-a.Y)*dy)/l, 0), 1)
-	}
-	ex, ey := float64(a.X)+t*dx-float64(c.X), float64(a.Y)+t*dy-float64(c.Y)
-	return ex*ex + ey*ey
-}
-
 // duelClearOK reports whether the bot may step from from to to at now
 // (outside a duel always) by the monster clearance (docs/pvp/finding.md
 // "Clear of monsters"): the straight segment keeps out of every aggressive
@@ -153,7 +141,7 @@ func (b *Brain) duelClearOK(from, to Point, now time.Time) bool {
 		return clearMargin(to, ds) > m
 	}
 	for _, d := range ds {
-		if segmentDist2(from, to, d.at) <= float64(d.r*d.r) {
+		if segmentDist(float64(d.at.X), float64(d.at.Y), float64(from.X), float64(from.Y), float64(to.X), float64(to.Y)) <= float64(d.r) {
 			return false
 		}
 	}

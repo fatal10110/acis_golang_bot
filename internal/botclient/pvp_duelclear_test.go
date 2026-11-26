@@ -115,7 +115,7 @@ func TestPvPDuelClearStand(t *testing.T) {
 		if !walk || a.kind != actMove || st == (Point{}) {
 			t.Fatalf("walk %v kind %v stand %v, want a walk", walk, a.kind, st)
 		}
-		if st == nearest || dist2(st, mob) <= disc*disc || segmentDist2(inside, st, mob) <= float64(disc*disc) {
+		if st == nearest || dist2(st, mob) <= disc*disc || segmentDist(float64(mob.X), float64(mob.Y), float64(inside.X), float64(inside.Y), float64(st.X), float64(st.Y)) <= float64(disc) {
 			t.Fatalf("stand point %v within %d of the monster at %v", st, disc, mob)
 		}
 		if !b.moveOK(inside, st, now) {
@@ -146,6 +146,37 @@ func TestPvPDuelClearStand(t *testing.T) {
 		}
 		if _, walk := b.engageWalk(pcID, r, now.Add(time.Second)); !walk || !b.engage.held.Equal(now) {
 			t.Fatalf("searched again within duelStandRetry: held %v", b.engage.held)
+		}
+	})
+	t.Run("in a duel, a walk under way when no stand point passes: one stop, then the hold", func(t *testing.T) {
+		b := brain(t, true)
+		if a, walk := b.engageWalk(pcID, r, now); !walk || a.kind != actMove || b.engage.stand != nearest {
+			t.Fatalf("walk %v kind %v stand %v, want a walk to %v", walk, a.kind, b.engage.stand, nearest)
+		}
+		// The server walks the bot toward the stand point; then the
+		// monster at the opponent fails every stand point mid-walk.
+		b.world.Apply(MoveToLocation{ObjectID: selfID, Origin: inside, Dest: nearest}, now)
+		aggroMob(t, b, behind, 50)
+		mid := now.Add(200 * time.Millisecond)
+		if !b.world.Self.Moving(mid) {
+			t.Fatal("the bot not moving mid-walk")
+		}
+		pos := b.world.Self.Position(mid)
+		a, walk := b.engageWalk(pcID, r, mid)
+		if !walk || a.kind != actMove || moveDest(t, a) != b.standing(mid) || horizontal2(moveDest(t, a), pos) > 1 {
+			t.Fatalf("walk %v kind %v to %v, want a stop at %v", walk, a.kind, a, pos)
+		}
+		if _, ok := b.blacklist[pcID]; ok {
+			t.Fatal("the duel opponent blacklisted")
+		}
+		// The server's answer: the bot stands where it stopped.
+		b.world.Apply(MoveToLocation{ObjectID: selfID, Origin: pos, Dest: pos}, mid)
+		next := mid.Add(100 * time.Millisecond)
+		if b.world.Self.Moving(next) {
+			t.Fatal("the bot still moving after the stop")
+		}
+		if a, walk := b.engageWalk(pcID, r, next); !walk || a.kind != actHold {
+			t.Fatalf("walk %v kind %v, want the hold", walk, a.kind)
 		}
 	})
 }
