@@ -1,7 +1,10 @@
 # Hardening, route planner and brain structure
 
-Status: draft, not approved. It proposes owner decisions SD1-SD5 below; they take `D` numbers when
-approved (provisional `D` numbers collided once already, #637). No issue is filed yet.
+Status: decided by the owner on 2026-11-26 where the "Owner decisions" table says so (D45-D48);
+two questions stay open there (the prototypes OP1 and OP2, and BR1b). Reviewed in three rounds by
+two independent reviewers before the decisions, and once more after them for the sections the
+decisions changed (HD4, Design 5); the corrections of that last round are in the text and were
+not read again.
 
 This plan comes from a review of the whole module on 2026-11-26 (`main` at 4f17fe2). The review
 found a small set of defects, two gaps in how the route planner joins a route's ends, and a brain
@@ -12,7 +15,7 @@ better than today's formulas. Each section says what was verified and how.
 Server paths (`internal/commons/...`, `internal/loginserver/...`) refer to
 [fatal10110/acis_golang](https://github.com/fatal10110/acis_golang); bot paths name this
 repository. Function names are given instead of line numbers, which drift. Ids in this document
-carry two letters (DF, HD, RT, BR, GM, WR, OP, SD) so they collide with no other plan's.
+carry two letters (DF, HD, RT, BR, GM, WR, WP, OP, SD) so they collide with no other plan's.
 
 ## Problem
 
@@ -91,7 +94,7 @@ The survey for repeated code ("Shared mechanisms" below) found 550-700 repeated 
 the package. The size of `Brain` is therefore not duplication to factor out. Feature logic is
 written as `Brain` methods over the whole brain, and nothing but convention keeps one feature out
 of another's state, or the wire code out of the brain (`channel.go` holds a decoder, its `World`
-apply and a rule; CLAUDE.md section 4 asks for that boundary).
+apply and a rule; CLAUDE.md section 4 asks for that boundary, and D46 moves the wire out).
 
 ## Goal
 
@@ -159,8 +162,9 @@ doubling to 2 min as `refused` does today, and it is reset only when an attempt 
 no longer by each dial that connects. Two things step it:
 
 - a refused dial on either port, as today;
-- a *not-ready ending*, `PlayFail` or a system `LoginFail` (`SystemError`, `AccessFailed`,
-  `ServerOverloaded`, `Maintenance`), when the last not-ready ending since the last entry came
+- a *not-ready ending*, `PlayFail`, a system `LoginFail` (`SystemError`, `AccessFailed`,
+  `ServerOverloaded`, `Maintenance`) or a packet the bot cannot decode before the world (HD4),
+  when the last not-ready ending since the last entry came
   from a different bot. Two different bots in a row mean the server, not an account.
 
 `Bot.after` is unchanged: a not-ready ending still waits the bot's own backoff, and a refused dial
@@ -195,12 +199,42 @@ restart a bot that stopped for it. The PR audits every lock a brain or reader ta
 that a panic would skip: the shared registries, and `Events.push` and `Events.Drain`, whose
 unlocks are not deferred today (a reader left blocked there would hang `play`'s join).
 
-**HD4, decode errors (DF7, decision SD1).** A decode error is wrapped as `errDecode` with the
-opcode, in `readEvents` and in the login and `EnterGame` decoders alike. `afterSession` and
-`Bot.after` treat it as its own class: counted in `decode_errors_total` by opcode, logged with the
-opcode and frame length (no payload), never counted as a server abort. Under SD1's option 1 the
-bot stops with `ErrDecode` after `maxAborts` such attempts, and the supervisor does not restart a
-bot that stopped for it, since the next session meets the same packet.
+**HD4, decode errors (DF7, D45).** A packet the bot cannot decode is logged as an error and
+skipped; the session plays on.
+
+- In the world (`readEvents`): `GameConn.read` decrypts the whole frame before it is decoded, and
+  frames are length-delimited, so one bad frame leaves the cipher and the stream in step, and
+  `decodeEvent` returns no event on an error, so nothing is applied in part. The reader logs an
+  error with the opcode (and the extended sub-opcode) and the frame length, never the payload,
+  counts it in `decode_errors_total` by opcode, drops the frame and reads on. The error line is
+  written for the first failure of each opcode in a session; later ones of that opcode only
+  count, or one changed layout of a frequent packet (`CharInfo`, `MoveToLocation`) would write
+  hundreds of lines a second for every bot. The set of opcodes already logged is the session's:
+  `play` makes it, `NewWorld` uses it first, and the reader owns it after.
+- Two packets are delivered on their opcode alone, with the error logged: `ServerClose` and
+  `LeaveWorld`. Both have empty layouts, and skipping one that grew a byte would turn a kick into
+  an abort and a commanded logout into a reconnect.
+- In the `EnterWorld` burst `NewWorld` replays: the same, a bad frame is logged, counted and
+  skipped, but for the burst's `UserInfo`. It is the only source of the bot's class, level, HP,
+  speed and collision height, so a bot without it would play an empty character: a bad `UserInfo`
+  there ends the attempt with `errDecode`, as before the world.
+- Before the world (login, `EnterGame`): those packets carry what the next step needs (the
+  session keys, the character list), so there is nothing to skip to. The attempt ends with
+  `errDecode`, logged as an error with the packet's name and counted the same way, never as a
+  server abort. It is one of HD2's not-ready endings: every bot meets the same packet, so two
+  different bots in a row step the gate's backoff, and the fleet probes at the gate's cap
+  instead of each bot logging in on its own backoff for good.
+
+Not a decode error: an empty frame is a read error in `GameConn.read` and ends the session as
+today, and a decoder that panics is HD3's.
+
+A decode error in the world no longer ends a session, so it no longer reaches `maxAborts` or the
+supervisor's restart. Two guides state the old rule and are edited with it:
+`docs/agents/go-style.md` ("A malformed server frame ends that bot's session, never the process")
+and `docs/agents/test-strategy.md` ("a malformed frame must end one session with an error"), with
+the doc comments of `ReadEvents` and `NewWorld`. The unit rule stays as it is: a decoder consumes
+exactly `len(payload)` in its tests, so a layout drift is still caught there and by the live
+scenarios; D45 only decides what a running bot does about one it meets.
 
 **HD5, one search for the drop (DF5).** `walker.drop` becomes one search instead of one per
 candidate. A new `Planner.RouteToNearest(from, accept)` expands outward from `from` with no
@@ -220,7 +254,8 @@ takes no cell in an avoided column. The total work is one budget, whatever the d
 
 Three differences from today, which the PR states: it takes the cheapest landing by path cost
 where today's rings take the nearest by distance that a route reaches, so the drop taken may
-differ; one search gets `maxReplans` pulls in all, where today each candidate gets its own; and a
+differ; one search gets nine pulls in all (`maxReplans` plus one), where today each candidate
+gets its own nine; and a
 search with no heuristic spends its budget within about 350 cells, so a drop-off farther than
 that along a ledge is `ErrBudget` where today's search toward one candidate may find it.
 
@@ -376,7 +411,7 @@ are other shapes and stay.
 So a feature keeps up to four wiring sites after this plan: its row, its arms in `handle`, a call
 in `send` (with BR1b, only when it reads other rows' packets; without it, as today), and a core
 call when it needs its own timing. The
-structural cause, one package and one `Brain`, is decision SD2's.
+structural cause is one `Brain` in one package; D46 moves the wire out of it, not the features.
 
 ### 4. Shared mechanisms (GM1-GM3)
 
@@ -407,27 +442,61 @@ WR1: the review reports two process-level duplications, which the PR confirms fi
 set (spots, stores, claims, boards, nav, gate) is built by hand in both `swarm.go` and `ui.go`, and
 the party organizer pass has two drivers (`botregistry/party.go`, `botregistry/organizer.go`).
 
-### 5. Package boundary (decision SD2)
+### 5. The wire in its own package (WP1-WP3, D46)
 
 CLAUDE.md section 4 says the wire codecs know nothing about the brain. In one package the compiler
-cannot hold that. Three ways:
+cannot hold that; the owner chose to make it compiled (D46). The game wire moves to
+`internal/botwire`: the event types, their decoders, the encoders and the opcodes. The decoders
+and encoders reference no `Brain`, `World` or `Persona` today, so nothing has to be untangled;
+the cost is mechanical and wide:
 
-- **a. Keep one package.** The boundary stays a review rule. No churn.
-- **b. Move the wire out: `internal/botwire`.** The decoders and encoders reference no `Brain`,
-  `World` or `Persona` today. The cost is larger than a move: Go has no function aliases, and the
-  encoders have 156 call sites in source and 288 in tests, with 82 test files calling a decoder or
-  encoder; `connLost` is a brain-side event and cannot satisfy an interface with an unexported
-  marker in another package; several encoders take unexported row types (`buyRow`, `sellRow`,
-  `storeRow`, `warehouseRow`). So b means exporting the codec API (or a file of forwarding
-  variables), an exported marker or a brain-side wrapper for local events, and moving the decoder
-  tests, in one PR, in a window with no open lane on `botclient`.
-- **c. Features in packages of their own.** Needs `Brain`, `World` and `Action` exported wholesale
-  for every feature and most test files; declined as speculative.
+- **Events and decoders (WP1).** `Event`, `Point` and every event type move, with the decoders
+  and their tables. `botwire` exports three things: `DecodeEvent`, which the reader, `NewWorld`
+  and the e2e harness already reach through one entry (`decodeEvent`); the constants typed by the
+  moved types (the status fields, the wait types, the item changes, the enchant results; 22 of
+  them); and the opcodes, 171 constants that are unexported today. The per-packet decoders stay
+  unexported inside `botwire`. `botclient` keeps one file of forwards, so the brain's code and its
+  tests do not change: a type alias per moved type (`type MoveToLocation = botwire.MoveToLocation`),
+  a constant per moved constant (`const opGameLogout = botwire.OpGameLogout`: the encoders, which
+  stay until WP2, `harness.go`, `brainpackets.go`, `partymatch.go` and 48 test files name
+  opcodes), and `decodeEvent` itself, which 24 test files call. The interface's marker method
+  becomes exported, so the session's own event (`connLost`, the only one) can stay in
+  `botclient`. No `botclient` test calls a per-packet game decoder, but about 20 test files use
+  other unexported wire names (`errTrailingBytes`, `eventDecoders`, `readItem`, `capFor`): the
+  codec tests in them (round trips, fixtures under `testdata`, the decode fuzz targets) are split
+  out of files that also hold brain tests (`shop_test.go`, `trade_test.go`, `store_test.go`) and
+  move to `botwire`; a brain test that only needs an event keeps calling `decodeEvent`.
+- **Encoders (WP2).** Go has no function aliases, and the encoders have 156 call sites in source
+  and 288 in tests. They move to `botwire` exported (`botwire.EncodeAction`), with the row types
+  they take (`buyRow`, `sellRow`, `storeRow`, `warehouseRow`), and the call sites are rewritten
+  mechanically; the forwarded opcode constants nothing names any more are dropped. In
+  `harness.go` the `Encode*` functions that only wrap an encoder go away and `internal/e2e` (66
+  call sites in 27 files) calls `botwire`; the ones that exist only there
+  (`EncodeRequestDestroyItem`, `EncodeSendBypassBuildCmd`) move to `botwire`, and the ones that
+  adapt an argument (`EncodeRequestPrivateStoreBuy`, `EncodeSetPrivateStoreListSell`,
+  `EncodeWalkRunToggle`, `EncodeRequestJoinPledge`) stay as adapters over it. `Pacer`,
+  `CredentialRefused` and `RecoveryScroll` stay.
+- **Login and handshake wire (WP3).** The login server's packets (`login.go`: `Init`, the
+  credentials, the server list) and the game handshake's codecs, which are in `gamepackets.go`
+  (`decodeVersionCheck`, `decodeUserInfo`, `encodeProtocolVersion`, `encodeAuthLogin`,
+  `encodeRequestCharacterCreate`, `encodeRequestGameStart`) and `character.go`
+  (`decodeCharSelectInfo`), move the same way, into `botwire` or a `botwire/login` beside it; the
+  PR decides by what they share. The types they share with the session move with them or are
+  aliased: `Self`, `SessionKeys`, `StartingClass`, `Appearance`, `ServerEntry`, `charSlot`,
+  `initPacket`. (`encodeEnterWorld` and `encodeLogout`, in the same file, are WP2's.)
 
-Proposed: a. b is the only step that would make the boundary compiled, and it is priced above so
-the owner can choose it; nothing else in this plan depends on it.
+A feature file that holds a decoder, its `World` apply and a rule today (`channel.go`) is split:
+the decoder goes, the rest stays. `World` and the brain stay in `botclient`; a package per
+feature was declined as speculative, since it would need `Brain`, `World` and `Action` exported
+wholesale.
 
-### 6. Outcome log (OP0, decision SD3)
+Each WP is one PR that changes no behavior and almost every file of the package, so it lands in
+a window with no open lane on `botclient`, rebased the same day. After WP2 a check in CI keeps the
+boundary: `botwire` imports nothing of `botclient` (the compiler already refuses the cycle), and
+a test over `go list -deps` keeps `botwire` free of the brain's other packages (`nav`,
+`charmodel`, `datapack`); no new linter.
+
+### 6. Outcome log (OP0, D47)
 
 Every estimate the bots act on is a closed formula that is never compared with what happened:
 
@@ -483,8 +552,8 @@ before the log exists; the measure to cross is written in the row, as D2 asks of
 | --- | --- | --- | --- | --- | --- |
 | OP1 | Calibrated fight estimate: keep `packFight`'s formula and learn two factors per bot, observed over modeled kill time (the stay's engaged times) and damage taken (the stay's HP lost per combat minute against the pack's modeled damage), as decayed means with the class row's pooled mean as prior (the shape `useMeter` has) | online estimate: exponential smoothing with shrinkage | the fixed margins of `packFits` | OP0. Adopt if the log shows the modeled times off by more than 25 % for some row | prototype |
 | OP2 | Spot choice as a multi-armed bandit: arms are the spots that pass today's filters; reward is measured experience (earning mode: adena) per hour less deaths; statistics shared across bots by spot, level band and role; the model's `earnRate` as prior; UCB1 or Thompson sampling, with the walk there as a switching cost | online learning | nearest-first in `claimSpot` | OP0. Adopt if measured rates differ between fitting spots by more than the walk costs | prototype |
-| OP3 | Reaction and tick delays drawn from a log-normal clipped to today's bounds, instead of uniform. Human reaction times are right-skewed; two parameters, nothing to train | distribution | `reactDelay`, `tickDelay`, the chat delay | `docs/plan.md` section 4 says "Uniform jitter; no seeded distributions", and section 2 "base interval plus uniform jitter": OP3 needs the owner to change that line. It also changes which delay a seed draws, so tests that pin a delay change | owner's call, SD4 |
-| OP4 | Whisper replies from a small language model in place of the 8 canned lines, under today's caps (5 an hour, 10 min a sender), the canned line on any error or timeout | hosted small model, or a local one outside the process | `ChatPolicy.Replies` | A hosted model sends a player's whisper text off the owner's machine; a local one takes memory beside the bots (`docs/home.md`). The call cannot run on a brain goroutine: one process-wide worker with a bounded queue owns it, and the reply returns through the bot's mailbox as a new kind of mail, dropped, not queued, once the session has ended. The player's text is untrusted input: the model gets no bot state and no tools. Never the merchant's price whispers: money stays with rules | owner's call, SD4; off by default |
+| OP3 | Reaction and tick delays drawn from a log-normal clipped to today's bounds, instead of uniform | distribution | `reactDelay`, `tickDelay`, the chat delay | — | declined by the owner (D48): the bots are not meant to pass for people (D7 marks their names), so a more human-looking delay buys nothing |
+| OP4 | Whisper replies from a small language model in place of the 8 canned lines, under today's caps (5 an hour, 10 min a sender), the canned line on any error or timeout | hosted small model, or a local one outside the process | `ChatPolicy.Replies` | A hosted model sends a player's whisper text off the owner's machine; a local one takes memory beside the bots (`docs/home.md`). The call cannot run on a brain goroutine: one process-wide worker with a bounded queue owns it, and the reply returns through the bot's mailbox as a new kind of mail, dropped, not queued, once the session has ended. The player's text is untrusted input: the model gets no bot state and no tools. Never the merchant's price whispers: money stays with rules | backlog issue (D48), not scheduled |
 | OP5 | Sale price from a fitted demand curve: the chance of a sale against ask over reference, by rarity (logistic regression) | small offline model | the linear markdown of `valuables.go` | a sale history, which the ledger does not keep; few sales a day, so months of data | not now |
 | OP6 | Spots assigned centrally as an assignment problem (Hungarian method, or min-cost flow with capacities) | known algorithm | per-bot first fit against `SpotRegistry` | a coordinator pass; bots stop choosing like players. Adopt only if #355's acceptance (most farm bots hold or share a spot within 15 minutes) fails | declined for now |
 | OP7 | Party composition by weighted matching with a swap improvement pass | known algorithm | the one-pass greedy of `botparty/compose.go` | evidence of poor parties in `parties_broken_total` by reason; none today | declined for now |
@@ -511,15 +580,26 @@ Declined, with the reason:
 | Reinforcement learning or behavior cloning for the rule order or the rotation | No simulator: the environment is the live server in real time; the tests pin a deterministic rule order; inference for 1000 bots competes with the machine's cap |
 | One host-wide dial gate across processes | D11 accepts the ban risk on the home run; HD1 makes a ban end |
 
-## Owner decisions (proposed)
+## Owner decisions
+
+Decided by the owner on 2026-11-26:
+
+| # | Decision | Answer |
+| --- | --- | --- |
+| D45 | What a bot does on a packet it cannot decode | It logs an error and skips the packet; the session plays on. Before the world, where nothing can be skipped, the attempt ends with the error logged. Never counted as a server abort. Design: HD4 |
+| D46 | Package boundary | The game wire moves to its own package, `internal/botwire`. Design: 5 (WP1-WP3) |
+| D47 | Outcome log | Written, off unless `-outcome-log` is given: bounded JSONL of spot stays, no names or text. Design: 6 (OP0) |
+| D48 | Human-looking delays and a language model for whispers | No log-normal delays (OP3): the bots are not hidden. A small language model for whisper replies (OP4) is a backlog issue, not scheduled |
+
+Open:
 
 | # | Question | Options | Proposed |
 | --- | --- | --- | --- |
-| SD1 | What a bot does on a packet it cannot decode | 1. End the session, count it as a decode error, stop the bot after `maxAborts` of them with `ErrDecode`, no restart. 2. Skip the frame, count it by opcode and play on with that event missing (frames are length-delimited, so the stream stays in step) | 1 |
-| SD2 | Package boundary | a. one package; b. `internal/botwire`, priced in Design 5; c. feature packages | a |
-| SD3 | Write an outcome log to disk | yes, off by default, bounded JSONL, no names or text; or no | yes |
-| SD4 | Which options to prototype | OP1 and OP2 after OP0; OP3 (changes `docs/plan.md` section 4); OP4 (sends whisper text off the machine when hosted) | OP1, OP2; OP3 and OP4 the owner's call |
-| SD5 | May these PRs change behavior, and is BR1b wanted | See the Delivery table's last column. BR1b (the `sent` column) changes no packet but edits tests across the package | yes, each PR states its change; BR1b the owner's call |
+| SD4 | Prototype the two learned choices once the outcome log has data | OP1, a fight estimate that corrects itself; OP2, spot choice by measured rate; either, both or neither | both, behind flags |
+| SD5 | Is BR1b wanted | BR1b (the `sent` column) changes no packet but edits tests across the package; without it the two known cross-row hooks are fixed one by one | the owner's call |
+
+Every PR of this plan states the behavior it changes (the Delivery table's last column), as D24
+asks of the M10 rewrite.
 
 ## Testing
 
@@ -536,8 +616,16 @@ Declined, with the reason:
 - **HD3.** A brain whose rule panics ends its attempt with `ErrPanic`, gives the gate's token
   back, releases its spot, joins its reader, and leaves a second bot of the same registry running;
   a panic in `EnterGame` does the same and closes the game connection.
-- **HD4.** A frame one byte short in the world, and one in `EnterGame`, end the attempt with
-  `errDecode` and count no abort.
+- **HD4.** A frame one byte short in the world is logged once, counted, skipped, and the event
+  after it is applied; a second of the same opcode only counts; a `ServerClose` and a
+  `LeaveWorld` with a trailing byte still end the session as a kick and a logout; a bad frame in
+  the `EnterWorld` burst does not fail `NewWorld`, a bad `UserInfo` there does; one in
+  `EnterGame` ends the attempt with `errDecode`, counts no abort, and from two bots steps the
+  gate. Two tests pin the old rule and are rewritten: `TestReadEventsMalformedFrameEnds`
+  (`reader_test.go`) and the malformed case of `TestNewWorldReplaysBurst` (`world_test.go`).
+- **WP1-WP3.** No test changes but the moves, the splits of mixed test files and the renames;
+  the suites of `internal/botclient`, `internal/botwire` and `internal/e2e` (build only) pass,
+  and the fuzz targets run from their new package.
 - **HD5.** A drop whose every candidate lies behind a closed door expands at most one budget; a
   box with no cell in a reached abstract SCC answers `ErrUnreachable` with no cell expanded; a
   ledge whose way down leaves the box and lands inside it still drops; a landing that is no click
@@ -564,14 +652,14 @@ Declined, with the reason:
 - No `-race` run on the owner's machine; PR CI runs the unit tier with it. The live scenarios are
   unchanged.
 
-## Delivery (proposed milestone M14, "Hardening and structure")
+## Delivery (milestone M14, "Hardening and structure")
 
 | PR | Scope | Needs | Changes behavior |
 | --- | --- | --- | --- |
 | HD1 | `errClosedAtAccept`, the quiet period on both gates, spacing turned on for an allowlisted gate that saw one, the counter; `internal/e2e/target.go`, the other user of `Turn.Dialed` | — | reconnect timing |
 | HD2 | The gate's backoff reset on entering the world; not-ready endings of two different bots step it; `internal/e2e/target.go` | HD1 (same files) | reconnect timing |
 | HD3 | Recover in `Bot.attempt` and the reader; `ErrPanic`; deferred `turn.Done`, `enter` and `play` cleanup; the lock audit | HD2 (same file) | a panic ends one bot |
-| HD4 | `errDecode` in the reader, login and `EnterGame`; its counter; no restart; SD1 | HD3 (same file) | what stops a bot |
+| HD4 | Skip and log an undecodable packet in the world and the burst; `ServerClose` and `LeaveWorld` on the opcode; `errDecode` before the world and for the burst's `UserInfo`, as a not-ready ending; the counter; the two guides and the doc comments (D45) | HD3 (same file), HD2 (the not-ready ending) | a bad packet no longer ends a session |
 | HD5 | `Planner.RouteToNearest`; `walker.drop` on it | — | which drop is taken (the cheapest landing by path cost) |
 | HD6 | Fold a deleted bot's counters, drop its slot | — | no |
 | RT1 | The same-cluster cap and seated search; the same-cluster owner sample | — | same-cluster routes past the cap |
@@ -583,13 +671,19 @@ Declined, with the reason:
 | GM2 | The trainer on `npcVisit.approach` | — | the trainer's clicks and shuns |
 | GM3 | `between`, `npcBypass` | — | no |
 | WR1 | One wiring site for the shared set; one organizer driver | — | no |
-| OP0 | Outcome log (SD3) | — | no |
-| OP1, OP2 | Prototypes behind flags, judged on the log (SD4) | OP0 | behind a flag |
+| WP1 | `internal/botwire`: event types, their constants, the opcodes, the decoders, `DecodeEvent`; the file of forwards in `botclient`; codec tests, fixtures and fuzz split out and moved (D46) | HD4 (the reader's decode path) | no |
+| WP2 | Encoders and their row types to `botwire`; call sites rewritten; `harness.go` and `internal/e2e` on `botwire`; the boundary test | WP1 | no |
+| WP3 | Login and handshake wire (`login.go`, `gamepackets.go`, `character.go`) and the types they share with the session | WP2 | no |
+| OP0 | Outcome log (D47) | — | no |
+| OP1, OP2 | Prototypes behind flags, judged on the log (SD4, open) | OP0 | behind a flag |
+| OP4 | Backlog: whisper replies from a small language model (D48) | — | not scheduled |
 
 Three lanes can run side by side: HD1-HD4 and HD6 (session, gate, supervisor), HD5 with RT1 and
 RT2 (`internal/nav` and the walker), and BR, GM (the brain). BR1 touches `brain.go` and
 `rules.go`, which 43 % and 35 % of the package's commits change, so its PRs land between waves of
-feature work, small and one at a time. RT3 is no PR: it is the profile, then a decision.
+feature work, small and one at a time. WP1-WP3 are a lane of their own that needs the package
+quiet: no other lane on `botclient` is open while one of them is. RT3 is no PR: it is the
+profile, then a decision.
 
 ## Risks
 
@@ -606,6 +700,14 @@ feature work, small and one at a time. RT3 is no PR: it is the profile, then a d
   2 min after the server is back; each bot then returns when its own backoff ends (up to 5 min),
   as today. On a full server, or with two or more accounts that always fail, a bot that
   reconnects may wait up to 2 min a turn.
+- **A skipped packet leaves the model stale (HD4).** A bot that plays on without a packet acts on
+  an older world: without an `ItemList` it misjudges what it carries. (The burst's `UserInfo`
+  is the exception: without it there is no character to play, so it ends the attempt.) The
+  error line and the
+  counter by opcode are the signal; the live scenarios and the decoder tests catch a drift before
+  a home run does.
+- **The wire move collides with every open lane (WP1-WP3).** Each is mechanical and wide. It
+  lands in a quiet window, and a lane opened across one rebases onto it.
 - **A panic that leaves shared state half-written (HD3).** The bot that panicked stops; the lock
   audit covers what other bots share. A registry whose invariant a panic could break mid-update is
   named in the PR.
@@ -622,8 +724,8 @@ feature work, small and one at a time. RT3 is no PR: it is the profile, then a d
 - `Distance` stays a lower bound with straight ends inside the endpoint clusters, so spot ranking
   stays blind to a wall or river inside the bot's own cluster. OP11 narrows it for fixed places
   only; nothing in this plan fixes it.
-- A feature still has up to four wiring sites (Design 3), and wire, world and brain stay in one
-  package unless SD2 chooses b.
+- A feature still has up to four wiring sites (Design 3), and the world and the brain stay in one
+  package after D46.
 - Not checked for this plan and left to their PRs: which `sent` hooks are owner-only (BR1b), the two
   process duplications (WR1), the tree size of OP11, the barrier size at which DF3 fails at the
   production budget.
