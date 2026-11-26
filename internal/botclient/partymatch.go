@@ -221,7 +221,7 @@ type roomVolunteer struct {
 	inRoom     int32
 	roomLeader string
 	// retry holds each leader the bot asked, until it may ask again.
-	retry map[string]time.Time
+	retry holds[string]
 }
 
 // roomAsk is a room join the bot sent.
@@ -355,7 +355,7 @@ func (b *Brain) pickRoom(now time.Time) (PartyRoom, bool) {
 	for _, r := range v.list {
 		if r.Leader == "" || strings.EqualFold(r.Leader, self.Name) || b.cfg.markers.Marks(r.Leader) ||
 			r.Members >= r.MaxMembers || self.Level < r.MinLevel || self.Level > r.MaxLevel ||
-			now.Before(v.retry[r.Leader]) {
+			v.retry.held(r.Leader, now) {
 			continue
 		}
 		if c.claim(r.Leader, self.ObjectID, now) {
@@ -371,15 +371,8 @@ func (b *Brain) pickRoom(now time.Time) (PartyRoom, bool) {
 func (b *Brain) roomGiveUp(now time.Time, pol RoomPolicy) {
 	v := &b.rooms
 	v.next = b.nextRoomList(now, pol)
-	if v.retry == nil {
-		v.retry = make(map[string]time.Time)
-	}
-	for n, t := range v.retry {
-		if !t.After(now) {
-			delete(v.retry, n)
-		}
-	}
-	v.retry[v.asked.leader] = now.Add(pol.Retry)
+	v.retry.prune(now)
+	v.retry.set(v.asked.leader, now.Add(pol.Retry))
 	if c := b.cfg.PartyClaims; c != nil {
 		if leader, _, ok := c.held(b.world.Self.ObjectID); ok && leader == v.asked.leader {
 			c.release(b.world.Self.ObjectID)

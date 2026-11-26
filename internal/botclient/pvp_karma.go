@@ -50,7 +50,7 @@ const npcTypeGuard = "Guard"
 // use).
 type karmaState struct {
 	arenaDeaths []time.Time
-	avoid       map[string]time.Time
+	avoid       holds[string]
 	victim      int32
 	lastPK      time.Time
 	had         bool
@@ -97,15 +97,8 @@ func (b *Brain) diedPvP(now time.Time) {
 	if name == "" {
 		return
 	}
-	for n, until := range k.avoid {
-		if !now.Before(until) {
-			delete(k.avoid, n)
-		}
-	}
-	if k.avoid == nil {
-		k.avoid = make(map[string]time.Time)
-	}
-	k.avoid[name] = now.Add(avoidAfterDeath)
+	k.avoid.prune(now)
+	k.avoid.set(name, now.Add(avoidAfterDeath))
 }
 
 // killer is the name of the player who killed the bot at now: the hardest
@@ -139,7 +132,7 @@ func (b *Brain) killer(now time.Time) string {
 // avoidAfterDeath of now: neither hunted nor challenged (fighting back
 // stays).
 func (b *Brain) avoided(name string, now time.Time) bool {
-	return now.Before(b.karma.avoid[name])
+	return b.karma.avoid.held(name, now)
 }
 
 // arenaDied keeps an arena death at now on an arena trip: the first

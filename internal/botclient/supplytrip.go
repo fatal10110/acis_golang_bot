@@ -245,10 +245,7 @@ func (b *Brain) shunTown(now time.Time) {
 		if horizontal2(b.cfg.Travel.gatekeepers[gi].at, town) > townArrive*townArrive {
 			continue
 		}
-		if tr.shunned == nil {
-			tr.shunned = make(map[int]time.Time)
-		}
-		tr.shunned[gi] = now.Add(visitShunFor)
+		tr.shunned.set(gi, now.Add(visitShunFor))
 	}
 }
 

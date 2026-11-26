@@ -45,5 +45,5 @@ func (b *Brain) sightedBuff(steps []Step, now time.Time) (Action, bool) {
 // record: seeing it is not fighting it.
 func (b *Brain) sightedFoe(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && o.Kind == KindPlayer && !o.Dead && b.fightRule(id, o, now) != fightNone && !now.Before(b.blacklist[id])
+	return o != nil && o.Kind == KindPlayer && !o.Dead && b.fightRule(id, o, now) != fightNone && !b.blacklist.held(id, now)
 }

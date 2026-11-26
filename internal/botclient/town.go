@@ -189,7 +189,7 @@ func (b *Brain) planHop(now time.Time) bool {
 	for gi := range m.gatekeepers {
 		g := &m.gatekeepers[gi]
 		d := dist2(from, g.at)
-		if d > reach || d >= bestDist || now.Before(tr.shunned[gi]) {
+		if d > reach || d >= bestDist || tr.shunned.held(gi, now) {
 			continue
 		}
 		if dests := m.hopDests(g, budget); len(dests) > 0 {

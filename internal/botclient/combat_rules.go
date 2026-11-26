@@ -2,7 +2,6 @@ package botclient
 
 import (
 	"cmp"
-	"maps"
 	"math"
 	"slices"
 	"time"
@@ -99,7 +98,7 @@ func selectAction(id int32, from Point) Action {
 // allowed by MayFight's rules (fightKind) and not blacklisted.
 func (b *Brain) mayFight(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && !o.Dead && b.fightKind(id, o, now) != fightNone && !now.Before(b.blacklist[id])
+	return o != nil && !o.Dead && b.fightKind(id, o, now) != fightNone && !b.blacklist.held(id, now)
 }
 
 // attackers are the bot's attackers it may fight at now, the hardest hitter
@@ -152,7 +151,7 @@ func (b *Brain) unfought(now time.Time) int32 {
 			continue
 		}
 		karma := b.world.Self.Karma > 0 && b.fightRule(k, o, now) == fightNone
-		if !karma && !now.Before(b.blacklist[k]) {
+		if !karma && !b.blacklist.held(k, now) {
 			continue
 		}
 		// A summon MayFight refuses is held off, not fled, while the bot
@@ -417,8 +416,8 @@ func (b *Brain) exhausted(id int32, now time.Time) bool {
 	if n <= 0 || b.tries[id] < n {
 		return false
 	}
-	maps.DeleteFunc(b.blacklist, func(_ int32, until time.Time) bool { return !now.Before(until) })
-	b.blacklist[id] = now.Add(b.persona.BlacklistFor)
+	b.blacklist.prune(now)
+	b.blacklist.set(id, now.Add(b.persona.BlacklistFor))
 	delete(b.tries, id)
 	return true
 }

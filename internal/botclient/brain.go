@@ -233,7 +233,7 @@ type Brain struct {
 	// bot's own swings or casts last landed on it; blacklist holds the
 	// targets given up on until a time (Persona.BlacklistAfter).
 	tries     map[int32]int
-	blacklist map[int32]time.Time
+	blacklist holds[int32]
 	// resting is set while rule 6 has the bot sit until recovered.
 	resting bool
 	// toggledAt is the last sit/stand toggle not yet confirmed.
@@ -438,10 +438,17 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 	}
 	b := &Brain{
 		world: w, events: q, out: out, clock: clock, rng: rng, persona: cfg.Persona, cfg: cfg, log: cfg.log, metrics: cfg.Metrics,
-		tries: make(map[int32]int), blacklist: make(map[int32]time.Time),
+		tries: make(map[int32]int), blacklist: make(holds[int32]),
 		usedAt: make(map[int32]time.Time), shotAsked: make(map[int32]shotAsk), shotOff: make(map[int32]bool),
 		buffedAt: make(map[buffKey]time.Time), tradedAt: make(map[int32]time.Time),
 		verdicts: make(chan verdict, verdictQueue),
+		spot:     spotVisit{avoid: make(holds[int])}, trip: travelTrip{shunned: make(holds[int])},
+		shop: shopVisit{shunned: make(holds[int32])}, newbie: newbieVisit{shunned: make(holds[int32])},
+		train:  trainerVisit{shunned: make(holds[int32]), walkShunned: make(holds[int32])},
+		market: marketVisit{cooled: make(holds[int32])}, wh: warehouseErrand{shunned: make(holds[int32])},
+		partyLead: partyLead{heard: make(holds[string]), retry: make(holds[string])},
+		rooms:     roomVolunteer{retry: make(holds[string])},
+		pvp:       pvpWorld{find: findState{held: make(holds[string])}}, karma: karmaState{avoid: make(holds[string])},
 	}
 	b.wireValuables()
 	if cfg.link != nil {

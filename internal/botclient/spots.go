@@ -237,7 +237,7 @@ type spotVisit struct {
 	// retryAt is when the bot may look for a spot again after finding none.
 	retryAt time.Time
 	// avoid are the spots the bot moved on from, until a time.
-	avoid map[int]time.Time
+	avoid holds[int]
 	// failed are the spots of the bot's current run of walks that ended
 	// unreachable (failedWalk), oldest first, each once: avoided while the run lasts,
 	// until a walk arrives or no candidate is left.
@@ -555,7 +555,7 @@ func (b *Brain) candsWhere(here navPoint, now time.Time, fit func(*datapack.Spot
 	var cands []spotCand
 	for i := range r.spots {
 		sp := &r.spots[i]
-		if (v.held && i == v.idx) || now.Before(v.avoid[i]) || !fit(sp, now) {
+		if (v.held && i == v.idx) || v.avoid.held(i, now) || !fit(sp, now) {
 			continue
 		}
 		line := math.Sqrt(float64(horizontal2(here.at, Point{X: sp.Center.X, Y: sp.Center.Y})))
@@ -739,15 +739,8 @@ func candAt(cands []spotCand, i int) Point {
 // moveOn gives the spot up and avoids it for d.
 func (b *Brain) moveOn(now time.Time, d time.Duration) {
 	v := &b.spot
-	if v.avoid == nil {
-		v.avoid = make(map[int]time.Time)
-	}
-	for i, until := range v.avoid {
-		if !now.Before(until) {
-			delete(v.avoid, i)
-		}
-	}
-	v.avoid[v.idx] = now.Add(d)
+	v.avoid.prune(now)
+	v.avoid.set(v.idx, now.Add(d))
 	b.leaveSpot()
 }
 
@@ -772,9 +765,7 @@ func (b *Brain) failedWalk(now time.Time) {
 	v.retryAt = now.Add(spotRetry)
 	until := v.retryAt.Add(walkRetry)
 	for _, i := range v.failed {
-		if v.avoid[i].Before(until) {
-			v.avoid[i] = until
-		}
+		v.avoid.extend(i, until)
 	}
 }
 

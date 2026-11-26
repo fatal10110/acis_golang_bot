@@ -225,12 +225,12 @@ type trainerVisit struct {
 	doneLevel, needSP int32
 	// shunned are the trainers that taught the bot nothing, by object id,
 	// until a time.
-	shunned map[int32]time.Time
+	shunned holds[int32]
 	// walk is the walk to a trainer's spawn while none is in sight (zero
 	// for none); walkShunned are the trainer templates whose spawn the bot
 	// reached without finding one or that no route reaches, until a time.
 	walk        npcVisit
-	walkShunned map[int32]time.Time
+	walkShunned holds[int32]
 	// near holds the stand point of the trainer in sight the bot walks to
 	// before it clicks (closeIn): its object and stand point only.
 	near npcVisit
@@ -256,10 +256,7 @@ func (t *trainerVisit) finish(level int32) {
 // shun ends the visit and leaves its trainer alone until now plus
 // trainerShunFor.
 func (t *trainerVisit) shun(now time.Time) {
-	if t.shunned == nil {
-		t.shunned = make(map[int32]time.Time)
-	}
-	t.shunned[t.npc] = now.Add(trainerShunFor)
+	t.shunned.set(t.npc, now.Add(trainerShunFor))
 	t.reset()
 }
 
@@ -389,7 +386,7 @@ func (b *Brain) startVisit(now time.Time) bool {
 	var bestDist int64
 	for _, npcID := range b.build().Kit.Trainers {
 		for id, o := range b.world.Objects {
-			if o.Kind != KindNPC || o.NPCID != npcID || o.Dead || now.Before(t.shunned[id]) {
+			if o.Kind != KindNPC || o.NPCID != npcID || o.Dead || t.shunned.held(id, now) {
 				continue
 			}
 			if d := dist2(from, o.Position(now)); best == 0 || d < bestDist {
@@ -427,7 +424,7 @@ func (b *Brain) startTrainerWalk(from Point, now time.Time) bool {
 	var best npcVisit
 	bestDist := int64(math.MaxInt64)
 	for _, npcID := range b.build().Kit.Trainers {
-		if now.Before(t.walkShunned[npcID]) {
+		if t.walkShunned.held(npcID, now) {
 			continue
 		}
 		for _, at := range m.spawns[npcID] {
@@ -448,10 +445,7 @@ func (b *Brain) trainerLeg(now time.Time) (Action, bool) {
 	if a, ok := b.walkTo(&t.walk, now); ok {
 		return a, true
 	}
-	if t.walkShunned == nil {
-		t.walkShunned = make(map[int32]time.Time)
-	}
-	t.walkShunned[t.walk.npcID] = now.Add(visitShunFor)
+	t.walkShunned.set(t.walk.npcID, now.Add(visitShunFor))
 	t.walk = npcVisit{}
 	return Action{}, false
 }
