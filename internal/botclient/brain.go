@@ -1009,6 +1009,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	case actUseItem:
 		b.usedAt[a.item] = now
 		b.supplyTrip.sent(a, now)
+		b.cureSent(a.item, now)
 	case actAutoShot:
 		b.shotAsked[a.item] = shotAsk{at: now, on: true}
 	case actAutoShotOff:

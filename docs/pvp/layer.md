@@ -76,9 +76,10 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
   kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (none are
   bought, and an uncancelled duel end restores CP, [duel end](server-duels.md)).
 - **Cures.** In a PvP fight, duels too (cures are cheap and a DOT decides a 2-minute duel): its own `AbnormalStatusUpdate` shows
-  a poison or bleed (stack type `poison`, `bleeding`, or effect type POISON, BLEED) with half its
+  a poison or bleed (skill type or resolved effect type POISON, BLEED: what the negate matches,
+  `hooks_buff.go` `negateTypeMatches`; a stack type alone, like NPC Bleed 4615's, is not) with half its
   ticks left → the cure. Its level is the lower set level (`hooks_buff.go:221-233`,
-  `negateLevelAllows`): `effectAbnormalLvl` (only with an `effectType`; Sting 223 sets only this) or
+  `negateLevelAllows`): `effectAbnormalLvl` (only with a resolved effect type, which every typed skill has; Sting 223 and Ice Dagger 1237 set only this) or
   `abnormalLvl` (Poison, Curse: Poison, Venom, Bleed); neither set → no cure. Up to 3: Antidote 1831
   or Bandage 1833; 4-7: Greater Antidote 1832 or Emergency Dressing 1834 (plain first when both
   work); 8: none. One `UseItem` per effect seen, 500 ms reuse. None against monsters.
@@ -86,7 +87,7 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
   or the latest `ExDuelUpdateUserInfo` (resent only when a gauge leaves its segment), CP and max CP
   from the latest `CharInfo` or duel window; each 35 since that read comes off CP, then HP. It drives finishers and the break-off, never a re-selection.
 - **Break off** (open world only): CP gone, HP under the row's `PvPBreakHP` (tank 20, normal 30,
-  glass cannon 40 %), no heal or potion ready, its pool fraction under the opponent's → its ready
+  glass cannon 40 %, by the class's M10 spot margin, which names the same three), no heal or potion ready, its pool fraction under the opponent's → its ready
   `Break` step (root, stun, fear, slow, Dash, a sleep under the rule above), then M10's flee
   (`FleeOutrun` against the opponent's `CharInfo` run speed). Unable to outrun: fights on.
 - **Break-cast gate.** A `Break` step only when its scaled hit time is under 4 s, the opponent is

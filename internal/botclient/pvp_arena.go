@@ -224,8 +224,8 @@ func (b *Brain) arenaTeleported(now time.Time, gk bool) {
 // Esc for its damage cast while the server still honours it (else the cast
 // lands first), a stop move that keeps arenaEdge inside (disengage,
 // moveOK), one attack interval after it, then the walk back out toward
-// where the trip set out; outside the arena the trip ends and the spot
-// rule picks again.
+// where the trip set out once Ultimate Defense ends (immobile); outside
+// the arena the trip ends and the spot rule picks again.
 func (b *Brain) arenaLeave(now time.Time) (Action, bool) {
 	t, s, g := &b.pvp.arena, &b.world.Self, &b.pvp.guard
 	if t.stopAt.IsZero() {
@@ -244,6 +244,9 @@ func (b *Brain) arenaLeave(now time.Time) (Action, bool) {
 	if b.arenaAt(s.Position(now)).Arena == 0 {
 		b.arenaEnd(now)
 		return Action{}, false
+	}
+	if b.immobile(now) {
+		return Action{}, true
 	}
 	a, st := b.goTo(t.from, arenaArrive, walkPlace, now)
 	if st == walkWalking {

@@ -176,10 +176,11 @@ type poleStand struct {
 // bystander to a stand point in range with none in its cone toward id,
 // trying repositionStep steps around id from the nearest, each holding on
 // the geodata and on duel ground; with none it holds. A new stand point
-// goes out only once the bot reached the last or a swing time passed.
+// goes out only once the bot reached the last or a swing time passed. It
+// holds while Ultimate Defense holds the bot (immobile).
 func (b *Brain) poleReposition(id int32, now time.Time) Action {
 	o := b.world.object(id)
-	if o == nil {
+	if o == nil || b.immobile(now) {
 		return Action{}
 	}
 	from, to := b.world.Self.Position(now), o.Position(now)

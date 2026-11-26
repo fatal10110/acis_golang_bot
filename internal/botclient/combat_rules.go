@@ -222,7 +222,8 @@ func (b *Brain) knowsNuke(rot []Step) bool {
 // Melee policy allows, side stepping when stuck. Either goes
 // out only while the straight line to id is open, else the bot walks to a
 // stand point first (engageWalk). A target out of attempts is blacklisted
-// instead.
+// instead. While Ultimate Defense holds the bot (immobile) no walk starts:
+// no stand point, chase or side step.
 func (b *Brain) fight(id int32, now time.Time) Action {
 	s := &b.world.Self
 	from := s.Position(now)
@@ -269,6 +270,10 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	if b.swingHeld(id, now) {
 		return Action{}
 	}
+	if b.immobile(now) && !b.meleeInRange(id, now) {
+		// Ultimate Defense: no chase, a move would only idle the bot.
+		return Action{}
+	}
 	if b.engaged != id {
 		if b.exhausted(id, now) {
 			return Action{}
@@ -291,7 +296,7 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	if a, walk := b.engageWalk(id, r, now); walk {
 		return a
 	}
-	if now.Sub(b.progressAt) >= stuckAfter {
+	if now.Sub(b.progressAt) >= stuckAfter && !b.immobile(now) {
 		return b.sideStep(id, now)
 	}
 	return Action{}

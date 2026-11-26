@@ -704,7 +704,8 @@ func (b *Brain) rulePrompt(now time.Time) (Action, bool) {
 // under CrowdedHP it heals or drains, else drinks a potion, early,
 // standing, and leaves the turn to the next rules when none is ready. No
 // potion goes out over a heal or drain in flight (sustaining), and no heal
-// or drain during a recall (escaping).
+// or drain during a recall (escaping). Against a player it fights (pvpFoe)
+// it does not flee: the PvP layer's break-off decides (docs/pvp/layer.md).
 func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	if !s.InCombat {
@@ -747,7 +748,7 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	if a, ok := b.heal(s.ObjectID, now); ok {
 		return a, true
 	}
-	if !b.mayFlee(now) {
+	if !b.mayFlee(now) || b.pvpFoe(now) {
 		return Action{}, false
 	}
 	return b.flee(b.world.Target, now), true
@@ -775,11 +776,16 @@ var fleeTurns = [...]float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi
 // skill first when it is ready. The point is on ground of the
 // bot's SCC (walker.inSCC), walked through the walker as checked segments
 // (D13), each from standstill; a run that arrived or ended unreachable
-// picks a fresh point at once.
+// picks a fresh point at once. None while Ultimate Defense holds the bot
+// (immobile).
 func (b *Brain) flee(id int32, now time.Time) Action {
 	s, v := &b.world.Self, &b.fleeing
 	if s.Sitting {
 		return b.toggle(now)
+	}
+	if b.immobile(now) {
+		// Ultimate Defense: a move would only idle the bot.
+		return Action{}
 	}
 	if f := b.build().Kit.Flee; f != 0 && b.world.SkillReady(f, now) {
 		return b.castOn(s.ObjectID, f, false, now)
