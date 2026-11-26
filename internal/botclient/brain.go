@@ -478,10 +478,13 @@ func (b *Brain) Run(done, logout <-chan struct{}) error {
 	// An inspect still waiting when the session ends gets the model as
 	// it stands.
 	defer func() { b.answerInspect(b.clock.Now(), true) }()
-	defer b.leaveSpot()
-	defer b.releaseStore()
-	defer b.releasePartyClaim()
-	defer b.releaseCraftBoard()
+	defer func() {
+		for _, r := range playRules {
+			if r.stop != nil {
+				r.stop(b)
+			}
+		}
+	}()
 	due := b.due()
 	timer := b.clock.NewTimer(due.Sub(b.clock.Now()))
 	defer timer.Stop()
