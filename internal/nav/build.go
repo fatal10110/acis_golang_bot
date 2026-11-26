@@ -58,6 +58,8 @@ type BuildStats struct {
 	SCCs, LargestSCC, CondEdges                       int
 	Doors, SkippedDoors                               int
 	Bytes                                             int
+	// Landmarks is the landmarks the abstract search's bound uses.
+	Landmarks int
 	// OneWayEdges join two abstract SCCs: crossings and pairs joined
 	// inside a cluster.
 	OneWayEdges int
@@ -998,7 +1000,9 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 	cond := l.cond
 	base := l.base
 
-	size := navHeaderSize + len(outs)*clusterRecSize + nNodes*nodeRecSize + nEdges*edgeRecSize + nDoorRefs*4 + (nSCC+1)*4 + nCond*4
+	nLandmarks := min(navLandmarks, stats.LargestSCC)
+	size := navHeaderSize + len(outs)*clusterRecSize + nNodes*nodeRecSize + nEdges*edgeRecSize + nDoorRefs*4 + (nSCC+1)*4 + nCond*4 +
+		nLandmarks*4 + nNodes*nLandmarks*8
 	if size > MaxNavCacheBytes {
 		return nil, errors.New("nav: nav cache would exceed MaxNavCacheBytes")
 	}
@@ -1014,6 +1018,7 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 		img = le.AppendUint32(img, uint32(n))
 	}
 	img = append(img, key.WaterHash[:]...)
+	img = le.AppendUint32(img, uint32(nLandmarks))
 	for ci, k := range b.keys {
 		img = le.AppendUint32(img, uint32(k.X))
 		img = le.AppendUint32(img, uint32(k.Y))
@@ -1060,6 +1065,12 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 			img = le.AppendUint32(img, t)
 		}
 	}
+	// The landmarks are found over the graph written so far.
+	g := &Graph{b: img, counts: graphCounts{clusters: len(outs), nodes: nNodes, edges: nEdges, doorRefs: nDoorRefs, sccs: nSCC, condEdges: nCond}}
+	g.layout()
+	ids, dist := landmarks(g, nLandmarks)
+	img = appendLandmarks(img, ids, dist)
+	stats.Landmarks = len(ids)
 	le.PutUint32(img[12:], crc32.Checksum(img[16:], navCRC))
 	stats.Bytes = len(img)
 	return img, nil
