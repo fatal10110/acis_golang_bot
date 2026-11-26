@@ -428,7 +428,8 @@ func TestRuleTrainStarts(t *testing.T) {
 // Support builds (docs/strategy.md, rows HM EM DM OM): the human, elven and
 // dark elven mystics learn Heal, Battle Heal, Group Heal, Might and Shield,
 // then their nukes and sustain; orc mystics their buffs, then the armor
-// masteries, Soul Cry, Chill Flame and Life Drain, and no heal. The persona
+// masteries, Soul Cry, Chill Flame and Life Drain, then the skills only
+// their PvP row casts (Venom, Dreaming Spirit, Fear; X8), and no heal. The persona
 // overrides none of them; the trainers come from the datapack
 // (TestTrainersShipped).
 func TestDefaultPersonaSkills(t *testing.T) {
@@ -445,8 +446,9 @@ func TestDefaultPersonaSkills(t *testing.T) {
 	want := []int32{
 		skillSoulShield, skillChantBattle, skillLightArmorMastery, skillHeavyArmorMastery, skillRobeMastery,
 		skillSoulCry, skillChillFlame, skillLifeDrain,
+		skillVenom, skillDreamingSpirit, skillFear,
 	}
 	if got := kit(classOrcMystic).Skills; !slices.Equal(got, want) {
-		t.Errorf("orc mystic skills = %v, want buffs, armor masteries, then attack spells", got)
+		t.Errorf("orc mystic skills = %v, want buffs, armor masteries, attack spells, then the PvP row's", got)
 	}
 }
