@@ -121,7 +121,7 @@ func scenePoint(p geotest.Point, dx, dy int) Point {
 
 // newNavBrain is a started brain at t0 walking on n, standing at pos, its
 // counters in a registry of its own.
-func newNavBrain(t *testing.T, n *Nav, p Persona, pos Point) (*Brain, *recordSender, *botmetrics.Registry) {
+func newNavBrain(t testing.TB, n *Nav, p Persona, pos Point) (*Brain, *recordSender, *botmetrics.Registry) {
 	t.Helper()
 	w := newTestWorld(t)
 	w.Self.HP, w.Self.MaxHP, w.Self.MP, w.Self.MaxMP = 100, 100, 100, 100

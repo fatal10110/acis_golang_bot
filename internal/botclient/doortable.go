@@ -31,8 +31,12 @@ type DoorTable struct {
 	slot   map[int]int      // door id to slot; read-only after newDoorTable
 	objs   []dynamic.Object // per slot; read-only after newDoorTable
 	closed []atomic.Bool    // per slot; stored only under mu, loaded lock-free
+	// changes counts the door state changes Set applied to the engine. The
+	// table owns it: Set adds one under mu after the engine toggle and the
+	// store, and every brain goroutine loads it lock-free (Changes).
+	changes atomic.Uint64
 
-	mu      sync.Mutex       // serializes Set: the engine toggle, then the store
+	mu      sync.Mutex       // serializes Set: the engine toggle, the store, then changes
 	unknown map[int]struct{} // guarded by mu: ids already logged as not loaded
 }
 
@@ -107,6 +111,16 @@ func (t *DoorTable) Set(id int, closed bool) {
 		t.engine.RemoveObject(t.objs[i])
 	}
 	t.closed[i].Store(closed)
+	t.changes.Add(1)
+}
+
+// Changes is the number of door state changes Set applied to the engine so
+// far; the doors closed at construction count none. It never blocks. A
+// reader that loads it before a route search and finds it unchanged later
+// knows every change applied since was applied before the search read the
+// engine: Set toggles the engine before it counts the change (#566).
+func (t *DoorTable) Changes() uint64 {
+	return t.changes.Load()
 }
 
 // DoorReporter is one bot's door reports, owned by its brain goroutine. It

@@ -27,6 +27,15 @@ type Nav struct {
 	Water *nav.Water
 }
 
+// doorChanges is the door table's change count (DoorTable.Changes), zero
+// without a door table: every door then stays open.
+func (n *Nav) doorChanges() uint64 {
+	if n.Doors == nil {
+		return 0
+	}
+	return n.Doors.Changes()
+}
+
 // closed is the door state a route search reads, nil without a door table.
 func (n *Nav) closed() func(door int) bool {
 	if n.Doors == nil {
@@ -213,6 +222,14 @@ type walker struct {
 	endedAt time.Time
 	// route is the rest of the route: route[0] is the next segment's end.
 	route []Point
+	// planned is the route take took, its start first; route is a tail of
+	// it while the walk keeps to that route. checked is what its plan
+	// verified (walker.verified).
+	planned []Point
+	checked planCheck
+	// checks counts the segment checks walkStep ran (segmentOK); a segment
+	// the plan verified goes out with none (#566).
+	checks int
 	// next is the segment the last decision returned, seg the one in
 	// flight (seg.sentAt zero for none), prev the one a click-ahead in
 	// flight followed, until the click's answer.
@@ -383,7 +400,7 @@ func (b *Brain) walkStep(dest Point, arrive int32, purpose walkPurpose, now time
 		}
 	}
 	to := w.route[0]
-	if !w.segmentOK(pos, to) {
+	if !w.verified(pos) && !w.checkSegment(pos, to) {
 		// The door state or the bot's position changed since the route
 		// was planned: plan again from here next decision.
 		w.route = nil
@@ -442,6 +459,39 @@ func (b *Brain) standing(now time.Time) Point {
 		pos.Z = int32(c.Z)
 	}
 	return pos
+}
+
+// planCheck is what a route's plan verified: every segment of a hierarchy
+// route passed CanMove over the shared engine, doors included, and the
+// step-chain check (nav.Planner.pull, the checks segmentOK makes) with the
+// planner's step and collision height, the door table's change count read
+// before the search (Nav.doorChanges). A route from any other planner
+// (a drop, a swim) has ok unset.
+type planCheck struct {
+	ok           bool
+	doors        uint64
+	lmax, height float64
+}
+
+// verified reports whether the segment from pos to route[0] is one the plan
+// verified, so walkStep sends it without checking it again (#566): route
+// is still the tail of the planned route, pos is exactly the waypoint before
+// route[0] (the plan's start, or the end of the segment the bot arrived at:
+// standing re-snaps any other position), no door changed since the plan,
+// and the planner checks with the step and collision height it planned
+// with. A door toggled while the plan ran counts as changed. Any other
+// segment is checked as before.
+func (w *walker) verified(pos Point) bool {
+	c, k := &w.checked, len(w.planned)-len(w.route)
+	return c.ok && k >= 1 && len(w.route) > 0 && &w.planned[k] == &w.route[0] && w.planned[k-1] == pos &&
+		c.doors == w.nav.doorChanges() && c.lmax == w.plan.Lmax && c.height == w.plan.CollisionHeight
+}
+
+// checkSegment is segmentOK for the segment walkStep is about to send,
+// counted in checks.
+func (w *walker) checkSegment(from, to Point) bool {
+	w.checks++
+	return w.segmentOK(from, to)
 }
 
 // segmentOK reports whether the segment from from to to passes CanMove on
@@ -541,6 +591,10 @@ func (b *Brain) planRoute(pos Point, now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	w.pins.Current = cur
+	// The door count is read before the search reads the door state, so a
+	// door toggled while it runs leaves the route's segments to be checked.
+	doors := w.nav.doorChanges()
+	hier := false
 	var route []location.Location
 	switch cur.Kind() {
 	case nav.Isolated:
@@ -578,8 +632,10 @@ func (b *Brain) planRoute(pos Point, now time.Time) (Action, bool) {
 			// across it over the SCCs between, so a far leader costs no
 			// more cells than one in the bot's SCC.
 			route, err = h.RouteOneWay(&w.plan, from, to, w.nav.closed())
+			hier = true
 		case ok:
 			route, err = h.Route(&w.plan, from, to, w.nav.closed())
+			hier = true
 		default:
 			if route, ok = w.swimRoute(from); !ok {
 				w.unreachable(reasonNoRoute)
@@ -589,7 +645,7 @@ func (b *Brain) planRoute(pos Point, now time.Time) (Action, bool) {
 	}
 	if errors.Is(err, nav.ErrWater) || errors.Is(err, nav.ErrUnreachable) || errors.Is(err, nav.ErrBudget) {
 		if r, ok := w.swimRoute(from); ok {
-			route, err = r, nil
+			route, err, hier = r, nil, false
 		}
 	}
 	switch {
@@ -608,15 +664,21 @@ func (b *Brain) planRoute(pos Point, now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	w.take(route)
+	if hier {
+		w.checked = planCheck{ok: true, doors: doors, lmax: w.plan.Lmax, height: w.plan.CollisionHeight}
+	}
 	return Action{}, true
 }
 
-// take makes route, from the bot's standing point on, the walk's route.
+// take makes route, from the bot's standing point on, the walk's route,
+// verified by no check of its plan (planRoute records a hierarchy plan's).
 func (w *walker) take(route []location.Location) {
-	w.route = w.route[:0]
-	for _, l := range route[1:] {
-		w.route = append(w.route, fromLoc(l))
+	w.planned = w.planned[:0]
+	for _, l := range route {
+		w.planned = append(w.planned, fromLoc(l))
 	}
+	w.route = w.planned[1:]
+	w.checked = planCheck{}
 }
 
 // swimRoute is the swimming cell planner's route from from to the walk's
