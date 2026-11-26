@@ -48,6 +48,20 @@ goroutine or shared table. `PartyTick` (30 s, injected clock) joins `Run`'s `sel
 (`armFlush`, `supervisor.go:310-321`); orders go through `Bot.Command`, which never blocks
 (`mailbox.go:136-152`).
 
+## Swarm wiring
+
+`bots swarm` has no registry and no supervisor: `botregistry.Organizer` runs the same pass over the
+swarm's bots (#395). Its `Run` is one goroutine `runSwarm` starts before the bots and joins after
+every bot returned (a signal, or the credential breaker); it owns the `State` and every bot's
+`Sent`, polls the answers and hands the orders through `Bot.Command` exactly as the supervisor
+does (the shared `partyLink`, `botregistry/organizer.go`), every `PartyTick` on the swarm's clock,
+on `DefaultPolicy`. Every bot is a `NewRun` on the first pass only: a swarm bot keeps one `Bot`
+(and its mailbox) for the whole process. With no registry there is no party mode and no pin, so
+`Unpin` is ignored and no panel call exists. A swarm runs one preset (`-persona`), and grouping
+needs a `farmer` and a `support` healer, so `-support N` makes the last N bots of a `farmer` swarm
+play `support`; a swarm of one preset forms nothing. `-no-parties` runs no organizer; a swarm of
+no party preset (`town`, `merchant`, `crafter`, `pvp`) starts none.
+
 ## Which orders arrived
 
 `Bot.Command` answers `ErrBusy` when the mailbox (4 deep, `mailbox.go:11`) is full, else returns a

@@ -121,7 +121,7 @@ type Config struct {
 	Log *slog.Logger
 	// Party, when set, runs the bot party organizer on its policy every
 	// PartyTick (docs/parties/organizer.md); nil runs none. The control
-	// panel sets it, a swarm has no organizer (D25).
+	// panel sets it; `bots swarm` runs an Organizer instead (D25).
 	Party *botparty.Policy
 }
 
@@ -172,12 +172,8 @@ type runState struct {
 	// bot is the live run's bot once it handed it over (Run.Live), nil
 	// otherwise.
 	bot runBot
-	// newRun marks a bot handed over since the last party pass. sent is
-	// the last organizer order handed to the bot and what became of it;
-	// answer is its answer channel while the answer is pending.
-	newRun bool
-	sent   botparty.Sent
-	answer <-chan error
+	// party is the organizer's record of the live run.
+	party partyLink
 }
 
 // runBot is the bot of a live run as the supervisor uses it: a
@@ -530,8 +526,7 @@ func (s *Supervisor) handle(e event) {
 		// state is live. A new bot holds no order of the organizer: the
 		// old one's mailbox answers ErrStopped.
 		st := s.runs[e.account]
-		st.bot, st.newRun = e.bot, true
-		st.sent, st.answer = botparty.Sent{}, nil
+		st.bot, st.party = e.bot, partyLink{newRun: true}
 		return
 	}
 	if e.learned {
@@ -550,8 +545,7 @@ func (s *Supervisor) handle(e event) {
 	if st.bot != nil {
 		snap := st.bot.Status()
 		s.update(e.account, func(b *Bot) { keepProgress(b, snap) })
-		st.bot, st.newRun = nil, false
-		st.sent, st.answer = botparty.Sent{}, nil
+		st.bot, st.party = nil, partyLink{}
 	}
 	if s.closing {
 		delete(s.runs, e.account)

@@ -18,6 +18,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botparty"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -64,6 +65,11 @@ type swarmOptions struct {
 	persona string
 	// clanInviters are the -clan-inviters names.
 	clanInviters []string
+	// support is how many of a -persona farmer swarm's bots, the last
+	// accounts, play the support preset instead (-support).
+	support int
+	// noParties turns the bot party organizer off (-no-parties).
+	noParties bool
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -84,6 +90,8 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	addStoreFlags(fs, &o.store)
 	addGeoFlags(fs, &o.geo)
 	addPersonaFlag(fs, &o.persona)
+	fs.IntVar(&o.support, "support", 0, "how many of a -persona farmer swarm's bots, the last accounts, play -persona support instead: the Support members the party organizer groups with the farmers")
+	fs.BoolVar(&o.noParties, "no-parties", false, "run no bot party organizer: the bots only join the parties players invite them to; default: farmer and support bots form bot parties")
 	inviters := fs.String("clan-inviters", "", "comma-separated character names whose clan invitation a crafter accepts while clanless; default: any player's")
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
@@ -145,6 +153,12 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 			o.clanInviters = append(o.clanInviters, n)
 		}
 	}
+	if o.support < 0 || o.support > o.accounts.Count {
+		return o, fmt.Errorf("-support %d: want 0 to -bots %d", o.support, o.accounts.Count)
+	}
+	if o.support > 0 && o.persona != botparty.PresetFarmer {
+		return o, fmt.Errorf("-support applies to -persona farmer, not %s", o.persona)
+	}
 	if p, _ := findPreset(o.persona); !p.inviters && flagSet(fs, "clan-inviters") {
 		return o, fmt.Errorf("-clan-inviters applies to -persona crafter, not %s", o.persona)
 	}
@@ -166,6 +180,8 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 // -metrics it serves the bots' metrics on loopback until every bot returned.
 // With -datapack the bots pick farming spots from one registry they share.
 // With -commanders or -gm-dsn-file they obey whispered GM commands.
+// Farmer and support bots form bot parties through the organizer
+// (botregistry.Organizer) unless -no-parties.
 func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	o, err := parseSwarmFlags(args, stderr)
 	if errors.Is(err, flag.ErrHelp) {
@@ -255,7 +271,26 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 			sh.nav.ReportCache(reg)
 		}
 	}
-	bots, err := newBots(cfg, p, p.brain(sh), o.marker, accounts, reg)
+	// The last -support accounts play support (validated by
+	// parseSwarmFlags: only beside farmers).
+	split := len(accounts) - o.support
+	bots, err := newBots(cfg, p, p.brain(sh), o.marker, accounts[:split], reg)
+	if err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
+	}
+	members := organized(bots, p.name)
+	if o.support > 0 {
+		sp, _ := findPreset(botparty.PresetSupport)
+		sb, err := newBots(cfg, sp, sp.brain(sh), o.marker, accounts[split:], reg)
+		if err != nil {
+			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+			return 1
+		}
+		bots = append(bots, sb...)
+		members = append(members, organized(sb, sp.name)...)
+	}
+	parties, err := swarmParties(o.noParties, members, clock, reg, log)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 1
@@ -282,7 +317,15 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	// Deferred after the bots are joined below: the profiles stay available
 	// until every bot returned.
 	defer servePprof(ctx, pln, log)()
-	log.Info("swarm starts", "bots", len(bots), "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent, "allowlisted", o.allowlisted)
+	log.Info("swarm starts", "bots", len(bots), "support", o.support, "parties", parties != nil, "prefix", o.accounts.Prefix, "persistent", o.accounts.Persistent, "allowlisted", o.allowlisted)
+	// The organizer plans until every bot returned (a signal, or the
+	// credential breaker), then it is stopped and joined.
+	partyCtx, stopParties := context.WithCancel(ctx)
+	defer stopParties()
+	var organizer sync.WaitGroup
+	if parties != nil {
+		organizer.Go(func() { parties.Run(partyCtx) })
+	}
 	var wg sync.WaitGroup
 	for _, b := range bots {
 		wg.Go(func() {
@@ -295,6 +338,8 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		})
 	}
 	wg.Wait()
+	stopParties()
+	organizer.Wait()
 	if rec != nil {
 		if err := rec.Err(); err != nil {
 			log.Error("recording failed", "err", err)

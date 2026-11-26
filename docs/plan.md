@@ -69,7 +69,7 @@ the goal.
 | D22 | How a bot picks its profession branch | Weighted by race fit, drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). Owner, 2026-11-24. Design: `docs/strategy.md` |
 | D23 | Which professions are out of scope | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone (#332); the Overlord is not picked (a group class). Owner, 2026-11-24. Design: `docs/strategy.md` |
 | D24 | May the M10 rewrite change today's behavior | Yes, per PR: S4 lands behavior-neutral, and every later PR states the behavior it changes. Owner, 2026-11-24. Design: `docs/strategy.md` |
-| D25 | Who organizes bot parties | The panel's supervisor, from the registry and the live snapshots: online bots of the same town within walking reach and a level band; no in-game discovery. On by default in `bots ui` with a panel switch; no organizer in `bots swarm`. Owner, 2026-11-25. Design: `docs/parties/` |
+| D25 | Who organizes bot parties | The panel's supervisor, from the registry and the live snapshots: online bots of the same town within walking reach and a level band; no in-game discovery. On by default in `bots ui` with a panel switch. `bots swarm` runs the same planner over its own bots, on by default (`-no-parties` turns it off; `-support N` makes the last N bots of a `farmer` swarm play `support`). Owner, 2026-11-25; swarm organizer 2026-11-26 (#395). Design: `docs/parties/` |
 | D26 | Who is in a bot party | A Damage-role bot (`farmer`) leads; Support-role bots (`support`) join, at least one healer; a third is any other Support bot, else a second Damage bot with no healer to lead with. Size 3, at most 4 (persona defaults). `merchant`, `crafter` and `town` never take part; party mode `off` keeps a bot out; the panel may pin a party. Owner, 2026-11-25. Design: `docs/parties/composition.md` |
 | D27 | Loot and level band of a bot party | Loot by turn: items rotate, the server splits adena in range, a spoil stays with its sweeper. A party forms within 3 levels and breaks past 5; players are not counted. Owner, 2026-11-25. Design: `docs/parties/composition.md` |
 | D28 | What players may ask of a bot party | Any player may whisper `join` to a bot party's leader to be invited, and `invite me` to a Support member to take it out (extends D3 as D20 did, for these two whispers to bots of bot parties only); a GM's `invite me` takes the bot out and a GM's `leave` to the leader disperses the party. Owner, 2026-11-25. Design: `docs/parties/players.md` |
@@ -498,11 +498,13 @@ to avoid: both would log in the same accounts and kick each other.
   store budget, D21: it farms the datapack's spots for loot and sells it in a town store; a `town` bot loots
   nothing, so it has nothing to sell), extended as personas land. A preset is a persona plus its
   options. Presets that need the datapack (`town`, `merchant`, farming spots) are offered only when
-  the panel started with one. `bots swarm -persona` takes one preset name from the same catalog.
+  the panel started with one. `bots swarm -persona` takes one preset name from the same catalog; `-support N` makes the last N
+  bots of a `farmer` swarm play `support`.
 - Bot parties (D25, `docs/parties/`): the supervisor runs the party organizer, which groups online
   `farmer` (Damage, the leader) and `support` bots of the same town into bot parties and hands their
   `lead`, `join` and `unparty` orders to the bots every `PartyTick` (30 s); `merchant`, `crafter`
-  and `town` bots never take part. It is on in `bots ui` and absent from `bots swarm`. Each registry
+  and `town` bots never take part. It is on in `bots ui`; `bots swarm` runs it over its own bots unless `-no-parties` (no registry,
+  so no party mode and no pin there; #395). Each registry
   bot has a party mode, `""` (auto) or `off` (never in a bot party), and may be pinned to a named
   party (`PartyGroup`, its leader `PartyLead`), which forms whatever band and composition say and
   outlives a panel restart until a member leaves it or the panel dissolves it; auto parties live in

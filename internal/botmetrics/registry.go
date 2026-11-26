@@ -33,7 +33,7 @@ type Registry struct {
 
 	mu   sync.Mutex
 	bots []*Bot // guarded by mu
-	// partiesFormed and partiesBroken count the panel organizer's bot
+	// partiesFormed and partiesBroken count the organizer's bot
 	// parties (docs/parties/panel.md, "Metrics"); guarded by mu.
 	partiesFormed uint64
 	partiesBroken map[string]uint64
@@ -146,7 +146,7 @@ type Snapshot struct {
 	ValuablesDeposits uint64            `json:"valuables_deposits_total"`
 	ValuablesReleased uint64            `json:"valuables_released_total"`
 	ValuablesHeld     int64             `json:"valuables_held"`
-	// PartiesFormed counts the bot parties the panel's organizer formed,
+	// PartiesFormed counts the bot parties the organizer (panel or swarm) formed,
 	// by hand or by itself, and PartiesBroken the ones it broke, keyed by
 	// the reason (docs/parties/panel.md, "Metrics").
 	PartiesFormed uint64            `json:"parties_formed_total"`

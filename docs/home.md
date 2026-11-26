@@ -157,6 +157,9 @@ GOMEMLIMIT=1GiB bots swarm \
   code 3: do not restart it in a loop.
 - `-game <public host:port>` when `Hostname` is not public (section 2).
 - The bot cap (`-bots`) and `GOMEMLIMIT` bound the process on the owner's machine.
+- Farmer and support bots form bot parties (`docs/parties/`): `-support N` makes the last N bots
+  play `support`, the healers the farmers lead; `-no-parties` keeps the bots in player parties
+  only.
 - `-metrics` serves live counters on loopback only (`docs/hetzner.md`, section 8, still applies).
 - `-pprof 127.0.0.1:6061` serves Go profiles on loopback, off by default; recipes and the
   server's `-debug-addr` are in `docs/hetzner.md`, "Profiling". `bots ui` takes it too.
