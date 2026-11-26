@@ -350,19 +350,39 @@ server's pathfinder.
   only by fall damage past the race's safe fall height (`ValidatePosition`, `character_fall.go`),
   but a bot walking off a wall's top looks like nothing a player does: the Orc village's place
   routes went up a ramp onto the wall's walkway and dropped 312 off its outer edge. Each drop costs
-  `costDrop` (100 cells) more: in the cell search, in the build's intra-cluster edge costs and on a
-  border crossing that drops, so a route goes down a ramp or through a gate whenever that way is
-  less than about 1600 units longer. The cost is a weight, not a ban, so a one-way drop toward a
-  leader below (`RouteOneWay`), a drop off one-way-out ground and a drop no ramp near it replaces
-  still route. Both numbers are kept small for the cell search's sake: A\* expands every cell whose
-  straight-line estimate is cheaper than the route, so a leg that must drop floods the cells within
-  about `costDrop`/20 cells of it first, and at a bound of 48 every step of a slope steeper than
-  about 72° cost the same, which on the owner's data made routes 1.6 times slower at the median and
-  twice at p99 (`BenchmarkOwnerNav`, cold p50 87 to 142 ms, p99 451 to 1057 ms). A steep slope's
-  steps of 49 to 96 stay one-way, as before, and cost nothing extra. On the owner's data the place
-  routes from the Orc village town point to the 24 routable spots within 20,000 of it: 12 dropped
-  312 to 376 off the north wall; with the cost none descends more than 72 in one cell (the 5 routes
-  down the south slope keep its steps of 56 to 72).
+  `costDrop` (100 cells) more for each whole 96 it falls (#514): a cliff weighs more than a ledge,
+  as its fall damage does (height × max HP / 1000 past the safe fall height of 180 to 380,
+  `formulas/fall.go`). The weight is added in the cell search, in the build's intra-cluster edge
+  costs and on a border crossing that drops (its multiple is kept in `buildCross.side`, at most 63).
+  So a route goes down a ramp or through a gate whenever that way is less than about 1600 units
+  longer per 96 of the fall. The cost is a weight, not a ban, so a one-way drop toward a leader
+  below (`RouteOneWay`), a drop off one-way-out ground and a drop no ramp near it replaces still
+  route. The unit and the bound are kept small for the cell search's sake: A\* expands every cell
+  whose straight-line estimate is cheaper than the route, so a leg that must drop floods the cells
+  within about its cost/20 cells of it first, and at a bound of 48 every step of a slope steeper
+  than about 72° cost the same, which on the owner's data made routes 1.6 times slower at the median
+  and twice at p99 (`BenchmarkOwnerNav`, cold p50 87 to 142 ms, p99 451 to 1057 ms). A steep slope's
+  steps of 49 to 96 stay one-way, as before, and cost nothing extra.
+  - **Measured on the owner's data** (`TestOwnerTownDrops`, local only): the place routes from
+    every town point of the home run (`TravelMap.Towns`: the gatekeepers' fixed spawns merged
+    within 3000, 22 points) and the Orc village point of #504 to every spot within 20,000 of each.
+    The Orc village's 24 routable spots: 12 dropped 312 to 376 off the north wall before #504; now
+    none descends more than 72 in one cell (the 5 routes down the south slope keep its steps of 56
+    to 72). Before #514's height weight, 4 towns had drops past 96:
+
+    | Town point | Routed | Before #514 | After |
+    | --- | --- | --- | --- |
+    | rune_town Arisha {38208 -48048 899} | 38 | 38 drop 2824 off the upper town's cliff | 38 keep the 296 below (accepted) |
+    | aden_town Elisa {146737 25807 -2013} | 17 | 1 drops 1032 (a fall of about 2900) | none past 56 |
+    | rune_town Ilyana {43824 -47664 -800} | 47 | 47 drop 296 on the south road | same (accepted) |
+    | giran_castle_town Minerva {105888 109808 -3200} | 64 | 46 drop 392 | 46 drop 264 to 280 (accepted) |
+
+    Every other town's routes descend 96 at most. The two accepted ledges (`acceptedDrops`) lie in
+    a crossing leg: the build costs a crossing as the straight line between its two nodes'
+    representatives, blind to a drop along the border between them, and a drop-free first try per
+    crossing leg exhausted the budget of 8 Rune routes. #575 tracks them. The height weight left
+    `BenchmarkOwnerNav` within its noise (cold p50 100 to 120 ms, p99 1030 to 672 ms; warm p50 78
+    to 65 ms, p99 639 to 441 ms).
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over
     139 regions;
