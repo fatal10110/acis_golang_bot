@@ -124,6 +124,10 @@ type spotStay struct {
 	// hits are the monsters the bot landed a hit on in the running
 	// stretch, at most stayHitsMax.
 	hits map[int32]stayHit
+	// others are the monsters another attacker hit in the running stretch
+	// before the bot landed a hit on them, at most stayHitsMax: a kill the
+	// bot finishes on one of them is shared.
+	others map[int32]struct{}
 }
 
 // stayHit is a monster the bot landed a hit on: when it first did and
@@ -190,7 +194,7 @@ func (b *Brain) stayPause(now time.Time) {
 	r.Combat += b.meter.fought - st.fought
 	r.Exp += s.Exp - st.exp
 	r.Adena += int64(b.carried(adenaID)) - st.adena
-	st.since, st.hits = time.Time{}, nil
+	st.since, st.hits, st.others = time.Time{}, nil, nil
 }
 
 // stayEnd ends the stay at now and hands its record to the outcome queue:
@@ -241,16 +245,17 @@ func (b *Brain) stayEvent(ev Event, now time.Time) {
 					b.stayHit(h.TargetID, now)
 				}
 			} else {
-				st.sharedHit(h.TargetID)
+				b.otherHit(e.AttackerID, h.TargetID)
 			}
 		}
 	case MagicSkillUse:
 		if e.CasterID == self {
 			b.stayHit(e.TargetID, now.Add(e.HitTime))
 		} else {
-			st.sharedHit(e.TargetID)
+			b.otherHit(e.CasterID, e.TargetID)
 		}
 	case Die:
+		delete(st.others, e.ObjectID)
 		h, ok := st.hits[e.ObjectID]
 		if !ok {
 			return
@@ -266,6 +271,7 @@ func (b *Brain) stayEvent(ev Event, now time.Time) {
 		}
 	case DeleteObject:
 		delete(st.hits, e.ObjectID)
+		delete(st.others, e.ObjectID)
 	}
 }
 
@@ -281,15 +287,39 @@ func (b *Brain) stayHit(id int32, at time.Time) {
 	if st.hits == nil {
 		st.hits = make(map[int32]stayHit)
 	}
-	st.hits[id] = stayHit{first: at}
+	_, shared := st.others[id]
+	delete(st.others, id)
+	st.hits[id] = stayHit{first: at, shared: shared}
 }
 
-// sharedHit marks monster id shared: another attacker hit it.
-func (st *spotStay) sharedHit(id int32) {
-	if h, ok := st.hits[id]; ok {
-		h.shared = true
-		st.hits[id] = h
+// otherHit notes that attacker, not the bot, hit or cast on monster
+// target: the bot's kill of it is shared, whether the bot hit it first or
+// hits it later in the running stretch. A cast on itself and a monster's
+// hit or cast (a monster healing or buffing another) share nothing; a
+// summon's do.
+func (b *Brain) otherHit(attacker, target int32) {
+	if attacker == target {
+		return
 	}
+	if o := b.world.Objects[attacker]; o != nil && o.Kind == KindNPC && !o.Summon {
+		return
+	}
+	st := &b.stay
+	if h, ok := st.hits[target]; ok {
+		h.shared = true
+		st.hits[target] = h
+		return
+	}
+	if _, ok := st.others[target]; ok {
+		return
+	}
+	if o := b.world.Objects[target]; o == nil || o.Kind != KindNPC || o.Dead || len(st.others) >= stayHitsMax {
+		return
+	}
+	if st.others == nil {
+		st.others = make(map[int32]struct{})
+	}
+	st.others[target] = struct{}{}
 }
 
 // stayDrank counts n of template id spent in combat (meterEvent) when it
