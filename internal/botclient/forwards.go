@@ -1,9 +1,14 @@
 package botclient
 
-import "github.com/fatal10110/acis_golang_bot/internal/botwire"
+import (
+	"math/rand/v2"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
+)
 
 // Forwards to the wire package (docs/plan.md D46): the events, their
-// constants and the game opcodes are declared in botwire; these names keep
+// constants, the login and handshake types and the opcodes are declared in
+// botwire; these names keep
 // botclient's brain, encoders and tests reading them as before.
 
 // The events and the types they carry.
@@ -244,4 +249,56 @@ const (
 	chatAll        = botwire.ChatAll
 	chatTell       = botwire.ChatTell
 	restartVillage = botwire.RestartVillage
+)
+
+// The login and handshake types: the session API and cmd/bots name them.
+type (
+	SessionKeys   = botwire.SessionKeys
+	ServerEntry   = botwire.ServerEntry
+	Self          = botwire.Self
+	StartingClass = botwire.StartingClass
+	Appearance    = botwire.Appearance
+	charSlot      = botwire.CharSlot
+)
+
+// The races and sexes RequestCharacterCreate carries.
+const (
+	RaceHuman   = botwire.RaceHuman
+	RaceElf     = botwire.RaceElf
+	RaceDarkElf = botwire.RaceDarkElf
+	RaceOrc     = botwire.RaceOrc
+	RaceDwarf   = botwire.RaceDwarf
+	SexMale     = botwire.SexMale
+	SexFemale   = botwire.SexFemale
+)
+
+// The starting classes.
+var (
+	HumanFighter   = botwire.HumanFighter
+	HumanMystic    = botwire.HumanMystic
+	ElvenFighter   = botwire.ElvenFighter
+	ElvenMystic    = botwire.ElvenMystic
+	DarkFighter    = botwire.DarkFighter
+	DarkMystic     = botwire.DarkMystic
+	OrcFighter     = botwire.OrcFighter
+	OrcMystic      = botwire.OrcMystic
+	DwarvenFighter = botwire.DwarvenFighter
+)
+
+// StartingClasses is botwire.StartingClasses.
+func StartingClasses() []StartingClass { return botwire.StartingClasses() }
+
+// RandomAppearance is botwire.RandomAppearance.
+func RandomAppearance(r *rand.Rand) Appearance { return botwire.RandomAppearance(r) }
+
+// The login opcodes the login client and its errors name.
+const (
+	opLoginInit          = botwire.OpLoginInit
+	opLoginFail          = botwire.OpLoginFail
+	opLoginAccountKicked = botwire.OpLoginAccountKicked
+	opLoginOk            = botwire.OpLoginOk
+	opLoginServerList    = botwire.OpLoginServerList
+	opLoginPlayFail      = botwire.OpLoginPlayFail
+	opLoginPlayOk        = botwire.OpLoginPlayOk
+	opLoginGGAuth        = botwire.OpLoginGGAuth
 )

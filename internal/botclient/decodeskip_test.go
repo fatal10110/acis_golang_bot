@@ -218,7 +218,7 @@ func TestSessionDecodeErrorBeforeWorld(t *testing.T) {
 	// Unspaced, so a turn's second dial needs no clock move.
 	gate := NewAllowlistedLoginGate(clock, rand.New(rand.NewPCG(1, 2)))
 	reg := botmetrics.NewRegistry()
-	_, shortErr := decodeUserInfo(packet(opGameUserInfo, 1))
+	_, shortErr := botwire.DecodeUserInfo(packet(opGameUserInfo, 1))
 	tests := []struct {
 		account string
 		n       *fakeNet

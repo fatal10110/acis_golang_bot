@@ -25,7 +25,7 @@ var recordedMustDecode = []byte{
 // len(payload) consumed and carry a plausible object id. Ids, coordinates
 // and times vary between runs and are not pinned. A payload with no decoder
 // yet is skipped, not passed. CharSelectInfo, which the handshake reads,
-// is botclient's TestRecordedCharSelectInfo.
+// is TestRecordedCharSelectInfo's.
 func TestRecordedFixtures(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("testdata", "recorded", "*.bin"))
 	if err != nil {
@@ -47,6 +47,9 @@ func TestRecordedFixtures(t *testing.T) {
 			}
 			if len(raw) == 0 || filepath.Base(path) != fmt.Sprintf("%02x.bin", raw[0]) {
 				t.Fatalf("fixture name does not match its opcode")
+			}
+			if raw[0] == OpGameCharSelectInfo {
+				t.Skip("handshake packet: TestRecordedCharSelectInfo decodes it")
 			}
 			ev, ok, err := DecodeEvent(raw)
 			if err != nil {

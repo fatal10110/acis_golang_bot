@@ -2,7 +2,6 @@ package botclient
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -256,21 +255,4 @@ func TestRecorderKeepsFirstWriteError(t *testing.T) {
 	}
 	var none *Recorder
 	none.Record([]byte{opGameStopMove}) // a nil Recorder is off
-}
-
-// TestRecordedCharSelectInfo replays the -record capture of CharSelectInfo
-// checked in under testdata/recorded: the handshake reads it, not the
-// reader, so botwire's TestRecordedFixtures leaves it here. It must decode
-// with exactly len(payload) consumed.
-func TestRecordedCharSelectInfo(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "recorded", fmt.Sprintf("%02x.bin", opGameCharSelectInfo)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(raw) == 0 || raw[0] != opGameCharSelectInfo {
-		t.Fatalf("fixture name does not match its opcode")
-	}
-	if _, err := decodeCharSelectInfo(raw); err != nil {
-		t.Fatal(err)
-	}
 }
