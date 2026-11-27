@@ -207,7 +207,9 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
   each run lifts a penalty above level 1 with Scrolls: Recovery, has it die to a GM-spawned
   Lizardman with karma until the penalty is level 1 (a death with karma always raises it, the GM's
   `//kill` never does), sets its karma back to 0 and its level to 5, and destroys its adena. Only
-  this scenario plays the account, so no other meets the penalty.
+  this scenario plays the account, so no other meets the penalty. The run ends with the penalty
+  lifted to 0 (the bot buys and reads a Scroll: Recovery, #583) and the adena left over; the next
+  run seeds both again.
 - `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
   fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),
   which then fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight.
@@ -274,7 +276,7 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 | `TestLiveRecoverLeaderLogout` | GM | #24 leader logout: `LeaderWait`, `/unstuck`, town |
 | `TestLiveFarmFight` | GM, datapack | #20 melee and Power Strike kills of a GM-spawned monster, #23 potion and auto soulshots, #29 loot pickup and junk drop |
 | `TestLiveSpots` | GM, datapack | #27 two farmers claim fitting spots within the cap, #38 an outleveled farmer leaves its spot for good |
-| `TestLiveEarn` | GM, datapack | #530 the earning mode (#527): a level 5 orc mystic under a death penalty a monster gave it with karma, and no adena, claims an earning spot and picks up adena |
+| `TestLiveEarn` | GM, datapack | #530 the earning mode (#527): a level 5 orc mystic under a death penalty a monster gave it with karma, and no adena, claims an earning spot and picks up adena; #583 the pickup pays a Scroll: Recovery: the bot buys it in Orc Village, reads it, its death penalty lifts 1 -> 0 (msg 1917) and `Status.Earning` turns false |
 | `TestLiveFarmStarters` | GM, datapack | #133 a level 1 elf, dark elf and orc farmer each claim a spot of their own newbie zone and kill a monster there |
 | `TestLiveMerchantBuySell` | GM, datapack | #31 a merchant visit buys potions and sells junk: potion, adena and stem counts from the bot's inventory packets |
 | `TestLiveTownErrands` | GM, datapack | #33 the town persona's errand cycle, a merchant visit then a gatekeeper hop; #32 the hop's teleport, the bot seen by the GM at the destination |

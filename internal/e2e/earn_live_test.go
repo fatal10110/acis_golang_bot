@@ -42,14 +42,18 @@ var earnGround = botclient.Point{X: -42666, Y: -108339, Z: -1685}
 // TestLiveEarn runs the earning mode (#527) against the server: an orc
 // mystic the GM levelled to 5, under death penalty level 1 a monster gave
 // it and with no adena, fits no farming spot; it claims an earning spot
-// (Status.Earning), farms it and picks up adena a kill dropped. The
-// penalty's lift is left out: a Scroll: Recovery costs thousands of
-// adena, hours of farming at this level.
+// (Status.Earning), farms it and picks up adena a kill dropped. One pickup
+// at its spot pays a Scroll: Recovery (#583: about 7,400 adena against a
+// price of 2,200 to 3,300), so the bot then walks to Orc Village for one
+// (penaltyTrip), buys it from the village trader, reads it, and its death
+// penalty lifts to 0: its spot is an ordinary one again.
 func TestLiveEarn(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
 	alone(t, &newbieSpots)
-	ctx := scenarioCtx(t, 40*time.Minute)
+	// The step bounds of the claim and the pickup fill most of 40 minutes;
+	// the lift's walk to town, purchase and read add two more (#583).
+	ctx := scenarioCtx(t, 50*time.Minute)
 	spots := spotRegistry(t, tg)
 	travel, _ := townData(t, tg)
 	gm := enterGM(t, ctx, tg)
@@ -113,7 +117,84 @@ func TestLiveEarn(t *testing.T) {
 		return ""
 	})
 	st = f.bot.Status()
-	t.Logf("%s picked up adena %d, carries %d adena; at the end: spot %s earning %v, death penalty %d", f.name, picked.object, picked.adena, st.Spot, st.Earning, st.DeathPenalty)
+	t.Logf("%s picked up adena %d, carries %d adena; spot %s earning %v, death penalty %d", f.name, picked.object, picked.adena, st.Spot, st.Earning, st.DeathPenalty)
+
+	// The lift (#583): the supply trip's purchase (recoveryWants), refused
+	// by no merchant, then the bot's own read (ruleRecover), refused by no
+	// use condition. The walk to Orc Village's trader and its shop visit
+	// take the step bound twice.
+	scroll := botclient.RecoveryScroll(earnLevel)
+	var lift earnLift
+	report := func() string {
+		st := f.bot.Status()
+		return fmt.Sprintf("carries %d adena and %d Scrolls: Recovery %d (most %d), read %v, lifted %v; rule %s, spot %q earning %v, death penalty %d",
+			lift.adena, lift.carried, scroll, lift.bought, lift.read, lift.lifted, st.Rule, st.Spot, st.Earning, st.DeathPenalty)
+	}
+	untilServedBy(t, ctx, "a Scroll: Recovery bought", time.Now().Add(2*stepBound), f.watch, merchantBuyRefused(f.watch), func() string {
+		keepAlive()
+		lift = penaltyLift(f.watch.Seen(0), scroll)
+		if lift.bought == 0 {
+			return report()
+		}
+		return ""
+	})
+	t.Logf("%s bought Scroll: Recovery %d (object %d), carries %d adena", f.name, scroll, lift.object, lift.adena)
+	// The check's goroutine reads object; the polls below rewrite lift.
+	object := lift.object
+	read := RefusalCheck{
+		From:     len(f.watch.Sent()),
+		Packet:   func(s Sent) bool { return s.Op == botclient.OpUseItem && s.Target == object },
+		Messages: []int32{msgS1CannotBeUsed},
+	}
+	untilServed(t, ctx, "the death penalty lifted", f.watch, read, func() string {
+		keepAlive()
+		lift = penaltyLift(f.watch.Seen(0), scroll)
+		st := f.bot.Status()
+		if !lift.read || !lift.lifted || st.DeathPenalty != 0 || st.Earning {
+			return report()
+		}
+		return ""
+	})
+	st = f.bot.Status()
+	t.Logf("%s read Scroll: Recovery %d: death penalty %d, spot %q earning %v, carries %d adena", f.name, scroll, st.DeathPenalty, st.Spot, st.Earning, lift.adena)
+}
+
+// earnLift is what penaltyLift read: the Scrolls: Recovery the bot carried
+// last and the most it carried, the scroll's object id, whether its count
+// fell (a read), whether the server lifted the bot's death penalty (system
+// message msgDeathPenaltyLifted) and the adena it carried last.
+type earnLift struct {
+	carried int32
+	bought  int32
+	object  int32
+	read    bool
+	lifted  bool
+	adena   int32
+}
+
+// penaltyLift reads seen, the bot's events, for its Scroll: Recovery
+// scroll bought and read and its death penalty lifted.
+func penaltyLift(seen []Seen, scroll int32) earnLift {
+	var l earnLift
+	for _, s := range seen {
+		if m, ok := s.Event.(botclient.SystemMessage); ok {
+			l.lifted = l.lifted || m.ID == msgDeathPenaltyLifted
+			continue
+		}
+		if n, _, ok := stock(s.Event, adena); ok {
+			l.adena = n
+		}
+		n, id, ok := stock(s.Event, scroll)
+		if !ok {
+			continue
+		}
+		if id != 0 {
+			l.object = id
+		}
+		l.read = l.read || n < l.carried
+		l.carried, l.bought = n, max(l.bought, n)
+	}
+	return l
 }
 
 // earnPickup is what adenaPickup read: the adena drops in sight, the
