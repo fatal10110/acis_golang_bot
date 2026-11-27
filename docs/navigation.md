@@ -394,7 +394,9 @@ server's pathfinder.
   building's two doorways. A border crossing pays no covered weight: it is one step, ranked by the
   straight line as before. The cost is a build parameter (`bots navbuild -covered`, 0 weighs
   none, at most 100) recorded in the nav cache header (format 7), and a hierarchy's legs weigh
-  covered ground as its cache was built; a planner without a hierarchy weighs the default. The
+  covered ground as its cache was built; a planner without a hierarchy weighs the default. So
+  does the walker's own planner (its swim route and its drop search, `walker.go`), whatever the
+  cache was built with, until it takes the graph's cost (#698). The
   weight covers the whole route, not the stretches near its ends: the abstract graph's costs are
   built before any end is known, and a pass-through is often chosen there.
   - **Measured on the owner's data** (`TestOwnerOrcCovered` and `BenchmarkOwnerCovered`, local
@@ -416,7 +418,8 @@ server's pathfinder.
     (8764 units against the line's 2304), so routes across keep the hall below a cost of about 60.
     The route to the trainers inside still enters. The sample's extra failure is a 145,712-unit
     route that runs 90,000 of them under a roof: the weight weakens the straight-line estimate on
-    covered ground, and it needs a node budget of 600,000 where 400,000 did. Every cost left
+    covered ground, and it needs a node budget of 600,000, over the walker's 400,000
+    (`walkBudget`): a shipped regression for that pair, tracked in #697. Every cost left
     `BenchmarkOwnerNav` within its noise (main's format 6 cache: cold p50 94 ms, p99 573 ms).
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over

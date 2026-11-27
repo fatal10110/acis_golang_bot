@@ -32,7 +32,7 @@ func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	datapack := fs.String("datapack", "", "local copy of the datapack's data/xml directory, holding doors.xml and zones/WaterZone.xml")
 	out := fs.String("out", "nav.cache", "nav cache file to write")
 	workers := fs.Int("workers", max(1, runtime.NumCPU()/2), "clusters built at once (default half the cores)")
-	covered := fs.Int("covered", nav.DefaultCoveredCost, "extra cost, in tenths of a cell, of a step out of covered ground (under a roof or an upper floor); 0 weighs none")
+	covered := fs.Int("covered", nav.DefaultCoveredCost, "extra cost, in tenths of a cell, of a step out of covered ground (under a roof or an upper floor); 0 weighs none in the hierarchy's routes (the walker's own swim and drop searches weigh the default until #698)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
