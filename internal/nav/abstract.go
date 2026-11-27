@@ -182,7 +182,8 @@ func (h *Hierarchy) Route(p *Planner, from, to location.Location, closed func(do
 func (h *Hierarchy) route(p *Planner, from, to location.Location, closed func(door int) bool, oneWay bool) ([]location.Location, error) {
 	// The abstract graph holds no wet cell, so its legs keep out of water
 	// too: a swim is the cell planner's (docs/navigation.md, "Swimming").
-	dry := *p
+	// Its legs weigh covered ground as the graph's costs do.
+	dry := p.withCovered(h.graph.covered)
 	dry.Swim = 0
 	p = &dry
 	s := getScratch()

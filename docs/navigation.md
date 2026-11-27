@@ -383,6 +383,44 @@ server's pathfinder.
     crossing leg exhausted the budget of 8 Rune routes. #575 tracks them. The height weight left
     `BenchmarkOwnerNav` within its noise (cold p50 100 to 120 ms, p99 1030 to 672 ms; warm p50 78
     to 65 ms, p99 639 to 441 ms).
+- **Covered ground** (#640): a cell with a layer of its column more than 64 over its floor
+  (`coverClear`, the walker's open test of #617) lies under a roof, an upper floor or a deck. A
+  step out of it costs `DefaultCoveredCost` (10, one cell) more, in the cell search and in the
+  build's intra-cluster edge costs. So a route between two outdoor points goes round a building
+  whenever the way round is less than about the covered stretch longer, and a route to a point
+  inside still enters, paying for its own covered cells only. The string pull and the straight
+  shortcut (#565) refuse a segment whose line leaves covered ground where its cell path does not
+  (`coveredAsPath`), as they refuse drops: without it a pulled segment cut back through a
+  building's two doorways. A border crossing pays no covered weight: it is one step, ranked by the
+  straight line as before. The cost is a build parameter (`bots navbuild -covered`, 0 weighs
+  none, at most 100) recorded in the nav cache header (format 7), and a hierarchy's legs weigh
+  covered ground as its cache was built; a planner without a hierarchy weighs the default. So
+  does the walker's own planner (its swim route and its drop search, `walker.go`), whatever the
+  cache was built with, until it takes the graph's cost (#698). The
+  weight covers the whole route, not the stretches near its ends: the abstract graph's costs are
+  built before any end is known, and a pass-through is often chosen there.
+  - **Measured on the owner's data** (`TestOwnerOrcCovered` and `BenchmarkOwnerCovered`, local
+    only; one cache per cost). Village: routes from the Orc village's town point to open ground
+    on a 200-unit grid within 2500 of it (320 routes). Sample: `BenchmarkOwnerNav`'s 200 pairs
+    about 40,000 apart.
+
+    | Covered cost | Village routes under a roof (points) | Village length | Sample under a roof (points) | Sample failed | `RouteCold` p50 / p99 |
+    | --- | --- | --- | --- | --- | --- |
+    | 0 | 90 (2786) | 677,830 | 153 (20,170) | 3 | 90 / 463 ms |
+    | 10 | 29 (1893) | 681,104 | 118 (9755) | 4 | 96 / 477 ms |
+    | 20 | 21 (1133) | 697,135 | 96 (8215) | 4 | 94 / 496 ms |
+    | 30 | 16 (658) | 713,737 | 89 (7867) | 4 | 93 / 496 ms |
+
+    The default is 10: it takes the village's pass-throughs whose way round is short (the 61 routes
+    south of the town point) at 0.5% more length; 20 and 30 take a few more at 3% and 5%. The 29
+    left at 10 are the routes west across the village: the village's west building holds its
+    east-west passage, a hall about 1500 long, and the only way round circles the whole village
+    (8764 units against the line's 2304), so routes across keep the hall below a cost of about 60.
+    The route to the trainers inside still enters. The sample's extra failure is a 145,712-unit
+    route that runs 90,000 of them under a roof: the weight weakens the straight-line estimate on
+    covered ground, and it needs a node budget of 600,000, over the walker's 400,000
+    (`walkBudget`): a shipped regression for that pair, tracked in #697. Every cost left
+    `BenchmarkOwnerNav` within its noise (main's format 6 cache: cold p50 94 ms, p99 573 ms).
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over
     139 regions;
@@ -544,8 +582,8 @@ server's pathfinder.
   largest SCC (`navLandmarks`; the first is the node farthest from the SCC's first node, each next
   one the node whose nearest landmark, there and back, is farthest) and stores every node's
   distance from each and to each over the all-open edge costs, node-major so one node's 16
-  distances share a cache line (nav cache format 6, 6.4 MB per landmark on the owner's 804,918
-  nodes). The goal is reached from its cluster's goal nodes `m` at the straight-line cost `s(m)`,
+  distances share a cache line (nav cache format 6, and 7 since #640's covered cost; 6.4 MB per
+  landmark on the owner's 804,918 nodes). The goal is reached from its cluster's goal nodes `m` at the straight-line cost `s(m)`,
   so for landmark `L` the cost from node `v` is at least `min_m(d(L,m) + s(m)) − d(L,v)` and at
   least `d(v,L) − max_m(d(m,L) − s(m))`; the second needs every goal node to reach `L`, and then a
   node that does not reach `L` reaches no goal node and the search drops it. Closed doors, the
@@ -571,7 +609,9 @@ server's pathfinder.
   tags, the SCC labels, the condensation and the landmark distances to a nav cache file with the geodata cache's
   discipline:
   - a magic and version, a CRC-32C, and keyed by the geodata cache's own CRC, a hash of
-    `doors.xml`, the build parameters and a hash of the water zones (see "Water");
+    `doors.xml`, the build parameters and a hash of the water zones (see "Water"); the covered
+    cost is recorded but not keyed, so a cache built with any cost serves and its routes weigh
+    covered ground as it was built ("Covered ground");
   - written to a temporary file, synced, then renamed;
   - mapped read-only at run time, with the graph read in place.
 

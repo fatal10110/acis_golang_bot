@@ -81,7 +81,7 @@ const keptMemberScratch = 2
 func NewHierarchy(g *Graph, e *engine.Engine, w *Water, cacheBytes int64) *Hierarchy {
 	return &Hierarchy{
 		graph:  g,
-		static: Planner{Engine: e.Static(), Water: w},
+		static: Planner{Engine: e.Static(), Water: w}.withCovered(g.covered),
 		cache:  newMemberCache(cacheBytes),
 		spare:  make(chan *memberScratch, keptMemberScratch),
 	}

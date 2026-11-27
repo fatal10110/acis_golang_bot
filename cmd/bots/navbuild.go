@@ -32,10 +32,11 @@ func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	datapack := fs.String("datapack", "", "local copy of the datapack's data/xml directory, holding doors.xml and zones/WaterZone.xml")
 	out := fs.String("out", "nav.cache", "nav cache file to write")
 	workers := fs.Int("workers", max(1, runtime.NumCPU()/2), "clusters built at once (default half the cores)")
+	covered := fs.Int("covered", nav.DefaultCoveredCost, "extra cost, in tenths of a cell, of a step out of covered ground (under a roof or an upper floor); 0 weighs none in the hierarchy's routes (the walker's own swim and drop searches weigh the default until #698)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if err := navbuild(ctx, *geodataDir, *geoengine, *cache, *datapack, *out, *workers, stdout, stderr); err != nil {
+	if err := navbuild(ctx, *geodataDir, *geoengine, *cache, *datapack, *out, *workers, *covered, stdout, stderr); err != nil {
 		fmt.Fprintf(stderr, "navbuild: %v\n", err)
 		return 1
 	}
@@ -45,12 +46,19 @@ func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) i
 // navbuildHeapLimit is the soft heap limit navbuild runs under.
 const navbuildHeapLimit = 1 << 30
 
-func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, out string, workers int, stdout, stderr io.Writer) error {
+func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, out string, workers, covered int, stdout, stderr io.Writer) error {
 	if geodataDir == "" || geoengine == "" || datapack == "" {
 		return errors.New("-geodata, -geoengine and -datapack are required")
 	}
 	if workers < 1 {
 		return errors.New("-workers must be at least 1")
+	}
+	if covered < 0 {
+		return errors.New("-covered must not be negative")
+	}
+	coveredCost := covered
+	if covered == 0 {
+		coveredCost = -1 // BuildConfig: negative weighs none, 0 the default
 	}
 	settings, err := geodata.LoadSettings(geoengine)
 	if err != nil {
@@ -91,13 +99,14 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	}
 	began := time.Now()
 	image, stats, err := nav.Build(ctx, nav.BuildConfig{
-		Engine:   c.Engine,
-		Doors:    doors.All(),
-		Water:    water,
-		Clusters: clusters,
-		Workers:  workers,
-		Key:      nav.NavKey{GeoCRC: c.CRC(), DoorsHash: nav.DoorsHash(doorsXML)},
-		Log:      log,
+		Engine:      c.Engine,
+		Doors:       doors.All(),
+		Water:       water,
+		Clusters:    clusters,
+		Workers:     workers,
+		CoveredCost: coveredCost,
+		Key:         nav.NavKey{GeoCRC: c.CRC(), DoorsHash: nav.DoorsHash(doorsXML)},
+		Log:         log,
 	})
 	if err != nil {
 		return err
@@ -112,7 +121,7 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 	fmt.Fprintf(stdout, "entrance nodes %d, edges %d (intra-cluster %d, crossings %d, one-way between SCCs %d), door refs %d, doors %d (%d skipped)\n",
 		stats.Nodes, stats.IntraEdges+stats.CrossEdges+stats.OneWayEdges, stats.IntraEdges, stats.CrossEdges, stats.OneWayEdges,
 		stats.DoorRefs, stats.Doors, stats.SkippedDoors)
-	fmt.Fprintf(stdout, "SCCs %d (largest %d nodes), condensation edges %d, landmarks %d\n", stats.SCCs, stats.LargestSCC, stats.CondEdges, stats.Landmarks)
+	fmt.Fprintf(stdout, "SCCs %d (largest %d nodes), condensation edges %d, landmarks %d, covered cost %d\n", stats.SCCs, stats.LargestSCC, stats.CondEdges, stats.Landmarks, covered)
 	fmt.Fprintf(stdout, "wrote %s (%.1f MB)\n", out, float64(stats.Bytes)/1e6)
 	return nil
 }

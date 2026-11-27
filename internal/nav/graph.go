@@ -20,8 +20,9 @@ import (
 //	          the CRC field, then the key (geodata cache CRC u32, cluster
 //	          side u32, doors.xml hash 8 bytes), the section counts
 //	          (clusters, nodes, edges, door refs, SCCs, condensation edges,
-//	          u32 each), the water hash (8 bytes) and the landmark count
-//	          u32, navHeaderSize in all
+//	          u32 each), the water hash (8 bytes), the landmark count
+//	          u32 and the covered cost u32 (BuildConfig.CoveredCost, the
+//	          extra of a step out of covered ground), navHeaderSize in all
 //	clusters  x i32, y i32, first node u32; sorted by (y, x)
 //	nodes     representative cell x i32, y i32, z i16, border side u8, pad
 //	          u8, run first and last position u16 each, cluster u32, SCC
@@ -45,11 +46,16 @@ import (
 // side or water is stale and refused, as is a corrupt one.
 const (
 	navMagic       = "ACISNAV\x00"
-	navVersion     = 6
-	navHeaderSize  = 68
+	navVersion     = 7
+	navHeaderSize  = 72
 	clusterRecSize = 12
 	nodeRecSize    = 28
 	edgeRecSize    = 20
+	// maxCoveredCost bounds BuildConfig.CoveredCost: ten cells per step
+	// out of covered ground, past which a route inside floods the cell
+	// search's budget long before it ends (docs/navigation.md, "Covered
+	// ground").
+	maxCoveredCost = 100
 	// noCost marks an edge with no door-free way.
 	noCost = math.MaxUint32
 	// MaxNavCacheBytes bounds the nav cache file a process maps: about four
@@ -92,6 +98,9 @@ type Graph struct {
 	mapping []byte // the mapped file, nil for an in-memory image
 	key     NavKey
 	counts  graphCounts
+	// covered is the extra cost of a step out of covered ground the graph
+	// was built with (BuildConfig.CoveredCost).
+	covered int32
 	// section offsets
 	clusters, nodes, edges, doorRefs, sccEdges, condEdges int
 	landmarkIDs, landmarkDist                             int
@@ -125,6 +134,11 @@ func parseGraph(b []byte) (*Graph, error) {
 	if c.landmarks > navLandmarks {
 		return nil, fmt.Errorf("%d landmarks, at most %d", c.landmarks, navLandmarks)
 	}
+	covered := binary.LittleEndian.Uint32(b[68:])
+	if covered > maxCoveredCost {
+		return nil, fmt.Errorf("covered cost %d, at most %d", covered, maxCoveredCost)
+	}
+	g.covered = int32(covered)
 	if off := g.layout(); off != len(b) {
 		return nil, fmt.Errorf("size %d, sections need %d", len(b), off)
 	}
@@ -247,6 +261,10 @@ func (g *Graph) Edges() int { return g.counts.edges }
 
 // SCCs returns the abstract SCC count.
 func (g *Graph) SCCs() int { return g.counts.sccs }
+
+// CoveredCost returns the extra cost of a step out of covered ground the
+// graph was built with, in tenths of a cell (BuildConfig.CoveredCost).
+func (g *Graph) CoveredCost() int { return int(g.covered) }
 
 // Clusters returns the cluster count.
 func (g *Graph) Clusters() int { return g.counts.clusters }
