@@ -309,9 +309,10 @@ this list.
   they buy nothing and the sets are model-chosen there.
 - TH, HK, PW, SR, AW, PR, TY, Plated Leather: against the reference monster the CON it takes costs
   more HP than its STR adds, in either role, and it is model-chosen (TH, PW and AW take Mithril
-  Light). Against a harmless target its STR gains for the Damage builds of HK and SR; for TH, PW
-  and AW's (their rows, #631: their first damage step at 40 is Deadly Blow, whose kill the STR does
-  not speed past the tie-break), PR and TY's, and every Support build (a tank), it is model-chosen.
+  Light). Against a harmless target its STR gains for the Damage builds of HK, SR and TY (TY's
+  with its own row, #633); for TH, PW and AW's (their rows, #631: their first damage step at 40 is
+  Deadly Blow, whose kill the STR does not speed past the tie-break), PR's, and every Support build
+  (a tank), it is model-chosen.
 - SN and SG, Demon: its -270 max HP and -1 WIT lose value against the reference monster in either
   role, and Karmian's cast speed outranks its +4 INT at every max HP, over 810 too: the row's
   "Demon once max HP covers the loss" does not hold through the model, and Demon is model-chosen

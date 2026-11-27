@@ -77,10 +77,10 @@ func TestRowBHSetValue(t *testing.T) {
 // Plated Leather (+4 STR, -1 CON): against the reference monster the CON
 // it takes costs more HP than the STR adds damage, in either role, and the
 // set is model-chosen; against a harmless target the STR gains for the
-// Damage builds of HK and SR (strDamage) and stays at the tie-break for
-// TH, PW, AW, PR and TY's (the daggers' first damage step at 40 is
-// Deadly Blow, #631) and every Support build (a tank: no heal the model
-// times), model-chosen. Mithril Light (+4 evasion) gains against the
+// Damage builds of HK, SR and TY (strDamage; TY's with its own row, #633)
+// and stays at the tie-break for TH, PW, AW and PR's (the daggers' first
+// damage step at 40 is Deadly Blow, #631) and every Support build (a
+// tank: no heal the model times), model-chosen. Mithril Light (+4 evasion) gains against the
 // reference monster and is model-chosen against a harmless one.
 func platedLeatherVerdicts(strDamage bool) [][]setGain {
 	return [][]setGain{setVerdict(RoleDamage, setPlatedLeather, strDamage, false), setVerdict(RoleSupport, setPlatedLeather, false, false)}
@@ -112,8 +112,8 @@ func TestRowAWSetValue(t *testing.T) {
 // TestRowPRSetValue: Plated Leather (kit: PR's).
 func TestRowPRSetValue(t *testing.T) { checkSecondSets(t, 37, platedLeatherVerdicts(false)...) }
 
-// TestRowTYSetValue: Plated Leather (kit: MO's).
-func TestRowTYSetValue(t *testing.T) { checkSecondSets(t, 48, platedLeatherVerdicts(false)...) }
+// TestRowTYSetValue: Plated Leather (kit: its own, kits_tyrant.go).
+func TestRowTYSetValue(t *testing.T) { checkSecondSets(t, 48, platedLeatherVerdicts(true)...) }
 
 // Divine (+171 MP, +1 WIT -1 INT, P. Def) and Karmian (x1.15 cast speed,
 // P. Def) gain for a healer in both roles, against the reference monster
