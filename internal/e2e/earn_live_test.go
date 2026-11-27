@@ -243,8 +243,8 @@ func adenaPickup(seen []Seen, picker int32) earnPickup {
 // death penalty above earnPenalty (liftDeathPenalty), dies to a monster
 // with karma until its penalty reaches earnPenalty (a monster kill with
 // karma always raises it, character_deathpenalty.go; a GM's //kill never
-// does: its killer is a player), is set to earnLevel, destroys its adena,
-// and logs out at earnGround with karma 0. The account is the scenario's
+// does: its killer is a player), is set to earnLevel, destroys its adena
+// and any Scroll: Recovery of earnLevel, and logs out at earnGround with karma 0. The account is the scenario's
 // own (group "earn"): no other scenario meets its penalty.
 func seedEarner(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, account string) {
 	t.Helper()
@@ -314,10 +314,19 @@ func seedEarner(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, acc
 		}
 	}
 	// No adena: a bot with a Scroll: Recovery's price buys it (penaltyTrip)
-	// rather than earning it, and earlier runs left it what it earned.
+	// rather than earning it, and earlier runs left it what it earned. No
+	// Scroll: Recovery of its level either: a run that failed between the
+	// purchase and the read, or a trip that bought more than one, left it
+	// one, and the bot reads it on entry (ruleRecover), lifting the penalty
+	// the earning claim needs.
+	scroll := botclient.RecoveryScroll(earnLevel)
 	for oid, it := range inv {
-		if it.TemplateID != adena || it.Count <= 0 {
+		if (it.TemplateID != adena && it.TemplateID != scroll) || it.Count <= 0 {
 			continue
+		}
+		what := "adena"
+		if it.TemplateID == scroll {
+			what = fmt.Sprintf("Scrolls: Recovery %d", scroll)
 		}
 		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(oid, it.Count)); err != nil {
 			t.Fatal(err)
@@ -328,11 +337,11 @@ func seedEarner(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, acc
 			if m, ok := ev.(botclient.SystemMessage); ok && slices.Contains(destroyRefusals, m.ID) {
 				refused = true
 			}
-			return refused || carriedOf(inv, adena) == 0
+			return refused || carriedOf(inv, it.TemplateID) == 0
 		}); err != nil || refused {
-			t.Fatalf("seed %s: destroy its %d adena: refused %v, %v", name, it.Count, refused, err)
+			t.Fatalf("seed %s: destroy its %d %s: refused %v, %v", name, it.Count, what, refused, err)
 		}
-		t.Logf("%s destroyed the %d adena earlier runs left it", name, it.Count)
+		t.Logf("%s destroyed the %d %s earlier runs left it", name, it.Count, what)
 	}
 	lctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()

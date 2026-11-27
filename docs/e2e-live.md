@@ -206,10 +206,11 @@ Operational limits, not persona defaults; unit-tested with a fake target (`inter
 - `TestLiveEarn`'s orc mystic `e2eearn1` keeps its death penalty, level and loot between runs:
   each run lifts a penalty above level 1 with Scrolls: Recovery, has it die to a GM-spawned
   Lizardman with karma until the penalty is level 1 (a death with karma always raises it, the GM's
-  `//kill` never does), sets its karma back to 0 and its level to 5, and destroys its adena. Only
-  this scenario plays the account, so no other meets the penalty. The run ends with the penalty
+  `//kill` never does), sets its karma back to 0 and its level to 5, and destroys its adena and any
+  Scroll: Recovery of its level (a run that failed before the read leaves one, and the bot reads it
+  on entry). Only this scenario plays the account, so no other meets the penalty. The run ends with the penalty
   lifted to 0 (the bot buys and reads a Scroll: Recovery, #583) and the adena left over; the next
-  run seeds both again.
+  run seeds them all again.
 - `TestLiveArrows` makes the GM visible (`//hide` toggled off, it logs in invisible and no monster
   fights an invisible player) and lets the GM land the first hit on a spawned wolf (`gmProvoke`),
   which then fights the GM: the datapack's monsters of the Warrior AI attack nobody on sight.
