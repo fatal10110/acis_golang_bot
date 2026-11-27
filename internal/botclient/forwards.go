@@ -154,7 +154,6 @@ const (
 	StatusLoad                = botwire.StatusLoad
 	StatusMaxLoad             = botwire.StatusMaxLoad
 	StatusKarma               = botwire.StatusKarma
-	ClassMaster               = botwire.ClassMaster
 	WaitSitting               = botwire.WaitSitting
 	WaitStanding              = botwire.WaitStanding
 	WaitFakeDeathStart        = botwire.WaitFakeDeathStart
