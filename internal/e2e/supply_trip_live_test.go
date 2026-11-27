@@ -25,18 +25,6 @@ const (
 	buyLoad = 45
 )
 
-// villageLoot has the scenario's farmer loot only the drops of the
-// creatures it fought (GroundNone, a persona default, D6). Other players
-// leave weapons and armor lying in Talking Island's village; the default
-// GroundFit took those that beat the Squire's set, up to Loot.StopAbove
-// (65 %) of the weight limit, far past Supply.BuyLoad (45 %), so the
-// preparation and the restock found no room for their scrolls (#516: 13
-// pieces after the landing, load 70511 of 109020; strip destroyed 16 and
-// 19 pieces the bots had picked up in earlier runs).
-func villageLoot(p *botclient.Persona) {
-	p.Loot.Ground = botclient.GroundNone
-}
-
 // TestLiveTownPrep logs a farmer stripped of every consumable in next to
 // Talking Island's grocer with adena (#170, #182): before it claims a
 // spot, its town preparation buys no-grade shots, Lesser Healing Potions
@@ -53,7 +41,6 @@ func TestLiveTownPrep(t *testing.T) {
 	strip(t, ctx, tg, gm, with(items, consumables...), account, &botclient.HumanFighter, stripEnd{at: nearGrocer, adena: tripAdena}, squiresSword, squiresShirt, squiresPants)
 	f := runFieldFarmer(t, ctx, tg, account, func(p *botclient.Persona) {
 		p.Potions = []int32{lesserHealingPotion}
-		villageLoot(p)
 	})
 
 	var farmAt time.Time
@@ -126,7 +113,6 @@ func TestLiveSupplyTrip(t *testing.T) {
 		p.Gear.Buy = false
 		p.Shop.SellAt = 0
 		p.Potions = []int32{lesserHealingPotion}
-		villageLoot(p)
 	})
 	logStats(t, f)
 	gmTeleport(t, ctx, gm, townTI)

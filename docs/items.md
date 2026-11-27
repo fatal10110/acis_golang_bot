@@ -592,6 +592,13 @@ grocer lists).
   cannot move at all, so the bot caps itself. The gear it buys stays under the 66.6 % band too: a
   piece that would take the load there is left off the list (`gearFits`).
 
+  Ground loot leaves room for the supplies (#573). A ground item the bot did not fight for, and
+  does not keep, is given up while taking it would leave less room under `Supply.BuyLoad`
+  (default 45 %) than the supplies it lacks weigh: each trip target over what it carries, before
+  the weight clamp. A littered town otherwise filled the bag with ground gear up to
+  `Loot.StopAbove`, and the restock bought no scrolls. Its own kills' drops, the items it keeps
+  (its supplies among them) and a bot short of no supply still go up to `Loot.StopAbove`.
+
 - **Never past the limit (#488).** These are operational limits, not persona defaults (D6):
   - No pickup takes the load to 100 %, whatever `Loot.StopAbove` sets (0 included). An item the
     loaded weight table lacks weighs an unknown amount and is never picked up; the table holds
