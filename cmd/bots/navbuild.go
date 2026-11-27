@@ -122,6 +122,7 @@ func navbuild(ctx context.Context, geodataDir, geoengine, cachePath, datapack, o
 		stats.Nodes, stats.IntraEdges+stats.CrossEdges+stats.OneWayEdges, stats.IntraEdges, stats.CrossEdges, stats.OneWayEdges,
 		stats.DoorRefs, stats.Doors, stats.SkippedDoors)
 	fmt.Fprintf(stdout, "SCCs %d (largest %d nodes), condensation edges %d, landmarks %d, covered cost %d\n", stats.SCCs, stats.LargestSCC, stats.CondEdges, stats.Landmarks, covered)
+	fmt.Fprintf(stdout, "crossings costed by a bound (cell path search over budget) %d\n", stats.BoundedCrossings)
 	fmt.Fprintf(stdout, "wrote %s (%.1f MB)\n", out, float64(stats.Bytes)/1e6)
 	return nil
 }

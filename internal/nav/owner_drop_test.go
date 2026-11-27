@@ -28,11 +28,9 @@ type acceptedDrop struct {
 	why string
 }
 
-// acceptedDrops are the drops the town probe accepts on the owner's data.
-var acceptedDrops = []acceptedDrop{
-	{location.Location{X: 40984, Y: -56648}, 296, "Rune south road ledge, crossing leg (#575)"},
-	{location.Location{X: 82064, Y: 112128}, 280, "Giran Minerva west ledge, crossing leg (#575)"},
-}
+// acceptedDrops are the drops the town probe accepts on the owner's data:
+// none since the crossings are costed by their cell paths (#575).
+var acceptedDrops []acceptedDrop
 
 // TestOwnerTownDrops is the offline probe of #504 and #514: the place routes
 // from every town point to every spot within 20000 of it, each with its

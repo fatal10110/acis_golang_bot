@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/bits"
 	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -68,6 +69,10 @@ type BuildStats struct {
 	// OneWayEdges join two abstract SCCs: crossings and pairs joined
 	// inside a cluster.
 	OneWayEdges int
+	// BoundedCrossings are the crossing edges whose cell path search ran
+	// past crossBudget: they cost the least the search left open, at least
+	// their straight line (crossCosts).
+	BoundedCrossings int
 }
 
 // RegionClusters returns the clusters of one geodata region tile.
@@ -142,6 +147,13 @@ func Build(ctx context.Context, cfg BuildConfig) ([]byte, BuildStats, error) {
 	if err != nil {
 		return nil, stats, err
 	}
+	var bounded atomic.Int64
+	if err := b.parallel(ctx, workers, progress("crossings"), func(s *buildScratch, i int) {
+		bounded.Add(int64(b.crossCosts(s, i, outs, l)))
+	}); err != nil {
+		return nil, stats, err
+	}
+	stats.BoundedCrossings = int(bounded.Load())
 	// Edge costs only between nodes of one abstract SCC: the only edges a
 	// route or distance search follows; the condensation holds the rest.
 	if err := b.parallel(ctx, workers, progress("costs"), func(s *buildScratch, i int) { b.intraEdges(s, i, &outs[i], l) }); err != nil {
@@ -385,6 +397,7 @@ type buildScratch struct {
 	target  []bool
 	via     []bool
 	doors   []int32
+	search  *scratch // crossCosts' cell searches
 	// reach edges
 	holders  []int32
 	holderOf map[int32]int
@@ -866,6 +879,8 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 				return nil, fmt.Errorf("nav: crossing target %d,%d,%d is no entrance", xto.X, xto.Y, xto.Z)
 			}
 			from := l.base[ci] + int(x.from)
+			// The straight line and the crossing's own drop: crossCosts
+			// replaces it by the cell path between the representatives.
 			cost := uint32(max(costCardinal, heuristic(o.nodes[x.from].rep, outs[ti].nodes[to].rep)))
 			cost += crossCost(x.side)
 			e := globalEdge{to: uint32(l.base[ti] + int(to)), open: cost, free: cost}
@@ -907,8 +922,9 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 	}
 	// A node pair joined inside a cluster across two abstract SCCs is a
 	// one-way edge a route that may take drops follows (RouteOneWay),
-	// costed as a crossing is: its straight line, which the leg refinement
-	// settles. Pairs inside one SCC get their costs from intraEdges.
+	// costed by its straight line, which the leg refinement settles. Pairs
+	// inside one SCC get their costs from intraEdges, the crossings theirs
+	// from crossCosts.
 	for ci := range outs {
 		o := &outs[ci]
 		for _, r := range o.reach {
@@ -929,6 +945,65 @@ func (b *builder) link(outs []clusterOut, stats *BuildStats) (*linked, error) {
 		stats.LargestSCC = max(stats.LargestSCC, n)
 	}
 	return l, nil
+}
+
+// crossBudget caps the cells the build's search of one crossing edge's
+// cell path expands (crossCosts). Most crossings join two representatives a
+// few cells apart; a crossing whose way between them must drop floods the
+// cells the drop's cost buys before it ends: about 25,000 for the Rune
+// south road's (#575).
+const crossBudget = 1 << 15
+
+// crossCosts costs the crossing edges out of cluster ci by the cell path
+// between the representatives of their two nodes inside the two clusters'
+// box: the path middleLeg refines the crossing to, its drops and covered
+// ground weighed as the route's search weighs them. The straight line link
+// costs them by does not see a drop along the border between the two
+// representatives, and the abstract search took such a crossing over a
+// drop-free way of about the same length (#575). An edge whose search runs
+// past crossBudget costs the least f the search left open, which no path
+// undercuts, or its straight line and crossing drop when more; crossCosts
+// returns how many did. Only cluster ci's nodes' edges are written, so the
+// workers share l.
+func (b *builder) crossCosts(s *buildScratch, ci int, outs []clusterOut, l *linked) int {
+	if s.search == nil {
+		s.search = new(scratch)
+	}
+	box := func(k ClusterKey) cellBox {
+		x0, y0 := int(k.X)*b.size, int(k.Y)*b.size
+		return cellBox{x0, y0, x0 + b.size, y0 + b.size}
+	}
+	from := box(b.keys[ci])
+	bounded := 0
+	for u, nd := range outs[ci].nodes {
+		edges := l.cross[l.base[ci]+u]
+		for i := range edges {
+			e := &edges[i]
+			ti := sort.Search(len(outs), func(t int) bool { return l.base[t+1] > int(e.to) })
+			if ti == ci {
+				continue // a one-way edge inside the cluster
+			}
+			to := box(b.keys[ti])
+			both := cellBox{min(from.x0, to.x0), min(from.y0, to.y0), max(from.x1, to.x1), max(from.y1, to.y1)}
+			goal := outs[ti].nodes[int(e.to)-l.base[ti]].rep
+			_, _, err := b.p.search(s.search, nd.rep, goal, crossBudget, nil, both)
+			var cost uint32
+			switch {
+			case err == nil:
+				cost = uint32(s.search.goalCost(goal))
+			case errors.Is(err, ErrBudget):
+				bounded++
+				cost = max(e.open, uint32(s.search.bound))
+			default:
+				continue // no path inside the box: the straight line stays
+			}
+			e.open = cost
+			if e.free != noCost {
+				e.free = max(e.free, cost)
+			}
+		}
+	}
+	return bounded
 }
 
 // addEdge merges e into edges. Crossings between the same two nodes

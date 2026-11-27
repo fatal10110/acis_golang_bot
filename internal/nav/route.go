@@ -239,10 +239,15 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		n = 1
 	}
 	s.drops = append(s.drops[:0], 0)
+	s.falls = s.falls[:0]
 	s.covers = append(s.covers[:0], 0)
 	weighCover := p.coveredCost() > 0
 	for k := 1; k <= n; k++ {
-		s.drops = append(s.drops, s.drops[k-1]+min(dropCost(cells[k-1].Z, cells[k].Z), 1))
+		drop := min(dropCost(cells[k-1].Z, cells[k].Z), 1)
+		if drop > 0 {
+			s.falls = append(s.falls, cells[k-1].Z-cells[k].Z)
+		}
+		s.drops = append(s.drops, s.drops[k-1]+drop)
 		cover := int32(0)
 		if weighCover && p.isCovered(cells[k-1], &s.layers) {
 			cover = 1
@@ -328,7 +333,7 @@ func (p *Planner) straight(s *scratch, from, to location.Location) bool {
 	}
 	s.grid.invalidate()
 	return !p.avoided(s, from, to, from, to) && p.corridorClear(s, from, to) &&
-		p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) && !p.lineDrops(s, from, to) &&
+		p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) && !p.lineDrops(s, from, to, dropBound) &&
 		!(p.coveredCost() > 0 && p.lineCovered(s, from, to))
 }
 
@@ -364,17 +369,25 @@ func (p *Planner) lineCovered(s *scratch, a, b location.Location) bool {
 }
 
 // dropsAsPath reports whether the segment from waypoint i to cell j may be
-// taken as far as drops go: the cell path from i to j holds a drop, or the
-// segment's line holds none. A route that weighed a ramp over a drop keeps
-// to it, where a straight line off the band's edge would pass CanMove (#504).
+// taken as far as drops go: the segment's line holds no drop higher than the
+// largest of the cell path from i to j, none at all when the path holds
+// none. A route that weighed a ramp over a drop keeps to it, where a
+// straight line off the band's edge would pass CanMove (#504), and one that
+// weighed two small drops over a high one keeps to them, where a straight
+// line past them would fall off the ledge (#575).
 func (p *Planner) dropsAsPath(s *scratch, i, j int) bool {
-	return s.drops[j] > s.drops[i] || !p.lineDrops(s, s.points[i], s.points[j])
+	most := int16(dropBound)
+	for _, f := range s.falls[s.drops[i]:s.drops[j]] {
+		most = max(most, f)
+	}
+	return !p.lineDrops(s, s.points[i], s.points[j], most)
 }
 
 // lineDrops reports whether the walk along the line from a to b, landing on
 // each cell's layer as CanMove does (the nearest at or below the last floor
-// plus block.CellIgnoreHeight), takes a drop.
-func (p *Planner) lineDrops(s *scratch, a, b location.Location) bool {
+// plus block.CellIgnoreHeight), takes a drop higher than most, which is at
+// least dropBound.
+func (p *Planner) lineDrops(s *scratch, a, b location.Location, most int16) bool {
 	s.dropLine = appendLineCells(s.dropLine[:0], a, b)
 	z := int16(p.Engine.Height(a.X, a.Y, a.Z))
 	for _, c := range s.dropLine[1:] {
@@ -382,7 +395,7 @@ func (p *Planner) lineDrops(s *scratch, a, b location.Location) bool {
 		if !ok {
 			return false // CanMove refuses the line
 		}
-		if dropCost(z, h) > 0 {
+		if z-h > most {
 			return true
 		}
 		z = h

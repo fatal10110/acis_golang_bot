@@ -162,7 +162,7 @@ func TestRouteStraightDropOnly(t *testing.T) {
 	if !e.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) {
 		t.Fatal("CanMove refuses the band's straight segment: the case tests no drop")
 	}
-	if !p.lineDrops(s, a, b) {
+	if !p.lineDrops(s, a, b, dropBound) {
 		t.Fatal("lineDrops finds no drop off the band")
 	}
 	if p.straight(s, a, b) {
