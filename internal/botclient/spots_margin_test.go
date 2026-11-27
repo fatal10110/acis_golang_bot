@@ -22,6 +22,7 @@ var rowSpotMargins = map[int32]float64{
 	15: marginGlassCannon, 11: marginGlassCannon, 29: marginGlassCannon, 26: marginGlassCannon,
 	42: marginGlassCannon, 39: marginGlassCannon, 50: marginNormal,
 	21: marginNormal, 34: marginNormal,
+	2: marginNormal, 3: marginNormal, 46: marginTank, 55: marginTank,
 	8: marginNormal, 23: marginNormal, 36: marginGlassCannon,
 	9: marginNormal, 24: marginNormal, 37: marginGlassCannon,
 }

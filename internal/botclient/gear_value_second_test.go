@@ -55,19 +55,19 @@ func TestRowSKSetValue(t *testing.T) { checkSecondSets(t, 33, fullPlateVerdicts)
 // TestRowSSSetValue: Full Plate (kit: EK's).
 func TestRowSSSetValue(t *testing.T) { checkSecondSets(t, 21, fullPlateVerdicts) }
 
-// TestRowGLSetValue: Full Plate (kit: WA's).
+// TestRowGLSetValue: Full Plate (kit: its own, kits_heavy.go).
 func TestRowGLSetValue(t *testing.T) { checkSecondSets(t, 2, fullPlateVerdicts) }
 
-// TestRowWLSetValue: Full Plate (kit: WA's).
+// TestRowWLSetValue: Full Plate (kit: its own, kits_heavy.go).
 func TestRowWLSetValue(t *testing.T) { checkSecondSets(t, 3, fullPlateVerdicts) }
 
-// TestRowDSSetValue: Full Plate (kit: OR's).
+// TestRowDSSetValue: Full Plate (kit: its own, kits_heavy.go).
 func TestRowDSSetValue(t *testing.T) { checkSecondSets(t, 46, fullPlateVerdicts) }
 
 // TestRowBDSetValue: Full Plate (kit: PK's).
 func TestRowBDSetValue(t *testing.T) { checkSecondSets(t, 34, fullPlateVerdicts) }
 
-// TestRowBHSetValue: Composite, else Full Plate (kit: SC's); the
+// TestRowBHSetValue: Composite, else Full Plate (kit: its own, kits_heavy.go); the
 // preferred Composite is model-chosen, so the bounty hunter buys Full
 // Plate where the model values it.
 func TestRowBHSetValue(t *testing.T) {

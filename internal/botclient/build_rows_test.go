@@ -95,6 +95,17 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 				fail("toggle %d is operateType %s", tg.Skill, sk.OperateType)
 				break
 			}
+			// A toggle's weapon gate fits its weaponsAllowed, as a branch
+			// gate: Polearm Accuracy's comes from <using kind>, not from
+			// weaponsAllowed.
+			if len(sk.WeaponsAllowed) > 0 && len(tg.Weapons) == 0 {
+				fail("toggle %d allows %v, it has no weapon gate", tg.Skill, sk.WeaponsAllowed)
+			}
+			for _, k := range tg.Weapons {
+				if len(sk.WeaponsAllowed) > 0 && !slices.Contains(sk.WeaponsAllowed, k) {
+					fail("toggle %d allows %v, its gate has %s", tg.Skill, sk.WeaponsAllowed, k)
+				}
+			}
 		}
 	}
 	for _, st := range slices.Concat(r.kit.Rotation, r.kit.PvP) {

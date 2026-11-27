@@ -324,6 +324,8 @@ var professionKits = map[int32]ClassKit{
 	// The singers and dancers (kits_songs.go).
 	classSwordSinger: swordSingerKit,
 	classBladedancer: bladedancerKit,
+	// The heavy damage rows (kits_heavy.go).
+	classGladiator: gladiatorKit, classWarlord: warlordKit, classDestroyer: destroyerKit, classBountyHunter: bountyHunterKit,
 	// The daggers (kits_daggers.go).
 	classTreasureHunter: treasureHunterKit,
 	classPlainsWalker:   plainsWalkerKit,

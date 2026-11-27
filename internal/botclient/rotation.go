@@ -311,16 +311,22 @@ func (b *Brain) isToggle(skill int32) bool {
 }
 
 // toggleCast is the cast that switches a combat toggle of toggles at now:
-// on while fighting with MP above its bound, off with MP under it or out of
-// a fight (docs/strategy.md, Design section 9). Each switch waits for the
+// on while fighting with MP above its bound and its weapon worn
+// (Toggle.Weapons), off with MP under it, with another weapon or out of a
+// fight (docs/strategy.md, Design section 9). Each switch waits for the
 // last one to settle; ok is false when none is due.
 func (b *Brain) toggleCast(toggles []Toggle, fighting bool, now time.Time) (Action, bool) {
 	s := &b.world.Self
+	var worn string
+	if slices.ContainsFunc(toggles, func(t Toggle) bool { return len(t.Weapons) > 0 }) {
+		worn, _ = b.wornKind()
+	}
 	for _, t := range toggles {
 		on := b.toggleOn(t.Skill)
+		armed := fighting && (len(t.Weapons) == 0 || slices.Contains(t.Weapons, worn))
 		switch {
-		case on && fighting && !below(s.MP, s.MaxMP, t.MPAbove),
-			!on && (!fighting || !above(s.MP, s.MaxMP, t.MPAbove)),
+		case on && armed && !below(s.MP, s.MaxMP, t.MPAbove),
+			!on && (!armed || !above(s.MP, s.MaxMP, t.MPAbove)),
 			b.toggleSettling(t.Skill, now) || !b.castReady(t.Skill, now):
 			continue
 		}
