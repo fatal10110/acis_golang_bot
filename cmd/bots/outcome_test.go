@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
@@ -85,8 +86,15 @@ func TestOutcomeLogWriter(t *testing.T) {
 			t.Errorf("line %d = %+v, want spot s level %d", i, o, i+1)
 		}
 	}
-	if st, err := os.Stat(path); err != nil || st.Mode().Perm() != 0o600 {
-		t.Errorf("mode %v, %v; want 0600", st.Mode().Perm(), err)
+	// Windows keeps no POSIX mode bits: os.Stat reports 0666 there.
+	if runtime.GOOS != "windows" {
+		st, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := st.Mode().Perm(); m != 0o600 {
+			t.Errorf("mode %v; want 0600", m)
+		}
 	}
 }
 
