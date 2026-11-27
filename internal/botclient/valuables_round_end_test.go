@@ -161,7 +161,7 @@ func TestValuablesRoundSessions(t *testing.T) {
 		// The look's keeper target dropped meanwhile: the deposit selects it.
 		steps[0].setup = func(b *Brain) { b.world.Target = 0 }
 		runTrainerSteps(t, c, steps)
-		tradeTurn(t, c, at(end+6*time.Second), InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(101, 0)}, {ItemModified, adenaStack(970)}}})
+		tradeTurn(t, c, at(end+6*time.Second), InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}, {State: ItemModified, Item: adenaStack(970)}}})
 		if e := entryOf(t, c, ledgerSword, 0); e.stored != 1 || e.carried != 0 {
 			t.Errorf("sword %+v, want counted stored", e)
 		}
@@ -182,7 +182,7 @@ func TestValuablesRoundSessions(t *testing.T) {
 			wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}, {object: 202, item: ledgerSword, count: 1}}),
 		}))
 		now := at(6 * time.Second)
-		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}, {ItemAdded, carriedOf(storedSword)}}}}, now); err != nil {
+		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}, {State: ItemAdded, Item: carriedOf(storedSword)}}}}, now); err != nil {
 			t.Fatal(err)
 		}
 		line := roundLine(t, b)

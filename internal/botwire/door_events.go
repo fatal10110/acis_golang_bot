@@ -1,6 +1,8 @@
-package botclient
+package botwire
 
-import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+import (
+	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+)
 
 // DoorInfo reports a door entering sight: its world object id, its doors.xml
 // id and whether it is closed. The server sends it, then a DoorStatusUpdate,
@@ -19,8 +21,9 @@ type DoorStatusUpdate struct {
 	Closed   bool
 }
 
-func (DoorInfo) event()         {}
-func (DoorStatusUpdate) event() {}
+func (DoorInfo) IsEvent() {}
+
+func (DoorStatusUpdate) IsEvent() {}
 
 // decodeDoorInfo: object id, door id, show-HP flag, 1, closed flag, max HP,
 // HP, 0, 0, every field an int32 (serverpackets/worldobjects.go

@@ -72,7 +72,7 @@ func testReleaseTradeSold(t *testing.T) {
 			b.cfg.valuables.openRound(Point{}, t0)
 			b.cfg.valuables.round.ads = 1
 			if sold {
-				if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(103, 3)}}}}, t0); err != nil {
+				if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(103, 3)}}}}, t0); err != nil {
 					t.Fatal(err)
 				}
 				b.syncValuables(t0)
@@ -256,7 +256,7 @@ func testReleaseInRound(t *testing.T) {
 		wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}}),
 	}))
 	now := at(6 * time.Second)
-	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}}}}, now); err != nil {
+	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}}, now); err != nil {
 		t.Fatal(err)
 	}
 	b.syncValuables(t0)
@@ -339,7 +339,7 @@ func testReleaseLook(t *testing.T) {
 		}
 		withdrawn := trainerStep{
 			name: "withdrawn: walk back", at: open + 6*time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
 			wantRule: "valuables", wantKind: actMove, wantTo: Point{}, wantWithin: anchorArrive,
 		}
 		steps := openingSteps(open+8*time.Second, []storeRow{{201, 1, int32(floor)}, {102, 10, 7}}, staffCand, skinCand)
@@ -446,7 +446,7 @@ func TestValuablesStoreSplit(t *testing.T) {
 		b.storeSent(Action{kind: actStoreList}, t0)
 		b.store.step = storeOpen
 		paid := int32(1000 + floor + 700)
-		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(paid)}, {ItemRemoved, swordUnit(101, 0)}, {ItemRemoved, swordLoot}}}}, at(time.Second)); err != nil {
+		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(paid)}, {State: ItemRemoved, Item: swordUnit(101, 0)}, {State: ItemRemoved, Item: swordLoot}}}}, at(time.Second)); err != nil {
 			t.Fatal(err)
 		}
 		b.closeStore(at(time.Second))
@@ -473,7 +473,7 @@ func TestValuablesStoreSplit(t *testing.T) {
 		b.storeSent(Action{kind: actStoreList}, t0)
 		b.store.step = storeOpen
 		recipe.Count = 4
-		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(int32(1000 + floor))}, {ItemModified, recipe}}}}, at(time.Second)); err != nil {
+		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(int32(1000 + floor))}, {State: ItemModified, Item: recipe}}}}, at(time.Second)); err != nil {
 			t.Fatal(err)
 		}
 		b.closeStore(at(time.Second))

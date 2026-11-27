@@ -189,7 +189,7 @@ func TestShotToggleBack(t *testing.T) {
 	if got := runShots(t, b, out, at(time.Minute)); got != nil {
 		t.Fatalf("answered toggles repeated: %v", got)
 	}
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, spare(1, dSword)}, {ItemModified, wielded(2, ngSword)}}}, at(time.Minute))
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: spare(1, dSword)}, {State: ItemModified, Item: wielded(2, ngSword)}}}, at(time.Minute))
 	if got, want := runShots(t, b, out, at(time.Minute+time.Second)), []toggle{{soulshotNoGrade, true}, {dSoulshot, false}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("toggles after the switch = %v, want %v", got, want)
 	}
@@ -361,12 +361,12 @@ func TestShotFallback(t *testing.T) {
 		t.Fatalf("a few looted D shots: gear %+v, want none", a)
 	}
 
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, shotStack(11, dSoulshot, 100)}}}, at(2*time.Second))
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: shotStack(11, dSoulshot, 100)}}}, at(2*time.Second))
 	a, ok := b.ruleGear(at(2 * time.Second))
 	if !ok || a.object != 2 {
 		t.Fatalf("D shots at the target: gear %+v %v, want the D sword used", a, ok)
 	}
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, spare(1, ngSword)}, {ItemModified, wielded(2, dSword)}}}, at(3*time.Second))
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: spare(1, ngSword)}, {State: ItemModified, Item: wielded(2, dSword)}}}, at(3*time.Second))
 	junk := slices.Collect(maps.Keys(b.junk()))
 	if slices.Contains(junk, 1) || slices.Contains(junk, 10) {
 		t.Errorf("junk %v holds the no-grade sword or its shots", junk)
@@ -375,7 +375,7 @@ func TestShotFallback(t *testing.T) {
 		t.Fatalf("D shots still at the target: gear %+v, want none", a)
 	}
 
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, shotStack(11, dSoulshot, 99)}}}, at(5*time.Second))
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: shotStack(11, dSoulshot, 99)}}}, at(5*time.Second))
 	if a, ok := b.ruleGear(at(5 * time.Second)); ok {
 		t.Fatalf("D shots under the target, D sword wielded: gear %+v, want none", a)
 	}
@@ -386,7 +386,7 @@ func TestShotFallback(t *testing.T) {
 		}
 	}
 
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, shotStack(11, dSoulshot, 0)}}}, at(6*time.Second))
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: shotStack(11, dSoulshot, 0)}}}, at(6*time.Second))
 	a, ok = b.ruleGear(at(6 * time.Second))
 	if !ok || a.object != 1 {
 		t.Fatalf("D shots gone: gear %+v %v, want the no-grade sword used", a, ok)
@@ -414,7 +414,7 @@ func TestShotReOn(t *testing.T) {
 	}
 	answer(soulshotNoGrade, false, at(time.Second))
 
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, spare(1, dSword)}, {ItemModified, wielded(2, ngSword)}}}, at(time.Minute))
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: spare(1, dSword)}, {State: ItemModified, Item: wielded(2, ngSword)}}}, at(time.Minute))
 	switched := at(time.Minute)
 	if got, want := runShots(t, b, out, switched), []toggle{{soulshotNoGrade, true}, {dSoulshot, false}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("toggles after the switch = %v, want %v", got, want)

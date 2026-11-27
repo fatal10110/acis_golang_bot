@@ -96,7 +96,7 @@ var (
 // ServerClose or LeaveWorld before it.
 type connLost struct{ err error }
 
-func (connLost) event() {}
+func (connLost) IsEvent() {}
 
 // panicError is a panic recovered at one of a bot's isolation boundaries:
 // its attempt (Bot.attempt) or its session's reader. It ends that attempt

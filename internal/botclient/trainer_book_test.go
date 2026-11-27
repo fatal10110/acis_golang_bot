@@ -10,7 +10,7 @@ import (
 // due again once that visit ends, as one bought after it does.
 func TestTrainerBookArrivesMidVisit(t *testing.T) {
 	b := newTrainerBrain(t, 200)
-	heal1, might1 := AcquirableSkill{skillHeal, 1, 160}, AcquirableSkill{skillMight, 1, 30}
+	heal1, might1 := AcquirableSkill{ID: skillHeal, Level: 1, Cost: 160}, AcquirableSkill{ID: skillMight, Level: 1, Cost: 30}
 	needsBook := AcquireSkillInfo{ID: skillHeal, Level: 1, Cost: 160, Requirements: []SkillRequirement{{Type: spellbookRequirement, ItemID: healBook, Count: 1}}}
 	book := Item{ObjectID: 300, TemplateID: healBook, Count: 1}
 	runTrainerSteps(t, b, []trainerStep{
@@ -21,7 +21,7 @@ func TestTrainerBookArrivesMidVisit(t *testing.T) {
 		{name: "book missing: might's cost", at: 4 * time.Second, events: []Event{needsBook}, wantRule: "train", wantKind: actSkillInfo},
 		{
 			name: "the book arrives, might learned", at: 5 * time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, book}}}, AcquireSkillInfo{ID: skillMight, Level: 1, Cost: 30}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: book}}}, AcquireSkillInfo{ID: skillMight, Level: 1, Cost: 30}},
 			wantRule: "train", wantKind: actLearnSkill,
 		},
 	})

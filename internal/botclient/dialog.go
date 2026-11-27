@@ -7,22 +7,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
-// NpcHtmlMessage opens a dialog: the HTML page of object ObjectID, or of
-// item ItemID when an item opened it.
-type NpcHtmlMessage struct {
-	ObjectID int32
-	HTML     string
-	ItemID   int32
-}
-
-func (NpcHtmlMessage) event() {}
-
-// decodeNpcHtmlMessage: object id, the page, item id
-// (serverpackets/npchtmlmessage.go).
-func decodeNpcHtmlMessage(r *wire.Reader) Event {
-	return NpcHtmlMessage{ObjectID: r.ReadInt32(), HTML: r.ReadString(), ItemID: r.ReadInt32()}
-}
-
 // Dialog is the last dialog page the server sent the bot: the object it
 // belongs to and the bypass commands of its links. The server accepts only
 // a bypass that is a link of the last page it sent (network/bypass.go

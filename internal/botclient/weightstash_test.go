@@ -150,7 +150,7 @@ func TestStashDeposit(t *testing.T) {
 			name: "private list", at: 5 * time.Second, events: []Event{WarehouseDepositList{Type: privateWarehouseType, Items: deposit}},
 			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{102, animalSkin, 10}),
 		},
-		trainerStep{name: "deposited", at: 6 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, whCarriedSkins}}}}},
+		trainerStep{name: "deposited", at: 6 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedSkins}}}}},
 	)
 	runTrainerSteps(t, b, steps)
 	if b.stashDue || b.wh.running {

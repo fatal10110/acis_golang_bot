@@ -1,4 +1,4 @@
-package botclient
+package botwire
 
 // The duel window packets (serverpackets/duel.go). Party is set for a party
 // duel.
@@ -35,9 +35,14 @@ type ExDuelUpdateUserInfo struct {
 // cancel inside the interrupt window among others (network/targeting.go).
 type MagicSkillCanceled struct{ CasterID int32 }
 
-func (ExDuelAskStart) event()       {}
-func (ExDuelReady) event()          {}
-func (ExDuelStart) event()          {}
-func (ExDuelEnd) event()            {}
-func (ExDuelUpdateUserInfo) event() {}
-func (MagicSkillCanceled) event()   {}
+func (ExDuelAskStart) IsEvent() {}
+
+func (ExDuelReady) IsEvent() {}
+
+func (ExDuelStart) IsEvent() {}
+
+func (ExDuelEnd) IsEvent() {}
+
+func (ExDuelUpdateUserInfo) IsEvent() {}
+
+func (MagicSkillCanceled) IsEvent() {}

@@ -1,9 +1,6 @@
 package botclient
 
 import (
-	"errors"
-	"testing"
-
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
@@ -206,6 +203,16 @@ func npcInfoPacket(n NPCInfo, run, walk int32, mult float64) []byte {
 	return w.Bytes()
 }
 
+var testUserInfo = UserInfo{
+	ObjectID: 0x10000001, Name: "bot7", Pos: Point{X: -71000, Y: 258000, Z: -3100}, Heading: 49152,
+	Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
+	HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000, InvLimit: 100,
+	PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
+	Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001, AllyID: 0x0a000002,
+	CollisionRadius: 9, PKKills: 11, PvPKills: 12,
+	STR: 40, DEX: 41, CON: 42, INT: 43, WIT: 44, MEN: 45, Critical: 305, MAtk: 306, CastSpd: 307, MDef: 309,
+}
+
 func fillUint16(w *wire.Writer, n int) {
 	for i := range n {
 		w.WriteUint16(uint16(0x100 + i))
@@ -219,122 +226,6 @@ func writeCubics(w *wire.Writer, n int) {
 	}
 }
 
-var (
-	testUserInfo = UserInfo{
-		ObjectID: 0x10000001, Name: "bot7", Pos: Point{X: -71000, Y: 258000, Z: -3100}, Heading: 49152,
-		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
-		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000, InvLimit: 100,
-		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
-		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001, AllyID: 0x0a000002,
-		CollisionRadius: 9, PKKills: 11, PvPKills: 12,
-		STR: 40, DEX: 41, CON: 42, INT: 43, WIT: 44, MEN: 45, Critical: 305, MAtk: 306, CastSpd: 307, MDef: 309,
-	}
-	testCharInfo = CharInfo{
-		ObjectID: 0x10000002, Name: "other", Pos: Point{X: 1, Y: 2, Z: 3}, Heading: 1000, ClassID: 10,
-		PvPFlag: 1, Karma: 50, RunSpeed: 156, WalkSpeed: 104, Sitting: true, InCombat: true, StoreType: 1,
-		RHand: 2369, LHand: 626, CollisionRadius: 8.5, ClanID: 0x0a000003, AllyID: 0x0a000004,
-		Abnormal: 0x2000, CP: 1100, MaxCP: 1200, DuelTeam: 2,
-	}
-	testNPCInfo = NPCInfo{
-		ObjectID: 0x10000003, NPCID: 20001, Attackable: true, Pos: Point{X: 4, Y: 5, Z: 6}, Heading: 2000,
-		RunSpeed: 195, WalkSpeed: 60, Running: true, Dead: true, Summon: true, PvPFlag: 2, Karma: 3,
-		Name: "Gremlin", Title: "a title", CollisionRadius: 10.5,
-	}
-)
-
-// inworldCases are well-formed frames of every in-world decoder.
-func inworldCases() []struct {
-	name string
-	raw  []byte
-	want Event
-} {
-	at := Point{X: 81000, Y: 148000, Z: -3400}
-	return []struct {
-		name string
-		raw  []byte
-		want Event
-	}{
-		{"UserInfo", userInfoPacket(testUserInfo, 120, 80, 1.3, 0), testUserInfo},
-		{"UserInfo cubics", userInfoPacket(testUserInfo, 120, 80, 1.3, 3), testUserInfo},
-		{"CharInfo", charInfoPacket(testCharInfo, 120, 80, 1.3, 2), testCharInfo},
-		{"CharInfo standing", charInfoPacket(CharInfo{ObjectID: 9, Running: true, Dead: true}, 0, 0, 1, 0), CharInfo{ObjectID: 9, Running: true, Dead: true}},
-		{"NPCInfo", npcInfoPacket(testNPCInfo, 130, 40, 1.5), testNPCInfo},
-		{"NPCInfo no server-side name", npcInfoPacket(NPCInfo{ObjectID: 7, NPCID: 31228}, 0, 0, 1), NPCInfo{ObjectID: 7, NPCID: 31228}},
-		{"NPCInfo class master", npcInfoPacket(liveMaster, 0, 0, 1), liveMaster},
-		{
-			"StatusUpdate", packet(opGameStatusUpdate, 7, 12, 9, 300, 10, 410, 11, 120, 12, 150, 13, 5000, 14, 1500, 15, 80000, 18, 333, 24, 444, 27, 7, 33, 90, 34, 200),
-			StatusUpdate{ObjectID: 7, Set: StatusHP | StatusMaxHP | StatusMP | StatusMaxMP | StatusSP | StatusLoad | StatusMaxLoad | StatusKarma | StatusCP | StatusMaxCP, HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, SP: 5000, Load: 1500, MaxLoad: 80000, Karma: 7, CP: 90, MaxCP: 200},
-		},
-		{"StatusUpdate unknown type only", packet(opGameStatusUpdate, 7, 1, 18, 333), StatusUpdate{ObjectID: 7}},
-		{"StatusUpdate empty", packet(opGameStatusUpdate, 7, 0), StatusUpdate{ObjectID: 7}},
-		{"MoveToPawn", packet(opGameMoveToPawn, 7, 8, 40, at.X, at.Y, at.Z), MoveToPawn{ObjectID: 7, TargetID: 8, Distance: 40, Origin: at}},
-		{"Die", packet(opGameDie, 7, 1, 0, 1, 0, 1, 1), Die{ObjectID: 7, Restart: RestartPoints{Village: true, Castle: true, Fixed: true}, Sweepable: true}},
-		{"Die village only", packet(opGameDie, 7, 1, 0, 0, 0, 0, 0), Die{ObjectID: 7, Restart: RestartPoints{Village: true}}},
-		{"Revive", packet(opGameRevive, 7), Revive{ObjectID: 7}},
-		{"MyTargetSelected", packet(opGameMyTargetSelected, 7, uint16(0xfffb)), MyTargetSelected{ObjectID: 7, Color: 0xfffb}},
-		{"TargetUnselected", packet(opGameTargetUnselected, 7, at.X, at.Y, at.Z), TargetUnselected{ObjectID: 7, Pos: at}},
-		{"SystemMessage no params", packet(opGameSystemMessage, 212, 0), SystemMessage{ID: 212}},
-		{
-			"SystemMessage every param type",
-			packet(opGameSystemMessage, 1147, 6, 0, "text", 1, 5, 3, 57, 4, 1216, 2, 6, 100, 7, at.X, at.Y, at.Z),
-			SystemMessage{ID: 1147, Text: [2]string{"text"}, Number: 5},
-		},
-		{"SystemMessage other type is one int32", packet(opGameSystemMessage, 9, 2, 2, 20001, 5, 3), SystemMessage{ID: 9}},
-		{"ActionFailed", packet(opGameActionFailed), ActionFailed{}},
-		{"CreatureSay", packet(opGameCreatureSay, 7, 1, "bot7", "hello"), CreatureSay{ObjectID: 7, Type: 1, Name: "bot7", Text: "hello"}},
-		{"ChangeWaitType", packet(opGameChangeWaitType, 7, 0, at.X, at.Y, at.Z), ChangeWaitType{ObjectID: 7, Type: WaitSitting, Pos: at}},
-		{"AutoAttackStart", packet(opGameAutoAttackStart, 7), AutoAttackStart{ObjectID: 7}},
-		{"AutoAttackStop", packet(opGameAutoAttackStop, 7), AutoAttackStop{ObjectID: 7}},
-	}
-}
-
-func TestDecodeInWorldEvent(t *testing.T) {
-	for _, tt := range inworldCases() {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := decodeEvent(tt.raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", got, ok, err)
-			}
-			if got != tt.want {
-				t.Fatalf("decodeEvent = %#v, want %#v", got, tt.want)
-			}
-		})
-	}
-}
-
-// Every in-world frame one byte short fails, and one byte long fails with
-// errTrailingBytes: each decoder consumes exactly its layout.
-func TestDecodeInWorldEventRejects(t *testing.T) {
-	for _, tt := range inworldCases() {
-		t.Run(tt.name, func(t *testing.T) {
-			if len(tt.raw) > 1 {
-				if _, _, err := decodeEvent(tt.raw[:len(tt.raw)-1]); err == nil {
-					t.Fatal("short frame decoded without error")
-				}
-			}
-			long := append(append([]byte(nil), tt.raw...), 0)
-			if _, _, err := decodeEvent(long); !errors.Is(err, errTrailingBytes) {
-				t.Fatalf("long frame error = %v, want %v", err, errTrailingBytes)
-			}
-		})
-	}
-}
-
-// A count off the wire larger than the frame holds fails short instead of
-// looping or allocating per count.
-func TestDecodeInWorldEventCounts(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  []byte
-	}{
-		{"StatusUpdate", packet(opGameStatusUpdate, 7, 0x7fffffff, 9, 1)},
-		{"SystemMessage", packet(opGameSystemMessage, 7, 0x7fffffff, 1, 1)},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeEvent(tt.raw); !errors.Is(err, wire.ErrShortPacket) {
-				t.Fatalf("decodeEvent error = %v, want %v", err, wire.ErrShortPacket)
-			}
-		})
-	}
-}
+// npcTemplateOffset is what NPCInfo adds to an NPC's template id (botwire's
+// decodeNPCInfo takes it off).
+const npcTemplateOffset = 1000000

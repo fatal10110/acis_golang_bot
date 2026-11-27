@@ -154,7 +154,7 @@ func crystallizingBrain(t *testing.T) *Brain {
 	}
 	b.craft.begin(craftLook, WarehouseRequest{Look: true}, t0)
 	b.craftPlan(t0, true)
-	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, gotWeapon}, {ItemAdded, gotOther}}}}, t0); err != nil {
+	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: gotWeapon}, {State: ItemAdded, Item: gotOther}}}}, t0); err != nil {
 		t.Fatal(err)
 	}
 	b.startMake(t0)
@@ -198,7 +198,7 @@ func TestBrainCrystallize(t *testing.T) {
 	crystals := Item{ObjectID: 600, TemplateID: crystalD, Count: 1170}
 	if err := b.handle([]Event{
 		SystemMessage{ID: msgItemCrystallized},
-		InventoryUpdate{Changes: []ItemChange{{ItemRemoved, gotWeapon}, {ItemAdded, crystals}}},
+		InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: gotWeapon}, {State: ItemAdded, Item: crystals}}},
 	}, t0.Add(100*time.Millisecond)); err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestBrainCrystallize(t *testing.T) {
 	crystals.Count = 2340
 	if err := b.handle([]Event{
 		SystemMessage{ID: msgItemCrystallized},
-		InventoryUpdate{Changes: []ItemChange{{ItemRemoved, gotOther}, {ItemModified, crystals}}},
+		InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: gotOther}, {State: ItemModified, Item: crystals}}},
 	}, next.Add(100*time.Millisecond)); err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ func TestBrainStoreGivenLoot(t *testing.T) {
 		{name: "open", at: time.Second, wantRule: "store", wantKind: actStoreManage, wantPayload: encodeRequestPrivateStoreManageSell()},
 		{name: "title", at: 2 * time.Second, events: []Event{manage}, wantRule: "store", wantKind: actStoreTitle, wantPayload: encodeSetPrivateStoreMsgSell("Loot for sale")},
 		{
-			name: "list", at: 3 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, swordLoot}}}},
+			name: "list", at: 3 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: swordLoot}}}},
 			wantRule: "store", wantKind: actStoreList,
 			wantPayload: encodeSetPrivateStoreListSell(false, []storeRow{{102, 10, 7}, {107, 1, 700}}),
 		},

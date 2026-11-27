@@ -82,7 +82,7 @@ type decodeSkipped struct {
 	err    error
 }
 
-func (decodeSkipped) event() {}
+func (decodeSkipped) IsEvent() {}
 
 // BurstSkips counts the frames of an EnterWorld burst NewWorld skipped
 // because they failed to decode, by opcode. The brain logs and counts them
