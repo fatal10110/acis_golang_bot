@@ -3,7 +3,7 @@ package botclient
 import (
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // ConfirmDlg message ids answered as a resurrection offer
@@ -29,27 +29,6 @@ const (
 	escapeRetry = 30 * time.Second
 )
 
-// encodeDlgAnswer answers ConfirmDlg msg (accept 1, decline 0), echoing its
-// requester id.
-func encodeDlgAnswer(msg int32, accept bool, requester int32) []byte {
-	w := wire.NewPacketWriter(opGameDlgAnswer)
-	w.WriteInt32(msg)
-	var v int32
-	if accept {
-		v = 1
-	}
-	w.WriteInt32(v)
-	w.WriteInt32(requester)
-	return w.Bytes()
-}
-
-// encodeRequestUserCommand runs a numbered slash command.
-func encodeRequestUserCommand(id int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestUserCommand)
-	w.WriteInt32(id)
-	return w.Bytes()
-}
-
 // ResurrectOffer is a resurrection offered to the dead bot, open until the
 // bot answers it or revives. The server keeps one open at a time.
 type ResurrectOffer struct {
@@ -69,12 +48,12 @@ func (w *World) applyConfirmDlg(e ConfirmDlg) {
 
 // answerResurrectAction answers the open resurrection offer.
 func answerResurrectAction(o ResurrectOffer, accept bool) Action {
-	return Action{kind: actDlgAnswer, payload: encodeDlgAnswer(o.MessageID, accept, o.RequesterID)}
+	return Action{kind: actDlgAnswer, payload: botwire.EncodeDlgAnswer(o.MessageID, accept, o.RequesterID)}
 }
 
 // escapeAction asks for /unstuck.
 func escapeAction() Action {
-	return Action{kind: actUserCommand, payload: encodeRequestUserCommand(userCommandEscape)}
+	return Action{kind: actUserCommand, payload: botwire.EncodeRequestUserCommand(userCommandEscape)}
 }
 
 // RecoverPolicy is how a bot recovers from its death and from losing its

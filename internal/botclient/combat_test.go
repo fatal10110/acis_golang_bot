@@ -1,29 +1,9 @@
 package botclient
 
 import (
-	"bytes"
 	"testing"
 	"time"
 )
-
-// TestCombatEncoders pins the combat client packets to the server decoders
-// (clientpackets targetaction.go, magic_skill_use.go).
-func TestCombatEncoders(t *testing.T) {
-	from := Point{X: -1, Y: 2, Z: 3}
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"AttackRequest", encodeAttackRequest(0x10203040, from), le(byte(0x0a), 0x10203040, -1, 2, 3, byte(0))},
-		{"RequestMagicSkillUse", encodeRequestMagicSkillUse(1177, false), le(byte(0x2f), 1177, 0, byte(0))},
-		{"RequestMagicSkillUse forced", encodeRequestMagicSkillUse(1177, true), le(byte(0x2f), 1177, 1, byte(0))},
-	}
-	for _, tc := range tests {
-		if !bytes.Equal(tc.got, tc.want) {
-			t.Errorf("%s\n got % x\nwant % x", tc.name, tc.got, tc.want)
-		}
-	}
-}
 
 // TestWorldCombat checks what the world model keeps of combat events:
 // attackers with their damage streaks, the bot's own casts and skill reuse,

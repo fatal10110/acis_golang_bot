@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // recipeCraftStep is one step of a crafter that learns a recipe scroll
@@ -82,12 +84,12 @@ func TestBrainRecipeCraftRowDuringAttempt(t *testing.T) {
 		return learnView{scroll: ssdScroll, opening: true, waitUntil: t0.Add(at + recipeReplyTimeout)}
 	}
 	runRecipeCraftSteps(t, b, []recipeCraftStep{
-		{name: "errand opens the common page", wantRule: "recipe", wantBook: encodeRequestRecipeBookOpen(false), wantLearn: opening(0)},
+		{name: "errand opens the common page", wantRule: "recipe", wantBook: botwire.EncodeRequestRecipeBookOpen(false), wantLearn: opening(0)},
 		{name: "craft check due: no open while the errand waits", at: time.Second, wantLearn: opening(0)},
 		{
 			name: "errand's page: errand opens the dwarven page", at: 2 * time.Second,
 			events:   []Event{RecipeBookItemList{MaxMP: 100, Recipes: []int32{}}},
-			wantRule: "recipe", wantBook: encodeRequestRecipeBookOpen(true), wantLearn: opening(2 * time.Second),
+			wantRule: "recipe", wantBook: botwire.EncodeRequestRecipeBookOpen(true), wantLearn: opening(2 * time.Second),
 		},
 		{name: "craft check still due: no open", at: 3 * time.Second, wantLearn: opening(2 * time.Second)},
 		{
@@ -108,7 +110,7 @@ func TestBrainRecipeCraftRowKarmaMidAttempt(t *testing.T) {
 	b := newRecipeCrafterBrain(t, script)
 	opening := learnView{scroll: ssdScroll, opening: true, waitUntil: t0.Add(recipeReplyTimeout)}
 	runRecipeCraftSteps(t, b, []recipeCraftStep{
-		{name: "errand opens the common page", wantRule: "recipe", wantBook: encodeRequestRecipeBookOpen(false), wantLearn: opening},
+		{name: "errand opens the common page", wantRule: "recipe", wantBook: botwire.EncodeRequestRecipeBookOpen(false), wantLearn: opening},
 		{
 			name: "karma: craft check waits for the errand's open", at: time.Second,
 			setup:     func(b *Brain) { b.world.Self.Karma = 100 },
@@ -117,7 +119,7 @@ func TestBrainRecipeCraftRowKarmaMidAttempt(t *testing.T) {
 		{name: "still within the errand's timeout", at: recipeReplyTimeout - time.Millisecond, wantLearn: opening},
 		{
 			name: "errand's open timed out: craft row opens its page", at: recipeReplyTimeout,
-			wantRule: "craft", wantBook: encodeRequestRecipeBookOpen(true), wantLearn: opening,
+			wantRule: "craft", wantBook: botwire.EncodeRequestRecipeBookOpen(true), wantLearn: opening,
 		},
 	})
 }
@@ -140,7 +142,7 @@ func TestBrainRecipeCraftRowOpenBeforeAttempt(t *testing.T) {
 			b := newRecipeCrafterBrain(t, script)
 			waiting := learnView{scroll: ssdScroll}
 			runRecipeCraftSteps(t, b, []recipeCraftStep{
-				{name: "craft row opens the dwarven page", wantRule: "craft", wantBook: encodeRequestRecipeBookOpen(true)},
+				{name: "craft row opens the dwarven page", wantRule: "craft", wantBook: botwire.EncodeRequestRecipeBookOpen(true)},
 				{
 					name: "attempt starts: the errand waits for the craft row's open", at: time.Second,
 					setup:     func(*Brain) { script.scrolls = []int32{ssdScroll} },
@@ -150,7 +152,7 @@ func TestBrainRecipeCraftRowOpenBeforeAttempt(t *testing.T) {
 				{name: "still within the craft row's timeout", at: recipeReplyTimeout - time.Millisecond, wantLearn: waiting},
 				{
 					name: "errand opens the common page", at: recipeReplyTimeout,
-					wantRule: "recipe", wantBook: encodeRequestRecipeBookOpen(false),
+					wantRule: "recipe", wantBook: botwire.EncodeRequestRecipeBookOpen(false),
 					wantLearn: learnView{scroll: ssdScroll, opening: true, waitUntil: at(2 * recipeReplyTimeout)},
 				},
 			})

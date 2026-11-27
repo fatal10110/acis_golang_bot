@@ -241,8 +241,8 @@ func TestPvPCure(t *testing.T) {
 				b.persona.Supply.Refill = 50
 				bought := make(map[int32]int32)
 				for _, r := range b.supplyWants() {
-					if slices.Contains(allCures, r.item) {
-						bought[r.item] = r.count
+					if slices.Contains(allCures, r.Item) {
+						bought[r.Item] = r.Count
 					}
 				}
 				if !maps.Equal(bought, want) {

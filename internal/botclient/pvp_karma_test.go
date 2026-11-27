@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -101,7 +102,7 @@ func TestPvPKarma(t *testing.T) {
 		b := pkRow(t, 1, 2*time.Hour)
 		now := at(time.Second)
 		_, a := b.decide(now)
-		if a.kind != actCast || a.skill != skillPowerSmash || string(a.payload) != string(encodeRequestMagicSkillUse(skillPowerSmash, true)) {
+		if a.kind != actCast || a.skill != skillPowerSmash || string(a.payload) != string(botwire.EncodeRequestMagicSkillUse(skillPowerSmash, true)) {
 			t.Fatalf("action %v skill %d, want the ctrl-held Power Smash", a.kind, a.skill)
 		}
 		if b.karma.victim != pcID || !b.karma.lastPK.Equal(now) {

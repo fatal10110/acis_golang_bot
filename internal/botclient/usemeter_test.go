@@ -212,9 +212,9 @@ func TestSupplyWants(t *testing.T) {
 		want    []buyRow
 		target  int32 // tripTarget of the Lesser Healing Potion
 	}{
-		{"low on everything", []Item{shotStack(2, soulshotNoGrade, 500)}, nil, []buyRow{{soulshotNoGrade, 3100}, {lesserHealingPotion, 10}, {scrollOfEscape, 2}, {soulOre, 500}}, 10},
+		{"low on everything", []Item{shotStack(2, soulshotNoGrade, 500)}, nil, []buyRow{{Item: soulshotNoGrade, Count: 3100}, {Item: lesserHealingPotion, Count: 10}, {Item: scrollOfEscape, Count: 2}, {Item: soulOre, Count: 500}}, 10},
 		{"enough of everything", []Item{shotStack(2, soulshotNoGrade, 900), potionStack(3), {ObjectID: 4, TemplateID: scrollOfEscape, Count: 1}, {ObjectID: 5, TemplateID: soulOre, Count: 200}}, nil, nil, 10},
-		{"restock overrides the potion", []Item{shotStack(2, soulshotNoGrade, 900)}, []Restock{{Item: lesserHealingPotion, Min: 1, Max: 5}}, []buyRow{{lesserHealingPotion, 5}, {scrollOfEscape, 2}, {soulOre, 500}}, 5},
+		{"restock overrides the potion", []Item{shotStack(2, soulshotNoGrade, 900)}, []Restock{{Item: lesserHealingPotion, Min: 1, Max: 5}}, []buyRow{{Item: lesserHealingPotion, Count: 5}, {Item: scrollOfEscape, Count: 2}, {Item: soulOre, Count: 500}}, 5},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -223,7 +223,7 @@ func TestSupplyWants(t *testing.T) {
 			b.persona.Supply.Extra = func(*World) map[int32]int32 { return map[int32]int32{soulOre: 500} }
 			b.cfg.Travel.spawnedSold[soulOre] = true
 			got := slices.DeleteFunc(b.shopWants(true), func(r buyRow) bool {
-				return !slices.Contains([]int32{soulshotNoGrade, lesserHealingPotion, scrollOfEscape, soulOre}, r.item)
+				return !slices.Contains([]int32{soulshotNoGrade, lesserHealingPotion, scrollOfEscape, soulOre}, r.Item)
 			})
 			if !slices.Equal(got, tt.want) {
 				t.Fatalf("shopWants = %v, want %v", got, tt.want)

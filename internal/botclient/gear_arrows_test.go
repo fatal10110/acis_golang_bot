@@ -100,13 +100,13 @@ func TestArrowWants(t *testing.T) {
 		want  []buyRow
 	}{
 		{name: "no bow", items: []Item{wornSword, carriedArrows}},
-		{name: "bow carried, worn next", items: []Item{carriedBow}, want: []buyRow{{item: woodenArrow, count: 1000}}},
+		{name: "bow carried, worn next", items: []Item{carriedBow}, want: []buyRow{{Item: woodenArrow, Count: 1000}}},
 		{name: "bow carried, not worn next", items: []Item{carriedBow}, edit: func(b *Brain) { b.world.Self.ClassID = classTreasureHunter }},
-		{name: "no-grade bow, no arrows", items: []Item{wornShortBow}, want: []buyRow{{item: woodenArrow, count: 1000}}},
-		{name: "D bow, a few of its arrows", items: []Item{wornStrongBow, boneArrowsOf(150)}, want: []buyRow{{item: boneArrow, count: 850}}},
-		{name: "D bow, arrows worn count", items: []Item{wornStrongBow, wornBoneArrows(150)}, want: []buyRow{{item: boneArrow, count: 850}}},
+		{name: "no-grade bow, no arrows", items: []Item{wornShortBow}, want: []buyRow{{Item: woodenArrow, Count: 1000}}},
+		{name: "D bow, a few of its arrows", items: []Item{wornStrongBow, boneArrowsOf(150)}, want: []buyRow{{Item: boneArrow, Count: 850}}},
+		{name: "D bow, arrows worn count", items: []Item{wornStrongBow, wornBoneArrows(150)}, want: []buyRow{{Item: boneArrow, Count: 850}}},
 		{name: "D bow, enough arrows", items: []Item{wornStrongBow, boneArrowsOf(200)}},
-		{name: "D bow, arrows of another grade", items: []Item{wornStrongBow, carriedArrows}, want: []buyRow{{item: boneArrow, count: 1000}}},
+		{name: "D bow, arrows of another grade", items: []Item{wornStrongBow, carriedArrows}, want: []buyRow{{Item: boneArrow, Count: 1000}}},
 		{name: "zero ArrowsMax", items: []Item{wornShortBow}, edit: func(b *Brain) { b.persona.Shop.ArrowsMax = 0 }},
 		{name: "no travel map", items: []Item{wornShortBow}, edit: func(b *Brain) { b.cfg.Travel = nil }},
 	}
@@ -134,7 +134,7 @@ func TestArrowBuyRows(t *testing.T) {
 	}}
 	b := newArcherBrain(t, 1, adenaStack(2000), wornShortBow)
 	b.persona.Shop.Restock = []Restock{{Item: lesserHealingPotion, Min: 1, Max: 5}}
-	want := []buyRow{{item: lesserHealingPotion, count: 5}, {item: woodenArrow, count: 250}}
+	want := []buyRow{{Item: lesserHealingPotion, Count: 5}, {Item: woodenArrow, Count: 250}}
 	if got := b.buyRows(window); !slices.Equal(got, want) {
 		t.Errorf("buyRows = %v, want %v", got, want)
 	}
@@ -185,7 +185,7 @@ func TestBrainArcherGear(t *testing.T) {
 	}
 
 	b = newArcherBrain(t, 0, adenaStack(30000))
-	want := buyRow{item: plainBow, count: 1}
+	want := buyRow{Item: plainBow, Count: 1}
 	if got := b.gearWants(); !slices.Contains(got, want) {
 		t.Errorf("unarmed archer: gearWants = %v, want %v among them", got, want)
 	}
@@ -240,7 +240,7 @@ func TestBrainArmedBowShops(t *testing.T) {
 			if !tt.shop {
 				return
 			}
-			want := buyRow{item: woodenArrow, count: b.persona.Shop.ArrowsMax - fewArrows.Count}
+			want := buyRow{Item: woodenArrow, Count: b.persona.Shop.ArrowsMax - fewArrows.Count}
 			if got := b.shopWants(false); !slices.Contains(got, want) {
 				t.Errorf("shopWants = %v, want %v among them", got, want)
 			}

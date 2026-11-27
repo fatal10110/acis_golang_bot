@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestWorldEffects checks the buff model: the bot's own list from
@@ -376,7 +378,7 @@ func TestSupportRules(t *testing.T) {
 			if a.object != tc.wantObject || a.skill != tc.wantSkill {
 				t.Errorf("action on %#x skill %d, want %#x skill %d", a.object, a.skill, tc.wantObject, tc.wantSkill)
 			}
-			if a.kind == actCast && !bytes.Equal(a.payload, encodeRequestMagicSkillUse(tc.wantSkill, false)) {
+			if a.kind == actCast && !bytes.Equal(a.payload, botwire.EncodeRequestMagicSkillUse(tc.wantSkill, false)) {
 				t.Errorf("cast payload % x", a.payload)
 			}
 		})
@@ -438,7 +440,7 @@ func TestBrainSupportFlow(t *testing.T) {
 		t.Fatalf("packet % x, want the leader selected", got)
 	}
 	step(4*time.Second, MyTargetSelected{ObjectID: pcID})
-	if got := out.frames[len(out.frames)-1]; !bytes.Equal(got, encodeRequestMagicSkillUse(skillHeal, false)) {
+	if got := out.frames[len(out.frames)-1]; !bytes.Equal(got, botwire.EncodeRequestMagicSkillUse(skillHeal, false)) {
 		t.Fatalf("packet % x, want Heal", got)
 	}
 	sent := len(out.frames)
@@ -454,7 +456,7 @@ func TestBrainSupportFlow(t *testing.T) {
 	// The leader's Might runs low: after the heal, the bot renews it.
 	step(8*time.Second, PartySmallWindowUpdate{Member: PartyMember{ObjectID: pcID, HP: 90, MaxHP: 100}},
 		PartySpelled{ObjectID: pcID, Effects: []Effect{{SkillID: skillMight, Left: 50 * time.Second}}})
-	if got := out.frames[len(out.frames)-1]; !bytes.Equal(got, encodeRequestMagicSkillUse(skillMight, false)) {
+	if got := out.frames[len(out.frames)-1]; !bytes.Equal(got, botwire.EncodeRequestMagicSkillUse(skillMight, false)) {
 		t.Fatalf("packet % x, want Might", got)
 	}
 	if got := b.buffedAt[buffKey{pcID, skillMight}]; !got.Equal(at(8 * time.Second)) {

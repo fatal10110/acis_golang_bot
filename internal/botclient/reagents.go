@@ -162,7 +162,7 @@ func (b *Brain) reagentWants() []buyRow {
 	var rows []buyRow
 	for _, n := range b.reagentNeeds() {
 		if have := b.carried(n.item); have < n.min && n.max > have && b.cfg.Travel.spawnedSold[n.item] {
-			rows = append(rows, buyRow{item: n.item, count: n.max - have})
+			rows = append(rows, buyRow{Item: n.item, Count: n.max - have})
 		}
 	}
 	return rows

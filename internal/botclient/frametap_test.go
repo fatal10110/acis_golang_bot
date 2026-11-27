@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // tapLog is a FrameTap keeping copies of what it saw.
@@ -29,7 +31,7 @@ func (l *tapLog) RecordSent(p []byte) {
 // brain encoded it, and each frame read decrypted, on an encrypted
 // connection.
 func TestGameConnTapsBothWays(t *testing.T) {
-	attack := encodeAttackRequest(7, Point{X: 1, Y: 2, Z: 3})
+	attack := botwire.EncodeAttackRequest(7, Point{X: 1, Y: 2, Z: 3})
 	move := moveToLocation(1, Point{X: 1}, Point{})
 	g, served := dialFake(t, true, []step{recvStep(attack), sendStep(move)}, true)
 	tap := &tapLog{}
@@ -60,9 +62,9 @@ func TestRecorderIgnoresSent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, served := dialFake(t, false, []step{recvStep(encodeAppearing())}, true)
+	g, served := dialFake(t, false, []step{recvStep(botwire.EncodeAppearing())}, true)
 	g.SetRecorder(rec)
-	if err := g.Send(encodeAppearing()); err != nil {
+	if err := g.Send(botwire.EncodeAppearing()); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-served; err != nil {
@@ -76,5 +78,5 @@ func TestRecorderIgnoresSent(t *testing.T) {
 	}
 	var none *Recorder
 	g.SetRecorder(none) // a nil Recorder in the interface is off too
-	none.RecordSent(encodeAppearing())
+	none.RecordSent(botwire.EncodeAppearing())
 }

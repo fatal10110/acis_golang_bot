@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // keeperObj is warehouse keeper Walderal (30005) once in sight.
@@ -63,11 +65,11 @@ func newWarehouseBrain(t *testing.T, wants *whWants, items ...Item) *Brain {
 }
 
 func depositReq(rows ...warehouseRow) []byte {
-	return encodeWarehouseRequest(opGameSendWareHouseDepositList, rows)
+	return botwire.EncodeWarehouseRequest(opGameSendWareHouseDepositList, rows)
 }
 
 func withdrawReq(rows ...warehouseRow) []byte {
-	return encodeWarehouseRequest(opGameSendWareHouseWithdrawList, rows)
+	return botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, rows)
 }
 
 // openSteps talks to the keeper and opens its clan warehouse from start.
@@ -82,7 +84,7 @@ func openSteps(start time.Duration, deposit bool) []trainerStep {
 		{name: "wait for the page", at: start + 2*time.Second, wantRule: "warehouse"},
 		{
 			name: "open", at: start + 3*time.Second, events: []Event{keeperPage(keeperObj, "DepositP", "WithdrawP", "DepositC", "WithdrawC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, deposit)),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, deposit)),
 		},
 		{name: "wait for the " + cmd + " list", at: start + 4*time.Second, wantRule: "warehouse"},
 	}
@@ -100,7 +102,7 @@ func TestBrainWarehouseDeposit(t *testing.T) {
 			events: []Event{WarehouseDepositList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{
 				{ObjectID: 102, TemplateID: animalSkin, Count: 10}, {ObjectID: 104, TemplateID: leatherShirt, Count: 1},
 			}}},
-			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{102, animalSkin, 10}),
+			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{Object: 102, Item: animalSkin, Count: 10}),
 		},
 		trainerStep{name: "wait for the deposit", at: 6 * time.Second, wantRule: "warehouse"},
 		trainerStep{
@@ -134,7 +136,7 @@ func TestBrainWarehouseWithdrawThenDeposit(t *testing.T) {
 		trainerStep{
 			name: "withdraw no more than listed", at: 5 * time.Second,
 			events:   []Event{WarehouseWithdrawList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{whStoredSkins, whStoredSword}}},
-			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{whStoredSkins.ObjectID, animalSkin, 20}),
+			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{Object: whStoredSkins.ObjectID, Item: animalSkin, Count: 20}),
 		},
 		trainerStep{name: "wait for the withdrawal", at: 6 * time.Second, wantRule: "warehouse"},
 		trainerStep{
@@ -144,12 +146,12 @@ func TestBrainWarehouseWithdrawThenDeposit(t *testing.T) {
 		},
 		trainerStep{
 			name: "deposit open at once", at: 8 * time.Second, events: []Event{keeperPage(keeperObj, "DepositC", "WithdrawC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
 		},
 		trainerStep{
 			name: "deposit", at: 9 * time.Second,
 			events:   []Event{WarehouseDepositList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{{ObjectID: 104, TemplateID: leatherShirt, Count: 1}}}},
-			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{104, leatherShirt, 1}),
+			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{Object: 104, Item: leatherShirt, Count: 1}),
 		},
 		trainerStep{name: "deposited", at: 10 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedShirt}}}}},
 		trainerStep{name: "no open before MinOpenGap since the deposit's", at: 8*time.Second + warehouseOpenGap - time.Millisecond},
@@ -179,7 +181,7 @@ func TestBrainWarehouseEmpty(t *testing.T) {
 		},
 		trainerStep{
 			name: "deposit open", at: 6 * time.Second, events: []Event{keeperPage(keeperObj, "DepositC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
 		},
 	)
 	runTrainerSteps(t, b, steps)
@@ -259,13 +261,13 @@ func TestWarehouseDepositChecks(t *testing.T) {
 		want     WarehouseOutcome
 		wantMsg  int32
 	}{
-		{name: "fee paid", adena: 60, wantRows: []warehouseRow{{102, animalSkin, 10}, {104, leatherShirt, 1}}},
+		{name: "fee paid", adena: 60, wantRows: []warehouseRow{{Object: 102, Item: animalSkin, Count: 10}, {Object: 104, Item: leatherShirt, Count: 1}}},
 		{name: "fee short", adena: 59, want: WarehouseShort},
 		{name: "open trade", adena: 1000, trade: true, want: WarehouseRefused, wantMsg: msgAlreadyTrading},
-		{name: "full: the merging stack only", adena: 1000, contents: fullWithSkins, known: true, wantRows: []warehouseRow{{102, animalSkin, 10}}},
+		{name: "full: the merging stack only", adena: 1000, contents: fullWithSkins, known: true, wantRows: []warehouseRow{{Object: 102, Item: animalSkin, Count: 10}}},
 		{name: "full: no new kind", adena: 1000, contents: full, known: true, want: WarehouseFull},
-		{name: "one slot free", adena: 1000, contents: full[1:], known: true, wantRows: []warehouseRow{{102, animalSkin, 10}}},
-		{name: "contents unknown: no slot check", adena: 1000, contents: full, wantRows: []warehouseRow{{102, animalSkin, 10}, {104, leatherShirt, 1}}},
+		{name: "one slot free", adena: 1000, contents: full[1:], known: true, wantRows: []warehouseRow{{Object: 102, Item: animalSkin, Count: 10}}},
+		{name: "contents unknown: no slot check", adena: 1000, contents: full, wantRows: []warehouseRow{{Object: 102, Item: animalSkin, Count: 10}, {Object: 104, Item: leatherShirt, Count: 1}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -328,7 +330,7 @@ func TestBrainWarehouseRequestTimeoutBackoff(t *testing.T) {
 	wants := &whWants{reqs: []WarehouseRequest{req, req, req}}
 	b := newWarehouseBrain(t, wants, adenaStack(1000), whCarriedSkins)
 	list := WarehouseDepositList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{{ObjectID: 102, TemplateID: animalSkin, Count: 10}}}
-	sent := depositReq(warehouseRow{102, animalSkin, 10})
+	sent := depositReq(warehouseRow{Object: 102, Item: animalSkin, Count: 10})
 	second := 3*time.Second + 2*warehouseOpenGap
 	steps := openSteps(0, true)
 	steps = append(steps,
@@ -337,7 +339,7 @@ func TestBrainWarehouseRequestTimeoutBackoff(t *testing.T) {
 		trainerStep{name: "talk again", at: second, wantRule: "warehouse", wantKind: actTalk},
 		trainerStep{
 			name: "open again", at: second + time.Second, events: []Event{keeperPage(keeperObj, "DepositC", "WithdrawC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
 		},
 		trainerStep{name: "deposit again", at: second + 2*time.Second, events: []Event{list}, wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: sent},
 		trainerStep{name: "unanswered again", at: second + 2*time.Second + warehouseReplyTimeout},
@@ -377,10 +379,10 @@ func TestBrainWarehouseChatPages(t *testing.T) {
 		runTrainerSteps(t, b, []trainerStep{
 			{name: "select", wantRule: "warehouse", wantKind: actSelect},
 			{name: "talk", at: time.Second, events: []Event{MyTargetSelected{ObjectID: keeperObj}}, wantRule: "warehouse", wantKind: actTalk},
-			{name: "first chat link", at: 2 * time.Second, events: []Event{first}, wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_Chat 1")},
+			{name: "first chat link", at: 2 * time.Second, events: []Event{first}, wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_Chat 1")},
 			{name: "freight page: talk again", at: 3 * time.Second, events: []Event{keeperPage(keeperObj, "DepositF", "WithdrawF", "Chat 0")}, wantRule: "warehouse", wantKind: actTalk},
-			{name: "next chat link", at: 4 * time.Second, events: []Event{first}, wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_Chat 2")},
-			{name: "clan page: open", at: 5 * time.Second, events: []Event{keeperPage(keeperObj, "DepositC", "WithdrawC", "Chat 0")}, wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true))},
+			{name: "next chat link", at: 4 * time.Second, events: []Event{first}, wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_Chat 2")},
+			{name: "clan page: open", at: 5 * time.Second, events: []Event{keeperPage(keeperObj, "DepositC", "WithdrawC", "Chat 0")}, wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true))},
 		})
 	})
 	t.Run("no clan warehouse", func(t *testing.T) {

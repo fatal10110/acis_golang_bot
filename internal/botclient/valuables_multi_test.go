@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // multiBrain is a merchant carrying the sword (101) and the staff (102) in
@@ -43,11 +45,11 @@ func TestValuablesTradeMulti(t *testing.T) {
 		first, second := rows[keys[0]], rows[keys[1]]
 		tradeOpen(t, b, t0, rows[staffKey], rows[swordKey])
 		rule, a := tradeTurn(t, b, at(time.Second))
-		wantTurn(t, "first add", rule, a, "prompt", actTradeAdd, encodeAddTradeItem(first.ObjectID, 1))
+		wantTurn(t, "first add", rule, a, "prompt", actTradeAdd, botwire.EncodeAddTradeItem(first.ObjectID, 1))
 		rule, a = tradeTurn(t, b, at(1500*time.Millisecond))
 		wantTurn(t, "first add unanswered", rule, a, "prompt", actHold, nil)
 		rule, a = tradeTurn(t, b, at(2*time.Second), TradeOwnAdd{Item: first}, TradeOtherAdd{Item: adenaPaid(int32(paid))})
-		wantTurn(t, "second add", rule, a, "prompt", actTradeAdd, encodeAddTradeItem(second.ObjectID, 1))
+		wantTurn(t, "second add", rule, a, "prompt", actTradeAdd, botwire.EncodeAddTradeItem(second.ObjectID, 1))
 		if err := b.handle([]Event{TradeOwnAdd{Item: second}}, at(3*time.Second)); err != nil {
 			t.Fatal(err)
 		}
@@ -83,7 +85,7 @@ func TestValuablesTradeMulti(t *testing.T) {
 		sum := price[swordKey] + price[staffKey]
 		offerBoth(t, b, keys, rows, sum)
 		rule, a := tradeTurn(t, b, at(4*time.Second))
-		wantTurn(t, "confirm", rule, a, "prompt", actTradeConfirm, encodeTradeDone(true))
+		wantTurn(t, "confirm", rule, a, "prompt", actTradeConfirm, botwire.EncodeTradeDone(true))
 		settle := []Event{
 			TradePressOwnOk{},
 			TradePressOtherOk{},
@@ -112,9 +114,9 @@ func TestValuablesTradeMulti(t *testing.T) {
 		b.valuablesSold = b.persona.Valuables.Budget - price[keys[0]]
 		tradeOpen(t, b, t0, rows[staffKey], rows[swordKey])
 		rule, a := tradeTurn(t, b, at(time.Second))
-		wantTurn(t, "add", rule, a, "prompt", actTradeAdd, encodeAddTradeItem(rows[keys[0]].ObjectID, 1))
+		wantTurn(t, "add", rule, a, "prompt", actTradeAdd, botwire.EncodeAddTradeItem(rows[keys[0]].ObjectID, 1))
 		rule, a = tradeTurn(t, b, at(2*time.Second), TradeOwnAdd{Item: rows[keys[0]]}, TradeOtherAdd{Item: adenaPaid(int32(price[keys[0]]))})
-		wantTurn(t, "confirm", rule, a, "prompt", actTradeConfirm, encodeTradeDone(true))
+		wantTurn(t, "confirm", rule, a, "prompt", actTradeConfirm, botwire.EncodeTradeDone(true))
 		if got := b.world.Trade.sale; got != price[keys[0]] {
 			t.Fatalf("sale %d, want %d", got, price[keys[0]])
 		}

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -212,12 +213,12 @@ func TestBrainGearPairSwap(t *testing.T) {
 		t.Fatal("the ring to wear is junk")
 	}
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "take the lesser ring off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(low.ObjectID)},
+		{name: "take the lesser ring off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(low.ObjectID)},
 		{name: "wait for it", at: 2 * time.Second},
 		{
 			name: "wear the new ring", at: 3 * time.Second,
 			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: carried(208, magicRing, partLRFinger)}}}},
-			wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(ring.ObjectID),
+			wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(ring.ObjectID),
 		},
 		{
 			name: "worn", at: 4 * time.Second,
@@ -236,7 +237,7 @@ func TestBrainGearPairStuck(t *testing.T) {
 	low, high := wornAt(208, magicRing, partLRFinger), wornAt(209, ringOfAnguish, partLRFinger)
 	b := newSlotsBrain(t, classMysticHuman, high, low, carried(210, ringOfKnowledge, partLRFinger))
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "take off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(low.ObjectID)},
+		{name: "take off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(low.ObjectID)},
 		{name: "waiting", at: time.Second + gearTimeout - time.Millisecond},
 		{name: "still worn", at: time.Second + gearTimeout},
 		{name: "not again", at: time.Minute},
@@ -252,7 +253,7 @@ func TestBrainGearTwoHander(t *testing.T) {
 	sword, shield := wornAt(201, shortSword, partRHand), wornAt(204, buckler, partLHand)
 	b := newSlotsBrain(t, classWarrior, sword, shield, carried(220, conjurorsStaff, partLRHand))
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "wear the two-hander", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(220)},
+		{name: "wear the two-hander", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(220)},
 		{
 			name: "worn, shield off", at: 2 * time.Second,
 			events: []Event{InventoryUpdate{Changes: []ItemChange{

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 func TestKillOf(t *testing.T) {
@@ -142,7 +143,7 @@ func TestLootTurns(t *testing.T) {
 		return Sent{Op: opAction, Target: id, Payload: p}
 	}
 	move := func(from int32) Sent {
-		return Sent{Op: opMoveBackwardToLocation, Payload: botclient.EncodeMoveBackwardToLocation(pt(from+50), pt(from))}
+		return Sent{Op: opMoveBackwardToLocation, Payload: botwire.EncodeMoveBackwardToLocation(pt(from+50), pt(from))}
 	}
 	tests := []struct {
 		name string

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -128,19 +128,10 @@ func (m *TravelMap) crystallizeWant(contents []WarehouseItem, reserved map[int32
 	return out
 }
 
-// encodeRequestCrystallizeItem crystallizes count of item object
-// (clientpackets/item_ops.go: two int32, object id then count).
-func encodeRequestCrystallizeItem(object, count int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestCrystallizeItem)
-	w.WriteInt32(object)
-	w.WriteInt32(count)
-	return w.Bytes()
-}
-
 // crystallizeAction crystallizes the whole of item object. It passes the
 // craft gate (gateCraft, craftGap).
 func crystallizeAction(object int32) Action {
-	return Action{kind: actCrystallize, payload: encodeRequestCrystallizeItem(object, 1), object: object}
+	return Action{kind: actCrystallize, payload: botwire.EncodeRequestCrystallizeItem(object, 1), object: object}
 }
 
 // crystalStep is the crystallizing of a crafter cycle: the gear it

@@ -1,34 +1,9 @@
 package botclient
 
 import (
-	"bytes"
 	"testing"
 	"time"
 )
-
-// The requests encode the server's readImpl field order: the payloads the
-// server's own decoder tests read (clientpackets/duel_test.go; RequestTargetCancel
-// clientpackets/targetaction.go, one uint16).
-func TestPvPWireEncode(t *testing.T) {
-	tests := []struct {
-		name string
-		got  []byte
-		want []byte
-	}{
-		{"RequestDuelStart party", encodeRequestDuelStart("Ab", true), []byte{0xd0, 0x27, 0x00, 'A', 0, 'b', 0, 0, 0, 1, 0, 0, 0}},
-		{"RequestDuelStart", encodeRequestDuelStart("Ab", false), []byte{0xd0, 0x27, 0x00, 'A', 0, 'b', 0, 0, 0, 0, 0, 0, 0}},
-		{"RequestDuelAnswerStart accepted", encodeRequestDuelAnswerStart(false, true), []byte{0xd0, 0x28, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0}},
-		{"RequestDuelAnswerStart party declined", encodeRequestDuelAnswerStart(true, false), []byte{0xd0, 0x28, 0x00, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-		{"RequestTargetCancel", encodeRequestTargetCancel(), []byte{0x37, 0x00, 0x00}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if !bytes.Equal(tt.got, tt.want) {
-				t.Fatalf("encoded % x, want % x", tt.got, tt.want)
-			}
-		})
-	}
-}
 
 // The SystemMessage ids match the server's constants
 // (serverpackets/systemmessage.go, systemmessage_duel.go,

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Channel fixtures: another party of the bot's channel, led by mateLeader,
@@ -13,24 +15,6 @@ const (
 	thirdLeader = int32(0x20000201)
 	bystander   = int32(0x20000301)
 )
-
-// TestEncodeChannelAsks checks the asks against the server's decoders
-// (clientpackets/party.go DecodeRequestExMPCCShowPartyMembersInfo: 0xd0,
-// sub-opcode 0x0026, leader id; RequestUserCommand: 0xaa, command id).
-func TestEncodeChannelAsks(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"members", encodeRequestExMPCCShowPartyMembersInfo(0x01020304), []byte{0xd0, 0x26, 0x00, 0x04, 0x03, 0x02, 0x01}},
-		{"overview", encodeRequestUserCommand(userCommandChannelList), []byte{0xaa, 97, 0, 0, 0}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
 
 // channelBrain is a pvpBrain in a party with selfID leading, whose party is
 // in a channel with mateLeader's (pcID in it) and thirdLeader's, the
@@ -137,8 +121,8 @@ func TestChannelModel(t *testing.T) {
 // members, one per channelAskGap, and in an arena all again after
 // channelRefresh.
 func TestRuleChannelAsks(t *testing.T) {
-	overview := encodeRequestUserCommand(userCommandChannelList)
-	members := encodeRequestExMPCCShowPartyMembersInfo
+	overview := botwire.EncodeRequestUserCommand(userCommandChannelList)
+	members := botwire.EncodeRequestExMPCCShowPartyMembersInfo
 	type step struct {
 		at    time.Duration
 		ev    Event

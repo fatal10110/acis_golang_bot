@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -45,11 +46,11 @@ func TestShopVisitLeavesWantsElsewhere(t *testing.T) {
 			wantRule: "shop", wantKind: actSelect,
 		},
 		{name: "talk", at: 2 * time.Second, events: []Event{MyTargetSelected{ObjectID: armorerObj}}, wantRule: "shop", wantKind: actTalk},
-		{name: "buy link", at: 3 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(buyCommand(armorerObj, 13))},
+		{name: "buy link", at: 3 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(buyCommand(armorerObj, 13))},
 		{
 			name: "buy the arrows", at: 4 * time.Second,
 			events:   []Event{BuyList{Money: 39004, ListID: 13, Items: []ShopItem{{Category: 5, ObjectID: woodenArrow, TemplateID: woodenArrow, SubCategory: 5, Price: 2}}}},
-			wantRule: "shop", wantKind: actBuyItem, wantPayload: encodeRequestBuyItem(13, []buyRow{{woodenArrow, 100}}),
+			wantRule: "shop", wantKind: actBuyItem, wantPayload: botwire.EncodeRequestBuyItem(13, []buyRow{{Item: woodenArrow, Count: 100}}),
 		},
 		{
 			name: "bought: the visit ends", at: 5 * time.Second,

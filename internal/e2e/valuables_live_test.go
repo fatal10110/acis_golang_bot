@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The valuables scenarios (#402, docs/valuables/preset.md "Live scenarios
@@ -78,7 +79,7 @@ func TestLiveValuablesTradeSale(t *testing.T) {
 	t.Logf("%s agreed at %d", f.name, agreed)
 
 	b.until(t, ctx, f.name+" asks "+b.c.Self.Name+" to trade", 3*time.Minute, func() bool { return b.requested })
-	if err := b.c.Send(ctx, botclient.EncodeAnswerTradeRequest(true)); err != nil {
+	if err := b.c.Send(ctx, botwire.EncodeAnswerTradeRequest(true)); err != nil {
 		t.Fatal(err)
 	}
 	paid := b.buyByTrade(t, ctx, int32(agreed))
@@ -320,7 +321,7 @@ func trimCarried(t *testing.T, ctx context.Context, tg *Target, account string, 
 		if seen[it.TemplateID]++; seen[it.TemplateID] <= n {
 			continue
 		}
-		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(id, it.Count)); err != nil {
+		if err := c.Send(ctx, botwire.EncodeRequestDestroyItem(id, it.Count)); err != nil {
 			t.Fatal(err)
 		}
 		ev, err := c.Await(ctx, time.Minute, func(ev botclient.Event) bool {
@@ -385,7 +386,7 @@ func enterBuyer(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, f *
 func (b *valuablesBuyer) destroyBought(t *testing.T, ctx context.Context) {
 	t.Helper()
 	for _, id := range b.bought {
-		if err := b.c.Send(ctx, botclient.EncodeRequestDestroyItem(id, 1)); err != nil {
+		if err := b.c.Send(ctx, botwire.EncodeRequestDestroyItem(id, 1)); err != nil {
 			t.Errorf("%s destroys bought item %d: %v", b.c.Self.Name, id, err)
 			return
 		}
@@ -421,7 +422,7 @@ func (b *valuablesBuyer) note(ev botclient.Event) {
 			return
 		}
 		switch e.Type {
-		case botclient.ChatTrade:
+		case botwire.ChatTrade:
 			b.ads = append(b.ads, e.Text)
 		case chatTell:
 			b.tells = append(b.tells, e.Text)
@@ -508,14 +509,14 @@ func (b *valuablesBuyer) buyByTrade(t *testing.T, ctx context.Context, price int
 	if got := ev.(botclient.TradeOtherAdd).Item; got.TemplateID != swordOfWatershadow || got.Count != 1 {
 		t.Fatalf("%s offers %d of template %d, want one %s", b.merchant, got.Count, got.TemplateID, swordName)
 	}
-	if err := b.c.Send(ctx, botclient.EncodeAddTradeItem(coins, price)); err != nil {
+	if err := b.c.Send(ctx, botwire.EncodeAddTradeItem(coins, price)); err != nil {
 		t.Fatal(err)
 	}
 	b.await(t, ctx, b.merchant+" confirms a paid trade", 30*time.Second, func(ev botclient.Event) bool {
 		_, ok := ev.(botclient.TradePressOtherOk)
 		return ok
 	})
-	if err := b.c.Send(ctx, botclient.EncodeTradeDone(true)); err != nil {
+	if err := b.c.Send(ctx, botwire.EncodeTradeDone(true)); err != nil {
 		t.Fatal(err)
 	}
 	var done, sword bool
@@ -550,11 +551,11 @@ func (b *valuablesBuyer) buyByTrade(t *testing.T, ctx context.Context, price int
 // returns the store's list.
 func (b *valuablesBuyer) storeList(t *testing.T, ctx context.Context, owner int32) botclient.PrivateStoreListSell {
 	t.Helper()
-	if err := b.c.Send(ctx, botclient.EncodeAction(owner, b.c.Pos())); err != nil {
+	if err := b.c.Send(ctx, botwire.EncodeAction(owner, b.c.Pos())); err != nil {
 		t.Fatal(err)
 	}
 	b.await(t, ctx, b.c.Self.Name+" selects "+b.merchant, 30*time.Second, func(botclient.Event) bool { return b.c.Target() == owner })
-	if err := b.c.Send(ctx, botclient.EncodeAction(owner, b.c.Pos())); err != nil {
+	if err := b.c.Send(ctx, botwire.EncodeAction(owner, b.c.Pos())); err != nil {
 		t.Fatal(err)
 	}
 	ev := b.await(t, ctx, b.c.Self.Name+" reads "+b.merchant+"'s store list", 30*time.Second, func(ev botclient.Event) bool {

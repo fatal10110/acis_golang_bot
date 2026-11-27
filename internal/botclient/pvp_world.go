@@ -4,6 +4,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -975,5 +976,5 @@ func (b *Brain) declineDuel(now time.Time) (Action, bool) {
 	if b.persona.PvP.Duels || a.at.IsZero() || now.Sub(a.at) > duelAskOpen {
 		return Action{}, false
 	}
-	return Action{kind: actDuelAnswer, payload: encodeRequestDuelAnswerStart(a.party, false)}, true
+	return Action{kind: actDuelAnswer, payload: botwire.EncodeRequestDuelAnswerStart(a.party, false)}, true
 }

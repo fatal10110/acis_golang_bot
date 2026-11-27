@@ -210,7 +210,7 @@ func TestShotWants(t *testing.T) {
 		{
 			name: "no-grade weapon", class: classHumanFight,
 			items: []Item{wielded(1, ngSword), shotStack(10, soulshotNoGrade, 50)},
-			want:  []buyRow{{soulshotNoGrade, 450}},
+			want:  []buyRow{{Item: soulshotNoGrade, Count: 450}},
 		},
 		{
 			name: "beginners' shots count", class: classHumanFight,
@@ -223,12 +223,12 @@ func TestShotWants(t *testing.T) {
 		{
 			name: "D weapon, D shots from a spawned merchant", class: classHumanFight, catSpawned: true,
 			items: []Item{wielded(1, dSword)},
-			want:  []buyRow{{dSoulshot, 500}},
+			want:  []buyRow{{Item: dSoulshot, Count: 500}},
 		},
 		{
 			name: "next weapon's shots too", class: classHumanFight, catSpawned: true,
 			items: []Item{wielded(1, ngSword), spare(2, dSword), shotStack(10, soulshotNoGrade, 500)},
-			want:  []buyRow{{dSoulshot, 500}},
+			want:  []buyRow{{Item: dSoulshot, Count: 500}},
 		},
 		{
 			name: "persona restock of unusable shots", class: classHumanFight, catSpawned: true,
@@ -240,13 +240,13 @@ func TestShotWants(t *testing.T) {
 		{
 			name: "mystic: blessed spiritshots", class: classHumanMystic,
 			items: []Item{wielded(1, ngWand)},
-			want:  []buyRow{{blessedNoGrade, 200}},
+			want:  []buyRow{{Item: blessedNoGrade, Count: 200}},
 		},
 		{
 			name: "mystic: plain spiritshots where no blessed are sold", class: classHumanMystic,
 			items: []Item{wielded(1, ngWand), shotStack(10, spiritshotNoGrade, 20)},
 			edit:  func(b *Brain) { delete(b.cfg.Travel.spawnedSold, blessedNoGrade) },
-			want:  []buyRow{{spiritshotNoGrade, 180}},
+			want:  []buyRow{{Item: spiritshotNoGrade, Count: 180}},
 		},
 		{
 			name: "mystic weapon without spiritshot room", class: classHumanMystic,
@@ -343,7 +343,7 @@ func TestShotFactor(t *testing.T) {
 func TestShotFactorBuy(t *testing.T) {
 	for _, spawned := range []bool{false, true} {
 		b := newShotBrain(t, classHumanFight, spawned, wielded(1, ngSword), adenaStack(1000000))
-		got := slices.ContainsFunc(b.gearWants(), func(r buyRow) bool { return r.item == dSword })
+		got := slices.ContainsFunc(b.gearWants(), func(r buyRow) bool { return r.Item == dSword })
 		if got != spawned {
 			t.Errorf("Sales Cat spawned %v: buys the D sword %v, want %v", spawned, got, spawned)
 		}

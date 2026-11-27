@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -392,7 +393,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 	destroyed, refused := 0, []string{}
 	for _, id := range gone {
 		it := inv[id]
-		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(id, it.Count)); err != nil {
+		if err := c.Send(ctx, botwire.EncodeRequestDestroyItem(id, it.Count)); err != nil {
 			t.Fatal(err)
 		}
 		// A destroy also tells the item disarmed (417) or gone (302)
@@ -416,7 +417,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		}
 		refused = append(refused, fmt.Sprintf("%s (%T%+v)", items[it.TemplateID].Name, ev, ev))
 		if inv[id].Equipped {
-			if err := c.Send(ctx, botclient.EncodeUseItem(id)); err != nil {
+			if err := c.Send(ctx, botwire.EncodeUseItem(id)); err != nil {
 				t.Fatal(err)
 			}
 			await(items[it.TemplateID].Name+" taken off", func() bool { return !inv[id].Equipped })
@@ -446,7 +447,7 @@ func strip(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, items ma
 		if inv[id].Equipped {
 			continue
 		}
-		if err := c.Send(ctx, botclient.EncodeUseItem(id)); err != nil {
+		if err := c.Send(ctx, botwire.EncodeUseItem(id)); err != nil {
 			t.Fatal(err)
 		}
 		await(fmt.Sprintf("%d worn", tmpl), func() bool { return inv[id].Equipped })

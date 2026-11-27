@@ -42,32 +42,32 @@ func TestBudgetTiers(t *testing.T) {
 		window []ShopItem
 		want   []buyRow
 	}{
-		{name: "broke: what the reserve leaves", adena: keep + 500, window: soeOnly, want: []buyRow{{scrollOfEscape, 1}}},
+		{name: "broke: what the reserve leaves", adena: keep + 500, window: soeOnly, want: []buyRow{{Item: scrollOfEscape, Count: 1}}},
 		{name: "broke: nothing under the reserve", adena: keep + 399, window: soeOnly},
 		{
 			name: "reserve: one SoE over a lower KeepAdena", adena: 1000, window: soeOnly,
 			edit: func(b *Brain) { b.persona.Shop.KeepAdena = 0 },
-			want: []buyRow{{scrollOfEscape, 1}},
+			want: []buyRow{{Item: scrollOfEscape, Count: 1}},
 		},
-		{name: "supplies before gear", adena: gearKeep + 2430 + 400, window: armor, want: []buyRow{{scrollOfEscape, 2}}},
+		{name: "supplies before gear", adena: gearKeep + 2430 + 400, window: armor, want: []buyRow{{Item: scrollOfEscape, Count: 2}}},
 		{
 			name: "no supplies: the gear", adena: gearKeep + 2430 + 400, window: armor,
 			edit: func(b *Brain) { b.persona.Supply.Escapes = 0 },
-			want: []buyRow{{leatherShirt22, 1}},
+			want: []buyRow{{Item: leatherShirt22, Count: 1}},
 		},
-		{name: "comfort tops the supplies up", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: goal, want: []buyRow{{scrollOfEscape, 1}}},
+		{name: "comfort tops the supplies up", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: goal, want: []buyRow{{Item: scrollOfEscape, Count: 1}}},
 		{name: "saving for the goal skips comfort", adena: gearKeep + 130000, items: []Item{carriedSoE}, window: goal},
 		{
 			name: "no saving below SaveFrom", adena: gearKeep + 130000, items: []Item{carriedSoE}, window: goal,
 			edit: func(b *Brain) { b.persona.Gear.SaveFrom = 90 },
-			want: []buyRow{{scrollOfEscape, 1}},
+			want: []buyRow{{Item: scrollOfEscape, Count: 1}},
 		},
 		{
 			name: "SaveFrom 0 never saves", adena: gearKeep + 130000, items: []Item{carriedSoE}, window: goal,
 			edit: func(b *Brain) { b.persona.Gear.SaveFrom = 0 },
-			want: []buyRow{{scrollOfEscape, 1}},
+			want: []buyRow{{Item: scrollOfEscape, Count: 1}},
 		},
-		{name: "the goal bought, then comfort", adena: gearKeep + 244000 + 400, items: []Item{carriedSoE}, window: goal, want: []buyRow{{falchion, 1}, {scrollOfEscape, 1}}},
+		{name: "the goal bought, then comfort", adena: gearKeep + 244000 + 400, items: []Item{carriedSoE}, window: goal, want: []buyRow{{Item: falchion, Count: 1}, {Item: scrollOfEscape, Count: 1}}},
 		{
 			name: "comfort off", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: goal,
 			edit: func(b *Brain) { b.persona.Shop.Comfort = false },
@@ -85,8 +85,8 @@ func TestBudgetTiers(t *testing.T) {
 			}
 			var cost int64
 			for _, r := range got {
-				j := slices.IndexFunc(tt.window, func(it ShopItem) bool { return it.TemplateID == r.item })
-				cost += int64(r.count) * int64(tt.window[j].Price)
+				j := slices.IndexFunc(tt.window, func(it ShopItem) bool { return it.TemplateID == r.Item })
+				cost += int64(r.Count) * int64(tt.window[j].Price)
 			}
 			if left := int64(tt.adena) - cost; left < b.reserve() {
 				t.Fatalf("left %d adena, under the reserve %d", left, b.reserve())

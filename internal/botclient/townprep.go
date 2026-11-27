@@ -61,7 +61,7 @@ func (b *Brain) preparing() bool {
 func (b *Brain) prepShort() bool {
 	adena := int64(b.carried(adenaID)) - b.floor(tierSupplies)
 	for _, r := range slices.Concat(b.shotWants(), b.supplyWants(), b.reagentWants()) {
-		if price, ok := b.cfg.Travel.cheapest[r.item]; ok && int64(price) <= adena && b.soldNear(r.item) {
+		if price, ok := b.cfg.Travel.cheapest[r.Item]; ok && int64(price) <= adena && b.soldNear(r.Item) {
 			return true
 		}
 	}

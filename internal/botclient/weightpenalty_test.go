@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestWeightBand pins weightBand to the server's bands
@@ -144,15 +146,15 @@ func TestBrainGearGradePenaltySwap(t *testing.T) {
 	t.Run("swap", func(t *testing.T) {
 		b := newPenaltyBrain(t, 0, true, wornArtisan, spareSword)
 		runTrainerSteps(t, b, []trainerStep{
-			{name: "take off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(wornArtisan.ObjectID)},
+			{name: "take off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(wornArtisan.ObjectID)},
 			{name: "waiting", at: 2 * time.Second},
-			{name: "wear the short sword", at: 3 * time.Second, events: []Event{off}, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(spareSword.ObjectID)},
+			{name: "wear the short sword", at: 3 * time.Second, events: []Event{off}, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(spareSword.ObjectID)},
 		})
 	})
 	t.Run("ignored", func(t *testing.T) {
 		b := newPenaltyBrain(t, 0, true, wornArtisan, spareSword)
 		runTrainerSteps(t, b, []trainerStep{
-			{name: "take off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(wornArtisan.ObjectID)},
+			{name: "take off", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(wornArtisan.ObjectID)},
 			{name: "given up", at: time.Second + gearTimeout},
 			{name: "not again", at: time.Minute},
 		})
@@ -166,7 +168,7 @@ func TestBrainGearGradePenaltySwap(t *testing.T) {
 // its load into the half-speed band: a piece that would is left out, the
 // lighter ones after it still bought; with no weights known all are.
 func TestGearWantsUnderSlowBand(t *testing.T) {
-	all := []buyRow{{falchion, 1}, {longSword, 1}, {leatherShirt22, 1}, {woodenGaiters, 1}, {leatherHelmet, 1}}
+	all := []buyRow{{Item: falchion, Count: 1}, {Item: longSword, Count: 1}, {Item: leatherShirt22, Count: 1}, {Item: woodenGaiters, Count: 1}, {Item: leatherHelmet, Count: 1}}
 	tests := []struct {
 		name    string
 		weights map[int32]int32
@@ -177,7 +179,7 @@ func TestGearWantsUnderSlowBand(t *testing.T) {
 			// 2000 swords is left out.
 			name:    "a piece past the band",
 			weights: map[int32]int32{falchion: 2000, longSword: 2000, leatherShirt22: 4000, woodenGaiters: 1000, leatherHelmet: 1000},
-			want:    []buyRow{{falchion, 1}, {longSword, 1}, {woodenGaiters, 1}, {leatherHelmet, 1}},
+			want:    []buyRow{{Item: falchion, Count: 1}, {Item: longSword, Count: 1}, {Item: woodenGaiters, Count: 1}, {Item: leatherHelmet, Count: 1}},
 		},
 		{name: "all fit", weights: map[int32]int32{falchion: 1}, want: all},
 		{name: "no weights", want: all},
@@ -200,7 +202,7 @@ func TestGearWantsUnderSlowBand(t *testing.T) {
 // left out whole, never in part.
 func TestGearWantsSetUnderSlowBand(t *testing.T) {
 	const keep = 10000
-	set := []buyRow{{setShield, 1}, {setChest, 1}, {setLegs, 1}, {setHead, 1}}
+	set := []buyRow{{Item: setShield, Count: 1}, {Item: setChest, Count: 1}, {Item: setLegs, Count: 1}, {Item: setHead, Count: 1}}
 	tests := []struct {
 		name   string
 		weight int32

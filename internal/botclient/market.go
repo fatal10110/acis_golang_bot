@@ -5,6 +5,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Store buying timing and reach (docs/items.md section 8).
@@ -138,7 +140,7 @@ func (b *Brain) ruleMarket(now time.Time) (Action, bool) {
 	}
 	if l := m.list; l != nil {
 		if rows := b.marketRows(*l); len(rows) > 0 {
-			return Action{kind: actStoreBuy, payload: encodeRequestPrivateStoreBuy(l.OwnerID, rows), object: m.v.obj}, true
+			return Action{kind: actStoreBuy, payload: botwire.EncodeRequestPrivateStoreBuy(l.OwnerID, rows), object: m.v.obj}, true
 		}
 		m.end(now, cooldown)
 		return Action{}, false
@@ -201,12 +203,12 @@ func (b *Brain) marketWants() []want {
 	var out []want
 	for _, s := range b.supplies() {
 		if have := b.carried(s.item); b.refills(have, s.count) {
-			out = append(out, want{buyRow: buyRow{item: s.item, count: s.count - have}, tier: tierSupplies})
+			out = append(out, want{buyRow: buyRow{Item: s.item, Count: s.count - have}, tier: tierSupplies})
 		}
 	}
 	goal, _ := b.gearGoal()
 	for _, id := range goal {
-		out = append(out, want{buyRow: buyRow{item: id, count: 1}, tier: tierGear})
+		out = append(out, want{buyRow: buyRow{Item: id, Count: 1}, tier: tierGear})
 	}
 	return out
 }
@@ -249,22 +251,22 @@ func (b *Brain) marketRows(l PrivateStoreListSell) []storeRow {
 	var bought [slotCount]bool
 	for _, w := range b.marketWants() {
 		t, slot := w.tier, slotNone
-		if g, ok := b.gearItem(w.item); ok {
+		if g, ok := b.gearItem(w.Item); ok {
 			if slot = slotOf(g.part); bought[slot] {
 				continue
 			}
 			t = max(t, tierGear)
 		}
 		var rest int64 // the planned set's pieces still to buy after this one
-		if slices.Contains(set, w.item) {
+		if slices.Contains(set, w.Item) {
 			for _, id := range set {
-				if id != w.item && !slices.Contains(got, id) {
+				if id != w.Item && !slices.Contains(got, id) {
 					rest += int64(b.cfg.Travel.cheapest[id])
 				}
 			}
 		}
-		need := int64(w.count)
-		for _, it := range b.offers(l, w.item) {
+		need := int64(w.Count)
+		for _, it := range b.offers(l, w.Item) {
 			n := min(need, int64(it.Count))
 			if it.Price > 0 {
 				n = min(n, (int64(l.BuyerAdena)-spent-b.floor(t)-rest)/int64(it.Price))
@@ -276,8 +278,8 @@ func (b *Brain) marketRows(l PrivateStoreListSell) []storeRow {
 			bought[slot] = true
 			spent += n * int64(it.Price)
 			need -= n
-			rows = append(rows, storeRow{object: it.ObjectID, count: int32(n), price: it.Price})
-			got = append(got, w.item)
+			rows = append(rows, storeRow{Object: it.ObjectID, Count: int32(n), Price: it.Price})
+			got = append(got, w.Item)
 			if len(rows) == shopMaxRows {
 				return rows
 			}

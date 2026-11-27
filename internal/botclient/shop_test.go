@@ -1,11 +1,11 @@
 package botclient
 
 import (
-	"bytes"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -39,27 +39,6 @@ var (
 	bookOffer   = ShopItem{Category: 5, ObjectID: healBook, TemplateID: healBook, Count: 3, SubCategory: 5, Price: 110}
 	skinRow     = ShopItem{Category: 5, ObjectID: 102, TemplateID: animalSkin, Count: 10, SubCategory: 5, Price: 5}
 )
-
-func TestShopEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{
-			"RequestBuyItem", encodeRequestBuyItem(14, []buyRow{{1060, 18}, {2509, 129}}),
-			[]byte{0x1f, 14, 0, 0, 0, 2, 0, 0, 0, 0x24, 4, 0, 0, 18, 0, 0, 0, 0xcd, 9, 0, 0, 129, 0, 0, 0},
-		},
-		{
-			"RequestSellItem", encodeRequestSellItem(0, []sellRow{{102, 1867, 10}}),
-			[]byte{0x1e, 0, 0, 0, 0, 1, 0, 0, 0, 102, 0, 0, 0, 0x4b, 7, 0, 0, 10, 0, 0, 0},
-		},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
 
 func TestIndexShops(t *testing.T) {
 	shops, cheapest := indexShops([]datapack.BuyList{
@@ -129,14 +108,14 @@ func TestBrainShopVisit(t *testing.T) {
 		},
 		{name: "talk", at: 41 * time.Second, events: []Event{MyTargetSelected{ObjectID: merchantObj}}, wantRule: "shop", wantKind: actTalk},
 		{name: "wait for the page", at: 42 * time.Second, wantRule: "shop"},
-		{name: "sell link", at: 43 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(sellCommand(merchantObj))},
+		{name: "sell link", at: 43 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(sellCommand(merchantObj))},
 		{name: "wait for the window", at: 44 * time.Second, wantRule: "shop"},
 		{
 			// The quest item and the equipped sword are never offered; the
 			// window leaves out the shirt and lists the potions, kept.
 			name: "sell the junk listed", at: 45 * time.Second,
 			events:   []Event{SellList{Money: 5000, Items: []ShopItem{skinRow, {ObjectID: 101, TemplateID: lesserHealingPotion, Count: 2, Price: 50}}}},
-			wantRule: "shop", wantKind: actSellItem, wantPayload: encodeRequestSellItem(0, []sellRow{{102, animalSkin, 10}}),
+			wantRule: "shop", wantKind: actSellItem, wantPayload: botwire.EncodeRequestSellItem(0, []sellRow{{Object: 102, Item: animalSkin, Count: 10}}),
 		},
 		{name: "wait for the sale", at: 46 * time.Second, wantRule: "shop"},
 		{
@@ -147,13 +126,13 @@ func TestBrainShopVisit(t *testing.T) {
 			},
 			wantRule: "shop", wantKind: actTalk,
 		},
-		{name: "buy link", at: 48 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(buyCommand(merchantObj, 14))},
+		{name: "buy link", at: 48 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(buyCommand(merchantObj, 14))},
 		{
 			// 4050 adena past the 1000 kept: 18 potions (1854), then 129
 			// spiritshots of the 200 wanted. No soulshots for a mystic.
 			name: "buy", at: 49 * time.Second,
 			events:   []Event{BuyList{Money: 5050, ListID: 14, Items: []ShopItem{{TemplateID: 1835, Price: 8}, shotOffer, potionOffer}}},
-			wantRule: "shop", wantKind: actBuyItem, wantPayload: encodeRequestBuyItem(14, []buyRow{{lesserHealingPotion, 18}, {spiritshotNoGrade, 129}}),
+			wantRule: "shop", wantKind: actBuyItem, wantPayload: botwire.EncodeRequestBuyItem(14, []buyRow{{Item: lesserHealingPotion, Count: 18}, {Item: spiritshotNoGrade, Count: 129}}),
 		},
 		{name: "wait for the purchase", at: 50 * time.Second, wantRule: "shop"},
 		{
@@ -308,7 +287,7 @@ func TestShopGivesUp(t *testing.T) {
 	var sale []sellRow
 	for _, it := range junk[3:] {
 		window.Items = append(window.Items, ShopItem{ObjectID: it.ObjectID, TemplateID: it.TemplateID, Count: it.Count, Price: 1})
-		sale = append(sale, sellRow{it.ObjectID, it.TemplateID, it.Count})
+		sale = append(sale, sellRow{Object: it.ObjectID, Item: it.TemplateID, Count: it.Count})
 	}
 	// The server refuses a sale in silence (network/sell.go
 	// requestSellItem): neither the window nor the sale is answered.
@@ -323,7 +302,7 @@ func TestShopGivesUp(t *testing.T) {
 			name: "sell window never opens", items: junk,
 			steps: []trainerStep{
 				{name: "talk", at: time.Second, setup: inSight, wantRule: "shop", wantKind: actTalk},
-				{name: "sell link", at: 2 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(sellCommand(merchantObj))},
+				{name: "sell link", at: 2 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(sellCommand(merchantObj))},
 				{name: "waiting", at: 2*time.Second + shopReplyTimeout - 1, wantRule: "shop"},
 				{name: "no buy list: given up", at: 2*time.Second + shopReplyTimeout},
 			},
@@ -333,7 +312,7 @@ func TestShopGivesUp(t *testing.T) {
 			steps: []trainerStep{
 				{name: "talk", at: time.Second, setup: inSight, wantRule: "shop", wantKind: actTalk},
 				{name: "sell link", at: 2 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass},
-				{name: "sell", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem, wantPayload: encodeRequestSellItem(0, sale)},
+				{name: "sell", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem, wantPayload: botwire.EncodeRequestSellItem(0, sale)},
 				{name: "waiting", at: 3*time.Second + shopReplyTimeout - 1, wantRule: "shop"},
 				{name: "no buy list: given up", at: 3*time.Second + shopReplyTimeout},
 			},
@@ -346,7 +325,7 @@ func TestShopGivesUp(t *testing.T) {
 				{name: "sell", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem},
 				{name: "waiting", at: 3*time.Second + shopReplyTimeout - 1, wantRule: "shop"},
 				{name: "talk again for the buy list", at: 3*time.Second + shopReplyTimeout, wantRule: "shop", wantKind: actTalk},
-				{name: "buy link", at: 4*time.Second + shopReplyTimeout, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(buyCommand(merchantObj, 14))},
+				{name: "buy link", at: 4*time.Second + shopReplyTimeout, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(buyCommand(merchantObj, 14))},
 				{name: "given up", at: 4*time.Second + 2*shopReplyTimeout},
 			},
 		},
@@ -434,12 +413,12 @@ func TestTrainerBuysSpellbook(t *testing.T) {
 		{name: "cost", at: 3 * time.Second, events: []Event{AcquireSkillList{Skills: []AcquirableSkill{heal1}}}, wantRule: "train", wantKind: actSkillInfo},
 		{name: "book missing: no learn, to the seller", at: 4 * time.Second, events: []Event{book}, wantRule: "shop", wantKind: actSelect},
 		{name: "talk", at: 5 * time.Second, events: []Event{MyTargetSelected{ObjectID: bookSellerObj}}, wantRule: "shop", wantKind: actTalk},
-		{name: "buy link", at: 6 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: bookSellerObj, HTML: merchantPage(bookSellerObj, 29)}}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(buyCommand(bookSellerObj, 29))},
-		{name: "buy one", at: 7 * time.Second, events: []Event{BuyList{Money: 2000, ListID: 29, Items: []ShopItem{bookOffer}}}, wantRule: "shop", wantKind: actBuyItem, wantPayload: encodeRequestBuyItem(29, []buyRow{{healBook, 1}})},
+		{name: "buy link", at: 6 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: bookSellerObj, HTML: merchantPage(bookSellerObj, 29)}}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(buyCommand(bookSellerObj, 29))},
+		{name: "buy one", at: 7 * time.Second, events: []Event{BuyList{Money: 2000, ListID: 29, Items: []ShopItem{bookOffer}}}, wantRule: "shop", wantKind: actBuyItem, wantPayload: botwire.EncodeRequestBuyItem(29, []buyRow{{Item: healBook, Count: 1}})},
 		{
 			name: "bought: back to the trainer", at: 8 * time.Second,
 			events:   []Event{ItemList{Items: []Item{adenaStack(1890), potionsOf(20), spiritsOf(100), {ObjectID: 300, TemplateID: healBook, Count: 1}}}},
-			wantRule: "train", wantKind: actSelect, wantPayload: encodeAction(trainerObj, Point{}),
+			wantRule: "train", wantKind: actSelect, wantPayload: botwire.EncodeAction(trainerObj, Point{}),
 		},
 	})
 	if len(b.shop.books) != 0 {
@@ -474,7 +453,7 @@ func TestShopKeepsBoughtBook(t *testing.T) {
 		it := Item{ObjectID: 200 + int32(i), TemplateID: 1867 + int32(i), Count: 1, SubCategory: 5}
 		junk = append(junk, it)
 		window.Items = append(window.Items, ShopItem{ObjectID: it.ObjectID, TemplateID: it.TemplateID, Count: 1, Price: 1})
-		sale = append(sale, sellRow{it.ObjectID, it.TemplateID, 1})
+		sale = append(sale, sellRow{Object: it.ObjectID, Item: it.TemplateID, Count: 1})
 	}
 	window.Items = append(window.Items, ShopItem{ObjectID: book.ObjectID, TemplateID: healBook, Count: 1, Price: 55})
 	carrying := append([]Item{adenaStack(5000), potionsOf(20), spiritsOf(100), book}, junk...)
@@ -491,7 +470,7 @@ func TestShopKeepsBoughtBook(t *testing.T) {
 			wantRule: "shop", wantKind: actTalk,
 		},
 		{name: "sell link", at: 2 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: merchantObj, HTML: merchantPage(merchantObj, 14)}}, wantRule: "shop", wantKind: actBypass},
-		{name: "the junk sold, the book kept", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem, wantPayload: encodeRequestSellItem(0, sale)},
+		{name: "the junk sold, the book kept", at: 3 * time.Second, events: []Event{window}, wantRule: "shop", wantKind: actSellItem, wantPayload: botwire.EncodeRequestSellItem(0, sale)},
 	})
 	if !b.shop.held[healBook] || len(b.shop.books) != 0 {
 		t.Fatalf("held %v, books %v: want the book held, none wanted", b.shop.held, b.shop.books)

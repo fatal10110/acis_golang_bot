@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -23,13 +24,13 @@ func gkSteps(rule string, start time.Duration, npcID int32, npcAt, stand Point, 
 			name: "gatekeeper in sight: select", at: s(0),
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(stand) },
 			events:   []Event{NPCInfo{ObjectID: gkObj, NPCID: npcID, Pos: npcAt}},
-			wantRule: rule, wantKind: actSelect, wantPayload: encodeAction(gkObj, stand),
+			wantRule: rule, wantKind: actSelect, wantPayload: botwire.EncodeAction(gkObj, stand),
 		},
 		{name: "talk", at: s(1), events: []Event{MyTargetSelected{ObjectID: gkObj}}, wantRule: rule, wantKind: actTalk},
 		{name: "wait for the page", at: s(2), wantRule: rule},
 		{
 			name: "list link", at: s(3), events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkPage(gkObj)}},
-			wantRule: rule, wantKind: actBypass, wantPayload: encodeRequestBypassToServer(teleportListBypass(gkObj)),
+			wantRule: rule, wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(teleportListBypass(gkObj)),
 		},
 		{name: "wait for the list", at: s(4), wantRule: rule},
 		last,
@@ -37,7 +38,7 @@ func gkSteps(rule string, start time.Duration, npcID int32, npcAt, stand Point, 
 }
 
 // destLink is the trip's destination link to testTravelMap's index 2.
-var destLink = encodeRequestBypassToServer(teleportBypass(gkObj, 2))
+var destLink = botwire.EncodeRequestBypassToServer(teleportBypass(gkObj, 2))
 
 // newPartyTripLeader is a level 20 bot at the origin carrying 5000 adena,
 // with spot "low" in walking reach that fits it not and spot "far" past the

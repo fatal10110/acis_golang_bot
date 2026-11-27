@@ -14,6 +14,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botaccounts"
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // MaxOnline is the most e2e characters a scenario keeps online at once,
@@ -456,7 +457,7 @@ func (c *Client) follow(ctx context.Context, ev botclient.Event) error {
 	case botclient.TeleportToLocation:
 		if e.ObjectID == c.Self.ObjectID {
 			c.pos = e.Pos
-			return c.Send(ctx, botclient.EncodeAppearing())
+			return c.Send(ctx, botwire.EncodeAppearing())
 		}
 	case botclient.MoveToLocation:
 		if e.ObjectID == c.Self.ObjectID {
@@ -495,7 +496,7 @@ func (c *Client) Watch(ctx context.Context, d time.Duration, fn func(botclient.E
 // destination, which geodata may have cut short. It does not wait for the
 // arrival. A move the server answers ActionFailed is ErrMoveRefused.
 func (c *Client) Move(ctx context.Context, to botclient.Point) (botclient.MoveToLocation, error) {
-	if err := c.Send(ctx, botclient.EncodeMoveBackwardToLocation(to, c.pos)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeMoveBackwardToLocation(to, c.pos)); err != nil {
 		return botclient.MoveToLocation{}, err
 	}
 	own := func(ev botclient.Event) bool {
@@ -726,7 +727,7 @@ func (g *GMClient) Command(ctx context.Context, cmd string) error {
 	if err := g.pacer.Command(ctx); err != nil {
 		return err
 	}
-	return g.Send(ctx, botclient.EncodeSendBypassBuildCmd(cmd))
+	return g.Send(ctx, botwire.EncodeSendBypassBuildCmd(cmd))
 }
 
 // Select makes objectID, a run character or a monster the run spawned, the
@@ -802,7 +803,7 @@ func (g *GMClient) selectOnce(ctx context.Context, objectID int32) error {
 	}
 	var err error
 	for range selectTries {
-		if err := g.Send(ctx, botclient.EncodeAction(objectID, g.pos)); err != nil {
+		if err := g.Send(ctx, botwire.EncodeAction(objectID, g.pos)); err != nil {
 			return err
 		}
 		var ev botclient.Event

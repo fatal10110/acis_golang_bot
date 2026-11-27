@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // lootPrices are the reference prices of the store test templates.
@@ -125,10 +127,10 @@ func TestBrainTradeLoot(t *testing.T) {
 		evs  []Event
 		want []byte
 	}{
-		{"request", []Event{SendTradeRequest{SenderID: pcID}}, encodeAnswerTradeRequest(true)},
-		{"window opens", []Event{TradeStart{PartnerID: pcID, Items: []TradeItem{arrowsRow, skinRow}}}, encodeAddTradeItem(skinLoot.ObjectID, 10)},
+		{"request", []Event{SendTradeRequest{SenderID: pcID}}, botwire.EncodeAnswerTradeRequest(true)},
+		{"window opens", []Event{TradeStart{PartnerID: pcID, Items: []TradeItem{arrowsRow, skinRow}}}, botwire.EncodeAddTradeItem(skinLoot.ObjectID, 10)},
 		{"partner pays short", []Event{TradeOwnAdd{Item: skinRow}, TradeOtherAdd{Item: adenaRow(69)}}, nil},
-		{"partner pays", []Event{TradeOtherAdd{Item: adenaRow(1)}}, encodeTradeDone(true)},
+		{"partner pays", []Event{TradeOtherAdd{Item: adenaRow(1)}}, botwire.EncodeTradeDone(true)},
 	}
 	now := t0
 	for _, s := range steps {

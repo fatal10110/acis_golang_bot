@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Recipe: Soulshot (D-grade) (recipes.xml recipe 20, scroll 1804).
@@ -46,17 +48,17 @@ func newRecipeBrain(t *testing.T, script *learnScript, items ...Item) *Brain {
 // holding recipe 1, from start.
 func openBookSteps(start time.Duration) []trainerStep {
 	return []trainerStep{
-		{name: "open the common page", at: start, wantRule: "recipe", wantKind: actRecipeBook, wantPayload: encodeRequestRecipeBookOpen(false)},
+		{name: "open the common page", at: start, wantRule: "recipe", wantKind: actRecipeBook, wantPayload: botwire.EncodeRequestRecipeBookOpen(false)},
 		{name: "wait for the page", at: start + time.Second},
 		{
 			name: "open the dwarven page", at: start + 2*time.Second,
 			events:   []Event{RecipeBookItemList{MaxMP: 100, Recipes: []int32{}}},
-			wantRule: "recipe", wantKind: actRecipeBook, wantPayload: encodeRequestRecipeBookOpen(true),
+			wantRule: "recipe", wantKind: actRecipeBook, wantPayload: botwire.EncodeRequestRecipeBookOpen(true),
 		},
 		{
 			name: "use the scroll", at: start + 3*time.Second,
 			events:   []Event{RecipeBookItemList{Dwarven: true, MaxMP: 100, Recipes: []int32{1}}},
-			wantRule: "recipe", wantKind: actUseItem, wantPayload: encodeUseItem(ssdScrollItem.ObjectID),
+			wantRule: "recipe", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(ssdScrollItem.ObjectID),
 		},
 	}
 }
@@ -116,7 +118,7 @@ func TestBrainLearnRecipeRefused(t *testing.T) {
 				trainerStep{name: "no retry before learnRetry", at: 4*time.Second + learnRetry - time.Millisecond},
 				trainerStep{
 					name: "retry due", at: 4*time.Second + learnRetry,
-					wantRule: "recipe", wantKind: actUseItem, wantPayload: encodeUseItem(ssdScrollItem.ObjectID),
+					wantRule: "recipe", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(ssdScrollItem.ObjectID),
 				},
 			)
 			runTrainerSteps(t, b, steps)

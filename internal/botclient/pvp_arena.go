@@ -4,6 +4,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -325,7 +326,7 @@ func (b *Brain) arenaLeave(now time.Time) (Action, bool) {
 	if t.stopAt.IsZero() {
 		if b.casting(now) {
 			if s.Casting(now) && now.Before(s.castEnd.Add(-escLead)) && !g.escFor.Equal(s.castEnd) {
-				return Action{kind: actTargetCancel, payload: encodeRequestTargetCancel()}, true
+				return Action{kind: actTargetCancel, payload: botwire.EncodeRequestTargetCancel()}, true
 			}
 			return Action{}, true
 		}

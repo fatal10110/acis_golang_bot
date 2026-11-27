@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 	gamecipher "github.com/fatal10110/acis_golang_bot/internal/gameserver/network/cipher"
 )
@@ -258,7 +259,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 	if got := wire.NewPacketReader(selected).ReadString(); got != name {
 		return Self{}, fmt.Errorf("selected slot %d as %q, server selected %q", slot, name, got)
 	}
-	if err := g.send(ctx, encodeEnterWorld()); err != nil {
+	if err := g.send(ctx, botwire.EncodeEnterWorld()); err != nil {
 		return Self{}, fmt.Errorf("send EnterWorld: %w", err)
 	}
 	var burst [][]byte
@@ -302,7 +303,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 func (g *GameConn) Logout(ctx context.Context) error {
 	stop := context.AfterFunc(ctx, func() { _ = g.conn.SetDeadline(time.Unix(1, 0)) })
 	defer stop()
-	if err := g.send(ctx, encodeLogout()); err != nil {
+	if err := g.send(ctx, botwire.EncodeLogout()); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

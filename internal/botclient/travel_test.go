@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -156,13 +157,13 @@ func TestBrainTravel(t *testing.T) {
 			name: "gatekeeper in sight: select", at: 3 * time.Second,
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 1900}) },
 			events:   []Event{NPCInfo{ObjectID: gkObj, NPCID: 30006, Pos: Point{X: 2000}}},
-			wantRule: "travel", wantKind: actSelect, wantPayload: encodeAction(gkObj, Point{X: 1900}),
+			wantRule: "travel", wantKind: actSelect, wantPayload: botwire.EncodeAction(gkObj, Point{X: 1900}),
 		},
 		{name: "talk", at: 4 * time.Second, events: []Event{MyTargetSelected{ObjectID: gkObj}}, wantRule: "travel", wantKind: actTalk},
 		{name: "wait for the page", at: 5 * time.Second, wantRule: "travel"},
-		{name: "list link", at: 6 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkPage(gkObj)}}, wantRule: "travel", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport_request")},
+		{name: "list link", at: 6 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkPage(gkObj)}}, wantRule: "travel", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport_request")},
 		{name: "wait for the list", at: 7 * time.Second, wantRule: "travel"},
-		{name: "destination link", at: 8 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkList(gkObj, 0, 2)}}, wantRule: "travel", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport 2")},
+		{name: "destination link", at: 8 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkList(gkObj, 0, 2)}}, wantRule: "travel", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport 2")},
 		{name: "wait for the teleport", at: 10 * time.Second, wantRule: "travel"},
 	})
 	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: travelDest}}}, at(11*time.Second)); err != nil {

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 )
 
@@ -80,7 +81,7 @@ func TestVisitLooksAfterLanding(t *testing.T) {
 		if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 5000}}}, now); err != nil {
 			t.Fatal(err)
 		}
-		if sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now); err != nil || !sent {
+		if sent, err := b.send(Action{kind: actAppear, payload: botwire.EncodeAppearing()}, now); err != nil || !sent {
 			t.Fatalf("appear: %v, %v", sent, err)
 		}
 	}

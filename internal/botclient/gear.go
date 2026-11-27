@@ -768,14 +768,14 @@ func (b *Brain) gearWants() []buyRow {
 		chosen = setRows
 	}
 	for _, id := range ids {
-		r := buyRow{item: id, count: 1}
+		r := buyRow{Item: id, Count: 1}
 		if !slices.Contains(set, id) && int64(b.cfg.Travel.cheapest[id]) <= budget && b.gearFits(chosen, r) {
 			chosen = append(chosen, r)
 		}
 	}
 	var rows []buyRow
 	for _, id := range ids {
-		if r := (buyRow{item: id, count: 1}); slices.Contains(chosen, r) {
+		if r := (buyRow{Item: id, Count: 1}); slices.Contains(chosen, r) {
 			rows = append(rows, r)
 		}
 	}

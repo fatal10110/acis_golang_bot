@@ -217,7 +217,7 @@ func TestReagentWants(t *testing.T) {
 	}{
 		{
 			name: "Death Spike, no Cursed Bone", kit: ClassKit{Rotation: []Step{{Skill: skillDeathSpike}}},
-			skills: []KnownSkill{{ID: skillDeathSpike, Level: 1}}, want: []buyRow{{item: cursedBone, count: 100}},
+			skills: []KnownSkill{{ID: skillDeathSpike, Level: 1}}, want: []buyRow{{Item: cursedBone, Count: 100}},
 		},
 		{
 			name: "Death Spike, Cursed Bones at the min", kit: ClassKit{Rotation: []Step{{Skill: skillDeathSpike}}},
@@ -229,7 +229,7 @@ func TestReagentWants(t *testing.T) {
 		{
 			name: "Bishop heals summed", kit: bishop, items: []Item{reagentStack(spiritOre, 50)},
 			skills: []KnownSkill{{ID: skillMajorHeal, Level: 1}, {ID: skillMajorGroupHeal, Level: 1}},
-			want:   []buyRow{{item: spiritOre, count: 450}},
+			want:   []buyRow{{Item: spiritOre, Count: 450}},
 		},
 		{
 			name: "Bishop heals at the min", kit: bishop, items: []Item{reagentStack(spiritOre, 100)},
@@ -237,7 +237,7 @@ func TestReagentWants(t *testing.T) {
 		},
 		{
 			name: "Greater Might at its known level, listed twice", kit: ClassKit{Rotation: []Step{{Skill: skillGreaterMight, Idle: true}}, Buffs: []Buff{{Skill: skillGreaterMight}}},
-			skills: []KnownSkill{{ID: skillGreaterMight, Level: 3}}, want: []buyRow{{item: spiritOre, count: 300}},
+			skills: []KnownSkill{{ID: skillGreaterMight, Level: 3}}, want: []buyRow{{Item: spiritOre, Count: 300}},
 		},
 		{
 			name: "Storm Cubic: no Crystal D seller", kit: ClassKit{Buffs: []Buff{{Skill: skillStormCubic}}},
@@ -277,7 +277,7 @@ func TestReagentBudget(t *testing.T) {
 	b.cfg.Travel = reagentTravel()
 	withKit(b, ClassKit{Rotation: []Step{{Skill: skillDeathSpike}}})
 	b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillDeathSpike, Level: 1}}}, t0)
-	want := []buyRow{{item: lesserHealingPotion, count: 5}, {item: cursedBone, count: 2}}
+	want := []buyRow{{Item: lesserHealingPotion, Count: 5}, {Item: cursedBone, Count: 2}}
 	if got := b.buyRows(window); !slices.Equal(got, want) {
 		t.Errorf("buyRows = %v, want %v", got, want)
 	}

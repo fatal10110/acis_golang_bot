@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // npcTypeWarehouseKeeper is the NPC template type of a warehouse keeper
@@ -76,24 +76,6 @@ const (
 var warehouseRefusals = []int32{
 	msgSlotsFull, msgAlreadyTrading, msgNotEnoughAdena, msgWeightLimit, msgNoRightClanWH,
 	msgClanLevelForWH, msgOverCapacity, msgLeaderOnlyWithdraw,
-}
-
-// warehouseRow is one row of a deposit or withdrawal request: an item
-// object, its template and how many.
-type warehouseRow struct{ object, item, count int32 }
-
-// encodeWarehouseRequest is SendWareHouseDepositList (op 0x31) or
-// SendWareHouseWithDrawList (op 0x32): row count, then per row object id
-// and count, exactly 4+8*rows bytes after the opcode
-// (clientpackets/warehouse.go decodeExactItemRequestBatch).
-func encodeWarehouseRequest(op byte, rows []warehouseRow) []byte {
-	w := wire.NewPacketWriter(op)
-	w.WriteInt32(int32(len(rows)))
-	for _, r := range rows {
-		w.WriteInt32(r.object)
-		w.WriteInt32(r.count)
-	}
-	return w.Bytes()
 }
 
 // WarehouseRow is one row a clan warehouse errand asks for: an item
@@ -283,7 +265,7 @@ func (e *warehouseErrand) result(o WarehouseOutcome, msg int32, now time.Time) {
 	r := WarehouseResult{Outcome: o, Msg: msg, At: now}
 	if o == WarehouseDone {
 		for _, row := range e.rows {
-			r.Rows = append(r.Rows, WarehouseRow{TemplateID: row.item, Count: row.count, Object: row.object})
+			r.Rows = append(r.Rows, WarehouseRow{TemplateID: row.Item, Count: row.Count, Object: row.Object})
 		}
 	}
 	if st := e.statusOf(e.req); e.depositing() {
@@ -533,7 +515,7 @@ func (b *Brain) warehouseRequest(now time.Time) (Action, bool) {
 			return Action{}, false
 		}
 		e.rows = rows
-		return Action{kind: actWarehouseWithdraw, payload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, rows), object: e.v.obj}, true
+		return Action{kind: actWarehouseWithdraw, payload: botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, rows), object: e.v.obj}, true
 	}
 	rows, o, msg := b.depositRows(stock)
 	if o != WarehouseNone {
@@ -541,7 +523,7 @@ func (b *Brain) warehouseRequest(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	e.rows = rows
-	return Action{kind: actWarehouseDeposit, payload: encodeWarehouseRequest(opGameSendWareHouseDepositList, rows), object: e.v.obj}, true
+	return Action{kind: actWarehouseDeposit, payload: botwire.EncodeWarehouseRequest(opGameSendWareHouseDepositList, rows), object: e.v.obj}, true
 }
 
 // whStock is an item a request may pick rows from.
@@ -566,7 +548,7 @@ func pickRows(want []WarehouseRow, stock []whStock) []warehouseRow {
 			if len(rows) == warehouseMaxRows {
 				return rows
 			}
-			rows = append(rows, warehouseRow{object: s.object, item: s.item, count: n})
+			rows = append(rows, warehouseRow{Object: s.object, Item: s.item, Count: n})
 		}
 	}
 	return rows
@@ -610,8 +592,8 @@ func (b *Brain) depositRows(stock []whStock) ([]warehouseRow, WarehouseOutcome, 
 	}
 	need := int64(warehouseFee) * int64(len(rows))
 	for _, r := range rows {
-		if r.item == adenaID {
-			need += int64(r.count)
+		if r.Item == adenaID {
+			need += int64(r.Count)
 		}
 	}
 	if int64(b.carried(adenaID)) < need {
@@ -626,7 +608,7 @@ func (b *Brain) depositRows(stock []whStock) ([]warehouseRow, WarehouseOutcome, 
 // as a new slot.
 func merges(r warehouseRow, contents []WarehouseItem) bool {
 	return slices.ContainsFunc(contents, func(it WarehouseItem) bool {
-		return it.TemplateID == r.item && (it.Count > 1 || r.count > 1)
+		return it.TemplateID == r.Item && (it.Count > 1 || r.Count > 1)
 	})
 }
 
@@ -783,7 +765,7 @@ func (b *Brain) movedRows(u InventoryUpdate) bool {
 	e := &b.wh
 	for _, c := range u.Changes {
 		for _, r := range e.rows {
-			if e.depositing() && c.Item.ObjectID == r.object || !e.depositing() && c.State != ItemRemoved && c.Item.TemplateID == r.item {
+			if e.depositing() && c.Item.ObjectID == r.Object || !e.depositing() && c.State != ItemRemoved && c.Item.TemplateID == r.Item {
 				return true
 			}
 		}
@@ -813,20 +795,20 @@ func (b *Brain) trackContents() {
 	for _, r := range e.rows {
 		if !e.depositing() {
 			for i := range st.Contents {
-				if st.Contents[i].ObjectID == r.object {
-					st.Contents[i].Count -= r.count
+				if st.Contents[i].ObjectID == r.Object {
+					st.Contents[i].Count -= r.Count
 				}
 			}
 			continue
 		}
 		if i := slices.IndexFunc(st.Contents, func(it WarehouseItem) bool { return merges(r, []WarehouseItem{it}) }); i >= 0 {
-			st.Contents[i].Count += r.count
+			st.Contents[i].Count += r.Count
 			continue
 		}
-		it := WarehouseItem{TemplateID: r.item, Count: r.count}
+		it := WarehouseItem{TemplateID: r.Item, Count: r.Count}
 		if e.req.Private {
-			it.ObjectID = r.object
-			if i := slices.IndexFunc(e.list, func(l WarehouseItem) bool { return l.ObjectID == r.object }); i >= 0 {
+			it.ObjectID = r.Object
+			if i := slices.IndexFunc(e.list, func(l WarehouseItem) bool { return l.ObjectID == r.Object }); i >= 0 {
 				it.Enchant = e.list[i].Enchant
 			}
 		}

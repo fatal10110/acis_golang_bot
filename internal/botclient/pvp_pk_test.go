@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -108,7 +109,7 @@ func TestPvPPKCap(t *testing.T) {
 		b := pvpRowBrain(t, 1, 36, "BIGBLUNT", lyrWarrior, skillPowerSmash, skillStunAttack)
 		pkVictimFight(t, b, lyrWarrior, Point{X: 90})
 		_, a := b.decide(at(time.Second))
-		if a.kind != actCast || a.skill != skillPowerSmash || string(a.payload) != string(encodeRequestMagicSkillUse(skillPowerSmash, true)) {
+		if a.kind != actCast || a.skill != skillPowerSmash || string(a.payload) != string(botwire.EncodeRequestMagicSkillUse(skillPowerSmash, true)) {
 			t.Fatalf("decision %v skill %d, want the ctrl-held Power Smash", a.kind, a.skill)
 		}
 		b.world.holdSkill(skillPowerSmash, at(time.Minute))
@@ -134,7 +135,7 @@ func TestPvPPKCap(t *testing.T) {
 			case a.kind == actCast && (a.skill == skillIceBolt || a.skill == skillCursePoison):
 				t.Fatalf("cast %d on a clean victim", a.skill)
 			case a.kind == actCast && a.skill == skillWindStrike:
-				if string(a.payload) != string(encodeRequestMagicSkillUse(skillWindStrike, true)) {
+				if string(a.payload) != string(botwire.EncodeRequestMagicSkillUse(skillWindStrike, true)) {
 					t.Fatal("Wind Strike without ctrl")
 				}
 				return

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestLiveNavFacts measures two server facts the walker rests on (#152):
@@ -124,7 +125,7 @@ func TestLiveNavFacts(t *testing.T) {
 			case <-time.After(rand.N(100 * time.Millisecond)):
 			}
 			poll := time.Now()
-			if err := gm.Send(ctx, botclient.EncodeValidatePosition(report, 0)); err != nil {
+			if err := gm.Send(ctx, botwire.EncodeValidatePosition(report, 0)); err != nil {
 				t.Fatal(err)
 			}
 			ev, err := gm.Await(ctx, EntryTimeout, own)

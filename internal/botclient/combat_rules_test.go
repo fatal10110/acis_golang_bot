@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestCombatRules checks rules 4 and 5 with the PvP defaults, attack
@@ -177,7 +179,7 @@ func TestCombatRules(t *testing.T) {
 			},
 			wantRule: "attacked", wantKind: actCast, wantOp: opGameRequestMagicSkillUse, wantObject: npcID,
 			check: func(t *testing.T, _ *Brain, a Action) {
-				if a.skill != 1177 || !bytes.Equal(a.payload, encodeRequestMagicSkillUse(1177, false)) {
+				if a.skill != 1177 || !bytes.Equal(a.payload, botwire.EncodeRequestMagicSkillUse(1177, false)) {
 					t.Errorf("cast % x, want skill 1177 unforced", a.payload)
 				}
 			},
@@ -470,7 +472,7 @@ func TestBrainCombatFlow(t *testing.T) {
 		t.Fatalf("first packet % x, want a select click", got)
 	}
 	step(2*time.Second, MyTargetSelected{ObjectID: npcID})
-	if got := last(); !bytes.Equal(got, encodeRequestMagicSkillUse(1177, false)) {
+	if got := last(); !bytes.Equal(got, botwire.EncodeRequestMagicSkillUse(1177, false)) {
 		t.Fatalf("second packet % x, want the cast", got)
 	}
 	sent := len(out.frames)
@@ -493,7 +495,7 @@ func TestBrainCombatFlow(t *testing.T) {
 		t.Fatalf("sent % x before the skill's reuse ended", last())
 	}
 	step(8 * time.Second)
-	if got := last(); !bytes.Equal(got, encodeRequestMagicSkillUse(1177, false)) {
+	if got := last(); !bytes.Equal(got, botwire.EncodeRequestMagicSkillUse(1177, false)) {
 		t.Fatalf("packet % x at reuse end, want the cast", got)
 	}
 	if b.tries[npcID] != 1 {

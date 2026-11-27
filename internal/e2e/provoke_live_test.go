@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // gmProvoke has the GM hit mob and step aside, and returns the monster's
@@ -30,7 +31,7 @@ func gmProvoke(t *testing.T, ctx context.Context, gm *GMClient, mob int32) (_ bo
 	attack := func() {
 		pl.tries++
 		pl.last = time.Now()
-		if err := gm.Send(ctx, botclient.EncodeAttackRequest(mob, gm.Pos())); err != nil {
+		if err := gm.Send(ctx, botwire.EncodeAttackRequest(mob, gm.Pos())); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 const (
@@ -97,8 +99,8 @@ func invite(t *testing.T, b *Brain, out *recordSender, requester string, ev time
 }
 
 var (
-	acceptFrame   = encodeRequestAnswerJoinParty(true)
-	declineFrame  = encodeRequestAnswerJoinParty(false)
+	acceptFrame   = botwire.EncodeRequestAnswerJoinParty(true)
+	declineFrame  = botwire.EncodeRequestAnswerJoinParty(false)
 	withdrawFrame = []byte{opGameRequestWithdrawParty}
 )
 

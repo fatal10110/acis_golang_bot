@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestStoreLeavesOnOrder checks that a merchant in store mode told to
@@ -10,7 +12,7 @@ import (
 // gives its registry claim back, holds until the server shows the store
 // closed, and then hands over to the follow and assist rules.
 func TestStoreLeavesOnOrder(t *testing.T) {
-	quit := encodeRequestPrivateStoreQuitSell()
+	quit := botwire.EncodeRequestPrivateStoreQuitSell()
 	opened := func(step storeStep) func(b *Brain) {
 		return func(b *Brain) {
 			id, _ := b.cfg.Stores.claim(Point{})

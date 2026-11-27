@@ -5,6 +5,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Combat timing. Melee clicks a target once (engaged) and the server
@@ -91,7 +93,7 @@ func (p PvPPolicy) MaySupport(o *Object) bool {
 
 // selectAction clicks id to select it.
 func selectAction(id int32, from Point) Action {
-	return Action{kind: actSelect, payload: encodeAction(id, from), object: id}
+	return Action{kind: actSelect, payload: botwire.EncodeAction(id, from), object: id}
 }
 
 // mayFight reports whether the bot may attack id at now: in sight, alive,
@@ -306,7 +308,7 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 			return a
 		}
 		if forced {
-			return Action{kind: actAttack, payload: encodeAttackRequest(id, from), object: id}
+			return Action{kind: actAttack, payload: botwire.EncodeAttackRequest(id, from), object: id}
 		}
 		return attackAction(id, from)
 	}

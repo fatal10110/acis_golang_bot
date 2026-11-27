@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // tradeTurn decides at now after handling evs, sends what it decided and
@@ -89,7 +91,7 @@ func inviteSent(t *testing.T, b *Brain) time.Time {
 	wantWalk(t, "legs to the whisperer", b, rule, a, Point{X: 600}, inviteArrive)
 	now := at(2 * time.Second)
 	rule, a = tradeTurn(t, b, now, teleportSelf(Point{X: 550}, seen(pcID, Point{X: 600}))...)
-	wantTurn(t, "request", rule, a, "valuables", actTradeRequest, encodeTradeRequest(pcID))
+	wantTurn(t, "request", rule, a, "valuables", actTradeRequest, botwire.EncodeTradeRequest(pcID))
 	return now
 }
 
@@ -131,7 +133,7 @@ func TestValuablesTradeInvite(t *testing.T) {
 			rule, a = tradeTurn(t, b, now.Add(time.Second), teleportSelf(Point{X: 50}, around...)...)
 			wantWalk(t, "legs to the second", b, rule, a, Point{X: 500}, inviteArrive)
 			rule, a = tradeTurn(t, b, now.Add(2*time.Second), teleportSelf(Point{X: 480}, around...)...)
-			wantTurn(t, "second request", rule, a, "valuables", actTradeRequest, encodeTradeRequest(pcID+1))
+			wantTurn(t, "second request", rule, a, "valuables", actTradeRequest, botwire.EncodeTradeRequest(pcID+1))
 			rule, a = tradeTurn(t, b, now.Add(3*time.Second), SystemMessage{ID: msgTradeDeclined})
 			wantWalk(t, "walk back again", b, rule, a, Point{}, anchorArrive)
 			for _, d := range []time.Duration{4 * time.Second, 10 * time.Second, 30 * time.Second} {
@@ -146,7 +148,7 @@ func TestValuablesTradeInvite(t *testing.T) {
 		sent := inviteSent(t, b)
 		start := TradeStart{PartnerID: pcID, Items: []TradeItem{{ObjectID: 101, TemplateID: ledgerSword, Count: 1}}}
 		rule, a := tradeTurn(t, b, sent.Add(time.Second), start)
-		wantTurn(t, "offer", rule, a, "prompt", actTradeAdd, encodeAddTradeItem(101, 1))
+		wantTurn(t, "offer", rule, a, "prompt", actTradeAdd, botwire.EncodeAddTradeItem(101, 1))
 		// The trade ends after AdEvery: the walk back comes before the line.
 		now := at(b.persona.Valuables.AdEvery + time.Second)
 		rule, a = tradeTurn(t, b, now, SendTradeDone{})
@@ -255,7 +257,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		agree(b, swordKey, 150000, true)
 		tradeOpen(t, b, t0, rowOf(staff), rowOf(sword))
 		rule, a := tradeTurn(t, b, at(time.Second))
-		wantTurn(t, "offer", rule, a, "prompt", actTradeAdd, encodeAddTradeItem(101, 1))
+		wantTurn(t, "offer", rule, a, "prompt", actTradeAdd, botwire.EncodeAddTradeItem(101, 1))
 		rule, a = tradeTurn(t, b, at(2*time.Second), TradeOwnAdd{Item: rowOf(sword)}, TradeOtherAdd{Item: adenaPaid(149999)})
 		wantTurn(t, "short", rule, a, "prompt", actHold, nil)
 		rule, a = tradeTurn(t, b, at(time.Minute-time.Millisecond))
@@ -280,7 +282,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		tradeOpen(t, b, t0, rowOf(staff), rowOf(sword))
 		tradeTurn(t, b, at(time.Second))
 		rule, a := tradeTurn(t, b, at(2*time.Second), TradeOwnAdd{Item: rowOf(sword)}, TradeOtherAdd{Item: adenaPaid(150000)})
-		wantTurn(t, "confirm", rule, a, "prompt", actTradeConfirm, encodeTradeDone(true))
+		wantTurn(t, "confirm", rule, a, "prompt", actTradeConfirm, botwire.EncodeTradeDone(true))
 		settle := []Event{
 			TradePressOwnOk{},
 			TradePressOtherOk{},
@@ -297,7 +299,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		if _, ok := b.cfg.valuables.entries[swordKey]; ok {
 			t.Fatal("sword entry still there after the sale")
 		}
-		if got, want := decideAd(t, "next line", b, at(4*time.Second)), encodeSay2(adLine(t, b, staffKey), chatTrade); !bytes.Equal(got, want) {
+		if got, want := decideAd(t, "next line", b, at(4*time.Second)), botwire.EncodeSay2(adLine(t, b, staffKey), chatTrade); !bytes.Equal(got, want) {
 			t.Fatalf("next line % x, want % x (the staff alone)", got, want)
 		}
 	})
@@ -305,7 +307,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 	t.Run("no round: not offered, request declined", func(t *testing.T) {
 		b := newBrain(t, false)
 		rule, a := tradeTurn(t, b, at(time.Second), SendTradeRequest{SenderID: pcID})
-		wantTurn(t, "decline", rule, a, "prompt", actAnswerTrade, encodeAnswerTradeRequest(false))
+		wantTurn(t, "decline", rule, a, "prompt", actAnswerTrade, botwire.EncodeAnswerTradeRequest(false))
 		tradeOpen(t, b, at(2*time.Second), rowOf(sword), rowOf(staff))
 		rule, a = tradeTurn(t, b, at(3*time.Second))
 		wantTurn(t, "nothing to offer", rule, a, "prompt", actTradeCancel, nil)
@@ -318,7 +320,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 			agree(b, swordKey, 150000, agreed)
 			b.tradedAt[pcID] = t0
 			rule, a := tradeTurn(t, b, at(time.Second), SendTradeRequest{SenderID: pcID})
-			wantTurn(t, "answer", rule, a, "prompt", actAnswerTrade, encodeAnswerTradeRequest(agreed))
+			wantTurn(t, "answer", rule, a, "prompt", actAnswerTrade, botwire.EncodeAnswerTradeRequest(agreed))
 		}
 	})
 
@@ -373,7 +375,7 @@ func TestValuablesTradeConfirm(t *testing.T) {
 		placePlayer(t, b, pcID, Point{Y: 100})
 		b.valuablesSold = b.persona.Valuables.Budget
 		rule, a := tradeTurn(t, b, at(time.Second), SendTradeRequest{SenderID: pcID})
-		wantTurn(t, "decline", rule, a, "prompt", actAnswerTrade, encodeAnswerTradeRequest(false))
+		wantTurn(t, "decline", rule, a, "prompt", actAnswerTrade, botwire.EncodeAnswerTradeRequest(false))
 	})
 }
 

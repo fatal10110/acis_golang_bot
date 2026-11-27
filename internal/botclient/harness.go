@@ -5,57 +5,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The exports below serve a game connection driven outside a brain: the
 // live e2e harness (internal/e2e) scripts its bots and its GM client with
-// them. Each encoder wraps the brain's own, so every wire layout keeps one
-// owner; every frame a script sends passes a Pacer first.
-
-// EncodeAction selects (or, on the object already selected, acts on)
-// objectID, clicked from origin.
-func EncodeAction(objectID int32, origin Point) []byte { return encodeAction(objectID, origin) }
-
-// EncodeAttackRequest force-attacks objectID from origin (see
-// encodeAttackRequest).
-func EncodeAttackRequest(objectID int32, origin Point) []byte {
-	return encodeAttackRequest(objectID, origin)
-}
-
-// EncodeRequestMagicSkillUse casts skill id on the current target, forced
-// (ctrl) or not (see encodeRequestMagicSkillUse).
-func EncodeRequestMagicSkillUse(id int32, ctrl bool) []byte {
-	return encodeRequestMagicSkillUse(id, ctrl)
-}
-
-// EncodeAppearing ends a teleport: the server keeps a teleported character
-// out of the world until it arrives (client_ingame.go handleAppearing).
-func EncodeAppearing() []byte { return encodeAppearing() }
-
-// RestartVillage is RequestRestartPoint's point type "to village"
-// (restart_selection.go).
-const RestartVillage int32 = 0
-
-// EncodeRequestRestartPoint asks a dead character to restart at the point of
-// type kind (RestartVillage).
-func EncodeRequestRestartPoint(kind int32) []byte { return encodeRequestRestartPoint(kind) }
-
-// EncodeSendBypassBuildCmd is a GM's admin command: cmd is the command line
-// without its leading "//" (server clientpackets/admin.go, one string). The
-// server runs it only for a character of enough access level
-// (network/admin.go sendBypassBuildCmd).
-func EncodeSendBypassBuildCmd(cmd string) []byte {
-	w := wire.NewPacketWriter(opGameSendBypassBuildCmd)
-	w.WriteString(cmd)
-	return w.Bytes()
-}
+// them, and encodes its packets with botwire, the brain's own encoders, so
+// every wire layout keeps one owner. The Encode functions here adapt an
+// argument a script does not choose; every frame a script sends passes a
+// Pacer first.
 
 // Client packet opcodes a scenario finds in the frames a bot wrote
 // (FrameTap.RecordSent): each packet's first field after the opcode is the
-// object, skill, item or list it acts on (encodeAction, encodeAttackRequest,
-// encodeRequestMagicSkillUse, encodeUseItem, encodeRequestDropItem,
-// encodeSkillRequest, encodeRequestBuyItem, encodeRequestSellItem).
+// object, skill, item or list it acts on (botwire.EncodeAction,
+// EncodeAttackRequest, EncodeRequestMagicSkillUse, EncodeUseItem,
+// EncodeRequestDropItem, EncodeSkillRequest, EncodeRequestBuyItem,
+// EncodeRequestSellItem).
 const (
 	OpAction               byte = opGameAction
 	OpAttackRequest        byte = opGameAttackRequest
@@ -66,26 +31,22 @@ const (
 	OpRequestBuyItem       byte = opGameRequestBuyItem
 	OpRequestSellItem      byte = opGameRequestSellItem
 	// OpRequestPrivateStoreBuy's first field is the store's owner
-	// (encodeRequestPrivateStoreBuy); OpRequestHennaEquip's the symbol it
-	// draws and OpRequestHennaUnequip's the symbol it removes
-	// (encodeRequestHennaEquip, encodeRequestHennaUnequip).
+	// (botwire.EncodeRequestPrivateStoreBuy); OpRequestHennaEquip's the
+	// symbol it draws and OpRequestHennaUnequip's the symbol it removes
+	// (botwire.EncodeRequestHennaEquip, EncodeRequestHennaUnequip).
 	OpRequestPrivateStoreBuy byte = opGameRequestPrivateStoreBuy
 	OpRequestHennaEquip      byte = opGameRequestHennaEquip
 	OpRequestHennaUnequip    byte = opGameRequestHennaUnequip
 	// OpRequestJoinPartyRoom's first field is the room it enters
-	// (encodeRequestJoinPartyRoom).
+	// (botwire.EncodeRequestJoinPartyRoom).
 	OpRequestJoinPartyRoom byte = opGameRequestJoinPartyRoom
 	// OpRequestEnchantItem's first field is the item it enchants
-	// (encodeRequestEnchantItem).
+	// (botwire.EncodeRequestEnchantItem).
 	OpRequestEnchantItem byte = opGameRequestEnchantItem
 	// OpMoveBackwardToLocation's first fields are the X and Y it goes to
-	// (encodeMoveBackwardToLocation).
+	// (botwire.EncodeMoveBackwardToLocation).
 	OpMoveBackwardToLocation byte = opGameMoveBackwardToLocation
 )
-
-// EncodeUseItem uses (equips or takes off) the carried item objectID (see
-// encodeUseItem).
-func EncodeUseItem(objectID int32) []byte { return encodeUseItem(objectID) }
 
 // RecoveryScroll is the Scroll: Recovery template a character of level
 // reads to lift a death penalty level (see recoveryScroll).
@@ -95,51 +56,14 @@ func RecoveryScroll(level int32) int32 { return recoveryScroll(level) }
 // (see recoveryReuse).
 const RecoveryReuse = recoveryReuse
 
-// EncodeRequestDestroyItem destroys count of the carried item objectID:
-// object id, count (clientpackets/item_ops.go RequestDestroyItem).
-func EncodeRequestDestroyItem(objectID, count int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestDestroyItem)
-	w.WriteInt32(objectID)
-	w.WriteInt32(count)
-	return w.Bytes()
-}
-
-// EncodeRequestDropItem drops count of the carried item objectID at p,
-// within 150 of the character (see encodeRequestDropItem).
-func EncodeRequestDropItem(objectID, count int32, p Point) []byte {
-	return encodeRequestDropItem(objectID, count, p)
-}
-
-// EncodeMoveBackwardToLocation walks or runs to to from origin, as a mouse
-// click (see encodeMoveBackwardToLocation).
-func EncodeMoveBackwardToLocation(to, origin Point) []byte {
-	return encodeMoveBackwardToLocation(to, origin)
-}
-
-// EncodeValidatePosition reports the character at p facing heading, not on
-// a boat (see encodeValidatePosition).
-func EncodeValidatePosition(p Point, heading int32) []byte { return encodeValidatePosition(p, heading) }
-
 // EncodeWalkRunToggle switches between walking and running (the action
 // bar's toggle, RequestActionUse 1).
-func EncodeWalkRunToggle() []byte { return encodeRequestActionUse(actionWalkRun) }
-
-// EncodeRequestJoinParty invites the player named target into the sender's
-// party under loot rule loot (see encodeRequestJoinParty).
-func EncodeRequestJoinParty(target string, loot int32) []byte {
-	return encodeRequestJoinParty(target, loot)
-}
+func EncodeWalkRunToggle() []byte { return botwire.EncodeRequestActionUse(actionWalkRun) }
 
 // EncodeRequestListPartyWaiting opens the sender's rooms window, which puts
-// it on the party-matching waiting list (see encodeRequestListPartyWaiting).
+// it on the party-matching waiting list (see botwire.EncodeRequestListPartyWaiting).
 func EncodeRequestListPartyWaiting(location, levelMode int32) []byte {
-	return encodeRequestListPartyWaiting(1, location, levelMode)
-}
-
-// EncodeRequestManagePartyRoom opens a room (roomID 0) or revises the room
-// roomID the sender leads (see encodeRequestManagePartyRoom).
-func EncodeRequestManagePartyRoom(roomID, maxMembers, minLevel, maxLevel, loot int32, title string) []byte {
-	return encodeRequestManagePartyRoom(roomID, maxMembers, minLevel, maxLevel, loot, title)
+	return botwire.EncodeRequestListPartyWaiting(1, location, levelMode)
 }
 
 // RoomsAnywhere and RoomsAnyLevel are the rooms window's widest filters
@@ -150,42 +74,8 @@ const (
 )
 
 // EncodeRequestJoinPledge invites the player whose object id is target
-// into the sender's main clan (see encodeRequestJoinPledge).
-func EncodeRequestJoinPledge(target int32) []byte { return encodeRequestJoinPledge(target, 0) }
-
-// EncodeSay2Tell whispers text to the player named target.
-func EncodeSay2Tell(target, text string) []byte { return encodeSay2Tell(target, text) }
-
-// Say2 channels a scenario speaks on besides a whisper (handler/chat):
-// the server delivers shout and trade lines to the players of a region.
-const (
-	ChatShout int32 = 1
-	ChatTrade int32 = 8
-)
-
-// EncodeSay2 says text on channel (ChatShout, ChatTrade); a whisper is
-// EncodeSay2Tell.
-func EncodeSay2(text string, channel int32) []byte { return encodeSay2(text, channel) }
-
-// EncodeRequestDuelStart challenges the player named name to a one-on-one
-// duel, or its party to a party duel (see encodeRequestDuelStart).
-func EncodeRequestDuelStart(name string, party bool) []byte {
-	return encodeRequestDuelStart(name, party)
-}
-
-// EncodeTradeRequest asks the player objectID to trade.
-func EncodeTradeRequest(objectID int32) []byte { return encodeTradeRequest(objectID) }
-
-// EncodeAddTradeItem adds count of the item objectID to the sender's offer
-// in its open trade.
-func EncodeAddTradeItem(objectID, count int32) []byte { return encodeAddTradeItem(objectID, count) }
-
-// EncodeTradeDone confirms the open trade, or cancels it.
-func EncodeTradeDone(confirm bool) []byte { return encodeTradeDone(confirm) }
-
-// EncodeAnswerTradeRequest answers the trade request the sender received:
-// accept opens the window, else it declines.
-func EncodeAnswerTradeRequest(accept bool) []byte { return encodeAnswerTradeRequest(accept) }
+// into the sender's main clan (see botwire.EncodeRequestJoinPledge).
+func EncodeRequestJoinPledge(target int32) []byte { return botwire.EncodeRequestJoinPledge(target, 0) }
 
 // StoreBuy is a row of a purchase from a private sell store: the listed
 // item object, how many and the store's unit price.
@@ -196,26 +86,19 @@ type StoreBuy struct{ ObjectID, Count, Price int32 }
 func EncodeRequestPrivateStoreBuy(owner int32, rows []StoreBuy) []byte {
 	r := make([]storeRow, len(rows))
 	for i, row := range rows {
-		r[i] = storeRow{object: row.ObjectID, count: row.Count, price: row.Price}
+		r[i] = storeRow{Object: row.ObjectID, Count: row.Count, Price: row.Price}
 	}
-	return encodeRequestPrivateStoreBuy(owner, r)
+	return botwire.EncodeRequestPrivateStoreBuy(owner, r)
 }
-
-// EncodeRequestPrivateStoreManageSell opens the sell store manage window
-// (PrivateStoreManageListSell answers it).
-func EncodeRequestPrivateStoreManageSell() []byte { return encodeRequestPrivateStoreManageSell() }
-
-// EncodeSetPrivateStoreMsgSell sets the sell store's title.
-func EncodeSetPrivateStoreMsgSell(title string) []byte { return encodeSetPrivateStoreMsgSell(title) }
 
 // EncodeSetPrivateStoreListSell lists rows for sale, each an object of the
 // seller's at a unit price, and opens the store.
 func EncodeSetPrivateStoreListSell(rows []StoreBuy) []byte {
 	r := make([]storeRow, len(rows))
 	for i, row := range rows {
-		r[i] = storeRow{object: row.ObjectID, count: row.Count, price: row.Price}
+		r[i] = storeRow{Object: row.ObjectID, Count: row.Count, Price: row.Price}
 	}
-	return encodeSetPrivateStoreListSell(false, r)
+	return botwire.EncodeSetPrivateStoreListSell(false, r)
 }
 
 // DecodeEvent decodes one server game frame (non-empty) as the session's

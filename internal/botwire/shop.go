@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // ShopItem is one row of a merchant's buy or sell window: what the
 // merchant sells at Price, or what the bot may sell it at Price each.
@@ -77,4 +75,38 @@ func decodeSellList(r *wire.Reader) Event {
 		l.Items = append(l.Items, readShopItem(r))
 	}
 	return l
+}
+
+// BuyRow is one row of a purchase: an item template and how many.
+type BuyRow struct{ Item, Count int32 }
+
+// SellRow is one row of a sale: a carried item, its template and how many.
+type SellRow struct{ Object, Item, Count int32 }
+
+// EncodeRequestBuyItem buys rows from buylist listID: list id, row count,
+// then per row item id and count (clientpackets/shop_trade.go).
+func EncodeRequestBuyItem(listID int32, rows []BuyRow) []byte {
+	w := wire.NewPacketWriter(OpGameRequestBuyItem)
+	w.WriteInt32(listID)
+	w.WriteInt32(int32(len(rows)))
+	for _, r := range rows {
+		w.WriteInt32(r.Item)
+		w.WriteInt32(r.Count)
+	}
+	return w.Bytes()
+}
+
+// EncodeRequestSellItem sells rows to the targeted merchant: list id, row
+// count, then per row object id, item id and count
+// (clientpackets/shop_trade.go).
+func EncodeRequestSellItem(listID int32, rows []SellRow) []byte {
+	w := wire.NewPacketWriter(OpGameRequestSellItem)
+	w.WriteInt32(listID)
+	w.WriteInt32(int32(len(rows)))
+	for _, r := range rows {
+		w.WriteInt32(r.Object)
+		w.WriteInt32(r.Item)
+		w.WriteInt32(r.Count)
+	}
+	return w.Bytes()
 }

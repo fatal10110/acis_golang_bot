@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // clickSlop is how far, horizontally, the server's answer to a ground click
@@ -94,7 +95,7 @@ func TestDesyncs(t *testing.T) {
 	at := func(ms int) time.Time { return t0.Add(time.Duration(ms) * time.Millisecond) }
 	pt := func(x, y int32) botclient.Point { return botclient.Point{X: x, Y: y, Z: -3000} }
 	from, to, corner := pt(0, 0), pt(1000, 0), pt(400, 300)
-	click := Sent{At: at(0), Op: opMoveBackwardToLocation, Payload: botclient.EncodeMoveBackwardToLocation(to, from)}
+	click := Sent{At: at(0), Op: opMoveBackwardToLocation, Payload: botwire.EncodeMoveBackwardToLocation(to, from)}
 	move := func(ms int, id int32, o, d botclient.Point) Seen {
 		return Seen{At: at(ms), Event: botclient.MoveToLocation{ObjectID: id, Origin: o, Dest: d}}
 	}

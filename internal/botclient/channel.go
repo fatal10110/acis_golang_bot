@@ -3,7 +3,7 @@ package botclient
 import (
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // userCommandChannelList is /channellistupdate (network/usercommand.go
@@ -25,17 +25,6 @@ const (
 	channelRetry   = 15 * time.Second
 	channelRefresh = time.Minute
 )
-
-// encodeRequestExMPCCShowPartyMembersInfo asks for the members of the
-// party the player leaderID is in; the server answers nothing for a player
-// offline or in no party (network/party_channel.go
-// requestChannelPartyMembers).
-func encodeRequestExMPCCShowPartyMembersInfo(leaderID int32) []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestExMPCCShowPartyMembersInfo)
-	w.WriteInt32(leaderID)
-	return w.Bytes()
-}
 
 // Channel is the command channel the bot's party is in; the zero Channel
 // is none. The server pushes no member ids: the bot asks for the parties
@@ -158,7 +147,7 @@ func (b *Brain) ruleChannel(now time.Time) (Action, bool) {
 	if !c.listed || arena && now.Sub(c.listedAt) >= channelRefresh {
 		switch {
 		case c.listAsked.IsZero() || now.Sub(c.listAsked) >= channelRetry:
-			a := Action{kind: actChannelAsk, payload: encodeRequestUserCommand(userCommandChannelList)}
+			a := Action{kind: actChannelAsk, payload: botwire.EncodeRequestUserCommand(userCommandChannelList)}
 			if !b.pace.allow(a.gate(), now) {
 				return Action{}, false
 			}
@@ -180,7 +169,7 @@ func (b *Brain) ruleChannel(now time.Time) (Action, bool) {
 	if due == 0 {
 		return Action{}, false
 	}
-	a := Action{kind: actChannelAsk, payload: encodeRequestExMPCCShowPartyMembersInfo(due)}
+	a := Action{kind: actChannelAsk, payload: botwire.EncodeRequestExMPCCShowPartyMembersInfo(due)}
 	if !b.pace.allow(a.gate(), now) {
 		return Action{}, false
 	}

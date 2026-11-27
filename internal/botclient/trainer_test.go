@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // trainerObj is a human mystic trainer (Zigaunt, NPC 30022) in sight.
@@ -19,31 +21,6 @@ func trainerPage(id int32) string {
 }
 
 func itoa(v int32) string { return strconv.Itoa(int(v)) }
-
-func TestTrainerEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"RequestBypassToServer", encodeRequestBypassToServer("npc_7"), []byte{0x21, 'n', 0, 'p', 0, 'c', 0, '_', 0, '7', 0, 0, 0}},
-		{
-			"RequestAcquireSkillInfo", encodeSkillRequest(opGameRequestAcquireSkillInfo, 1011, 2, acquireSkillUsual),
-			[]byte{0x6b, 0xf3, 3, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
-		},
-		{
-			"RequestAcquireSkill", encodeSkillRequest(opGameRequestAcquireSkill, 1068, 1, acquireSkillUsual),
-			[]byte{0x6c, 0x2c, 4, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
-		},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-	if got := skillListBypass(268435473); got != "npc_268435473_SkillList" {
-		t.Errorf("skillListBypass = %q", got)
-	}
-}
 
 // TestDialogLinks checks the links read off a page against the server's
 // whitelist rules (bypass.go bypassWhitelist.record).
@@ -167,11 +144,11 @@ func runTrainerSteps(t *testing.T, b *Brain, steps []trainerStep) {
 }
 
 func infoReq(id, level int32) []byte {
-	return encodeSkillRequest(opGameRequestAcquireSkillInfo, id, level, acquireSkillUsual)
+	return botwire.EncodeSkillRequest(opGameRequestAcquireSkillInfo, id, level, acquireSkillUsual)
 }
 
 func learnReq(id, level int32) []byte {
-	return encodeSkillRequest(opGameRequestAcquireSkill, id, level, acquireSkillUsual)
+	return botwire.EncodeSkillRequest(opGameRequestAcquireSkill, id, level, acquireSkillUsual)
 }
 
 // TestBrainTrainerVisit walks a level 15 human mystic through a visit:
@@ -184,12 +161,12 @@ func TestBrainTrainerVisit(t *testing.T) {
 	heal1, heal2, might := AcquirableSkill{ID: skillHeal, Level: 1, Cost: 160}, AcquirableSkill{ID: skillHeal, Level: 2, Cost: 160}, AcquirableSkill{ID: skillMight, Level: 1, Cost: 470}
 	anti := AcquirableSkill{ID: 146, Level: 1, Cost: 240} // offered, not wanted
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "select", wantRule: "train", wantKind: actSelect, wantPayload: encodeAction(trainerObj, Point{})},
+		{name: "select", wantRule: "train", wantKind: actSelect, wantPayload: botwire.EncodeAction(trainerObj, Point{})},
 		{name: "selection not confirmed yet clicks again", at: time.Second, wantRule: "train", wantKind: actSelect},
-		{name: "talk", at: 2 * time.Second, events: []Event{MyTargetSelected{ObjectID: trainerObj}}, wantRule: "train", wantKind: actTalk, wantPayload: encodeAction(trainerObj, Point{})},
+		{name: "talk", at: 2 * time.Second, events: []Event{MyTargetSelected{ObjectID: trainerObj}}, wantRule: "train", wantKind: actTalk, wantPayload: botwire.EncodeAction(trainerObj, Point{})},
 		{name: "wait for the page", at: 10 * time.Second, wantRule: "train"},
 		{name: "a page of another NPC changes nothing", at: 11 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: npcID, HTML: trainerPage(npcID)}}, wantRule: "train"},
-		{name: "skill list link", at: 12 * time.Second, events: []Event{page}, wantRule: "train", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(skillListBypass(trainerObj))},
+		{name: "skill list link", at: 12 * time.Second, events: []Event{page}, wantRule: "train", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(skillListBypass(trainerObj))},
 		{name: "wait for the list", at: 13 * time.Second, wantRule: "train"},
 		{name: "ask the cost of the first wanted skill", at: 14 * time.Second, events: []Event{AcquireSkillList{Skills: []AcquirableSkill{anti, might, heal1}}}, wantRule: "train", wantKind: actSkillInfo, wantPayload: infoReq(skillHeal, 1)},
 		{name: "wait for the cost", at: 15 * time.Second, wantRule: "train"},
@@ -370,5 +347,11 @@ func TestDefaultPersonaSkills(t *testing.T) {
 	}
 	if got := kit(classOrcMystic).Skills; !slices.Equal(got, want) {
 		t.Errorf("orc mystic skills = %v, want buffs, armor masteries, attack spells, then the PvP row's", got)
+	}
+}
+
+func TestSkillListBypass(t *testing.T) {
+	if got := skillListBypass(268435473); got != "npc_268435473_SkillList" {
+		t.Errorf("skillListBypass = %q", got)
 	}
 }

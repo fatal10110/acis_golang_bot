@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // inviteArrive is how near the whisperer it asks for a trade the bot walks
@@ -48,7 +49,7 @@ type valuableInvite struct {
 }
 
 func tradeRequestAction(partner int32) Action {
-	return Action{kind: actTradeRequest, payload: encodeTradeRequest(partner), object: partner}
+	return Action{kind: actTradeRequest, payload: botwire.EncodeTradeRequest(partner), object: partner}
 }
 
 // valuablesLeft is what the session's valuables budget has left

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -43,17 +44,6 @@ func TestParseCommand(t *testing.T) {
 		if ok != tt.ok || got != tt.want {
 			t.Errorf("parseCommand(%q) = %+v, %v; want %+v, %v", tt.text, got, ok, tt.want, tt.ok)
 		}
-	}
-}
-
-func TestEncodeSay2Tell(t *testing.T) {
-	// "hi" in UTF-16LE with its terminator, the Tell type, then "GM".
-	want := []byte{opGameSay2, 'h', 0, 'i', 0, 0, 0, 2, 0, 0, 0, 'G', 0, 'M', 0, 0, 0}
-	if got := encodeSay2Tell("GM", "hi"); !bytes.Equal(got, want) {
-		t.Fatalf("encodeSay2Tell = % x, want % x", got, want)
-	}
-	if g := tellAction("GM", "hi").gate(); g != gateChat {
-		t.Fatalf("tell gate %d, want gateChat", g)
 	}
 }
 
@@ -128,11 +118,11 @@ func TestBrainCommandReplies(t *testing.T) {
 		party bool // the bot is in the commander's party
 		want  []byte
 	}{
-		{"invite me", "invite me", false, encodeSay2Tell("GM", inviteMeText)},
+		{"invite me", "invite me", false, botwire.EncodeSay2Tell("GM", inviteMeText)},
 		{"invite me in its party", "invite me", true, nil},
-		{"leave", "leave", true, encodeRequestWithdrawParty()},
+		{"leave", "leave", true, botwire.EncodeRequestWithdrawParty()},
 		{"leave outside a party", "leave", false, nil},
-		{"go without spots", "go wolves", false, encodeSay2Tell("GM", replyNoSpots)},
+		{"go without spots", "go wolves", false, botwire.EncodeSay2Tell("GM", replyNoSpots)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -367,5 +357,11 @@ func TestBrainRunVerdict(t *testing.T) {
 	b.events.push(LeaveWorld{}, done)
 	if err := <-errc; !errors.Is(err, ErrCommandedLogout) {
 		t.Fatalf("Run = %v, want ErrCommandedLogout", err)
+	}
+}
+
+func TestTellGate(t *testing.T) {
+	if g := tellAction("GM", "hi").gate(); g != gateChat {
+		t.Fatalf("tell gate %d, want gateChat", g)
 	}
 }

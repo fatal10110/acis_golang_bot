@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // Pages of the recipe book on the wire: RequestRecipeBookOpen,
 // RecipeBookItemList and RecipeItemMakeInfo name the dwarven page 0 and the
@@ -66,4 +64,23 @@ func decodeRecipeItemMakeInfo(r *wire.Reader) Event {
 		RecipeID: r.ReadInt32(), Dwarven: r.ReadInt32() == RecipePageDwarven,
 		MP: r.ReadInt32(), MaxMP: r.ReadInt32(), Status: r.ReadInt32(),
 	}
+}
+
+// EncodeRequestRecipeBookOpen asks for the dwarven or the common page of
+// the recipe book (clientpackets/recipe.go: any page but 0 is common).
+func EncodeRequestRecipeBookOpen(dwarven bool) []byte {
+	w := wire.NewPacketWriter(OpGameRequestRecipeBookOpen)
+	page := RecipePageCommon
+	if dwarven {
+		page = RecipePageDwarven
+	}
+	w.WriteInt32(page)
+	return w.Bytes()
+}
+
+// EncodeRequestRecipeItemMakeSelf crafts recipeID for the bot itself.
+func EncodeRequestRecipeItemMakeSelf(recipeID int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestRecipeItemMakeSelf)
+	w.WriteInt32(recipeID)
+	return w.Bytes()
 }

@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // Command channel packets (internal/gameserver/network/serverpackets/
 // party.go and usercommand.go, clientpackets/party.go). The uint16 server
@@ -101,4 +99,15 @@ func decodeExMultiPartyCommandChannelInfo(r *wire.Reader) Event {
 		e.Parties = append(e.Parties, ChannelPartyRow{LeaderName: r.ReadString(), LeaderID: r.ReadInt32(), Count: r.ReadInt32()})
 	}
 	return e
+}
+
+// EncodeRequestExMPCCShowPartyMembersInfo asks for the members of the
+// party the player leaderID is in; the server answers nothing for a player
+// offline or in no party (network/party_channel.go
+// requestChannelPartyMembers).
+func EncodeRequestExMPCCShowPartyMembersInfo(leaderID int32) []byte {
+	w := wire.NewPacketWriter(OpGameClientExtended)
+	w.WriteUint16(OpGameRequestExMPCCShowPartyMembersInfo)
+	w.WriteInt32(leaderID)
+	return w.Bytes()
 }

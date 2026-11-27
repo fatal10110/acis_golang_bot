@@ -57,7 +57,7 @@ func TestSupplyPotion(t *testing.T) {
 			if target <= 0 {
 				t.Fatalf("tripTarget(%d) = %d, want > 0", tt.want, target)
 			}
-			want := buyRow{item: tt.want, count: target}
+			want := buyRow{Item: tt.want, Count: target}
 			if got := b.shopWants(true); !slices.Contains(got, want) {
 				t.Fatalf("shopWants = %v, want it to hold %v", got, want)
 			}

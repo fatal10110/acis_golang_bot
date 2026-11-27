@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestLootGroundRaid checks the raid loot lock (#460): a drop of a raid or
@@ -58,7 +60,7 @@ func TestLootGroundRaid(t *testing.T) {
 			rule, a := b.decide(at(tt.at))
 			var want []byte
 			if tt.want != 0 {
-				want = encodeAction(tt.want, Point{})
+				want = botwire.EncodeAction(tt.want, Point{})
 			}
 			if !bytes.Equal(a.payload, want) || (want != nil) != (rule == "loot") {
 				t.Fatalf("decide = %q % x, want loot % x", rule, a.payload, want)

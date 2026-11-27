@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // autoAttackStart is the server's AutoAttackStart frame (opcode 0x2b) of id.
@@ -20,7 +21,7 @@ func TestWatchRecordsBothWays(t *testing.T) {
 	w.Record([]byte{0x2b, 0x01}) // malformed
 	w.Record(autoAttackStart(7)) // kept
 	w.Record([]byte{0x25})       // ActionFailed
-	attack := botclient.EncodeAttackRequest(-5, botclient.Point{X: 1})
+	attack := botwire.EncodeAttackRequest(-5, botclient.Point{X: 1})
 	w.RecordSent(attack)
 	attack[1] = 0 // the watch keeps its own copy
 	w.RecordSent([]byte{0x09})

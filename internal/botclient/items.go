@@ -3,7 +3,7 @@ package botclient
 import (
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // potionReuse is how long the bot drinks no potion after it drank one. The
@@ -32,31 +32,9 @@ const shotRetry = 30 * time.Second
 // TravelMap.WithItemIndex puts the datapack's in its place.
 var healingPotions = []int32{1539, 1061, 1060}
 
-// encodeUseItem uses the carried item objectID with ctrl released.
-func encodeUseItem(objectID int32) []byte {
-	w := wire.NewPacketWriter(opGameUseItem)
-	w.WriteInt32(objectID)
-	w.WriteInt32(0) // ctrl not held
-	return w.Bytes()
-}
-
-// encodeRequestAutoSoulShot turns auto use of the shot template
-// templateID on or off. The server needs the template in the inventory.
-func encodeRequestAutoSoulShot(templateID int32, enable bool) []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestAutoSoulShot)
-	w.WriteInt32(templateID)
-	var v int32
-	if enable {
-		v = 1
-	}
-	w.WriteInt32(v)
-	return w.Bytes()
-}
-
 // useItemAction uses it.
 func useItemAction(it Item) Action {
-	return Action{kind: actUseItem, payload: encodeUseItem(it.ObjectID), item: it.TemplateID}
+	return Action{kind: actUseItem, payload: botwire.EncodeUseItem(it.ObjectID), item: it.TemplateID}
 }
 
 // autoShotAction turns auto use of the shot template templateID on, or
@@ -66,7 +44,7 @@ func autoShotAction(templateID int32, enable bool) Action {
 	if !enable {
 		kind = actAutoShotOff
 	}
-	return Action{kind: kind, payload: encodeRequestAutoSoulShot(templateID, enable), item: templateID}
+	return Action{kind: kind, payload: botwire.EncodeRequestAutoSoulShot(templateID, enable), item: templateID}
 }
 
 // Inventory is what the bot carries. Its weight is the character's:

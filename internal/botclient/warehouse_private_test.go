@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Keepers of the private warehouse tests (data/xml/spawnlist; docs/valuables/round.md,
@@ -62,14 +64,14 @@ func privateOpenSteps(start time.Duration, deposit bool) []trainerStep {
 		{name: "wait for the page", at: start + 2*time.Second, wantRule: "warehouse"},
 		{
 			name: "open", at: start + 3*time.Second, events: []Event{keeperPage(keeperObj, "DepositP", "WithdrawP", "DepositC", "WithdrawC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_" + cmd),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_" + cmd),
 		},
 		{name: "wait for the " + cmd + " list", at: start + 4*time.Second, wantRule: "warehouse"},
 	}
 }
 
 func chatBypass(obj int32, n string) []byte {
-	return encodeRequestBypassToServer("npc_" + itoa(obj) + "_Chat " + n)
+	return botwire.EncodeRequestBypassToServer("npc_" + itoa(obj) + "_Chat " + n)
 }
 
 // TestPrivateWarehouseErrand is the private warehouse errand (V3a,
@@ -132,7 +134,7 @@ func testPrivateLinks(t *testing.T) {
 			trainerStep{name: "clan list ignored", at: 5 * time.Second, events: []Event{WarehouseDepositList{Type: clanWarehouseType, Items: deposit}}, wantRule: "warehouse"},
 			trainerStep{
 				name: "private list", at: 6 * time.Second, events: []Event{WarehouseDepositList{Type: privateWarehouseType, Items: deposit}},
-				wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{102, animalSkin, 10}),
+				wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{Object: 102, Item: animalSkin, Count: 10}),
 			},
 			trainerStep{name: "deposited", at: 7 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedSkins}}}}},
 		)
@@ -151,7 +153,7 @@ func testPrivateLinks(t *testing.T) {
 			{name: "talk", at: time.Second, events: []Event{MyTargetSelected{ObjectID: keeperObj}}, wantRule: "warehouse", wantKind: actTalk},
 			{
 				name: "open", at: 2 * time.Second, events: []Event{keeperPage(keeperObj, "WithdrawC", "WithdrawP 1")},
-				wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_WithdrawP 1"),
+				wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_WithdrawP 1"),
 			},
 		})
 	})
@@ -163,7 +165,7 @@ func testPrivateLinks(t *testing.T) {
 			{name: "chat link", at: 2 * time.Second, events: []Event{keeperPage(keeperObj, "Chat 1", "Quest")}, wantRule: "warehouse", wantKind: actBypass, wantPayload: chatBypass(keeperObj, "1")},
 			{
 				name: "open", at: 3 * time.Second, events: []Event{keeperPage(keeperObj, "DepositP", "WithdrawP", "Chat 0")},
-				wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_WithdrawP"),
+				wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_WithdrawP"),
 			},
 		})
 	})
@@ -364,10 +366,10 @@ func testPrivateStatus(t *testing.T) {
 		{name: "select", at: start, setup: queue(depositSword), wantRule: "warehouse", wantKind: actTalk},
 		{
 			name: "open", at: start + time.Second, events: []Event{keeperPage(keeperObj, "DepositP", "WithdrawP")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_DepositP"),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_DepositP"),
 		},
 		{
-			name: "deposit", at: start + 2*time.Second, wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{106, swordTemplate, 1}),
+			name: "deposit", at: start + 2*time.Second, wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{Object: 106, Item: swordTemplate, Count: 1}),
 			events: []Event{WarehouseDepositList{Type: privateWarehouseType, Items: []WarehouseItem{
 				{ObjectID: 102, TemplateID: animalSkin, Count: 10}, {ObjectID: 106, TemplateID: swordTemplate, Count: 1, Enchant: 5},
 			}}},
@@ -387,7 +389,7 @@ func testPrivateStatus(t *testing.T) {
 		{name: "open", at: start + time.Second, events: []Event{keeperPage(keeperObj, "DepositP", "WithdrawP")}, wantRule: "warehouse", wantKind: actBypass},
 		{
 			name: "withdraw", at: start + 2*time.Second, events: []Event{WarehouseWithdrawList{Type: privateWarehouseType, Items: want}},
-			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{106, swordTemplate, 1}),
+			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{Object: 106, Item: swordTemplate, Count: 1}),
 		},
 		{name: "withdrawn", at: start + 3*time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: whCarriedSword}}}}},
 	})
@@ -573,7 +575,7 @@ func testPrivateMarks(t *testing.T) {
 			b.world.Apply(ItemList{Items: []Item{adenaStack(1000), whCarriedSkins}}, t0)
 			last := trainerStep{name: "page: marked", at: 2 * time.Second, events: []Event{tt.page}}
 			if tt.open != "" {
-				last.wantRule, last.wantKind, last.wantPayload = "warehouse", actBypass, encodeRequestBypassToServer(tt.open)
+				last.wantRule, last.wantKind, last.wantPayload = "warehouse", actBypass, botwire.EncodeRequestBypassToServer(tt.open)
 			}
 			runTrainerSteps(t, b, []trainerStep{
 				{name: "select", setup: queue(tt.req), wantRule: "warehouse", wantKind: actSelect},

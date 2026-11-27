@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Dialog is the last dialog page the server sent the bot: the object it
@@ -61,13 +61,5 @@ func isCtrlOrSpace(r rune) bool { return r <= ' ' }
 // bypassAction sends bypass command cmd, a link of the open dialog. The
 // bypass gate (gateBypass) spaces it.
 func bypassAction(cmd string) Action {
-	return Action{kind: actBypass, payload: encodeRequestBypassToServer(cmd)}
-}
-
-// encodeRequestBypassToServer sends bypass command cmd
-// (clientpackets/html.go).
-func encodeRequestBypassToServer(cmd string) []byte {
-	w := wire.NewPacketWriter(opGameRequestBypassToServer)
-	w.WriteString(cmd)
-	return w.Bytes()
+	return Action{kind: actBypass, payload: botwire.EncodeRequestBypassToServer(cmd)}
 }

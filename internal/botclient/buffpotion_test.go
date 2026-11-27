@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -204,7 +205,7 @@ func TestRuleBuffPotion(t *testing.T) {
 				}
 				return
 			}
-			if !ok || a.kind != actUseItem || !bytes.Equal(a.payload, encodeUseItem(tt.want)) {
+			if !ok || a.kind != actUseItem || !bytes.Equal(a.payload, botwire.EncodeUseItem(tt.want)) {
 				t.Fatalf("ruleBuffPotion = %v, %v, want a UseItem of %#x", a, ok, tt.want)
 			}
 			if rule, _ := b.decide(at(10 * time.Second)); rule != "buffpotion" {
@@ -260,11 +261,11 @@ func TestBuffPotionComfort(t *testing.T) {
 		want   []buyRow
 	}{
 		// 60 minutes of a 20-minute effect.
-		{name: "a trip's worth", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: soePotion, want: []buyRow{{scrollOfEscape, 1}, {magicHastePotion, 3}}},
+		{name: "a trip's worth", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: soePotion, want: []buyRow{{Item: scrollOfEscape, Count: 1}, {Item: magicHastePotion, Count: 3}}},
 		{
 			name: "less what it carries", adena: gearKeep + 100000,
 			items:  []Item{carriedSoE, {ObjectID: 301, TemplateID: magicHastePotion, Count: 2}},
-			window: soePotion, want: []buyRow{{scrollOfEscape, 1}, {magicHastePotion, 1}},
+			window: soePotion, want: []buyRow{{Item: scrollOfEscape, Count: 1}, {Item: magicHastePotion, Count: 1}},
 		},
 		{
 			name: "within the weight left", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: soePotion,
@@ -273,13 +274,13 @@ func TestBuffPotionComfort(t *testing.T) {
 				b.world.Self.Load, b.world.Self.MaxLoad = 410, 1000
 				b.cfg.Travel.weights = map[int32]int32{magicHastePotion: 20, scrollOfEscape: 10}
 			},
-			want: []buyRow{{scrollOfEscape, 1}, {magicHastePotion, 1}},
+			want: []buyRow{{Item: scrollOfEscape, Count: 1}, {Item: magicHastePotion, Count: 1}},
 		},
 		{name: "saving for the goal skips it", adena: gearKeep + 130000, items: []Item{carriedSoE}, window: goal},
 		{
 			name: "not from an unspawned merchant", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: soePotion,
 			edit: func(b *Brain) { delete(b.cfg.Travel.spawnedSold, magicHastePotion) },
-			want: []buyRow{{scrollOfEscape, 1}},
+			want: []buyRow{{Item: scrollOfEscape, Count: 1}},
 		},
 		{
 			name: "comfort off", adena: gearKeep + 100000, items: []Item{carriedSoE}, window: soePotion,
@@ -381,7 +382,7 @@ func TestCrowdedPotion(t *testing.T) {
 			if rule != tt.wantRule || tt.wantKind != 0 && a.kind != tt.wantKind {
 				t.Fatalf("decide = %q %v, want %q kind %v", rule, a.kind, tt.wantRule, tt.wantKind)
 			}
-			if tt.wantKind == actUseItem && !bytes.Equal(a.payload, encodeUseItem(potion.ObjectID)) {
+			if tt.wantKind == actUseItem && !bytes.Equal(a.payload, botwire.EncodeUseItem(potion.ObjectID)) {
 				t.Fatalf("UseItem payload %x, want one of %#x", a.payload, potion.ObjectID)
 			}
 		})

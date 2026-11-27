@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
@@ -124,7 +125,7 @@ func TestTownPrepBoothShop(t *testing.T) {
 		},
 		{name: "talk", at: 81 * time.Second, events: []Event{MyTargetSelected{ObjectID: merchantObj}}, wantRule: "shop", wantKind: actTalk},
 		{name: "wait for the page", at: 82 * time.Second, wantRule: "shop"},
-		{name: "buy link", at: 83 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(buyCommand(merchantObj, 14))},
+		{name: "buy link", at: 83 * time.Second, events: []Event{page}, wantRule: "shop", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(buyCommand(merchantObj, 14))},
 		{name: "wait for the window", at: 84 * time.Second, wantRule: "shop"},
 		{
 			name: "buy", at: 85 * time.Second,

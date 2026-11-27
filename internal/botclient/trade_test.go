@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 const (
@@ -23,25 +25,6 @@ var (
 
 func adenaRow(n int32) TradeItem {
 	return TradeItem{ObjectID: coinID, TemplateID: adenaID, Count: n, Category: 4, SubCategory: 4}
-}
-
-func TestTradeEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"TradeRequest", encodeTradeRequest(pcID), []byte{0x15, 2, 0, 0, 0x20}},
-		{"AnswerTradeRequest accept", encodeAnswerTradeRequest(true), []byte{0x44, 1, 0, 0, 0}},
-		{"AnswerTradeRequest decline", encodeAnswerTradeRequest(false), []byte{0x44, 0, 0, 0, 0}},
-		{"AddTradeItem", encodeAddTradeItem(goodsID, 10), []byte{0x16, 0, 0, 0, 0, 1, 0, 0, 0x40, 10, 0, 0, 0}},
-		{"TradeDone confirm", encodeTradeDone(true), []byte{0x17, 1, 0, 0, 0}},
-		{"TradeDone cancel", encodeTradeDone(false), []byte{0x17, 0, 0, 0, 0}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
 }
 
 // TestWorldTrade applies a trade's life, from the request to the settled
@@ -126,8 +109,8 @@ func TestTradeRule(t *testing.T) {
 	paid := func(b *Brain) {
 		openTrade(b, TradeOwnAdd{Item: goodsRow}, TradeOtherAdd{Item: adenaRow(300)}, TradeOtherAdd{Item: adenaRow(200)})
 	}
-	accept, decline := encodeAnswerTradeRequest(true), encodeAnswerTradeRequest(false)
-	confirm, cancel := encodeTradeDone(true), encodeTradeDone(false)
+	accept, decline := botwire.EncodeAnswerTradeRequest(true), botwire.EncodeAnswerTradeRequest(false)
+	confirm, cancel := botwire.EncodeTradeDone(true), botwire.EncodeTradeDone(false)
 	tests := []struct {
 		name    string
 		persona func(*Persona)
@@ -166,7 +149,7 @@ func TestTradeRule(t *testing.T) {
 			setup: func(b *Brain) { b.tradedAt[pcID] = t0; request(b) }, want: accept, wantRule: "prompt",
 		},
 		{name: "expired request", setup: func(b *Brain) { b.world.Apply(SendTradeRequest{SenderID: pcID}, now.Add(-tradeRequestTimeout)) }, wantRule: ""},
-		{name: "open trade offers the goods", setup: func(b *Brain) { openTrade(b) }, want: encodeAddTradeItem(goodsID, 10), wantRule: "prompt"},
+		{name: "open trade offers the goods", setup: func(b *Brain) { openTrade(b) }, want: botwire.EncodeAddTradeItem(goodsID, 10), wantRule: "prompt"},
 		{name: "add sent waits for its echo", setup: func(b *Brain) { openTrade(b); b.world.Trade.added = 1 }, wantRule: "prompt"},
 		{name: "goods gone cancels", setup: func(b *Brain) { delete(b.world.Inventory.Items, goodsID); openTrade(b) }, want: cancel, wantRule: "prompt"},
 		{name: "offers locked before the bot's cancels", setup: func(b *Brain) { openTrade(b, TradePressOtherOk{}) }, want: cancel, wantRule: "prompt"},
@@ -253,12 +236,12 @@ func TestBrainTrade(t *testing.T) {
 		evs  []Event
 		want []byte
 	}{
-		{"request", []Event{SendTradeRequest{SenderID: pcID}}, encodeAnswerTradeRequest(true)},
-		{"window opens", []Event{TradeStart{PartnerID: pcID, Items: []TradeItem{potRow, goodsRow}}}, encodeAddTradeItem(goodsID, 10)},
-		{"partner pays", []Event{TradeOwnAdd{Item: goodsRow}, TradeOtherAdd{Item: adenaRow(500)}}, encodeTradeDone(true)},
+		{"request", []Event{SendTradeRequest{SenderID: pcID}}, botwire.EncodeAnswerTradeRequest(true)},
+		{"window opens", []Event{TradeStart{PartnerID: pcID, Items: []TradeItem{potRow, goodsRow}}}, botwire.EncodeAddTradeItem(goodsID, 10)},
+		{"partner pays", []Event{TradeOwnAdd{Item: goodsRow}, TradeOtherAdd{Item: adenaRow(500)}}, botwire.EncodeTradeDone(true)},
 		{"partner confirms", []Event{TradePressOwnOk{}, TradePressOtherOk{}}, nil},
 		{"settled", []Event{SendTradeDone{Success: true}}, nil},
-		{"next request", []Event{SendTradeRequest{SenderID: pcID}}, encodeAnswerTradeRequest(false)},
+		{"next request", []Event{SendTradeRequest{SenderID: pcID}}, botwire.EncodeAnswerTradeRequest(false)},
 	}
 	now := t0
 	for _, s := range steps {

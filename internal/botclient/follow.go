@@ -3,6 +3,8 @@ package botclient
 import (
 	"math"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // FollowPolicy is how a party member follows its leader (rule "follow"):
@@ -233,5 +235,5 @@ func (b *Brain) wakeBy(t time.Time) {
 }
 
 func walkRunAction() Action {
-	return Action{kind: actWalkRun, payload: encodeRequestActionUse(actionWalkRun)}
+	return Action{kind: actWalkRun, payload: botwire.EncodeRequestActionUse(actionWalkRun)}
 }

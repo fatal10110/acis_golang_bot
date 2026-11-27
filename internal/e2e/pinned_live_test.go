@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Pinned scenario characters keep what every earlier run left them: the
@@ -83,7 +84,7 @@ func liftDeathPenalty(t *testing.T, ctx context.Context, c *Client, gm *GMClient
 			t.Fatalf("strip %s: death penalty level %d: out of Scrolls: Recovery %d", c.Self.Name, penalty, scroll)
 		}
 		read := time.Now()
-		if err := c.Send(ctx, botclient.EncodeUseItem(id)); err != nil {
+		if err := c.Send(ctx, botwire.EncodeUseItem(id)); err != nil {
 			t.Fatal(err)
 		}
 		was, refused := penalty, false

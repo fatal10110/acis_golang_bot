@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // AcquirableSkill is one skill level a trainer offers: the next level of a
 // skill the bot may learn at its level, and its SP cost.
@@ -73,4 +71,14 @@ func decodeAcquireSkillInfo(r *wire.Reader) Event {
 		r.Skip(4)
 	}
 	return i
+}
+
+// EncodeSkillRequest is RequestAcquireSkillInfo or RequestAcquireSkill
+// (opcode op): skill id, level, list type (clientpackets/acquire_skill.go).
+func EncodeSkillRequest(op byte, id, level, typ int32) []byte {
+	w := wire.NewPacketWriter(op)
+	w.WriteInt32(id)
+	w.WriteInt32(level)
+	w.WriteInt32(typ)
+	return w.Bytes()
 }

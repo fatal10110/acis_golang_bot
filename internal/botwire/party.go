@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // AskJoinParty invites the bot into the party of the player named
 // Requester, under loot rule Loot.
@@ -134,4 +132,52 @@ func decodePartyMemberPosition(r *wire.Reader) Event {
 		e.Members = append(e.Members, PartyMemberAt{ObjectID: r.ReadInt32(), Pos: readPoint(r)})
 	}
 	return e
+}
+
+// EncodeRequestOustPartyMember expels the member named name from the
+// party the bot leads; the server ignores it from anyone else or for a
+// name no member has (network/party.go requestOustPartyMember).
+func EncodeRequestOustPartyMember(name string) []byte {
+	w := wire.NewPacketWriter(OpGameRequestOustPartyMember)
+	w.WriteString(name)
+	return w.Bytes()
+}
+
+// EncodeRequestChangePartyLeader hands the party the bot leads to the
+// member named name; a dueling member is refused in silence
+// (party/party.go ChangeLeader).
+func EncodeRequestChangePartyLeader(name string) []byte {
+	w := wire.NewPacketWriter(OpGameClientExtended)
+	w.WriteUint16(OpGameRequestChangePartyLeader)
+	w.WriteString(name)
+	return w.Bytes()
+}
+
+// EncodeRequestJoinParty invites the player named target into the bot's
+// party under loot rule loot (botclient's lootFindersKeepers to
+// lootByTurnSpoil; the server invites nobody under another rule, and a
+// leader's invitation carries its party's rule whatever loot says).
+func EncodeRequestJoinParty(target string, loot int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestJoinParty)
+	w.WriteString(target)
+	w.WriteInt32(loot)
+	return w.Bytes()
+}
+
+// EncodeRequestAnswerJoinParty answers the pending party invitation: 1
+// accepts, 0 declines.
+func EncodeRequestAnswerJoinParty(accept bool) []byte {
+	w := wire.NewPacketWriter(OpGameRequestAnswerJoinParty)
+	var v int32
+	if accept {
+		v = 1
+	}
+	w.WriteInt32(v)
+	return w.Bytes()
+}
+
+// EncodeRequestWithdrawParty leaves the bot's party; in none it does
+// nothing.
+func EncodeRequestWithdrawParty() []byte {
+	return wire.NewPacketWriter(OpGameRequestWithdrawParty).Bytes()
 }

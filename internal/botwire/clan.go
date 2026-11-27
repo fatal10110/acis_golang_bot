@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // AskJoinPledge invites the bot into the clan named Clan, by the player
 // whose object id is RequesterID.
@@ -59,4 +57,22 @@ func decodePledgeShowMemberListAll(r *wire.Reader) Event {
 		r.Skip(6 * 4) // level, class, sex, race, online object id, sponsor
 	}
 	return e
+}
+
+// EncodeRequestAnswerJoinPledge answers the pending clan invitation: 1
+// accepts, 0 declines (clientpackets/pledge.go, any non-zero accepts).
+func EncodeRequestAnswerJoinPledge(accept bool) []byte {
+	w := wire.NewPacketWriter(OpGameRequestAnswerJoinPledge)
+	w.WriteInt32(wire.BoolInt32(accept))
+	return w.Bytes()
+}
+
+// EncodeRequestJoinPledge invites the player whose object id is target
+// into the sender's clan, sub-unit pledgeType (0 the main clan)
+// (clientpackets/pledge.go).
+func EncodeRequestJoinPledge(target, pledgeType int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestJoinPledge)
+	w.WriteInt32(target)
+	w.WriteInt32(pledgeType)
+	return w.Bytes()
 }
