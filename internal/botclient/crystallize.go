@@ -363,7 +363,7 @@ func (b *Brain) crystallizeSent(a Action, now time.Time) {
 	}
 	cz.tried[a.object] = true
 	cz.pending, cz.sentAt = true, now
-	c.nextAt = now.Add(craftGap + time.Duration(b.rng.Int64N(int64(craftJitter)+1)))
+	c.nextAt = now.Add(b.between(craftGap, craftGap+craftJitter))
 }
 
 // crystallizeEvent moves the crystallizing under way on with its answer,

@@ -56,6 +56,9 @@ type uiOptions struct {
 	localAddr   string
 	allowlisted bool
 	metrics     string
+	// outcomeLog is the outcome log's file (-outcome-log); empty records
+	// nothing.
+	outcomeLog string
 	// pprof is the loopback address of the profile endpoint; empty serves
 	// none. It never shares the panel's listener.
 	pprof string
@@ -98,6 +101,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	addSpawnEventsFlag(fs, &o.spawnEvents)
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
+	addOutcomeLogFlag(fs, &o.outcomeLog)
 	fs.StringVar(&o.listen, "listen", defaultListen, "loopback address the web panel serves on (open http://ADDR/ in a browser)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
@@ -301,6 +305,13 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	if err := prepareRegistry(reg, o, log); err != nil {
 		return err
 	}
+	outcomes, stopOutcomes, err := startOutcomeLog(o.outcomeLog, log)
+	if err != nil {
+		return err
+	}
+	// The writer takes the stays of every bot until all returned
+	// (sup.Run), then it is joined.
+	defer stopOutcomes()
 	dialOpt, _ := botclient.ParseLocalAddr(o.localAddr) // validated by parseUIFlags
 	clock := botclient.SystemClock{}
 	gate := botclient.NewLoginGate(clock, nil)
@@ -326,6 +337,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		secret:   secret,
 		datapack: o.datapack,
 	}
+	runner.shared.outcomes = outcomes
 	// The navigation opens before the spots: the registry drops the spots in
 	// water (loadSpots).
 	if o.geo.set() {

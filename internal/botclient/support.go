@@ -196,8 +196,7 @@ func (b *Brain) leaderHit(attacker, target int32, now time.Time) {
 		b.assist.seen = now
 		return
 	}
-	lo := b.persona.AssistMin
-	delay := lo + time.Duration(b.rng.Int64N(int64(max(b.persona.AssistMax-lo, 0))+1))
+	delay := b.between(b.persona.AssistMin, b.persona.AssistMax)
 	b.assist = assistPlan{alarm: alarm{at: now.Add(delay), armed: true}, target: target, seen: now}
 }
 

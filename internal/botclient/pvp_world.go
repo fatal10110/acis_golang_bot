@@ -673,7 +673,7 @@ func (b *Brain) playerNamed(name string) int32 {
 // pvpReact is when a reaction to a PvP event at now is due: PvPReactMin to
 // PvPReactMax later (D35).
 func (b *Brain) pvpReact(now time.Time) time.Time {
-	return now.Add(b.cfg.PvPReactMin + time.Duration(b.rng.Int64N(int64(b.cfg.PvPReactMax-b.cfg.PvPReactMin)+1)))
+	return now.Add(b.between(b.cfg.PvPReactMin, b.cfg.PvPReactMax))
 }
 
 // fights reports whether id is a player the bot fights at now: its duel

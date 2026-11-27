@@ -161,11 +161,13 @@ type shared struct {
 	// clanInviters are the names a crafter accepts a clan invitation from
 	// (-clan-inviters); none accepts any player's.
 	clanInviters []string
+	// outcomes is the outcome log's queue (-outcome-log), nil without one.
+	outcomes *botclient.OutcomeQueue
 }
 
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
 // Metrics. A preset leaves out the pieces it does not use: only farming
-// presets get the spot registry, only merchants the store registry and,
+// presets get the spot registry and the outcome queue, only merchants the store registry and,
 // with their valuables policy, the ad board and valuables budget; every
 // preset gets the craft board, the ground item claims and the challenge holds, and the farmer,
 // support and merchant presets the
@@ -182,7 +184,7 @@ func (p preset) brain(s shared) botclient.BrainConfig {
 		cfg.Persona = s.travel.WithItemIndex(cfg.Persona)
 	}
 	if p.farms {
-		cfg.Spots = s.spots
+		cfg.Spots, cfg.Outcomes = s.spots, s.outcomes
 	}
 	if p.store && s.stores != nil {
 		cfg.Stores = s.stores

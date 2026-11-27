@@ -319,6 +319,7 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 	}
 	v.arrived, v.idleSince, v.failed = true, time.Time{}, v.failed[:0]
 	b.anchor = s.Position(now)
+	b.stayArrive(now)
 	if b.crowded(v.at, now) {
 		b.moveOn(now, b.persona.Spots.AvoidFor)
 		return Action{}, true
@@ -783,9 +784,12 @@ func (b *Brain) diedAtSpot(now time.Time) {
 
 // leaveSpot gives back the spot the bot holds or farms beside, if any, its
 // whole weight (a leader's party): on a move, on death and when the brain
-// stops.
+// stops. It ends the spot stay the outcome log records (stayEnd).
 func (b *Brain) leaveSpot() {
 	v := &b.spot
+	if b.stay.open {
+		b.stayEnd(b.clock.Now())
+	}
 	switch {
 	case v.held:
 		b.cfg.Spots.releaseN(v.idx, v.claimWeight())

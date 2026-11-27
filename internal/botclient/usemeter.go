@@ -167,9 +167,11 @@ func (b *Brain) meterEvent(ev Event, now time.Time) {
 		case ItemModified:
 			if c.Item.Count < prev.Count {
 				m.spend(prev.TemplateID, prev.Count-c.Item.Count)
+				b.stayDrank(prev.TemplateID, prev.Count-c.Item.Count)
 			}
 		case ItemRemoved:
 			m.spend(prev.TemplateID, prev.Count)
+			b.stayDrank(prev.TemplateID, prev.Count)
 		}
 	}
 }
