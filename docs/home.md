@@ -173,6 +173,9 @@ GOMEMLIMIT=1GiB bots swarm \
 - `-metrics` serves live counters on loopback only (`docs/hetzner.md`, section 8, still applies).
 - `-pprof 127.0.0.1:6061` serves Go profiles on loopback, off by default; recipes and the
   server's `-debug-addr` are in `docs/hetzner.md`, "Profiling". `bots ui` takes it too.
+- A Go runtime crash is also written to `crash.log` in `acis-bots` under the user's config
+  directory (`-crash-file` names another file), as `bots ui` does (section 8). A swarm and a panel
+  on one host share the default file: each start appends its own header line.
 - `-outcome-log <file>` writes one JSON line per farming bot's spot stay (`docs/structure.md`,
   Design section 6), off by default; past 64 MiB the file becomes `<file>.1` and a new one
   starts, so it stays under 128 MiB. It holds no account or character name and no chat text.
@@ -232,6 +235,10 @@ SHA256`). Flags and commands are the same as on Linux.
 - `bots ui` keeps its registry in `%AppData%\acis-bots` unless `-data-dir` names another
   directory. A second `bots ui` on the same directory is refused while the first runs; a killed
   panel leaves no lock behind.
+- A runtime crash of `bots ui` or `bots swarm` is also written to `%AppData%\acis-bots\crash.log`
+  (section 8), so no `2> ui.log` redirect is needed to keep its first lines. When another bots
+  process holds the file, a start that finds it past 1 MiB cannot move it to `crash.log.1` and
+  empties it instead, with a warning.
 - The panel (`127.0.0.1:8090`) and the metrics and pprof endpoints listen on loopback only, so they need no
   firewall rule; if Windows Defender Firewall asks anyway, allow nothing. The bots' outbound
   connections need no rule either.
@@ -269,6 +276,15 @@ bots ui -secret-file ~/.config/acis-bots/secret -prefix home -login <server>:210
   serves the page with hot reload against a `bots ui` on the default `-listen`.
 - The registry lives in `-data-dir` (default `acis-bots` under the user's config directory); a
   restart on the same directory logs back in every bot marked online, as the same characters.
+- A Go runtime crash (a fatal error such as out of memory, or an unrecovered panic) is written to
+  `crash.log` in `-data-dir` as well as to stderr, so the first lines of a dump of thousands of
+  goroutines survive a console that keeps only the last few thousand. Each start appends a line
+  with its time, command, process id and build; a start that finds the file past 1 MiB moves it to
+  `crash.log.1` (the one older generation kept). The file is `0600`: a goroutine dump can hold
+  strings. One line stays on stderr only: the `fatal error: <message>` line the runtime prints
+  before it starts dying (a runtime throw such as out of memory or a stack overflow); the file
+  still holds the faulting goroutine, whose top frames name the throw site. A panic, a `SIGQUIT`
+  dump and every goroutine trace reach the file whole (#704 tracks the missing line).
 - `town` and `merchant` are offered only with `-datapack`; without it they are listed disabled.
   The spot picker lists the datapack's spots, so it is empty without `-datapack`.
 - No password, secret or GM DSN reaches the API, the page or the logs.
