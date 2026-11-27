@@ -140,25 +140,25 @@ func TestRowSESetValue(t *testing.T) { checkSecondSets(t, 43, healerVerdicts) }
 // max HP (TestRowSNDemonRule): model-chosen.
 var nukerKarmianVerdicts = append(setVerdict(RoleDamage, setKarmian, true, true), setVerdict(RoleSupport, setKarmian, false, true)...)
 
-// TestRowSNSetValue: Demon, else Karmian (kit: HW's). Against a harmless
+// TestRowSNSetValue: Demon, else Karmian (kit: SN's). Against a harmless
 // target the sorcerer's Demon INT gains in the Damage role.
 func TestRowSNSetValue(t *testing.T) {
 	checkSecondSets(t, 12, setVerdict(RoleDamage, setDemon, true, false), setVerdict(RoleSupport, setDemon, false, false), nukerKarmianVerdicts)
 }
 
-// TestRowSGSetValue: Karmian, else Demon (kit: EW's). The spellsinger's
+// TestRowSGSetValue: Karmian, else Demon (kit: SG's). The spellsinger's
 // Demon loses value against a harmless target too, its lost WIT costing
 // more cast speed than the INT adds.
 func TestRowSGSetValue(t *testing.T) {
 	checkSecondSets(t, 27, nukerKarmianVerdicts, bothRoles(setDemon, false, false))
 }
 
-// TestRowSHSetValue: Karmian (kit: DW's).
+// TestRowSHSetValue: Karmian (kit: SH's).
 func TestRowSHSetValue(t *testing.T) { checkSecondSets(t, 40, nukerKarmianVerdicts) }
 
 // TestRowWCSetValue: Full Plate, else Composite, in the Support role (the
 // orc mystic's heavy armor grant); the Karmian robe, the Damage role's
-// set and the Support role's fallback (kit: OS's, whose Support build is
+// set and the Support role's fallback (kit: WC's, whose Support build is
 // a tank: Chant of Life heals over time with no skill power). Karmian
 // gains against the reference monster in either role and stays at the
 // tie-break against a harmless target, model-chosen there.

@@ -334,4 +334,9 @@ var professionKits = map[int32]ClassKit{
 	classHawkeye:       hawkeyeKit,
 	classSilverRanger:  silverRangerKit,
 	classPhantomRanger: phantomRangerKit,
+	// The nukers and the warcryer (kits_nukers.go).
+	classSorcerer:    sorcererKit,
+	classSpellsinger: spellsingerKit,
+	classSpellhowler: spellhowlerKit,
+	classWarcryer:    warcryerKit,
 }

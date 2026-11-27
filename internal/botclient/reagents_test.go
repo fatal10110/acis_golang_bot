@@ -12,7 +12,6 @@ import (
 // and items ids).
 const (
 	skillStormCubic     int32 = 10
-	skillDeathSpike     int32 = 1148
 	skillGreaterMight   int32 = 1388
 	skillMajorHeal      int32 = 1401
 	skillMajorGroupHeal int32 = 1402
