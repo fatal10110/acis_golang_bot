@@ -297,6 +297,9 @@ type Action struct {
 	// interrupts marks a cast that answers an opponent's cast
 	// (Brain.interruptCast), what bot_pvp_interrupts_total counts.
 	interrupts bool
+	// learn marks a recipe book open of the recipe errand (ruleRecipe),
+	// the one its attempt waits on; the craft row's open is not marked.
+	learn bool
 }
 
 type actionKind uint8
