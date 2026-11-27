@@ -249,7 +249,8 @@ func (b *Brain) crafterWant(now time.Time) WarehouseRequest {
 // the combat refusal or craftReplyTimeout), at least craftGap plus up to
 // craftJitter apart (gateCraft keeps craftGap, over the server's silent
 // 300 ms ManufactureDelay), and a RequestRecipeBookOpen per unknown page,
-// one per recipeReplyTimeout. The warehouse errand paces its opens
+// one per recipeReplyTimeout and none while a recipe attempt runs (the
+// errand opens the pages then). The warehouse errand paces its opens
 // (MinOpenGap) and bypasses.
 func (b *Brain) ruleCraft(now time.Time) (Action, bool) {
 	if !b.crafting() || b.world.Self.InCombat || b.world.Self.Dead {
@@ -266,6 +267,15 @@ func (b *Brain) ruleCraft(now time.Time) (Action, bool) {
 	switch c.phase {
 	case craftIdle:
 		if b.world.Clan.ID == 0 || !b.craftCheckDue(now) {
+			return Action{}, false
+		}
+		// A recipe attempt's open waits for its page, and an open of
+		// ours would answer it (#652); the errand's open in turn waits
+		// for ours. The check waits for either, each bounded by its own
+		// recipeReplyTimeout, even when the recipe row does not run (a
+		// karma row) to end the attempt.
+		e, book := &b.learn, &b.world.Recipes
+		if e.scroll != 0 && !(book.DwarvenKnown && book.CommonKnown) && (e.opening && now.Before(e.waitUntil) || c.bookPending(now)) {
 			return Action{}, false
 		}
 		if a, ok := b.openBook(now); ok {
@@ -290,11 +300,17 @@ func (b *Brain) ruleCraft(now time.Time) (Action, bool) {
 // per recipeReplyTimeout: the planner plans only recipes in the book.
 func (b *Brain) openBook(now time.Time) (Action, bool) {
 	book, c := &b.world.Recipes, &b.craft
-	if book.DwarvenKnown && book.CommonKnown || now.Before(c.bookAt.Add(recipeReplyTimeout)) && !c.bookAt.IsZero() {
+	if book.DwarvenKnown && book.CommonKnown || c.bookPending(now) {
 		return Action{}, false
 	}
 	c.bookAt = now
 	return recipeBookAction(!book.DwarvenKnown), true
+}
+
+// bookPending reports whether the craft row's last book open may still be
+// waiting for its answer at now: within recipeReplyTimeout of it.
+func (c *crafterCycle) bookPending(now time.Time) bool {
+	return !c.bookAt.IsZero() && now.Before(c.bookAt.Add(recipeReplyTimeout))
 }
 
 // craftCheckDue reports whether a check is due: nextCheck passed, or the
