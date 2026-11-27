@@ -274,6 +274,25 @@ type supply struct {
 // clamped by the weight left under BuyLoad once the ones before it are
 // carried (weightCap).
 func (b *Brain) supplies() []supply {
+	out := b.supplyTargets()
+	room, capped := b.weightCap(out)
+	if !capped {
+		return out
+	}
+	for i := range out {
+		wt := b.cfg.Travel.weights[out[i].item]
+		if wt <= 0 {
+			continue
+		}
+		out[i].count = int32(min(int64(out[i].count), max(room, 0)/int64(wt)))
+		room -= int64(out[i].count) * int64(wt)
+	}
+	return out
+}
+
+// supplyTargets are supplies before the weight clamp: each trip target
+// whole, whatever the load leaves room for.
+func (b *Brain) supplyTargets() []supply {
 	var out []supply
 	add := func(id, n int32, extra bool) {
 		if id == 0 || slices.ContainsFunc(out, func(s supply) bool { return s.item == id }) {
@@ -307,19 +326,21 @@ func (b *Brain) supplies() []supply {
 			add(id, extra[id], true)
 		}
 	}
-	room, capped := b.weightCap(out)
-	if !capped {
-		return out
-	}
-	for i := range out {
-		wt := b.cfg.Travel.weights[out[i].item]
-		if wt <= 0 {
-			continue
-		}
-		out[i].count = int32(min(int64(out[i].count), max(room, 0)/int64(wt)))
-		room -= int64(out[i].count) * int64(wt)
-	}
 	return out
+}
+
+// supplyShort is the weight of the supplies the bot still lacks: what each
+// trip target (supplyTargets, before the weight clamp) wants over what it
+// carries. ok is false while the weight limit or the item weights are
+// unknown, as for weightCap.
+func (b *Brain) supplyShort() (short int64, ok bool) {
+	if _, ok := b.weightCap(nil); !ok {
+		return 0, false
+	}
+	for _, s := range b.supplyTargets() {
+		short += int64(max(s.count-b.carried(s.item), 0)) * int64(b.cfg.Travel.weights[s.item])
+	}
+	return short, true
 }
 
 // weightCap is the weight the supplies may take: BuyLoad percent of the

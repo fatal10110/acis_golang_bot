@@ -100,7 +100,7 @@ func TestLootGround(t *testing.T) {
 
 // TestLootGroundWeight checks that a ground item the farmer did not fight
 // for is given up when it would bring the load to Loot.StopAbove, and taken
-// under it.
+// under it, with no supply short (TestLootGroundSupplies).
 func TestLootGroundWeight(t *testing.T) {
 	item := GroundItem{ObjectID: junkDrop, TemplateID: keptMat, Pos: Point{X: 900}, Stackable: true, Count: 5}
 	for _, tt := range []struct {
@@ -112,7 +112,7 @@ func TestLootGroundWeight(t *testing.T) {
 		{name: "under the cap", load: 64949, want: junkDrop},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newTripBrain(t, potionStack(20))
+			b := newTripBrain(t, potionStack(20), soeStack(2))
 			b.persona.Loot = defaultLootPolicy()
 			b.persona.Loot.Ground = GroundAny
 			b.world.Self.Load = tt.load
