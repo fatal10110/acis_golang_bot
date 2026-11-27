@@ -14,18 +14,8 @@ import (
 // sends no packet itself; each bot's brain paces what an order causes
 // (invites: docs/parties/server.md, "Pacing").
 func (s *Supervisor) partyPass() {
-	cands := s.candidates()
-	next := s.party.NextID
-	st, orders := botparty.Plan(s.party, cands, *s.cfg.Party, s.cfg.Clock.Now())
-	s.party = st
-	countParties(st, next, s.cfg.Metrics, s.log)
-	for _, c := range cands {
-		s.runs[c.Account].party.newRun = false
-	}
-	for _, o := range orders {
-		s.order(o)
-	}
-	s.unpin(st.Unpin)
+	s.party = planPass(s.party, s.candidates(), *s.cfg.Party, s.cfg.Clock.Now(), s.cfg.Metrics, s.log, s.partyLink)
+	s.unpin(s.party.Unpin)
 }
 
 // candidates are the registry's bots with a live run as the organizer reads
@@ -47,14 +37,15 @@ func (s *Supervisor) candidates() []botparty.Candidate {
 	return out
 }
 
-// order hands o to the bot of its account's live run (partyLink.order). A
-// bot with no live run gets nothing: its record waits for one.
-func (s *Supervisor) order(o botparty.Order) {
-	st := s.runs[o.Account]
+// partyLink is the organizer's record and the bot of account's live run
+// (planPass); an account with no live run has neither, and its record waits
+// for one.
+func (s *Supervisor) partyLink(account string) (*partyLink, Orderable) {
+	st := s.runs[account]
 	if st == nil || st.bot == nil || st.stopping {
-		return
+		return nil, nil
 	}
-	st.party.order(st.bot, o, s.log)
+	return &st.party, st.bot
 }
 
 // unpin clears the registry pin of each account, saved at once, so no pass

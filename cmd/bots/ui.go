@@ -22,7 +22,6 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botpanel"
 	"github.com/fatal10110/acis_golang_bot/internal/botparty"
 	"github.com/fatal10110/acis_golang_bot/internal/botregistry"
-	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // defaultListen is the web panel's address when -listen is not given.
@@ -305,19 +304,19 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	if err := prepareRegistry(reg, o, log); err != nil {
 		return err
 	}
-	outcomes, stopOutcomes, err := startOutcomeLog(o.outcomeLog, log)
+	dialOpt, _ := botclient.ParseLocalAddr(o.localAddr) // validated by parseUIFlags
+	clock := botclient.SystemClock{}
+	w, cleanup, err := buildShared(wiringOptions{
+		allowlisted: o.allowlisted, outcomeLog: o.outcomeLog, datapack: o.datapack, spawnMultiplier: o.spawnMultiplier,
+		spawnEvents: o.spawnEvents, store: o.store, geo: o.geo, stores: true,
+	}, clock, log)
 	if err != nil {
 		return err
 	}
-	// The writer takes the stays of every bot until all returned
-	// (sup.Run), then it is joined.
-	defer stopOutcomes()
-	dialOpt, _ := botclient.ParseLocalAddr(o.localAddr) // validated by parseUIFlags
-	clock := botclient.SystemClock{}
-	gate := botclient.NewLoginGate(clock, nil)
-	if o.allowlisted {
-		gate = botclient.NewAllowlistedLoginGate(clock, nil)
-	}
+	// The navigation stays mapped and the outcome writer takes the stays of
+	// every bot until all returned (sup.Run).
+	defer cleanup()
+	gate := w.gate
 	runner := uiRunner{
 		cfg: botclient.SessionConfig{
 			LoginAddr:  o.loginAddr,
@@ -330,35 +329,14 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 			Gate:       gate,
 			Log:        log,
 		},
-		shared: shared{
-			claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), challenges: botclient.NewChallengeHolds(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget,
-			ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
-		},
+		shared:   w.shared,
 		secret:   secret,
 		datapack: o.datapack,
 	}
-	runner.shared.outcomes = outcomes
-	// The navigation opens before the spots: the registry drops the spots in
-	// water (loadSpots).
-	if o.geo.set() {
-		n, closeNav, err := o.geo.open(o.datapack, log)
-		if err != nil {
-			return err
-		}
-		// The caches stay mapped until every bot returned.
-		defer closeNav()
-		runner.shared.nav = n
-	}
 	// catalog names the items and effects of the panel's inspects.
 	var catalog *botpanel.Catalog
-	if o.datapack != "" {
-		sh := &runner.shared
-		var dp *datapack.Datapack
-		if sh.spots, sh.travel, dp, err = loadSpots(o.datapack, o.spawnMultiplier, supplyConfig(o.spawnEvents), sh.nav, log); err != nil {
-			return err
-		}
-		catalog = botpanel.NewCatalog(dp)
-		sh.stores = o.store.registry(sh.travel, log)
+	if w.dp != nil {
+		catalog = botpanel.NewCatalog(w.dp)
 	}
 	auth, stopAuth, err := startAuthority(ctx, o.gm, clock, log)
 	if err != nil {
