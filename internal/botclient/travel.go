@@ -390,13 +390,13 @@ func (tr *travelTrip) sent(a Action, now time.Time) {
 // teleportListBypass is the gatekeeper page's link to its teleport list
 // (folk_bypass.go BypassTeleportList).
 func teleportListBypass(obj int32) string {
-	return "npc_" + strconv.Itoa(int(obj)) + "_teleport_request"
+	return npcBypass(obj, "teleport_request")
 }
 
 // teleportBypass is the list page's link to destination index
 // (gatekeeper.Window: npc_<object id>_teleport <index>).
 func teleportBypass(obj int32, index int) string {
-	return "npc_" + strconv.Itoa(int(obj)) + "_teleport " + strconv.Itoa(index)
+	return npcBypass(obj, "teleport "+strconv.Itoa(index))
 }
 
 // ruleTravel is a rule 9 errand ahead of the spot rule: on a trip the spot

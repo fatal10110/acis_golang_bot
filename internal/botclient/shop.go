@@ -419,10 +419,10 @@ func (sh *shopVisit) sent(a Action, now time.Time) {
 // sellCommand and buyCommand are the merchant page's sell link and its
 // link to buylist listID (bypass.go bypassNpc: npc_<object id>_<command>;
 // model/actor/npc/folk_bypass.go merchantCommand).
-func sellCommand(obj int32) string { return "npc_" + strconv.Itoa(int(obj)) + "_Sell" }
+func sellCommand(obj int32) string { return npcBypass(obj, "Sell") }
 
 func buyCommand(obj, listID int32) string {
-	return "npc_" + strconv.Itoa(int(obj)) + "_Buy " + strconv.Itoa(int(listID))
+	return npcBypass(obj, "Buy "+strconv.Itoa(int(listID)))
 }
 
 // ruleShop is a rule 9 errand: with junk to sell or items to restock, the

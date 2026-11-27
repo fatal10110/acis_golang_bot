@@ -2,7 +2,6 @@ package botclient
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -455,11 +454,11 @@ func (e *warehouseErrand) sent(a Action, now time.Time) {
 // clanWarehouseCommand is keeper obj's clan deposit or withdrawal link
 // (folk_warehouse.go warehouseCommand: DepositC and WithdrawC, exact).
 func clanWarehouseCommand(obj int32, deposit bool) string {
-	cmd := "_WithdrawC"
+	cmd := "WithdrawC"
 	if deposit {
-		cmd = "_DepositC"
+		cmd = "DepositC"
 	}
-	return "npc_" + strconv.Itoa(int(obj)) + cmd
+	return npcBypass(obj, cmd)
 }
 
 // openLink is the link of the open page that opens the transaction under
@@ -474,15 +473,15 @@ func (b *Brain) openLink(obj int32) string {
 		}
 		return ""
 	}
-	prefix := "npc_" + strconv.Itoa(int(obj))
 	if e.depositing() {
-		if cmd := prefix + "_DepositP"; d.Has(cmd) {
+		if cmd := npcBypass(obj, "DepositP"); d.Has(cmd) {
 			return cmd
 		}
 		return ""
 	}
+	withdraw := npcBypass(obj, "WithdrawP")
 	for _, l := range d.Links {
-		if strings.HasPrefix(l, prefix+"_WithdrawP") {
+		if strings.HasPrefix(l, withdraw) {
 			return l
 		}
 	}
@@ -562,7 +561,7 @@ func (b *Brain) warehouseLink(now time.Time) (Action, bool) {
 	}
 	if len(e.chats) < warehouseChats {
 		for _, l := range b.world.Dialog.Links {
-			if strings.HasPrefix(l, "npc_"+strconv.Itoa(int(v.obj))+"_Chat ") && !strings.HasSuffix(l, " 0") && !slices.Contains(e.chats, l) {
+			if strings.HasPrefix(l, npcBypass(v.obj, "Chat ")) && !strings.HasSuffix(l, " 0") && !slices.Contains(e.chats, l) {
 				e.chats = append(e.chats, l)
 				return bypassTo(v.obj, l), true
 			}

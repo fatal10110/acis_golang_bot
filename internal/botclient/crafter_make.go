@@ -130,7 +130,7 @@ func (b *Brain) craftSent(a Action, now time.Time) {
 		return
 	}
 	c.pending, c.sentAt, c.failure = true, now, CraftFailNone
-	c.nextAt = now.Add(craftGap + time.Duration(b.rng.Int64N(int64(craftJitter)+1)))
+	c.nextAt = now.Add(b.between(craftGap, craftGap+craftJitter))
 }
 
 // craftEvent moves the craft under way on with the server's answer ev: its
@@ -273,7 +273,7 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 	}
 	wait = max(wait, warehouseOpenGap)
 	if p.CheckJitter > 0 {
-		wait += time.Duration(b.rng.Int64N(int64(p.CheckJitter) + 1))
+		wait += b.between(0, p.CheckJitter)
 	}
 	c.noteCraftEnd(now, now.Add(wait), ok)
 	b.notePoolGear()

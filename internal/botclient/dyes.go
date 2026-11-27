@@ -3,7 +3,6 @@ package botclient
 import (
 	"cmp"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -202,7 +201,7 @@ func (b *Brain) ruleDyes(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	if !d.listed {
-		if cmd := "npc_" + strconv.Itoa(int(v.obj)) + "_" + drawCommand; b.world.Dialog.Has(cmd) {
+		if cmd := npcBypass(v.obj, drawCommand); b.world.Dialog.Has(cmd) {
 			return bypassTo(v.obj, cmd), true
 		}
 		d.backOff(now, p.RetryAfter)

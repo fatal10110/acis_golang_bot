@@ -3,7 +3,6 @@ package botclient
 import (
 	"math"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
@@ -291,7 +290,7 @@ func (t *trainerVisit) sent(a Action, now time.Time) {
 // skillListBypass is the bypass of trainer id's skill list link
 // (bypass.go bypassNpc: npc_<object id>_<command>).
 func skillListBypass(id int32) string {
-	return "npc_" + strconv.Itoa(int(id)) + "_" + skillListCommand
+	return npcBypass(id, skillListCommand)
 }
 
 // ruleTrain is a rule 9 errand: with a visit due, the bot walks to the
