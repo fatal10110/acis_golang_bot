@@ -2,7 +2,9 @@
 // totals on a live expvar endpoint bound to loopback (docs/plan.md, "7.
 // Metrics").
 //
-// Every bot owns one Bot for the life of the process, across its sessions.
+// Every bot owns one Bot for as long as it exists, across its sessions; a
+// deleted bot's Bot is folded into the Registry's retained total
+// (Registry.Remove), so the sums never fall.
 // Only that bot's goroutines write it, through per-bot atomics nobody else
 // writes, so no swarm-wide atomic or mutex sits on a per-frame or per-action
 // path. One Registry.Run goroutine sums every Bot on a period into a
@@ -14,6 +16,7 @@ package botmetrics
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +38,10 @@ type Registry struct {
 
 	mu   sync.Mutex
 	bots []*Bot // guarded by mu
+	// retained is the counters of the removed Bots (Remove), shaped like
+	// one Bot with no account and its held gauge always zero; guarded by
+	// mu.
+	retained Bot
 	// partiesFormed and partiesBroken count the organizer's bot
 	// parties (docs/parties/panel.md, "Metrics"); guarded by mu.
 	partiesFormed uint64
@@ -57,18 +64,40 @@ func NewRegistry(rules ...string) *Registry {
 		r.rules = append(r.rules, name)
 	}
 	r.rules = append(r.rules, otherRule)
+	r.retained.rules = make([]atomic.Uint64, len(r.rules))
 	return r
 }
 
 // NewBot adds one bot's counters to the registry. Call it once per bot, not
-// per session: a Bot is never removed, so the swarm's fixed bot cap bounds
-// the registry.
+// per session, and Remove it when the bot is deleted: the live bots, which
+// the swarm's fixed bot cap bounds, bound the registry.
 func (r *Registry) NewBot() *Bot {
 	b := &Bot{reg: r, rules: make([]atomic.Uint64, len(r.rules))}
 	r.mu.Lock()
 	r.bots = append(r.bots, b)
 	r.mu.Unlock()
 	return b
+}
+
+// Remove folds b's counters into the registry's retained total and drops b,
+// so no sum of Collect falls and the registry holds only the live bots;
+// Snapshot.Bots falls by one and Snapshot.ValuablesHeld by b's gauge, whose
+// units go away with the bot. Call it once b records nothing more: after
+// the run that recorded into it ended, since a count recorded later is
+// lost. A nil b, or one the registry does not hold (removed before), is
+// ignored, so a removal never counts twice.
+func (r *Registry) Remove(b *Bot) {
+	if b == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	i := slices.Index(r.bots, b)
+	if i < 0 {
+		return
+	}
+	r.retained.fold(b)
+	r.bots = slices.Delete(r.bots, i, i+1)
 }
 
 // SetBreaker records the state of the process-wide credential breaker: open
@@ -97,17 +126,19 @@ func (r *Registry) PartyBroken(why string) {
 	r.mu.Unlock()
 }
 
-// Snapshot is the sum of every Bot at one collection. Counters only grow;
+// Snapshot is the sum of every Bot at one collection, the removed ones
+// included (Registry.Remove). Counters only grow;
 // QueueDepth counts the events the brain drained at each wakeup, and
 // WakeLagMicros how late each timed wakeup ran after it was due.
 type Snapshot struct {
-	At         time.Time `json:"at"`
-	Bots       int       `json:"bots"`
-	Events     uint64    `json:"events"`
-	Sent       uint64    `json:"sent"`
-	Paced      uint64    `json:"paced"`
-	Reconnects uint64    `json:"reconnects"`
-	Aborts     uint64    `json:"aborts"`
+	At time.Time `json:"at"`
+	// Bots counts the live slots: it falls when a bot is removed.
+	Bots       int    `json:"bots"`
+	Events     uint64 `json:"events"`
+	Sent       uint64 `json:"sent"`
+	Paced      uint64 `json:"paced"`
+	Reconnects uint64 `json:"reconnects"`
+	Aborts     uint64 `json:"aborts"`
 	// Panics counts the panics the bots recovered from: in an attempt or
 	// in a session's reader (botclient.ErrPanic).
 	Panics uint64 `json:"panics_total"`
@@ -213,15 +244,13 @@ func (o PlanOutcome) String() string {
 	return planNames[o]
 }
 
-// Collect sums every Bot as of at, stores the sum as the latest and returns
-// it.
+// Collect sums every Bot and the removed Bots' retained total as of at,
+// stores the sum as the latest and returns it.
 func (r *Registry) Collect(at time.Time) *Snapshot {
 	s := &Snapshot{At: at, BreakerOpen: r.breakerOpen.Load(), AcceptClosed: r.acceptClosed.Load(), Rules: make(map[string]uint64, len(r.rules))}
-	var soldTrade, soldStore uint64
-	var plans [planOutcomes]uint64
-	var decode [decodeSlots]uint64
-	var pvp pvpSums
-	hits := make([]uint64, len(r.rules))
+	// sum adds up the Bots through the fold Remove uses, so a counter is
+	// summed and retained alike.
+	sum := Bot{rules: make([]atomic.Uint64, len(r.rules))}
 	r.mu.Lock()
 	s.Bots = len(r.bots)
 	s.PartiesFormed = r.partiesFormed
@@ -229,56 +258,48 @@ func (r *Registry) Collect(at time.Time) *Snapshot {
 	for why, n := range r.partiesBroken {
 		s.PartiesBroken[why] = n
 	}
+	sum.fold(&r.retained)
 	for _, b := range r.bots {
-		s.Events += b.events.Load()
-		s.Sent += b.sent.Load()
-		s.Paced += b.paced.Load()
-		s.Reconnects += b.reconnects.Load()
-		s.Aborts += b.aborts.Load()
-		s.Panics += b.panics.Load()
-		s.NavBlocked += b.navBlocked.Load()
-		s.NavDesync += b.navDesync.Load()
-		s.NavDoorReplan += b.navDoorReplan.Load()
-		s.NavSegments += b.navSegments.Load()
-		s.ValuablesAds += b.valuablesAds.Load()
-		s.ValuablesReplies += b.valuablesReplies.Load()
-		soldTrade += b.valuablesSoldTrade.Load()
-		soldStore += b.valuablesSoldStore.Load()
-		s.ValuablesDeposits += b.valuablesDeposits.Load()
-		s.ValuablesReleased += b.valuablesReleased.Load()
+		sum.fold(b)
 		s.ValuablesHeld += b.valuablesHeld.Load()
-		for i := range b.rules {
-			hits[i] += b.rules[i].Load()
-		}
-		for i := range b.navPlans {
-			plans[i] += b.navPlans[i].Load()
-		}
-		for i := range b.decodeErrors {
-			decode[i] += b.decodeErrors[i].Load()
-		}
-		pvp.add(&b.pvp)
-		s.QueueDepth.add(&b.depth)
-		s.WakeLagMicros.add(&b.wakeLag)
-		s.NavWalkIdleMillis.add(&b.walkIdle)
-		s.NavWalkEfficiency.add(&b.walkEfficiency)
-		s.NavPlanMicros.add(&b.planTime)
 	}
 	r.mu.Unlock()
+	s.Events = sum.events.Load()
+	s.Sent = sum.sent.Load()
+	s.Paced = sum.paced.Load()
+	s.Reconnects = sum.reconnects.Load()
+	s.Aborts = sum.aborts.Load()
+	s.Panics = sum.panics.Load()
+	s.NavBlocked = sum.navBlocked.Load()
+	s.NavDesync = sum.navDesync.Load()
+	s.NavDoorReplan = sum.navDoorReplan.Load()
+	s.NavSegments = sum.navSegments.Load()
+	s.ValuablesAds = sum.valuablesAds.Load()
+	s.ValuablesReplies = sum.valuablesReplies.Load()
+	s.ValuablesDeposits = sum.valuablesDeposits.Load()
+	s.ValuablesReleased = sum.valuablesReleased.Load()
+	s.ValuablesSold = map[string]uint64{ViaTrade: sum.valuablesSoldTrade.Load(), ViaStore: sum.valuablesSoldStore.Load()}
+	s.QueueDepth.add(&sum.depth)
+	s.WakeLagMicros.add(&sum.wakeLag)
+	s.NavWalkIdleMillis.add(&sum.walkIdle)
+	s.NavWalkEfficiency.add(&sum.walkEfficiency)
+	s.NavPlanMicros.add(&sum.planTime)
 	s.NavPlans = make(map[string]uint64, planOutcomes)
-	for i, n := range plans {
-		s.NavPlans[planNames[i]] = n
+	for i := range sum.navPlans {
+		s.NavPlans[planNames[i]] = sum.navPlans[i].Load()
 	}
-	s.ValuablesSold = map[string]uint64{ViaTrade: soldTrade, ViaStore: soldStore}
 	s.DecodeErrors = make(map[string]uint64)
-	for i, n := range decode {
-		if n != 0 {
+	for i := range sum.decodeErrors {
+		if n := sum.decodeErrors[i].Load(); n != 0 {
 			s.DecodeErrors[decodeSlotName(i)] = n
 		}
 	}
+	var pvp pvpSums
+	pvp.add(&sum.pvp)
 	pvp.fill(s)
 	r.collectNavCache(s)
 	for i, name := range r.rules {
-		s.Rules[name] = hits[i]
+		s.Rules[name] = sum.rules[i].Load()
 	}
 	r.last.Store(s)
 	return s
@@ -334,6 +355,43 @@ type Bot struct {
 	walkIdle                                Histogram // milliseconds
 	walkEfficiency                          Histogram // per mille
 	planTime                                Histogram // microseconds
+}
+
+// fold adds src's counters, rule hits, PvP counters and histograms to b:
+// every count Collect sums, and not the valuablesHeld gauge. src is a Bot of
+// b's registry, so its rules index like b's.
+func (b *Bot) fold(src *Bot) {
+	b.events.Add(src.events.Load())
+	b.sent.Add(src.sent.Load())
+	b.paced.Add(src.paced.Load())
+	b.reconnects.Add(src.reconnects.Load())
+	b.aborts.Add(src.aborts.Load())
+	b.panics.Add(src.panics.Load())
+	for i := range src.decodeErrors {
+		b.decodeErrors[i].Add(src.decodeErrors[i].Load())
+	}
+	b.navBlocked.Add(src.navBlocked.Load())
+	b.navDesync.Add(src.navDesync.Load())
+	b.navDoorReplan.Add(src.navDoorReplan.Load())
+	b.navSegments.Add(src.navSegments.Load())
+	for i := range src.navPlans {
+		b.navPlans[i].Add(src.navPlans[i].Load())
+	}
+	b.valuablesAds.Add(src.valuablesAds.Load())
+	b.valuablesReplies.Add(src.valuablesReplies.Load())
+	b.valuablesSoldTrade.Add(src.valuablesSoldTrade.Load())
+	b.valuablesSoldStore.Add(src.valuablesSoldStore.Load())
+	b.valuablesDeposits.Add(src.valuablesDeposits.Load())
+	b.valuablesReleased.Add(src.valuablesReleased.Load())
+	b.pvp.fold(&src.pvp)
+	for i := range src.rules {
+		b.rules[i].Add(src.rules[i].Load())
+	}
+	b.depth.fold(&src.depth)
+	b.wakeLag.fold(&src.wakeLag)
+	b.walkIdle.fold(&src.walkIdle)
+	b.walkEfficiency.fold(&src.walkEfficiency)
+	b.planTime.fold(&src.planTime)
 }
 
 // Drained records one wakeup of the brain that drained n queued events.

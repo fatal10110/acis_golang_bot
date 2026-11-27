@@ -24,12 +24,26 @@ func (h *Histogram) Observe(v int64) {
 	v = max(v, 0)
 	h.counts[bits.Len64(uint64(v))].Add(1)
 	h.sum.Add(uint64(v))
+	h.raise(v)
+}
+
+// raise lifts the max to v.
+func (h *Histogram) raise(v int64) {
 	for {
 		m := h.max.Load()
 		if v <= m || h.max.CompareAndSwap(m, v) {
 			return
 		}
 	}
+}
+
+// fold adds src's counts and sum to h and lifts h's max to src's.
+func (h *Histogram) fold(src *Histogram) {
+	for i := range src.counts {
+		h.counts[i].Add(src.counts[i].Load())
+	}
+	h.sum.Add(src.sum.Load())
+	h.raise(src.max.Load())
 }
 
 // HistogramSnapshot is the sum of histograms at one collection.

@@ -621,6 +621,7 @@ func (s *Supervisor) replace(b Bot, cause error) {
 	if err := s.cfg.Registry.Drop(b.Account, cause.Error(), s.cfg.Clock.Now()); err != nil {
 		s.log.Error("registry update failed", "account", b.Account, "err", err)
 	}
+	s.dropSlot(b.Account)
 	nb, err := s.cfg.Registry.NewBot(Bot{Class: b.Class, Preset: b.Preset, Online: true})
 	if err != nil {
 		s.log.Error("bot not replaced", "account", b.Account, "err", err)
@@ -927,8 +928,24 @@ func (s *Supervisor) Delete(ctx context.Context, account string) error {
 		case b.Online || s.runs[account] != nil:
 			return ErrOnline
 		}
-		return s.cfg.Registry.Drop(account, reasonDeleted, s.cfg.Clock.Now())
+		err := s.cfg.Registry.Drop(account, reasonDeleted, s.cfg.Clock.Now())
+		s.dropSlot(account)
+		return err
 	})
+}
+
+// dropSlot removes the metrics slot of account, whose bot was dropped (a
+// failed save of the file still drops it in memory), and folds the slot's
+// counters into the metrics' retained total (botmetrics.Registry.Remove).
+// The account has no live run, so nothing records into the slot any more;
+// a bot that never ran has no slot.
+func (s *Supervisor) dropSlot(account string) {
+	slot, ok := s.slots[account]
+	if !ok {
+		return
+	}
+	delete(s.slots, account)
+	s.cfg.Metrics.Remove(slot)
 }
 
 // ResumeLogins resets the credential breaker (botclient.LoginGate.Reset)
