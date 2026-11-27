@@ -88,7 +88,7 @@ func TestValuablesMetrics(t *testing.T) {
 			step: func(_ *testing.T, b *Brain) {
 				b.store.step, b.store.adenaAtOpen = storeListed, 1000
 				for _, obj := range []int32{101, 102, 103} {
-					b.store.valuables = append(b.store.valuables, listedValuable{row: storeRow{object: obj, count: 1, price: 150000}, key: sword, atList: 1})
+					b.store.valuables = append(b.store.valuables, listedValuable{row: storeRow{Object: obj, Count: 1, Price: 150000}, key: sword, atList: 1})
 				}
 				b.countSold()
 			},
@@ -98,7 +98,7 @@ func TestValuablesMetrics(t *testing.T) {
 			name: "store close: nothing sold", items: []Item{adenaStack(1000), swordUnit(101, 0)},
 			step: func(_ *testing.T, b *Brain) {
 				b.store.step, b.store.adenaAtOpen = storeListed, 1000
-				b.store.valuables = []listedValuable{{row: storeRow{object: 101, count: 1, price: 150000}, key: sword, atList: 1}}
+				b.store.valuables = []listedValuable{{row: storeRow{Object: 101, Count: 1, Price: 150000}, key: sword, atList: 1}}
 				b.countSold()
 			},
 		},
@@ -143,7 +143,7 @@ func TestValuablesMetrics(t *testing.T) {
 func depositAnswered(b *Brain, private bool) {
 	e := &b.wh
 	e.req = WarehouseRequest{Private: private, Deposit: []WarehouseRow{{TemplateID: ledgerSword, Count: 1, Object: 101}}}
-	e.running, e.step, e.rows = true, whSent, []warehouseRow{{object: 101, item: ledgerSword, count: 1}}
+	e.running, e.step, e.rows = true, whSent, []warehouseRow{{Object: 101, Item: ledgerSword, Count: 1}}
 	b.warehouseEvent(InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}}}, t0)
 }
 

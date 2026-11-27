@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -225,7 +226,7 @@ func (b *Brain) answerDuel(now time.Time) (Action, bool) {
 	if yes && now.Before(a.due) {
 		return Action{}, false
 	}
-	return Action{kind: actDuelAnswer, payload: encodeRequestDuelAnswerStart(a.party, yes), yes: yes}, true
+	return Action{kind: actDuelAnswer, payload: botwire.EncodeRequestDuelAnswerStart(a.party, yes), yes: yes}, true
 }
 
 // ruleChallenge is the bot's RequestDuelStart (docs/pvp/finding.md
@@ -323,7 +324,7 @@ func (b *Brain) nearestPlayer(now time.Time, ok func(id int32, o *Object) bool) 
 // challenge is the RequestDuelStart of player id, a one-on-one duel or a
 // party duel (yes marks it).
 func (b *Brain) challenge(id int32, party bool) Action {
-	return Action{kind: actDuelStart, payload: encodeRequestDuelStart(b.world.object(id).Name, party), object: id, yes: party}
+	return Action{kind: actDuelStart, payload: botwire.EncodeRequestDuelStart(b.world.object(id).Name, party), object: id, yes: party}
 }
 
 // challengeSent keeps the bot's challenge a sent at now: the shared and

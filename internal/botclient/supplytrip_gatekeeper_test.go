@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The gatekeeper supply trip tests' towns: eastTown across the split
@@ -46,18 +48,18 @@ func TestSupplyTripGatekeeper(t *testing.T) {
 			name: "gatekeeper in sight: select", at: time.Minute + time.Second,
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(Point{X: 2100}) },
 			events:   []Event{NPCInfo{ObjectID: gkObj, NPCID: townGK, Pos: Point{X: 2000}}},
-			wantRule: "supply", wantKind: actSelect, wantPayload: encodeAction(gkObj, Point{X: 2100}),
+			wantRule: "supply", wantKind: actSelect, wantPayload: botwire.EncodeAction(gkObj, Point{X: 2100}),
 		},
 		{name: "talk", at: time.Minute + 2*time.Second, events: []Event{MyTargetSelected{ObjectID: gkObj}}, wantRule: "supply", wantKind: actTalk},
 		{name: "wait for the page", at: time.Minute + 3*time.Second, wantRule: "supply"},
 		{
 			name: "list link", at: time.Minute + 4*time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkPage(gkObj)}},
-			wantRule: "supply", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport_request"),
+			wantRule: "supply", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport_request"),
 		},
 		{name: "wait for the list", at: time.Minute + 5*time.Second, wantRule: "supply"},
 		{
 			name: "destination link", at: time.Minute + 6*time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkObj, HTML: gkList(gkObj, 2)}},
-			wantRule: "supply", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport 2"),
+			wantRule: "supply", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(gkObj) + "_teleport 2"),
 		},
 		{name: "wait for the teleport", at: time.Minute + 8*time.Second, wantRule: "supply"},
 	})
@@ -198,18 +200,18 @@ func gateDialog(start time.Duration, obj, npcID int32, npcAt, stand Point, index
 			name: "gatekeeper in sight: select", at: s(0),
 			setup:    func(b *Brain) { b.world.Self.move = stopAt(stand) },
 			events:   []Event{NPCInfo{ObjectID: obj, NPCID: npcID, Pos: npcAt}},
-			wantRule: "supply", wantKind: actSelect, wantPayload: encodeAction(obj, stand),
+			wantRule: "supply", wantKind: actSelect, wantPayload: botwire.EncodeAction(obj, stand),
 		},
 		{name: "talk", at: s(1), events: []Event{MyTargetSelected{ObjectID: obj}}, wantRule: "supply", wantKind: actTalk},
 		{name: "wait for the page", at: s(2), wantRule: "supply"},
 		{
 			name: "list link", at: s(3), events: []Event{NpcHtmlMessage{ObjectID: obj, HTML: gkPage(obj)}},
-			wantRule: "supply", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(obj) + "_teleport_request"),
+			wantRule: "supply", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(obj) + "_teleport_request"),
 		},
 		{name: "wait for the list", at: s(4), wantRule: "supply"},
 		{
 			name: "destination link", at: s(5), events: []Event{NpcHtmlMessage{ObjectID: obj, HTML: gkList(obj, index)}},
-			wantRule: "supply", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(obj) + "_teleport " + itoa(int32(index))),
+			wantRule: "supply", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(obj) + "_teleport " + itoa(int32(index))),
 		},
 	}
 }
@@ -304,7 +306,7 @@ func TestSupplyTripGatekeeperTwoHops(t *testing.T) {
 	runTrainerSteps(t, b, append([]trainerStep{{
 		name: "leg to gatekeeper B", at: time.Minute + 9*time.Second,
 		setup: func(b *Brain) {
-			if sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, land); err != nil || !sent {
+			if sent, err := b.send(Action{kind: actAppear, payload: botwire.EncodeAppearing()}, land); err != nil || !sent {
 				t.Fatalf("Appearing: send = %v, %v", sent, err)
 			}
 		},

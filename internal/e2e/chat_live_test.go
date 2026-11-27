@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestLiveChatReplies whispers to a bot of the default chat policy (#36):
@@ -39,9 +39,9 @@ func TestLiveChatReplies(t *testing.T) {
 	for _, line := range []struct {
 		name    string
 		channel int32
-	}{{"shout", botclient.ChatShout}, {"trade", botclient.ChatTrade}} {
+	}{{"shout", botwire.ChatShout}, {"trade", botwire.ChatTrade}} {
 		from := f.seen()
-		if err := s.Send(ctx, botclient.EncodeSay2("e2e test line, please ignore", line.channel)); err != nil {
+		if err := s.Send(ctx, botwire.EncodeSay2("e2e test line, please ignore", line.channel)); err != nil {
 			t.Fatal(err)
 		}
 		if n := tells(t, ctx, s, f.name, silence); n != 0 {

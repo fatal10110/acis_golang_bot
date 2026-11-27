@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -75,7 +76,7 @@ func TestMarketVisit(t *testing.T) {
 			// at 450; the row at 460 is above 1.5 x the reference price.
 			name: "buy", at: 13 * time.Second, events: []Event{list},
 			wantRule: "market", wantKind: actStoreBuy,
-			wantPayload: encodeRequestPrivateStoreBuy(sellerObj, []storeRow{{900, 4, 400}, {901, 6, 450}}),
+			wantPayload: botwire.EncodeRequestPrivateStoreBuy(sellerObj, []storeRow{{Object: 900, Count: 4, Price: 400}, {Object: 901, Count: 6, Price: 450}}),
 		},
 		{name: "one request per list", at: 14 * time.Second, events: []Event{list}, wantRule: "market"},
 		{name: "bought: the visit ends", at: 15 * time.Second, events: []Event{bought}},
@@ -175,18 +176,18 @@ func TestMarketRows(t *testing.T) {
 		{
 			name: "at most 1.5 x the reference price", potion: 50, adena: 10000,
 			list: PrivateStoreListSell{Items: []StoreItem{ghp(1, 10, 451, 300), ghp(2, 2, 450, 300)}},
-			want: []storeRow{{2, 2, 450}},
+			want: []storeRow{{Object: 2, Count: 2, Price: 450}},
 		},
 		{
 			name: "the travel map's reference price for a row without one", potion: 50, adena: 10000,
 			list: PrivateStoreListSell{Items: []StoreItem{ghp(1, 10, 460, 0), ghp(2, 3, 440, 0)}},
-			want: []storeRow{{2, 3, 440}},
+			want: []storeRow{{Object: 2, Count: 3, Price: 440}},
 		},
 		{
 			// 1.5 x 100 would allow 150; the grocer sells at 103.
 			name: "never above a spawned merchant's price", potion: 0, adena: 100000,
 			list: PrivateStoreListSell{Items: []StoreItem{lesser(1, 50, 104), lesser(2, 20, 103), lesser(3, 10, 90)}},
-			want: []storeRow{{3, 10, 90}, {2, 20, 103}},
+			want: []storeRow{{Object: 3, Count: 10, Price: 90}, {Object: 2, Count: 20, Price: 103}},
 		},
 		{
 			name: "no price known", potion: 50, adena: 10000,
@@ -196,7 +197,7 @@ func TestMarketRows(t *testing.T) {
 			// 2000 past the 1000 reserve: 5 at 400.
 			name: "within the budget", potion: 50, adena: 3000,
 			list: PrivateStoreListSell{Items: []StoreItem{ghp(1, 10, 400, 300)}},
-			want: []storeRow{{1, 5, 400}},
+			want: []storeRow{{Object: 1, Count: 5, Price: 400}},
 		},
 		{
 			name: "nothing past the reserve", potion: 50, adena: 1399,
@@ -208,7 +209,7 @@ func TestMarketRows(t *testing.T) {
 			// (4000), then 2 Greater ones at 400.
 			name: "the budget spent in the supplies' order", potion: 10, adena: 6000,
 			list: PrivateStoreListSell{Items: []StoreItem{ghp(1, 10, 400, 300), lesser(2, 50, 100)}},
-			want: []storeRow{{2, 40, 100}, {1, 2, 400}},
+			want: []storeRow{{Object: 2, Count: 40, Price: 100}, {Object: 1, Count: 2, Price: 400}},
 		},
 		{
 			name: "a package store sells only whole", potion: 50, adena: 10000,

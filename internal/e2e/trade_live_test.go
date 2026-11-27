@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // stemPrice is the unit price the trading bot asks for a stem: a persona
@@ -60,7 +61,7 @@ func TestLiveTradeFromBot(t *testing.T) {
 	from := f.seen()
 	tr = openTrade(t, ctx, c, f)
 	price = stemPrice * tr.offer.Count
-	if err := c.Send(ctx, botclient.EncodeAddTradeItem(tr.adena, price)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeAddTradeItem(tr.adena, price)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
@@ -99,7 +100,7 @@ type trade struct {
 // openTrade has c ask the bot f to trade and waits for the bot's offer.
 func openTrade(t *testing.T, ctx context.Context, c *Client, f *farmer) trade {
 	t.Helper()
-	if err := c.Send(ctx, botclient.EncodeTradeRequest(f.id)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeTradeRequest(f.id)); err != nil {
 		t.Fatal(err)
 	}
 	ev, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
@@ -141,11 +142,11 @@ func openTrade(t *testing.T, ctx context.Context, c *Client, f *farmer) trade {
 func closeTrade(t *testing.T, ctx context.Context, c *Client, tr trade, pay int32) (botOk bool, done botclient.SendTradeDone, stems int32) {
 	t.Helper()
 	if pay > 0 {
-		if err := c.Send(ctx, botclient.EncodeAddTradeItem(tr.adena, pay)); err != nil {
+		if err := c.Send(ctx, botwire.EncodeAddTradeItem(tr.adena, pay)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := c.Send(ctx, botclient.EncodeTradeDone(true)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeTradeDone(true)); err != nil {
 		t.Fatal(err)
 	}
 	stems = tr.stems

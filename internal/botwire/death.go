@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // ConfirmDlg parameter types the server writes (confirmdlg.go).
 const (
@@ -51,4 +49,25 @@ func decodeConfirmDlg(r *wire.Reader) Event {
 		e.RequesterID = r.ReadInt32()
 	}
 	return e
+}
+
+// EncodeDlgAnswer answers ConfirmDlg msg (accept 1, decline 0), echoing its
+// requester id.
+func EncodeDlgAnswer(msg int32, accept bool, requester int32) []byte {
+	w := wire.NewPacketWriter(OpGameDlgAnswer)
+	w.WriteInt32(msg)
+	var v int32
+	if accept {
+		v = 1
+	}
+	w.WriteInt32(v)
+	w.WriteInt32(requester)
+	return w.Bytes()
+}
+
+// EncodeRequestUserCommand runs a numbered slash command.
+func EncodeRequestUserCommand(id int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestUserCommand)
+	w.WriteInt32(id)
+	return w.Bytes()
 }

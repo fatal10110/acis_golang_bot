@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestLiveStoreSale has a second client of the run buy out a bot's private
@@ -26,7 +27,7 @@ func TestLiveStoreSale(t *testing.T) {
 
 	// The first click selects the owner, the second opens its store.
 	for range 2 {
-		if err := c.Send(ctx, botclient.EncodeAction(f.id, c.Pos())); err != nil {
+		if err := c.Send(ctx, botwire.EncodeAction(f.id, c.Pos())); err != nil {
 			t.Fatal(err)
 		}
 	}

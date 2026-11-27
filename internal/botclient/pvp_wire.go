@@ -1,7 +1,5 @@
 package botclient
 
-import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-
 // SystemMessage ids the PvP rules read, named as the server names them
 // (serverpackets/systemmessage.go, systemmessage_duel.go,
 // olympiad_match.go). 139 is msgResisted (spoil.go). S1 and S2 are
@@ -55,36 +53,3 @@ const (
 	msgS1CannotDuelRiding          = 2027
 	msgS1CannotReceiveDuelTooFar   = 2028
 )
-
-// encodeRequestDuelStart challenges the player named name to a duel, or its
-// party to a party duel. Its sender's pacing lands with its rule (X4); the
-// per-connection frame bucket bounds it meanwhile.
-func encodeRequestDuelStart(name string, party bool) []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestDuelStart)
-	w.WriteString(name)
-	w.WriteInt32(wire.BoolInt32(party))
-	return w.Bytes()
-}
-
-// encodeRequestDuelAnswerStart answers an ExDuelAskStart: party echoes the
-// kind of duel asked, accepted takes it. The middle int32 is unused by the
-// server.
-func encodeRequestDuelAnswerStart(party, accepted bool) []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestDuelAnswerStart)
-	w.WriteInt32(wire.BoolInt32(party))
-	w.WriteInt32(0)
-	w.WriteInt32(wire.BoolInt32(accepted))
-	return w.Bytes()
-}
-
-// encodeRequestTargetCancel is the Esc key: unselect 0 stops the bot's cast
-// inside its interrupt window and keeps the target, else clears the target
-// (network/targeting.go). The guards send one per own cast (guardState
-// escFor), within the per-connection frame limits (network/floodprotector.go).
-func encodeRequestTargetCancel() []byte {
-	w := wire.NewPacketWriter(opGameRequestTargetCancel)
-	w.WriteUint16(0) // unselect
-	return w.Bytes()
-}

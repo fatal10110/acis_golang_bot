@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // masterObj is the class master (NPC 50000) once in sight.
@@ -36,7 +38,7 @@ func menuPage(obj int32, classes ...int32) NpcHtmlMessage {
 }
 
 func masterBypass(obj int32, cmd string) []byte {
-	return encodeRequestBypassToServer("npc_" + strconv.Itoa(int(obj)) + "_" + cmd)
+	return botwire.EncodeRequestBypassToServer("npc_" + strconv.Itoa(int(obj)) + "_" + cmd)
 }
 
 // newClassBrain is a bot of class and level at the origin with the default

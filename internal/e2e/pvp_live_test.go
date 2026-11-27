@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -241,7 +242,7 @@ func TestLivePvPDuel(t *testing.T) {
 
 	botStart := bot.bot.Status()
 	from := bot.seen()
-	if err := c.Send(ctx, botclient.EncodeRequestDuelStart(bot.name, false)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeRequestDuelStart(bot.name, false)); err != nil {
 		t.Fatal(err)
 	}
 	ev, err := c.Await(ctx, 45*time.Second, func(ev botclient.Event) bool {
@@ -270,7 +271,7 @@ func TestLivePvPDuel(t *testing.T) {
 
 	// Duellists attack each other without force once both are Duelling;
 	// a ctrl-click is as good and raises no flag in the same duel.
-	for _, p := range [][]byte{botclient.EncodeAction(bot.id, c.Pos()), botclient.EncodeAttackRequest(bot.id, c.Pos())} {
+	for _, p := range [][]byte{botwire.EncodeAction(bot.id, c.Pos()), botwire.EncodeAttackRequest(bot.id, c.Pos())} {
 		if err := c.Send(ctx, p); err != nil {
 			t.Fatal(err)
 		}
@@ -332,7 +333,7 @@ func TestLivePvPFightBack(t *testing.T) {
 	}
 
 	from := bot.seen()
-	for _, p := range [][]byte{botclient.EncodeAction(bot.id, c.Pos()), botclient.EncodeAttackRequest(bot.id, c.Pos())} {
+	for _, p := range [][]byte{botwire.EncodeAction(bot.id, c.Pos()), botwire.EncodeAttackRequest(bot.id, c.Pos())} {
 		if err := c.Send(ctx, p); err != nil {
 			t.Fatal(err)
 		}
@@ -473,7 +474,7 @@ func TestLivePvPArena(t *testing.T) {
 	from := map[*farmer]int{a: a.seen(), b: b.seen()}
 	t.Logf("%s exp %d and %s exp %d on their arena trip", a.name, exp[a], b.name, exp[b])
 
-	for _, p := range [][]byte{botclient.EncodeAction(b.id, c.Pos()), botclient.EncodeAttackRequest(b.id, c.Pos())} {
+	for _, p := range [][]byte{botwire.EncodeAction(b.id, c.Pos()), botwire.EncodeAttackRequest(b.id, c.Pos())} {
 		if err := c.Send(ctx, p); err != nil {
 			t.Fatal(err)
 		}
@@ -620,7 +621,7 @@ func TestLivePvPHealer(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("%s receiving the GM's sword: %v", c.Self.Name, err)
 	}
-	if err := c.Send(ctx, botclient.EncodeUseItem(sword)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeUseItem(sword)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
@@ -694,9 +695,9 @@ func TestLivePvPHealer(t *testing.T) {
 				break
 			}
 			cPressedAt = time.Now()
-			ps := [][]byte{botclient.EncodeAttackRequest(leader.id, c.Pos())}
+			ps := [][]byte{botwire.EncodeAttackRequest(leader.id, c.Pos())}
 			if cPresses == 0 {
-				ps = append([][]byte{botclient.EncodeAction(leader.id, c.Pos())}, ps...)
+				ps = append([][]byte{botwire.EncodeAction(leader.id, c.Pos())}, ps...)
 			}
 			cPresses++
 			for _, p := range ps {
@@ -706,13 +707,13 @@ func TestLivePvPHealer(t *testing.T) {
 			}
 		case !swungAt.IsZero() && time.Since(swungAt) >= pvpPress && time.Since(pressedAt) >= pvpPress:
 			pressedAt = time.Now()
-			if err := gm.Send(ctx, botclient.EncodeAttackRequest(leader.id, gm.Pos())); err != nil {
+			if err := gm.Send(ctx, botwire.EncodeAttackRequest(leader.id, gm.Pos())); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 	from := leader.seen()
-	for _, p := range [][]byte{botclient.EncodeAction(leader.id, gm.Pos()), botclient.EncodeAttackRequest(leader.id, gm.Pos())} {
+	for _, p := range [][]byte{botwire.EncodeAction(leader.id, gm.Pos()), botwire.EncodeAttackRequest(leader.id, gm.Pos())} {
 		if err := gm.Send(ctx, p); err != nil {
 			t.Fatal(err)
 		}
@@ -737,7 +738,7 @@ func TestLivePvPHealer(t *testing.T) {
 	// flagged player outside the caster's party needs ctrl, else the
 	// server answers 109 (character_social.go beneficialCastAllowed).
 	healFrom := leader.seen()
-	for _, p := range [][]byte{botclient.EncodeAction(gm.Self.ObjectID, c.Pos()), botclient.EncodeRequestMagicSkillUse(pvpHeal, true)} {
+	for _, p := range [][]byte{botwire.EncodeAction(gm.Self.ObjectID, c.Pos()), botwire.EncodeRequestMagicSkillUse(pvpHeal, true)} {
 		if err := c.Send(ctx, p); err != nil {
 			t.Fatal(err)
 		}

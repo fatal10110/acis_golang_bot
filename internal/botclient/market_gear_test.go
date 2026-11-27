@@ -44,19 +44,19 @@ func TestMarketGearRows(t *testing.T) {
 			{
 				name: "one piece at the base price", buyer: adena,
 				items: []StoreItem{row(1, piece, 3, price)},
-				want:  []storeRow{{1, 1, price}},
+				want:  []storeRow{{Object: 1, Count: 1, Price: price}},
 			},
 			{
 				name: "the cheaper row of the piece", buyer: adena,
 				items: []StoreItem{row(1, piece, 1, price), row(2, piece, 1, price-1)},
-				want:  []storeRow{{2, 1, price - 1}},
+				want:  []storeRow{{Object: 2, Count: 1, Price: price - 1}},
 			},
 			{name: "never above the base price", buyer: adena, items: []StoreItem{row(1, piece, 1, price+1)}},
 			{name: "under KeepAdena", buyer: keep + price - 1, items: []StoreItem{row(1, piece, 1, price)}},
 			{
 				name: "just above KeepAdena", buyer: keep + price,
 				items: []StoreItem{row(1, piece, 1, price)},
-				want:  []storeRow{{1, 1, price}},
+				want:  []storeRow{{Object: 1, Count: 1, Price: price}},
 			},
 		}
 		for _, tc := range tests {
@@ -88,14 +88,14 @@ func TestMarketGearRows(t *testing.T) {
 			{
 				// 2900 past KeepAdena: the legs, and 2100 left for the rest.
 				name: "the piece with the rest paid", buyer: adena, items: legs,
-				want: []storeRow{{1, 1, 800}},
+				want: []storeRow{{Object: 1, Count: 1, Price: 800}},
 			},
 			{name: "the rest not paid", buyer: adena - 1, items: legs},
 			{
 				// Each piece bought lowers the rest still to pay.
 				name: "the whole set", buyer: adena,
 				items: []StoreItem{row(1, setLegs, 1, 800), row(2, setHead, 1, 500), row(3, setChest, 1, 1000), row(4, setShield, 1, 600)},
-				want:  []storeRow{{4, 1, 600}, {3, 1, 1000}, {1, 1, 800}, {2, 1, 500}},
+				want:  []storeRow{{Object: 4, Count: 1, Price: 600}, {Object: 3, Count: 1, Price: 1000}, {Object: 1, Count: 1, Price: 800}, {Object: 2, Count: 1, Price: 500}},
 			},
 			{name: "a set piece above the base price", buyer: adena + 1000, items: []StoreItem{row(1, setLegs, 1, 801)}},
 		}

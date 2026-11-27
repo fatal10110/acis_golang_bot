@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -159,40 +159,6 @@ func defaultShopPolicy() ShopPolicy {
 		Comfort:         true,
 		Reach:           8000,
 	}
-}
-
-// buyRow is one row of a purchase: an item template and how many.
-type buyRow struct{ item, count int32 }
-
-// sellRow is one row of a sale: a carried item, its template and how many.
-type sellRow struct{ object, item, count int32 }
-
-// encodeRequestBuyItem buys rows from buylist listID: list id, row count,
-// then per row item id and count (clientpackets/shop_trade.go).
-func encodeRequestBuyItem(listID int32, rows []buyRow) []byte {
-	w := wire.NewPacketWriter(opGameRequestBuyItem)
-	w.WriteInt32(listID)
-	w.WriteInt32(int32(len(rows)))
-	for _, r := range rows {
-		w.WriteInt32(r.item)
-		w.WriteInt32(r.count)
-	}
-	return w.Bytes()
-}
-
-// encodeRequestSellItem sells rows to the targeted merchant: list id, row
-// count, then per row object id, item id and count
-// (clientpackets/shop_trade.go).
-func encodeRequestSellItem(listID int32, rows []sellRow) []byte {
-	w := wire.NewPacketWriter(opGameRequestSellItem)
-	w.WriteInt32(listID)
-	w.WriteInt32(int32(len(rows)))
-	for _, r := range rows {
-		w.WriteInt32(r.object)
-		w.WriteInt32(r.item)
-		w.WriteInt32(r.count)
-	}
-	return w.Bytes()
 }
 
 // shopList is a buylist as the travel map keeps it.
@@ -381,13 +347,13 @@ func (b *Brain) ruleShop(now time.Time) (Action, bool) {
 	}
 	if l := sh.sellList; l != nil {
 		if rows := b.sellRows(*l); len(rows) > 0 {
-			return Action{kind: actSellItem, payload: encodeRequestSellItem(l.ListID, rows), object: v.obj}, true
+			return Action{kind: actSellItem, payload: botwire.EncodeRequestSellItem(l.ListID, rows), object: v.obj}, true
 		}
 		sh.sellList, sh.sell = nil, false
 	}
 	if l := sh.buyList; l != nil {
 		if rows := b.buyRows(*l); len(rows) > 0 {
-			return Action{kind: actBuyItem, payload: encodeRequestBuyItem(l.ListID, rows), object: v.obj}, true
+			return Action{kind: actBuyItem, payload: botwire.EncodeRequestBuyItem(l.ListID, rows), object: v.obj}, true
 		}
 		sh.buyList = nil
 		sh.dropList()
@@ -455,11 +421,11 @@ func (b *Brain) wantsElsewhere(npcID int32) bool {
 		return slices.ContainsFunc(shops[id], func(l shopList) bool { _, ok := l.sells(item); return ok })
 	}
 	for _, r := range b.shopWants(false) {
-		if sold(npcID, r.item) {
+		if sold(npcID, r.Item) {
 			continue
 		}
 		for id := range shops {
-			if id != npcID && sold(id, r.item) {
+			if id != npcID && sold(id, r.Item) {
 				return true
 			}
 		}
@@ -498,7 +464,7 @@ func (b *Brain) startShop(now time.Time) bool {
 	}
 	shops, from := b.cfg.Travel.shops, b.world.Self.Position(now)
 	sells := func(l shopList, rows []buyRow) bool {
-		return slices.ContainsFunc(rows, func(r buyRow) bool { _, ok := l.sells(r.item); return ok })
+		return slices.ContainsFunc(rows, func(r buyRow) bool { _, ok := l.sells(r.Item); return ok })
 	}
 	// lists returns the lists of merchant npcID the visit opens; ok is
 	// false for a merchant the visit has no use for: one selling none of
@@ -562,7 +528,7 @@ func (b *Brain) listWanted(npcID, listID int32) bool {
 	want := b.shopWants(true)
 	for _, l := range b.cfg.Travel.shops[npcID] {
 		if l.id == listID {
-			return slices.ContainsFunc(want, func(r buyRow) bool { _, ok := l.sells(r.item); return ok })
+			return slices.ContainsFunc(want, func(r buyRow) bool { _, ok := l.sells(r.Item); return ok })
 		}
 	}
 	return false
@@ -648,7 +614,7 @@ func (b *Brain) sellRows(l SellList) []sellRow {
 	var rows []sellRow
 	for _, it := range l.Items {
 		if j, ok := junk[it.ObjectID]; ok && len(rows) < shopMaxRows {
-			rows = append(rows, sellRow{object: it.ObjectID, item: j.TemplateID, count: it.Count})
+			rows = append(rows, sellRow{Object: it.ObjectID, Item: j.TemplateID, Count: it.Count})
 			delete(junk, it.ObjectID)
 		}
 	}

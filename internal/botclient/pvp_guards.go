@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -397,7 +398,7 @@ func (b *Brain) ruleGuard(now time.Time) (Action, bool) {
 	g.stopping = id
 	if b.casting(now) {
 		if g.castOn == id && g.castDamage && s.Casting(now) && now.Before(s.castEnd.Add(-escLead)) && !g.escFor.Equal(s.castEnd) {
-			return Action{kind: actTargetCancel, payload: encodeRequestTargetCancel()}, true
+			return Action{kind: actTargetCancel, payload: botwire.EncodeRequestTargetCancel()}, true
 		}
 		// Past the window (or answered with no MagicSkillUse yet): it
 		// lands; the move goes first once it did.

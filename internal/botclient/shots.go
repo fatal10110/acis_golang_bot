@@ -333,13 +333,13 @@ func (b *Brain) shotWants() []buyRow {
 	var sup []supply
 	for _, w := range b.shotWeapons() {
 		id := b.buyShot(w)
-		if id == 0 || slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
+		if id == 0 || slices.ContainsFunc(rows, func(r buyRow) bool { return r.Item == id }) {
 			continue
 		}
 		have := b.carriedShots(w)
 		if st.Max > 0 {
 			if have < st.Min && st.Max > have {
-				rows = append(rows, buyRow{item: id, count: st.Max - have})
+				rows = append(rows, buyRow{Item: id, Count: st.Max - have})
 			}
 			continue
 		}
@@ -351,7 +351,7 @@ func (b *Brain) shotWants() []buyRow {
 		}
 		i := slices.IndexFunc(sup, func(s supply) bool { return s.item == id })
 		if i >= 0 && b.refills(have, sup[i].count) {
-			rows = append(rows, buyRow{item: id, count: sup[i].count - have})
+			rows = append(rows, buyRow{Item: id, Count: sup[i].count - have})
 		}
 	}
 	return rows

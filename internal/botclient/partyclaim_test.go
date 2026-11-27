@@ -4,6 +4,8 @@ import (
 	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 const (
@@ -161,7 +163,7 @@ func TestPartyClaims(t *testing.T) {
 						answers = append(answers, f)
 					}
 				}
-				want := encodeRequestAnswerJoinParty(s.want)
+				want := botwire.EncodeRequestAnswerJoinParty(s.want)
 				if len(answers) != 1 || string(answers[0]) != string(want) {
 					t.Fatalf("step %d: bot %d answered % x, want % x", i, s.bot, answers, want)
 				}

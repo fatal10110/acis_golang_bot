@@ -105,7 +105,7 @@ func TestTownPrepShop(t *testing.T) {
 	now := at(time.Minute)
 	b.shop.nextAt = now.Add(shopRetry)
 	b.armPrep()
-	want := []buyRow{{item: lesserHealingPotion, count: target - 5}}
+	want := []buyRow{{Item: lesserHealingPotion, Count: target - 5}}
 	if got := b.supplyWants(); len(got) != 1 || got[0] != want[0] {
 		t.Fatalf("supplyWants preparing = %v, want %v", got, want)
 	}

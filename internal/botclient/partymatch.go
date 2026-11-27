@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Party matching (Alt+L) as a partyless support bot uses it: it lists the
@@ -84,61 +84,6 @@ func (p RoomPolicy) withDefaults() RoomPolicy {
 	}
 }
 
-// encodeRequestListPartyWaiting opens the rooms window: the server puts the
-// asker on the waiting list and answers PartyMatchList with the rooms at
-// location whose level range levelMode filters. auto is unused by the
-// server.
-func encodeRequestListPartyWaiting(auto, location, levelMode int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestListPartyWaiting)
-	w.WriteInt32(auto)
-	w.WriteInt32(location)
-	w.WriteInt32(levelMode)
-	return w.Bytes()
-}
-
-// encodeRequestManagePartyRoom opens a room (roomID 0) or revises the room
-// roomID the sender leads.
-func encodeRequestManagePartyRoom(roomID, maxMembers, minLevel, maxLevel, loot int32, title string) []byte {
-	w := wire.NewPacketWriter(opGameRequestManagePartyRoom)
-	w.WriteInt32(roomID)
-	w.WriteInt32(maxMembers)
-	w.WriteInt32(minLevel)
-	w.WriteInt32(maxLevel)
-	w.WriteInt32(loot)
-	w.WriteString(title)
-	return w.Bytes()
-}
-
-// encodeRequestJoinPartyRoom enters the room roomID (0: the first room
-// location and levelMode list). A refusal is system message 1413; a sender
-// off the waiting list enters nothing and hears nothing.
-func encodeRequestJoinPartyRoom(roomID, location, levelMode int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestJoinPartyRoom)
-	w.WriteInt32(roomID)
-	w.WriteInt32(location)
-	w.WriteInt32(levelMode)
-	return w.Bytes()
-}
-
-// encodeRequestWithdrawPartyRoom leaves the room roomID: the room id, then
-// an int the server reads and drops (clientpackets decodePartyRoomRef). A
-// member of the leader's party stays.
-func encodeRequestWithdrawPartyRoom(roomID int32) []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestWithdrawPartyRoom)
-	w.WriteInt32(roomID)
-	w.WriteInt32(0)
-	return w.Bytes()
-}
-
-// encodeRequestExitPartyMatchingWaitingRoom takes the sender off the
-// waiting list; it has no body and no answer.
-func encodeRequestExitPartyMatchingWaitingRoom() []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestExitPartyMatchingWaitingRoom)
-	return w.Bytes()
-}
-
 // roomVolunteer is the bot's part in the party-matching rooms (rule
 // "rooms"). It is owned by the brain goroutine.
 type roomVolunteer struct {
@@ -176,7 +121,7 @@ type roomAsk struct {
 
 // roomListAction asks for the rooms near the bot that its level fits.
 func roomListAction() Action {
-	return Action{kind: actRoomList, payload: encodeRequestListPartyWaiting(1, roomsNearMe, roomsLevelsMine)}
+	return Action{kind: actRoomList, payload: botwire.EncodeRequestListPartyWaiting(1, roomsNearMe, roomsLevelsMine)}
 }
 
 // ruleRooms runs a partyless support bot's room volunteering
@@ -212,14 +157,14 @@ func (b *Brain) ruleRooms(now time.Time) (Action, bool) {
 	// leader does not lead (it took another invitation): the server takes
 	// it out only when it leaves the party (partymatch LeaveWithParty).
 	if v.inRoom != 0 && (!inParty || v.roomLeader != "" && b.ledByOther(v.roomLeader)) {
-		return Action{kind: actRoomWithdraw, payload: encodeRequestWithdrawPartyRoom(v.inRoom)}, true
+		return Action{kind: actRoomWithdraw, payload: botwire.EncodeRequestWithdrawPartyRoom(v.inRoom)}, true
 	}
 	if !v.listedAt.IsZero() && (v.got || now.Sub(v.listedAt) >= roomListAnswer) {
 		if !b.mayVolunteer(now) {
 			v.pick = PartyRoom{}
 		} else if r, ok := b.pickRoom(now); ok {
 			v.pick = r
-			return Action{kind: actRoomJoin, payload: encodeRequestJoinPartyRoom(r.ID, roomsNearMe, roomsLevelsMine)}, true
+			return Action{kind: actRoomJoin, payload: botwire.EncodeRequestJoinPartyRoom(r.ID, roomsNearMe, roomsLevelsMine)}, true
 		}
 		v.pick, v.listedAt, v.list, v.got = PartyRoom{}, time.Time{}, nil, false
 	}
@@ -227,7 +172,7 @@ func (b *Brain) ruleRooms(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	if v.waiting {
-		return Action{kind: actRoomExit, payload: encodeRequestExitPartyMatchingWaitingRoom()}, true
+		return Action{kind: actRoomExit, payload: botwire.EncodeRequestExitPartyMatchingWaitingRoom()}, true
 	}
 	if !b.mayVolunteer(now) {
 		return Action{}, false

@@ -3,7 +3,7 @@ package botclient
 import (
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // partyInviteTimeout is how long the server keeps a party invitation
@@ -14,43 +14,14 @@ const partyInviteTimeout = 15 * time.Second
 // maxPartyMembers is the largest party (party.MaxMembers on the server).
 const maxPartyMembers = 9
 
-// encodeRequestJoinParty invites the player named target into the bot's
-// party under loot rule loot (lootFindersKeepers to lootByTurnSpoil; the
-// server invites nobody under another rule, and a leader's invitation
-// carries its party's rule whatever loot says).
-func encodeRequestJoinParty(target string, loot int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestJoinParty)
-	w.WriteString(target)
-	w.WriteInt32(loot)
-	return w.Bytes()
-}
-
-// encodeRequestAnswerJoinParty answers the pending party invitation: 1
-// accepts, 0 declines.
-func encodeRequestAnswerJoinParty(accept bool) []byte {
-	w := wire.NewPacketWriter(opGameRequestAnswerJoinParty)
-	var v int32
-	if accept {
-		v = 1
-	}
-	w.WriteInt32(v)
-	return w.Bytes()
-}
-
-// encodeRequestWithdrawParty leaves the bot's party; in none it does
-// nothing.
-func encodeRequestWithdrawParty() []byte {
-	return wire.NewPacketWriter(opGameRequestWithdrawParty).Bytes()
-}
-
 // answerPartyAction answers the open party invitation.
 func answerPartyAction(accept bool) Action {
-	return Action{kind: actAnswerParty, payload: encodeRequestAnswerJoinParty(accept)}
+	return Action{kind: actAnswerParty, payload: botwire.EncodeRequestAnswerJoinParty(accept)}
 }
 
 // leavePartyAction leaves the bot's party.
 func leavePartyAction() Action {
-	return Action{kind: actLeaveParty, payload: encodeRequestWithdrawParty()}
+	return Action{kind: actLeaveParty, payload: botwire.EncodeRequestWithdrawParty()}
 }
 
 // acceptParty is the invitation policy that accepts every invitation.

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -228,10 +229,10 @@ func TestBrainDyes(t *testing.T) {
 		{name: "wait for the page", at: 2 * time.Second, wantRule: "dyes"},
 		{name: "the Draw link", at: 3 * time.Second, events: []Event{makerPage(makerObj)}, wantRule: "dyes", wantKind: actBypass, wantPayload: masterBypass(makerObj, "Draw")},
 		{name: "wait for the window", at: 4 * time.Second, wantRule: "dyes"},
-		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(1)},
+		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(1)},
 		{name: "wait for HennaInfo", at: 6 * time.Second, wantRule: "dyes"},
 		{name: "wait for the inventory", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}}}, SystemMessage{ID: 877}}, wantRule: "dyes"},
-		{name: "draw symbol 6", at: 8 * time.Second, events: []Event{spent(200, dyeStr, 0)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(6)},
+		{name: "draw symbol 6", at: 8 * time.Second, events: []Event{spent(200, dyeStr, 0)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(6)},
 		{name: "wait again", at: 9 * time.Second, wantRule: "dyes"},
 	})
 	if err := b.handle([]Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}, {SymbolID: 6, Active: 6}}}, spent(201, dyeDex, 0)}, at(10*time.Second)); err != nil {
@@ -254,11 +255,11 @@ func TestBrainDyesInventoryFirst(t *testing.T) {
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "talk", at: time.Second, setup: makerInSight, wantRule: "dyes", wantKind: actTalk},
 		{name: "the Draw link", at: 3 * time.Second, events: []Event{makerPage(makerObj)}, wantRule: "dyes", wantKind: actBypass, wantPayload: masterBypass(makerObj, "Draw")},
-		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(1)},
+		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(1)},
 		{name: "the inventory first", at: 6 * time.Second, events: []Event{spent(200, dyeStr, 0)}, wantRule: "dyes"},
 		{name: "HennaInfo after it", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}}}}, wantRule: "dyes"},
 		{name: "still waiting", at: 5*time.Second + dyeReplyTimeout - time.Millisecond, wantRule: "dyes"},
-		{name: "draw symbol 6", at: 5*time.Second + dyeReplyTimeout, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(6)},
+		{name: "draw symbol 6", at: 5*time.Second + dyeReplyTimeout, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(6)},
 	})
 	if !b.dyes.retryAt.IsZero() {
 		t.Fatalf("visit %+v, want no back-off", b.dyes)
@@ -273,28 +274,28 @@ func TestBrainDyesSecondProfession(t *testing.T) {
 		adenaStack(1000000), dyeStack(200, dyeStr2, 10), dyeStack(201, dyeDex2, 20))
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "talk", at: time.Second, setup: makerInSight, wantRule: "dyes", wantKind: actTalk},
-		{name: "remove symbol 1", at: 2 * time.Second, events: []Event{makerPage(makerObj)}, wantRule: "dyes", wantKind: actHennaUnequip, wantPayload: encodeRequestHennaUnequip(1)},
+		{name: "remove symbol 1", at: 2 * time.Second, events: []Event{makerPage(makerObj)}, wantRule: "dyes", wantKind: actHennaUnequip, wantPayload: botwire.EncodeRequestHennaUnequip(1)},
 		{name: "wait for HennaInfo", at: 3 * time.Second, wantRule: "dyes"},
 		{
 			name: "remove symbol 6", at: 4 * time.Second,
 			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 6, Active: 0}}}, spent(202, dyeStr, 5)},
-			wantRule: "dyes", wantKind: actHennaUnequip, wantPayload: encodeRequestHennaUnequip(6),
+			wantRule: "dyes", wantKind: actHennaUnequip, wantPayload: botwire.EncodeRequestHennaUnequip(6),
 		},
 		{
 			name: "the Draw link", at: 5 * time.Second,
 			events:   []Event{HennaInfo{MaxSlots: 3}, spent(203, dyeDex, 5)},
 			wantRule: "dyes", wantKind: actBypass, wantPayload: masterBypass(makerObj, "Draw"),
 		},
-		{name: "draw symbol 42", at: 6 * time.Second, events: []Event{drawWindow(37, 42)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(42)},
+		{name: "draw symbol 42", at: 6 * time.Second, events: []Event{drawWindow(37, 42)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(42)},
 		{
 			name: "draw symbol 37", at: 7 * time.Second,
 			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 42, Active: 42}}}, spent(201, dyeDex2, 10)},
-			wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(37),
+			wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(37),
 		},
 		{
 			name: "draw symbol 42 again", at: 8 * time.Second,
 			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 42, Active: 42}, {SymbolID: 37, Active: 37}}}, spent(200, dyeStr2, 0)},
-			wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(42),
+			wantRule: "dyes", wantKind: actHennaEquip, wantPayload: botwire.EncodeRequestHennaEquip(42),
 		},
 	})
 	if err := b.handle([]Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 42, Active: 42}, {SymbolID: 37, Active: 37}, {SymbolID: 42, Active: 42}}}, spent(201, dyeDex2, 0)}, at(9*time.Second)); err != nil {
@@ -392,10 +393,10 @@ func TestDyeWants(t *testing.T) {
 		want    []buyRow
 		wantFee int64
 	}{
-		{name: "both symbols", class: 1, adena: floor + 2*sym, want: []buyRow{{dyeStr, 10}, {dyeDex, 10}}, wantFee: 74000},
-		{name: "the second short", class: 1, adena: floor + 2*sym - 1, want: []buyRow{{dyeStr, 10}}, wantFee: 37000},
+		{name: "both symbols", class: 1, adena: floor + 2*sym, want: []buyRow{{Item: dyeStr, Count: 10}, {Item: dyeDex, Count: 10}}, wantFee: 74000},
+		{name: "the second short", class: 1, adena: floor + 2*sym - 1, want: []buyRow{{Item: dyeStr, Count: 10}}, wantFee: 37000},
 		{name: "none paid in full", class: 1, adena: floor + sym - 1},
-		{name: "carried dyes", class: 1, adena: floor + 2*sym, items: []Item{dyeStack(200, dyeStr, 4)}, want: []buyRow{{dyeStr, 6}, {dyeDex, 10}}, wantFee: 74000},
+		{name: "carried dyes", class: 1, adena: floor + 2*sym, items: []Item{dyeStack(200, dyeStr, 4)}, want: []buyRow{{Item: dyeStr, Count: 6}, {Item: dyeDex, Count: 10}}, wantFee: 74000},
 		{name: "dyes in hand: the fee only", class: 1, adena: floor + 74000, items: []Item{dyeStack(200, dyeStr, 10), dyeStack(201, dyeDex, 10)}, wantFee: 74000},
 		{name: "base class", class: classHumanFight, adena: floor + 2*sym},
 	}
@@ -443,12 +444,12 @@ func TestBuyDyes(t *testing.T) {
 		window []ShopItem
 		want   []buyRow
 	}{
-		{name: "both symbols' dyes", adena: floor + 2*sym, window: window, want: []buyRow{{dyeStr, 10}, {dyeDex, 10}}},
-		{name: "the fee kept", adena: floor + 2*sym, money: floor + 2*sym - 1, window: window, want: []buyRow{{dyeStr, 10}}},
+		{name: "both symbols' dyes", adena: floor + 2*sym, window: window, want: []buyRow{{Item: dyeStr, Count: 10}, {Item: dyeDex, Count: 10}}},
+		{name: "the fee kept", adena: floor + 2*sym, money: floor + 2*sym - 1, window: window, want: []buyRow{{Item: dyeStr, Count: 10}}},
 		{
 			name: "a short stock is not bought", adena: floor + 2*sym,
 			window: []ShopItem{{TemplateID: dyeStr, Price: dyePrice, Count: 9}, {TemplateID: dyeDex, Price: dyePrice}},
-			want:   []buyRow{{dyeDex, 10}},
+			want:   []buyRow{{Item: dyeDex, Count: 10}},
 		},
 	}
 	for _, tt := range tests {
@@ -464,7 +465,7 @@ func TestBuyDyes(t *testing.T) {
 		})
 	}
 	b := newDyeBudgetBrain(t, 1, floor+2*sym)
-	if got := b.shopWants(false); !slices.Contains(got, buyRow{dyeStr, 10}) || !slices.Contains(got, buyRow{dyeDex, 10}) {
+	if got := b.shopWants(false); !slices.Contains(got, buyRow{Item: dyeStr, Count: 10}) || !slices.Contains(got, buyRow{Item: dyeDex, Count: 10}) {
 		t.Fatalf("shopWants = %v, want both symbols' dyes: they make a visit due", got)
 	}
 }

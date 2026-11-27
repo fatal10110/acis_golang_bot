@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The store a second client opens for TestLiveStoreBuy: no-grade shots at
@@ -83,7 +84,7 @@ func TestLiveStoreBuy(t *testing.T) {
 // until the GM, next to c, sees the store open.
 func openSellStore(t *testing.T, ctx context.Context, gm *GMClient, c *Client, prices map[int32]int32, count int32) {
 	t.Helper()
-	if err := c.Send(ctx, botclient.EncodeRequestPrivateStoreManageSell()); err != nil {
+	if err := c.Send(ctx, botwire.EncodeRequestPrivateStoreManageSell()); err != nil {
 		t.Fatal(err)
 	}
 	ev, err := c.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
@@ -102,7 +103,7 @@ func openSellStore(t *testing.T, ctx context.Context, gm *GMClient, c *Client, p
 	if len(rows) != len(prices) {
 		t.Fatalf("%s's manage window offers %d of the %d templates", c.Self.Name, len(rows), len(prices))
 	}
-	if err := c.Send(ctx, botclient.EncodeSetPrivateStoreMsgSell("e2e")); err != nil {
+	if err := c.Send(ctx, botwire.EncodeSetPrivateStoreMsgSell("e2e")); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Send(ctx, botclient.EncodeSetPrivateStoreListSell(rows)); err != nil {

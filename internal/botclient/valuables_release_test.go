@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Manage list candidates of the release tests: the carried swords 101 and
@@ -38,9 +40,9 @@ func listRows(b *Brain, cands ...StoreItem) []storeRow {
 // of cands, listing rows.
 func openingSteps(start time.Duration, rows []storeRow, cands ...StoreItem) []trainerStep {
 	return []trainerStep{
-		{name: "open", at: start, wantRule: "store", wantKind: actStoreManage, wantPayload: encodeRequestPrivateStoreManageSell()},
+		{name: "open", at: start, wantRule: "store", wantKind: actStoreManage, wantPayload: botwire.EncodeRequestPrivateStoreManageSell()},
 		{name: "title", at: start + time.Second, events: []Event{PrivateStoreManageListSell{OwnerID: selfID, Adena: 1000, Candidates: cands}}, wantRule: "store", wantKind: actStoreTitle},
-		{name: "list", at: start + 2*time.Second, wantRule: "store", wantKind: actStoreList, wantPayload: encodeSetPrivateStoreListSell(false, rows)},
+		{name: "list", at: start + 2*time.Second, wantRule: "store", wantKind: actStoreList, wantPayload: botwire.EncodeSetPrivateStoreListSell(false, rows)},
 	}
 }
 
@@ -185,7 +187,7 @@ func testReleaseCarried(t *testing.T) {
 	}
 	end := p.RoundWait
 	floor := b.valuableFloor(swordKey)
-	runTrainerSteps(t, b, openingSteps(end, []storeRow{{101, 1, int32(floor)}, {102, 10, 7}}, swordCand101, skinCand))
+	runTrainerSteps(t, b, openingSteps(end, []storeRow{{Object: 101, Count: 1, Price: int32(floor)}, {Object: 102, Count: 10, Price: 7}}, swordCand101, skinCand))
 	if e := entryOf(t, b, ledgerSword, 0); !e.released || e.rounds != p.MaxRounds || e.carried != 1 {
 		t.Errorf("sword %+v, want released after its third round, carried", e)
 	}
@@ -253,7 +255,7 @@ func testReleaseInRound(t *testing.T) {
 	release(t, b, sword3Key)
 	runTrainerSteps(t, b, append(keeperSteps(0, "WithdrawP"), trainerStep{
 		name: "withdraw the released staff", at: 5 * time.Second, events: []Event{privateList(storedStaff)}, wantRule: "valuables", wantKind: actWarehouseWithdraw,
-		wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}}),
+		wantPayload: botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{Object: 201, Item: ledgerStaff, Count: 1}}),
 	}))
 	now := at(6 * time.Second)
 	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}}, now); err != nil {
@@ -304,7 +306,7 @@ func testReleaseBudgetSpent(t *testing.T) {
 	}
 	b.store.step, b.store.candidates = storeIdle, nil
 	runTrainerSteps(t, b, depositSteps(0, []WarehouseItem{{ObjectID: 101, TemplateID: ledgerSword, Count: 1}, {ObjectID: 103, TemplateID: ledgerSword, Count: 1, Enchant: 3}},
-		[]warehouseRow{{object: 101, item: ledgerSword, count: 1}, {object: 103, item: ledgerSword, count: 1}}))
+		[]warehouseRow{{Object: 101, Item: ledgerSword, Count: 1}, {Object: 103, Item: ledgerSword, Count: 1}}))
 }
 
 // testReleaseLook: a look finding a released stored valuable, loot carried:
@@ -331,7 +333,7 @@ func testReleaseLook(t *testing.T) {
 		// The look's keeper is still selected: the visit talks at once.
 		runTrainerSteps(t, b, append(keeperSteps(open-time.Second, "WithdrawP")[1:], trainerStep{
 			name: "withdraw the staff", at: open + 4*time.Second, events: []Event{privateList(storedStaff)}, wantRule: "valuables", wantKind: actWarehouseWithdraw,
-			wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}}),
+			wantPayload: botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{Object: 201, Item: ledgerStaff, Count: 1}}),
 		}))
 		floor := b.valuableFloor(staffKey5)
 		if floor != 644000+5*50000 {
@@ -342,7 +344,7 @@ func testReleaseLook(t *testing.T) {
 			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
 			wantRule: "valuables", wantKind: actMove, wantTo: Point{}, wantWithin: anchorArrive,
 		}
-		steps := openingSteps(open+8*time.Second, []storeRow{{201, 1, int32(floor)}, {102, 10, 7}}, staffCand, skinCand)
+		steps := openingSteps(open+8*time.Second, []storeRow{{Object: 201, Count: 1, Price: int32(floor)}, {Object: 102, Count: 10, Price: 7}}, staffCand, skinCand)
 		steps[0].events = []Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 50}}}
 		runTrainerSteps(t, b, append([]trainerStep{withdrawn}, steps...))
 	})
@@ -353,7 +355,7 @@ func testReleaseLook(t *testing.T) {
 		// The count runs from the look's last decision, at 5 s.
 		wantHeld(t, "pending", b, at(6*time.Second))
 		wantHeld(t, "within StoreHold", b, at(5*time.Second+hold-time.Second))
-		runTrainerSteps(t, b, openingSteps(5*time.Second+hold, []storeRow{{102, 10, 7}}, skinCand))
+		runTrainerSteps(t, b, openingSteps(5*time.Second+hold, []storeRow{{Object: 102, Count: 10, Price: 7}}, skinCand))
 	})
 }
 
@@ -377,13 +379,15 @@ func testReleaseRows(t *testing.T) {
 		{
 			name: "the store budget spent: the valuables only", items: []Item{swordUnit(101, 0), skinLoot}, cands: []StoreItem{skinCand, swordCand101},
 			left: 2000000, storeSold: true,
-			want: func(b *Brain) []storeRow { return []storeRow{{101, 1, int32(b.valuableFloor(swordKey))}} },
+			want: func(b *Brain) []storeRow {
+				return []storeRow{{Object: 101, Count: 1, Price: int32(b.valuableFloor(swordKey))}}
+			},
 		},
 		{
 			name: "by score, then the loot", items: []Item{swordUnit(101, 0), carriedOf(storedStaff), skinLoot}, cands: []StoreItem{skinCand, swordCand101, staffCand},
 			left: 2000000,
 			want: func(b *Brain) []storeRow {
-				return []storeRow{{201, 1, int32(b.valuableFloor(staffKey5))}, {101, 1, int32(b.valuableFloor(swordKey))}, {102, 10, 7}}
+				return []storeRow{{Object: 201, Count: 1, Price: int32(b.valuableFloor(staffKey5))}, {Object: 101, Count: 1, Price: int32(b.valuableFloor(swordKey))}, {Object: 102, Count: 10, Price: 7}}
 			},
 		},
 		{
@@ -391,18 +395,20 @@ func testReleaseRows(t *testing.T) {
 			cands: []StoreItem{swordCand101, {ObjectID: 103, TemplateID: ledgerSword, Count: 1, BodySlot: partRHand}, swordCand104}, left: 200000,
 			want: func(b *Brain) []storeRow {
 				f := int32(b.valuableFloor(swordKey))
-				return []storeRow{{101, 1, f}, {103, 1, f}}
+				return []storeRow{{Object: 101, Count: 1, Price: f}, {Object: 103, Count: 1, Price: f}}
 			},
 		},
 		{
 			name: "a row above left", items: []Item{swordUnit(101, 0)}, cands: []StoreItem{swordCand101}, left: 1,
-			want: func(b *Brain) []storeRow { return []storeRow{{101, 1, int32(b.valuableFloor(swordKey))}} },
+			want: func(b *Brain) []storeRow {
+				return []storeRow{{Object: 101, Count: 1, Price: int32(b.valuableFloor(swordKey))}}
+			},
 		},
 		{name: "left spent", items: []Item{swordUnit(101, 0)}, cands: []StoreItem{swordCand101}, left: 0},
 		{
 			name: "a stack: ceil(left / floor) units", items: []Item{recipe}, cands: []StoreItem{recipeCand}, left: 800000,
 			want: func(b *Brain) []storeRow {
-				return []storeRow{{110, 3, int32(b.valuableFloor(valuableKey{template: ledgerRecipe}))}}
+				return []storeRow{{Object: 110, Count: 3, Price: int32(b.valuableFloor(valuableKey{template: ledgerRecipe}))}}
 			},
 		},
 	} {
@@ -440,7 +446,7 @@ func TestValuablesStoreSplit(t *testing.T) {
 		release(t, b, swordKey)
 		floor := b.valuableFloor(swordKey)
 		rows := listRows(b, skinCand, swordCand101, swordCand)
-		if want := []storeRow{{101, 1, int32(floor)}, {102, 10, 7}, {107, 1, 700}}; !reflect.DeepEqual(rows, want) {
+		if want := []storeRow{{Object: 101, Count: 1, Price: int32(floor)}, {Object: 102, Count: 10, Price: 7}, {Object: 107, Count: 1, Price: 700}}; !reflect.DeepEqual(rows, want) {
 			t.Fatalf("rows %v, want %v", rows, want)
 		}
 		b.storeSent(Action{kind: actStoreList}, t0)
@@ -466,7 +472,7 @@ func TestValuablesStoreSplit(t *testing.T) {
 		release(t, b, k)
 		floor := b.valuableFloor(k)
 		b.valuablesSold = b.persona.Valuables.Budget - 2*floor - 1
-		if rows := listRows(b, recipeCand); len(rows) != 1 || rows[0].count != 3 {
+		if rows := listRows(b, recipeCand); len(rows) != 1 || rows[0].Count != 3 {
 			t.Fatalf("rows %v, want 3 of the 5 recipes", rows)
 		}
 		before := b.valuablesSold

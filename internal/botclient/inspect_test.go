@@ -22,17 +22,6 @@ func answered(m mail) (Inspection, bool) {
 	}
 }
 
-// TestEncodeRequestItemList checks the frame: the opcode alone
-// (clientpackets.OpcodeRequestItemList, no payload).
-func TestEncodeRequestItemList(t *testing.T) {
-	if got, want := encodeRequestItemList(), []byte{0x0f}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("RequestItemList = % x, want % x", got, want)
-	}
-	if g := (Action{kind: actItemList}).gate(); g != gateNone {
-		t.Fatalf("RequestItemList gate %v, want none: the frame bucket bounds it", g)
-	}
-}
-
 // TestBrainInspect checks the brain's answer to an inspect: one
 // RequestItemList, then the model once the ItemList answering it is applied,
 // or the model as it stands, stale, at the deadline.
@@ -326,5 +315,13 @@ func TestBotInspect(t *testing.T) {
 	}
 	if _, err := b.Inspect(time.Second); !errors.Is(err, ErrStopped) {
 		t.Fatalf("inspect after the stop = %v, want ErrStopped", err)
+	}
+}
+
+// TestRequestItemListGate checks that RequestItemList passes no gate of its
+// own: the frame bucket bounds it.
+func TestRequestItemListGate(t *testing.T) {
+	if g := (Action{kind: actItemList}).gate(); g != gateNone {
+		t.Fatalf("RequestItemList gate %v, want none: the frame bucket bounds it", g)
 	}
 }

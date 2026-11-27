@@ -1,4 +1,4 @@
-package botclient
+package botwire
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ func TestEncodeRequestEnchantItem(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := encodeRequestEnchantItem(tt.obj); !bytes.Equal(got, tt.want) {
+			if got := EncodeRequestEnchantItem(tt.obj); !bytes.Equal(got, tt.want) {
 				t.Fatalf("payload % x, want % x", got, tt.want)
 			}
 		})

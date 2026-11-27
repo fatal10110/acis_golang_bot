@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Templates of the look's process start rows: a quest item and a shadow
@@ -63,7 +65,7 @@ func lookSteps(start time.Duration) []trainerStep {
 		{name: "wait for the page", at: start + 2*time.Second, wantRule: "valuables"},
 		{
 			name: "open", at: start + 3*time.Second, events: []Event{keeperPage(keeperObj, "DepositP", "WithdrawP", "DepositC", "WithdrawC")},
-			wantRule: "valuables", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_WithdrawP"),
+			wantRule: "valuables", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_WithdrawP"),
 		},
 		{name: "wait for the list", at: start + 4*time.Second, wantRule: "valuables"},
 	}

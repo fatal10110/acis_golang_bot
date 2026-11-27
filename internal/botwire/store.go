@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // storeRowSize and storeListedRowSize are the wire sizes of a candidate row
 // and of a listed row (with its reference price).
@@ -108,4 +106,57 @@ func decodePrivateStoreListSell(r *wire.Reader) Event {
 // decodePrivateStoreMsgSell: owner id, title (frameStoreMessage).
 func decodePrivateStoreMsgSell(r *wire.Reader) Event {
 	return PrivateStoreMsgSell{OwnerID: r.ReadInt32(), Title: r.ReadString()}
+}
+
+// StoreRow is one row of a sell list or a purchase from a store: an item
+// object, how many and the unit price.
+type StoreRow struct{ Object, Count, Price int32 }
+
+// EncodeRequestPrivateStoreManageSell opens the sell store manage window;
+// no body (clientpackets/privatestore.go).
+func EncodeRequestPrivateStoreManageSell() []byte {
+	return wire.NewPacketWriter(OpGameRequestPrivateStoreManageSell).Bytes()
+}
+
+// EncodeSetPrivateStoreMsgSell sets the store title (clientpackets
+// DecodeStoreMessage).
+func EncodeSetPrivateStoreMsgSell(title string) []byte {
+	w := wire.NewPacketWriter(OpGameSetPrivateStoreMsgSell)
+	w.WriteString(title)
+	return w.Bytes()
+}
+
+// EncodeSetPrivateStoreListSell lists rows for sale: packaged (1 sells the
+// whole list as one), row count, then per row object id, count and unit
+// price (DecodeSetPrivateStoreListSell).
+func EncodeSetPrivateStoreListSell(packaged bool, rows []StoreRow) []byte {
+	w := wire.NewPacketWriter(OpGameSetPrivateStoreListSell)
+	w.WriteInt32(boolInt32(packaged))
+	writeStoreRows(w, rows)
+	return w.Bytes()
+}
+
+// EncodeRequestPrivateStoreQuitSell closes the sell store, or leaves its
+// manage window; no body.
+func EncodeRequestPrivateStoreQuitSell() []byte {
+	return wire.NewPacketWriter(OpGameRequestPrivateStoreQuitSell).Bytes()
+}
+
+// EncodeRequestPrivateStoreBuy buys rows from the sell store of player
+// owner: owner id, row count, then per row object id, count and the
+// store's unit price (DecodeRequestPrivateStoreBuy).
+func EncodeRequestPrivateStoreBuy(owner int32, rows []StoreRow) []byte {
+	w := wire.NewPacketWriter(OpGameRequestPrivateStoreBuy)
+	w.WriteInt32(owner)
+	writeStoreRows(w, rows)
+	return w.Bytes()
+}
+
+func writeStoreRows(w *wire.Writer, rows []StoreRow) {
+	w.WriteInt32(int32(len(rows)))
+	for _, r := range rows {
+		w.WriteInt32(r.Object)
+		w.WriteInt32(r.Count)
+		w.WriteInt32(r.Price)
+	}
 }

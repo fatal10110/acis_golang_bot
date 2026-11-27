@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestBrainGearWarriorLine has a warrior of each line, wearing a sword and
@@ -28,7 +30,7 @@ func TestBrainGearWarriorLine(t *testing.T) {
 			b.cfg.account = accountFor(t, HumanFighter.ID, RoleDamage, line{first: classWarrior, second: tt.second})
 			b.world.Self.Level, b.builtOK = 24, false
 			runTrainerSteps(t, b, []trainerStep{
-				{name: "wear the line's weapon", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(tt.wear)},
+				{name: "wear the line's weapon", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(tt.wear)},
 			})
 		})
 	}

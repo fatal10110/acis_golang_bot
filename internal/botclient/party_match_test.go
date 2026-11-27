@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // matchRoom is a room a player named Lea leads, free and open to levels
@@ -12,35 +14,12 @@ var matchRoom = PartyRoom{ID: 5, Title: "exp", Location: 1, MinLevel: 1, MaxLeve
 
 const leaID = int32(0x30000010)
 
-func TestPartyMatchEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"RequestListPartyWaiting", encodeRequestListPartyWaiting(1, roomsNearMe, roomsLevelsMine), []byte{0x6f, 1, 0, 0, 0, 0xfe, 0xff, 0xff, 0xff, 0, 0, 0, 0}},
-		{"RequestJoinPartyRoom", encodeRequestJoinPartyRoom(5, roomsNearMe, roomsLevelsMine), []byte{0x71, 5, 0, 0, 0, 0xfe, 0xff, 0xff, 0xff, 0, 0, 0, 0}},
-		{
-			"RequestManagePartyRoom", encodeRequestManagePartyRoom(0, 4, 1, 20, 2, "A"),
-			[]byte{0x70, 0, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 20, 0, 0, 0, 2, 0, 0, 0, 'A', 0, 0, 0},
-		},
-		{"RequestWithdrawPartyRoom", encodeRequestWithdrawPartyRoom(5), []byte{0xd0, 0x03, 0x00, 5, 0, 0, 0, 0, 0, 0, 0}},
-		{"RequestExitPartyMatchingWaitingRoom", encodeRequestExitPartyMatchingWaitingRoom(), []byte{0xd0, 0x17, 0x00}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if !bytes.Equal(tt.got, tt.want) {
-				t.Fatalf("got % x, want % x", tt.got, tt.want)
-			}
-		})
-	}
-}
-
 // Every frame the room rule sends, as the tests name it.
 var (
-	roomListFrame     = encodeRequestListPartyWaiting(1, roomsNearMe, roomsLevelsMine)
-	roomExitFrame     = encodeRequestExitPartyMatchingWaitingRoom()
-	roomWithdrawFrame = encodeRequestWithdrawPartyRoom(matchRoom.ID)
-	roomJoinFrame     = encodeRequestJoinPartyRoom(matchRoom.ID, roomsNearMe, roomsLevelsMine)
+	roomListFrame     = botwire.EncodeRequestListPartyWaiting(1, roomsNearMe, roomsLevelsMine)
+	roomExitFrame     = botwire.EncodeRequestExitPartyMatchingWaitingRoom()
+	roomWithdrawFrame = botwire.EncodeRequestWithdrawPartyRoom(matchRoom.ID)
+	roomJoinFrame     = botwire.EncodeRequestJoinPartyRoom(matchRoom.ID, roomsNearMe, roomsLevelsMine)
 )
 
 // roomPolicy is the room policy of the tests: the floors.

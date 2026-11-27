@@ -3,6 +3,7 @@ package botclient
 import (
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -201,7 +202,7 @@ func (b *Brain) ruleSweep(now time.Time) (Action, bool) {
 			return a, true
 		}
 	}
-	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, false), object: id, skill: skill}, true
+	return Action{kind: actCast, payload: botwire.EncodeRequestMagicSkillUse(skill, false), object: id, skill: skill}, true
 }
 
 // indexCorpseTimes are the corpse times of the NPC templates whose

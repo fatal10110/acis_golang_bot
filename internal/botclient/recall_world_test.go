@@ -5,6 +5,8 @@ import (
 	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestBrainLanding checks that after its Appearing the bot makes no
@@ -143,7 +145,7 @@ func TestBrainRecallClanInvite(t *testing.T) {
 	if err := b.wake(b.decisionAt()); err != nil {
 		t.Fatal(err)
 	}
-	want := [][]byte{encodeAppearing(), encodeRequestAnswerJoinPledge(true)}
+	want := [][]byte{botwire.EncodeAppearing(), botwire.EncodeRequestAnswerJoinPledge(true)}
 	if len(out.frames) != len(want) || !bytes.Equal(out.frames[0], want[0]) || !bytes.Equal(out.frames[1], want[1]) {
 		t.Fatalf("sent % x, want Appearing then the acceptance % x", out.frames, want)
 	}

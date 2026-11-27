@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // meleeRun is how a bot came to attack a monster: the Action that selected
@@ -100,14 +101,14 @@ func TestMeleeApproach(t *testing.T) {
 	stand := botclient.Point{X: -83064, Y: 249960, Z: -3633}
 	round := botclient.Point{X: -83200, Y: 250000, Z: -3640}
 	pkt := func(ms int, op byte, id int32, from botclient.Point) Sent {
-		p := botclient.EncodeAction(id, from)
+		p := botwire.EncodeAction(id, from)
 		if op == opAttackRequest {
-			p = botclient.EncodeAttackRequest(id, from)
+			p = botwire.EncodeAttackRequest(id, from)
 		}
 		return Sent{At: at(ms), Op: op, Target: id, Payload: p}
 	}
 	move := func(ms int) Sent {
-		return Sent{At: at(ms), Op: opMoveBackwardToLocation, Payload: botclient.EncodeMoveBackwardToLocation(round, stand)}
+		return Sent{At: at(ms), Op: opMoveBackwardToLocation, Payload: botwire.EncodeMoveBackwardToLocation(round, stand)}
 	}
 	// ev is an event read after the first before packets were sent.
 	ev := func(ms, before int, e botclient.Event) Seen { return Seen{At: at(ms), Event: e, SentBefore: before} }

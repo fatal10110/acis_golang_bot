@@ -1,33 +1,17 @@
 package botclient
 
 import (
-	"bytes"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 const (
 	clanID    = int32(0x0a000001)
 	otherClan = int32(0x0a000002)
 )
-
-func TestClanEncoders(t *testing.T) {
-	tests := []struct {
-		name string
-		got  []byte
-		want []byte
-	}{
-		{"accept", encodeRequestAnswerJoinPledge(true), []byte{0x25, 1, 0, 0, 0}},
-		{"decline", encodeRequestAnswerJoinPledge(false), []byte{0x25, 0, 0, 0, 0}},
-		{"invite", EncodeRequestJoinPledge(pcID), []byte{0x24, 2, 0, 0, 0x20, 0, 0, 0, 0}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
 
 func TestWorldClan(t *testing.T) {
 	invited := SystemMessage{ID: msgInvitedToClan, Text: [2]string{"Alden", "Crafters"}}
@@ -88,8 +72,8 @@ func TestWorldClan(t *testing.T) {
 }
 
 func TestBrainClanInvite(t *testing.T) {
-	accept := encodeRequestAnswerJoinPledge(true)
-	decline := encodeRequestAnswerJoinPledge(false)
+	accept := botwire.EncodeRequestAnswerJoinPledge(true)
+	decline := botwire.EncodeRequestAnswerJoinPledge(false)
 	auth := func(p Persona) Persona { return NewAuthority(AuthorityConfig{Commanders: []int32{gmID}}).Hooks(p) }
 	tests := []struct {
 		name      string

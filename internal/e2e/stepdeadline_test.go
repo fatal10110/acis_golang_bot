@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 func TestAwaitStep(t *testing.T) {
@@ -114,7 +115,7 @@ func TestEventTail(t *testing.T) {
 func TestWatchTail(t *testing.T) {
 	w := NewWatch(newParkClock())
 	for i := range refusalTail + 2 {
-		w.RecordSent(botclient.EncodeAction(int32(100+i), botclient.Point{}))
+		w.RecordSent(botwire.EncodeAction(int32(100+i), botclient.Point{}))
 	}
 	got := w.Tail()
 	if strings.Contains(got, "(101)") || !strings.Contains(got, "(102)") || !strings.Contains(got, fmt.Sprintf("(%d)", 101+refusalTail)) {

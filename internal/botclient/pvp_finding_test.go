@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
@@ -66,7 +67,7 @@ func duelAnswer(b *Brain, now time.Time) (answered, yes bool) {
 	if rule != "duel" || a.kind != actDuelAnswer {
 		return false, false
 	}
-	return true, string(a.payload) == string(encodeRequestDuelAnswerStart(false, true))
+	return true, string(a.payload) == string(botwire.EncodeRequestDuelAnswerStart(false, true))
 }
 
 // challenged reports the player the bot challenges at now, "" for none.
@@ -144,7 +145,7 @@ func TestPvPDuelAccept(t *testing.T) {
 			if tc.party || tc.edit != nil {
 				return
 			}
-			if _, a := b.decide(at(time.Second)); a.kind == actDuelAnswer && string(a.payload) != string(encodeRequestDuelAnswerStart(false, false)) {
+			if _, a := b.decide(at(time.Second)); a.kind == actDuelAnswer && string(a.payload) != string(botwire.EncodeRequestDuelAnswerStart(false, false)) {
 				t.Fatalf("payload % x, want the decline", a.payload)
 			}
 		})

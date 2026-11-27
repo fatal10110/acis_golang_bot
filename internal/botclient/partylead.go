@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The loot rules of a party (party/party.go on the server): finders
@@ -428,36 +428,17 @@ func (b *Brain) partyPlayers(slot Command) []int32 {
 	return ids
 }
 
-// encodeRequestOustPartyMember expels the member named name from the
-// party the bot leads; the server ignores it from anyone else or for a
-// name no member has (network/party.go requestOustPartyMember).
-func encodeRequestOustPartyMember(name string) []byte {
-	w := wire.NewPacketWriter(opGameRequestOustPartyMember)
-	w.WriteString(name)
-	return w.Bytes()
-}
-
-// encodeRequestChangePartyLeader hands the party the bot leads to the
-// member named name; a dueling member is refused in silence
-// (party/party.go ChangeLeader).
-func encodeRequestChangePartyLeader(name string) []byte {
-	w := wire.NewPacketWriter(opGameClientExtended)
-	w.WriteUint16(opGameRequestChangePartyLeader)
-	w.WriteString(name)
-	return w.Bytes()
-}
-
 // inviteAction invites the player named name under partyLoot.
 func inviteAction(name string) Action {
-	return Action{kind: actInviteParty, payload: encodeRequestJoinParty(name, partyLoot)}
+	return Action{kind: actInviteParty, payload: botwire.EncodeRequestJoinParty(name, partyLoot)}
 }
 
 // oustAction expels the member named name.
 func oustAction(name string) Action {
-	return Action{kind: actOustParty, payload: encodeRequestOustPartyMember(name)}
+	return Action{kind: actOustParty, payload: botwire.EncodeRequestOustPartyMember(name)}
 }
 
 // changeLeaderAction hands the party to the member named name.
 func changeLeaderAction(name string) Action {
-	return Action{kind: actChangeLeader, payload: encodeRequestChangePartyLeader(name)}
+	return Action{kind: actChangeLeader, payload: botwire.EncodeRequestChangePartyLeader(name)}
 }

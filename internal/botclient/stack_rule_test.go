@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -222,8 +223,8 @@ func TestFightOpener(t *testing.T) {
 		a      Action
 		opened bool
 	}{
-		{"attack step", Action{kind: actCast, payload: encodeRequestMagicSkillUse(skillPowerStrike, false), object: npcID, skill: skillPowerStrike, opens: true}, true},
-		{"sustain step", Action{kind: actCast, payload: encodeRequestMagicSkillUse(skillDrainHealth, false), object: npcID, skill: skillDrainHealth}, false},
+		{"attack step", Action{kind: actCast, payload: botwire.EncodeRequestMagicSkillUse(skillPowerStrike, false), object: npcID, skill: skillPowerStrike, opens: true}, true},
+		{"sustain step", Action{kind: actCast, payload: botwire.EncodeRequestMagicSkillUse(skillDrainHealth, false), object: npcID, skill: skillDrainHealth}, false},
 		{"melee click", attackAction(npcID, Point{}), true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

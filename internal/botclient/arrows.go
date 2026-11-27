@@ -128,7 +128,7 @@ func (b *Brain) arrowWants() []buyRow {
 func (b *Brain) arrowRow(id int32) (buyRow, bool) {
 	p := &b.persona.Shop
 	if have := b.carried(id); id != 0 && have < p.ArrowsMin && p.ArrowsMax > have {
-		return buyRow{item: id, count: p.ArrowsMax - have}, true
+		return buyRow{Item: id, Count: p.ArrowsMax - have}, true
 	}
 	return buyRow{}, false
 }

@@ -32,8 +32,6 @@ func TestGameEncoders(t *testing.T) {
 		{"RequestCharacterCreate", encodeRequestCharacterCreate("bot7", HumanFighter, Appearance{HairStyle: 1}), packet(0x0b, "bot7", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)},
 		// slot, uint16, three int32 (requestgamestart.go).
 		{"RequestGameStart", encodeRequestGameStart(2), packet(0x0d, 2, uint16(0), 0, 0, 0)},
-		{"EnterWorld", encodeEnterWorld(), []byte{0x03}},
-		{"Logout", encodeLogout(), []byte{0x09}},
 	}
 	for _, tt := range tests {
 		if !bytes.Equal(tt.got, tt.want) {

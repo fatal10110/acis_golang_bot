@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // chatShout is the Say2 channel of shout, which a reply never answers
@@ -95,7 +96,7 @@ func TestBrainChatReply(t *testing.T) {
 	if err := b.wake(at(chatDelay)); err != nil {
 		t.Fatal(err)
 	}
-	want := encodeSay2Tell("Alden", "hey")
+	want := botwire.EncodeSay2Tell("Alden", "hey")
 	if b.lastRule != "chat" || len(out.frames) != 1 || !bytes.Equal(out.frames[0], want) {
 		t.Fatalf("rule %q sent %x, want chat sending %x", b.lastRule, out.frames, want)
 	}

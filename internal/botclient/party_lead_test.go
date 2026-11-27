@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The members of the lead tests: Abel, Beth and Cole are bots a lead lists,
@@ -51,7 +53,7 @@ func invited(t *testing.T, out *recordSender) []string {
 	var got []string
 	for _, f := range framesOf(out, opGameRequestJoinParty) {
 		i := slices.IndexFunc(inviteNames, func(n string) bool {
-			return bytes.Equal(f, encodeRequestJoinParty(n, lootByTurn))
+			return bytes.Equal(f, botwire.EncodeRequestJoinParty(n, lootByTurn))
 		})
 		if i < 0 {
 			t.Fatalf("invitation % x, want one of a listed member by turn", f)
@@ -81,8 +83,8 @@ func TestPartyLeadCodec(t *testing.T) {
 		name      string
 		got, want []byte
 	}{
-		{"RequestOustPartyMember", encodeRequestOustPartyMember("GM"), []byte{0x2c, 'G', 0, 'M', 0, 0, 0}},
-		{"RequestChangePartyLeader", encodeRequestChangePartyLeader("GM"), []byte{0xd0, 0x04, 0x00, 'G', 0, 'M', 0, 0, 0}},
+		{"RequestOustPartyMember", botwire.EncodeRequestOustPartyMember("GM"), []byte{0x2c, 'G', 0, 'M', 0, 0, 0}},
+		{"RequestChangePartyLeader", botwire.EncodeRequestChangePartyLeader("GM"), []byte{0xd0, 0x04, 0x00, 'G', 0, 'M', 0, 0, 0}},
 		{"invitation", inviteAction("GM").payload, []byte{0x29, 'G', 0, 'M', 0, 0, 0, 3, 0, 0, 0}},
 		{"oust action", oustAction("GM").payload, []byte{0x2c, 'G', 0, 'M', 0, 0, 0}},
 		{"change leader action", changeLeaderAction("GM").payload, []byte{0xd0, 0x04, 0x00, 'G', 0, 'M', 0, 0, 0}},
@@ -280,12 +282,12 @@ func TestPartyLeadOustsDropped(t *testing.T) {
 	}
 	b.setPartySlot(lead("Abel"))
 	decideAt(t, b, 2*time.Second)
-	want := [][]byte{encodeRequestOustPartyMember("Beth")}
+	want := [][]byte{botwire.EncodeRequestOustPartyMember("Beth")}
 	if got := framesOf(out, opGameRequestOustPartyMember); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ousted % x, want Beth alone", got)
 	}
 	decideAt(t, b, 3*time.Second, 4*time.Second, 5*time.Second)
-	want = append(want, encodeRequestOustPartyMember("Cole"))
+	want = append(want, botwire.EncodeRequestOustPartyMember("Cole"))
 	if got := framesOf(out, opGameRequestOustPartyMember); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ousted % x, want Beth then Cole, once each", got)
 	}
@@ -305,7 +307,7 @@ func TestPartyHandoverLeaves(t *testing.T) {
 		var got []string
 		for _, f := range framesOf(out, opGameClientExtended) {
 			for _, n := range []string{"Abbot", "Talbot", "Zed", "Mate"} {
-				if bytes.Equal(f, encodeRequestChangePartyLeader(n)) {
+				if bytes.Equal(f, botwire.EncodeRequestChangePartyLeader(n)) {
 					got = append(got, n)
 				}
 			}
@@ -436,7 +438,7 @@ func TestPartyWhisperNoReformLeader(t *testing.T) {
 			t.Fatalf("%d invitations before 62 s, want 1", n)
 		}
 		decideAt(t, b, 62*time.Second)
-		want := [][]byte{encodeRequestJoinParty("Mate", lootByTurn), encodeRequestJoinParty("Mate", lootByTurn)}
+		want := [][]byte{botwire.EncodeRequestJoinParty("Mate", lootByTurn), botwire.EncodeRequestJoinParty("Mate", lootByTurn)}
 		if got := framesOf(out, opGameRequestJoinParty); !reflect.DeepEqual(got, want) {
 			t.Fatalf("invitations % x, want Mate at 31 s and 62 s", got)
 		}

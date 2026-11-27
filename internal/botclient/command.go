@@ -5,14 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
-
-// chatTell is the Say2 channel of a whisper (say2.go say2Tell): the
-// server answers a whisper with CreatureSay of that type to its target
-// and an echo to the speaker, named "->" and the target's name
-// (chat.go chatTell).
-const chatTell int32 = 2
 
 // echoPrefix starts the name of the echo of the bot's own whisper.
 const echoPrefix = "->"
@@ -105,20 +99,11 @@ func parseCommand(text string) (command, bool) {
 	return command{}, false
 }
 
-// encodeSay2Tell whispers text to the player named target.
-func encodeSay2Tell(target, text string) []byte {
-	w := wire.NewPacketWriter(opGameSay2)
-	w.WriteString(text)
-	w.WriteInt32(chatTell)
-	w.WriteString(target)
-	return w.Bytes()
-}
-
 // tellAction whispers text to the player named target. It passes the chat
 // gate (chatGap): whispers have no server gate (chat.go chatTell), so the
 // bot keeps the pace of its all-channel chat.
 func tellAction(target, text string) Action {
-	return Action{kind: actTell, payload: encodeSay2Tell(target, text)}
+	return Action{kind: actTell, payload: botwire.EncodeSay2Tell(target, text)}
 }
 
 // orders are the commands in force, owned by the brain goroutine: the GM

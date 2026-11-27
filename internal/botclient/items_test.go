@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 var (
@@ -18,23 +20,6 @@ var (
 	}
 	shotRow = Item{ObjectID: 0x30000003, TemplateID: 1835, Count: 500, Category: 4, SubCategory: 5}
 )
-
-func TestItemEncoders(t *testing.T) {
-	tests := []struct {
-		name string
-		got  []byte
-		want []byte
-	}{
-		{"UseItem", encodeUseItem(0x30000001), []byte{0x14, 1, 0, 0, 0x30, 0, 0, 0, 0}},
-		{"RequestAutoSoulShot on", encodeRequestAutoSoulShot(1835, true), []byte{0xd0, 0x05, 0, 0x2b, 0x07, 0, 0, 1, 0, 0, 0}},
-		{"RequestAutoSoulShot off", encodeRequestAutoSoulShot(1835, false), []byte{0xd0, 0x05, 0, 0x2b, 0x07, 0, 0, 0, 0, 0, 0}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
 
 func TestWorldInventory(t *testing.T) {
 	w := newTestWorld(t)
@@ -156,7 +141,7 @@ func TestBrainPotion(t *testing.T) {
 			if tt.want != actUseItem {
 				return
 			}
-			if want := encodeUseItem(tt.wantObj); !bytes.Equal(a.payload, want) {
+			if want := botwire.EncodeUseItem(tt.wantObj); !bytes.Equal(a.payload, want) {
 				t.Fatalf("payload % x, want % x", a.payload, want)
 			}
 			if sent, err := b.send(a, now); !sent || err != nil {

@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // gkTownObj is gatekeeper 30006 once in sight.
@@ -82,8 +84,8 @@ func TestBrainTownHop(t *testing.T) {
 			wantRule: "travel", wantKind: actSelect,
 		},
 		{name: "talk", at: 63 * time.Second, events: []Event{MyTargetSelected{ObjectID: gkTownObj}}, wantRule: "travel", wantKind: actTalk},
-		{name: "list link", at: 64 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkTownObj, HTML: gkPage(gkTownObj)}}, wantRule: "travel", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkTownObj) + "_teleport_request")},
-		{name: "the other town's link", at: 65 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkTownObj, HTML: gkList(gkTownObj, 0, 2, 3, 4)}}, wantRule: "travel", wantKind: actBypass, wantPayload: encodeRequestBypassToServer("npc_" + itoa(gkTownObj) + "_teleport 2")},
+		{name: "list link", at: 64 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkTownObj, HTML: gkPage(gkTownObj)}}, wantRule: "travel", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(gkTownObj) + "_teleport_request")},
+		{name: "the other town's link", at: 65 * time.Second, events: []Event{NpcHtmlMessage{ObjectID: gkTownObj, HTML: gkList(gkTownObj, 0, 2, 3, 4)}}, wantRule: "travel", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer("npc_" + itoa(gkTownObj) + "_teleport 2")},
 		{name: "wait for the teleport", at: 66 * time.Second, wantRule: "travel"},
 	})
 	if err := b.handle([]Event{TeleportToLocation{ObjectID: selfID, Pos: Point{X: 95000}}}, at(67*time.Second)); err != nil {

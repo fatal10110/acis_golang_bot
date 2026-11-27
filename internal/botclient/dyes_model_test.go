@@ -105,7 +105,7 @@ func TestRowDyes(t *testing.T) {
 			rows, _ := b.dyeWants()
 			var dyes int32
 			for _, r := range rows {
-				dyes += r.count
+				dyes += r.Count
 			}
 			if want := int32(hennaDrawDyes * len(draw)); dyes != want {
 				t.Errorf("buys %+v for draws %v, want %d dyes", rows, draw, want)

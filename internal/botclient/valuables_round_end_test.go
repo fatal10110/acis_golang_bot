@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestValuablesRoundNoOpen: with no open due at the round's end (a retry
@@ -179,7 +181,7 @@ func TestValuablesRoundSessions(t *testing.T) {
 		}
 		runTrainerSteps(t, b, append(keeperSteps(0, "WithdrawP"), trainerStep{
 			name: "withdraw both", at: 5 * time.Second, events: []Event{privateList(storedStaff, storedSword)}, wantRule: "valuables", wantKind: actWarehouseWithdraw,
-			wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}, {object: 202, item: ledgerSword, count: 1}}),
+			wantPayload: botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{Object: 201, Item: ledgerStaff, Count: 1}, {Object: 202, Item: ledgerSword, Count: 1}}),
 		}))
 		now := at(6 * time.Second)
 		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}, {State: ItemAdded, Item: carriedOf(storedSword)}}}}, now); err != nil {

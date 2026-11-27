@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // WarehouseItem is one row of a warehouse list: a carried item a deposit
 // may move, or an item the warehouse holds.
@@ -77,4 +75,22 @@ func decodeWarehouseDepositList(r *wire.Reader) Event {
 func decodeWarehouseWithdrawList(r *wire.Reader) Event {
 	typ, adena, items := readWarehouseList(r)
 	return WarehouseWithdrawList{Type: typ, Adena: adena, Items: items}
+}
+
+// WarehouseRow is one row of a deposit or withdrawal request: an item
+// object, its template and how many.
+type WarehouseRow struct{ Object, Item, Count int32 }
+
+// EncodeWarehouseRequest is SendWareHouseDepositList (op 0x31) or
+// SendWareHouseWithDrawList (op 0x32): row count, then per row object id
+// and count, exactly 4+8*rows bytes after the opcode
+// (clientpackets/warehouse.go decodeExactItemRequestBatch).
+func EncodeWarehouseRequest(op byte, rows []WarehouseRow) []byte {
+	w := wire.NewPacketWriter(op)
+	w.WriteInt32(int32(len(rows)))
+	for _, r := range rows {
+		w.WriteInt32(r.Object)
+		w.WriteInt32(r.Count)
+	}
+	return w.Bytes()
 }

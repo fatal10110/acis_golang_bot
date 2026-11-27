@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // guideObj is the Newbie Guide of Talking Island (NPC 30598) once in sight.
@@ -33,7 +35,7 @@ func guideInSight(b *Brain) {
 	b.world.Target = guideObj
 }
 
-var supportMagic = encodeRequestBypassToServer(supportMagicBypass)
+var supportMagic = botwire.EncodeRequestBypassToServer(supportMagicBypass)
 
 // TestBrainNewbieBuffs walks a level 8 bot to the guide's spawn, talks to
 // the guide and asks for the buffs once per level of the window.

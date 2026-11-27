@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The support skills a human mystic learns by level 15 (skill ids of the
@@ -382,7 +383,7 @@ func TestLiveSupport(t *testing.T) {
 			t.Logf("cleanup: delete the orc %d: %v", mob, err)
 		}
 	})
-	if err := leader.Send(ctx, botclient.EncodeAction(mob, leader.Pos())); err != nil {
+	if err := leader.Send(ctx, botwire.EncodeAction(mob, leader.Pos())); err != nil {
 		t.Fatal(err)
 	}
 	quiet := time.Now().Add(bareSelection)
@@ -399,7 +400,7 @@ func TestLiveSupport(t *testing.T) {
 	if left := time.Until(might.at.Add(buffTime - supportRebuff)); left < time.Minute {
 		t.Fatalf("the renewal falls due %v after the leader's swing: too close to time the assist", left)
 	}
-	if err := leader.Send(ctx, botclient.EncodeAttackRequest(mob, leader.Pos())); err != nil {
+	if err := leader.Send(ctx, botwire.EncodeAttackRequest(mob, leader.Pos())); err != nil {
 		t.Fatal(err)
 	}
 	var attackAt time.Time
@@ -434,14 +435,14 @@ func TestLiveSupport(t *testing.T) {
 			if mob, err = gm.Spawn(ctx, vukuOrc); err != nil {
 				t.Fatal(err)
 			}
-			if err := leader.Send(ctx, botclient.EncodeAction(mob, leader.Pos())); err != nil {
+			if err := leader.Send(ctx, botwire.EncodeAction(mob, leader.Pos())); err != nil {
 				t.Fatal(err)
 			}
 		}
 		fightFrom := time.Now()
 		var tauntAt time.Time
 		taunt := func() {
-			if err := leader.Send(ctx, botclient.EncodeRequestMagicSkillUse(skillAggression, false)); err != nil {
+			if err := leader.Send(ctx, botwire.EncodeRequestMagicSkillUse(skillAggression, false)); err != nil {
 				t.Fatal(err)
 			}
 			tauntAt = time.Now()

@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // PartyRoom is one row of the rooms list.
 type PartyRoom struct {
@@ -61,4 +59,59 @@ func decodePartyMatchDetail(r *wire.Reader) Event {
 		RoomID: r.ReadInt32(), MaxMembers: r.ReadInt32(), MinLevel: r.ReadInt32(),
 		MaxLevel: r.ReadInt32(), Loot: r.ReadInt32(), Location: r.ReadInt32(), Title: r.ReadString(),
 	}
+}
+
+// EncodeRequestListPartyWaiting opens the rooms window: the server puts the
+// asker on the waiting list and answers PartyMatchList with the rooms at
+// location whose level range levelMode filters. auto is unused by the
+// server.
+func EncodeRequestListPartyWaiting(auto, location, levelMode int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestListPartyWaiting)
+	w.WriteInt32(auto)
+	w.WriteInt32(location)
+	w.WriteInt32(levelMode)
+	return w.Bytes()
+}
+
+// EncodeRequestManagePartyRoom opens a room (roomID 0) or revises the room
+// roomID the sender leads.
+func EncodeRequestManagePartyRoom(roomID, maxMembers, minLevel, maxLevel, loot int32, title string) []byte {
+	w := wire.NewPacketWriter(OpGameRequestManagePartyRoom)
+	w.WriteInt32(roomID)
+	w.WriteInt32(maxMembers)
+	w.WriteInt32(minLevel)
+	w.WriteInt32(maxLevel)
+	w.WriteInt32(loot)
+	w.WriteString(title)
+	return w.Bytes()
+}
+
+// EncodeRequestJoinPartyRoom enters the room roomID (0: the first room
+// location and levelMode list). A refusal is system message 1413; a sender
+// off the waiting list enters nothing and hears nothing.
+func EncodeRequestJoinPartyRoom(roomID, location, levelMode int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestJoinPartyRoom)
+	w.WriteInt32(roomID)
+	w.WriteInt32(location)
+	w.WriteInt32(levelMode)
+	return w.Bytes()
+}
+
+// EncodeRequestWithdrawPartyRoom leaves the room roomID: the room id, then
+// an int the server reads and drops (clientpackets decodePartyRoomRef). A
+// member of the leader's party stays.
+func EncodeRequestWithdrawPartyRoom(roomID int32) []byte {
+	w := wire.NewPacketWriter(OpGameClientExtended)
+	w.WriteUint16(OpGameRequestWithdrawPartyRoom)
+	w.WriteInt32(roomID)
+	w.WriteInt32(0)
+	return w.Bytes()
+}
+
+// EncodeRequestExitPartyMatchingWaitingRoom takes the sender off the
+// waiting list; it has no body and no answer.
+func EncodeRequestExitPartyMatchingWaitingRoom() []byte {
+	w := wire.NewPacketWriter(OpGameClientExtended)
+	w.WriteUint16(OpGameRequestExitPartyMatchingWaitingRoom)
+	return w.Bytes()
 }

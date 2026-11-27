@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -134,7 +135,7 @@ func TestRuleRecover(t *testing.T) {
 				}
 				return
 			}
-			if !ok || a.kind != actUseItem || !bytes.Equal(a.payload, encodeUseItem(tt.want)) {
+			if !ok || a.kind != actUseItem || !bytes.Equal(a.payload, botwire.EncodeUseItem(tt.want)) {
 				t.Fatalf("ruleRecover = %v, %v, want a UseItem of %#x", a, ok, tt.want)
 			}
 			if rule, _ := b.decide(now); rule != "recover" {
@@ -186,10 +187,10 @@ func TestRecoveryWants(t *testing.T) {
 		edit  func(b *Brain)
 		want  []buyRow
 	}{
-		{name: "one per level", dp: 3, level: 10, want: []buyRow{{item: recoveryNoGrade, count: 3}}},
-		{name: "less those carried", dp: 3, level: 10, items: []Item{{ObjectID: 0x30000031, TemplateID: recoveryNoGrade, Count: 2}}, want: []buyRow{{item: recoveryNoGrade, count: 1}}},
+		{name: "one per level", dp: 3, level: 10, want: []buyRow{{Item: recoveryNoGrade, Count: 3}}},
+		{name: "less those carried", dp: 3, level: 10, items: []Item{{ObjectID: 0x30000031, TemplateID: recoveryNoGrade, Count: 2}}, want: []buyRow{{Item: recoveryNoGrade, Count: 1}}},
 		{name: "enough carried", dp: 2, level: 10, items: []Item{{ObjectID: 0x30000031, TemplateID: recoveryNoGrade, Count: 2}}},
-		{name: "its level's band", dp: 1, level: 25, want: []buyRow{{item: recoveryD, count: 1}}},
+		{name: "its level's band", dp: 1, level: 25, want: []buyRow{{Item: recoveryD, Count: 1}}},
 		{name: "no penalty", dp: 0, level: 10},
 		{name: "not sold", dp: 1, level: 45},
 		{name: "the persona keeps its penalty", dp: 1, level: 10, edit: func(b *Brain) { b.persona.Recover.LiftDeathPenalty = false }},

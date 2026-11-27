@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 const (
@@ -19,14 +21,6 @@ var (
 	adenaOnGround = GroundItem{ObjectID: adenaDrop, TemplateID: 57, Pos: Point{X: 900, Y: 20, Z: -5}, Stackable: true, Count: 120}
 	junkOnGround  = GroundItem{ObjectID: junkDrop, TemplateID: junkTemplate, Pos: Point{X: 950}, Stackable: true, Count: 3}
 )
-
-func TestEncodeRequestDropItem(t *testing.T) {
-	got := encodeRequestDropItem(0x40000003, 25, Point{X: 1, Y: -2, Z: 300})
-	want := []byte{0x12, 3, 0, 0, 0x40, 25, 0, 0, 0, 1, 0, 0, 0, 0xfe, 0xff, 0xff, 0xff, 0x2c, 1, 0, 0}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("encodeRequestDropItem = % x, want % x", got, want)
-	}
-}
 
 func TestWorldGround(t *testing.T) {
 	tests := []struct {
@@ -111,17 +105,17 @@ func TestRuleLoot(t *testing.T) {
 		wantRule string
 		want     []byte
 	}{
-		{name: "own kill's drop is picked up", evs: kill(adenaOnGround), wantRule: "loot", want: encodeAction(adenaDrop, Point{})},
+		{name: "own kill's drop is picked up", evs: kill(adenaOnGround), wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{})},
 		{name: "a bot told to stay leaves the drop", setup: func(b *Brain) { b.orders.stay = true }, evs: kill(adenaOnGround), wantRule: "stay"},
 		{
 			name:     "drop of a monster that hit the bot",
 			evs:      []timed{{0, Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}}, {0, Die{ObjectID: npcID}}, {0, DropItem{DropperID: npcID, Item: adenaOnGround}}},
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{
 			name:     "drop of a monster the bot cast at",
 			evs:      []timed{{0, MagicSkillUse{CasterID: selfID, TargetID: npcID, SkillID: 1177}}, {0, Die{ObjectID: npcID}}, {0, DropItem{DropperID: npcID, Item: adenaOnGround}}},
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{name: "drop of a monster the bot never fought", evs: []timed{{0, Die{ObjectID: npcID}}, {0, DropItem{DropperID: npcID, Item: adenaOnGround}}}},
 		{
@@ -146,7 +140,7 @@ func TestRuleLoot(t *testing.T) {
 			persona:  func(p *Persona) { p.PvP.FightFlagged = true },
 			setup:    func(b *Brain) { b.world.Objects[pcID].PvPFlag = 1 },
 			evs:      []timed{{0, Attack{AttackerID: pcID, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}}, {0, Die{ObjectID: pcID}}, {0, DropItem{DropperID: pcID, Item: adenaOnGround}}},
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{
 			name: "drop of a monster fought too long ago",
@@ -160,7 +154,7 @@ func TestRuleLoot(t *testing.T) {
 		{name: "loot off", persona: func(p *Persona) { p.Loot.Pickup = false }, evs: kill(adenaOnGround)},
 		{name: "picked up by another", evs: append(kill(adenaOnGround), timed{0, GetItem{PickerID: pcID, ObjectID: adenaDrop}})},
 		{name: "out of sight", evs: append(kill(adenaOnGround), timed{0, DeleteObject{ObjectID: adenaDrop}})},
-		{name: "oldest drop first", evs: kill(junkOnGround, adenaOnGround), wantRule: "loot", want: encodeAction(junkDrop, Point{})},
+		{name: "oldest drop first", evs: kill(junkOnGround, adenaOnGround), wantRule: "loot", want: botwire.EncodeAction(junkDrop, Point{})},
 		{
 			name: "finders keepers party member leaves it",
 			setup: func(b *Brain) {
@@ -174,7 +168,7 @@ func TestRuleLoot(t *testing.T) {
 				b.world.Party = Party{LeaderID: selfID, Loot: partyLootFindersKeepers, Members: map[int32]*PartyMate{pcID: {}}}
 			},
 			evs:      kill(adenaOnGround),
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{
 			name: "random loot party member loots",
@@ -182,7 +176,7 @@ func TestRuleLoot(t *testing.T) {
 				b.world.Party = Party{LeaderID: pcID, Loot: 1, Members: map[int32]*PartyMate{pcID: {}}}
 			},
 			evs:      kill(adenaOnGround),
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{
 			name:    "finders keepers member loots when the persona says so",
@@ -191,13 +185,13 @@ func TestRuleLoot(t *testing.T) {
 				b.world.Party = Party{LeaderID: pcID, Loot: partyLootFindersKeepers, Members: map[int32]*PartyMate{pcID: {}}}
 			},
 			evs:      kill(adenaOnGround),
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{
 			name:     "combat stance after the kill yields to the loot",
 			setup:    func(b *Brain) { b.world.Self.InCombat = true },
 			evs:      kill(adenaOnGround),
-			wantRule: "loot", want: encodeAction(adenaDrop, Point{}),
+			wantRule: "loot", want: botwire.EncodeAction(adenaDrop, Point{}),
 		},
 		{name: "combat stance with nothing queued holds", setup: func(b *Brain) { b.world.Self.InCombat = true }, evs: kill(), wantRule: "attacked"},
 		{
@@ -214,12 +208,12 @@ func TestRuleLoot(t *testing.T) {
 			name:    "overweight drops junk first",
 			persona: dropper, setup: carry(junk, Item{ObjectID: 0x40000011, TemplateID: 57, Count: 9}),
 			evs:      kill(adenaOnGround),
-			wantRule: "loot", want: encodeRequestDropItem(junk.ObjectID, 7, Point{}),
+			wantRule: "loot", want: botwire.EncodeRequestDropItem(junk.ObjectID, 7, Point{}),
 		},
 		{
 			name:    "lowest junk stack first",
 			persona: dropper, setup: carry(Item{ObjectID: 0x40000012, TemplateID: junkTemplate, Count: 1}, junk),
-			wantRule: "loot", want: encodeRequestDropItem(junk.ObjectID, 7, Point{}),
+			wantRule: "loot", want: botwire.EncodeRequestDropItem(junk.ObjectID, 7, Point{}),
 		},
 		{name: "equipped junk is kept", persona: dropper, setup: carry(Item{ObjectID: junk.ObjectID, TemplateID: junkTemplate, Count: 1, Equipped: true})},
 		{name: "no junk carried", persona: dropper, setup: carry(Item{ObjectID: 0x40000011, TemplateID: 57, Count: 9})},
@@ -272,17 +266,17 @@ func TestLootPickupSequence(t *testing.T) {
 		rule string
 		want []byte
 	}{
-		{at: time.Second, rule: "loot", want: encodeAction(adenaDrop, Point{})},
+		{at: time.Second, rule: "loot", want: botwire.EncodeAction(adenaDrop, Point{})},
 		// The server walks the bot to the item.
 		{at: 1100 * time.Millisecond, evs: []Event{MoveToLocation{ObjectID: selfID, Dest: Point{X: 3000}}}, rule: "loot"},
 		{at: 2 * time.Second, rule: "loot"},
 		{at: 5 * time.Second, rule: "loot"},
 		// Stopped short: lootRetry is long gone, click again from there.
-		{at: 6 * time.Second, evs: []Event{StopMove{ObjectID: selfID, Pos: Point{X: 400}}}, rule: "loot", want: encodeAction(adenaDrop, Point{X: 400})},
+		{at: 6 * time.Second, evs: []Event{StopMove{ObjectID: selfID, Pos: Point{X: 400}}}, rule: "loot", want: botwire.EncodeAction(adenaDrop, Point{X: 400})},
 		{at: 8 * time.Second, rule: "loot"},
-		{at: 9 * time.Second, rule: "loot", want: encodeAction(adenaDrop, Point{X: 400})},
+		{at: 9 * time.Second, rule: "loot", want: botwire.EncodeAction(adenaDrop, Point{X: 400})},
 		// Timeout after the first click: on to the next item.
-		{at: 16 * time.Second, rule: "loot", want: encodeAction(junkDrop, Point{X: 400})},
+		{at: 16 * time.Second, rule: "loot", want: botwire.EncodeAction(junkDrop, Point{X: 400})},
 		{at: 17 * time.Second, evs: []Event{GetItem{PickerID: pcID, ObjectID: junkDrop}}, rule: ""},
 	}
 	for _, s := range steps {
@@ -324,11 +318,11 @@ func TestLootDropSequence(t *testing.T) {
 		paced bool
 		want  []byte
 	}{
-		{at: time.Second, rule: "loot", want: encodeRequestDropItem(first.ObjectID, 7, Point{})},
+		{at: time.Second, rule: "loot", want: botwire.EncodeRequestDropItem(first.ObjectID, 7, Point{})},
 		{at: 2 * time.Second, rule: "loot", paced: true},
-		{at: 3 * time.Second, rule: "loot", want: encodeRequestDropItem(second.ObjectID, 2, Point{})},
+		{at: 3 * time.Second, rule: "loot", want: botwire.EncodeRequestDropItem(second.ObjectID, 2, Point{})},
 		{at: 4 * time.Second, rule: ""},
-		{at: time.Second + dropRetry, rule: "loot", want: encodeRequestDropItem(first.ObjectID, 7, Point{})},
+		{at: time.Second + dropRetry, rule: "loot", want: botwire.EncodeRequestDropItem(first.ObjectID, 7, Point{})},
 	}
 	for _, s := range steps {
 		now := at(s.at)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The earning scenario's character (#530): an orc mystic at level 5, as the
@@ -328,7 +329,7 @@ func seedEarner(t *testing.T, ctx context.Context, tg *Target, gm *GMClient, acc
 		if it.TemplateID == scroll {
 			what = fmt.Sprintf("Scrolls: Recovery %d", scroll)
 		}
-		if err := c.Send(ctx, botclient.EncodeRequestDestroyItem(oid, it.Count)); err != nil {
+		if err := c.Send(ctx, botwire.EncodeRequestDestroyItem(oid, it.Count)); err != nil {
 			t.Fatal(err)
 		}
 		refused := false
@@ -372,7 +373,7 @@ func dieToMonster(t *testing.T, ctx context.Context, gm *GMClient, c *Client, in
 			t.Fatalf("seed %s: dead %v, death penalty raised to %d after %d attack clicks on lizardman %d: %v", name, dead, raised, earnDieTries, mob, last)
 		}
 		if seen && !dead {
-			if err := c.Send(ctx, botclient.EncodeAttackRequest(mob, c.Pos())); err != nil {
+			if err := c.Send(ctx, botwire.EncodeAttackRequest(mob, c.Pos())); err != nil {
 				t.Fatal(err)
 			}
 		}

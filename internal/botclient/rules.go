@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Persona is the rule set a brain plays: its role, the thresholds of the
@@ -451,25 +453,25 @@ func (a Action) gate() gate {
 }
 
 func moveAction(to, from Point) Action {
-	return Action{kind: actMove, payload: encodeMoveBackwardToLocation(to, from)}
+	return Action{kind: actMove, payload: botwire.EncodeMoveBackwardToLocation(to, from)}
 }
 
 // attackAction clicks the selected object id, which attacks it.
 func attackAction(id int32, from Point) Action {
-	return Action{kind: actAttack, payload: encodeAction(id, from), object: id}
+	return Action{kind: actAttack, payload: botwire.EncodeAction(id, from), object: id}
 }
 
 func sitStandAction() Action {
-	return Action{kind: actSitStand, payload: encodeRequestActionUse(actionSitStand)}
+	return Action{kind: actSitStand, payload: botwire.EncodeRequestActionUse(actionSitStand)}
 }
 
 func emoteAction(id int32) Action {
-	return Action{kind: actEmote, payload: encodeRequestSocialAction(id)}
+	return Action{kind: actEmote, payload: botwire.EncodeRequestSocialAction(id)}
 }
 
 // sayAction says text on the all channel.
 func sayAction(text string) Action {
-	return Action{kind: actSay, payload: encodeSay2(text, chatAll)}
+	return Action{kind: actSay, payload: botwire.EncodeSay2(text, chatAll)}
 }
 
 // restartToVillage is the death policy that restarts in the nearest town
@@ -478,7 +480,7 @@ func restartToVillage(w *World, _ time.Time) Action {
 	if !w.Prompts.Restart.Points.Village {
 		return Action{}
 	}
-	return Action{kind: actRestart, payload: encodeRequestRestartPoint(restartVillage)}
+	return Action{kind: actRestart, payload: botwire.EncodeRequestRestartPoint(restartVillage)}
 }
 
 // rule is one row of the decision table. run reports whether the rule

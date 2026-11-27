@@ -443,7 +443,7 @@ func (b *Brain) dyeWants() (rows []buyRow, fee int64) {
 	}
 	for _, id := range order {
 		if n := need[id] - b.carried(id); n > 0 {
-			rows = append(rows, buyRow{item: id, count: n})
+			rows = append(rows, buyRow{Item: id, Count: n})
 		}
 	}
 	return rows, fee

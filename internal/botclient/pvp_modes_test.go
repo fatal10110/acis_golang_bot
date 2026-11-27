@@ -3,6 +3,8 @@ package botclient
 import (
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestPvPDuelDecline checks the Duels mode (docs/pvp/modes.md): without it
@@ -28,12 +30,12 @@ func TestPvPDuelDecline(t *testing.T) {
 			}
 			rule, a := b.decide(due)
 			if tc.duels {
-				if a.kind != actDuelAnswer || string(a.payload) != string(encodeRequestDuelAnswerStart(false, true)) {
+				if a.kind != actDuelAnswer || string(a.payload) != string(botwire.EncodeRequestDuelAnswerStart(false, true)) {
 					t.Fatalf("kind %v payload % x, want the acceptance (TestPvPDuelAccept)", a.kind, a.payload)
 				}
 				return
 			}
-			if rule != "duel" || a.kind != actDuelAnswer || string(a.payload) != string(encodeRequestDuelAnswerStart(tc.party, false)) {
+			if rule != "duel" || a.kind != actDuelAnswer || string(a.payload) != string(botwire.EncodeRequestDuelAnswerStart(tc.party, false)) {
 				t.Fatalf("rule %q kind %v payload % x, want the decline", rule, a.kind, a.payload)
 			}
 			if _, err := b.send(a, due); err != nil {

@@ -10,33 +10,19 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
+// TestHarnessEncoders pins the adapters a script calls in place of a botwire
+// encoder: each fixes an argument a script does not choose.
 func TestHarnessEncoders(t *testing.T) {
 	tests := []struct {
 		name string
 		got  []byte
 		want []byte
 	}{
-		{"SendBypassBuildCmd", EncodeSendBypassBuildCmd("kick e2e"), []byte{0x5b, 'k', 0, 'i', 0, 'c', 0, 'k', 0, ' ', 0, 'e', 0, '2', 0, 'e', 0, 0, 0}},
-		{"RequestRestartPoint village", EncodeRequestRestartPoint(RestartVillage), []byte{0x6d, 0, 0, 0, 0}},
-		{"Appearing", EncodeAppearing(), []byte{0x30}},
-		{"Action", EncodeAction(0x01020304, Point{X: 1, Y: -1, Z: 2}), []byte{0x04, 4, 3, 2, 1, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0, 0}},
-		{"MoveBackwardToLocation", EncodeMoveBackwardToLocation(Point{X: 1, Y: -1, Z: 2}, Point{X: 3, Y: 4, Z: 5}), []byte{0x01, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 1, 0, 0, 0}},
-		{"RequestMagicSkillUse", EncodeRequestMagicSkillUse(28, false), []byte{0x2f, 28, 0, 0, 0, 0, 0, 0, 0, 0}},
-		{"RequestMagicSkillUse ctrl", EncodeRequestMagicSkillUse(0x0102, true), []byte{0x2f, 2, 1, 0, 0, 1, 0, 0, 0, 0}},
 		{"WalkRunToggle", EncodeWalkRunToggle(), []byte{0x45, 1, 0, 0, 0, 0, 0, 0, 0, 0}},
-		{"RequestJoinParty", EncodeRequestJoinParty("ab", 1), []byte{0x29, 'a', 0, 'b', 0, 0, 0, 1, 0, 0, 0}},
-		{"Say2Tell", EncodeSay2Tell("ab", "hi"), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 2, 0, 0, 0, 'a', 0, 'b', 0, 0, 0}},
-		// The server's own vector (clientpackets_item_trade_test.go).
-		{"RequestDestroyItem", EncodeRequestDestroyItem(501, 2), []byte{0x59, 0xf5, 0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00}},
-		{"UseItem", EncodeUseItem(0x01020304), []byte{0x14, 4, 3, 2, 1, 0, 0, 0, 0}},
-		{"RequestDropItem", EncodeRequestDropItem(0x01020304, 2, Point{X: 1, Y: -1, Z: 2}), []byte{0x12, 4, 3, 2, 1, 2, 0, 0, 0, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0}},
-		{"Say2 shout", EncodeSay2("hi", ChatShout), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 1, 0, 0, 0}},
-		{"Say2 trade", EncodeSay2("hi", ChatTrade), []byte{0x38, 'h', 0, 'i', 0, 0, 0, 8, 0, 0, 0}},
-		{"TradeRequest", EncodeTradeRequest(0x01020304), []byte{0x15, 4, 3, 2, 1}},
-		{"AddTradeItem", EncodeAddTradeItem(7, 300), []byte{0x16, 0, 0, 0, 0, 7, 0, 0, 0, 0x2c, 1, 0, 0}},
-		{"TradeDone confirm", EncodeTradeDone(true), []byte{0x17, 1, 0, 0, 0}},
-		{"TradeDone cancel", EncodeTradeDone(false), []byte{0x17, 0, 0, 0, 0}},
 		{"RequestPrivateStoreBuy", EncodeRequestPrivateStoreBuy(9, []StoreBuy{{ObjectID: 7, Count: 2, Price: 300}, {ObjectID: 8, Count: 1, Price: 5}}), []byte{0x79, 9, 0, 0, 0, 2, 0, 0, 0, 7, 0, 0, 0, 2, 0, 0, 0, 0x2c, 1, 0, 0, 8, 0, 0, 0, 1, 0, 0, 0, 5, 0, 0, 0}},
+		{"RequestJoinPledge main clan", EncodeRequestJoinPledge(0x20000002), []byte{0x24, 2, 0, 0, 0x20, 0, 0, 0, 0}},
+		{"SetPrivateStoreListSell not packaged", EncodeSetPrivateStoreListSell([]StoreBuy{{ObjectID: 7, Count: 2, Price: 300}}), []byte{0x74, 0, 0, 0, 0, 1, 0, 0, 0, 7, 0, 0, 0, 2, 0, 0, 0, 0x2c, 1, 0, 0}},
+		{"RequestListPartyWaiting auto", EncodeRequestListPartyWaiting(RoomsAnywhere, RoomsAnyLevel), []byte{0x6f, 1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 1, 0, 0, 0}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

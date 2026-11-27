@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -28,17 +29,6 @@ func czMap() *TravelMap {
 		},
 		prices:  map[int32]int32{czWeapon: 644000, czBoots: 30000, czCWeapon: 500000, crystalD: 650, crystalC: 3000},
 		weights: map[int32]int32{czWeapon: 1500, czBoots: 1000, czCWeapon: 1500},
-	}
-}
-
-func TestCrystallizeEncoder(t *testing.T) {
-	got := encodeRequestCrystallizeItem(0x10000400, 1)
-	if want := []byte{0x72, 0x00, 0x04, 0x00, 0x10, 1, 0, 0, 0}; !bytes.Equal(got, want) {
-		t.Fatalf("payload % x, want % x", got, want)
-	}
-	a := crystallizeAction(500)
-	if a.kind != actCrystallize || a.object != 500 || a.gate() != gateCraft {
-		t.Fatalf("crystallizeAction = %+v, want a crystallize of 500 through the craft gate", a)
 	}
 }
 
@@ -186,7 +176,7 @@ func TestBrainCrystallizePlan(t *testing.T) {
 func TestBrainCrystallize(t *testing.T) {
 	b := crystallizingBrain(t)
 	rule, a := b.decide(t0)
-	if rule != "craft" || a.kind != actCrystallize || !bytes.Equal(a.payload, encodeRequestCrystallizeItem(gotWeapon.ObjectID, 1)) {
+	if rule != "craft" || a.kind != actCrystallize || !bytes.Equal(a.payload, botwire.EncodeRequestCrystallizeItem(gotWeapon.ObjectID, 1)) {
 		t.Fatalf("decide = %q %d % x, want the first withdrawn weapon crystallized", rule, a.kind, a.payload)
 	}
 	if ok, err := b.send(a, t0); err != nil || !ok {
@@ -295,5 +285,12 @@ func TestBrainCrafterDepositsOrderedShots(t *testing.T) {
 	}
 	if c.delivering[id] != 156 {
 		t.Fatalf("delivering %v, want the order's 156", c.delivering)
+	}
+}
+
+func TestCrystallizeAction(t *testing.T) {
+	a := crystallizeAction(500)
+	if a.kind != actCrystallize || a.object != 500 || a.gate() != gateCraft {
+		t.Fatalf("crystallizeAction = %+v, want a crystallize of 500 through the craft gate", a)
 	}
 }

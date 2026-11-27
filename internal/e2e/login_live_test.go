@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestLiveLoginEnterLogout logs a new account in, creates its character on
@@ -97,10 +98,10 @@ func TestLiveLogoutRefusedInCombat(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("bot sees the monster: %v", err)
 	}
-	if err := bot.Send(ctx, botclient.EncodeAction(mob, bot.Pos())); err != nil {
+	if err := bot.Send(ctx, botwire.EncodeAction(mob, bot.Pos())); err != nil {
 		t.Fatal(err)
 	}
-	if err := bot.Send(ctx, botclient.EncodeAttackRequest(mob, bot.Pos())); err != nil {
+	if err := bot.Send(ctx, botwire.EncodeAttackRequest(mob, bot.Pos())); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := bot.Await(ctx, 30*time.Second, func(ev botclient.Event) bool {
