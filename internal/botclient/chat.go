@@ -2,6 +2,8 @@ package botclient
 
 import (
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // ChatPolicy is how the bot answers whispers (rule "chat", docs/plan.md
@@ -138,7 +140,7 @@ type chatReply struct {
 // chatReplyAction whispers text back to the player named target. It
 // passes the chat gate like every whisper.
 func chatReplyAction(target, text string) Action {
-	return Action{kind: actChatReply, payload: encodeSay2Tell(target, text)}
+	return Action{kind: actChatReply, payload: botwire.EncodeSay2Tell(target, text)}
 }
 
 // chatHeard schedules a reply at now to a whisper that is no command (heard

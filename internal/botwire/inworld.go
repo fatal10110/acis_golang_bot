@@ -4,9 +4,7 @@ package botwire
 // server writer it names field by field; fields the model does not keep are
 // skipped by width, so DecodeEvent still sees the whole frame consumed.
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // npcTemplateOffset is what NPCInfo adds to an NPC's template id.
 const npcTemplateOffset = 1000000
@@ -284,4 +282,12 @@ func decodeCreatureSay(r *wire.Reader) Event {
 // (serverpackets/stance_social.go).
 func decodeChangeWaitType(r *wire.Reader) Event {
 	return ChangeWaitType{ObjectID: r.ReadInt32(), Type: WaitType(r.ReadInt32()), Pos: readPoint(r)}
+}
+
+func EncodeEnterWorld() []byte {
+	return wire.NewPacketWriter(OpGameEnterWorld).Bytes()
+}
+
+func EncodeLogout() []byte {
+	return wire.NewPacketWriter(OpGameLogout).Bytes()
 }

@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // GroundItem is an item lying on the ground.
 type GroundItem struct {
@@ -61,4 +59,15 @@ func decodeDropItem(r *wire.Reader) Event {
 // (serverpackets/grounditems.go FrameGetItem).
 func decodeGetItem(r *wire.Reader) Event {
 	return GetItem{PickerID: r.ReadInt32(), ObjectID: r.ReadInt32(), Pos: readPoint(r)}
+}
+
+// EncodeRequestDropItem drops count of carried item objectID at p, which
+// the server accepts within 150 of the character (the server's
+// clientpackets/item_ops.go, inventory.go dropInRange).
+func EncodeRequestDropItem(objectID, count int32, p Point) []byte {
+	w := wire.NewPacketWriter(OpGameRequestDropItem)
+	w.WriteInt32(objectID)
+	w.WriteInt32(count)
+	writePoint(w, p)
+	return w.Bytes()
 }

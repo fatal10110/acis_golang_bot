@@ -79,11 +79,3 @@ func encodeRequestGameStart(slot int32) []byte {
 	}
 	return w.Bytes()
 }
-
-func encodeEnterWorld() []byte {
-	return wire.NewPacketWriter(opGameEnterWorld).Bytes()
-}
-
-func encodeLogout() []byte {
-	return wire.NewPacketWriter(opGameLogout).Bytes()
-}

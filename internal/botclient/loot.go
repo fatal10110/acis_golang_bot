@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
 )
 
@@ -115,17 +115,6 @@ func defaultLootPolicy() LootPolicy {
 	}
 }
 
-// encodeRequestDropItem drops count of carried item objectID at p, which
-// the server accepts within 150 of the character (the server's
-// clientpackets/item_ops.go, inventory.go dropInRange).
-func encodeRequestDropItem(objectID, count int32, p Point) []byte {
-	w := wire.NewPacketWriter(opGameRequestDropItem)
-	w.WriteInt32(objectID)
-	w.WriteInt32(count)
-	writePoint(w, p)
-	return w.Bytes()
-}
-
 // applyGround keeps the items on the ground in sight. A picked up item
 // leaves with GetItem, and with the DeleteObject after it.
 func (w *World) applyGround(ev Event) {
@@ -145,12 +134,12 @@ func (w *World) applyGround(ev Event) {
 // pickupAction clicks ground item id from origin, which picks it up, the
 // server walking the character there first when it is out of reach.
 func pickupAction(id int32, from Point) Action {
-	return Action{kind: actPickup, payload: encodeAction(id, from), object: id}
+	return Action{kind: actPickup, payload: botwire.EncodeAction(id, from), object: id}
 }
 
 // dropAction drops the whole stack it at p.
 func dropAction(it Item, p Point) Action {
-	return Action{kind: actDrop, payload: encodeRequestDropItem(it.ObjectID, it.Count, p), object: it.ObjectID}
+	return Action{kind: actDrop, payload: botwire.EncodeRequestDropItem(it.ObjectID, it.Count, p), object: it.ObjectID}
 }
 
 // lootQueue is the bot's loot: the ground items it means to pick up and

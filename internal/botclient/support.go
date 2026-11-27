@@ -4,6 +4,8 @@ import (
 	"maps"
 	"slices"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The support persona (docs/plan.md, personas): heal the party, keep its
@@ -392,7 +394,7 @@ func (b *Brain) castOn(id, skill int32, selectFirst bool, now time.Time) Action 
 	case selectFirst && b.world.Target != id:
 		return selectAction(id, s.Position(now))
 	}
-	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, false), object: id, skill: skill}
+	return Action{kind: actCast, payload: botwire.EncodeRequestMagicSkillUse(skill, false), object: id, skill: skill}
 }
 
 // buffSent records a buff cast going out at now, for buffRetry: a kit

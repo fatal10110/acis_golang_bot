@@ -5,21 +5,12 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
-
-// encodeRequestEnchantItem enchants the carried or worn item objectID with
-// the scroll the last UseItem selected (clientpackets/item_ops.go
-// DecodeRequestEnchantItem: one int32; the server ignores a 0).
-func encodeRequestEnchantItem(objectID int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestEnchantItem)
-	w.WriteInt32(objectID)
-	return w.Bytes()
-}
 
 // enchantAction enchants it with the selected scroll.
 func enchantAction(it Item) Action {
-	return Action{kind: actEnchant, payload: encodeRequestEnchantItem(it.ObjectID), item: it.TemplateID}
+	return Action{kind: actEnchant, payload: botwire.EncodeRequestEnchantItem(it.ObjectID), item: it.TemplateID}
 }
 
 // enchantScroll is an enchant scroll the server takes: a weapon or an armor

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // tradeRequestTimeout is how long the server keeps a trade request
@@ -31,50 +31,10 @@ const tradeForget = 10 * time.Second
 // (item.SubCategoryQuest on the server).
 const subCategoryQuest = 3
 
-// encodeTradeRequest asks the player objectID to trade with the bot.
-func encodeTradeRequest(objectID int32) []byte {
-	w := wire.NewPacketWriter(opGameTradeRequest)
-	w.WriteInt32(objectID)
-	return w.Bytes()
-}
-
-// encodeAnswerTradeRequest answers the pending trade request: 1 accepts, 0
-// declines.
-func encodeAnswerTradeRequest(accept bool) []byte {
-	w := wire.NewPacketWriter(opGameAnswerTradeRequest)
-	w.WriteInt32(boolInt32(accept))
-	return w.Bytes()
-}
-
-// encodeAddTradeItem adds count of the item objectID to the bot's offer.
-// The leading trade id is read and ignored by the server
-// (handleAddTradeItem); the bot sends 0.
-func encodeAddTradeItem(objectID, count int32) []byte {
-	w := wire.NewPacketWriter(opGameAddTradeItem)
-	w.WriteInt32(0)
-	w.WriteInt32(objectID)
-	w.WriteInt32(count)
-	return w.Bytes()
-}
-
-// encodeTradeDone confirms the trade (1) or cancels it (0).
-func encodeTradeDone(confirm bool) []byte {
-	w := wire.NewPacketWriter(opGameTradeDone)
-	w.WriteInt32(boolInt32(confirm))
-	return w.Bytes()
-}
-
-func boolInt32(b bool) int32 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // answerTradeAction answers the open trade request; an accepted one names
 // partner, for the per-partner rate limit.
 func answerTradeAction(accept bool, partner int32) Action {
-	a := Action{kind: actAnswerTrade, payload: encodeAnswerTradeRequest(accept)}
+	a := Action{kind: actAnswerTrade, payload: botwire.EncodeAnswerTradeRequest(accept)}
 	if accept {
 		a.object = partner
 	}
@@ -82,15 +42,15 @@ func answerTradeAction(accept bool, partner int32) Action {
 }
 
 func addTradeItemAction(it TradeItem) Action {
-	return Action{kind: actTradeAdd, payload: encodeAddTradeItem(it.ObjectID, it.Count)}
+	return Action{kind: actTradeAdd, payload: botwire.EncodeAddTradeItem(it.ObjectID, it.Count)}
 }
 
 func tradeConfirmAction() Action {
-	return Action{kind: actTradeConfirm, payload: encodeTradeDone(true)}
+	return Action{kind: actTradeConfirm, payload: botwire.EncodeTradeDone(true)}
 }
 
 func tradeCancelAction() Action {
-	return Action{kind: actTradeCancel, payload: encodeTradeDone(false)}
+	return Action{kind: actTradeCancel, payload: botwire.EncodeTradeDone(false)}
 }
 
 // TradeInvite is a trade request waiting for the bot's answer.

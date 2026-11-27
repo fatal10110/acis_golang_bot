@@ -1,8 +1,6 @@
 package botclient
 
-import (
-	"time"
-)
+import "time"
 
 // System messages of the bot's own death penalty level, sent to it alone
 // with every change (applyLiveDeathPenalty, network/live_player_events.go).
@@ -130,7 +128,7 @@ func (b *Brain) recoveryWants() []buyRow {
 		return nil
 	}
 	if n := b.world.Self.DeathPenalty - b.carried(id); n > 0 {
-		return []buyRow{{item: id, count: n}}
+		return []buyRow{{Item: id, Count: n}}
 	}
 	return nil
 }

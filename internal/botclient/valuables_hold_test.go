@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -35,7 +36,7 @@ func wantHeld(t *testing.T, name string, b *Brain, now time.Time) {
 func wantOpening(t *testing.T, name string, b *Brain, now time.Time) {
 	t.Helper()
 	rule, a := b.decide(now)
-	wantTurn(t, name, rule, a, "store", actStoreManage, encodeRequestPrivateStoreManageSell())
+	wantTurn(t, name, rule, a, "store", actStoreManage, botwire.EncodeRequestPrivateStoreManageSell())
 }
 
 // TestValuablesStoreHold: a pending round keeps the store from opening

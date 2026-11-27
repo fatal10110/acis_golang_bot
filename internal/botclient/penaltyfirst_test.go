@@ -115,11 +115,11 @@ func TestRecoveryFirstInBudget(t *testing.T) {
 	b.cfg.Travel.cheapest[recoveryNoGrade] = recoveryPrice
 	b.cfg.Travel.spawnedSold[recoveryNoGrade] = true
 	b.world.Apply(EtcStatusUpdate{DeathPenalty: 1}, t0)
-	if first := b.wants(false)[0]; first.buyRow != (buyRow{item: recoveryNoGrade, count: 1}) || first.tier != tierSupplies {
+	if first := b.wants(false)[0]; first.buyRow != (buyRow{Item: recoveryNoGrade, Count: 1}) || first.tier != tierSupplies {
 		t.Fatalf("first want = %v, want one Scroll: Recovery in the supplies tier", first)
 	}
 	window := []ShopItem{{TemplateID: scrollOfEscape, Price: soePrice}, {TemplateID: recoveryNoGrade, Price: recoveryPrice}}
-	want := []buyRow{{recoveryNoGrade, 1}, {scrollOfEscape, 1}}
+	want := []buyRow{{Item: recoveryNoGrade, Count: 1}, {Item: scrollOfEscape, Count: 1}}
 	if got := b.buyRows(BuyList{Money: adena, ListID: 1, Items: window}); !slices.Equal(got, want) {
 		t.Fatalf("buyRows = %v, want %v", got, want)
 	}

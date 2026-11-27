@@ -148,7 +148,7 @@ func TestStashDeposit(t *testing.T) {
 	steps = append(steps,
 		trainerStep{
 			name: "private list", at: 5 * time.Second, events: []Event{WarehouseDepositList{Type: privateWarehouseType, Items: deposit}},
-			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{102, animalSkin, 10}),
+			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{Object: 102, Item: animalSkin, Count: 10}),
 		},
 		trainerStep{name: "deposited", at: 6 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedSkins}}}}},
 	)

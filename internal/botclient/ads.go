@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf16"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The ad board's limits at the design's defaults (docs/valuables/preset.md
@@ -229,5 +231,5 @@ func (b *Brain) adTurn(now time.Time) (Action, bool) {
 	r.ads++
 	r.adAt = now
 	b.metrics.ValuablesAd()
-	return Action{kind: actSay, payload: encodeSay2(text, chatTrade)}, true
+	return Action{kind: actSay, payload: botwire.EncodeSay2(text, chatTrade)}, true
 }

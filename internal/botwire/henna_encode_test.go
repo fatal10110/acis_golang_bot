@@ -1,4 +1,4 @@
-package botclient
+package botwire
 
 import (
 	"bytes"
@@ -12,9 +12,9 @@ func TestHennaEncoders(t *testing.T) {
 		name      string
 		got, want []byte
 	}{
-		{"RequestHennaEquip", encodeRequestHennaEquip(6), []byte{0xbc, 6, 0, 0, 0}},
-		{"RequestHennaEquip high id", encodeRequestHennaEquip(0x0125), []byte{0xbc, 0x25, 1, 0, 0}},
-		{"RequestHennaUnequip", encodeRequestHennaUnequip(37), []byte{0xbf, 37, 0, 0, 0}},
+		{"RequestHennaEquip", EncodeRequestHennaEquip(6), []byte{0xbc, 6, 0, 0, 0}},
+		{"RequestHennaEquip high id", EncodeRequestHennaEquip(0x0125), []byte{0xbc, 0x25, 1, 0, 0}},
+		{"RequestHennaUnequip", EncodeRequestHennaUnequip(37), []byte{0xbf, 37, 0, 0, 0}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

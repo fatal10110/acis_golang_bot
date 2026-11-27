@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestPartyJoinReleasesSpot checks the spot release of joining
@@ -223,7 +225,7 @@ func TestPartyMemberLeaderLost(t *testing.T) {
 			t.Fatalf("in LeaderWait: rule %q kind %d, want leader holding", name, a.kind)
 		}
 		name, a := deathStep(t, b, gone.Add(wait))
-		if name != "leader" || !bytes.Equal(a.payload, encodeSay2Tell("Leader", DefaultPersona().Recover.Whisper)) {
+		if name != "leader" || !bytes.Equal(a.payload, botwire.EncodeSay2Tell("Leader", DefaultPersona().Recover.Whisper)) {
 			t.Fatalf("at LeaderWait: rule %q % x, want the whisper to Leader", name, a.payload)
 		}
 	})

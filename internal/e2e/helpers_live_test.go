@@ -10,6 +10,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Helpers of the live scenarios. Time is real here: every scenario bounds
@@ -102,7 +103,7 @@ func enterGM(t *testing.T, ctx context.Context, tg *Target) *GMClient {
 // itself by command.
 func revive(t *testing.T, ctx context.Context, c *Client) {
 	t.Helper()
-	if err := c.Send(ctx, botclient.EncodeRequestRestartPoint(botclient.RestartVillage)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeRequestRestartPoint(botwire.RestartVillage)); err != nil {
 		t.Fatal(err)
 	}
 	revived, landed := false, false

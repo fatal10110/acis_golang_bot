@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -508,7 +509,7 @@ func TestPvPDuelFight(t *testing.T) {
 		b.world.Apply(SkillList{Skills: []KnownSkill{{ID: skillWindStrike, Level: 1}}}, t0)
 		withKit(b, ClassKit{Rotation: []Step{{Skill: skillWindStrike}}})
 	}
-	plain := encodeRequestMagicSkillUse(skillWindStrike, false)
+	plain := botwire.EncodeRequestMagicSkillUse(skillWindStrike, false)
 	tests := []struct {
 		name  string
 		setup func(t *testing.T, b *Brain)

@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // HennaRow is one symbol of the draw window: its id, its dye, the dyes a
 // draw takes and the draw price.
@@ -70,4 +68,20 @@ func decodeHennaInfo(r *wire.Reader) Event {
 		e.Worn = append(e.Worn, WornSymbol{SymbolID: r.ReadInt32(), Active: r.ReadInt32()})
 	}
 	return e
+}
+
+// EncodeRequestHennaEquip draws symbolID (clientpackets/henna.go: one
+// int32).
+func EncodeRequestHennaEquip(symbolID int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestHennaEquip)
+	w.WriteInt32(symbolID)
+	return w.Bytes()
+}
+
+// EncodeRequestHennaUnequip removes the worn symbolID
+// (clientpackets/henna.go: one int32).
+func EncodeRequestHennaUnequip(symbolID int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestHennaUnequip)
+	w.WriteInt32(symbolID)
+	return w.Bytes()
 }

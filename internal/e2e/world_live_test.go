@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestLiveRecallReappear recalls a bot to the GM: the bot is teleported
@@ -53,7 +54,7 @@ func TestLiveKilledBotRevivesInVillage(t *testing.T) {
 	if !ev.(botclient.Die).Restart.Village {
 		t.Fatalf("Die %+v offers no village", ev)
 	}
-	if err := bot.Send(ctx, botclient.EncodeRequestRestartPoint(botclient.RestartVillage)); err != nil {
+	if err := bot.Send(ctx, botwire.EncodeRequestRestartPoint(botwire.RestartVillage)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := bot.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestBrainCastRefused: the server refuses a heal it cannot pay for with
@@ -41,7 +43,7 @@ func TestBrainCastRefused(t *testing.T) {
 			}
 			hit := Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}
 			step(time.Second, hit)
-			if got := out.frames[len(out.frames)-1]; !bytes.Equal(got, encodeRequestMagicSkillUse(skillHeal, false)) {
+			if got := out.frames[len(out.frames)-1]; !bytes.Equal(got, botwire.EncodeRequestMagicSkillUse(skillHeal, false)) {
 				t.Fatalf("packet % x, want Heal", got)
 			}
 			step(1200*time.Millisecond, hit, SystemMessage{ID: tc.msg})

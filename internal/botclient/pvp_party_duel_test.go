@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -117,7 +118,7 @@ func TestPvPPartyDuelAnswer(t *testing.T) {
 				}
 				rule, a = b.decide(due)
 			}
-			want := encodeRequestDuelAnswerStart(true, tc.yes)
+			want := botwire.EncodeRequestDuelAnswerStart(true, tc.yes)
 			if rule != "duel" || a.kind != actDuelAnswer || !bytes.Equal(a.payload, want) {
 				t.Fatalf("decision rule %q kind %v payload % x, want % x", rule, a.kind, a.payload, want)
 			}
@@ -126,7 +127,7 @@ func TestPvPPartyDuelAnswer(t *testing.T) {
 	t.Run("a bot-marked challenger", func(t *testing.T) {
 		b := duelLeader(t, nil)
 		b.handleOne(t, ExDuelAskStart{Requester: markedName, Party: true}, at(time.Second))
-		if _, a := b.decide(at(time.Second)); a.kind != actDuelAnswer || !bytes.Equal(a.payload, encodeRequestDuelAnswerStart(true, false)) {
+		if _, a := b.decide(at(time.Second)); a.kind != actDuelAnswer || !bytes.Equal(a.payload, botwire.EncodeRequestDuelAnswerStart(true, false)) {
 			t.Fatalf("payload % x, want the decline at once (D38)", a.payload)
 		}
 	})
@@ -168,7 +169,7 @@ func TestPvPPartyDuelChallenge(t *testing.T) {
 	t.Run("the leader challenges a party duel", func(t *testing.T) {
 		b := duelLeader(t, nil)
 		rule, a := whispered(t, b)
-		if rule != "challenge" || !bytes.Equal(a.payload, encodeRequestDuelStart(foeName, true)) {
+		if rule != "challenge" || !bytes.Equal(a.payload, botwire.EncodeRequestDuelStart(foeName, true)) {
 			t.Fatalf("decision rule %q payload % x, want the party duel challenge", rule, a.payload)
 		}
 		if d := b.pvp.duel; d.Phase != DuelAsked || !d.Party || !d.Challenged {
@@ -203,14 +204,14 @@ func TestPvPPartyDuelChallenge(t *testing.T) {
 		b := duelLeader(t, nil)
 		b.handleOne(t, whisper(ptyKN, "kn", "duel"), at(time.Second))
 		now := b.pvp.find.whisper.due
-		if _, a := b.decide(now); !bytes.Equal(a.payload, encodeRequestDuelStart("kn", false)) {
+		if _, a := b.decide(now); !bytes.Equal(a.payload, botwire.EncodeRequestDuelStart("kn", false)) {
 			t.Fatalf("payload % x, want the one-on-one challenge of a party mate", a.payload)
 		}
 	})
 	t.Run("a member challenges one-on-one", func(t *testing.T) {
 		b := duelMember(t)
 		b.persona.PvP.Duels = true
-		if _, a := whispered(t, b); !bytes.Equal(a.payload, encodeRequestDuelStart(foeName, false)) {
+		if _, a := whispered(t, b); !bytes.Equal(a.payload, botwire.EncodeRequestDuelStart(foeName, false)) {
 			t.Fatalf("payload % x, want the one-on-one challenge", a.payload)
 		}
 	})
@@ -230,7 +231,7 @@ func TestPvPPartyDuelFight(t *testing.T) {
 		}
 		arena := Point{X: -83760 + 40 - 180, Y: -238825 + 150, Z: -3331}
 		b.handleOne(t, TeleportToLocation{ObjectID: selfID, Pos: arena}, at(3*time.Second))
-		if _, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, at(3*time.Second)); err != nil {
+		if _, err := b.send(Action{kind: actAppear, payload: botwire.EncodeAppearing()}, at(3*time.Second)); err != nil {
 			t.Fatal(err)
 		}
 		b.handleOne(t, window(pcID, foeName, 100), at(10*time.Second))
@@ -258,7 +259,7 @@ func TestPvPPartyDuelFight(t *testing.T) {
 		b.handleOne(t, window(pcID, foeName, 1), from.Add(time.Second))
 		wantDecision(t, b, from.Add(time.Second), "duel", actSelect, ptyFoe2, 0)
 		// The click on the last foe answered by a 692: frozen too.
-		if _, err := b.send(Action{kind: actSelect, payload: encodeAction(ptyFoe2, Point{}), object: ptyFoe2}, from.Add(time.Second)); err != nil {
+		if _, err := b.send(Action{kind: actSelect, payload: botwire.EncodeAction(ptyFoe2, Point{}), object: ptyFoe2}, from.Add(time.Second)); err != nil {
 			t.Fatal(err)
 		}
 		b.handleOne(t, SystemMessage{ID: msgOtherPartyIsFrozen}, from.Add(2*time.Second))
@@ -296,7 +297,7 @@ func TestPvPPartyDuelFight(t *testing.T) {
 			t.Fatal(err)
 		}
 		b.pvp.duel.Opponent = pcID
-		if _, err := b.send(Action{kind: actSelect, payload: encodeAction(ptyCL, Point{}), object: ptyCL}, from); err != nil {
+		if _, err := b.send(Action{kind: actSelect, payload: botwire.EncodeAction(ptyCL, Point{}), object: ptyCL}, from); err != nil {
 			t.Fatal(err)
 		}
 		b.handleOne(t, SystemMessage{ID: msgOtherPartyIsFrozen}, from.Add(time.Second))

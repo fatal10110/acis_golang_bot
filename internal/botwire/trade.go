@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // SendTradeRequest asks the bot to trade with the player SenderID.
 type SendTradeRequest struct{ SenderID int32 }
@@ -114,4 +112,44 @@ func decodeTradeItemUpdate(r *wire.Reader) Event {
 		e.Items = append(e.Items, TradeAvail{Mode: r.ReadUint16(), Item: readTradeItem(r)})
 	}
 	return e
+}
+
+// EncodeTradeRequest asks the player objectID to trade with the bot.
+func EncodeTradeRequest(objectID int32) []byte {
+	w := wire.NewPacketWriter(OpGameTradeRequest)
+	w.WriteInt32(objectID)
+	return w.Bytes()
+}
+
+// EncodeAnswerTradeRequest answers the pending trade request: 1 accepts, 0
+// declines.
+func EncodeAnswerTradeRequest(accept bool) []byte {
+	w := wire.NewPacketWriter(OpGameAnswerTradeRequest)
+	w.WriteInt32(boolInt32(accept))
+	return w.Bytes()
+}
+
+// EncodeAddTradeItem adds count of the item objectID to the bot's offer.
+// The leading trade id is read and ignored by the server
+// (handleAddTradeItem); the bot sends 0.
+func EncodeAddTradeItem(objectID, count int32) []byte {
+	w := wire.NewPacketWriter(OpGameAddTradeItem)
+	w.WriteInt32(0)
+	w.WriteInt32(objectID)
+	w.WriteInt32(count)
+	return w.Bytes()
+}
+
+// EncodeTradeDone confirms the trade (1) or cancels it (0).
+func EncodeTradeDone(confirm bool) []byte {
+	w := wire.NewPacketWriter(OpGameTradeDone)
+	w.WriteInt32(boolInt32(confirm))
+	return w.Bytes()
+}
+
+func boolInt32(b bool) int32 {
+	if b {
+		return 1
+	}
+	return 0
 }

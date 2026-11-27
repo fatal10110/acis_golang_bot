@@ -6,7 +6,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Private sell store timing and limits.
@@ -68,10 +68,6 @@ func defaultStorePolicy() StorePolicy {
 	return StorePolicy{Title: "Loot for sale", MinMarkup: 120, MaxMarkup: 150, MaxRows: 4, Retry: 5 * time.Minute}
 }
 
-// storeRow is one row of a sell list or a purchase from a store: an item
-// object, how many and the unit price.
-type storeRow struct{ object, count, price int32 }
-
 // listedValuable is a released valuable's row of a store list, its ledger
 // entry and the units its object held when listed (a stack may list part
 // of them).
@@ -79,55 +75,6 @@ type listedValuable struct {
 	row    storeRow
 	key    valuableKey
 	atList int64
-}
-
-// encodeRequestPrivateStoreManageSell opens the sell store manage window;
-// no body (clientpackets/privatestore.go).
-func encodeRequestPrivateStoreManageSell() []byte {
-	return wire.NewPacketWriter(opGameRequestPrivateStoreManageSell).Bytes()
-}
-
-// encodeSetPrivateStoreMsgSell sets the store title (clientpackets
-// DecodeStoreMessage).
-func encodeSetPrivateStoreMsgSell(title string) []byte {
-	w := wire.NewPacketWriter(opGameSetPrivateStoreMsgSell)
-	w.WriteString(title)
-	return w.Bytes()
-}
-
-// encodeSetPrivateStoreListSell lists rows for sale: packaged (1 sells the
-// whole list as one), row count, then per row object id, count and unit
-// price (DecodeSetPrivateStoreListSell).
-func encodeSetPrivateStoreListSell(packaged bool, rows []storeRow) []byte {
-	w := wire.NewPacketWriter(opGameSetPrivateStoreListSell)
-	w.WriteInt32(boolInt32(packaged))
-	writeStoreRows(w, rows)
-	return w.Bytes()
-}
-
-// encodeRequestPrivateStoreQuitSell closes the sell store, or leaves its
-// manage window; no body.
-func encodeRequestPrivateStoreQuitSell() []byte {
-	return wire.NewPacketWriter(opGameRequestPrivateStoreQuitSell).Bytes()
-}
-
-// encodeRequestPrivateStoreBuy buys rows from the sell store of player
-// owner: owner id, row count, then per row object id, count and the
-// store's unit price (DecodeRequestPrivateStoreBuy).
-func encodeRequestPrivateStoreBuy(owner int32, rows []storeRow) []byte {
-	w := wire.NewPacketWriter(opGameRequestPrivateStoreBuy)
-	w.WriteInt32(owner)
-	writeStoreRows(w, rows)
-	return w.Bytes()
-}
-
-func writeStoreRows(w *wire.Writer, rows []storeRow) {
-	w.WriteInt32(int32(len(rows)))
-	for _, r := range rows {
-		w.WriteInt32(r.object)
-		w.WriteInt32(r.count)
-		w.WriteInt32(r.price)
-	}
 }
 
 // storeStep is where an opening or an open store stands.
@@ -204,7 +151,7 @@ func (b *Brain) ruleStore(now time.Time) (Action, bool) {
 		}
 	case storeManage:
 		if t := b.persona.Store.Title; t != "" && storeTitleFits(t) {
-			return Action{kind: actStoreTitle, payload: encodeSetPrivateStoreMsgSell(t)}, true
+			return Action{kind: actStoreTitle, payload: botwire.EncodeSetPrivateStoreMsgSell(t)}, true
 		}
 		st.step = storeTitled
 		return b.ruleStore(now)
@@ -214,7 +161,7 @@ func (b *Brain) ruleStore(now time.Time) (Action, bool) {
 			st.step = storeQuit
 			return b.ruleStore(now)
 		}
-		return Action{kind: actStoreList, payload: encodeSetPrivateStoreListSell(false, rows)}, true
+		return Action{kind: actStoreList, payload: botwire.EncodeSetPrivateStoreListSell(false, rows)}, true
 	case storeListed:
 		switch {
 		case s.StoreType == storeTypeSell || s.StoreType == storeTypePackageSell:
@@ -229,7 +176,7 @@ func (b *Brain) ruleStore(now time.Time) (Action, bool) {
 		}
 	}
 	if st.step == storeQuit {
-		return Action{kind: actStoreQuit, payload: encodeRequestPrivateStoreQuitSell()}, true
+		return Action{kind: actStoreQuit, payload: botwire.EncodeRequestPrivateStoreQuitSell()}, true
 	}
 	return Action{}, true
 }
@@ -263,7 +210,7 @@ func (b *Brain) startStore(now time.Time) (Action, bool) {
 		}
 		b.store.claim, b.store.claimed = id, true
 	}
-	return Action{kind: actStoreManage, payload: encodeRequestPrivateStoreManageSell()}, true
+	return Action{kind: actStoreManage, payload: botwire.EncodeRequestPrivateStoreManageSell()}, true
 }
 
 // storeReady reports whether the bot may start an opening at now: no
@@ -428,7 +375,7 @@ func (b *Brain) storeRows() []storeRow {
 		if n < 1 {
 			continue
 		}
-		rows = append(rows, storeRow{object: c.ObjectID, count: int32(n), price: int32(price)})
+		rows = append(rows, storeRow{Object: c.ObjectID, Count: int32(n), Price: int32(price)})
 		left -= n * price
 		room -= n * price
 	}
@@ -463,7 +410,7 @@ func (b *Brain) valuableStoreRows(room *int64) []storeRow {
 			if n < 1 {
 				continue
 			}
-			r := storeRow{object: c.ObjectID, count: int32(n), price: int32(floor)}
+			r := storeRow{Object: c.ObjectID, Count: int32(n), Price: int32(floor)}
 			rows = append(rows, r)
 			st.valuables = append(st.valuables, listedValuable{row: r, key: k, atList: int64(it.Count)})
 			left -= n * floor
@@ -491,8 +438,8 @@ func (b *Brain) storeListed(k valuableKey) (int64, bool) {
 		return 0, false
 	}
 	for _, l := range st.valuables {
-		if it, ok := b.world.Inventory.Items[l.row.object]; ok && l.key == k && it.Count > 0 {
-			return int64(l.row.price), true
+		if it, ok := b.world.Inventory.Items[l.row.Object]; ok && l.key == k && it.Count > 0 {
+			return int64(l.row.Price), true
 		}
 	}
 	return 0, false
@@ -556,11 +503,11 @@ func (b *Brain) countSold() {
 			rows := 0
 			for _, l := range st.valuables {
 				var kept int64
-				if it, ok := b.world.Inventory.Items[l.row.object]; ok {
+				if it, ok := b.world.Inventory.Items[l.row.Object]; ok {
 					kept = int64(it.Count)
 				}
-				if sold := min(int64(l.row.count), max(l.atList-kept, 0)); sold > 0 {
-					valuables += sold * int64(l.row.price)
+				if sold := min(int64(l.row.Count), max(l.atList-kept, 0)); sold > 0 {
+					valuables += sold * int64(l.row.Price)
 					rows++
 				}
 			}

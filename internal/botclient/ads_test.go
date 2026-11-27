@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -128,7 +129,7 @@ func TestAdText(t *testing.T) {
 			{"third line: from the top again", 2 * every, adLine(t, b, staffKey, recipeKey)},
 		}
 		for _, st := range steps {
-			if got := decideAd(t, st.name, b, at(st.at)); !bytes.Equal(got, encodeSay2(st.want, chatTrade)) {
+			if got := decideAd(t, st.name, b, at(st.at)); !bytes.Equal(got, botwire.EncodeSay2(st.want, chatTrade)) {
 				t.Fatalf("%s: line % x, want Trade %q", st.name, got, st.want)
 			}
 		}
@@ -137,12 +138,12 @@ func TestAdText(t *testing.T) {
 	t.Run("an entry no longer carried is not named", func(t *testing.T) {
 		b := newAdBrain(t, NewAdBoard(DefaultAdRegionGap, DefaultAdProcessPerHour), 0, swordUnit(101, 0), lootStack(103, ledgerRecipe, 5))
 		openAdRound(b, t0)
-		if got, want := decideAd(t, "both", b, t0), adLine(t, b, recipeKey, swordKey); !bytes.Equal(got, encodeSay2(want, chatTrade)) {
+		if got, want := decideAd(t, "both", b, t0), adLine(t, b, recipeKey, swordKey); !bytes.Equal(got, botwire.EncodeSay2(want, chatTrade)) {
 			t.Fatalf("line % x, want %q", got, want)
 		}
 		b.world.Apply(ItemList{Items: []Item{lootStack(103, ledgerRecipe, 5)}}, t0)
 		now := at(b.persona.Valuables.AdEvery)
-		if got, want := decideAd(t, "sword sold", b, now), adLine(t, b, recipeKey); !bytes.Equal(got, encodeSay2(want, chatTrade)) {
+		if got, want := decideAd(t, "sword sold", b, now), adLine(t, b, recipeKey); !bytes.Equal(got, botwire.EncodeSay2(want, chatTrade)) {
 			t.Fatalf("line after the sword left % x, want %q", got, want)
 		}
 	})
@@ -161,7 +162,7 @@ func TestAdPacing(t *testing.T) {
 			x.persona.Valuables.FirstLineWait, x.persona.Valuables.RoundWait = time.Hour, time.Hour
 			openAdRound(x, t0)
 		}
-		line := encodeSay2(adLine(t, a, swordKey), chatTrade)
+		line := botwire.EncodeSay2(adLine(t, a, swordKey), chatTrade)
 		steps := []struct {
 			name string
 			b    *Brain

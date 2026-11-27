@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -37,34 +38,6 @@ var (
 	// swordListed is the sword listed at 700, enchanted +3.
 )
 
-func TestStoreEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"RequestPrivateStoreManageSell", encodeRequestPrivateStoreManageSell(), []byte{0x73}},
-		{"RequestPrivateStoreQuitSell", encodeRequestPrivateStoreQuitSell(), []byte{0x76}},
-		{"SetPrivateStoreMsgSell", encodeSetPrivateStoreMsgSell("ab"), []byte{0x77, 'a', 0, 'b', 0, 0, 0}},
-		{
-			"SetPrivateStoreListSell", encodeSetPrivateStoreListSell(false, []storeRow{{102, 10, 7}}),
-			[]byte{0x74, 0, 0, 0, 0, 1, 0, 0, 0, 102, 0, 0, 0, 10, 0, 0, 0, 7, 0, 0, 0},
-		},
-		{
-			"SetPrivateStoreListSell packaged", encodeSetPrivateStoreListSell(true, nil),
-			[]byte{0x74, 1, 0, 0, 0, 0, 0, 0, 0},
-		},
-		{
-			"RequestPrivateStoreBuy", encodeRequestPrivateStoreBuy(selfID, []storeRow{{107, 1, 700}}),
-			[]byte{0x79, 1, 0, 0, 0x10, 1, 0, 0, 0, 107, 0, 0, 0, 1, 0, 0, 0, 0xbc, 2, 0, 0},
-		},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
-
 // newStoreBrain is a merchant at the origin of a town with budget, a 140 %
 // markup and the default persona (no idle drift) carrying items, wooden
 // arrows on an NPC shop's list and the store test templates' reference
@@ -91,14 +64,14 @@ func TestBrainStoreOpen(t *testing.T) {
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "stand up", at: time.Second, wantRule: "store", wantKind: actSitStand},
 		{name: "wait for the stand to end", at: 2 * time.Second, events: []Event{ChangeWaitType{ObjectID: selfID, Type: WaitStanding}}, wantRule: "store"},
-		{name: "open", at: 5 * time.Second, wantRule: "store", wantKind: actStoreManage, wantPayload: encodeRequestPrivateStoreManageSell()},
+		{name: "open", at: 5 * time.Second, wantRule: "store", wantKind: actStoreManage, wantPayload: botwire.EncodeRequestPrivateStoreManageSell()},
 		{name: "wait for the manage list", at: 6 * time.Second, wantRule: "store"},
-		{name: "title", at: 7 * time.Second, events: []Event{manage}, wantRule: "store", wantKind: actStoreTitle, wantPayload: encodeSetPrivateStoreMsgSell("Loot for sale")},
+		{name: "title", at: 7 * time.Second, events: []Event{manage}, wantRule: "store", wantKind: actStoreTitle, wantPayload: botwire.EncodeSetPrivateStoreMsgSell("Loot for sale")},
 		{
 			// The skin at 7 (1.4 times 5) and the sword at 700; never the
 			// arrows an NPC sells, nor the thread, worth nothing to an NPC.
 			name: "list", at: 8 * time.Second, wantRule: "store", wantKind: actStoreList,
-			wantPayload: encodeSetPrivateStoreListSell(false, []storeRow{{102, 10, 7}, {107, 1, 700}}),
+			wantPayload: botwire.EncodeSetPrivateStoreListSell(false, []storeRow{{Object: 102, Count: 10, Price: 7}, {Object: 107, Count: 1, Price: 700}}),
 		},
 		{name: "wait for the store", at: 9 * time.Second, wantRule: "store"},
 		{name: "open for business", at: 10 * time.Second, setup: func(b *Brain) { b.world.Self.StoreType = storeTypeSell }, wantRule: "store"},
@@ -133,9 +106,9 @@ func TestStoreRowsBudget(t *testing.T) {
 		budget, sold int64
 		want         []storeRow
 	}{
-		{name: "all", budget: 1000, want: []storeRow{{102, 10, 7}, {107, 1, 700}}},
-		{name: "the sword past the budget left", budget: 1000, sold: 900, want: []storeRow{{102, 10, 7}}},
-		{name: "part of the stack", budget: 50, want: []storeRow{{102, 7, 7}}},
+		{name: "all", budget: 1000, want: []storeRow{{Object: 102, Count: 10, Price: 7}, {Object: 107, Count: 1, Price: 700}}},
+		{name: "the sword past the budget left", budget: 1000, sold: 900, want: []storeRow{{Object: 102, Count: 10, Price: 7}}},
+		{name: "part of the stack", budget: 50, want: []storeRow{{Object: 102, Count: 7, Price: 7}}},
 		{name: "nothing left", budget: 50, sold: 50},
 	}
 	for _, tt := range tests {
@@ -157,12 +130,12 @@ func TestStoreRowsCap(t *testing.T) {
 	b := newStoreBrain(t, 1<<40, adenaStack(1<<31-1-700), skinLoot, swordLoot)
 	b.store.step = storeAskManage
 	b.storeManageList(PrivateStoreManageListSell{OwnerID: selfID, Candidates: []StoreItem{swordCand, skinCand}})
-	if got, want := b.storeRows(), []storeRow{{107, 1, 700}}; !reflect.DeepEqual(got, want) {
+	if got, want := b.storeRows(), []storeRow{{Object: 107, Count: 1, Price: 700}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("storeRows near the adena cap = %v, want %v", got, want)
 	}
 	b.persona.Store.MaxRows = 1
 	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(0)}}}, t0)
-	if got, want := b.storeRows(), []storeRow{{107, 1, 700}}; !reflect.DeepEqual(got, want) {
+	if got, want := b.storeRows(), []storeRow{{Object: 107, Count: 1, Price: 700}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("storeRows of one row = %v, want %v", got, want)
 	}
 }
@@ -306,7 +279,7 @@ func TestStoreEnds(t *testing.T) {
 				t.Fatalf("decide = action %d, want quit %v", a.kind, tt.quit)
 			}
 			if tt.quit {
-				if !bytes.Equal(a.payload, encodeRequestPrivateStoreQuitSell()) {
+				if !bytes.Equal(a.payload, botwire.EncodeRequestPrivateStoreQuitSell()) {
 					t.Fatalf("payload % x, want RequestPrivateStoreQuitSell", a.payload)
 				}
 				if sent, err := b.send(a, now); !sent || err != nil {

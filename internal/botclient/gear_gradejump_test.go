@@ -43,7 +43,7 @@ func TestGradeJumpBuys(t *testing.T) {
 		{TemplateID: salamanderMail, Price: 429000},
 		{TemplateID: scrollOfEscape, Price: soePrice},
 	}
-	falchionAndSoE := []buyRow{{falchion, 1}, {scrollOfEscape, 1}}
+	falchionAndSoE := []buyRow{{Item: falchion, Count: 1}, {Item: scrollOfEscape, Count: 1}}
 	tests := []struct {
 		name      string
 		level     int32
@@ -59,7 +59,7 @@ func TestGradeJumpBuys(t *testing.T) {
 		{name: "level 19: small upgrade skipped, saving skips comfort", level: 19, adena: gearKeep + 400000, weapon: wornLongSword},
 		{
 			name: "level 18: small upgrade skipped, D weapon out of reach", level: 18, adena: gearKeep + 300000, weapon: wornLongSword,
-			want: []buyRow{{scrollOfEscape, 1}},
+			want: []buyRow{{Item: scrollOfEscape, Count: 1}},
 		},
 		{name: "level 18: a big upgrade still bought", level: 18, adena: gearKeep + 400000, weapon: wornSword, want: falchionAndSoE},
 		{
@@ -82,7 +82,7 @@ func TestGradeJumpBuys(t *testing.T) {
 			edit: func(b *Brain) { b.persona.Gear.MaxGrade = 0 },
 			want: falchionAndSoE,
 		},
-		{name: "level 20: the savings buy the D weapon", level: 20, expertise: 1, adena: gearKeep + 700000, weapon: wornLongSword, want: []buyRow{{artisansSword, 1}, {scrollOfEscape, 1}}},
+		{name: "level 20: the savings buy the D weapon", level: 20, expertise: 1, adena: gearKeep + 700000, weapon: wornLongSword, want: []buyRow{{Item: artisansSword, Count: 1}, {Item: scrollOfEscape, Count: 1}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

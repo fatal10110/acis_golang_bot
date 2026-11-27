@@ -57,7 +57,7 @@ func TestShopBowArrowsFirst(t *testing.T) {
 				b.world.Apply(NPCInfo{ObjectID: grocerObj, NPCID: grocer, Pos: Point{X: 2000}}, t0)
 			}
 			wants := b.shopWants(false)
-			if got := slices.ContainsFunc(wants, func(r buyRow) bool { return r.item == woodenArrow }); got != tt.arrows {
+			if got := slices.ContainsFunc(wants, func(r buyRow) bool { return r.Item == woodenArrow }); got != tt.arrows {
 				t.Fatalf("shopWants = %v: arrows wanted %v, want %v", wants, got, tt.arrows)
 			}
 			if !b.startShop(at(time.Second)) || b.shop.v.npcID != tt.want || !slices.Equal(b.shop.lists, tt.lists) {

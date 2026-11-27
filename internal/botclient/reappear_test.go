@@ -7,21 +7,6 @@ import (
 	"time"
 )
 
-func TestEncodeAppearRestart(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"Appearing", encodeAppearing(), []byte{0x30}},
-		{"RequestRestartPoint village", encodeRequestRestartPoint(restartVillage), []byte{0x6d, 0, 0, 0, 0}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
-
 // opcodes lists the opcode of every frame out.
 func opcodes(out *recordSender) []byte {
 	ops := make([]byte, 0, len(out.frames))

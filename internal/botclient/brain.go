@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Brain timing defaults and fixed waits.
@@ -870,7 +871,7 @@ func (b *Brain) wake(now time.Time) error {
 		l.retryAt = now.Add(logoutRetry)
 	}
 	if l.requested && !now.Before(l.retryAt) {
-		sent, err := b.send(Action{kind: actLogout, payload: encodeLogout()}, now)
+		sent, err := b.send(Action{kind: actLogout, payload: botwire.EncodeLogout()}, now)
 		if err != nil {
 			return err
 		}
@@ -891,7 +892,7 @@ func (b *Brain) wake(now time.Time) error {
 		b.whispers.spendWake(now)
 		b.spendWalkWake(now)
 		if b.appearing {
-			sent, err := b.send(Action{kind: actAppear, payload: encodeAppearing()}, now)
+			sent, err := b.send(Action{kind: actAppear, payload: botwire.EncodeAppearing()}, now)
 			if err != nil {
 				return err
 			}
@@ -929,7 +930,7 @@ func (b *Brain) wake(now time.Time) error {
 	}
 	if !b.appearing && now.Sub(b.pace.lastSent) >= keepaliveAfter {
 		s := &b.world.Self
-		ka := Action{kind: actKeepalive, payload: encodeValidatePosition(s.Position(now), s.Heading)}
+		ka := Action{kind: actKeepalive, payload: botwire.EncodeValidatePosition(s.Position(now), s.Heading)}
 		if _, err := b.send(ka, now); err != nil {
 			return err
 		}

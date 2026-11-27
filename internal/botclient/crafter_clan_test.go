@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // TestCrafterPersonaClanInvite: the crafter preset accepts a clan
@@ -36,7 +38,7 @@ func TestCrafterPersonaClanInvite(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, a := b.decide(at(time.Second))
-			if a.kind != actAnswerClan || !bytes.Equal(a.payload, encodeRequestAnswerJoinPledge(tt.want)) {
+			if a.kind != actAnswerClan || !bytes.Equal(a.payload, botwire.EncodeRequestAnswerJoinPledge(tt.want)) {
 				t.Fatalf("answer %d % x, want accept=%v", a.kind, a.payload, tt.want)
 			}
 		})

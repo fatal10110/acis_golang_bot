@@ -11,6 +11,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
@@ -292,7 +293,7 @@ func TestBlockedStops(t *testing.T) {
 	from, to := botclient.Point{X: 0, Y: 0, Z: -3000}, botclient.Point{X: 1000, Y: 0, Z: -3000}
 	stop := botclient.Point{X: 520, Y: 0, Z: -3000}
 	pt := func(x int32) botclient.Point { return botclient.Point{X: x, Y: 0, Z: -3000} }
-	click := Sent{At: at(0), Op: opMoveBackwardToLocation, Payload: botclient.EncodeMoveBackwardToLocation(to, from)}
+	click := Sent{At: at(0), Op: opMoveBackwardToLocation, Payload: botwire.EncodeMoveBackwardToLocation(to, from)}
 	move := func(ms int, id int32, o, d botclient.Point) Seen {
 		return Seen{At: at(ms), Event: botclient.MoveToLocation{ObjectID: id, Origin: o, Dest: d}}
 	}
@@ -340,7 +341,7 @@ func TestBlockedStops(t *testing.T) {
 			// The second click runs from x130 toward x500; its answer at
 			// 1050, then 130 at 130 a second, stops at x260 at 2300.
 			seen: []Seen{move(50, self, from, to), move(1050, self, pt(130), pt(500)), move(2300, self, pt(260), pt(260))},
-			sent: []Sent{click, {At: at(1000), Op: opMoveBackwardToLocation, Payload: botclient.EncodeMoveBackwardToLocation(pt(500), pt(130))}},
+			sent: []Sent{click, {At: at(1000), Op: opMoveBackwardToLocation, Payload: botwire.EncodeMoveBackwardToLocation(pt(500), pt(130))}},
 			want: []blockedStop{{from: pt(130), to: pt(500), stop: pt(260), tick: 250 * time.Millisecond}},
 		},
 		{

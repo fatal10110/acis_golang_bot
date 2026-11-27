@@ -1,6 +1,6 @@
 package botclient
 
-import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+import "github.com/fatal10110/acis_golang_bot/internal/botwire"
 
 // System messages of the Symbol Maker (serverpackets/henna.go,
 // systemmessage.go). YouNotEnoughAdena is msgNotEnoughAdena.
@@ -17,28 +17,12 @@ const (
 	hennaRemoveFraction = 5
 )
 
-// encodeRequestHennaEquip draws symbolID (clientpackets/henna.go: one
-// int32).
-func encodeRequestHennaEquip(symbolID int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestHennaEquip)
-	w.WriteInt32(symbolID)
-	return w.Bytes()
-}
-
-// encodeRequestHennaUnequip removes the worn symbolID
-// (clientpackets/henna.go: one int32).
-func encodeRequestHennaUnequip(symbolID int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestHennaUnequip)
-	w.WriteInt32(symbolID)
-	return w.Bytes()
-}
-
 // hennaEquipAction draws symbolID.
 func hennaEquipAction(symbolID int32) Action {
-	return Action{kind: actHennaEquip, payload: encodeRequestHennaEquip(symbolID), item: symbolID}
+	return Action{kind: actHennaEquip, payload: botwire.EncodeRequestHennaEquip(symbolID), item: symbolID}
 }
 
 // hennaUnequipAction removes the worn symbolID.
 func hennaUnequipAction(symbolID int32) Action {
-	return Action{kind: actHennaUnequip, payload: encodeRequestHennaUnequip(symbolID), item: symbolID}
+	return Action{kind: actHennaUnequip, payload: botwire.EncodeRequestHennaUnequip(symbolID), item: symbolID}
 }

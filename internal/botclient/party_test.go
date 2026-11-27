@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 const (
@@ -16,23 +18,6 @@ var (
 	gmRow   = PartyMember{ObjectID: gmID, Name: "GM", CP: 100, MaxCP: 200, HP: 300, MaxHP: 400, MP: 50, MaxMP: 60, Level: 40, ClassID: 88}
 	mateRow = PartyMember{ObjectID: mateID, Name: "mate", CP: 1, MaxCP: 2, HP: 3, MaxHP: 4, MP: 5, MaxMP: 6, Level: 7, ClassID: 18}
 )
-
-func TestPartyEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"RequestJoinParty", encodeRequestJoinParty("GM", 1), []byte{0x29, 'G', 0, 'M', 0, 0, 0, 1, 0, 0, 0}},
-		{"RequestAnswerJoinParty accept", encodeRequestAnswerJoinParty(true), []byte{0x2a, 1, 0, 0, 0}},
-		{"RequestAnswerJoinParty decline", encodeRequestAnswerJoinParty(false), []byte{0x2a, 0, 0, 0, 0}},
-		{"RequestWithdrawParty", encodeRequestWithdrawParty(), []byte{0x2b}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
 
 // TestWorldParty applies a party's life, joining a GM's party through to
 // leaving it, and checks the model after each step.
@@ -137,8 +122,8 @@ func TestWorldParty(t *testing.T) {
 // reaction to it, per the persona, and not after the server dropped it.
 func TestBrainPartyInvite(t *testing.T) {
 	onlyGM := func(_ *World, requester string, _ time.Time) bool { return requester == "GM" }
-	accept := encodeRequestAnswerJoinParty(true)
-	decline := encodeRequestAnswerJoinParty(false)
+	accept := botwire.EncodeRequestAnswerJoinParty(true)
+	decline := botwire.EncodeRequestAnswerJoinParty(false)
 	tests := []struct {
 		name      string
 		persona   Persona

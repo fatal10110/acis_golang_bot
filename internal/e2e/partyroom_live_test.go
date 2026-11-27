@@ -6,6 +6,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Party-matching system messages (acis_golang internal/gameserver/network/
@@ -62,7 +63,7 @@ func TestLivePartyRoomJoin(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("the leader's rooms list: %v", err)
 	}
-	if err := leader.Send(ctx, botclient.EncodeRequestManagePartyRoom(0, 4, 1, 80, 0, "e2e room")); err != nil {
+	if err := leader.Send(ctx, botwire.EncodeRequestManagePartyRoom(0, 4, 1, 80, 0, "e2e room")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := leader.Await(ctx, EntryTimeout, func(ev botclient.Event) bool {

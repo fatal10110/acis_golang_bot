@@ -75,10 +75,10 @@ func (b *Brain) wants(comfort bool) []want {
 		var books []buyRow
 		for id := range b.shop.books {
 			if b.carried(id) == 0 {
-				books = append(books, buyRow{item: id, count: 1})
+				books = append(books, buyRow{Item: id, Count: 1})
 			}
 		}
-		slices.SortFunc(books, func(a, b buyRow) int { return int(a.item - b.item) })
+		slices.SortFunc(books, func(a, b buyRow) int { return int(a.Item - b.Item) })
 		add(tierSupplies, books)
 	}
 	for _, r := range p.Restock {
@@ -86,7 +86,7 @@ func (b *Brain) wants(comfort bool) []want {
 			continue
 		}
 		if have := b.carried(r.Item); have < r.Min && r.Max > have {
-			add(tierSupplies, []buyRow{{item: r.Item, count: r.Max - have}})
+			add(tierSupplies, []buyRow{{Item: r.Item, Count: r.Max - have}})
 		}
 	}
 	add(tierSupplies, b.shotWants())
@@ -124,7 +124,7 @@ func (b *Brain) dueWants(anyAdena bool) []want {
 	var out []want
 	for _, w := range b.wants(false) {
 		if !anyAdena && b.cfg.Travel != nil {
-			price, ok := b.cfg.Travel.cheapest[w.item]
+			price, ok := b.cfg.Travel.cheapest[w.Item]
 			if !ok || int64(price) > adena-b.floor(w.tier) {
 				continue
 			}
@@ -163,44 +163,44 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 				left := int64(l.Money) - spent - b.floor(tierComfort)
 				saving = b.saves(goal, left, rows)
 			}
-			if saving || slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == w.item }) {
+			if saving || slices.ContainsFunc(rows, func(r buyRow) bool { return r.Item == w.Item }) {
 				continue
 			}
 		}
 		slot := slotNone
-		if g, ok := b.gearItem(w.item); ok {
+		if g, ok := b.gearItem(w.Item); ok {
 			if slot = slotOf(g.part); bought[slot] {
 				continue
 			}
 			t = max(t, tierGear)
 		}
 		var rest int64 // the planned set's pieces still to buy after this one
-		if slices.Contains(set, w.item) {
+		if slices.Contains(set, w.Item) {
 			for _, id := range set {
-				if id != w.item && !slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
+				if id != w.Item && !slices.ContainsFunc(rows, func(r buyRow) bool { return r.Item == id }) {
 					rest += int64(b.cfg.Travel.cheapest[id])
 				}
 			}
 		}
-		j := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.item })
+		j := slices.IndexFunc(l.Items, func(it ShopItem) bool { return it.TemplateID == w.Item })
 		if j < 0 || l.Items[j].Price <= 0 {
 			continue
 		}
 		it := l.Items[j]
-		n := int64(w.count)
+		n := int64(w.Count)
 		if it.Count > 0 {
 			n = min(n, int64(it.Count))
 		}
 		n = min(n, (int64(l.Money)-spent-b.floor(t)-rest-w.keep)/int64(it.Price))
-		if n < 1 || w.whole && n < int64(w.count) {
+		if n < 1 || w.whole && n < int64(w.Count) {
 			continue
 		}
 		bought[slot] = true
 		spent += n * int64(it.Price)
-		rows = append(rows, buyRow{item: w.item, count: int32(n)})
+		rows = append(rows, buyRow{Item: w.Item, Count: int32(n)})
 		if slot == slotWeapon {
-			r, ok := b.arrowRow(b.cfg.Travel.arrows[w.item])
-			if ok && !slices.ContainsFunc(wants, func(x want) bool { return x.item == r.item }) {
+			r, ok := b.arrowRow(b.cfg.Travel.arrows[w.Item])
+			if ok && !slices.ContainsFunc(wants, func(x want) bool { return x.Item == r.Item }) {
 				wants = slices.Insert(wants, i+1, want{buyRow: r, tier: tierSupplies})
 			}
 		}
@@ -218,7 +218,7 @@ func (b *Brain) buyRows(l BuyList) []buyRow {
 func (b *Brain) saves(goal []int32, left int64, rows []buyRow) bool {
 	var rest []int32
 	for _, id := range goal {
-		if !slices.ContainsFunc(rows, func(r buyRow) bool { return r.item == id }) {
+		if !slices.ContainsFunc(rows, func(r buyRow) bool { return r.Item == id }) {
 			rest = append(rest, id)
 		}
 	}
@@ -265,7 +265,7 @@ func (b *Brain) comfortWants() []buyRow {
 			continue
 		}
 		if have := b.carried(s.item); have < s.count {
-			rows = append(rows, buyRow{item: s.item, count: s.count - have})
+			rows = append(rows, buyRow{Item: s.item, Count: s.count - have})
 		}
 	}
 	if r, ok := b.buffPotionRow(); ok {

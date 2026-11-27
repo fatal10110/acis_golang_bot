@@ -1,8 +1,6 @@
 package botwire
 
-import (
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-)
+import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 
 // Item is one item the bot carries, as ItemList and InventoryUpdate report
 // it.
@@ -104,4 +102,51 @@ func decodeInventoryUpdate(r *wire.Reader) Event {
 // decodeExAutoSoulShot: template id, enabled as int32.
 func decodeExAutoSoulShot(r *wire.Reader) Event {
 	return ExAutoSoulShot{TemplateID: r.ReadInt32(), Enabled: r.ReadInt32() != 0}
+}
+
+// EncodeUseItem uses the carried item objectID with ctrl released.
+func EncodeUseItem(objectID int32) []byte {
+	w := wire.NewPacketWriter(OpGameUseItem)
+	w.WriteInt32(objectID)
+	w.WriteInt32(0) // ctrl not held
+	return w.Bytes()
+}
+
+// EncodeRequestAutoSoulShot turns auto use of the shot template
+// templateID on or off. The server needs the template in the inventory.
+func EncodeRequestAutoSoulShot(templateID int32, enable bool) []byte {
+	w := wire.NewPacketWriter(OpGameClientExtended)
+	w.WriteUint16(OpGameRequestAutoSoulShot)
+	w.WriteInt32(templateID)
+	var v int32
+	if enable {
+		v = 1
+	}
+	w.WriteInt32(v)
+	return w.Bytes()
+}
+
+// EncodeRequestItemList asks the server for the whole inventory: it
+// answers with an ItemList (network/client_ingame.go handleRequestItemList,
+// no payload).
+func EncodeRequestItemList() []byte {
+	return wire.NewPacketWriter(OpGameRequestItemList).Bytes()
+}
+
+// EncodeRequestCrystallizeItem crystallizes count of item object
+// (clientpackets/item_ops.go: two int32, object id then count).
+func EncodeRequestCrystallizeItem(object, count int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestCrystallizeItem)
+	w.WriteInt32(object)
+	w.WriteInt32(count)
+	return w.Bytes()
+}
+
+// EncodeRequestDestroyItem destroys count of the carried item objectID:
+// object id, count (clientpackets/item_ops.go RequestDestroyItem).
+func EncodeRequestDestroyItem(objectID, count int32) []byte {
+	w := wire.NewPacketWriter(OpGameRequestDestroyItem)
+	w.WriteInt32(objectID)
+	w.WriteInt32(count)
+	return w.Bytes()
 }

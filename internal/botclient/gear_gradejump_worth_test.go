@@ -104,12 +104,12 @@ func TestGradeJumpWorth(t *testing.T) {
 			// No worn helmet to gain over.
 			name: "level 18: a helmet for the empty head slot", level: 18,
 			products: []datapack.Product{{ItemID: leatherHelmet, Price: 10200}},
-			want:     []buyRow{{leatherHelmet, 1}},
+			want:     []buyRow{{Item: leatherHelmet, Count: 1}},
 		},
 		{
 			name: "level 10: the full armor", level: 10,
 			products: []datapack.Product{{ItemID: ngFull, Price: 100000}},
-			want:     []buyRow{{ngFull, 1}, {scrollOfEscape, 1}},
+			want:     []buyRow{{Item: ngFull, Count: 1}, {Item: scrollOfEscape, Count: 1}},
 		},
 		{
 			// 60 over 33+20 is 13%, under its 16% share of the D weapon;
@@ -121,31 +121,31 @@ func TestGradeJumpWorth(t *testing.T) {
 			// 13% over its 6% share.
 			name: "level 18: a cheaper full armor bought", level: 18,
 			products: []datapack.Product{{ItemID: ngFull, Price: 40000}},
-			want:     []buyRow{{ngFull, 1}},
+			want:     []buyRow{{Item: ngFull, Count: 1}},
 		},
 		{
 			// The chest gains 3% for a 5% share, the legs 100% for 5%.
 			name: "level 18, no set: only the legs", level: 18,
 			products: ngSet(30000),
-			want:     []buyRow{{ngLegs, 1}},
+			want:     []buyRow{{Item: ngLegs, Count: 1}},
 		},
 		{
 			// Together 74 over 53 is 40%, over their 9% share.
 			name: "level 18: the set bought by its combined gain", level: 18,
 			products: ngSet(30000), sets: true,
-			want: []buyRow{{ngChest, 1}, {ngLegs, 1}},
+			want: []buyRow{{Item: ngChest, Count: 1}, {Item: ngLegs, Count: 1}},
 		},
 		{
 			// 40% under their 47% share: the legs alone, 100% for 23%.
 			// The 250000 left is under half the D weapon: no saving.
 			name: "level 18: the dear set skipped, its legs bought", level: 18,
 			products: ngSet(150000), sets: true,
-			want: []buyRow{{ngLegs, 1}, {scrollOfEscape, 1}},
+			want: []buyRow{{Item: ngLegs, Count: 1}, {Item: scrollOfEscape, Count: 1}},
 		},
 		{
 			name: "level 10: the dear set bought", level: 10,
 			products: ngSet(150000), sets: true,
-			want: []buyRow{{ngChest, 1}, {ngLegs, 1}, {scrollOfEscape, 1}},
+			want: []buyRow{{Item: ngChest, Count: 1}, {Item: ngLegs, Count: 1}, {Item: scrollOfEscape, Count: 1}},
 		},
 	}
 	for _, tt := range tests {

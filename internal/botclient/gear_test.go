@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -198,7 +199,7 @@ func TestBrainGearEquip(t *testing.T) {
 	runTrainerSteps(t, b, []trainerStep{
 		{
 			name: "wear the long sword", at: 2 * time.Second,
-			wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(newSword.ObjectID),
+			wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(newSword.ObjectID),
 		},
 		{name: "wait for the answer", at: 3 * time.Second},
 		{
@@ -267,7 +268,7 @@ func TestGearStoreLoot(t *testing.T) {
 func TestBrainGearRefused(t *testing.T) {
 	b := newGearBrain(t, 0, wornSword, newSword)
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "wear", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(newSword.ObjectID)},
+		{name: "wear", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(newSword.ObjectID)},
 		{name: "waiting", at: time.Second + gearTimeout - time.Millisecond},
 		{name: "refused", at: time.Second + gearTimeout},
 		{name: "not again", at: time.Minute},
@@ -285,7 +286,7 @@ func TestBrainGearRefused(t *testing.T) {
 func TestBrainGearBestFirst(t *testing.T) {
 	b := newGearBrain(t, 0, wornSword, newSword, newFalchon)
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "wear the falchion", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(newFalchon.ObjectID)},
+		{name: "wear the falchion", at: time.Second, wantRule: "gear", wantKind: actUseItem, wantPayload: botwire.EncodeUseItem(newFalchon.ObjectID)},
 		{
 			name: "worn", at: 2 * time.Second,
 			events: []Event{InventoryUpdate{Changes: []ItemChange{
@@ -324,22 +325,22 @@ func TestGearWants(t *testing.T) {
 			// 290000 past the 10000 kept: both swords, best first, then a
 			// piece per slot; no D grade without expertise.
 			name: "rich", carried: std, adena: 300000, buy: true,
-			want:   []buyRow{{falchion, 1}, {longSword, 1}, {leatherShirt22, 1}, {woodenGaiters, 1}, {leatherHelmet, 1}},
+			want:   []buyRow{{Item: falchion, Count: 1}, {Item: longSword, Count: 1}, {Item: leatherShirt22, Count: 1}, {Item: woodenGaiters, Count: 1}, {Item: leatherHelmet, Count: 1}},
 			window: window(longSword, falchion, leatherShirt22, woodenGaiters, leatherHelmet),
-			bought: []buyRow{{falchion, 1}, {leatherShirt22, 1}, {woodenGaiters, 1}, {leatherHelmet, 1}},
+			bought: []buyRow{{Item: falchion, Count: 1}, {Item: leatherShirt22, Count: 1}, {Item: woodenGaiters, Count: 1}, {Item: leatherHelmet, Count: 1}},
 		},
 		{
 			// 149000 past the 1000 the shop keeps: the long sword leaves
 			// 13000, the shirt 10570, then nothing past the 9000 more gear
 			// keeps.
 			name: "the window spends what is left", carried: std, adena: 150000, buy: true,
-			want:   []buyRow{{longSword, 1}, {leatherShirt22, 1}, {woodenGaiters, 1}, {leatherHelmet, 1}},
+			want:   []buyRow{{Item: longSword, Count: 1}, {Item: leatherShirt22, Count: 1}, {Item: woodenGaiters, Count: 1}, {Item: leatherHelmet, Count: 1}},
 			window: window(longSword, leatherShirt22, woodenGaiters, leatherHelmet),
-			bought: []buyRow{{longSword, 1}, {leatherShirt22, 1}},
+			bought: []buyRow{{Item: longSword, Count: 1}, {Item: leatherShirt22, Count: 1}},
 		},
 		{
 			name: "a better sword carried", carried: append(slices.Clone(std), newSword), adena: 300000, buy: true,
-			want: []buyRow{{leatherShirt22, 1}, {woodenGaiters, 1}, {leatherHelmet, 1}},
+			want: []buyRow{{Item: leatherShirt22, Count: 1}, {Item: woodenGaiters, Count: 1}, {Item: leatherHelmet, Count: 1}},
 		},
 		{name: "nothing past the gear's reserve", carried: std, adena: 10000, buy: true},
 		{name: "buying off", carried: std, adena: 300000},

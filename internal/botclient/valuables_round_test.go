@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -55,7 +56,7 @@ var nearKeeper = Point{X: 300}
 // select, talk, open the private link cmd, wait for its list.
 func keeperSteps(start time.Duration, cmd string) []trainerStep {
 	steps := lookSteps(start)
-	steps[3].wantPayload = encodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_" + cmd)
+	steps[3].wantPayload = botwire.EncodeRequestBypassToServer("npc_" + itoa(keeperObj) + "_" + cmd)
 	steps[4].name = "wait for the " + cmd + " list"
 	return steps
 }
@@ -65,7 +66,7 @@ func keeperSteps(start time.Duration, cmd string) []trainerStep {
 func roundLine(t *testing.T, b *Brain) []byte {
 	t.Helper()
 	b.syncValuables(t0)
-	return encodeSay2(adLine(t, b, b.adEntries()...), chatTrade)
+	return botwire.EncodeSay2(adLine(t, b, b.adEntries()...), chatTrade)
 }
 
 // firstLine has b start its round at t0 with nothing stored and say its
@@ -82,14 +83,14 @@ func firstLine(t *testing.T, b *Brain) {
 func depositSteps(start time.Duration, list []WarehouseItem, rows []warehouseRow) []trainerStep {
 	return append(keeperSteps(start, "DepositP"), trainerStep{
 		name: "deposit", at: start + 5*time.Second, events: []Event{WarehouseDepositList{Type: privateWarehouseType, Adena: 1000, Items: list}},
-		wantRule: "valuables", wantKind: actWarehouseDeposit, wantPayload: encodeWarehouseRequest(opGameSendWareHouseDepositList, rows),
+		wantRule: "valuables", wantKind: actWarehouseDeposit, wantPayload: botwire.EncodeWarehouseRequest(opGameSendWareHouseDepositList, rows),
 	})
 }
 
 // swordDeposit is the deposit of the carried sword 101.
 var (
 	swordDepositList = []WarehouseItem{{ObjectID: 101, TemplateID: ledgerSword, Count: 1}}
-	swordDepositRows = []warehouseRow{{object: 101, item: ledgerSword, count: 1}}
+	swordDepositRows = []warehouseRow{{Object: 101, Item: ledgerSword, Count: 1}}
 )
 
 // wantNoRound checks the round is closed and none of its visits runs.
@@ -179,7 +180,7 @@ func testRoundUnreachable(t *testing.T) {
 	b := newRoundBrain(t, nearKeeper, []WarehouseItem{storedStaff}, swordUnit(101, 0))
 	runTrainerSteps(t, b, append(keeperSteps(0, "WithdrawP"), trainerStep{
 		name: "withdraw", at: 5 * time.Second, events: []Event{privateList(storedStaff)}, wantRule: "valuables", wantKind: actWarehouseWithdraw,
-		wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}}),
+		wantPayload: botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{Object: 201, Item: ledgerStaff, Count: 1}}),
 	}))
 	b.walk.nav = nil
 	rule, a := tradeTurn(t, b, at(6*time.Second), InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 1000}})
@@ -219,7 +220,7 @@ func TestValuablesReadvertise(t *testing.T) {
 	staffAsk, swordAsk := entryOf(t, b, ledgerStaff, 5).ask, entryOf(t, b, ledgerSword, 0).ask
 	runTrainerSteps(t, b, append(keeperSteps(0, "WithdrawP"), trainerStep{
 		name: "withdraw both", at: 5 * time.Second, events: []Event{privateList(storedStaff, storedSword)}, wantRule: "valuables", wantKind: actWarehouseWithdraw,
-		wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}, {object: 202, item: ledgerSword, count: 1}}),
+		wantPayload: botwire.EncodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{Object: 201, Item: ledgerStaff, Count: 1}, {Object: 202, Item: ledgerSword, Count: 1}}),
 	}))
 	now := at(6 * time.Second)
 	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}, {State: ItemAdded, Item: carriedOf(storedSword)}}}}, now); err != nil {

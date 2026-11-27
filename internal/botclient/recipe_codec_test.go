@@ -6,27 +6,6 @@ import (
 	"time"
 )
 
-// TestRecipeEncoders pins the request bytes: the opcode and one int32, as
-// clientpackets/recipe.go decodeRecipeInt reads them.
-func TestRecipeEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"RequestRecipeBookOpen dwarven", encodeRequestRecipeBookOpen(true), []byte{0xac, 0, 0, 0, 0}},
-		{"RequestRecipeBookOpen common", encodeRequestRecipeBookOpen(false), []byte{0xac, 1, 0, 0, 0}},
-		{"RequestRecipeItemMakeSelf", encodeRequestRecipeItemMakeSelf(20), []byte{0xaf, 20, 0, 0, 0}},
-		{"RequestRecipeItemMakeSelf high id", encodeRequestRecipeItemMakeSelf(0x0102), []byte{0xaf, 2, 1, 0, 0}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if !bytes.Equal(tt.got, tt.want) {
-				t.Fatalf("payload % x, want % x", tt.got, tt.want)
-			}
-		})
-	}
-}
-
 // TestCraftFailure tells the system messages ahead of RecipeItemMakeInfo
 // status 0 apart; the success messages and the consumed notices tell none.
 func TestCraftFailure(t *testing.T) {

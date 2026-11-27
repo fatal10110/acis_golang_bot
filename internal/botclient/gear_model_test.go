@@ -224,7 +224,7 @@ func TestGearNoKindDroppingMix(t *testing.T) {
 			}
 			var buy []int32
 			for _, r := range b.gearWants() {
-				buy = append(buy, r.item)
+				buy = append(buy, r.Item)
 			}
 			slices.Sort(buy)
 			if !slices.Equal(buy, tt.wantBuy) {

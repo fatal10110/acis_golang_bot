@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -190,7 +191,7 @@ func weaponAt(e uint16, n int32) InventoryUpdate {
 // ending at +3 with the fourth scroll kept.
 func TestBrainEnchantToSafe(t *testing.T) {
 	b := newEnchantBrain(t, enchanted(enchWeaponObj, artisansSword, partRHand, 0), scrollStack(enchScrollObj, scrollWD, 4))
-	use, req := encodeUseItem(enchScrollObj), encodeRequestEnchantItem(enchWeaponObj)
+	use, req := botwire.EncodeUseItem(enchScrollObj), botwire.EncodeRequestEnchantItem(enchWeaponObj)
 	runEnchantSteps(t, b, []enchantTestStep{
 		{name: "use the scroll", at: time.Second, want: actUseItem, payload: use},
 		{name: "wait for the window", at: 2 * time.Second, want: actHold},
@@ -218,7 +219,7 @@ func TestBrainEnchantToSafe(t *testing.T) {
 // RetryAfter: no window, no result, a result other than a success, or no
 // inventory update showing the new level.
 func TestBrainEnchantBacksOff(t *testing.T) {
-	use, req := encodeUseItem(enchScrollObj), encodeRequestEnchantItem(enchWeaponObj)
+	use, req := botwire.EncodeUseItem(enchScrollObj), botwire.EncodeRequestEnchantItem(enchWeaponObj)
 	choose := []Event{ChooseInventoryItem{ScrollItemID: scrollWD}}
 	gone := InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: enchanted(enchWeaponObj, artisansSword, partRHand, 0)}}}
 	tests := []struct {

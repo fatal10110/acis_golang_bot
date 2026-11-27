@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/craftplan"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -99,8 +100,8 @@ func TestBrainCraftOrders(t *testing.T) {
 		item  int32
 		count int64
 	}
-	tell := func(text string) []byte { return encodeSay2Tell(leaderName, text) }
-	clan := func(text string) []byte { return encodeSay2(text, chatClan) }
+	tell := func(text string) []byte { return botwire.EncodeSay2Tell(leaderName, text) }
+	clan := func(text string) []byte { return botwire.EncodeSay2(text, chatClan) }
 	lead := func(text string) CreatureSay { return whisper(leaderID, leaderName, text) }
 	tests := []struct {
 		name  string
@@ -120,7 +121,7 @@ func TestBrainCraftOrders(t *testing.T) {
 		},
 		{
 			name: "GM whisper", setup: func(b *Brain) { knownWarehouse(b, 10) }, ev: whisper(gmID, "GM", "craft steel"),
-			want: encodeSay2Tell("GM", "crafting 1 Steel"), order: &order{OrderByGM, "GM", steel, 1},
+			want: botwire.EncodeSay2Tell("GM", "crafting 1 Steel"), order: &order{OrderByGM, "GM", steel, 1},
 		},
 		{
 			name: "GM in clan chat", setup: func(b *Brain) { knownWarehouse(b, 10) },
@@ -290,7 +291,7 @@ func deliverGMOrder(t *testing.T, b *Brain, by OrderSource, name string, now tim
 // GM order: through the chat gate, none for a leader's order, a name with
 // the bot marker or past the chat Total.
 func TestBrainCraftOrderAnnounce(t *testing.T) {
-	line := encodeSay2("crafted 3 Steel for GM, in the clan warehouse", chatClan)
+	line := botwire.EncodeSay2("crafted 3 Steel for GM, in the clan warehouse", chatClan)
 	t.Run("two GM orders, chatGap apart", func(t *testing.T) {
 		b := newOrderBrain(t)
 		deliverGMOrder(t, b, OrderByGM, "GM", t0)

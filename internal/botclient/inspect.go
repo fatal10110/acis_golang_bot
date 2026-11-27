@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The panel's inspect (#437): a one-off request in the Bot's mailbox that
@@ -154,7 +154,7 @@ func (b *Brain) inspectWake(now time.Time) error {
 		s.wakeAt = now.Add(time.Second / frameRate)
 		return nil
 	}
-	sent, err := b.send(Action{kind: actItemList, payload: encodeRequestItemList()}, now)
+	sent, err := b.send(Action{kind: actItemList, payload: botwire.EncodeRequestItemList()}, now)
 	if err != nil {
 		return err
 	}
@@ -241,13 +241,6 @@ func (b *Brain) heldValuables() []HeldValuable {
 		return cmp.Or(cmp.Compare(a.TemplateID, b.TemplateID), cmp.Compare(a.Enchant, b.Enchant))
 	})
 	return held
-}
-
-// encodeRequestItemList asks the server for the whole inventory: it
-// answers with an ItemList (network/client_ingame.go handleRequestItemList,
-// no payload).
-func encodeRequestItemList() []byte {
-	return wire.NewPacketWriter(opGameRequestItemList).Bytes()
 }
 
 // bodySlotNames name the body part masks ItemList reports for a worn item

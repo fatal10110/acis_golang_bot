@@ -4,23 +4,9 @@ import (
 	"bytes"
 	"testing"
 	"time"
-)
 
-func TestDeathEncoders(t *testing.T) {
-	tests := []struct {
-		name      string
-		got, want []byte
-	}{
-		{"DlgAnswer accept", encodeDlgAnswer(1510, true, 0), []byte{0xc5, 0xe6, 5, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0}},
-		{"DlgAnswer decline echoes requester", encodeDlgAnswer(332, false, 7), []byte{0xc5, 0x4c, 1, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0}},
-		{"RequestUserCommand unstuck", encodeRequestUserCommand(userCommandEscape), []byte{0xaa, 52, 0, 0, 0}},
-	}
-	for _, tt := range tests {
-		if !bytes.Equal(tt.got, tt.want) {
-			t.Errorf("%s = % x, want % x", tt.name, tt.got, tt.want)
-		}
-	}
-}
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
+)
 
 func TestWorldResurrectOffer(t *testing.T) {
 	offer := ConfirmDlg{MessageID: confirmResurrect, Name: "cleric"}
@@ -71,7 +57,7 @@ func deathApply(t *testing.T, b *Brain, now time.Time, events ...Event) {
 func TestRuleDeadRecover(t *testing.T) {
 	village := Die{ObjectID: selfID, Restart: RestartPoints{Village: true}}
 	offer := ConfirmDlg{MessageID: confirmResurrect, Name: "cleric"}
-	restart := encodeRequestRestartPoint(restartVillage)
+	restart := botwire.EncodeRequestRestartPoint(restartVillage)
 	tests := []struct {
 		name    string
 		recover func(*RecoverPolicy)
@@ -80,8 +66,8 @@ func TestRuleDeadRecover(t *testing.T) {
 		at      time.Duration // after the death at t0
 		want    []byte        // nil holds
 	}{
-		{"offer accepted", nil, true, []Event{offer}, time.Second, encodeDlgAnswer(confirmResurrect, true, 0)},
-		{"offer declined", func(r *RecoverPolicy) { r.AcceptResurrection = false }, false, []Event{offer}, time.Second, encodeDlgAnswer(confirmResurrect, false, 0)},
+		{"offer accepted", nil, true, []Event{offer}, time.Second, botwire.EncodeDlgAnswer(confirmResurrect, true, 0)},
+		{"offer declined", func(r *RecoverPolicy) { r.AcceptResurrection = false }, false, []Event{offer}, time.Second, botwire.EncodeDlgAnswer(confirmResurrect, false, 0)},
 		{"party member waits", nil, true, nil, 2*time.Minute - time.Millisecond, nil},
 		{"party member restarts after the wait", nil, true, nil, 2 * time.Minute, restart},
 		{"alone restarts at once", nil, false, nil, time.Second, restart},
@@ -206,11 +192,11 @@ func TestLeaderLeftFallsBackToTown(t *testing.T) {
 	}
 	now := lost.Add(wait)
 	name, a := deathStep(t, b, now)
-	if name != "leader" || !bytes.Equal(a.payload, encodeSay2Tell("GM", "where did you go?")) {
+	if name != "leader" || !bytes.Equal(a.payload, botwire.EncodeSay2Tell("GM", "where did you go?")) {
 		t.Fatalf("after the wait: %q % x, want the whisper to GM", name, a.payload)
 	}
 	now = now.Add(chatGap)
-	if name, a := deathStep(t, b, now); name != "leader" || !bytes.Equal(a.payload, encodeRequestUserCommand(userCommandEscape)) {
+	if name, a := deathStep(t, b, now); name != "leader" || !bytes.Equal(a.payload, botwire.EncodeRequestUserCommand(userCommandEscape)) {
 		t.Fatalf("after the whisper: %q kind %d, want /unstuck", name, a.kind)
 	}
 	deathApply(t, b, now.Add(time.Second), MagicSkillUse{CasterID: selfID, TargetID: selfID, SkillID: 2099, HitTime: 5 * time.Minute})

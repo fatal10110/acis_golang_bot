@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/craftplan"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -198,9 +199,9 @@ func (b *Brain) answerOrder(t tell, text string, now time.Time) {
 	}
 	b.cfg.chat.count(now, p)
 	text = clipChat(text)
-	payload := encodeSay2(text, chatClan)
+	payload := botwire.EncodeSay2(text, chatClan)
 	if !t.clan {
-		payload = encodeSay2Tell(t.name, text)
+		payload = botwire.EncodeSay2Tell(t.name, text)
 	}
 	b.announce = append(b.announce, Action{kind: actAnswer, payload: payload})
 }
@@ -220,7 +221,7 @@ func (b *Brain) announceOrder(o CraftOrder, now time.Time) {
 		label = fmt.Sprintf("item %d", o.Product)
 	}
 	text := clipChat(fmt.Sprintf("crafted %d %s for %s, in the clan warehouse", o.Count, label, o.Member))
-	b.announce = append(b.announce, Action{kind: actAnnounce, payload: encodeSay2(text, chatClan)})
+	b.announce = append(b.announce, Action{kind: actAnnounce, payload: botwire.EncodeSay2(text, chatClan)})
 }
 
 // ruleAnnounce says the first queued craft order line (an order's answer,

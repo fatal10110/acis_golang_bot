@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // clanInviteTimeout is how long the server keeps a clan invitation
@@ -18,27 +18,9 @@ const clanInviteTimeout = 15 * time.Second
 // it right before AskJoinPledge (network/clan.go requestJoinPledge).
 const msgInvitedToClan = 67
 
-// encodeRequestAnswerJoinPledge answers the pending clan invitation: 1
-// accepts, 0 declines (clientpackets/pledge.go, any non-zero accepts).
-func encodeRequestAnswerJoinPledge(accept bool) []byte {
-	w := wire.NewPacketWriter(opGameRequestAnswerJoinPledge)
-	w.WriteInt32(wire.BoolInt32(accept))
-	return w.Bytes()
-}
-
-// encodeRequestJoinPledge invites the player whose object id is target
-// into the sender's clan, sub-unit pledgeType (0 the main clan)
-// (clientpackets/pledge.go).
-func encodeRequestJoinPledge(target, pledgeType int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestJoinPledge)
-	w.WriteInt32(target)
-	w.WriteInt32(pledgeType)
-	return w.Bytes()
-}
-
 // answerClanAction answers the open clan invitation.
 func answerClanAction(accept bool) Action {
-	return Action{kind: actAnswerClan, payload: encodeRequestAnswerJoinPledge(accept)}
+	return Action{kind: actAnswerClan, payload: botwire.EncodeRequestAnswerJoinPledge(accept)}
 }
 
 // AcceptClanFrom is the clan invitation policy of a bot that joins a

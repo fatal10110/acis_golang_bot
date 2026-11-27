@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Recipe learning limits.
@@ -50,28 +50,9 @@ var learnRefusals = []int32{
 	msgCreateLvlTooLowToRegister, msgUpToS1RecipesCanRegister,
 }
 
-// encodeRequestRecipeBookOpen asks for the dwarven or the common page of
-// the recipe book (clientpackets/recipe.go: any page but 0 is common).
-func encodeRequestRecipeBookOpen(dwarven bool) []byte {
-	w := wire.NewPacketWriter(opGameRequestRecipeBookOpen)
-	page := recipePageCommon
-	if dwarven {
-		page = recipePageDwarven
-	}
-	w.WriteInt32(page)
-	return w.Bytes()
-}
-
-// encodeRequestRecipeItemMakeSelf crafts recipeID for the bot itself.
-func encodeRequestRecipeItemMakeSelf(recipeID int32) []byte {
-	w := wire.NewPacketWriter(opGameRequestRecipeItemMakeSelf)
-	w.WriteInt32(recipeID)
-	return w.Bytes()
-}
-
 // recipeBookAction opens the dwarven or the common page of the book.
 func recipeBookAction(dwarven bool) Action {
-	return Action{kind: actRecipeBook, payload: encodeRequestRecipeBookOpen(dwarven)}
+	return Action{kind: actRecipeBook, payload: botwire.EncodeRequestRecipeBookOpen(dwarven)}
 }
 
 // learnBookAction is the recipe errand's own open of a page (ruleRecipe),
@@ -85,7 +66,7 @@ func learnBookAction(dwarven bool) Action {
 // craftAction crafts recipeID for the bot. It passes the craft gate
 // (gateCraft, craftGap).
 func craftAction(recipeID int32) Action {
-	return Action{kind: actCraft, payload: encodeRequestRecipeItemMakeSelf(recipeID), item: recipeID}
+	return Action{kind: actCraft, payload: botwire.EncodeRequestRecipeItemMakeSelf(recipeID), item: recipeID}
 }
 
 // CraftFailure is why a craft failed: the system message the server sends

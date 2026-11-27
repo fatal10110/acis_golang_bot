@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -94,19 +94,9 @@ func indexTrainers(npcs map[int32]datapack.NPC) map[int32][]int32 {
 // (serverpackets/acquireskill.go).
 const spellbookRequirement int32 = 99
 
-// encodeSkillRequest is RequestAcquireSkillInfo or RequestAcquireSkill
-// (opcode op): skill id, level, list type (clientpackets/acquire_skill.go).
-func encodeSkillRequest(op byte, id, level, typ int32) []byte {
-	w := wire.NewPacketWriter(op)
-	w.WriteInt32(id)
-	w.WriteInt32(level)
-	w.WriteInt32(typ)
-	return w.Bytes()
-}
-
 // talkAction clicks the selected NPC id from origin, which talks to it.
 func talkAction(id int32, from Point) Action {
-	return Action{kind: actTalk, payload: encodeAction(id, from), object: id}
+	return Action{kind: actTalk, payload: botwire.EncodeAction(id, from), object: id}
 }
 
 // trainStep is where a trainer visit stands.
@@ -272,10 +262,10 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 			return Action{}, false
 		}
 		t.pending = sk
-		return Action{kind: actSkillInfo, payload: encodeSkillRequest(opGameRequestAcquireSkillInfo, sk.ID, sk.Level, acquireSkillUsual)}, true
+		return Action{kind: actSkillInfo, payload: botwire.EncodeSkillRequest(opGameRequestAcquireSkillInfo, sk.ID, sk.Level, acquireSkillUsual)}, true
 	case trainLearn:
 		sk := t.pending
-		return Action{kind: actLearnSkill, payload: encodeSkillRequest(opGameRequestAcquireSkill, sk.ID, sk.Level, acquireSkillUsual)}, true
+		return Action{kind: actLearnSkill, payload: botwire.EncodeSkillRequest(opGameRequestAcquireSkill, sk.ID, sk.Level, acquireSkillUsual)}, true
 	}
 	// The way to the page, as every NPC visit's: a stand point with an open
 	// line first, then the clicks, bounded by visitClicks.

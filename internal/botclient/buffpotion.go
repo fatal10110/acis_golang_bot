@@ -1,8 +1,6 @@
 package botclient
 
-import (
-	"time"
-)
+import "time"
 
 // buffPotionWait is how long the bot drinks no buff potion after one
 // UseItem of it unless its effect shows in the bot's abnormals, which then
@@ -94,5 +92,5 @@ func (b *Brain) buffPotionRow() (buyRow, bool) {
 			n = min(n, int32(max(room, 0)/int64(wt)))
 		}
 	}
-	return buyRow{item: id, count: n}, n > 0
+	return buyRow{Item: id, Count: n}, n > 0
 }

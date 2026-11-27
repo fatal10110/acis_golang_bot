@@ -14,6 +14,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // Helpers of the scenarios that run whole bots next to scripted clients:
@@ -177,7 +178,7 @@ const partyAnswer = 20 * time.Second
 // answer, 1 accepted and 0 declined.
 func invite(t *testing.T, ctx context.Context, c *Client, name string) int32 {
 	t.Helper()
-	if err := c.Send(ctx, botclient.EncodeRequestJoinParty(name, 0)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeRequestJoinParty(name, 0)); err != nil {
 		t.Fatal(err)
 	}
 	ev, err := c.Await(ctx, partyAnswer, func(ev botclient.Event) bool {
@@ -193,7 +194,7 @@ func invite(t *testing.T, ctx context.Context, c *Client, name string) int32 {
 // tell whispers text to the player named name.
 func tell(t *testing.T, ctx context.Context, c *Client, name, text string) {
 	t.Helper()
-	if err := c.Send(ctx, botclient.EncodeSay2Tell(name, text)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeSay2Tell(name, text)); err != nil {
 		t.Fatal(err)
 	}
 }

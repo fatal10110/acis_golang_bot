@@ -177,7 +177,7 @@ func TestValuableClassification(t *testing.T) {
 			}
 			var listed []int32
 			for _, r := range b.storeRows() {
-				listed = append(listed, r.object)
+				listed = append(listed, r.Object)
 			}
 			if want := map[bool][]int32{true: {swordLoot.ObjectID}, false: {sword.ObjectID, swordLoot.ObjectID}}[enabled]; !slices.Equal(listed, want) {
 				t.Errorf("enabled %v: store rows %v, want %v", enabled, listed, want)

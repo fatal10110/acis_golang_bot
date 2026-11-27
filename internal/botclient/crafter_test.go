@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/craftplan"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
@@ -48,7 +49,7 @@ func newCrafterBrain(t *testing.T, items ...Item) *Brain {
 	return b
 }
 
-func craftReq() []byte { return encodeRequestRecipeItemMakeSelf(steelRecipe) }
+func craftReq() []byte { return botwire.EncodeRequestRecipeItemMakeSelf(steelRecipe) }
 
 func madeInfo(status int32) RecipeItemMakeInfo {
 	return RecipeItemMakeInfo{RecipeID: steelRecipe, Dwarven: true, MP: 70, MaxMP: 100, Status: status}
@@ -72,7 +73,7 @@ func TestBrainCrafterCycle(t *testing.T) {
 		trainerStep{name: "reopen under the lease", at: 4*time.Second + warehouseOpenGap, wantRule: "warehouse", wantKind: actTalk},
 		trainerStep{
 			name: "withdraw link", at: 65 * time.Second, events: []Event{keeperPage(keeperObj, "WithdrawC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, false)),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, false)),
 		},
 		trainerStep{
 			name: "withdraw the plan's ore", at: 66 * time.Second,
@@ -82,7 +83,7 @@ func TestBrainCrafterCycle(t *testing.T) {
 				}
 			},
 			events:   []Event{WarehouseWithdrawList{Type: clanWarehouseType, Items: []WarehouseItem{whStoredOre}}},
-			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{whStoredOre.ObjectID, ironOre, 10}),
+			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{Object: whStoredOre.ObjectID, Item: ironOre, Count: 10}),
 		},
 		trainerStep{
 			name: "withdrawn: release the lease, craft", at: 67 * time.Second,
@@ -131,12 +132,12 @@ func TestBrainCrafterCycle(t *testing.T) {
 		{name: "deposit after MinOpenGap", at: 65*time.Second + warehouseOpenGap, wantRule: "warehouse", wantKind: actTalk},
 		{
 			name: "deposit link", at: 126 * time.Second, events: []Event{keeperPage(keeperObj, "DepositC")},
-			wantRule: "warehouse", wantKind: actBypass, wantPayload: encodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
+			wantRule: "warehouse", wantKind: actBypass, wantPayload: botwire.EncodeRequestBypassToServer(clanWarehouseCommand(keeperObj, true)),
 		},
 		{
 			name: "deposit the steel", at: 127 * time.Second,
 			events:   []Event{WarehouseDepositList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{{ObjectID: 300, TemplateID: steel, Count: 5}}}},
-			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{300, steel, 5}),
+			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{Object: 300, Item: steel, Count: 5}),
 		},
 		{
 			name: "deposited: the cycle ends", at: 128 * time.Second,

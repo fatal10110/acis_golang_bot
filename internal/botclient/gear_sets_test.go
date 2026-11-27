@@ -197,7 +197,7 @@ func TestGearSetBuy(t *testing.T) {
 		b := newSetBrain(t, setShop, append(old, adenaStack(keep+2900))...)
 		var got []int32
 		for _, r := range b.gearWants() {
-			got = append(got, r.item)
+			got = append(got, r.Item)
 		}
 		if !slices.Equal(got, set) {
 			t.Fatalf("gearWants = %v, want the set %v", got, set)
@@ -206,7 +206,7 @@ func TestGearSetBuy(t *testing.T) {
 			t.Fatalf("gearGoal = %v, want the set %v", goal, set)
 		}
 		rows := b.buyRows(BuyList{Money: keep + 2900, ListID: 1, Items: shopItems(setShop)})
-		want := []buyRow{{setShield, 1}, {setChest, 1}, {setLegs, 1}, {setHead, 1}}
+		want := []buyRow{{Item: setShield, Count: 1}, {Item: setChest, Count: 1}, {Item: setLegs, Count: 1}, {Item: setHead, Count: 1}}
 		if !slices.Equal(rows, want) {
 			t.Fatalf("buyRows = %v, want %v", rows, want)
 		}
@@ -244,7 +244,7 @@ func TestGearSetBuy(t *testing.T) {
 		}
 		var got []int32
 		for _, r := range b.gearWants() {
-			got = append(got, r.item)
+			got = append(got, r.Item)
 		}
 		if !slices.Contains(got, setLegs) {
 			t.Fatalf("gearWants = %v, want the affordable setLegs over oldPants", got)
@@ -260,7 +260,7 @@ func TestGearSetBuy(t *testing.T) {
 		}
 		var got []int32
 		for _, r := range b.gearWants() {
-			got = append(got, r.item)
+			got = append(got, r.Item)
 		}
 		if !slices.Equal(got, set) {
 			t.Fatalf("gearWants = %v, want the set %v", got, set)
@@ -269,7 +269,7 @@ func TestGearSetBuy(t *testing.T) {
 	t.Run("part sold here: the rest still paid", func(t *testing.T) {
 		b := newSetBrain(t, setShop, append(old, adenaStack(keep+2900))...)
 		window := shopItems(setShop[:1]) // the chest only
-		if rows := b.buyRows(BuyList{Money: keep + 2900, ListID: 1, Items: window}); !slices.Equal(rows, []buyRow{{setChest, 1}}) {
+		if rows := b.buyRows(BuyList{Money: keep + 2900, ListID: 1, Items: window}); !slices.Equal(rows, []buyRow{{Item: setChest, Count: 1}}) {
 			t.Fatalf("buyRows = %v, want the chest", rows)
 		}
 		if rows := b.buyRows(BuyList{Money: keep + 1500, ListID: 1, Items: window}); len(rows) != 0 {

@@ -129,7 +129,7 @@ func (b *Brain) loadFits(rows ...buyRow) bool {
 	}
 	load := int64(s.Load)
 	for _, r := range rows {
-		load += int64(t.weights[r.item]) * int64(cmp.Or(r.count, 1))
+		load += int64(t.weights[r.Item]) * int64(cmp.Or(r.Count, 1))
 	}
 	return fitsUnderSlow(load, s.MaxLoad)
 }
@@ -138,7 +138,7 @@ func (b *Brain) loadFits(rows ...buyRow) bool {
 func oneEach(ids []int32) []buyRow {
 	rows := make([]buyRow, len(ids))
 	for i, id := range ids {
-		rows[i] = buyRow{item: id, count: 1}
+		rows[i] = buyRow{Item: id, Count: 1}
 	}
 	return rows
 }

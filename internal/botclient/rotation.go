@@ -3,6 +3,8 @@ package botclient
 import (
 	"slices"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The rotation runner (docs/strategy.md, Design sections 4, 7 and 9): fight
@@ -213,7 +215,7 @@ func (b *Brain) castStep(id, skill int32, opens bool, now time.Time) Action {
 			return a
 		}
 	}
-	return Action{kind: actCast, payload: encodeRequestMagicSkillUse(skill, b.forced(id, now)), object: id, skill: skill, opens: opens}
+	return Action{kind: actCast, payload: botwire.EncodeRequestMagicSkillUse(skill, b.forced(id, now)), object: id, skill: skill, opens: opens}
 }
 
 // onceRecord is what Step.Once reads (stepState.onced): the target the

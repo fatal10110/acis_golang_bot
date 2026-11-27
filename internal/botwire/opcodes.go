@@ -322,6 +322,6 @@ const (
 )
 
 // OpGameRequestDestroyItem destroys an item (clientpackets/wiresafe.go).
-// Only the e2e harness sends it (botclient.EncodeRequestDestroyItem): a
+// Only the e2e harness sends it (EncodeRequestDestroyItem): a
 // bot never destroys what it carries.
 const OpGameRequestDestroyItem = 0x59

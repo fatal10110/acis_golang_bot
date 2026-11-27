@@ -411,7 +411,7 @@ func (b *Brain) refillRow(s supply) (buyRow, bool) {
 		return buyRow{}, false
 	}
 	if have := b.carried(s.item); b.refills(have, s.count) {
-		return buyRow{item: s.item, count: s.count - have}, true
+		return buyRow{Item: s.item, Count: s.count - have}, true
 	}
 	return buyRow{}, false
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/geotest"
 )
@@ -129,7 +130,7 @@ func TestSpoilVerdicts(t *testing.T) {
 			b := rowBrain(t, DwarvenFighter.ID, 10, "BLUNT", skillSpoil, skillSweeper)
 			castSpoil(t, b)
 			if tt.other {
-				mustSend(t, b, Action{kind: actCast, payload: encodeRequestMagicSkillUse(skillOther, false), object: selfID, skill: skillOther}, spoilVerdictAt)
+				mustSend(t, b, Action{kind: actCast, payload: botwire.EncodeRequestMagicSkillUse(skillOther, false), object: selfID, skill: skillOther}, spoilVerdictAt)
 			}
 			for _, ev := range tt.verdict {
 				mustHandle(t, b, spoilVerdictAt, ev)

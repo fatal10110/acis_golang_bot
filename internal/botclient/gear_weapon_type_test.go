@@ -77,11 +77,11 @@ func TestBrainDaggerArcherToBow(t *testing.T) {
 	wornDagger := wornAt(220, dagger, partRHand)
 	b := newDaggerArcher(t, wornDagger, adenaStack(30000))
 	b.persona.Shop.KeepAdena = 0
-	if got, want := b.gearWants(), (buyRow{item: plainBow, count: 1}); !slices.Contains(got, want) {
+	if got, want := b.gearWants(), (buyRow{Item: plainBow, Count: 1}); !slices.Contains(got, want) {
 		t.Fatalf("gearWants = %v, want %v among them", got, want)
 	}
 	window := BuyList{Money: 30000, Items: []ShopItem{{TemplateID: plainBow, Price: 12500}, {TemplateID: woodenArrow, Price: 2}}}
-	want := []buyRow{{item: plainBow, count: 1}, {item: woodenArrow, count: 1000}}
+	want := []buyRow{{Item: plainBow, Count: 1}, {Item: woodenArrow, Count: 1000}}
 	if got := b.buyRows(window); !slices.Equal(got, want) {
 		t.Fatalf("buyRows = %v, want %v", got, want)
 	}
@@ -92,7 +92,7 @@ func TestBrainDaggerArcherToBow(t *testing.T) {
 	if a, ok := b.ruleGear(at(time.Second)); ok {
 		t.Fatalf("bow, no arrows: ruleGear = %+v, want the dagger kept", a)
 	}
-	if got, want := b.shopWants(true), (buyRow{item: woodenArrow, count: 1000}); !slices.Contains(got, want) {
+	if got, want := b.shopWants(true), (buyRow{Item: woodenArrow, Count: 1000}); !slices.Contains(got, want) {
 		t.Errorf("bow, no arrows: shopWants = %v, want %v among them", got, want)
 	}
 	if got := slices.Sorted(maps.Keys(b.junk())); len(got) != 0 {
@@ -133,7 +133,7 @@ func TestArrowsOfNextBow(t *testing.T) {
 	b := newDaggerArcher(t, wornShortBow, carriedArrows, strongBow, boneArrowsOf(50))
 	b.world.Apply(SkillList{Skills: []KnownSkill{{ID: expertiseSkill, Level: 1, Passive: true}}}, t0)
 	b.persona.Gear.Buy = false
-	want := []buyRow{{item: boneArrow, count: 950}}
+	want := []buyRow{{Item: boneArrow, Count: 950}}
 	if got := b.shopWants(true); !slices.Equal(got, want) {
 		t.Errorf("shopWants = %v, want %v", got, want)
 	}
@@ -150,16 +150,16 @@ func TestBuyRowsBowArrowsOnce(t *testing.T) {
 	b.persona.Shop.KeepAdena = 0
 	window := BuyList{Money: 30000, Items: []ShopItem{{TemplateID: plainBow, Price: 12500}, {TemplateID: woodenArrow, Price: 2}}}
 	got := b.buyRows(window)
-	if !slices.Contains(got, buyRow{item: plainBow, count: 1}) {
+	if !slices.Contains(got, buyRow{Item: plainBow, Count: 1}) {
 		t.Errorf("buyRows = %v, want the bow among them", got)
 	}
 	var arrows []buyRow
 	for _, r := range got {
-		if r.item == woodenArrow {
+		if r.Item == woodenArrow {
 			arrows = append(arrows, r)
 		}
 	}
-	want := []buyRow{{item: woodenArrow, count: b.persona.Shop.ArrowsMax - fewArrows.Count}}
+	want := []buyRow{{Item: woodenArrow, Count: b.persona.Shop.ArrowsMax - fewArrows.Count}}
 	if !slices.Equal(arrows, want) {
 		t.Errorf("buyRows arrow rows = %v, want %v", arrows, want)
 	}
@@ -171,7 +171,7 @@ func TestBuyRowsArrowsFollowBow(t *testing.T) {
 	b := newDaggerArcher(t, wornAt(220, dagger, partRHand), adenaStack(1000000))
 	b.persona.Shop.KeepAdena = 0
 	gear := b.gearWants()
-	bowAt := slices.Index(gear, buyRow{item: plainBow, count: 1})
+	bowAt := slices.Index(gear, buyRow{Item: plainBow, Count: 1})
 	if bowAt < 0 || bowAt == len(gear)-1 {
 		t.Fatalf("gearWants = %v, want the bow before another piece", gear)
 	}
@@ -179,7 +179,7 @@ func TestBuyRowsArrowsFollowBow(t *testing.T) {
 	for _, p := range slices.Backward(arrowShop) {
 		window.Items = append(window.Items, ShopItem{TemplateID: p.ItemID, Price: p.Price})
 	}
-	want := slices.Insert(slices.Clone(gear), bowAt+1, buyRow{item: woodenArrow, count: b.persona.Shop.ArrowsMax})
+	want := slices.Insert(slices.Clone(gear), bowAt+1, buyRow{Item: woodenArrow, Count: b.persona.Shop.ArrowsMax})
 	if got := b.buyRows(window); !slices.Equal(got, want) {
 		t.Errorf("buyRows = %v, want %v", got, want)
 	}
@@ -203,7 +203,7 @@ func TestGearWantsUnarmedBow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newDaggerArcher(t, append(tt.items, wornAt(220, dagger, partRHand), adenaStack(30000))...)
 			b.persona.Shop.ArrowsMax = tt.max
-			got := slices.Contains(b.gearWants(), buyRow{item: plainBow, count: 1})
+			got := slices.Contains(b.gearWants(), buyRow{Item: plainBow, Count: 1})
 			if got != tt.want {
 				t.Errorf("gearWants has the bow = %v, want %v", got, tt.want)
 			}
