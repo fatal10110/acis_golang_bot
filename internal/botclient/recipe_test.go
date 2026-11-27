@@ -70,7 +70,7 @@ func TestBrainLearnRecipe(t *testing.T) {
 			name: "learned", at: 5 * time.Second,
 			events: []Event{
 				SystemMessage{ID: msgS1Added},
-				InventoryUpdate{Changes: []ItemChange{{ItemRemoved, ssdScrollItem}}},
+				InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: ssdScrollItem}}},
 				RecipeBookItemList{Dwarven: true, MaxMP: 100, Recipes: []int32{1, ssdRecipe}},
 			},
 		},

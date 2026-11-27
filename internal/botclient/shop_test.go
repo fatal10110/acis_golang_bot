@@ -2,13 +2,10 @@ package botclient
 
 import (
 	"bytes"
-	"errors"
-	"reflect"
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
@@ -36,84 +33,12 @@ func merchantPage(obj int32, lists ...int32) string {
 	return html + `<a action="bypass -h npc_` + itoa(obj) + `_Sell">Sell</a></body></html>`
 }
 
-// shopRows is a window's rows as packet fields.
-func shopRows(items ...ShopItem) []any {
-	var f []any
-	for _, it := range items {
-		f = append(f, it.Category, it.ObjectID, it.TemplateID, it.Count, it.SubCategory, uint16(0), it.BodySlot, it.Enchant, uint16(0), uint16(0), it.Price)
-	}
-	return f
-}
-
-func shopWindow(op byte, money, listID int32, count uint16, items ...ShopItem) []byte {
-	return packet(op, append([]any{money, listID, count}, shopRows(items...)...)...)
-}
-
 var (
 	potionOffer = ShopItem{Category: 5, ObjectID: lesserHealingPotion, TemplateID: lesserHealingPotion, SubCategory: 5, Price: 103}
 	shotOffer   = ShopItem{Category: 5, ObjectID: spiritshotNoGrade, TemplateID: spiritshotNoGrade, SubCategory: 5, Price: 17}
 	bookOffer   = ShopItem{Category: 5, ObjectID: healBook, TemplateID: healBook, Count: 3, SubCategory: 5, Price: 110}
 	skinRow     = ShopItem{Category: 5, ObjectID: 102, TemplateID: animalSkin, Count: 10, SubCategory: 5, Price: 5}
 )
-
-func TestDecodeShopWindows(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  []byte
-		want Event
-	}{
-		// 100 adena, list 14, one row: Lesser Healing Potion, unlimited, at 103.
-		{
-			"BuyList bytes",
-			[]byte{
-				0x11, 100, 0, 0, 0, 14, 0, 0, 0, 1, 0,
-				5, 0, 0x24, 4, 0, 0, 0x24, 4, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 103, 0, 0, 0,
-			},
-			BuyList{Money: 100, ListID: 14, Items: []ShopItem{potionOffer}},
-		},
-		{"BuyList", shopWindow(opGameBuyList, 5000, 29, 2, bookOffer, potionOffer), BuyList{Money: 5000, ListID: 29, Items: []ShopItem{bookOffer, potionOffer}}},
-		// A sold-out product of limited stock is counted, not written.
-		{"BuyList sold out", shopWindow(opGameBuyList, 5000, 29, 3, potionOffer), BuyList{Money: 5000, ListID: 29, Items: []ShopItem{potionOffer}}},
-		{"BuyList empty", shopWindow(opGameBuyList, 0, 14, 0), BuyList{ListID: 14, Items: []ShopItem{}}},
-		{"SellList", shopWindow(opGameSellList, 300, 0, 1, skinRow), SellList{Money: 300, Items: []ShopItem{skinRow}}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := decodeEvent(tt.raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", got, ok, err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("decodeEvent = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDecodeShopWindowsRejects(t *testing.T) {
-	buy := shopWindow(opGameBuyList, 1, 14, 1, potionOffer)
-	sell := shopWindow(opGameSellList, 1, 0, 1, skinRow)
-	tests := []struct {
-		name string
-		raw  []byte
-		want error
-	}{
-		{"BuyList short header", packet(opGameBuyList, 1, 14), wire.ErrShortPacket},
-		{"BuyList short row", buy[:len(buy)-1], wire.ErrShortPacket},
-		{"BuyList trailing", append(shopWindow(opGameBuyList, 1, 14, 0), 0), errTrailingBytes},
-		{"BuyList rows past the count", shopWindow(opGameBuyList, 1, 14, 1, potionOffer, shotOffer), errTrailingBytes},
-		{"SellList short row", sell[:len(sell)-4], wire.ErrShortPacket},
-		{"SellList count past the frame", shopWindow(opGameSellList, 1, 0, 2, skinRow), wire.ErrShortPacket},
-		{"SellList trailing", append(sell, 0), errTrailingBytes},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeEvent(tt.raw); !errors.Is(err, tt.want) {
-				t.Fatalf("decodeEvent error = %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
 
 func TestShopEncoders(t *testing.T) {
 	tests := []struct {
@@ -217,7 +142,7 @@ func TestBrainShopVisit(t *testing.T) {
 		{
 			name: "sold: talk again past the sold page", at: 47 * time.Second,
 			events: []Event{
-				InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(5050)}, {ItemRemoved, skin}}},
+				InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(5050)}, {State: ItemRemoved, Item: skin}}},
 				soldPage,
 			},
 			wantRule: "shop", wantKind: actTalk,
@@ -500,7 +425,7 @@ func TestTrainerBuysSpellbook(t *testing.T) {
 	b.cfg.Travel = &TravelMap{shops: shops, cheapest: cheapest, trainers: testTrainers}
 	b.world.Apply(ItemList{Items: []Item{adenaStack(2000), potionsOf(20), spiritsOf(100), sword}}, t0)
 	b.world.Apply(NPCInfo{ObjectID: bookSellerObj, NPCID: 30094, Pos: Point{X: -300}}, t0)
-	heal1 := AcquirableSkill{skillHeal, 1, 160}
+	heal1 := AcquirableSkill{ID: skillHeal, Level: 1, Cost: 160}
 	book := AcquireSkillInfo{ID: skillHeal, Level: 1, Cost: 160, Requirements: []SkillRequirement{{Type: spellbookRequirement, ItemID: healBook, Count: 1}}}
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "select", wantRule: "train", wantKind: actSelect},
@@ -527,7 +452,7 @@ func TestTrainerBuysSpellbook(t *testing.T) {
 func TestTrainerLearnsWithBook(t *testing.T) {
 	b := newTrainerBrain(t, 200)
 	b.world.Apply(ItemList{Items: []Item{{ObjectID: 300, TemplateID: healBook, Count: 1}}}, t0)
-	b.train.npc, b.train.step, b.train.pending = trainerObj, trainPick, AcquirableSkill{skillHeal, 1, 160}
+	b.train.npc, b.train.step, b.train.pending = trainerObj, trainPick, AcquirableSkill{ID: skillHeal, Level: 1, Cost: 160}
 	ev := AcquireSkillInfo{ID: skillHeal, Level: 1, Cost: 160, Requirements: []SkillRequirement{{Type: spellbookRequirement, ItemID: healBook, Count: 1}}}
 	if err := b.handle([]Event{ev}, at(time.Second)); err != nil {
 		t.Fatal(err)
@@ -571,7 +496,7 @@ func TestShopKeepsBoughtBook(t *testing.T) {
 	if !b.shop.held[healBook] || len(b.shop.books) != 0 {
 		t.Fatalf("held %v, books %v: want the book held, none wanted", b.shop.held, b.shop.books)
 	}
-	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, book}}}}, at(4*time.Second)); err != nil {
+	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: book}}}}, at(4*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if b.shop.held[healBook] {

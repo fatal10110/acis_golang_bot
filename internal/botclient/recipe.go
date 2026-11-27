@@ -50,69 +50,6 @@ var learnRefusals = []int32{
 	msgCreateLvlTooLowToRegister, msgUpToS1RecipesCanRegister,
 }
 
-// Pages of the recipe book on the wire: RequestRecipeBookOpen,
-// RecipeBookItemList and RecipeItemMakeInfo name the dwarven page 0 and the
-// common page 1 (clientpackets/recipe.go, serverpackets/recipe.go).
-const (
-	recipePageDwarven int32 = 0
-	recipePageCommon  int32 = 1
-)
-
-// RecipeBookItemList is one page of the bot's recipe book: dwarven or
-// common, the bot's max MP, and the recipe ids in book order.
-type RecipeBookItemList struct {
-	Dwarven bool
-	MaxMP   int32
-	Recipes []int32
-}
-
-// Outcomes of a craft a RecipeItemMakeInfo reports
-// (serverpackets/recipe.go RecipeMakeInfo*).
-const (
-	RecipeMadeNone    int32 = -1
-	RecipeMadeFailed  int32 = 0
-	RecipeMadeSuccess int32 = 1
-)
-
-// RecipeItemMakeInfo is the craft window of RecipeID after a craft: its
-// page, the bot's MP and max MP, and Status, the craft's outcome
-// (RecipeMade*). A failed craft is told apart by the system message ahead
-// of it (craftFailure).
-type RecipeItemMakeInfo struct {
-	RecipeID  int32
-	Dwarven   bool
-	MP, MaxMP int32
-	Status    int32
-}
-
-func (RecipeBookItemList) event() {}
-func (RecipeItemMakeInfo) event() {}
-
-// decodeRecipeBookItemList: page, max MP, count, then per recipe its id
-// and its 1-based position (serverpackets/recipe.go
-// FrameRecipeBookItemList). The position is the list order and is dropped.
-// The loop ends at the first short read.
-func decodeRecipeBookItemList(r *wire.Reader) Event {
-	e := RecipeBookItemList{Dwarven: r.ReadInt32() == recipePageDwarven, MaxMP: r.ReadInt32()}
-	n := int(r.ReadInt32())
-	e.Recipes = make([]int32, 0, capFor(r, n, 8))
-	for ; n > 0 && r.Err() == nil; n-- {
-		id := r.ReadInt32()
-		r.ReadInt32()
-		e.Recipes = append(e.Recipes, id)
-	}
-	return e
-}
-
-// decodeRecipeItemMakeInfo: recipe id, page, MP, max MP, status
-// (serverpackets/recipe.go FrameRecipeItemMakeInfo).
-func decodeRecipeItemMakeInfo(r *wire.Reader) Event {
-	return RecipeItemMakeInfo{
-		RecipeID: r.ReadInt32(), Dwarven: r.ReadInt32() == recipePageDwarven,
-		MP: r.ReadInt32(), MaxMP: r.ReadInt32(), Status: r.ReadInt32(),
-	}
-}
-
 // encodeRequestRecipeBookOpen asks for the dwarven or the common page of
 // the recipe book (clientpackets/recipe.go: any page but 0 is common).
 func encodeRequestRecipeBookOpen(dwarven bool) []byte {

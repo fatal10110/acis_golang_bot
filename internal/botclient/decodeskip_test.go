@@ -14,6 +14,7 @@ import (
 
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
@@ -34,10 +35,10 @@ func TestReadEventsSkipsMalformedFrame(t *testing.T) {
 		then    Event // queued after the skip; nil: the next frame's event
 	}{
 		{"short frame", packet(opGameStopMove, seed), decodeSkipped{key: opcodeKey{op: opGameStopMove}, length: 5}, wire.ErrShortPacket, nil},
-		{"trailing bytes", append(stopMove(5, at, 9), 0), decodeSkipped{key: opcodeKey{op: opGameStopMove}, length: 22}, errTrailingBytes, nil},
+		{"trailing bytes", append(stopMove(5, at, 9), 0), decodeSkipped{key: opcodeKey{op: opGameStopMove}, length: 22}, botwire.ErrTrailingBytes, nil},
 		{"extended", packet(opGameExtended, opGameExAutoSoulShot, seed), decodeSkipped{key: opcodeKey{op: opGameExtended, sub: opGameExAutoSoulShot}, length: 7}, wire.ErrShortPacket, nil},
-		{"ServerClose", append(packet(opGameServerClose), 0), decodeSkipped{key: opcodeKey{op: opGameServerClose}, length: 2}, errTrailingBytes, ServerClose{}},
-		{"LeaveWorld", append(packet(opGameLeaveWorld), 0), decodeSkipped{key: opcodeKey{op: opGameLeaveWorld}, length: 2}, errTrailingBytes, LeaveWorld{}},
+		{"ServerClose", append(packet(opGameServerClose), 0), decodeSkipped{key: opcodeKey{op: opGameServerClose}, length: 2}, botwire.ErrTrailingBytes, ServerClose{}},
+		{"LeaveWorld", append(packet(opGameLeaveWorld), 0), decodeSkipped{key: opcodeKey{op: opGameLeaveWorld}, length: 2}, botwire.ErrTrailingBytes, LeaveWorld{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -275,7 +276,7 @@ func TestEnterGameDecodeErrors(t *testing.T) {
 		{"CharSelectInfo", []step{authLogin, sendStep(packet(opGameCharSelectInfo, -1))}, nil},
 		{"UserInfo head", append(gameStart[:6:6], sendStep(packet(opGameUserInfo, 1, 2, 3, 4))), wire.ErrShortPacket},
 		{"burst UserInfo", append(gameStart[:6:6], sendStep(userInfoHead(1, 2, 3, 4, objectID))), wire.ErrShortPacket},
-		{"burst UserInfo trailing", append(gameStart[:6:6], sendStep(append(userInfo(1, 2, 3, 4, objectID), 0))), errTrailingBytes},
+		{"burst UserInfo trailing", append(gameStart[:6:6], sendStep(append(userInfo(1, 2, 3, 4, objectID), 0))), botwire.ErrTrailingBytes},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

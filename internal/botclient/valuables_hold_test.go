@@ -273,7 +273,7 @@ func TestValuablesOffRound(t *testing.T) {
 		b.valuablesSold = b.persona.Valuables.Budget
 		runTrainerSteps(t, b, append(depositSteps(0, swordDepositList, swordDepositRows), trainerStep{
 			name: "deposited: walk back", at: 6 * time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(101, 0)}, {ItemModified, adenaStack(970)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}, {State: ItemModified, Item: adenaStack(970)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
 			wantRule: "valuables", wantKind: actMove, wantTo: Point{}, wantWithin: anchorArrive,
 		}))
 		if e := entryOf(t, b, ledgerSword, 0); e.stored != 1 || e.carried != 0 {
@@ -294,7 +294,7 @@ func TestValuablesOffRound(t *testing.T) {
 		b.valuablesSold = b.persona.Valuables.Budget
 		adena := func(n int32, now time.Time) {
 			t.Helper()
-			if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(n)}}}}, now); err != nil {
+			if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(n)}}}}, now); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -309,7 +309,7 @@ func TestValuablesOffRound(t *testing.T) {
 			}
 		}
 		now := at(warehouseBackoffMax + 2*time.Minute)
-		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, swordUnit(102, 0)}}}}, now); err != nil {
+		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: swordUnit(102, 0)}}}}, now); err != nil {
 			t.Fatal(err)
 		}
 		if rule, a := b.decide(now); rule != "valuables" || a.kind != actSelect || b.wh.req.Deposit == nil {

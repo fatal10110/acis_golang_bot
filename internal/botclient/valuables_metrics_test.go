@@ -144,7 +144,7 @@ func depositAnswered(b *Brain, private bool) {
 	e := &b.wh
 	e.req = WarehouseRequest{Private: private, Deposit: []WarehouseRow{{TemplateID: ledgerSword, Count: 1, Object: 101}}}
 	e.running, e.step, e.rows = true, whSent, []warehouseRow{{object: 101, item: ledgerSword, count: 1}}
-	b.warehouseEvent(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(101, 0)}}}, t0)
+	b.warehouseEvent(InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}}}, t0)
 }
 
 // TestValuablesHeldView checks that the held valuables gauge and the
@@ -180,7 +180,7 @@ func TestValuablesHeldView(t *testing.T) {
 	}
 
 	// The ledger follows a sold unit: the gauge on the next decision.
-	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(103, 0)}}}, t0)
+	b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(103, 0)}}}, t0)
 	b.syncValuables(t0)
 	if got := reg.Collect(t0).ValuablesHeld; got != 4 {
 		t.Errorf("held gauge after a sale = %d, want 4", got)

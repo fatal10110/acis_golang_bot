@@ -105,7 +105,7 @@ func TestBrainWarehouseDeposit(t *testing.T) {
 		trainerStep{name: "wait for the deposit", at: 6 * time.Second, wantRule: "warehouse"},
 		trainerStep{
 			name: "deposited", at: 7 * time.Second,
-			events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, whCarriedSkins}, {ItemModified, adenaStack(970)}}}},
+			events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedSkins}, {State: ItemModified, Item: adenaStack(970)}}}},
 		},
 		trainerStep{name: "no open before MinOpenGap", at: 3*time.Second + warehouseOpenGap - time.Millisecond},
 		trainerStep{name: "open due again", at: 3*time.Second + warehouseOpenGap, wantRule: "warehouse", wantKind: actTalk},
@@ -139,7 +139,7 @@ func TestBrainWarehouseWithdrawThenDeposit(t *testing.T) {
 		trainerStep{name: "wait for the withdrawal", at: 6 * time.Second, wantRule: "warehouse"},
 		trainerStep{
 			name: "withdrawn: talk again for the deposit", at: 7 * time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, Item{ObjectID: 105, TemplateID: animalSkin, Count: 20}}}}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: Item{ObjectID: 105, TemplateID: animalSkin, Count: 20}}}}},
 			wantRule: "warehouse", wantKind: actTalk,
 		},
 		trainerStep{
@@ -151,7 +151,7 @@ func TestBrainWarehouseWithdrawThenDeposit(t *testing.T) {
 			events:   []Event{WarehouseDepositList{Type: clanWarehouseType, Adena: 1000, Items: []WarehouseItem{{ObjectID: 104, TemplateID: leatherShirt, Count: 1}}}},
 			wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{104, leatherShirt, 1}),
 		},
-		trainerStep{name: "deposited", at: 10 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, whCarriedShirt}}}}},
+		trainerStep{name: "deposited", at: 10 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedShirt}}}}},
 		trainerStep{name: "no open before MinOpenGap since the deposit's", at: 8*time.Second + warehouseOpenGap - time.Millisecond},
 	)
 	runTrainerSteps(t, b, steps)
@@ -296,7 +296,7 @@ func TestWarehouseCheckedBeforeOpen(t *testing.T) {
 		t.Fatalf("deposit = %d after %d asks, want short after one", got, len(wants.seen))
 	}
 	runTrainerSteps(t, b, []trainerStep{{name: "asked again", at: warehouseOpenGap, setup: func(b *Brain) {
-		b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(30)}}}, t0)
+		b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(30)}}}, t0)
 	}, wantRule: "warehouse", wantKind: actSelect}})
 }
 

@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-// classMaster is the class master's NPC template id (Hasha, the Class
-// Manager, data/xml/npcs/50000-50999.xml; D15).
-const classMaster int32 = 50000
-
 // The class master's commands (classmaster/command.go): the menu of the
 // first, second and third transfer, and the transfer to a class of the menu.
 const (

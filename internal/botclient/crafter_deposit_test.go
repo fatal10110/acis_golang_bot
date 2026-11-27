@@ -29,7 +29,7 @@ func TestBrainCrafterCarriedOrderFlow(t *testing.T) {
 	}
 	sendCraft(t, b, at(2*time.Second))
 	evs := []Event{madeInfo(RecipeMadeSuccess), InventoryUpdate{Changes: []ItemChange{
-		{ItemRemoved, Item{ObjectID: 200, TemplateID: ironOre}}, {ItemAdded, Item{ObjectID: 300, TemplateID: steel, Count: 1}},
+		{State: ItemRemoved, Item: Item{ObjectID: 200, TemplateID: ironOre}}, {State: ItemAdded, Item: Item{ObjectID: 300, TemplateID: steel, Count: 1}},
 	}}}
 	if err := b.handle(evs, at(2*time.Second+100*time.Millisecond)); err != nil {
 		t.Fatal(err)

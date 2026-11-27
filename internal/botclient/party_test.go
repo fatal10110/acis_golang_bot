@@ -2,12 +2,9 @@ package botclient
 
 import (
 	"bytes"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
 const (
@@ -19,87 +16,6 @@ var (
 	gmRow   = PartyMember{ObjectID: gmID, Name: "GM", CP: 100, MaxCP: 200, HP: 300, MaxHP: 400, MP: 50, MaxMP: 60, Level: 40, ClassID: 88}
 	mateRow = PartyMember{ObjectID: mateID, Name: "mate", CP: 1, MaxCP: 2, HP: 3, MaxHP: 4, MP: 5, MaxMP: 6, Level: 7, ClassID: 18}
 )
-
-// vitals are the fields of a party window row, in the server's order
-// (writePartyMemberVitals).
-func vitals(m PartyMember) []any {
-	return []any{m.ObjectID, m.Name, m.CP, m.MaxCP, m.HP, m.MaxHP, m.MP, m.MaxMP, m.Level, m.ClassID}
-}
-
-func partyWindowAll(leader, loot int32, races []int32, members ...PartyMember) []byte {
-	fields := []any{leader, loot, int32(len(members))}
-	for i, m := range members {
-		fields = append(append(fields, vitals(m)...), 0, races[i])
-	}
-	return packet(opGamePartySmallWindowAll, fields...)
-}
-
-func TestDecodePartyEvents(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  []byte
-		want Event
-	}{
-		// "GM" in UTF-16LE with its terminator, then loot rule 1.
-		{"AskJoinParty bytes", []byte{0x39, 'G', 0, 'M', 0, 0, 0, 1, 0, 0, 0}, AskJoinParty{Requester: "GM", Loot: 1}},
-		{"AskJoinParty", packet(opGameAskJoinParty, "leader", 2), AskJoinParty{Requester: "leader", Loot: 2}},
-		{"JoinParty", packet(opGameJoinParty, 1), JoinParty{Response: 1}},
-		{
-			"PartySmallWindowAll", partyWindowAll(gmID, 1, []int32{0, 3}, gmRow, mateRow),
-			PartySmallWindowAll{LeaderID: gmID, Loot: 1, Members: []PartyMember{gmRow, mateRow}},
-		},
-		{"PartySmallWindowAll alone", partyWindowAll(selfID, 0, nil), PartySmallWindowAll{LeaderID: selfID}},
-		{
-			"PartySmallWindowAdd", packet(opGamePartySmallWindowAdd, append(append([]any{gmID, 2}, vitals(mateRow)...), 0, 0)...),
-			PartySmallWindowAdd{LeaderID: gmID, Loot: 2, Member: mateRow},
-		},
-		{"PartySmallWindowUpdate", packet(opGamePartySmallWindowUpdate, vitals(gmRow)...), PartySmallWindowUpdate{Member: gmRow}},
-		{"PartySmallWindowDelete", packet(opGamePartySmallWindowDelete, mateID, "mate"), PartySmallWindowDelete{ObjectID: mateID, Name: "mate"}},
-		{"PartySmallWindowDeleteAll", packet(opGamePartySmallWindowDeleteAll), PartySmallWindowDeleteAll{}},
-		{
-			"PartyMemberPosition", packet(opGamePartyMemberPosition, 2, selfID, 1, 2, 3, gmID, -4, 5, -6),
-			PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: selfID, Pos: Point{1, 2, 3}}, {ObjectID: gmID, Pos: Point{-4, 5, -6}}}},
-		},
-		{"PartyMemberPosition empty", packet(opGamePartyMemberPosition, 0), PartyMemberPosition{}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := decodeEvent(tt.raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", got, ok, err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("decodeEvent = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDecodePartyEventsRejects(t *testing.T) {
-	all := partyWindowAll(gmID, 1, []int32{0}, gmRow)
-	add := packet(opGamePartySmallWindowAdd, append(append([]any{gmID, 2}, vitals(mateRow)...), 0, 0)...)
-	tests := []struct {
-		name string
-		raw  []byte
-		want error
-	}{
-		{"AskJoinParty without loot", packet(opGameAskJoinParty, "GM"), wire.ErrShortPacket},
-		{"WindowAll short of its count", packet(opGamePartySmallWindowAll, append([]any{gmID, 1, 2}, vitals(gmRow)...)...), wire.ErrShortPacket},
-		{"WindowAll count past the frame", packet(opGamePartySmallWindowAll, gmID, 1, 0x7fffffff), wire.ErrShortPacket},
-		{"WindowAll trailing", append(all, 0), errTrailingBytes},
-		{"WindowAdd without its zeros", add[:len(add)-8], wire.ErrShortPacket},
-		{"DeleteAll trailing", packet(opGamePartySmallWindowDeleteAll, 0), errTrailingBytes},
-		{"MemberPosition short row", packet(opGamePartyMemberPosition, 1, gmID, 1, 2), wire.ErrShortPacket},
-		{"MemberPosition trailing", packet(opGamePartyMemberPosition, 0, 0), errTrailingBytes},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeEvent(tt.raw); !errors.Is(err, tt.want) {
-				t.Fatalf("decodeEvent error = %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
 
 func TestPartyEncoders(t *testing.T) {
 	tests := []struct {
@@ -149,10 +65,10 @@ func TestWorldParty(t *testing.T) {
 		},
 		{
 			"positions, own and an unknown id skipped",
-			PartyMemberPosition{Members: []PartyMemberAt{{selfID, Point{1, 1, 1}}, {gmID, Point{10, 20, 30}}, {mateID, Point{9, 9, 9}}}},
+			PartyMemberPosition{Members: []PartyMemberAt{{ObjectID: selfID, Pos: Point{X: 1, Y: 1, Z: 1}}, {ObjectID: gmID, Pos: Point{X: 10, Y: 20, Z: 30}}, {ObjectID: mateID, Pos: Point{X: 9, Y: 9, Z: 9}}}},
 			at(8 * time.Second),
 			PartyInvite{},
-			Party{LeaderID: gmID, Loot: 1, Members: map[int32]*PartyMate{gmID: gm(Point{10, 20, 30}, at(8*time.Second))}},
+			Party{LeaderID: gmID, Loot: 1, Members: map[int32]*PartyMate{gmID: gm(Point{X: 10, Y: 20, Z: 30}, at(8*time.Second))}},
 		},
 		{
 			"member added",
@@ -160,7 +76,7 @@ func TestWorldParty(t *testing.T) {
 			at(9 * time.Second),
 			PartyInvite{},
 			Party{LeaderID: gmID, Loot: 1, Members: map[int32]*PartyMate{
-				gmID: gm(Point{10, 20, 30}, at(8*time.Second)), mateID: {PartyMember: mateRow},
+				gmID: gm(Point{X: 10, Y: 20, Z: 30}, at(8*time.Second)), mateID: {PartyMember: mateRow},
 			}},
 		},
 		{
@@ -169,7 +85,7 @@ func TestWorldParty(t *testing.T) {
 			at(10 * time.Second),
 			PartyInvite{},
 			Party{LeaderID: gmID, Loot: 1, Members: map[int32]*PartyMate{
-				gmID: {PartyMember: hurt, Pos: Point{10, 20, 30}, PosAt: at(8 * time.Second)}, mateID: {PartyMember: mateRow},
+				gmID: {PartyMember: hurt, Pos: Point{X: 10, Y: 20, Z: 30}, PosAt: at(8 * time.Second)}, mateID: {PartyMember: mateRow},
 			}},
 		},
 		{
@@ -178,7 +94,7 @@ func TestWorldParty(t *testing.T) {
 			at(10 * time.Second),
 			PartyInvite{},
 			Party{LeaderID: gmID, Loot: 1, Members: map[int32]*PartyMate{
-				gmID: {PartyMember: hurt, Pos: Point{10, 20, 30}, PosAt: at(8 * time.Second)}, mateID: {PartyMember: mateRow},
+				gmID: {PartyMember: hurt, Pos: Point{X: 10, Y: 20, Z: 30}, PosAt: at(8 * time.Second)}, mateID: {PartyMember: mateRow},
 			}},
 		},
 		{
@@ -187,7 +103,7 @@ func TestWorldParty(t *testing.T) {
 			at(11 * time.Second),
 			PartyInvite{},
 			Party{LeaderID: gmID, Loot: 1, Members: map[int32]*PartyMate{
-				gmID: {PartyMember: hurt, Pos: Point{10, 20, 30}, PosAt: at(8 * time.Second)},
+				gmID: {PartyMember: hurt, Pos: Point{X: 10, Y: 20, Z: 30}, PosAt: at(8 * time.Second)},
 			}},
 		},
 		{"left the party", PartySmallWindowDeleteAll{}, at(12 * time.Second), PartyInvite{}, Party{}},

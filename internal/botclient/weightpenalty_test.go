@@ -140,7 +140,7 @@ func TestGearGradePenalty(t *testing.T) {
 // it to come off, then wears the carried sword of the bot's grade; a
 // take-off the server ignores past gearTimeout is given up for good.
 func TestBrainGearGradePenaltySwap(t *testing.T) {
-	off := InventoryUpdate{Changes: []ItemChange{{ItemModified, Item{ObjectID: wornArtisan.ObjectID, TemplateID: artisansSword, Count: 1, BodySlot: partRHand}}}}
+	off := InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: Item{ObjectID: wornArtisan.ObjectID, TemplateID: artisansSword, Count: 1, BodySlot: partRHand}}}}
 	t.Run("swap", func(t *testing.T) {
 		b := newPenaltyBrain(t, 0, true, wornArtisan, spareSword)
 		runTrainerSteps(t, b, []trainerStep{

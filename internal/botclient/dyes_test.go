@@ -128,17 +128,17 @@ func TestDyePlan(t *testing.T) {
 		{name: "orc shaman", class: 50, slots: 2, wantDr: []int32{10, 10}},
 		{name: "treasure hunter", class: 8, slots: 3, wantDr: []int32{42, 37, 42}},
 		{name: "shillien elder", class: 43, slots: 3, wantDr: []int32{46, 46, 46}},
-		{name: "one worn: the other", class: 1, slots: 2, worn: []WornSymbol{{1, 1}}, wantDr: []int32{6}},
-		{name: "a worn symbol off the table keeps its slot", class: 1, slots: 2, worn: []WornSymbol{{8, 8}}, wantDr: []int32{1}},
-		{name: "full slots", class: 1, slots: 2, worn: []WornSymbol{{1, 1}, {6, 6}}},
+		{name: "one worn: the other", class: 1, slots: 2, worn: []WornSymbol{{SymbolID: 1, Active: 1}}, wantDr: []int32{6}},
+		{name: "a worn symbol off the table keeps its slot", class: 1, slots: 2, worn: []WornSymbol{{SymbolID: 8, Active: 8}}, wantDr: []int32{1}},
+		{name: "full slots", class: 1, slots: 2, worn: []WornSymbol{{SymbolID: 1, Active: 1}, {SymbolID: 6, Active: 6}}},
 		{name: "base class: no slot", class: classHumanFight, slots: 0},
 		{
 			name: "second profession: inactive first-profession symbols go", class: 8, slots: 3,
-			worn: []WornSymbol{{1, 0}, {6, 0}}, wantRemove: []int32{1, 6}, wantDr: []int32{42, 37, 42},
+			worn: []WornSymbol{{SymbolID: 1, Active: 0}, {SymbolID: 6, Active: 0}}, wantRemove: []int32{1, 6}, wantDr: []int32{42, 37, 42},
 		},
 		{
 			name: "an inactive symbol the datapack lacks keeps its slot", class: 8, slots: 3,
-			worn: []WornSymbol{{99, 0}}, wantDr: []int32{42, 37},
+			worn: []WornSymbol{{SymbolID: 99, Active: 0}}, wantDr: []int32{42, 37},
 		},
 		{
 			name: "a row outside the class list is skipped", class: 15, slots: 2,
@@ -190,9 +190,9 @@ func TestDyesDue(t *testing.T) {
 		{name: "nine dyes", class: 1, slots: 2, items: []Item{adenaStack(rich), dyeStack(200, dyeStr, 9)}},
 		{name: "fee past the reserve short", class: 1, slots: 2, items: []Item{adenaStack(37000), dyeStack(200, dyeStr, 10)}},
 		{name: "base class", class: classHumanFight, slots: 0, items: both},
-		{name: "full slots", class: 1, slots: 2, worn: []WornSymbol{{1, 1}, {6, 6}}, items: both},
-		{name: "removal only", class: classGladiator, slots: 3, worn: []WornSymbol{{1, 0}}, items: []Item{adenaStack(rich)}, want: true},
-		{name: "removal fee short", class: classGladiator, slots: 3, worn: []WornSymbol{{1, 0}}, items: []Item{adenaStack(1000)}},
+		{name: "full slots", class: 1, slots: 2, worn: []WornSymbol{{SymbolID: 1, Active: 1}, {SymbolID: 6, Active: 6}}, items: both},
+		{name: "removal only", class: classGladiator, slots: 3, worn: []WornSymbol{{SymbolID: 1, Active: 0}}, items: []Item{adenaStack(rich)}, want: true},
+		{name: "removal fee short", class: classGladiator, slots: 3, worn: []WornSymbol{{SymbolID: 1, Active: 0}}, items: []Item{adenaStack(1000)}},
 		{name: "backing off", class: 1, slots: 2, items: both, edit: func(b *Brain) { b.dyes.retryAt = at(time.Minute) }},
 		{name: "maker out of reach", class: 1, slots: 2, items: both, edit: func(b *Brain) { b.persona.Dyes.Reach = 4000 }},
 		{
@@ -230,11 +230,11 @@ func TestBrainDyes(t *testing.T) {
 		{name: "wait for the window", at: 4 * time.Second, wantRule: "dyes"},
 		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(1)},
 		{name: "wait for HennaInfo", at: 6 * time.Second, wantRule: "dyes"},
-		{name: "wait for the inventory", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{1, 1}}}, SystemMessage{ID: 877}}, wantRule: "dyes"},
+		{name: "wait for the inventory", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}}}, SystemMessage{ID: 877}}, wantRule: "dyes"},
 		{name: "draw symbol 6", at: 8 * time.Second, events: []Event{spent(200, dyeStr, 0)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(6)},
 		{name: "wait again", at: 9 * time.Second, wantRule: "dyes"},
 	})
-	if err := b.handle([]Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{1, 1}, {6, 6}}}, spent(201, dyeDex, 0)}, at(10*time.Second)); err != nil {
+	if err := b.handle([]Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}, {SymbolID: 6, Active: 6}}}, spent(201, dyeDex, 0)}, at(10*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := b.ruleDyes(at(10 * time.Second)); ok {
@@ -256,7 +256,7 @@ func TestBrainDyesInventoryFirst(t *testing.T) {
 		{name: "the Draw link", at: 3 * time.Second, events: []Event{makerPage(makerObj)}, wantRule: "dyes", wantKind: actBypass, wantPayload: masterBypass(makerObj, "Draw")},
 		{name: "draw symbol 1", at: 5 * time.Second, events: []Event{drawWindow(1, 6)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(1)},
 		{name: "the inventory first", at: 6 * time.Second, events: []Event{spent(200, dyeStr, 0)}, wantRule: "dyes"},
-		{name: "HennaInfo after it", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{1, 1}}}}, wantRule: "dyes"},
+		{name: "HennaInfo after it", at: 7 * time.Second, events: []Event{HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}}}}, wantRule: "dyes"},
 		{name: "still waiting", at: 5*time.Second + dyeReplyTimeout - time.Millisecond, wantRule: "dyes"},
 		{name: "draw symbol 6", at: 5*time.Second + dyeReplyTimeout, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(6)},
 	})
@@ -269,7 +269,7 @@ func TestBrainDyesInventoryFirst(t *testing.T) {
 // profession's inactive symbols to the maker: it removes both, one per
 // answer, then draws the second profession's rows into all 3 slots.
 func TestBrainDyesSecondProfession(t *testing.T) {
-	b := newDyeBrain(t, 8, 40, 3, []WornSymbol{{1, 0}, {6, 0}},
+	b := newDyeBrain(t, 8, 40, 3, []WornSymbol{{SymbolID: 1, Active: 0}, {SymbolID: 6, Active: 0}},
 		adenaStack(1000000), dyeStack(200, dyeStr2, 10), dyeStack(201, dyeDex2, 20))
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "talk", at: time.Second, setup: makerInSight, wantRule: "dyes", wantKind: actTalk},
@@ -277,7 +277,7 @@ func TestBrainDyesSecondProfession(t *testing.T) {
 		{name: "wait for HennaInfo", at: 3 * time.Second, wantRule: "dyes"},
 		{
 			name: "remove symbol 6", at: 4 * time.Second,
-			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{6, 0}}}, spent(202, dyeStr, 5)},
+			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 6, Active: 0}}}, spent(202, dyeStr, 5)},
 			wantRule: "dyes", wantKind: actHennaUnequip, wantPayload: encodeRequestHennaUnequip(6),
 		},
 		{
@@ -288,16 +288,16 @@ func TestBrainDyesSecondProfession(t *testing.T) {
 		{name: "draw symbol 42", at: 6 * time.Second, events: []Event{drawWindow(37, 42)}, wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(42)},
 		{
 			name: "draw symbol 37", at: 7 * time.Second,
-			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{42, 42}}}, spent(201, dyeDex2, 10)},
+			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 42, Active: 42}}}, spent(201, dyeDex2, 10)},
 			wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(37),
 		},
 		{
 			name: "draw symbol 42 again", at: 8 * time.Second,
-			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{42, 42}, {37, 37}}}, spent(200, dyeStr2, 0)},
+			events:   []Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 42, Active: 42}, {SymbolID: 37, Active: 37}}}, spent(200, dyeStr2, 0)},
 			wantRule: "dyes", wantKind: actHennaEquip, wantPayload: encodeRequestHennaEquip(42),
 		},
 	})
-	if err := b.handle([]Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{42, 42}, {37, 37}, {42, 42}}}, spent(201, dyeDex2, 0)}, at(9*time.Second)); err != nil {
+	if err := b.handle([]Event{HennaInfo{MaxSlots: 3, Worn: []WornSymbol{{SymbolID: 42, Active: 42}, {SymbolID: 37, Active: 37}, {SymbolID: 42, Active: 42}}}, spent(201, dyeDex2, 0)}, at(9*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := b.ruleDyes(at(9 * time.Second)); ok || b.dyes.v.active() || !b.dyes.retryAt.IsZero() {
@@ -480,7 +480,7 @@ func TestDyesKept(t *testing.T) {
 	if !b.keepsItem(dyes) {
 		t.Fatal("planned dyes not kept: a store or a trade would let them go")
 	}
-	b.world.Apply(HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{1, 1}, {6, 6}}}, t0)
+	b.world.Apply(HennaInfo{MaxSlots: 2, Worn: []WornSymbol{{SymbolID: 1, Active: 1}, {SymbolID: 6, Active: 6}}}, t0)
 	if _, ok := b.junk()[dyes.ObjectID]; !ok {
 		t.Fatal("dyes with every slot drawn not junk")
 	}

@@ -204,8 +204,8 @@ func TestBrainGearEquip(t *testing.T) {
 		{
 			name: "worn: nothing left to wear", at: 4 * time.Second,
 			events: []Event{InventoryUpdate{Changes: []ItemChange{
-				{ItemModified, Item{ObjectID: 210, TemplateID: longSword, Count: 1, Equipped: true, BodySlot: partRHand}},
-				{ItemModified, Item{ObjectID: 201, TemplateID: shortSword, Count: 1, BodySlot: partRHand}},
+				{State: ItemModified, Item: Item{ObjectID: 210, TemplateID: longSword, Count: 1, Equipped: true, BodySlot: partRHand}},
+				{State: ItemModified, Item: Item{ObjectID: 201, TemplateID: shortSword, Count: 1, BodySlot: partRHand}},
 			}}},
 		},
 	})
@@ -249,9 +249,9 @@ func TestGearStoreLoot(t *testing.T) {
 		t.Error("worn pieces are store loot")
 	}
 	b.world.Apply(InventoryUpdate{Changes: []ItemChange{
-		{ItemModified, Item{ObjectID: 220, TemplateID: salamanderMail, Count: 1, Equipped: true, BodySlot: partFullArmor}},
-		{ItemModified, Item{ObjectID: 202, TemplateID: squireShirt, Count: 1, BodySlot: partChest}},
-		{ItemModified, Item{ObjectID: 203, TemplateID: squirePants, Count: 1, BodySlot: partLegs}},
+		{State: ItemModified, Item: Item{ObjectID: 220, TemplateID: salamanderMail, Count: 1, Equipped: true, BodySlot: partFullArmor}},
+		{State: ItemModified, Item: Item{ObjectID: 202, TemplateID: squireShirt, Count: 1, BodySlot: partChest}},
+		{State: ItemModified, Item: Item{ObjectID: 203, TemplateID: squirePants, Count: 1, BodySlot: partLegs}},
 	}}, at(time.Second))
 	inv := b.world.Inventory.Items
 	if !b.storeLoot(inv[202]) || !b.storeLoot(inv[203]) {
@@ -289,8 +289,8 @@ func TestBrainGearBestFirst(t *testing.T) {
 		{
 			name: "worn", at: 2 * time.Second,
 			events: []Event{InventoryUpdate{Changes: []ItemChange{
-				{ItemModified, Item{ObjectID: 211, TemplateID: falchion, Count: 1, Equipped: true, BodySlot: partRHand}},
-				{ItemModified, Item{ObjectID: 201, TemplateID: shortSword, Count: 1, BodySlot: partRHand}},
+				{State: ItemModified, Item: Item{ObjectID: 211, TemplateID: falchion, Count: 1, Equipped: true, BodySlot: partRHand}},
+				{State: ItemModified, Item: Item{ObjectID: 201, TemplateID: shortSword, Count: 1, BodySlot: partRHand}},
 			}}},
 		},
 	})

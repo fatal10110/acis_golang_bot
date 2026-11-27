@@ -2,7 +2,6 @@ package botclient
 
 import (
 	"bytes"
-	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -15,44 +14,6 @@ const (
 	recoveryNoGrade int32 = 8594
 	recoveryD       int32 = 8595
 )
-
-// TestDecodeEtcStatusUpdate pins the decoder to the server writer
-// (serverpackets/etcstatusupdate.go): seven int32s, the force charges first,
-// the weight band second, the grade penalty fifth and the death penalty
-// last, the whole frame consumed, a frame one byte
-// short or long refused.
-func TestDecodeEtcStatusUpdate(t *testing.T) {
-	raw := packet(opGameEtcStatusUpdate, 2, 2, 1, 0, 1, 0, 3)
-	ev, ok, err := decodeEvent(raw)
-	if err != nil || !ok {
-		t.Fatalf("decodeEvent = %v, %v", ok, err)
-	}
-	if want := (EtcStatusUpdate{Charges: 2, WeightPenalty: 2, GradePenalty: 1, DeathPenalty: 3}); !reflect.DeepEqual(ev, want) {
-		t.Fatalf("decoded %+v, want %+v", ev, want)
-	}
-	if _, _, err := decodeEvent(raw[:len(raw)-1]); err == nil {
-		t.Error("a frame one byte short decoded")
-	}
-	if _, _, err := decodeEvent(append(bytes.Clone(raw), 0)); err == nil {
-		t.Error("a frame one byte long decoded")
-	}
-}
-
-// TestDecodeDeathPenaltyMessage pins the level message to the server
-// writer (FrameSystemMessageNumber): one number parameter, the new level.
-func TestDecodeDeathPenaltyMessage(t *testing.T) {
-	ev, ok, err := decodeEvent(packet(opGameSystemMessage, msgDeathPenaltyLevelAdded, 1, sysParamNumber, 4))
-	if err != nil || !ok {
-		t.Fatalf("decodeEvent = %v, %v", ok, err)
-	}
-	if want := (SystemMessage{ID: msgDeathPenaltyLevelAdded, Number: 4}); !reflect.DeepEqual(ev, want) {
-		t.Fatalf("decoded %+v, want %+v", ev, want)
-	}
-	ev, _, err = decodeEvent(packet(opGameSystemMessage, 1, 2, sysParamNumber, 7, sysParamNumber, 8))
-	if want := (SystemMessage{ID: 1, Number: 7}); err != nil || !reflect.DeepEqual(ev, want) {
-		t.Fatalf("decoded %+v, %v, want the first number %+v", ev, err, want)
-	}
-}
 
 // TestDeathPenaltyLevel checks where the world takes the bot's level
 // from: the session's first EtcStatusUpdate, sent ahead of the spawn, then

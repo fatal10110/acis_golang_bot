@@ -56,22 +56,6 @@ const (
 	msgS1CannotReceiveDuelTooFar   = 2028
 )
 
-// decodeExDuelAskStart: requester name, int32 party flag.
-func decodeExDuelAskStart(r *wire.Reader) Event {
-	return ExDuelAskStart{Requester: r.ReadString(), Party: r.ReadInt32() != 0}
-}
-
-// decodeExDuelUpdateUserInfo: name, object id, class id, level, then HP, max
-// HP, MP, max MP, CP, max CP, each an int32.
-func decodeExDuelUpdateUserInfo(r *wire.Reader) Event {
-	u := ExDuelUpdateUserInfo{Name: r.ReadString(), ObjectID: r.ReadInt32()}
-	u.ClassID, u.Level = r.ReadInt32(), r.ReadInt32()
-	u.HP, u.MaxHP = r.ReadInt32(), r.ReadInt32()
-	u.MP, u.MaxMP = r.ReadInt32(), r.ReadInt32()
-	u.CP, u.MaxCP = r.ReadInt32(), r.ReadInt32()
-	return u
-}
-
 // encodeRequestDuelStart challenges the player named name to a duel, or its
 // party to a party duel. Its sender's pacing lands with its rule (X4); the
 // per-connection frame bucket bounds it meanwhile.

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 func TestHarnessEncoders(t *testing.T) {
@@ -50,7 +52,7 @@ func TestDecodeEventExported(t *testing.T) {
 	if err != nil || !ok || ev != (Revive{ObjectID: 7}) {
 		t.Fatalf("DecodeEvent(Revive) = %v %v %v", ev, ok, err)
 	}
-	if _, _, err := DecodeEvent([]byte{opGameRevive, 7, 0, 0, 0, 0}); !errors.Is(err, errTrailingBytes) {
+	if _, _, err := DecodeEvent([]byte{opGameRevive, 7, 0, 0, 0, 0}); !errors.Is(err, botwire.ErrTrailingBytes) {
 		t.Fatalf("DecodeEvent(long Revive) error %v, want trailing bytes", err)
 	}
 }

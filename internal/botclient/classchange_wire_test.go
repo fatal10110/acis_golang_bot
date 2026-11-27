@@ -13,27 +13,6 @@ var (
 	liveRoy    = NPCInfo{ObjectID: 268470359, NPCID: 31228, Pos: Point{X: -84516, Y: 242971, Z: -3720}}
 )
 
-func TestNPCInfoTemplate(t *testing.T) {
-	tests := []struct {
-		name string
-		npc  NPCInfo
-		want int32
-	}{
-		{"the class master", liveMaster, classMaster},
-		{"Roy the Cat", liveRoy, 31228},
-		{"another server-side name on Roy's look", NPCInfo{NPCID: 31228, Name: "Roy"}, 31228},
-		{"the master's name on another look", NPCInfo{NPCID: 30022, Name: "Hasha"}, 30022},
-		{"a monster", NPCInfo{NPCID: 20001}, 20001},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.npc.Template(); got != tt.want {
-				t.Fatalf("Template() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestClassChangeMasterFromWire checks the class change rule finds the
 // master from live-shaped NPCInfo and never takes Roy the Cat for it: with
 // only Roy in sight it walks to the master's spawn on the travel map.
