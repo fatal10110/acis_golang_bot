@@ -56,6 +56,12 @@ type rig struct {
 	stderr *lockedBuffer
 	cancel context.CancelFunc
 	done   chan error
+	// exited is closed once the supervisor's Run returned (after done
+	// holds its error), so the cleanup joins it whoever read done.
+	exited chan struct{}
+	// quit is closed by the cleanup: it ends every run still handing
+	// over or parked on its end, so the supervisor's Run can return.
+	quit chan struct{}
 	// bodies are every response body read, for the secret check.
 	mu     sync.Mutex
 	bodies []string
@@ -96,7 +102,7 @@ func newRig(t *testing.T, cfg Config) *rig {
 	if err := reg.SetPanel("hz", botnames.DefaultMarker); err != nil {
 		t.Fatal(err)
 	}
-	g := &rig{t: t, reg: reg, runs: make(chan *run), secret: secret, ring: NewRing(1000), stderr: &lockedBuffer{}, done: make(chan error, 1)}
+	g := &rig{t: t, reg: reg, runs: make(chan *run), secret: secret, ring: NewRing(1000), stderr: &lockedBuffer{}, done: make(chan error, 1), exited: make(chan struct{}), quit: make(chan struct{})}
 	log := slog.New(g.ring.Handler(slog.NewTextHandler(g.stderr, nil), nil))
 	clock := botclient.SystemClock{}
 	gate := botclient.NewLoginGate(clock, rand.New(rand.NewPCG(1, 2)))
@@ -128,7 +134,14 @@ func newRig(t *testing.T, cfg Config) *rig {
 	g.sup = sup
 	ctx, cancel := context.WithCancel(t.Context())
 	g.cancel = cancel
-	go func() { g.done <- sup.Run(ctx) }()
+	go func() {
+		g.done <- sup.Run(ctx)
+		close(g.exited)
+	}()
+	// The supervisor's goroutine owns the registry: join it before the
+	// registry closes, also when the test failed before g.stop (#582).
+	// Cleanups run last in, first out, so this runs before reg.Close.
+	t.Cleanup(g.join)
 	cfg.Supervisor, cfg.Gate, cfg.Metrics, cfg.Logs, cfg.MaxOnline, cfg.Log = sup, gate, metrics, g.ring, 3, log
 	if cfg.Presets == nil {
 		cfg.Presets = []Preset{{Name: "support", Help: "farms"}, {Name: "town", Help: "idles"}}
@@ -154,8 +167,14 @@ func (g *rig) run(log *slog.Logger) botregistry.RunFunc {
 		}
 		r.Live(b)
 		fr := &run{Run: r, bot: b, ctx: ctx, end: make(chan error)}
-		g.runs <- fr
-		err = <-fr.end
+		select {
+		case g.runs <- fr:
+		case <-g.quit:
+		}
+		select {
+		case err = <-fr.end:
+		case <-g.quit:
+		}
 		if ctx.Err() != nil {
 			_ = b.Run(ctx)
 		}
@@ -208,6 +227,21 @@ func (g *rig) stop(live ...*run) {
 	if err := <-g.done; err != nil {
 		g.t.Fatalf("supervisor Run = %v", err)
 	}
+}
+
+// join stops the panel and the supervisor and waits for the supervisor's
+// Run to return: the rig's cleanup. After g.stop it returns at once; after a
+// failed test it ends the runs the test left parked.
+func (g *rig) join() {
+	if g.panel != nil {
+		g.panel.Stop()
+	}
+	if g.srv != nil {
+		g.srv.Close()
+	}
+	g.cancel()
+	close(g.quit)
+	<-g.exited
 }
 
 // do sends a request and returns its status and body.
@@ -278,6 +312,20 @@ func (g *rig) settle(account string, from botregistry.RunState) botView {
 	return botView{}
 }
 
+// learned waits until account's character is name: Run.Learned posts the
+// report to the supervisor's mailbox, so a read right after it can come
+// first (#582).
+func (g *rig) learned(account, name string) botView {
+	g.t.Helper()
+	for range 10000 {
+		if v := g.bots()[account]; v.Name == name {
+			return v
+		}
+	}
+	g.t.Fatalf("bot %s never learned character %s", account, name)
+	return botView{}
+}
+
 // noSecret fails when a response body, a ring line or stderr carries the
 // secret or a password of the registry's accounts.
 func (g *rig) noSecret() {
@@ -326,8 +374,7 @@ func TestPanelCreateSpawnDespawnPreset(t *testing.T) {
 		t.Fatalf("created %+v (run %s) and %+v (run %s)", b1, r1.Preset, b2, r2.Preset)
 	}
 	r1.Learned("AldenBot", *b1.Class)
-	bots := g.bots()
-	if v := bots["hz1"]; v.Run != botregistry.RunActive || v.Live == nil || v.Live.State != "new" || v.Live.Preset != "support" || v.Name != "AldenBot" {
+	if v := g.learned("hz1", "AldenBot"); v.Run != botregistry.RunActive || v.Live == nil || v.Live.State != "new" || v.Live.Preset != "support" || v.Name != "AldenBot" {
 		t.Fatalf("hz1 %+v live %+v", v, v.Live)
 	}
 	var one botView
