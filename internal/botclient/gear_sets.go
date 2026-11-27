@@ -201,6 +201,23 @@ func (b *Brain) bestSet(w *worn, pool map[int32]Item) (setPlan, bool) {
 	// consider weighs plan p, its shield left to decide when set is
 	// non-nil.
 	consider := func(p setPlan, set *armorSet) {
+		// The Sorcerer's C-grade choice is a deliberate HP threshold from the
+		// second-profession plan: Demon loses 270 max HP, so it is not eligible
+		// until the character has more than three times that loss.  The generic
+		// valuer cannot express this as a set preference because Karmian's cast
+		// speed can otherwise win even after the HP loss is survivable.
+		if b.world.Self.ClassID == 12 {
+			switch p.pieces[slotBody] {
+			case 441: // Demon
+				if b.world.Self.MaxHP <= 810 {
+					return
+				}
+			case 439: // Karmian
+				if b.world.Self.MaxHP > 810 {
+					return
+				}
+			}
+		}
 		next := *w
 		next[slotShield] = Item{}
 		for _, s := range setSlots {
