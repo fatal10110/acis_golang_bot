@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botclient"
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
@@ -125,6 +126,32 @@ func countParties(st botparty.State, next int, m *botmetrics.Registry, log *slog
 	}
 }
 
+// planPass is the step of an organizer pass the supervisor's (partyPass)
+// and the Organizer's share (docs/parties/organizer.md): it plans cands
+// over st with policy at now, counts the parties formed and broken into m,
+// clears the new-run mark of every candidate's record and hands each order
+// to its account's bot. link resolves an account to its record and its bot,
+// both nil for an account with no live bot, which gets no order. planPass
+// holds no state and starts nothing: it runs on the caller's goroutine,
+// which owns st and the records, and returns the state for the caller to
+// keep, whose Unpin the caller applies or ignores.
+func planPass(st botparty.State, cands []botparty.Candidate, policy botparty.Policy, now time.Time, m *botmetrics.Registry, log *slog.Logger, link func(account string) (*partyLink, Orderable)) botparty.State {
+	next := st.NextID
+	st, orders := botparty.Plan(st, cands, policy, now)
+	countParties(st, next, m, log)
+	for _, c := range cands {
+		if l, _ := link(c.Account); l != nil {
+			l.newRun = false
+		}
+	}
+	for _, o := range orders {
+		if l, b := link(o.Account); l != nil && b != nil {
+			l.order(b, o, log)
+		}
+	}
+	return st
+}
+
 // OrganizedBot is a bot of a fixed set the Organizer orders: its account
 // and the preset it plays.
 type OrganizedBot struct {
@@ -218,16 +245,15 @@ func (o *Organizer) pass() {
 		l.poll()
 		cands = append(cands, partyCandidate(b.Account, b.Preset, b.Bot.Status(), l))
 	}
-	next := o.state.NextID
-	st, orders := botparty.Plan(o.state, cands, o.cfg.Policy, o.cfg.Clock.Now())
-	o.state = st
-	countParties(st, next, o.cfg.Metrics, o.log)
-	for _, l := range o.links {
-		l.newRun = false
+	o.state = planPass(o.state, cands, o.cfg.Policy, o.cfg.Clock.Now(), o.cfg.Metrics, o.log, o.link)
+}
+
+// link is the record and the bot of account (planPass); an account of no
+// bot of the set has neither.
+func (o *Organizer) link(account string) (*partyLink, Orderable) {
+	b := o.bots[account]
+	if b == nil {
+		return nil, nil
 	}
-	for _, ord := range orders {
-		if b := o.bots[ord.Account]; b != nil {
-			o.links[ord.Account].order(b, ord, o.log)
-		}
-	}
+	return o.links[account], b
 }
