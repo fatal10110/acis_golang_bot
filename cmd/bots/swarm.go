@@ -210,10 +210,20 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	log := slog.New(slog.NewTextHandler(stderr, nil))
 	dialOpt, _ := botclient.ParseLocalAddr(o.localAddr) // validated by parseSwarmFlags
 	clock := botclient.SystemClock{}
-	gate := botclient.NewLoginGate(clock, nil)
-	if o.allowlisted {
-		gate = botclient.NewAllowlistedLoginGate(clock, nil)
+	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
+	w, cleanup, err := buildShared(wiringOptions{
+		allowlisted: o.allowlisted, outcomeLog: o.outcomeLog, datapack: o.datapack, spawnMultiplier: o.spawnMultiplier,
+		spawnEvents: o.spawnEvents, store: o.store, geo: o.geo, stores: p.store,
+	}, clock, log)
+	if err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
 	}
+	// Deferred first of the run's pieces: the navigation stays mapped and
+	// the outcome writer takes the stays of every bot until all returned.
+	defer cleanup()
+	gate, sh := w.gate, w.shared
+	sh.clanInviters = o.clanInviters
 	cfg := botclient.SessionConfig{
 		LoginAddr:  o.loginAddr,
 		GameAddr:   o.gameAddr,
@@ -226,42 +236,6 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		Clock:      clock,
 		Gate:       gate,
 		Log:        log,
-	}
-	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
-	sh := shared{
-		claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), challenges: botclient.NewChallengeHolds(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters,
-		ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
-	}
-	outcomes, stopOutcomes, err := startOutcomeLog(o.outcomeLog, log)
-	if err != nil {
-		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
-		return 1
-	}
-	// Deferred first of the run's pieces: the writer takes the stays of
-	// every bot until all returned, then it is joined.
-	defer stopOutcomes()
-	sh.outcomes = outcomes
-	// The navigation opens before the spots: the registry drops the spots in
-	// water (loadSpots).
-	if o.geo.set() {
-		n, closeNav, err := o.geo.open(o.datapack, log)
-		if err != nil {
-			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
-			return 1
-		}
-		// Deferred before the bots start: the caches stay mapped until
-		// every bot returned.
-		defer closeNav()
-		sh.nav = n
-	}
-	if o.datapack != "" {
-		if sh.spots, sh.travel, _, err = loadSpots(o.datapack, o.spawnMultiplier, supplyConfig(o.spawnEvents), sh.nav, log); err != nil {
-			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
-			return 1
-		}
-		if p.store {
-			sh.stores = o.store.registry(sh.travel, log)
-		}
 	}
 	if err := walkReady(p, sh.nav); err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
