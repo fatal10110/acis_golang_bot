@@ -393,6 +393,7 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 	}
 	in := b.craftInput(c.orders, fromWarehouse, now)
 	c.plan = craftplan.Build(in, b.persona.Crafter.Plan)
+	b.fillCarriedOrders(now)
 	if fromWarehouse && !c.plan.Exhausted {
 		b.cancelUnplanned()
 	}
@@ -436,6 +437,47 @@ func (b *Brain) claimCraftOrders(now time.Time) []CraftOrder {
 		}
 	}
 	return append(mine, commanded...)
+}
+
+// fillCarriedOrders moves to crafted the cycle's claimed orders the plan
+// holds no chain for whose whole count the bot carries, beyond what its
+// crafted orders take and the plan keeps, so the cycle deposits and
+// delivers them. Such a product was made before its order could be
+// claimed: a chain for the clan used the materials a member deposited
+// before posting the order, and a shot it made stays carried as a supply
+// (#577). An order the plan crafts is never filled from the bag, and a
+// partial count stays claimed.
+func (b *Brain) fillCarriedOrders(now time.Time) {
+	c, board, clan, self := &b.craft, b.cfg.CraftBoard, b.world.Clan.ID, b.world.Self.ObjectID
+	planned := make(map[int]bool)
+	for _, ch := range c.plan.Chains {
+		planned[ch.Order] = true
+	}
+	taken := ingredientCounts(c.plan.Keep)
+	for _, o := range board.Orders(clan, now) {
+		if o.State == OrderCrafted && o.Crafter == self {
+			taken[o.Product] += o.Count
+		}
+	}
+	for i, o := range c.orders {
+		if planned[i] || b.carriedLoose(o.Product)-taken[o.Product] < o.Count {
+			continue
+		}
+		if board.Crafted(clan, o.ID, self, now) {
+			taken[o.Product] += o.Count
+		}
+	}
+}
+
+// carriedLoose is how many of item template the bot carries unequipped.
+func (b *Brain) carriedLoose(item int32) int64 {
+	var n int64
+	for _, it := range b.world.Inventory.Items {
+		if it.TemplateID == item && !it.Equipped {
+			n += int64(it.Count)
+		}
+	}
+	return n
 }
 
 // renewCraftClaims renews the claims of the cycle's orders on the tick.
@@ -525,13 +567,7 @@ func (b *Brain) craftDepositRows(keep map[int32]int64, now time.Time) []Warehous
 		}
 	}
 	for t, n := range ordered {
-		var carried int64
-		for _, it := range b.world.Inventory.Items {
-			if it.TemplateID == t && !it.Equipped {
-				carried += int64(it.Count)
-			}
-		}
-		if n = min(n, carried); n > 0 {
+		if n = min(n, b.carriedLoose(t)); n > 0 {
 			rows = append(rows, WarehouseRow{TemplateID: t, Count: int32(min(n, int64(1<<31-1)))})
 		}
 	}
