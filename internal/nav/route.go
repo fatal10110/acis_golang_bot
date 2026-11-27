@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
+	"github.com/fatal10110/acis_golang_bot/internal/geo/engine"
 	"github.com/fatal10110/acis_golang_bot/internal/geo/location"
 )
 
@@ -216,8 +217,9 @@ func (p *Planner) routeToNearest(s *scratch, from location.Location, accept func
 // check failed is skipped. With nothing yet, it
 // takes the farthest within exactCells that passes CanMove and the full
 // step-chain check. None crosses a column of p.Avoid but the
-// route's endpoints', and none drops (dropBound) where the cell path it
-// stands for does not. When even the next cell fails, it reports that edge.
+// route's endpoints', none drops (dropBound) where the cell path it
+// stands for does not, and none crosses covered ground where that path does
+// not. When even the next cell fails, it reports that edge.
 func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (edgeKey, bool) {
 	n := len(cells) - 1
 	s.points = s.points[:0]
@@ -237,8 +239,15 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		n = 1
 	}
 	s.drops = append(s.drops[:0], 0)
+	s.covers = append(s.covers[:0], 0)
+	weighCover := p.coveredCost() > 0
 	for k := 1; k <= n; k++ {
 		s.drops = append(s.drops, s.drops[k-1]+min(dropCost(cells[k-1].Z, cells[k].Z), 1))
+		cover := int32(0)
+		if weighCover && p.isCovered(cells[k-1], &s.layers) {
+			cover = 1
+		}
+		s.covers = append(s.covers, s.covers[k-1]+cover)
 	}
 	s.route = append(s.route[:0], from)
 	s.grid.invalidate()
@@ -249,7 +258,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		// candidates fail it. Both must pass, so the order changes nothing.
 		for j := n; j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
-			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.dropsAsPath(s, i, j) {
+			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.corridorClear(s, a, b) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.dropsAsPath(s, i, j) && p.coveredAsPath(s, i, j) {
 				next = j
 			}
 		}
@@ -272,7 +281,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 					continue
 				}
 				s.work++
-				if !p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) || !p.dropsAsPath(s, i, j) {
+				if !p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) || !p.dropsAsPath(s, i, j) || !p.coveredAsPath(s, i, j) {
 					continue
 				}
 				st := p.corridorStretches(s, a, b)
@@ -290,7 +299,7 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 		}
 		for j := min(n, i+exactCells); j > i && next < 0; j-- {
 			a, b := s.points[i], s.points[j]
-			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.dropsAsPath(s, i, j) && p.stepChainOK(s, a, b) {
+			if p.inReach(s, cells, i, j, n) && !p.avoided(s, a, b, from, to) && p.Engine.CanMove(a.X, a.Y, a.Z, b.X, b.Y, b.Z) && p.dropsAsPath(s, i, j) && p.coveredAsPath(s, i, j) && p.stepChainOK(s, a, b) {
 				next = j
 			}
 		}
@@ -308,8 +317,9 @@ func (p *Planner) pull(s *scratch, cells []Cell, from, to location.Location) (ed
 // what pull asks of its first candidate, the whole path at once, being
 // within the segment cap, crossing no avoided column, passing the corridor
 // test and CanMove over p's engine (where the door table toggles the doors),
-// and taking no drop, since without a cell path no drop of the path can
-// stand for one of the line (dropsAsPath). The goal is a click target
+// and taking no drop nor crossing covered ground, since without a cell path
+// no drop or covered cell of the path can stand for one of the line
+// (dropsAsPath, coveredAsPath). The goal is a click target
 // already. When it passes, pull would take the same segment after the
 // search; when it fails, the search decides as it always did (#565).
 func (p *Planner) straight(s *scratch, from, to location.Location) bool {
@@ -318,7 +328,39 @@ func (p *Planner) straight(s *scratch, from, to location.Location) bool {
 	}
 	s.grid.invalidate()
 	return !p.avoided(s, from, to, from, to) && p.corridorClear(s, from, to) &&
-		p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) && !p.lineDrops(s, from, to)
+		p.Engine.CanMove(from.X, from.Y, from.Z, to.X, to.Y, to.Z) && !p.lineDrops(s, from, to) &&
+		!(p.coveredCost() > 0 && p.lineCovered(s, from, to))
+}
+
+// coveredAsPath reports whether the segment from waypoint i to cell j may be
+// taken as far as covered ground goes: the cell path from i to j leaves a
+// covered cell, or the segment's line leaves none. A route that weighed the
+// way round a building over the way through keeps to it, where a straight
+// line through its doorways would pass CanMove (#640).
+func (p *Planner) coveredAsPath(s *scratch, i, j int) bool {
+	return p.coveredCost() <= 0 || s.covers[j] > s.covers[i] || !p.lineCovered(s, s.points[i], s.points[j])
+}
+
+// lineCovered reports whether the walk along the line from a to b, landing
+// on each cell's layer as CanMove does, leaves a covered cell
+// (Planner.isCovered) before b's.
+func (p *Planner) lineCovered(s *scratch, a, b location.Location) bool {
+	s.dropLine = appendLineCells(s.dropLine[:0], a, b)
+	c := Cell{X: engine.GeoX(a.X), Y: engine.GeoY(a.Y), Z: p.Engine.Height(a.X, a.Y, a.Z)}
+	for k := 0; ; k++ {
+		if p.isCovered(c, &s.layers) {
+			return true
+		}
+		if k+1 >= len(s.dropLine) {
+			return false
+		}
+		next := s.dropLine[k+1]
+		h, _, ok := p.Engine.NodeBelow(next.x, next.y, int(c.Z)+block.CellIgnoreHeight)
+		if !ok || k+2 >= len(s.dropLine) {
+			return false // CanMove refuses the line, or next is b's cell
+		}
+		c = Cell{X: next.x, Y: next.y, Z: h}
+	}
 }
 
 // dropsAsPath reports whether the segment from waypoint i to cell j may be

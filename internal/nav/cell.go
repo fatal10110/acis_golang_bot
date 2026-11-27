@@ -62,6 +62,12 @@ type Planner struct {
 	// noDrops refuses every drop (dropCost), for the hierarchy's endpoint
 	// legs; set on a copy only.
 	noDrops bool
+	// covered is the extra cost of a step out of covered ground when
+	// coveredSet, else DefaultCoveredCost: a hierarchy sets it on its
+	// copies to what its nav cache was built with (withCovered), so the
+	// zero Planner weighs covered ground as a default build does.
+	covered    int32
+	coveredSet bool
 }
 
 // Locate snaps a world point to its cell and the layer nearest its Z, as the
@@ -99,6 +105,55 @@ func (p *Planner) clickable(c Cell, buf *[block.MaxLayers]block.Cell) bool {
 		}
 	}
 	return true
+}
+
+// coverClear is how far over a cell's floor another layer of its column may
+// lie with the cell still in the open: more than a step's climb, less than a
+// storey. It is the walker's open test (openClear in botclient, #617), so the
+// ground the planner weighs as covered is the ground #640 measured as indoor.
+const coverClear = 64
+
+// DefaultCoveredCost is the extra cost, in tenths of a cell, of a step out of
+// covered ground: a cell with a layer more than coverClear over its own, under
+// a roof, an upper floor or a deck. A route then goes round a building rather
+// than through it whenever the way round is less than
+// DefaultCoveredCost/costCardinal times the covered stretch longer, and still
+// enters where an end is inside (docs/navigation.md, "Covered ground"). It is
+// a nav build parameter (BuildConfig.CoveredCost), recorded in the nav cache.
+const DefaultCoveredCost = 10
+
+// coveredCost returns the extra cost of a step out of covered ground.
+func (p *Planner) coveredCost() int32 {
+	if p.coveredSet {
+		return p.covered
+	}
+	return DefaultCoveredCost
+}
+
+// withCovered returns p weighing a step out of covered ground at cost.
+func (p Planner) withCovered(cost int32) Planner {
+	p.covered, p.coveredSet = cost, true
+	return p
+}
+
+// isCovered reports whether a layer of c's column lies more than coverClear
+// over c's floor.
+func (p *Planner) isCovered(c Cell, buf *[block.MaxLayers]block.Cell) bool {
+	for _, l := range p.Engine.AppendLayers(buf[:0], c.X, c.Y) {
+		if int(l.Height) > int(c.Z)+coverClear {
+			return true
+		}
+	}
+	return false
+}
+
+// coverExtra returns what a step out of c costs more for covered ground: 0
+// in the open or when the planner weighs no covered ground.
+func (p *Planner) coverExtra(c Cell, buf *[block.MaxLayers]block.Cell) int32 {
+	if cost := p.coveredCost(); cost > 0 && p.isCovered(c, buf) {
+		return cost
+	}
+	return 0
 }
 
 // direction is one cardinal step on the geodata grid.
@@ -157,6 +212,7 @@ func (p *Planner) nswe(c Cell) block.NSWE {
 // extra for leaving a cell next to a blocked edge or a drop. The clearance
 // extra keeps routes off walls and ledges, which leaves a margin for the step
 // chain and for dead reckoning (docs/navigation.md, "Wall clearance cost").
+// A step out of covered ground costs coveredCost more (DefaultCoveredCost).
 const (
 	costCardinal  = 10
 	costDiagonal  = 14
@@ -204,7 +260,8 @@ type neighbour struct {
 // as the server's pathfinder does for its corner steps
 // (geo/pathfind/pathfind.go, cornerSteps and addCandidate).
 //
-// A swimming planner's edge into a wet cell costs swimCost times as much.
+// A swimming planner's edge into a wet cell costs swimCost times as much. An
+// edge out of covered ground costs coveredCost more (DefaultCoveredCost).
 func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 	swims := p.swims()
 	if !swims && p.Water.wet(c.X, c.Y, c.Z) {
@@ -225,9 +282,10 @@ func (p *Planner) neighbours(dst []neighbour, c Cell) []neighbour {
 			edge = true // a drop
 		}
 	}
-	extra := int32(0)
+	var buf [block.MaxLayers]block.Cell
+	extra := p.coverExtra(c, &buf)
 	if edge {
-		extra = costClearance
+		extra += costClearance
 	}
 	cost := func(c Cell, base int32) int32 {
 		if swims && p.Water.wet(c.X, c.Y, c.Z) {
