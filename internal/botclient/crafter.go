@@ -393,7 +393,12 @@ func (b *Brain) craftPlan(now time.Time, fromWarehouse bool) {
 	}
 	in := b.craftInput(c.orders, fromWarehouse, now)
 	c.plan = craftplan.Build(in, b.persona.Crafter.Plan)
-	b.fillCarriedOrders(now)
+	if fromWarehouse {
+		// Without the list (a withdrawal that brought nothing, a mid-make
+		// replan) an order whose materials still lie in the pool has no
+		// chain either: filling it would spend the bot's own supplies.
+		b.fillCarriedOrders(now)
+	}
 	if fromWarehouse && !c.plan.Exhausted {
 		b.cancelUnplanned()
 	}
@@ -446,7 +451,8 @@ func (b *Brain) claimCraftOrders(now time.Time) []CraftOrder {
 // claimed: a chain for the clan used the materials a member deposited
 // before posting the order, and a shot it made stays carried as a supply
 // (#577). An order the plan crafts is never filled from the bag, and a
-// partial count stays claimed.
+// partial count stays claimed. Only a plan from the fresh warehouse list
+// fills: there a missing chain means the pool holds no materials for it.
 func (b *Brain) fillCarriedOrders(now time.Time) {
 	c, board, clan, self := &b.craft, b.cfg.CraftBoard, b.world.Clan.ID, b.world.Self.ObjectID
 	planned := make(map[int]bool)

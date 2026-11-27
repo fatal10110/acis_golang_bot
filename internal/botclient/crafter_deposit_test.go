@@ -58,14 +58,17 @@ func TestBrainCrafterCarriedOrderFlow(t *testing.T) {
 // TestBrainCrafterCarriedOrder: a claimed order the plan holds no chain
 // for is crafted from the bag only for its whole count and beyond what the
 // bot's crafted orders take; an order the plan crafts is not filled from
-// the bag.
+// the bag; a plan without the warehouse list never fills (the order's
+// materials may still lie in the pool).
 func TestBrainCrafterCarriedOrder(t *testing.T) {
 	tests := []struct {
 		name  string
 		items []Item
 		count int64
 		// crafted posts an earlier order of one steel, crafted by the bot.
-		crafted   bool
+		crafted bool
+		// noList plans without the warehouse list (craftPlan(now, false)).
+		noList    bool
 		wantState OrderState
 		wantPhase crafterPhase
 	}{
@@ -96,6 +99,11 @@ func TestBrainCrafterCarriedOrder(t *testing.T) {
 			},
 			count: 1, wantState: OrderClaimed, wantPhase: craftMake,
 		},
+		{
+			name:  "planned without the list: not filled",
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 3}}, count: 3, noList: true,
+			wantState: OrderClaimed, wantPhase: craftIdle,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,7 +120,8 @@ func TestBrainCrafterCarriedOrder(t *testing.T) {
 			id, _ := board.Post(clan, "Member", steel, tt.count)
 			board.MaterialsIn(clan, id)
 			now := at(time.Minute)
-			b.craftPlan(now, false)
+			b.wh.status.Known, b.wh.status.Contents = true, nil
+			b.craftPlan(now, !tt.noList)
 			var got CraftOrder
 			for _, o := range board.Orders(clan, now) {
 				if o.ID == id {
