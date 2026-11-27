@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 func TestCheckCredentials(t *testing.T) {
@@ -15,10 +17,10 @@ func TestCheckCredentials(t *testing.T) {
 	key := []byte("0123456789abcdef")
 	const sessionID = 0x4242
 	credentials := step{check: func(p []byte) error {
-		var want [authBlockSize]byte
+		var want [botwire.AuthBlockSize]byte
 		copy(want[0x5e:], "bot7")
 		copy(want[0x6c:], "pw")
-		if p[0] != 0x00 || len(p) < 1+authBlockSize || !bytes.Equal(rsaDecryptBlock(priv, p[1:1+authBlockSize]), want[:]) {
+		if p[0] != 0x00 || len(p) < 1+botwire.AuthBlockSize || !bytes.Equal(rsaDecryptBlock(priv, p[1:1+botwire.AuthBlockSize]), want[:]) {
 			return fmt.Errorf("RequestAuthLogin %x does not carry the credentials", p)
 		}
 		return nil

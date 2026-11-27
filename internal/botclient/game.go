@@ -89,14 +89,14 @@ func newGameConn(ctx context.Context, conn net.Conn, revision int32, timeout tim
 }
 
 func (g *GameConn) handshake(ctx context.Context, revision int32) error {
-	if err := g.send(ctx, encodeProtocolVersion(revision)); err != nil {
+	if err := g.send(ctx, botwire.EncodeProtocolVersion(revision)); err != nil {
 		return fmt.Errorf("send ProtocolVersion: %w", closedOnWrite(err))
 	}
 	raw, err := g.read(ctx, time.Now().Add(g.timeout))
 	if err != nil {
 		return fmt.Errorf("read VersionCheck: %w", closedOnRead(err))
 	}
-	key, enabled, err := decodeVersionCheck(raw)
+	key, enabled, err := botwire.DecodeVersionCheck(raw)
 	if err != nil {
 		return gameDecodeError("VersionCheck", raw, err)
 	}
@@ -166,24 +166,6 @@ func (g *GameConn) read(ctx context.Context, deadline time.Time) ([]byte, error)
 // Close closes the connection; a blocked Read returns.
 func (g *GameConn) Close() error { return g.conn.Close() }
 
-// Self is the bot's own character as the EnterWorld burst described it.
-type Self struct {
-	// Name is the character's, the one selected or created.
-	Name string
-	// Slots is how many characters the account held once this one was
-	// chosen: CharSelectInfo's count, after the creation if there was one.
-	Slots    int
-	ObjectID int32
-	X, Y, Z  int32
-	Heading  int32
-	// Burst holds copies of the EnterWorld frames that preceded UserInfo
-	// (objects already in sight among them), in arrival order.
-	Burst [][]byte
-	// UserInfo is a copy of the burst's UserInfo frame. NewWorld replays
-	// it after Burst.
-	UserInfo []byte
-}
-
 // GameStartError reports a game-server rejection before the world was
 // entered: AuthLoginFail or CharCreateFail and its reason code.
 type GameStartError struct {
@@ -225,7 +207,7 @@ func EnterGame(ctx context.Context, g *GameConn, account string, keys SessionKey
 }
 
 func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKeys, ch Character, chosen func(string, int32)) (Self, error) {
-	if err := g.send(ctx, encodeAuthLogin(account, keys)); err != nil {
+	if err := g.send(ctx, botwire.EncodeAuthLogin(account, keys)); err != nil {
 		return Self{}, fmt.Errorf("send AuthLogin: %w", err)
 	}
 	reply, err := g.readUntil(ctx, opGameCharSelectInfo, opGameAuthLoginFail)
@@ -235,7 +217,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 	if reply[0] == opGameAuthLoginFail {
 		return Self{}, &GameStartError{Packet: "AuthLoginFail", Reason: wire.NewPacketReader(reply).ReadInt32()}
 	}
-	slots, err := decodeCharSelectInfo(reply)
+	slots, err := botwire.DecodeCharSelectInfo(reply)
 	if err != nil {
 		return Self{}, gameDecodeError("CharSelectInfo", reply, err)
 	}
@@ -249,7 +231,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 		chosen(name, s.ClassID)
 	}
 
-	if err := g.send(ctx, encodeRequestGameStart(slot)); err != nil {
+	if err := g.send(ctx, botwire.EncodeRequestGameStart(slot)); err != nil {
 		return Self{}, fmt.Errorf("send RequestGameStart: %w", err)
 	}
 	selected, err := g.readUntil(ctx, opGameCharSelected)
@@ -273,7 +255,7 @@ func (g *GameConn) enterGame(ctx context.Context, account string, keys SessionKe
 		case opGameUserInfo:
 			// The whole UserInfo decodes here, before the world: NewWorld
 			// replays it last, and a bad one ends the attempt (errDecode).
-			self, err := decodeUserInfo(raw)
+			self, err := botwire.DecodeUserInfo(raw)
 			if err == nil {
 				_, _, err = decodeEvent(raw)
 			}

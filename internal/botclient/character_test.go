@@ -1,15 +1,12 @@
 package botclient
 
 import (
-	"bytes"
 	"errors"
-	"math/rand/v2"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
-	"github.com/fatal10110/acis_golang_bot/internal/testsupport/decodefuzz"
 )
 
 // named returns live slots (delete timer 0) bearing names, in order.
@@ -20,6 +17,10 @@ func named(names ...string) []charSlot {
 	}
 	return slots
 }
+
+// paperdollSlots is the number of paperdoll entries CharSelectInfo writes
+// per slot (botwire's decoder skips them).
+const paperdollSlots = 17
 
 // charSelectInfoPacket is the server's CharSelectInfo (charselectinfo.go):
 // the count, then every field of each slot in its order. Fields the client
@@ -52,75 +53,6 @@ func charSelectInfoPacket(slots ...charSlot) []byte {
 		w.WriteInt32(next()) // augmentation
 	}
 	return w.Bytes()
-}
-
-func TestCharSelectInfoDecode(t *testing.T) {
-	three := []charSlot{{Name: "AldenBot", ClassID: 18}, {Name: "GraeBot", DeleteTimer: 3600, ClassID: 1}, {Name: "x", DeleteTimer: -1}}
-	full := charSelectInfoPacket(three...)
-	tests := []struct {
-		name    string
-		raw     []byte
-		want    []charSlot
-		wantErr string
-	}{
-		{"empty account", charSelectInfoPacket(), nil, ""},
-		{"one slot", charSelectInfoPacket(named("bot7")...), named("bot7"), ""},
-		{"three slots", full, three, ""},
-		{"truncated", full[:len(full)-1], nil, "decode CharSelectInfo"},
-		{"trailing byte", append(append([]byte(nil), full...), 0), nil, "trailing"},
-		{"count beyond slots", append([]byte{0x13, 4, 0, 0, 0}, full[5:]...), nil, "decode CharSelectInfo"},
-		{"negative count", packet(0x13, -1), nil, "count -1"},
-		{"opcode only", []byte{0x13}, nil, "decode CharSelectInfo"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := decodeCharSelectInfo(tt.raw)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("err = %v, want %q", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil || !slices.Equal(got, tt.want) {
-				t.Fatalf("slots = %+v, %v; want %+v", got, err, tt.want)
-			}
-		})
-	}
-}
-
-// FuzzCharSelectInfo feeds the decoder arbitrary payloads: it must return
-// slots or an error, never panic, and allocate in proportion to the input.
-func FuzzCharSelectInfo(f *testing.F) {
-	f.Add(charSelectInfoPacket())
-	f.Add(charSelectInfoPacket(named("AldenBot", "Gr")...))
-	f.Add([]byte{0x13, 0xff, 0xff, 0xff, 0x7f})
-	f.Fuzz(func(t *testing.T, raw []byte) {
-		if len(raw) == 0 {
-			return
-		}
-		decodefuzz.Bounded(t, "decodeCharSelectInfo", raw, func() { _, _ = decodeCharSelectInfo(raw) })
-	})
-}
-
-func TestCharCreateEncoder(t *testing.T) {
-	tests := []struct {
-		name  string
-		class StartingClass
-		look  Appearance
-		want  []byte
-	}{
-		// name, race, sex, class, six stats, hair style, hair color, face
-		// (requestcharactercreate.go).
-		{"human fighter", HumanFighter, Appearance{HairStyle: 1}, packet(0x0b, "AldenBot", 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)},
-		{"elven mystic female", ElvenMystic, Appearance{Sex: SexFemale, HairStyle: 6, HairColor: 3, Face: 2}, packet(0x0b, "AldenBot", 1, 1, 25, 0, 0, 0, 0, 0, 0, 6, 3, 2)},
-		{"orc mystic", OrcMystic, Appearance{HairStyle: 4, HairColor: 2, Face: 1}, packet(0x0b, "AldenBot", 3, 0, 49, 0, 0, 0, 0, 0, 0, 4, 2, 1)},
-		{"dwarven fighter", DwarvenFighter, Appearance{Sex: SexFemale}, packet(0x0b, "AldenBot", 4, 1, 53, 0, 0, 0, 0, 0, 0, 0, 0, 0)},
-	}
-	for _, tt := range tests {
-		if got := encodeRequestCharacterCreate("AldenBot", tt.class, tt.look); !bytes.Equal(got, tt.want) {
-			t.Errorf("%s = %x, want %x", tt.name, got, tt.want)
-		}
-	}
 }
 
 func TestCharacterValidate(t *testing.T) {
@@ -159,24 +91,6 @@ func TestCharacterValidate(t *testing.T) {
 				t.Fatalf("err = %v, want %q", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-// TestCharRandomAppearance: every draw is one the server accepts, and both
-// sexes and the female-only hair styles come up.
-func TestCharRandomAppearance(t *testing.T) {
-	r := rand.New(rand.NewPCG(3, 5))
-	var female, longHair bool
-	for range 2000 {
-		a := RandomAppearance(r)
-		if err := a.Validate(); err != nil {
-			t.Fatalf("RandomAppearance() = %+v: %v", a, err)
-		}
-		female = female || a.Sex == SexFemale
-		longHair = longHair || a.HairStyle > 4
-	}
-	if !female || !longHair {
-		t.Fatalf("2000 draws: female %v, hair style above 4 %v", female, longHair)
 	}
 }
 

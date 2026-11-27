@@ -3,8 +3,7 @@ package botwire
 // Opcodes of the game packets the bot reads and sends, redeclared from the
 // acis_golang server's packet packages (the file each value comes from is
 // named in its group). Login and game opcodes overlap, so each constant
-// names its protocol and direction; the login opcodes stay with the login
-// client in botclient.
+// names its protocol and direction.
 
 // Game server to client (internal/gameserver/network/serverpackets).
 const (
@@ -325,3 +324,23 @@ const (
 // Only the e2e harness sends it (EncodeRequestDestroyItem): a
 // bot never destroys what it carries.
 const OpGameRequestDestroyItem = 0x59
+
+// Login server to client (internal/loginserver/network/serverpackets).
+const (
+	OpLoginInit          = 0x00 // init.go
+	OpLoginFail          = 0x01 // loginfail.go
+	OpLoginAccountKicked = 0x02 // accountkicked.go
+	OpLoginOk            = 0x03 // loginok.go
+	OpLoginServerList    = 0x04 // serverlist.go
+	OpLoginPlayFail      = 0x06 // playfail.go
+	OpLoginPlayOk        = 0x07 // playok.go
+	OpLoginGGAuth        = 0x0b // ggauth.go
+)
+
+// Client to login server (internal/loginserver/network/clientpackets).
+const (
+	OpLoginRequestAuthLogin   = 0x00 // requestauthlogin.go
+	OpLoginRequestServerLogin = 0x02 // requestserverlogin.go
+	OpLoginRequestServerList  = 0x05 // requestserverlist.go
+	OpLoginAuthGameGuard      = 0x07 // authgameguard.go
+)

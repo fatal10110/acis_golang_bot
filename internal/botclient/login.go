@@ -2,44 +2,18 @@ package botclient
 
 import (
 	"context"
-	"crypto/rsa"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"syscall"
 	"time"
 
-	commoncrypt "github.com/fatal10110/acis_golang_bot/internal/commons/crypt"
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
+
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 	logincrypt "github.com/fatal10110/acis_golang_bot/internal/loginserver/crypt"
 )
-
-// Credential block layout of RequestAuthLogin: the name and password sit at
-// fixed offsets of one 128-byte RSA block.
-const (
-	authBlockSize   = 128
-	authNameOffset  = 0x5e
-	authNameMax     = 14
-	authPassOffset  = 0x6c
-	authPassMax     = 16
-	initPayloadSize = 1 + 4 + 4 + 128 + 16 + 16 + 1
-)
-
-// SessionKeys are the login and play key pairs the login server hands out;
-// the game server checks them against the login server on AuthLogin.
-type SessionKeys struct {
-	LoginKey1, LoginKey2 int32
-	PlayKey1, PlayKey2   int32
-}
-
-// ServerEntry is one row of the login server's ServerList.
-type ServerEntry struct {
-	ID     byte
-	Addr   string
-	Online bool
-}
 
 // LoginResult is what a completed login-server session yields.
 type LoginResult struct {
@@ -201,18 +175,18 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	if err != nil {
 		return nil, res, nil, fmt.Errorf("read Init: %w", closedOnRead(err))
 	}
-	init, err := decodeInit(first)
+	init, err := botwire.DecodeInit(first)
 	if err != nil {
 		return nil, res, nil, loginDecodeError("Init", opLoginInit, len(first), err)
 	}
-	cr, err := logincrypt.NewClientLoginCrypt(init.blowfishKey)
+	cr, err := logincrypt.NewClientLoginCrypt(init.BlowfishKey)
 	if err != nil {
 		return nil, res, nil, err
 	}
 	res.Connected = time.Now()
 	c := &loginConn{conn: conn, frames: frames, crypt: cr, timeout: timeout}
 
-	if err := c.send(ctx, encodeAuthGameGuard(init.sessionID)); err != nil {
+	if err := c.send(ctx, botwire.EncodeAuthGameGuard(init.SessionID)); err != nil {
 		return nil, res, nil, fmt.Errorf("send AuthGameGuard: %w", err)
 	}
 	reply, err := c.read(ctx)
@@ -223,7 +197,7 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 		return nil, res, nil, err
 	}
 
-	if err := c.send(ctx, encodeRequestAuthLogin(init.publicKey, account, password)); err != nil {
+	if err := c.send(ctx, botwire.EncodeRequestAuthLogin(init.PublicKey, account, password)); err != nil {
 		return nil, res, nil, fmt.Errorf("send RequestAuthLogin: %w", err)
 	}
 	if reply, err = c.read(ctx); err != nil {
@@ -232,10 +206,10 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	// With ShowLicence off the server answers the credentials with the
 	// ServerList itself and does not check the session keys afterwards.
 	if len(reply) > 0 && reply[0] == opLoginOk {
-		if res.Keys.LoginKey1, res.Keys.LoginKey2, err = decodeKeyPair(reply); err != nil {
+		if res.Keys.LoginKey1, res.Keys.LoginKey2, err = botwire.DecodeKeyPair(reply); err != nil {
 			return nil, res, nil, loginDecodeError("LoginOk", opLoginOk, len(reply), err)
 		}
-		if err := c.send(ctx, encodeRequestServerList(res.Keys.LoginKey1, res.Keys.LoginKey2)); err != nil {
+		if err := c.send(ctx, botwire.EncodeRequestServerList(res.Keys.LoginKey1, res.Keys.LoginKey2)); err != nil {
 			return nil, res, nil, fmt.Errorf("send RequestServerList: %w", err)
 		}
 		if reply, err = c.read(ctx); err != nil {
@@ -245,7 +219,7 @@ func authenticate(ctx context.Context, conn net.Conn, account, password string, 
 	if err := expectLoginReply(reply, opLoginServerList, "ServerList"); err != nil {
 		return nil, res, nil, err
 	}
-	servers, err := decodeServerList(reply)
+	servers, err := botwire.DecodeServerList(reply)
 	if err != nil {
 		return nil, res, nil, loginDecodeError("ServerList", opLoginServerList, len(reply), err)
 	}
@@ -266,7 +240,7 @@ func loginSession(ctx context.Context, conn net.Conn, account, password string, 
 		return res, fmt.Errorf("server %d is not in the ServerList", serverID)
 	}
 
-	if err := c.send(ctx, encodeRequestServerLogin(res.Keys.LoginKey1, res.Keys.LoginKey2, serverID)); err != nil {
+	if err := c.send(ctx, botwire.EncodeRequestServerLogin(res.Keys.LoginKey1, res.Keys.LoginKey2, serverID)); err != nil {
 		return res, fmt.Errorf("send RequestServerLogin: %w", err)
 	}
 	reply, err := c.read(ctx)
@@ -276,7 +250,7 @@ func loginSession(ctx context.Context, conn net.Conn, account, password string, 
 	if err := expectLoginReply(reply, opLoginPlayOk, "PlayOk"); err != nil {
 		return res, err
 	}
-	if res.Keys.PlayKey1, res.Keys.PlayKey2, err = decodeKeyPair(reply); err != nil {
+	if res.Keys.PlayKey1, res.Keys.PlayKey2, err = botwire.DecodeKeyPair(reply); err != nil {
 		return res, loginDecodeError("PlayOk", opLoginPlayOk, len(reply), err)
 	}
 	return res, nil
@@ -300,104 +274,4 @@ func expectLoginReply(reply []byte, opcode byte, name string) error {
 		return &LoginError{Packet: "AccountKicked", Reason: r.ReadInt32()}
 	}
 	return fmt.Errorf("login reply opcode %#x, want %s (%#x)", reply[0], name, opcode)
-}
-
-type initPacket struct {
-	sessionID   int32
-	publicKey   *rsa.PublicKey
-	blowfishKey []byte
-}
-
-// decodeInit decrypts the first login packet in place and parses it.
-func decodeInit(frame []byte) (initPacket, error) {
-	var p initPacket
-	if err := logincrypt.DecryptFirst(frame); err != nil {
-		return p, err
-	}
-	if len(frame) < initPayloadSize || frame[0] != opLoginInit {
-		return p, fmt.Errorf("first login packet is not Init (%d bytes, opcode %#x)", len(frame), frame[0])
-	}
-	r := wire.NewPacketReader(frame)
-	p.sessionID = r.ReadInt32()
-	_ = r.ReadInt32() // protocol revision
-	pub, err := commoncrypt.UnscrambleModulus(r.ReadBytes(128))
-	if err != nil {
-		return p, err
-	}
-	p.publicKey = pub
-	_ = r.ReadBytes(16) // GameGuard placeholder
-	p.blowfishKey = append([]byte(nil), r.ReadBytes(16)...)
-	return p, r.Err()
-}
-
-// decodeKeyPair reads the two leading session keys of LoginOk or PlayOk.
-func decodeKeyPair(reply []byte) (key1, key2 int32, err error) {
-	r := wire.NewPacketReader(reply)
-	key1, key2 = r.ReadInt32(), r.ReadInt32()
-	return key1, key2, r.Err()
-}
-
-func decodeServerList(reply []byte) ([]ServerEntry, error) {
-	r := wire.NewPacketReader(reply)
-	n := int(r.ReadUint8())
-	_ = r.ReadUint8() // last server
-	servers := make([]ServerEntry, 0, n)
-	for range n {
-		var s ServerEntry
-		s.ID = r.ReadUint8()
-		ip := net.IP(r.ReadBytes(4))
-		port := r.ReadInt32()
-		s.Addr = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
-		_ = r.ReadUint8()  // age limit
-		_ = r.ReadUint8()  // PvP
-		_ = r.ReadUint16() // current players
-		_ = r.ReadUint16() // max players
-		s.Online = r.ReadUint8() != 0
-		_ = r.ReadInt32() // server type bits
-		_ = r.ReadUint8() // brackets
-		if r.Err() != nil {
-			break
-		}
-		servers = append(servers, s)
-	}
-	if err := r.Err(); err != nil {
-		return nil, fmt.Errorf("decode ServerList: %w", err)
-	}
-	return servers, nil
-}
-
-func encodeAuthGameGuard(sessionID int32) []byte {
-	w := wire.NewPacketWriter(opLoginAuthGameGuard)
-	w.WriteInt32(sessionID)
-	for range 4 {
-		w.WriteInt32(0)
-	}
-	return w.Bytes()
-}
-
-// encodeRequestAuthLogin RSA-encrypts (no padding) the credential block
-// with the session's public key. Longer names and passwords are truncated
-// to their fields.
-func encodeRequestAuthLogin(pub *rsa.PublicKey, account, password string) []byte {
-	var block [authBlockSize]byte
-	copy(block[authNameOffset:authNameOffset+authNameMax], account)
-	copy(block[authPassOffset:authPassOffset+authPassMax], password)
-	w := wire.NewPacketWriter(opLoginRequestAuthLogin)
-	w.WriteBytes(commoncrypt.EncryptDynamicKey(pub, block[:]))
-	return w.Bytes()
-}
-
-func encodeRequestServerList(key1, key2 int32) []byte {
-	w := wire.NewPacketWriter(opLoginRequestServerList)
-	w.WriteInt32(key1)
-	w.WriteInt32(key2)
-	return w.Bytes()
-}
-
-func encodeRequestServerLogin(key1, key2 int32, serverID byte) []byte {
-	w := wire.NewPacketWriter(opLoginRequestServerLogin)
-	w.WriteInt32(key1)
-	w.WriteInt32(key2)
-	w.WriteUint8(serverID)
-	return w.Bytes()
 }
