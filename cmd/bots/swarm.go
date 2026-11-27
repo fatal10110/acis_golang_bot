@@ -70,6 +70,9 @@ type swarmOptions struct {
 	support int
 	// noParties turns the bot party organizer off (-no-parties).
 	noParties bool
+	// outcomeLog is the outcome log's file (-outcome-log); empty records
+	// nothing.
+	outcomeLog string
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -98,6 +101,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	addSpawnEventsFlag(fs, &o.spawnEvents)
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
+	addOutcomeLogFlag(fs, &o.outcomeLog)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -228,6 +232,15 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), challenges: botclient.NewChallengeHolds(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget, clanInviters: o.clanInviters,
 		ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
 	}
+	outcomes, stopOutcomes, err := startOutcomeLog(o.outcomeLog, log)
+	if err != nil {
+		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
+		return 1
+	}
+	// Deferred first of the run's pieces: the writer takes the stays of
+	// every bot until all returned, then it is joined.
+	defer stopOutcomes()
+	sh.outcomes = outcomes
 	// The navigation opens before the spots: the registry drops the spots in
 	// water (loadSpots).
 	if o.geo.set() {
@@ -236,7 +249,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 			return 1
 		}
-		// Deferred first of the run's pieces: the caches stay mapped until
+		// Deferred before the bots start: the caches stay mapped until
 		// every bot returned.
 		defer closeNav()
 		sh.nav = n
