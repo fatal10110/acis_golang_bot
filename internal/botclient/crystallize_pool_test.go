@@ -39,7 +39,7 @@ func TestBrainCrystallizePoolGear(t *testing.T) {
 		if c.phase != craftDeposit || !reflect.DeepEqual(c.req.Deposit, bothWhole) {
 			t.Fatalf("phase %d deposit %+v, want both pool weapons deposited, the spare kept", c.phase, c.req.Deposit)
 		}
-		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, gotWeapon}, {ItemRemoved, gotOther}}}}, next); err != nil {
+		if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: gotWeapon}, {State: ItemRemoved, Item: gotOther}}}}, next); err != nil {
 			t.Fatal(err)
 		}
 		b.endCraftCycle(next, true)

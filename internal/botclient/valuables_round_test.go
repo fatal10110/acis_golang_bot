@@ -153,7 +153,7 @@ func testRoundNone(t *testing.T) {
 		{"no unmarked private keeper", func(b *Brain) { b.cfg.valuables.noPrivate[keeperNPC] = true }, 0},
 		{"look not done", func(b *Brain) { b.wh.private = WarehouseStatus{} }, 0},
 		{"stored ones alone", func(b *Brain) {
-			b.world.Apply(InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(101, 0)}}}, t0)
+			b.world.Apply(InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}}}, t0)
 			b.wh.private.Contents = []WarehouseItem{storedSword}
 		}, 0},
 	} {
@@ -182,7 +182,7 @@ func testRoundUnreachable(t *testing.T) {
 		wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}}),
 	}))
 	b.walk.nav = nil
-	rule, a := tradeTurn(t, b, at(6*time.Second), InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 1000}})
+	rule, a := tradeTurn(t, b, at(6*time.Second), InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 1000}})
 	if rule == "valuables" || a.kind == actSay {
 		t.Fatalf("no route back: rule %q action %d, want the round ended", rule, a.kind)
 	}
@@ -222,7 +222,7 @@ func TestValuablesReadvertise(t *testing.T) {
 		wantPayload: encodeWarehouseRequest(opGameSendWareHouseWithdrawList, []warehouseRow{{object: 201, item: ledgerStaff, count: 1}, {object: 202, item: ledgerSword, count: 1}}),
 	}))
 	now := at(6 * time.Second)
-	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}, {ItemAdded, carriedOf(storedSword)}}}}, now); err != nil {
+	if err := b.handle([]Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}, {State: ItemAdded, Item: carriedOf(storedSword)}}}}, now); err != nil {
 		t.Fatal(err)
 	}
 	line := roundLine(t, b)
@@ -266,7 +266,7 @@ func TestValuablesFirstLineWait(t *testing.T) {
 	back := 6 * time.Second
 	wait := b.persona.Valuables.FirstLineWait
 	runTrainerSteps(t, b, []trainerStep{
-		{name: "back at the anchor: board held", at: back, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOf(storedStaff)}}}}, wantRule: "valuables"},
+		{name: "back at the anchor: board held", at: back, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOf(storedStaff)}}}}, wantRule: "valuables"},
 		{name: "still held", at: back + wait - time.Second, wantRule: "valuables"},
 		{name: "FirstLineWait: the deposit, the keeper still selected", at: back + wait, wantRule: "valuables", wantKind: actTalk},
 	})
@@ -373,7 +373,7 @@ func TestValuablesHoldsTurn(t *testing.T) {
 			after  time.Duration
 			stored int64
 		}{
-			{"answered", []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(101, 0)}, {ItemModified, adenaStack(970)}}}}, time.Second, 1},
+			{"answered", []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}, {State: ItemModified, Item: adenaStack(970)}}}}, time.Second, 1},
 			{"timed out", nil, warehouseReplyTimeout, 0},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -409,7 +409,7 @@ func TestValuablesRoundDeposit(t *testing.T) {
 		list := append(slices.Clone(swordDepositList), WarehouseItem{ObjectID: 102, TemplateID: animalSkin, Count: 10})
 		runTrainerSteps(t, b, append(depositSteps(end, list, swordDepositRows), trainerStep{
 			name: "deposited: walk back", at: end + 6*time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, swordUnit(101, 0)}, {ItemModified, adenaStack(970)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: swordUnit(101, 0)}, {State: ItemModified, Item: adenaStack(970)}}}, TeleportToLocation{ObjectID: selfID, Pos: Point{X: 250}}},
 			wantRule: "valuables", wantKind: actMove, wantTo: Point{}, wantWithin: anchorArrive,
 		}))
 		if e := entryOf(t, b, ledgerSword, 0); e.stored != 1 || e.carried != 0 {

@@ -86,7 +86,7 @@ func TestBrainCrafterCycle(t *testing.T) {
 		},
 		trainerStep{
 			name: "withdrawn: release the lease, craft", at: 67 * time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, carriedOre}}}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: carriedOre}}}},
 			wantRule: "craft", wantKind: actCraft, wantPayload: craftReq(),
 		},
 	)
@@ -99,7 +99,7 @@ func TestBrainCrafterCycle(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		evs := []Event{madeInfo(RecipeMadeSuccess)}
 		if i == 5 {
-			evs = append(evs, InventoryUpdate{Changes: []ItemChange{{ItemRemoved, carriedOre}, {ItemAdded, Item{ObjectID: 300, TemplateID: steel, Count: 5}}}})
+			evs = append(evs, InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: carriedOre}, {State: ItemAdded, Item: Item{ObjectID: 300, TemplateID: steel, Count: 5}}}})
 		}
 		answered := sent.Add(100 * time.Millisecond)
 		if err := b.handle(evs, answered); err != nil {
@@ -140,7 +140,7 @@ func TestBrainCrafterCycle(t *testing.T) {
 		},
 		{
 			name: "deposited: the cycle ends", at: 128 * time.Second,
-			events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, Item{ObjectID: 300, TemplateID: steel, Count: 5}}}}}, wantRule: "craft",
+			events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: Item{ObjectID: 300, TemplateID: steel, Count: 5}}}}}, wantRule: "craft",
 		},
 		{name: "idle until CheckEvery", at: 128*time.Second + 5*time.Minute - time.Millisecond},
 		{name: "next check", at: 128*time.Second + 5*time.Minute, wantRule: "craft"},
@@ -338,7 +338,7 @@ func TestBrainCrafterOrder(t *testing.T) {
 	}
 	sendCraft(t, b, at(4*time.Second))
 	evs := []Event{madeInfo(RecipeMadeSuccess), InventoryUpdate{Changes: []ItemChange{
-		{ItemRemoved, Item{ObjectID: 200, TemplateID: ironOre}}, {ItemAdded, Item{ObjectID: 300, TemplateID: steel, Count: 1}},
+		{State: ItemRemoved, Item: Item{ObjectID: 200, TemplateID: ironOre}}, {State: ItemAdded, Item: Item{ObjectID: 300, TemplateID: steel, Count: 1}},
 	}}}
 	if err := b.handle(evs, at(4*time.Second+100*time.Millisecond)); err != nil {
 		t.Fatal(err)

@@ -58,8 +58,8 @@ func TestMarketVisit(t *testing.T) {
 		{ObjectID: 900, TemplateID: greaterPotion, Count: 4, Price: 400, ReferencePrice: 300},
 	}}
 	bought := InventoryUpdate{Changes: []ItemChange{
-		{ItemModified, adenaStack(10000 - 4*400 - 6*450)},
-		{ItemAdded, Item{ObjectID: 950, TemplateID: greaterPotion, Count: 10, SubCategory: 5}},
+		{State: ItemModified, Item: adenaStack(10000 - 4*400 - 6*450)},
+		{State: ItemAdded, Item: Item{ObjectID: 950, TemplateID: greaterPotion, Count: 10, SubCategory: 5}},
 	}}
 	runTrainerSteps(t, b, []trainerStep{
 		{name: "store in sight: leg into range first", at: time.Second, events: []Event{sellStore(sellerObj, 600)}, wantRule: "market", wantKind: actMove},

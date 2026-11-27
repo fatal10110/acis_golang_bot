@@ -134,7 +134,7 @@ func testPrivateLinks(t *testing.T) {
 				name: "private list", at: 6 * time.Second, events: []Event{WarehouseDepositList{Type: privateWarehouseType, Items: deposit}},
 				wantRule: "warehouse", wantKind: actWarehouseDeposit, wantPayload: depositReq(warehouseRow{102, animalSkin, 10}),
 			},
-			trainerStep{name: "deposited", at: 7 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, whCarriedSkins}}}}},
+			trainerStep{name: "deposited", at: 7 * time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedSkins}}}}},
 		)
 		runTrainerSteps(t, b, steps)
 		if got := b.wh.private.Deposit; got.Outcome != WarehouseDone || b.wh.status.Deposit.Outcome != WarehouseNone {
@@ -372,7 +372,7 @@ func testPrivateStatus(t *testing.T) {
 				{ObjectID: 102, TemplateID: animalSkin, Count: 10}, {ObjectID: 106, TemplateID: swordTemplate, Count: 1, Enchant: 5},
 			}}},
 		},
-		{name: "deposited", at: start + 3*time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemRemoved, whCarriedSword}}}}},
+		{name: "deposited", at: start + 3*time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemRemoved, Item: whCarriedSword}}}}},
 	}
 	runTrainerSteps(t, b, steps)
 	want := []WarehouseItem{stored, {ObjectID: 106, TemplateID: swordTemplate, Count: 1, Enchant: 5}}
@@ -389,7 +389,7 @@ func testPrivateStatus(t *testing.T) {
 			name: "withdraw", at: start + 2*time.Second, events: []Event{WarehouseWithdrawList{Type: privateWarehouseType, Items: want}},
 			wantRule: "warehouse", wantKind: actWarehouseWithdraw, wantPayload: withdrawReq(warehouseRow{106, swordTemplate, 1}),
 		},
-		{name: "withdrawn", at: start + 3*time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemAdded, whCarriedSword}}}}},
+		{name: "withdrawn", at: start + 3*time.Second, events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemAdded, Item: whCarriedSword}}}}},
 	})
 	if got := b.wh.private; !reflect.DeepEqual(got.Contents, []WarehouseItem{stored}) || got.Withdraw.Outcome != WarehouseDone {
 		t.Fatalf("private status %+v, want the +5 sword taken off", got)

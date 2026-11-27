@@ -1,16 +1,16 @@
-package botclient
+package botwire
+
+// Combat events and their decoders. Each decoder follows the server writer
+// it names field by field (serverpackets under
+// internal/gameserver/network), so DecodeEvent sees the whole frame
+// consumed. A count read off the wire bounds a loop that ends at the first
+// short read, and never sizes an allocation past what the frame can hold.
 
 import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
-
-// Combat events and their decoders. Each decoder follows the server writer
-// it names field by field (serverpackets under
-// internal/gameserver/network), so decodeEvent sees the whole frame
-// consumed. A count read off the wire bounds a loop that ends at the first
-// short read, and never sizes an allocation past what the frame can hold.
 
 // Attack hit flags (model/actor/attack/controller.go).
 const (
@@ -85,12 +85,17 @@ type RelationChanged struct {
 	PvPFlag        uint8
 }
 
-func (Attack) event()             {}
-func (MagicSkillUse) event()      {}
-func (MagicSkillLaunched) event() {}
-func (SkillList) event()          {}
-func (SkillCoolTime) event()      {}
-func (RelationChanged) event()    {}
+func (Attack) IsEvent() {}
+
+func (MagicSkillUse) IsEvent() {}
+
+func (MagicSkillLaunched) IsEvent() {}
+
+func (SkillList) IsEvent() {}
+
+func (SkillCoolTime) IsEvent() {}
+
+func (RelationChanged) IsEvent() {}
 
 // Wire sizes of the repeated entries, to bound allocations.
 const (

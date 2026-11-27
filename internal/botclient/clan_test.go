@@ -2,101 +2,15 @@ package botclient
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
 const (
 	clanID    = int32(0x0a000001)
 	otherClan = int32(0x0a000002)
 )
-
-// clanRoster writes PledgeShowMemberListAll in the server's order
-// (pledgememberlist.go): the header, then per member its row and sponsor
-// flag.
-func clanRoster(id, pledgeType int32, name, leader string, members ...string) []byte {
-	fields := []any{
-		wire.BoolInt32(pledgeType != 0), id, pledgeType, name, leader,
-		7, 3, 0, 0, 0, 120, 0, 0, 0, "", 0, 0, int32(len(members)),
-	}
-	for i, m := range members {
-		fields = append(fields, m, 20+int32(i), 18, 0, 1, int32(0x10000100)+int32(i), 0)
-	}
-	return packet(opGamePledgeShowMemberListAll, fields...)
-}
-
-func TestDecodeClanEvents(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  []byte
-		want Event
-	}{
-		// Object id 0x30000001, then "Cr" in UTF-16LE with its terminator.
-		{"AskJoinPledge bytes", []byte{0x32, 1, 0, 0, 0x30, 'C', 0, 'r', 0, 0, 0}, AskJoinPledge{RequesterID: gmID, Clan: "Cr"}},
-		{"AskJoinPledge", packet(opGameAskJoinPledge, pcID, "Crafters"), AskJoinPledge{RequesterID: pcID, Clan: "Crafters"}},
-		{"JoinPledge", packet(opGameJoinPledge, clanID), JoinPledge{ClanID: clanID}},
-		{
-			"PledgeShowMemberListAll", clanRoster(clanID, 0, "Crafters", "GM", "GM", "bot7"),
-			PledgeShowMemberListAll{ClanID: clanID, Name: "Crafters", Leader: "GM"},
-		},
-		{
-			"PledgeShowMemberListAll sub-unit", clanRoster(clanID, 100, "Guard", "Captain"),
-			PledgeShowMemberListAll{ClanID: clanID, PledgeType: 100, Name: "Guard", Leader: "Captain"},
-		},
-		{"PledgeShowMemberListDeleteAll", packet(opGamePledgeShowMemberListDeleteAll), PledgeShowMemberListDeleteAll{}},
-		{
-			"SystemMessage clan invitation", packet(opGameSystemMessage, msgInvitedToClan, 2, 0, "Alden", 0, "Crafters"),
-			SystemMessage{ID: msgInvitedToClan, Text: [2]string{"Alden", "Crafters"}},
-		},
-		{
-			"SystemMessage keeps two texts", packet(opGameSystemMessage, 9, 4, 1, 5, 0, "a", 0, "b", 0, "c"),
-			SystemMessage{ID: 9, Text: [2]string{"a", "b"}, Number: 5},
-		},
-		{"CreatureSay clan", packet(opGameCreatureSay, pcID, chatClan, "Alden", "hi all"), CreatureSay{ObjectID: pcID, Type: chatClan, Name: "Alden", Text: "hi all"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := decodeEvent(tt.raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", got, ok, err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("decodeEvent = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDecodeClanEventsRejects(t *testing.T) {
-	roster := clanRoster(clanID, 0, "Crafters", "GM", "GM")
-	tests := []struct {
-		name string
-		raw  []byte
-		want error
-	}{
-		{"AskJoinPledge without clan name", packet(opGameAskJoinPledge, pcID), wire.ErrShortPacket},
-		{"AskJoinPledge trailing", append(packet(opGameAskJoinPledge, pcID, "Cr"), 0), errTrailingBytes},
-		{"JoinPledge short", packet(opGameJoinPledge, uint16(1)), wire.ErrShortPacket},
-		{"roster short of its count", roster[:len(roster)-4], wire.ErrShortPacket},
-		{"roster count past the frame", packet(opGamePledgeShowMemberListAll, 0, clanID, 0, "C", "L", 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0, 0, 0x7fffffff), wire.ErrShortPacket},
-		{"roster trailing", append(roster, 0), errTrailingBytes},
-		{"DeleteAll trailing", packet(opGamePledgeShowMemberListDeleteAll, 0), errTrailingBytes},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeEvent(tt.raw); !errors.Is(err, tt.want) {
-				t.Fatalf("decodeEvent error = %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
 
 func TestClanEncoders(t *testing.T) {
 	tests := []struct {
@@ -263,49 +177,5 @@ func TestBrainClanChatUnanswered(t *testing.T) {
 		if f[0] == opGameSay2 {
 			t.Fatalf("sent Say2 % x after clan chat", f)
 		}
-	}
-}
-
-// TestRecordedClanFixtures checks the clan frames TestLiveClanInvite
-// recorded against the live server decode to sane fields: a clan id, names.
-// Ids and names vary between runs and are not pinned; TestRecordedFixtures
-// checks each decodes exactly.
-func TestRecordedClanFixtures(t *testing.T) {
-	tests := []struct {
-		op   byte
-		sane func(Event) bool
-	}{
-		{opGameAskJoinPledge, func(ev Event) bool {
-			e, ok := ev.(AskJoinPledge)
-			return ok && e.RequesterID != 0 && e.Clan != ""
-		}},
-		{opGameJoinPledge, func(ev Event) bool {
-			e, ok := ev.(JoinPledge)
-			return ok && e.ClanID != 0
-		}},
-		{opGamePledgeShowMemberListAll, func(ev Event) bool {
-			e, ok := ev.(PledgeShowMemberListAll)
-			return ok && e.ClanID != 0 && e.PledgeType == 0 && e.Name != "" && e.Leader != ""
-		}},
-		{opGamePledgeShowMemberListDeleteAll, func(ev Event) bool {
-			_, ok := ev.(PledgeShowMemberListDeleteAll)
-			return ok
-		}},
-	}
-	for _, tt := range tests {
-		name := fmt.Sprintf("%02x.bin", tt.op)
-		t.Run(name, func(t *testing.T) {
-			raw, err := os.ReadFile(filepath.Join("testdata", "recorded", name))
-			if err != nil {
-				t.Fatal(err)
-			}
-			ev, ok, err := decodeEvent(raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", ev, ok, err)
-			}
-			if !tt.sane(ev) {
-				t.Errorf("decoded %+v, want non-zero ids and non-empty names", ev)
-			}
-		})
 	}
 }

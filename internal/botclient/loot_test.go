@@ -2,12 +2,9 @@ package botclient
 
 import (
 	"bytes"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
 const (
@@ -22,70 +19,6 @@ var (
 	adenaOnGround = GroundItem{ObjectID: adenaDrop, TemplateID: 57, Pos: Point{X: 900, Y: 20, Z: -5}, Stackable: true, Count: 120}
 	junkOnGround  = GroundItem{ObjectID: junkDrop, TemplateID: junkTemplate, Pos: Point{X: 950}, Stackable: true, Count: 3}
 )
-
-func TestDecodeGroundItems(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  []byte
-		want Event
-	}{
-		{
-			"SpawnItem bytes",
-			[]byte{
-				0x0b, 1, 0, 0, 0x40, 57, 0, 0, 0, 0x84, 3, 0, 0, 20, 0, 0, 0, 0xfb, 0xff, 0xff, 0xff,
-				1, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0,
-			},
-			SpawnItem{Item: adenaOnGround},
-		},
-		{
-			"DropItem",
-			packet(opGameDropItem, npcID, junkDrop, junkTemplate, 950, 0, 0, 1, 3, 1),
-			DropItem{DropperID: npcID, Item: junkOnGround},
-		},
-		{
-			"DropItem not stackable",
-			packet(opGameDropItem, selfID, 7, 2369, 1, 2, 3, 0, 1, 1),
-			DropItem{DropperID: selfID, Item: GroundItem{ObjectID: 7, TemplateID: 2369, Pos: Point{1, 2, 3}, Count: 1}},
-		},
-		{"GetItem", packet(opGameGetItem, pcID, adenaDrop, 900, 20, -5), GetItem{PickerID: pcID, ObjectID: adenaDrop, Pos: Point{900, 20, -5}}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := decodeEvent(tt.raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", got, ok, err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("decodeEvent = %+v, want %+v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDecodeGroundItemsRejects(t *testing.T) {
-	spawn := packet(opGameSpawnItem, adenaDrop, 57, 1, 2, 3, 1, 5, 0)
-	drop := packet(opGameDropItem, npcID, adenaDrop, 57, 1, 2, 3, 1, 5, 1)
-	get := packet(opGameGetItem, pcID, adenaDrop, 1, 2, 3)
-	tests := []struct {
-		name string
-		raw  []byte
-		want error
-	}{
-		{"SpawnItem short", spawn[:len(spawn)-1], wire.ErrShortPacket},
-		{"SpawnItem trailing", append(spawn, 0), errTrailingBytes},
-		{"DropItem short", drop[:len(drop)-4], wire.ErrShortPacket},
-		{"DropItem trailing", append(drop, 0), errTrailingBytes},
-		{"GetItem short", get[:len(get)-1], wire.ErrShortPacket},
-		{"GetItem trailing", append(get, 0), errTrailingBytes},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeEvent(tt.raw); !errors.Is(err, tt.want) {
-				t.Fatalf("decodeEvent error = %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
 
 func TestEncodeRequestDropItem(t *testing.T) {
 	got := encodeRequestDropItem(0x40000003, 25, Point{X: 1, Y: -2, Z: 300})

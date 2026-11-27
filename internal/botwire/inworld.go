@@ -1,10 +1,12 @@
-package botclient
-
-import "github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+package botwire
 
 // Decoders of the in-world packets the world model reads. Each follows the
 // server writer it names field by field; fields the model does not keep are
-// skipped by width, so decodeEvent still sees the whole frame consumed.
+// skipped by width, so DecodeEvent still sees the whole frame consumed.
+
+import (
+	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
+)
 
 // npcTemplateOffset is what NPCInfo adds to an NPC's template id.
 const npcTemplateOffset = 1000000

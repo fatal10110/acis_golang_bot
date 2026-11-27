@@ -95,10 +95,6 @@ func RecoveryScroll(level int32) int32 { return recoveryScroll(level) }
 // (see recoveryReuse).
 const RecoveryReuse = recoveryReuse
 
-// opGameRequestDestroyItem destroys an item (clientpackets/wiresafe.go).
-// Only the harness sends it: a bot never destroys what it carries.
-const opGameRequestDestroyItem = 0x59
-
 // EncodeRequestDestroyItem destroys count of the carried item objectID:
 // object id, count (clientpackets/item_ops.go RequestDestroyItem).
 func EncodeRequestDestroyItem(objectID, count int32) []byte {

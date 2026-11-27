@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/fatal10110/acis_golang_bot/internal/commons/wire"
 )
 
 // Payloads in the server's layouts (serverpackets/<file> named per decoder).
@@ -22,57 +20,6 @@ func moveToLocation(oid int32, dest, origin Point) []byte {
 
 func stopMove(oid int32, at Point, heading int32) []byte {
 	return packet(opGameStopMove, oid, at.X, at.Y, at.Z, heading)
-}
-
-func TestDecodeEvent(t *testing.T) {
-	at := Point{X: 81000, Y: 148000, Z: -3400}
-	to := Point{X: 81200, Y: 148100, Z: -3410}
-	tests := []struct {
-		name string
-		raw  []byte
-		want Event
-	}{
-		{"MoveToLocation", moveToLocation(0x10000001, to, at), MoveToLocation{ObjectID: 0x10000001, Dest: to, Origin: at}},
-		{"StopMove", stopMove(7, at, 49152), StopMove{ObjectID: 7, Pos: at, Heading: 49152}},
-		{"ValidateLocation", packet(opGameValidateLocation, 7, at.X, at.Y, at.Z, 100), ValidateLocation{ObjectID: 7, Pos: at, Heading: 100}},
-		{"TeleportToLocation", packet(opGameTeleportToLocation, 7, at.X, at.Y, at.Z, 0), TeleportToLocation{ObjectID: 7, Pos: at}},
-		{"TeleportToLocation fast", packet(opGameTeleportToLocation, 7, at.X, at.Y, at.Z, 1), TeleportToLocation{ObjectID: 7, Pos: at, Fast: true}},
-		{"DeleteObject", packet(opGameDeleteObject, 7, 1), DeleteObject{ObjectID: 7}},
-		{"DeleteObject seated", packet(opGameDeleteObject, 7, 0), DeleteObject{ObjectID: 7, Seated: true}},
-		{"ServerClose", packet(opGameServerClose), ServerClose{}},
-		{"LeaveWorld", packet(opGameLeaveWorld), LeaveWorld{}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok, err := decodeEvent(tt.raw)
-			if err != nil || !ok {
-				t.Fatalf("decodeEvent = %v, %v, %v", got, ok, err)
-			}
-			if got != tt.want {
-				t.Fatalf("decodeEvent = %#v, want %#v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDecodeEventRejects(t *testing.T) {
-	move := moveToLocation(1, Point{}, Point{})
-	tests := []struct {
-		name string
-		raw  []byte
-		want error
-	}{
-		{"short", move[:len(move)-1], wire.ErrShortPacket},
-		{"trailing", append(move, 0), errTrailingBytes},
-		{"trailing on empty body", packet(opGameLeaveWorld, 0), errTrailingBytes},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := decodeEvent(tt.raw); !errors.Is(err, tt.want) {
-				t.Fatalf("decodeEvent error = %v, want %v", err, tt.want)
-			}
-		})
-	}
 }
 
 // scriptedSource replays frames through one reused buffer, the way
@@ -311,71 +258,19 @@ func TestRecorderKeepsFirstWriteError(t *testing.T) {
 	none.Record([]byte{opGameStopMove}) // a nil Recorder is off
 }
 
-// recordedMustDecode pins the recorded opcodes whose decoder must run: a
-// decoder dropped later, or a fixture deleted, fails the test instead of
-// passing silently.
-var recordedMustDecode = []byte{
-	opGameMoveToLocation, opGameUserInfo, opGameStatusUpdate, opGameDeleteObject,
-	opGameCharSelectInfo, opGameNPCInfo, opGameActionFailed, opGameChangeWaitType,
-	opGameSystemMessage, opGameLeaveWorld, opGameSkillList, opGameSkillCoolTime, opGameItemList,
-	opGameAskJoinPledge, opGameJoinPledge, opGamePledgeShowMemberListAll,
-	opGamePledgeShowMemberListDeleteAll, opGameWarehouseDepositList, opGameWarehouseWithdrawList,
-	opGameRecipeBookItemList, opGameRecipeItemMakeInfo,
-}
-
-// TestRecordedFixtures replays the -record captures checked in under
-// testdata/recorded: every payload with a decoder must decode with exactly
-// len(payload) consumed and carry a plausible object id. Ids, coordinates
-// and times vary between runs and are not pinned. A payload with no decoder
-// yet is skipped, not passed.
-func TestRecordedFixtures(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("testdata", "recorded", "*.bin"))
+// TestRecordedCharSelectInfo replays the -record capture of CharSelectInfo
+// checked in under testdata/recorded: the handshake reads it, not the
+// reader, so botwire's TestRecordedFixtures leaves it here. It must decode
+// with exactly len(payload) consumed.
+func TestRecordedCharSelectInfo(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "recorded", fmt.Sprintf("%02x.bin", opGameCharSelectInfo)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(paths) == 0 {
-		t.Skip("no recorded fixtures yet: they need a live server (#5)")
+	if len(raw) == 0 || raw[0] != opGameCharSelectInfo {
+		t.Fatalf("fixture name does not match its opcode")
 	}
-	pinned := map[byte]bool{}
-	for _, op := range recordedMustDecode {
-		pinned[op] = true
-	}
-	decoded := map[byte]bool{}
-	for _, path := range paths {
-		t.Run(filepath.Base(path), func(t *testing.T) {
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(raw) == 0 || filepath.Base(path) != fmt.Sprintf("%02x.bin", raw[0]) {
-				t.Fatalf("fixture name does not match its opcode")
-			}
-			if raw[0] == opGameCharSelectInfo { // read in the handshake, not by the reader
-				if _, err := decodeCharSelectInfo(raw); err != nil {
-					t.Fatal(err)
-				}
-				decoded[raw[0]] = true
-				return
-			}
-			ev, ok, err := decodeEvent(raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !ok {
-				if pinned[raw[0]] {
-					t.Fatalf("opcode %#02x is pinned but has no decoder", raw[0])
-				}
-				t.Skipf("no decoder for opcode %#02x yet", raw[0])
-			}
-			decoded[raw[0]] = true
-			if oid := reflect.ValueOf(ev).FieldByName("ObjectID"); oid.IsValid() && oid.Int() == 0 {
-				t.Errorf("%T has object id 0", ev)
-			}
-		})
-	}
-	for _, op := range recordedMustDecode {
-		if !decoded[op] {
-			t.Errorf("pinned opcode %#02x was not decoded from a fixture", op)
-		}
+	if _, err := decodeCharSelectInfo(raw); err != nil {
+		t.Fatal(err)
 	}
 }

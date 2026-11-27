@@ -216,12 +216,12 @@ func TestBrainGearPairSwap(t *testing.T) {
 		{name: "wait for it", at: 2 * time.Second},
 		{
 			name: "wear the new ring", at: 3 * time.Second,
-			events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, carried(208, magicRing, partLRFinger)}}}},
+			events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: carried(208, magicRing, partLRFinger)}}}},
 			wantRule: "gear", wantKind: actUseItem, wantPayload: encodeUseItem(ring.ObjectID),
 		},
 		{
 			name: "worn", at: 4 * time.Second,
-			events: []Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, wornAt(210, ringOfKnowledge, partLRFinger)}}}},
+			events: []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: wornAt(210, ringOfKnowledge, partLRFinger)}}}},
 		},
 	})
 	junk := b.junk()
@@ -256,9 +256,9 @@ func TestBrainGearTwoHander(t *testing.T) {
 		{
 			name: "worn, shield off", at: 2 * time.Second,
 			events: []Event{InventoryUpdate{Changes: []ItemChange{
-				{ItemModified, carried(204, buckler, partLHand)},
-				{ItemModified, carried(201, shortSword, partRHand)},
-				{ItemModified, wornAt(220, conjurorsStaff, partLRHand)},
+				{State: ItemModified, Item: carried(204, buckler, partLHand)},
+				{State: ItemModified, Item: carried(201, shortSword, partRHand)},
+				{State: ItemModified, Item: wornAt(220, conjurorsStaff, partLRHand)},
 			}}},
 		},
 	})

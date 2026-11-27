@@ -35,7 +35,7 @@ func TestStoreLeavesOnOrder(t *testing.T) {
 				{
 					name: "order", at: time.Minute,
 					setup:    func(b *Brain) { b.orders.follow = pcID },
-					events:   []Event{InventoryUpdate{Changes: []ItemChange{{ItemModified, adenaStack(40)}}}},
+					events:   []Event{InventoryUpdate{Changes: []ItemChange{{State: ItemModified, Item: adenaStack(40)}}}},
 					wantRule: "store", wantKind: actStoreQuit, wantPayload: quit,
 				},
 				{name: "store still shown", at: time.Minute + time.Second, wantRule: "store"},
