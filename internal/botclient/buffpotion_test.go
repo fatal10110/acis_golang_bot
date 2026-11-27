@@ -13,7 +13,6 @@ import (
 // Skills of the buff potion tests (aCis_datapack/data/xml/skills): Haste,
 // Acumen and their beginners' kinds from the Newbie Guide.
 const (
-	skillHaste         int32 = 1086
 	skillHasteNewbie   int32 = 4327
 	skillAcumenNewbie  int32 = 4329
 	skillAlacrity      int32 = 2012

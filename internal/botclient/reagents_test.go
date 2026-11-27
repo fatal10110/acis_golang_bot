@@ -11,12 +11,9 @@ import (
 // Skills and reagents of the reagent tests (aCis_datapack/data/xml skills
 // and items ids).
 const (
-	skillStormCubic     int32 = 10
-	skillGreaterMight   int32 = 1388
-	skillMajorHeal      int32 = 1401
-	skillMajorGroupHeal int32 = 1402
-	energyStone         int32 = 5589
-	cursedBone          int32 = 2508
+	skillStormCubic int32 = 10
+	energyStone     int32 = 5589
+	cursedBone      int32 = 2508
 )
 
 // reagentSkills are the reagent tests' skill levels: Sonic Buster 3

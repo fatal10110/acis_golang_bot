@@ -76,14 +76,16 @@ var healerHeals = []Heal{
 }
 
 // The human, elven and dark elven mystics' Support parts (rows HM EM DM):
-// the healers' heals, Might and Shield on the party from 7, the Support
-// role's 50 % MPReserve and 30 % Sit MP (both roles melee only under
-// MPReserve), and its learn table's heals and buffs.
+// the healers' heals from the level their trees grant them (Heal 7, Battle
+// Heal and Group Heal 14), Might and Shield on the party from 7, the
+// Support role's 50 % MPReserve and 30 % Sit MP (both roles melee only
+// under MPReserve), and its learn table's heals and buffs.
 var (
 	baseMysticHeals = func() []Heal {
+		from := map[int32]int32{skillBattleHeal: 14, skillGroupHeal: 14, skillHeal: 7}
 		hs := make([]Heal, len(healerHeals))
 		for i, h := range healerHeals {
-			h.Role = RoleSupport
+			h.Role, h.From = RoleSupport, from[h.Skill]
 			hs[i] = h
 		}
 		return hs
