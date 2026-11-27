@@ -353,20 +353,20 @@ func TestBrainTrainerRetries(t *testing.T) {
 		runTrainerSteps(t, b, []trainerStep{
 			{name: "talk", wantRule: "train", wantKind: actTalk},
 			{name: "no link", at: time.Second, events: []Event{NpcHtmlMessage{ObjectID: trainerObj, HTML: "<html><body>I cannot teach you.</body></html>"}}},
-			{name: "still shunned", at: time.Second + trainerShunFor - time.Millisecond},
-			{name: "visited again later", at: time.Second + trainerShunFor, wantRule: "train", wantKind: actTalk},
+			{name: "still shunned", at: time.Second + visitShunFor - time.Millisecond},
+			{name: "visited again later", at: time.Second + visitShunFor, wantRule: "train", wantKind: actTalk},
 		})
 	})
 	t.Run("a trainer that never answers is shunned", func(t *testing.T) {
 		b := newTrainerBrain(t, 500)
 		b.world.Target = trainerObj
 		var steps []trainerStep
-		for i := range trainerClicks {
+		for i := range visitClicks {
 			steps = append(steps, trainerStep{name: "talk", at: time.Duration(i) * trainerTalkTimeout, wantRule: "train", wantKind: actTalk})
 		}
-		steps = append(steps, trainerStep{name: "give up", at: trainerClicks * trainerTalkTimeout})
+		steps = append(steps, trainerStep{name: "give up", at: visitClicks * trainerTalkTimeout})
 		runTrainerSteps(t, b, steps)
-		if !b.train.shunned[trainerObj].Equal(at(trainerClicks*trainerTalkTimeout + trainerShunFor)) {
+		if !b.train.shunned[trainerObj].Equal(at(visitClicks*trainerTalkTimeout + visitShunFor)) {
 			t.Errorf("shunned = %v", b.train.shunned)
 		}
 	})

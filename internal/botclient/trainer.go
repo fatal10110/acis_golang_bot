@@ -20,10 +20,6 @@ const (
 	// its answer. The server answers nothing to one it refuses (out of
 	// reach, not the next level of the skill), so the visit talks again.
 	trainerReplyTimeout = 5 * time.Second
-	// trainerClicks is how many clicks (selections and talks) a visit
-	// spends before it leaves the trainer alone for trainerShunFor.
-	trainerClicks  = 6
-	trainerShunFor = 10 * time.Minute
 )
 
 // acquireSkillUsual is the list type of the class trainer's skills
@@ -202,12 +198,15 @@ const (
 // SP reaches the cheapest wanted skill the last visit could not afford.
 type trainerVisit struct {
 	// npc is the trainer's object id while a visit runs, 0 otherwise.
-	npc  int32
+	npc int32
+	// v is the way to the trainer's page (approach): the stand point, the
+	// clicks and their wait, at trainer npc.
+	v    npcVisit
 	step trainStep
 	// waitUntil, when set, is when the answer to the last packet of the
-	// visit is given up on.
+	// visit after the page (the skill list link, a skill request) is given
+	// up on.
 	waitUntil time.Time
-	clicks    int
 	// offer is the trainer's last list; pending is the skill asked about or
 	// learned and not yet answered.
 	offer   []AcquirableSkill
@@ -231,16 +230,13 @@ type trainerVisit struct {
 	// reached without finding one or that no route reaches, until a time.
 	walk        npcVisit
 	walkShunned holds[int32]
-	// near holds the stand point of the trainer in sight the bot walks to
-	// before it clicks (closeIn): its object and stand point only.
-	near npcVisit
 }
 
 // reset ends the visit in progress.
 func (t *trainerVisit) reset() {
-	t.npc, t.step, t.waitUntil, t.clicks = 0, trainTalk, time.Time{}, 0
+	t.npc, t.step, t.waitUntil = 0, trainTalk, time.Time{}
 	t.offer, t.pending, t.skipped, t.short, t.again = nil, AcquirableSkill{}, nil, 0, false
-	t.walk, t.near = npcVisit{}, npcVisit{}
+	t.v, t.walk = npcVisit{}, npcVisit{}
 }
 
 // finish ends a visit that got the trainer's list as far as it could go at
@@ -253,10 +249,10 @@ func (t *trainerVisit) finish(level int32) {
 	t.reset()
 }
 
-// shun ends the visit and leaves its trainer alone until now plus
-// trainerShunFor.
+// shun ends the visit and leaves its trainer alone, by object id, until now
+// plus visitShunFor: a second trainer of the class in sight is still picked.
 func (t *trainerVisit) shun(now time.Time) {
-	t.shunned.set(t.npc, now.Add(trainerShunFor))
+	t.shunned.set(t.npc, now.Add(visitShunFor))
 	t.reset()
 }
 
@@ -272,20 +268,22 @@ func (t *trainerVisit) skip(s AcquirableSkill, cost, sp int32) {
 	}
 }
 
-// sent records a packet of the visit that went out at now.
+// sent records a packet of the visit that went out at now: a click or a
+// bypass acting on the trainer, or a skill request (which only the trainer
+// visit sends). Another row's click or bypass on another NPC counts for
+// nothing here.
 func (t *trainerVisit) sent(a Action, now time.Time) {
 	if t.npc == 0 {
 		return
 	}
 	switch a.kind {
-	case actSelect:
+	case actSelect, actTalk:
+		t.v.sent(a, now)
+	case actBypass:
 		if a.object == t.npc {
-			t.clicks++
+			t.waitUntil = now.Add(trainerReplyTimeout)
 		}
-	case actTalk:
-		t.clicks++
-		t.waitUntil = now.Add(trainerTalkTimeout)
-	case actBypass, actSkillInfo, actLearnSkill:
+	case actSkillInfo, actLearnSkill:
 		t.waitUntil = now.Add(trainerReplyTimeout)
 	}
 }
@@ -316,7 +314,8 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 		// Out of sight: the visit starts over in this decision, by the walk
 		// to a spawn when no other trainer is in sight, so the errand runs
 		// on without a gap. The trainer is gone or dead, so startVisit
-		// cannot pick it again.
+		// cannot pick it again. This runs before approach, which would look
+		// again for the same template instead.
 		t.reset()
 		return b.ruleTrain(now)
 	}
@@ -331,7 +330,7 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 	switch t.step {
 	case trainOpen:
 		if b.world.Dialog.Has(skillListBypass(t.npc)) {
-			return bypassAction(skillListBypass(t.npc)), true
+			return bypassTo(t.npc, skillListBypass(t.npc)), true
 		}
 		// Another page replaced the trainer's: the server would refuse
 		// the link, so talk again.
@@ -348,26 +347,14 @@ func (b *Brain) ruleTrain(now time.Time) (Action, bool) {
 		sk := t.pending
 		return Action{kind: actLearnSkill, payload: encodeSkillRequest(opGameRequestAcquireSkill, sk.ID, sk.Level, acquireSkillUsual)}, true
 	}
-	// The click walks the bot straight at the trainer, never routed: walk
-	// to a stand point with an open line first, as every NPC visit does.
-	if t.near.obj != t.npc {
-		t.near = npcVisit{obj: t.npc}
-	}
-	if a, ok := b.closeIn(&t.near, visitArrive, now); ok {
-		return a, true
-	}
-	if t.clicks >= trainerClicks {
+	// The way to the page, as every NPC visit's: a stand point with an open
+	// line first, then the clicks, bounded by visitClicks.
+	a, ok := b.approach(&t.v, now)
+	if !ok {
 		t.shun(now)
 		return Action{}, false
 	}
-	if s.Sitting {
-		return b.toggle(now), true
-	}
-	if b.world.Target != t.npc {
-		return selectAction(t.npc, s.Position(now)), true
-	}
-	b.walk.talking(o.Position(now), now)
-	return talkAction(t.npc, s.Position(now)), true
+	return a, true
 }
 
 // startVisit starts a visit when one is due: at the nearest trainer of the
@@ -382,21 +369,22 @@ func (b *Brain) startVisit(now time.Time) bool {
 		return false
 	}
 	from := s.Position(now)
-	var best int32
+	var best npcVisit
 	var bestDist int64
 	for _, npcID := range b.build().Kit.Trainers {
 		for id, o := range b.world.Objects {
 			if o.Kind != KindNPC || o.NPCID != npcID || o.Dead || t.shunned.held(id, now) {
 				continue
 			}
-			if d := dist2(from, o.Position(now)); best == 0 || d < bestDist {
-				best, bestDist = id, d
+			at := o.Position(now)
+			if d := dist2(from, at); best.obj == 0 || d < bestDist {
+				best, bestDist = npcVisit{npcID: npcID, at: at, obj: id}, d
 			}
 		}
 	}
-	if best != 0 {
+	if best.obj != 0 {
 		t.reset()
-		t.npc = best
+		t.npc, t.v = best.obj, best
 		return true
 	}
 	return b.startTrainerWalk(from, now)
@@ -483,7 +471,7 @@ func (b *Brain) trainEvent(ev Event, now time.Time) {
 	}
 	switch e := ev.(type) {
 	case NpcHtmlMessage:
-		if e.ObjectID != t.npc {
+		if !t.v.page(e) {
 			return
 		}
 		if !b.world.Dialog.Has(skillListBypass(t.npc)) {

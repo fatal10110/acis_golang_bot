@@ -10,7 +10,7 @@ import (
 // TestTrainerClosesIn has a trainer in sight farther than visitArrive: the
 // click would walk the bot straight at it, never routed, so the visit walks
 // to a stand point with an open line first, then clicks; with no stand
-// point the bot reaches, the clicks are tried, bounded by trainerClicks.
+// point the bot reaches, the clicks are tried, bounded by visitClicks.
 func TestTrainerClosesIn(t *testing.T) {
 	trainer := Point{X: 5000}
 	tests := []struct {
