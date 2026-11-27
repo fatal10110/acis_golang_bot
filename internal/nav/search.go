@@ -20,12 +20,16 @@ type scratch struct {
 	index indexTable
 	edges []neighbour
 	cells []Cell
+	// bound is the least f search left open when its budget ran out: no
+	// path to its goal costs less.
+	bound int32
 	// Pulling. drops[k] counts the drops on the cell path up to cell k,
-	// covers[k] the covered cells before cell k; dropLine is lineDrops' and
-	// lineCovered's line.
+	// falls holds their heights in path order, covers[k] the covered cells
+	// before cell k; dropLine is lineDrops' and lineCovered's line.
 	points   []location.Location
 	route    []location.Location
 	drops    []int32
+	falls    []int16
 	covers   []int32
 	dropLine []lineCell
 	// Corridor test.
@@ -184,6 +188,7 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 			return s.trace(it.idx), expanded, nil
 		}
 		if expanded >= budget {
+			s.bound = it.f
 			return nil, expanded, ErrBudget
 		}
 		n.closed = true
@@ -299,6 +304,12 @@ func (p *Planner) reachers(s *scratch, goal Cell, box cellBox) int {
 		}
 	}
 	return len(s.cells)
+}
+
+// goalCost is the cost of the path the last search found to goal.
+func (s *scratch) goalCost(goal Cell) int32 {
+	idx, _ := s.index.get(cellKey(goal))
+	return s.nodes[idx].g
 }
 
 // trace returns the path ending at node idx, start first, in s.cells.

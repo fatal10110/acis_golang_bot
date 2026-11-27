@@ -353,7 +353,9 @@ server's pathfinder.
   `costDrop` (100 cells) more for each whole 96 it falls (#514): a cliff weighs more than a ledge,
   as its fall damage does (the whole height × max HP / 1000 once the fall passes the safe fall
   height of 180 to 380, `formulas/fall.go`). The weight is added in the cell search, in the build's intra-cluster edge
-  costs and on a border crossing that drops (its multiple is kept in `buildCross.side`, at most 63).
+  costs and in the crossing edge costs (since #575 the cell path between the crossing's two nodes'
+  representatives, below; a crossing whose search runs out still adds its own step's drop, its
+  multiple kept in `buildCross.side`, at most 63).
   So a route goes down a ramp or through a gate whenever that way is less than about 1600 units
   longer per 96 of the fall. The cost is a weight, not a ban, so a one-way drop toward a leader
   below (`RouteOneWay`), a drop off one-way-out ground and a drop no ramp near it replaces still
@@ -372,17 +374,32 @@ server's pathfinder.
 
     | Town point | Routed | Before #514 | After |
     | --- | --- | --- | --- |
-    | rune_town Arisha {38208 -48048 899} | 38 | 38 drop 2824 off the upper town's cliff | 38 keep the 296 below (accepted) |
+    | rune_town Arisha {38208 -48048 899} | 38 | 38 drop 2824 off the upper town's cliff | 38 keep the 296 below; none since #575 |
     | aden_town Elisa {146737 25807 -2013} | 17 | 1 drops 1032 (a fall of about 2900) | none past 56 |
-    | rune_town Ilyana {43824 -47664 -800} | 47 | 47 drop 296 on the south road | same (accepted) |
-    | giran_castle_town Minerva {105888 109808 -3200} | 64 | 46 drop 392 | 46 drop 264 to 280 (accepted) |
+    | rune_town Ilyana {43824 -47664 -800} | 47 | 47 drop 296 on the south road | same; none since #575 |
+    | giran_castle_town Minerva {105888 109808 -3200} | 64 | 46 drop 392 | 46 drop 264 to 280; none since #575 |
 
-    Every other town's routes descend 96 at most. The two accepted ledges (`acceptedDrops`) lie in
-    a crossing leg: the build costs a crossing as the straight line between its two nodes'
-    representatives, blind to a drop along the border between them, and a drop-free first try per
-    crossing leg exhausted the budget of 8 Rune routes. #575 tracks them. The height weight left
-    `BenchmarkOwnerNav` within its noise (cold p50 100 to 120 ms, p99 1030 to 672 ms; warm p50 78
-    to 65 ms, p99 639 to 441 ms).
+    Every other town's routes descend 96 at most. The height weight left `BenchmarkOwnerNav` within
+    its noise (cold p50 100 to 120 ms, p99 1030 to 672 ms; warm p50 78 to 65 ms, p99 639 to 441 ms).
+  - **Crossing legs** (#575): the two ledges #514 left (`acceptedDrops`, now empty) lay in a
+    crossing leg. The build costed a crossing as the straight line between its two nodes'
+    representatives, blind to a drop along the border between them: on the Rune south road 934
+    for a way whose cell path costs 2200 and drops 168 (160 to 296 on the covered-cost 0 build),
+    so the abstract search took it over a drop-free way of about the same length. A drop-free
+    first try per crossing leg exhausted the budget of 8 Rune routes. Since nav cache format 8 the
+    build costs every crossing edge by the cell path between the representatives inside the two
+    clusters, the path `middleLeg` refines it to (`crossCosts`, a phase of its own after `link`).
+    A search past `crossBudget` (32,768 cells) costs the least f it left open, which no path
+    undercuts: 7,507 of the owner's 396,607 crossings (7,429 at covered cost 0). The string pull
+    also takes a segment only when its line drops no higher than the largest drop of the cell path
+    it stands for (`dropsAsPath`): on the covered-cost 0 build the Rune line fell 296 where its
+    path fell 160. `TestOwnerTownDrops` now finds no place route past 96 on either build, every
+    town routing as many spots as before (17 failures, all ErrBudget, as before). `navbuild`
+    went from 7 min 48 s to 11 min 14 s with 2 workers (the crossings phase 4.5 min), max RSS
+    0.97 GB. `BenchmarkOwnerNav` (main abfb74a's format 7 cache before, format 8 after, back to
+    back): route cold p50 92.6 to 84.2 ms, p99 453 to 468 ms; warm p50 69.1 to 64.5 ms, p99 437
+    to 470 ms; the short routes' failures 2 to 0 of 300, the same-cluster routes' 11 to 7 of
+    1000.
 - **Covered ground** (#640): a cell with a layer of its column more than 64 over its floor
   (`coverClear`, the walker's open test of #617) lies under a roof, an upper floor or a deck. A
   step out of it costs `DefaultCoveredCost` (10, one cell) more, in the cell search and in the
@@ -582,7 +599,7 @@ server's pathfinder.
   largest SCC (`navLandmarks`; the first is the node farthest from the SCC's first node, each next
   one the node whose nearest landmark, there and back, is farthest) and stores every node's
   distance from each and to each over the all-open edge costs, node-major so one node's 16
-  distances share a cache line (nav cache format 6, and 7 since #640's covered cost; 6.4 MB per
+  distances share a cache line (nav cache format 6, 7 since #640's covered cost and 8 since #575's crossing costs; 6.4 MB per
   landmark on the owner's 804,918 nodes). The goal is reached from its cluster's goal nodes `m` at the straight-line cost `s(m)`,
   so for landmark `L` the cost from node `v` is at least `min_m(d(L,m) + s(m)) − d(L,v)` and at
   least `d(v,L) − max_m(d(m,L) − s(m))`; the second needs every goal node to reach `L`, and then a
@@ -631,7 +648,9 @@ server's pathfinder.
   membership rule exact; the crossing between two runs is an edge of its own.
 - **Two build phases.** First, per cluster, the entrances and which nodes reach which inside it
   (one cycle per local SCC, plus the transitive reduction between local SCCs). That is enough to
-  label the abstract SCCs exactly. Second, per cluster, costs by Dijkstra, and only between nodes
+  label the abstract SCCs exactly. Between the two, per cluster, each crossing out of it is costed
+  by an A\* search between its two nodes' representatives inside the two clusters (#575, "Drops").
+  Second, per cluster, costs by Dijkstra, and only between nodes
   of one abstract SCC: those are the only edges a route or distance search follows, and the
   condensation carries the rest. An edge whose shortest path runs through another node's
   representative is dropped, since it is the sum of two kept edges (no distance changes). Edges
@@ -644,7 +663,9 @@ server's pathfinder.
   server's overlay lifts: the layer nearest the door's floor. An edge's door set holds the doors of
   the cells its all-open path crosses; its door-free cost is the cheapest path avoiding every
   footprint cell. Crossings between the same two entrance nodes merge into one edge: the cheapest
-  crossing's cost and doors, and the cheapest door-free crossing as its door-free cost.
+  crossing's doors, and its door-free cost when one crossing has no door. The merged edge then
+  costs the cell path between the two nodes' representatives inside their two clusters (#575,
+  "Drops").
 - **Cluster side** is a build parameter (default 256 cells) and part of the cache key; the CI
   tests run the same code on 32- and 64-cell clusters over windows of the synthetic region.
 - **`Reachable`** misses one case only: a drop between two cells of one cluster that are in no
