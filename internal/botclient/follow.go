@@ -222,7 +222,7 @@ func (b *Brain) behind(lead leaderView, from Point, now time.Time) float64 {
 // followDelay is the wait between noticing the leader moved and moving.
 func (b *Brain) followDelay() time.Duration {
 	p := &b.persona.Follow
-	return p.DelayMin + time.Duration(b.rng.Int64N(int64(max(p.DelayMax-p.DelayMin, 0))+1))
+	return b.between(p.DelayMin, p.DelayMax)
 }
 
 // wakeBy brings the next decision forward to t at the latest.

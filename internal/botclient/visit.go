@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/nav"
@@ -115,6 +116,12 @@ func (b *Brain) pickVisit(npcs []int32, reach int32, now time.Time) (npcVisit, b
 		}
 	}
 	return best, best.active()
+}
+
+// npcBypass is the bypass of command cmd on the page npc obj opened
+// (bypass.go bypassNpc: npc_<object id>_<command>).
+func npcBypass(obj int32, cmd string) string {
+	return "npc_" + strconv.Itoa(int(obj)) + "_" + cmd
 }
 
 // bypassTo sends bypass command cmd, a link of the page npc obj opened.

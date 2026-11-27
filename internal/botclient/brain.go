@@ -1116,10 +1116,17 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	return true, nil
 }
 
+// between is a uniform random duration in lo-hi, both ends included; lo
+// when hi is not above it. It draws from the rng once whatever the bounds,
+// so the draws that follow do not depend on them.
+func (b *Brain) between(lo, hi time.Duration) time.Duration {
+	return lo + time.Duration(b.rng.Int64N(int64(max(hi-lo, 0))+1))
+}
+
 func (b *Brain) tickDelay() time.Duration {
-	return b.cfg.Tick + time.Duration(b.rng.Int64N(int64(b.cfg.TickJitter)+1))
+	return b.between(b.cfg.Tick, b.cfg.Tick+b.cfg.TickJitter)
 }
 
 func (b *Brain) reactDelay() time.Duration {
-	return b.cfg.ReactMin + time.Duration(b.rng.Int64N(int64(b.cfg.ReactMax-b.cfg.ReactMin)+1))
+	return b.between(b.cfg.ReactMin, b.cfg.ReactMax)
 }

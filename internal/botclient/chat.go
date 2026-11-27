@@ -161,7 +161,7 @@ func (b *Brain) chatHeard(e CreatureSay, now time.Time) {
 // chatDelay is a uniform delay in ChatPolicy's DelayMin-DelayMax.
 func (b *Brain) chatDelay() time.Duration {
 	p := &b.persona.Chat
-	return p.DelayMin + time.Duration(b.rng.Int64N(int64(max(p.DelayMax-p.DelayMin, 0))+1))
+	return b.between(p.DelayMin, p.DelayMax)
 }
 
 // ruleChat sends the waiting whisper reply once due and the chat gate lets

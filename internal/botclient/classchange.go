@@ -159,14 +159,15 @@ func (b *Brain) ruleClassChange(now time.Time) (Action, bool) {
 // menu link once. A page with neither offers the bot nothing.
 func (b *Brain) classLink() (string, bool) {
 	c, s := &b.class, &b.world.Self
-	prefix := "npc_" + strconv.Itoa(int(c.v.obj)) + "_"
 	want := b.build().Race.Professions[s.ClassID]
-	if cmd := prefix + changeClassCommand + " " + strconv.Itoa(int(want)); b.world.Dialog.Has(cmd) {
+	if cmd := npcBypass(c.v.obj, changeClassCommand+" "+strconv.Itoa(int(want))); b.world.Dialog.Has(cmd) {
 		return cmd, true
 	}
-	if _, tier := transferTier(s.ClassID); !c.menu && b.world.Dialog.Has(prefix+tier) {
-		c.menu = true
-		return prefix + tier, true
+	if _, tier := transferTier(s.ClassID); !c.menu {
+		if cmd := npcBypass(c.v.obj, tier); b.world.Dialog.Has(cmd) {
+			c.menu = true
+			return cmd, true
+		}
 	}
 	return "", false
 }

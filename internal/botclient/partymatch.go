@@ -290,7 +290,7 @@ func (b *Brain) ruleRooms(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	if v.next.IsZero() {
-		v.next = now.Add(time.Duration(b.rng.Int64N(int64(pol.ListEvery) + 1)))
+		v.next = now.Add(b.between(0, pol.ListEvery))
 	}
 	if now.Before(v.next) || !b.cfg.PartyClaims.listTurn(now) {
 		return Action{}, false
@@ -383,7 +383,7 @@ func (b *Brain) roomGiveUp(now time.Time, pol RoomPolicy) {
 // nextRoomList is when the list after one at now is due: ListEvery and a
 // random part of up to half of it later.
 func (b *Brain) nextRoomList(now time.Time, pol RoomPolicy) time.Time {
-	return now.Add(pol.ListEvery + time.Duration(b.rng.Int64N(int64(pol.ListEvery/2)+1)))
+	return now.Add(b.between(pol.ListEvery, pol.ListEvery+pol.ListEvery/2))
 }
 
 // roomEvent takes the answers to the bot's room requests: the list it
