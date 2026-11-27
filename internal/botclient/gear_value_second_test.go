@@ -41,15 +41,16 @@ var (
 	compositeVerdicts = bothRoles(setComposite, false, false)
 )
 
-// TestRowPLSetValue: Full Plate, else Composite (kit: KN's).
+// TestRowPLSetValue: Full Plate, else Composite (kit: its own, kits_tanks.go;
+// its Support build stays a tank with Holy Blessing known, gearRole).
 func TestRowPLSetValue(t *testing.T) {
 	checkSecondSets(t, 5, fullPlateVerdicts, compositeVerdicts)
 }
 
-// TestRowTKSetValue: Full Plate (kit: EK's).
+// TestRowTKSetValue: Full Plate (kit: its own, kits_tanks.go).
 func TestRowTKSetValue(t *testing.T) { checkSecondSets(t, 20, fullPlateVerdicts) }
 
-// TestRowSKSetValue: Full Plate (kit: PK's).
+// TestRowSKSetValue: Full Plate (kit: its own, kits_tanks.go).
 func TestRowSKSetValue(t *testing.T) { checkSecondSets(t, 33, fullPlateVerdicts) }
 
 // TestRowSSSetValue: Full Plate (kit: EK's).

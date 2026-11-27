@@ -298,9 +298,10 @@ a set worth more. These rows keep the model as it is:
 **Model-chosen sets, second professions (#626).** The same rule for the C-grade sets of the
 second-profession rows ("Gear and range" below), at 40, against a harmless target and against the
 level's reference monster. The verdicts are computed on the kits shipped with #626: until its row
-lands, a second profession compiles its first profession's kit (PL KN's, TK EK's, SK PK's, BI and
-PP CL's, EE EO's, SE SO's, and so on), and each row PR re-runs its classes' verdicts and updates
-this list.
+lands, a second profession compiles its first profession's kit (BI and PP CL's, EE EO's, SE SO's,
+and so on), and each row PR re-runs its classes' verdicts and updates this list. PL, TK and SK's
+verdicts hold on their own kits (#628): PL's Support build, a fighter's that melees always, stays
+a tank with Holy Blessing known (gearRole).
 
 - PL, BH and WC, Composite: +5795 weight limit, which no role's value reads. Model-chosen in every
   role, so BH's first set is model-chosen and the bounty hunter buys Full Plate where it values it.
