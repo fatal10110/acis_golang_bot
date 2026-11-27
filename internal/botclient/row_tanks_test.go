@@ -340,3 +340,43 @@ func TestGearRoleTankHeals(t *testing.T) {
 		})
 	}
 }
+
+// TestRowPLTankWeapon checks a Support PL knowing Holy Blessing, valued as
+// a tank, ranks a sword above a magic sword of the same grade (the M. Atk
+// one): the heal gives it no healer's value for M. Atk. Valued as a
+// healer, the same bot would rank the magic sword first.
+func TestRowPLTankWeapon(t *testing.T) {
+	const (
+		tankSword  int32 = 92101 // P. Atk 100, M. Atk 40
+		tankMagicS int32 = 92102 // P. Atk 60, M. Atk 120
+	)
+	weapons := map[int32]datapack.Item{
+		tankSword:  {ID: tankSword, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 2, Price: 900000, Stats: datapack.Stats{PAtk: 100, MAtk: 40, PAtkSpd: 379}},
+		tankMagicS: {ID: tankMagicS, Type: "Weapon", BodyPart: "rhand", Kind: "SWORD", Grade: 2, Price: 900000, Stats: datapack.Stats{PAtk: 60, MAtk: 120, PAtkSpd: 379}},
+	}
+	b := newModelBrain(t, classPaladin, 40, RoleSupport, []KnownSkill{{ID: skillHolyBlessing, Level: 1}}, nil)
+	m := b.cfg.Travel
+	m.skills = maps.Clone(m.skills)
+	m.skills[datapack.SkillRef{ID: skillHolyBlessing, Level: 1}] = datapack.Skill{Type: "HEAL", OperateType: "ACTIVE", Power: 200, HitTime: 2 * time.Second, ReuseDelay: 10 * time.Second, MPConsume: 30}
+	m.classes = maps.Clone(m.classes)
+	m.classes[classPaladin] = modelClass(classPaladin, 4, 0, 40, 43, 30, 21, 11, 25, 4, 80, 500)
+	b.world.Self.MaxHP, b.world.Self.MaxMP = 0, 0 // calibrate nothing
+	gear, _ := indexGear(weapons, m.cheapest)
+	m.gear = maps.Clone(m.gear)
+	maps.Copy(m.gear, gear)
+	v := b.valuer()
+	if v == nil {
+		t.Fatal("no gear model")
+	}
+	if !v.tank {
+		t.Errorf("gear valued for role kind %v, want a tank", v.role.Kind)
+	}
+	w := b.rawWorn()
+	score := func(id int32) float64 {
+		g := m.gear[id]
+		return b.pieceScore(&w, &g, Item{ObjectID: 301, TemplateID: id, Count: 1})
+	}
+	if s, mg := score(tankSword), score(tankMagicS); s <= mg {
+		t.Errorf("sword scores %v, magic sword %v; want the sword higher", s, mg)
+	}
+}

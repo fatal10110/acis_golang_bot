@@ -343,12 +343,13 @@ var magicSkillTypes = []string{"MDAM", "DRAIN", "DEATHLINK"}
 // a Support build with a heal it knows and a caster's melee policy (not
 // MeleeAlways), the HP a minute that heal restores (its power, M. Atk for a
 // HEAL, its MP and cast time, and the rest); any other Support build is a
-// tank, which values how long it lasts (tank): a fighter that heals, PL with
-// Holy Blessing, still wears its plate and sword; any other build, the kills a minute of the first rotation step it
-// knows that deals damage (damageSkillTypes, as the spot fit's
-// spotAttack: not Self Heal's HEAL), else of its melee hits. A cast costs
-// its mpInitialConsume and mpConsume as the server charges them
-// (cast/controller.go CanCast); a heal that costs no MP is no heal.
+// tank, which values how long it lasts (tank): a fighter that heals, PL
+// with Holy Blessing, still wears its plate and sword; any other build,
+// the kills a minute of the first rotation step it knows that deals damage
+// (damageSkillTypes, as the spot fit's spotAttack: not Self Heal's HEAL),
+// else of its melee hits. A cast costs its mpInitialConsume and mpConsume
+// as the server charges them (cast/controller.go CanCast); a heal that
+// costs no MP is no heal.
 func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	bd, m := b.build(), b.cfg.Travel
 	known := func(id int32) (datapack.Skill, bool) {
