@@ -314,11 +314,10 @@ a tank with Holy Blessing known (gearRole).
   with its own row, #633); for TH, PW and AW's (their rows, #631: their first damage step at 40 is
   Deadly Blow, whose kill the STR does not speed past the tie-break), PR's, and every Support build
   (a tank), it is model-chosen.
-- SN and SG, Demon: its -270 max HP and -1 WIT lose value against the reference monster in either
-  role, and Karmian's cast speed outranks its +4 INT at every max HP, over 810 too: the row's
-  "Demon once max HP covers the loss" does not hold through the model, and Demon is model-chosen
-  (the sorcerer's Damage build gains from its INT only against a harmless target). The owner's
-  call on the rule is #676.
+- SN and SG, Demon: the Sorcerer follows the explicit row rule: Karmian is eligible through 810
+  max HP, and Demon is eligible above 810, covering its -270 max HP loss. This bound is enforced
+  at set choice because the generic model's cast-speed comparison cannot express the row rule.
+  Spellsinger keeps Karmian as its preferred set.
 - SN, SG, SH and WC, Karmian, Support: the build is a tank, whose P. Def gain counts against the
   reference monster; against a harmless target the set is model-chosen. WC's Damage build: the same.
 - BI, PP, EE and SE, Divine and Karmian: they gain in both roles against either target (at 40 the
