@@ -113,7 +113,7 @@ func TestRunSwarm(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			// The login address is unroutable: nothing may reach a dial.
-			args := append([]string{"-login", "192.0.2.1:1", "-timeout", "1ms"}, tt.args...)
+			args := append([]string{"-login", "192.0.2.1:1", "-timeout", "1ms", "-crash-file", filepath.Join(t.TempDir(), "crash.log")}, tt.args...)
 			if code := run(tt.ctx, append([]string{"swarm"}, args...), &stdout, &stderr); code != tt.code {
 				t.Fatalf("exit %d, want %d; stderr %q", code, tt.code, stderr.String())
 			}

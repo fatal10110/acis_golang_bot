@@ -73,6 +73,9 @@ type swarmOptions struct {
 	// outcomeLog is the outcome log's file (-outcome-log); empty records
 	// nothing.
 	outcomeLog string
+	// crashFile keeps the runtime's crash output (-crash-file); empty is
+	// crash.log in the default data directory.
+	crashFile string
 }
 
 func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
@@ -102,6 +105,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	addOutcomeLogFlag(fs, &o.outcomeLog)
+	fs.StringVar(&o.crashFile, "crash-file", "", crashFileUsage)
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -195,6 +199,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
 		return 2
 	}
+	defer startCrashLog(o.crashFile, "swarm", stderr)()
 	accounts, err := o.accounts.Accounts()
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)

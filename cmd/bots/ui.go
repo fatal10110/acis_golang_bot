@@ -285,11 +285,9 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	}
 	dir := o.dataDir
 	if dir == "" {
-		base, err := os.UserConfigDir()
-		if err != nil {
+		if dir, err = defaultDataDir(); err != nil {
 			return fmt.Errorf("no -data-dir: %w", err)
 		}
-		dir = filepath.Join(base, botregistry.DefaultDirName)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("data dir: %w", err)
@@ -299,6 +297,9 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 		return err
 	}
 	defer reg.Close()
+	// Started once the registry lock is held, so a refused second panel
+	// never rotates the running one's crash log.
+	defer startCrashLog(filepath.Join(dir, crashFileName), "ui", stderr)()
 	ring := botpanel.NewRing(logLines)
 	log := slog.New(ring.Handler(slog.NewTextHandler(stderr, nil), nil))
 	if err := prepareRegistry(reg, o, log); err != nil {
