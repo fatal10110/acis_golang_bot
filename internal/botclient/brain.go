@@ -118,6 +118,10 @@ type BrainConfig struct {
 	// after (GroundClaims), shared by every bot of the process, so no two
 	// chase one item. Nil leaves that to the server.
 	Ground *GroundClaims
+	// Outcomes, when set, is the queue the brain hands a record of each
+	// spot stay to (Outcome, OP0), shared by every bot of the process and
+	// written by the command that opened the log. Nil records nothing.
+	Outcomes *OutcomeQueue
 	// Challenges, when set, are the challenge holds of the process
 	// (ChallengeHolds), shared by every bot of the process, so one player
 	// gets at most one own challenge per challengeSameEvery from all of
@@ -276,6 +280,8 @@ type Brain struct {
 	train trainerVisit
 	// spot is the farming spot (rule 9 errand).
 	spot spotVisit
+	// stay is the spot stay the outcome log records (cfg.Outcomes).
+	stay spotStay
 	// assist is the creature the party leader attacked (rule 9 assist).
 	assist assistPlan
 	// buffedAt is when the bot last cast each buff on each target
@@ -582,6 +588,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		b.inviteEvent(ev)
 		b.roomEvent(ev, now)
 		b.reweighSpot()
+		// Before the switch: the bot's own Die ends its stay (diedAtSpot).
+		b.stayEvent(ev, now)
 		switch e := ev.(type) {
 		case LeaveWorld:
 			switch {
@@ -654,6 +662,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				b.anchor = e.Pos
 				b.appearing = b.appearing || !e.Fast
 				// Somewhere else: walk to the spot again.
+				b.stayPause(now)
 				b.spot.arrived = false
 				if !e.Fast {
 					// A teleport made right after a landing (one the

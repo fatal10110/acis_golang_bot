@@ -173,6 +173,10 @@ GOMEMLIMIT=1GiB bots swarm \
 - `-metrics` serves live counters on loopback only (`docs/hetzner.md`, section 8, still applies).
 - `-pprof 127.0.0.1:6061` serves Go profiles on loopback, off by default; recipes and the
   server's `-debug-addr` are in `docs/hetzner.md`, "Profiling". `bots ui` takes it too.
+- `-outcome-log <file>` writes one JSON line per farming bot's spot stay (`docs/structure.md`,
+  Design section 6), off by default; past 64 MiB the file becomes `<file>.1` and a new one
+  starts, so it stays under 128 MiB. It holds no account or character name and no chat text.
+  `bots ui` takes it too.
 
 ## 5. Dead lines and reconnects
 
