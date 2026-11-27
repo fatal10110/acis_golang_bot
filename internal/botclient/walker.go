@@ -624,9 +624,8 @@ func (b *Brain) planRoute(pos Point, now time.Time) (Action, bool) {
 		to, same, ok := w.target(w.dest)
 		switch {
 		case cur.Kind() == nav.OneWayOut:
-			// Drop into the nearest abstract SCC first, whatever the
-			// destination: the next plan routes from there with the
-			// hierarchy.
+			// Drop into an abstract SCC first, whatever the destination:
+			// the next plan routes from there with the hierarchy.
 			route, err = w.drop(from, cur)
 		case ok && !same:
 			// A one-way drop toward the destination: the hierarchy routes
@@ -799,11 +798,31 @@ func (w *walker) inSCC(at, p Point) Point {
 	return at
 }
 
-// drop is the one checked route from one-way-out ground at from into the
-// nearest abstract SCC its member cur reaches: the nearest cell of one in
-// rings of cells around from that a route reaches.
+// drop is the one checked route from one-way-out ground at from into an
+// abstract SCC its member cur reaches: one search (Planner.RouteToNearest)
+// for the cheapest landing by path cost on a cell of such an SCC inside the
+// box of walkDropCells around from. The way down may leave the box; only
+// the landing is bounded by it. When no cell of the box at the bot's height
+// is in such an SCC, there is no search: ErrUnreachable.
 func (w *walker) drop(from location.Location, cur nav.Member) ([]location.Location, error) {
 	h := w.nav.Hier
+	cx, cy := engine.GeoX(from.X), engine.GeoY(from.Y)
+	lands := func(c nav.Cell) bool {
+		m, err := h.Locate(c, nil)
+		return err == nil && m.Kind() == nav.InSCC && h.Reachable(cur, m)
+	}
+	if !w.dropInBox(from, lands) {
+		return nil, nav.ErrUnreachable
+	}
+	return w.plan.RouteToNearest(from, func(c nav.Cell) bool {
+		return abs(c.X-cx) <= walkDropCells && abs(c.Y-cy) <= walkDropCells && lands(c)
+	})
+}
+
+// dropInBox reports whether a cell of the box of walkDropCells around from,
+// on the layer nearest from's height, is one lands takes. It scans rings of
+// cells outward from from, so a landing near the bot ends it early.
+func (w *walker) dropInBox(from location.Location, lands func(nav.Cell) bool) bool {
 	cx, cy := engine.GeoX(from.X), engine.GeoY(from.Y)
 	for r := 1; r <= walkDropCells; r++ {
 		for dx := -r; dx <= r; dx++ {
@@ -811,22 +830,14 @@ func (w *walker) drop(from location.Location, cur nav.Member) ([]location.Locati
 				if max(abs(dx), abs(dy)) != r {
 					continue
 				}
-				x, y := engine.WorldX(cx+dx), engine.WorldY(cy+dy)
-				c, ok := w.plan.Locate(location.Location{X: x, Y: y, Z: from.Z})
-				if !ok {
-					continue
-				}
-				m, err := h.Locate(c, nil)
-				if err != nil || m.Kind() != nav.InSCC || !h.Reachable(cur, m) {
-					continue
-				}
-				if route, err := w.plan.Route(from, location.Location{X: x, Y: y, Z: int(c.Z)}); err == nil {
-					return route, nil
+				c, ok := w.plan.Locate(location.Location{X: engine.WorldX(cx + dx), Y: engine.WorldY(cy + dy), Z: from.Z})
+				if ok && lands(c) {
+					return true
 				}
 			}
 		}
 	}
-	return nil, nav.ErrUnreachable
+	return false
 }
 
 // sent records the walker's packet that went out at now. Any packet but a

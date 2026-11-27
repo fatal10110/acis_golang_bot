@@ -411,8 +411,8 @@ server's pathfinder.
     through the cell, and would be one SCC. A local SCC with no such X is one of two kinds:
     - **one-way out**: it reaches some abstract SCC, but none reaches it back. This is ground the
       bot can drop off but never climb back to, such as a ledge a teleport or a restart point puts
-      it on. The walker takes one checked drop into the nearest abstract SCC it reaches, then goes
-      on as normal;
+      it on. The walker takes one checked drop into an abstract SCC it reaches, the landing
+      cheapest by path cost within 32 cells (`Planner.RouteToNearest`), then goes on as normal;
     - **isolated**: it reaches no abstract SCC at all. This is a closed pocket or pit, and the only
       `/unstuck` case. The rule is exact
     because every border crossing is an entrance or merged into one only when mutually reachable
@@ -1233,8 +1233,9 @@ unreachable (with a reason).
   (injected clock). A segment unanswered after 2 s, or still on its way past its end plus half its
   run plus 2 s, counts as failed. This replaces "100 units closer per leg".
 - **Recovery**: replan from where the server says the bot is.
-  - A bot standing on one-way-out ground first drops, with one checked route, into the nearest
-    abstract SCC it reaches.
+  - A bot standing on one-way-out ground first drops, with one checked route, into an abstract
+    SCC it reaches: one search outward in path-cost order (`Planner.RouteToNearest`, at most the
+    walk's budget) lands on the first click target within 32 cells of the bot in such an SCC.
   - `/unstuck` is kept for isolated ground only, which reaches no abstract SCC (a closed pit, the
     restart area of acis_golang#5412).
     The server's recall is a five-minute cast; the walker holds every walk while it runs.

@@ -213,6 +213,63 @@ func (p *Planner) search(s *scratch, start, goal Cell, budget int, avoid map[edg
 	return nil, expanded, ErrUnreachable
 }
 
+// searchNearest runs a uniform-cost search from start over the cell graph,
+// expanding at most budget cells and skipping the edges in avoid and the
+// cells in avoided columns (Planner.Avoid), until it pops a cell lands
+// takes. It returns the cell path, start first, in s.cells, and the cells
+// it expanded.
+func (p *Planner) searchNearest(s *scratch, start Cell, budget int, avoid map[edgeKey]struct{}, lands func(Cell) bool) ([]Cell, int, error) {
+	s.nodes = s.nodes[:0]
+	s.open = s.open[:0]
+	s.index.reset()
+
+	s.index.getOrPut(cellKey(start), 0)
+	s.nodes = append(s.nodes, newNode(start, 0, -1))
+	s.push(openItem{idx: 0})
+
+	expanded := 0
+	for len(s.open) > 0 {
+		it := s.pop()
+		n := &s.nodes[it.idx]
+		if n.closed || it.g != n.g {
+			continue
+		}
+		cur, g := n.cell(), n.g
+		if lands(cur) {
+			return s.trace(it.idx), expanded, nil
+		}
+		if expanded >= budget {
+			return nil, expanded, ErrBudget
+		}
+		n.closed = true
+		expanded++
+		s.edges = p.neighbours(s.edges[:0], cur)
+		for _, e := range s.edges {
+			if avoid != nil {
+				if _, ok := avoid[edgeKey{cur, e.cell}]; ok {
+					continue
+				}
+			}
+			if !p.Avoid.empty() && p.Avoid.has(e.cell) {
+				continue
+			}
+			ng := g + e.cost
+			idx, seen := s.index.getOrPut(cellKey(e.cell), int32(len(s.nodes)))
+			if !seen {
+				s.nodes = append(s.nodes, newNode(e.cell, ng, it.idx))
+			} else {
+				m := &s.nodes[idx]
+				if m.closed || ng >= m.g {
+					continue
+				}
+				m.g, m.parent = ng, it.idx
+			}
+			s.push(openItem{f: ng, g: ng, idx: idx})
+		}
+	}
+	return nil, expanded, ErrUnreachable
+}
+
 // reachers walks back from goal over the cardinal crossings inside box and
 // leaves every cell that reaches goal in s.index, goal included. It returns
 // the cells it walked. Diagonals add no reach: a diagonal needs both
