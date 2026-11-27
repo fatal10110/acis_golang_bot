@@ -236,7 +236,9 @@ SHA256`). Flags and commands are the same as on Linux.
   directory. A second `bots ui` on the same directory is refused while the first runs; a killed
   panel leaves no lock behind.
 - A runtime crash of `bots ui` or `bots swarm` is also written to `%AppData%\acis-bots\crash.log`
-  (section 8), so no `2> ui.log` redirect is needed to keep its first lines. When another bots
+  (section 8): the file keeps the panic or goroutine dump, but a runtime throw's `fatal error:`
+  line (and the `runtime: ...` lines before it) reach stderr only (#704), so keep a `2> ui.log`
+  redirect to catch them. When another bots
   process holds the file, a start that finds it past 1 MiB cannot move it to `crash.log.1` and
   empties it instead, with a warning.
 - The panel (`127.0.0.1:8090`) and the metrics and pprof endpoints listen on loopback only, so they need no
