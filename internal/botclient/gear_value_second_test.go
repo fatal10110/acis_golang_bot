@@ -121,16 +121,16 @@ func TestRowTYSetValue(t *testing.T) { checkSecondSets(t, 48, platedLeatherVerdi
 // too: at 40 the naked healer lasts its survival floor.
 var healerVerdicts = append(bothRoles(setDivine, true, true), bothRoles(setKarmian, true, true)...)
 
-// TestRowBISetValue: Divine, else Karmian (kit: CL's).
+// TestRowBISetValue: Divine, else Karmian (kit: its own, kits_healers.go).
 func TestRowBISetValue(t *testing.T) { checkSecondSets(t, 16, healerVerdicts) }
 
-// TestRowPPSetValue: Karmian, else Divine (kit: CL's).
+// TestRowPPSetValue: Karmian, else Divine (kit: its own, kits_healers.go).
 func TestRowPPSetValue(t *testing.T) { checkSecondSets(t, 17, healerVerdicts) }
 
-// TestRowEESetValue: Divine, else Karmian (kit: EO's).
+// TestRowEESetValue: Divine, else Karmian (kit: its own, kits_healers.go).
 func TestRowEESetValue(t *testing.T) { checkSecondSets(t, 30, healerVerdicts) }
 
-// TestRowSESetValue: Divine, else Karmian (kit: SO's).
+// TestRowSESetValue: Divine, else Karmian (kit: its own, kits_healers.go).
 func TestRowSESetValue(t *testing.T) { checkSecondSets(t, 43, healerVerdicts) }
 
 // Karmian on a nuker: its cast speed gains in the Damage role against

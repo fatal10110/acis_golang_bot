@@ -147,7 +147,7 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 		known(id)
 	}
 	for _, h := range r.kit.Heals {
-		known(h.Skill)
+		starts(h.Skill, h.From)
 		party("heal", h.Skill, h.Members > 0)
 	}
 	for _, bf := range r.kit.Buffs {
@@ -338,7 +338,8 @@ func TestBehaviorRowsShipped(t *testing.T) {
 // missing one, a bracket gate narrower than weaponsAllowed, a Within gate
 // off castRange, a wrong level of a step, a toggle or a buff, a toggle of a
 // skill that is none, a party buff or heal of a single-target skill and the
-// other way round, a skill out of the tree (a heal's, Relax), a wrong
+// other way round, a skill out of the tree (a heal's, Relax), a heal off
+// its level or with none, a wrong
 // charge gate, a (base) tag on a skill first granted from 20 and a
 // profession that is not a direct child each fail. In a second
 // profession's row (40/75) a (fixed) tag on a skill of the parent's tree
@@ -383,7 +384,7 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{ID: chant, Level: 1}:   {Target: "PARTY"},
 	}
 	row := func(next int32, steps ...Step) behaviorRow {
-		return behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Rotation: steps, Heals: []Heal{{Skill: plain, HP: 50}}}, next: next}
+		return behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Rotation: steps, Heals: []Heal{{Skill: plain, From: 7, HP: 50}}}, next: next}
 	}
 	tests := []struct {
 		name string
@@ -416,6 +417,9 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{"not a direct child", row(12), true},
 		{"buff level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: plain, From: 7}}}}, false},
 		{"wrong buff level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: plain, From: 9}}}}, true},
+		{"wrong heal level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: plain, From: 9, HP: 60}}}}, true},
+		{"no heal level", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: plain, HP: 60}}}}, true},
+		{"second row: heal at its level", second(ClassKit{Heals: []Heal{{Skill: own43, From: 43, HP: 60}}}), false},
 		{"base skill", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Relax: plain, Base: []int32{plain}}}, false},
 		{"base tag from 20", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Buffs: []Buff{{Skill: late}}, Base: []int32{late}}}, true},
 		{"profession row starts at 20", behaviorRow{name: "fixture", class: 10, start: 20, end: 39, kit: ClassKit{Rotation: []Step{{Skill: plain}}}}, false},

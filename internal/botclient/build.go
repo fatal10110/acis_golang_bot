@@ -528,7 +528,7 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 		}
 	}
 	for _, h := range line.Heals {
-		if plays(h.Role) {
+		if h.From <= level && plays(h.Role) {
 			k.Heals = append(k.Heals, h)
 		}
 	}

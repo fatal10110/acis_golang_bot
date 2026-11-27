@@ -143,11 +143,17 @@ func (w *World) applyEffects(ev Event, now time.Time) {
 // a party member. With Members it is a party heal (Group Heal, Chant of
 // Life: target PARTY), cast on the bot only while at least that many of the
 // members the bot supports within partyBuffReach, itself included, are
-// under the percent. Role puts it in that role's heals only, as Step.Role.
+// under the percent. Role puts it in that role's heals only, as Step.Role;
+// From is the level the heal starts at, as Step.From. An MP heal (MP,
+// Recharge) reads HP as an MP percent and goes out in ruleHeal's MP pass
+// only, on a member other than the bot whose class does not know it
+// (rechargeClasses).
 type Heal struct {
 	Skill   int32
 	HP      int
 	Members int
+	From    int32
+	MP      bool
 	Role    Role
 }
 
@@ -272,7 +278,7 @@ func (b *Brain) vitals(id int32) (hp, maxHP int32) {
 	return 0, 0
 }
 
-// healSkill is the build's first heal ready at now whose HP percent
+// healSkill is the build's first HP heal ready at now whose HP percent
 // member id is under, and whose member count is; ok is false for none.
 func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 	hp, maxHP := b.vitals(id)
@@ -281,7 +287,7 @@ func (b *Brain) healSkill(id int32, now time.Time) (h Heal, ok bool) {
 	}
 	held := b.partySkillHeld(now)
 	for _, h := range b.build().Kit.Heals {
-		if h.Members > 0 && held {
+		if h.MP || h.Members > 0 && held {
 			continue
 		}
 		if below(hp, maxHP, h.HP) && b.castReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) && (h.Members == 0 || b.patientsUnder(h.HP, now) >= h.Members) {
@@ -344,16 +350,36 @@ func (b *Brain) ruleHeal(now time.Time) (Action, bool) {
 	if (s.Casting(now) || b.castPending(now)) && slices.ContainsFunc(ids, b.wounded) {
 		return Action{}, true
 	}
+	return b.mpHeal(ids, now)
+}
+
+// mpHeal is ruleHeal's MP pass, after no patient got an HP heal: over the
+// patients ids in their order, the first one other than the bot, alive and
+// of a class that does not know Recharge (rechargeClasses), under a ready
+// MP heal's MP percent gets it. A party member's MP is the party window's;
+// it reports false for none.
+func (b *Brain) mpHeal(ids []int32, now time.Time) (Action, bool) {
+	for _, id := range ids {
+		m := b.world.Party.Members[id]
+		if id == b.world.Self.ObjectID || m == nil || m.HP <= 0 || slices.Contains(rechargeClasses, m.ClassID) {
+			continue
+		}
+		for _, h := range b.build().Kit.Heals {
+			if h.MP && below(m.MP, m.MaxMP, h.HP) && b.castReady(h.Skill, now) && !b.longCastHeld(h.Skill, now) {
+				return b.castOn(id, h.Skill, true, now), true
+			}
+		}
+	}
 	return Action{}, false
 }
 
 // wounded reports whether member id is alive and under the HP percent of
-// a heal the bot knows.
+// an HP heal the bot knows.
 func (b *Brain) wounded(id int32) bool {
 	hp, maxHP := b.vitals(id)
 	return hp > 0 && slices.ContainsFunc(b.build().Kit.Heals, func(h Heal) bool {
 		_, known := b.world.Skills[h.Skill]
-		return known && below(hp, maxHP, h.HP)
+		return known && !h.MP && below(hp, maxHP, h.HP)
 	})
 }
 
