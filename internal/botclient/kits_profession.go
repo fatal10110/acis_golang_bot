@@ -330,4 +330,6 @@ var professionKits = map[int32]ClassKit{
 	classTreasureHunter: treasureHunterKit,
 	classPlainsWalker:   plainsWalkerKit,
 	classAbyssWalker:    abyssWalkerKit,
+	// The tyrant (kits_tyrant.go).
+	classTyrant: tyrantKit,
 }
