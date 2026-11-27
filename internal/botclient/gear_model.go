@@ -340,14 +340,16 @@ func addDye(a charmodel.Attrs, h datapack.Henna) charmodel.Attrs {
 var magicSkillTypes = []string{"MDAM", "DRAIN", "DEATHLINK"}
 
 // gearRole is what the model values the bot's gear for (charmodel.Role):
-// a Support build with a heal it knows, the HP a minute that heal restores
-// (its power, M. Atk for a HEAL, its MP and cast time, and the rest); a
-// Support build with none is a tank, which values how long it lasts
-// (tank); any other build, the kills a minute of the first rotation step it
-// knows that deals damage (damageSkillTypes, as the spot fit's
-// spotAttack: not Self Heal's HEAL), else of its melee hits. A cast costs
-// its mpInitialConsume and mpConsume as the server charges them
-// (cast/controller.go CanCast); a heal that costs no MP is no heal.
+// a Support build with a heal it knows and a caster's melee policy (not
+// MeleeAlways), the HP a minute that heal restores (its power, M. Atk for a
+// HEAL, its MP and cast time, and the rest); any other Support build is a
+// tank, which values how long it lasts (tank): a fighter that heals, PL
+// with Holy Blessing, still wears its plate and sword; any other build,
+// the kills a minute of the first rotation step it knows that deals damage
+// (damageSkillTypes, as the spot fit's spotAttack: not Self Heal's HEAL),
+// else of its melee hits. A cast costs its mpInitialConsume and mpConsume
+// as the server charges them (cast/controller.go CanCast); a heal that
+// costs no MP is no heal.
 func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	bd, m := b.build(), b.cfg.Travel
 	known := func(id int32) (datapack.Skill, bool) {
@@ -360,7 +362,7 @@ func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	}
 	if bd.Role == RoleSupport {
 		for _, h := range bd.Kit.Heals {
-			if sk, ok := known(h.Skill); ok && sk.MPInitialConsume+sk.MPConsume > 0 {
+			if sk, ok := known(h.Skill); ok && sk.MPInitialConsume+sk.MPConsume > 0 && bd.Kit.Melee != MeleeAlways {
 				return charmodel.Role{
 					Kind: charmodel.Support, RestTime: charmodel.DefaultRestTime, SurvivalFloor: charmodel.DefaultSurvivalFloor,
 					HealPower: sk.Power, HealMP: float64(sk.MPInitialConsume + sk.MPConsume), HealHitTime: sk.HitTime, HealReuse: sk.ReuseDelay, HealMAtk: sk.Type == "HEAL",
