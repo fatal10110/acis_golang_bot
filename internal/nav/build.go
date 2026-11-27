@@ -37,6 +37,11 @@ type BuildConfig struct {
 	Clusters []ClusterKey
 	// ClusterCells is the cluster side in cells, DefaultClusterCells when 0.
 	ClusterCells int
+	// CoveredCost is the extra cost, in tenths of a cell, of a step out of
+	// covered ground: DefaultCoveredCost when 0, none when negative. The
+	// nav cache records it, and a hierarchy's routes weigh covered ground
+	// as its cache was built (docs/navigation.md, "Covered ground").
+	CoveredCost int
 	// Workers caps the clusters built at once, 1 when 0. `bots navbuild`
 	// uses half the cores (docs/home.md, resource cap).
 	Workers int
@@ -99,8 +104,17 @@ func Build(ctx context.Context, cfg BuildConfig) ([]byte, BuildStats, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
+	covered := int32(DefaultCoveredCost)
+	switch {
+	case cfg.CoveredCost < 0:
+		covered = 0
+	case cfg.CoveredCost > maxCoveredCost:
+		return nil, BuildStats{}, fmt.Errorf("nav: covered cost %d is over %d", cfg.CoveredCost, maxCoveredCost)
+	case cfg.CoveredCost > 0:
+		covered = int32(cfg.CoveredCost)
+	}
 	static := cfg.Engine.Static()
-	b := &builder{size: size, keys: keys, p: Planner{Engine: static, Water: cfg.Water}, built: make(map[ClusterKey]bool, len(keys))}
+	b := &builder{size: size, keys: keys, p: Planner{Engine: static, Water: cfg.Water}.withCovered(covered), built: make(map[ClusterKey]bool, len(keys))}
 	for _, k := range keys {
 		b.built[k] = true
 	}
@@ -1019,6 +1033,7 @@ func (b *builder) encode(outs []clusterOut, l *linked, key NavKey, stats *BuildS
 	}
 	img = append(img, key.WaterHash[:]...)
 	img = le.AppendUint32(img, uint32(nLandmarks))
+	img = le.AppendUint32(img, uint32(b.p.coveredCost()))
 	for ci, k := range b.keys {
 		img = le.AppendUint32(img, uint32(k.X))
 		img = le.AppendUint32(img, uint32(k.Y))

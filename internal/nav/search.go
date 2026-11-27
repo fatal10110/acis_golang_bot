@@ -20,11 +20,13 @@ type scratch struct {
 	index indexTable
 	edges []neighbour
 	cells []Cell
-	// Pulling. drops[k] counts the drops on the cell path up to cell k;
-	// dropLine is lineDrops' line.
+	// Pulling. drops[k] counts the drops on the cell path up to cell k,
+	// covers[k] the covered cells before cell k; dropLine is lineDrops' and
+	// lineCovered's line.
 	points   []location.Location
 	route    []location.Location
 	drops    []int32
+	covers   []int32
 	dropLine []lineCell
 	// Corridor test.
 	line      []lineCell

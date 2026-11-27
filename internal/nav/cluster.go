@@ -1,6 +1,8 @@
 package nav
 
 import (
+	"math"
+
 	"github.com/fatal10110/acis_golang_bot/internal/geo/block"
 )
 
@@ -46,6 +48,10 @@ type localGraph struct {
 	// edge marks a cell next to a wall, a climb over 48 or a drop, which
 	// costs costClearance more to leave.
 	edge []bool
+	// cover marks a cell on covered ground (Planner.isCovered), which costs
+	// coverCost more to leave: the loading planner's coveredCost.
+	cover     []bool
+	coverCost int32
 	// layers is scratch for AppendLayers.
 	layers [block.MaxLayers]block.Cell
 }
@@ -76,6 +82,17 @@ func (g *localGraph) load(p *Planner, x0, y0, size int) {
 	g.colStart[cols] = int32(n)
 	g.next = resize(g.next, 4*n)
 	g.edge = resize(g.edge, n)
+	g.cover = resize(g.cover, n)
+	g.coverCost = p.coveredCost()
+	for c := range cols {
+		top := int16(math.MinInt16)
+		for i := g.colStart[c]; i < g.colStart[c+1]; i++ {
+			top = max(top, g.z[i])
+		}
+		for i := g.colStart[c]; i < g.colStart[c+1]; i++ {
+			g.cover[i] = int(top) > int(g.z[i])+coverClear
+		}
+	}
 	for i := range n {
 		c := g.cell(int32(i))
 		g.edge[i] = g.nswe[i] != block.AllDirections
@@ -100,13 +117,16 @@ func (g *localGraph) load(p *Planner, x0, y0, size int) {
 // appendSteps appends the weighted steps out of cell i that stay inside the
 // cluster, with the step costs of Planner.neighbours: cardinals, and a
 // diagonal where both L-shaped detours land on the same cell, plus the
-// clearance extra next to a wall or drop, and costDrop on a drop. It skips the diagonal's own
-// CanMove: the costs only rank, and the build makes no CanMove call per
-// cell this way.
+// clearance extra next to a wall or drop, coverCost out of covered ground,
+// and costDrop on a drop. It skips the diagonal's own CanMove: the costs
+// only rank, and the build makes no CanMove call per cell this way.
 func (g *localGraph) appendSteps(dst []step, i int32) []step {
 	extra := int32(0)
 	if g.edge[i] {
 		extra = costClearance
+	}
+	if g.cover[i] && g.coverCost > 0 {
+		extra += g.coverCost
 	}
 	nx := g.next[4*i : 4*i+4]
 	for _, t := range nx {
