@@ -269,9 +269,13 @@ func (b *Brain) ruleCraft(now time.Time) (Action, bool) {
 		if b.world.Clan.ID == 0 || !b.craftCheckDue(now) {
 			return Action{}, false
 		}
-		// A recipe attempt opens the pages it does not know itself, and
-		// an open of ours would answer its own (#652): the check waits.
-		if book := &b.world.Recipes; b.learn.scroll != 0 && !(book.DwarvenKnown && book.CommonKnown) {
+		// A recipe attempt's open waits for its page, and an open of
+		// ours would answer it (#652); the errand's open in turn waits
+		// for ours. The check waits for either, each bounded by its own
+		// recipeReplyTimeout, even when the recipe row does not run (a
+		// karma row) to end the attempt.
+		e, book := &b.learn, &b.world.Recipes
+		if e.scroll != 0 && !(book.DwarvenKnown && book.CommonKnown) && (e.opening && now.Before(e.waitUntil) || c.bookPending(now)) {
 			return Action{}, false
 		}
 		if a, ok := b.openBook(now); ok {

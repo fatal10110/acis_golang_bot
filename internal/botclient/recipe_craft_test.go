@@ -99,6 +99,29 @@ func TestBrainRecipeCraftRowDuringAttempt(t *testing.T) {
 	})
 }
 
+// TestBrainRecipeCraftRowKarmaMidAttempt: karma gained while the errand
+// waits for its page skips the recipe row (a karma row), so nothing ends
+// the attempt; the craft check holds only until the errand's open times
+// out, then opens its page.
+func TestBrainRecipeCraftRowKarmaMidAttempt(t *testing.T) {
+	script := &learnScript{scrolls: []int32{ssdScroll}}
+	b := newRecipeCrafterBrain(t, script)
+	opening := learnView{scroll: ssdScroll, opening: true, waitUntil: t0.Add(recipeReplyTimeout)}
+	runRecipeCraftSteps(t, b, []recipeCraftStep{
+		{name: "errand opens the common page", wantRule: "recipe", wantBook: encodeRequestRecipeBookOpen(false), wantLearn: opening},
+		{
+			name: "karma: craft check waits for the errand's open", at: time.Second,
+			setup:     func(b *Brain) { b.world.Self.Karma = 100 },
+			wantLearn: opening,
+		},
+		{name: "still within the errand's timeout", at: recipeReplyTimeout - time.Millisecond, wantLearn: opening},
+		{
+			name: "errand's open timed out: craft row opens its page", at: recipeReplyTimeout,
+			wantRule: "craft", wantBook: encodeRequestRecipeBookOpen(true), wantLearn: opening,
+		},
+	})
+}
+
 // TestBrainRecipeCraftRowOpenBeforeAttempt: a craft row open in flight
 // when an attempt starts holds the errand's open until it is answered or
 // timed out, so its answer, the page or the refusal while casting, does
