@@ -510,16 +510,23 @@ func (b *Brain) lootQueued(now time.Time) bool {
 // nextLoot is the queued item to pick up at now, 0 for none: the head of
 // the queue, after the ground items due (groundScan), giving up the ones
 // too heavy to carry or with no slot for them (lootFits), the ground items
-// that would take the weight the supplies still need (groundLeavesSupplies)
-// or while a loot stall pauses them (groundPaused) and those another bot of
-// the process is after (GroundClaims). The bot claims the item it returns
-// and gives back the one it held before.
+// while a loot stall pauses them (groundPaused) and those another bot of
+// the process is after (GroundClaims). A ground item that would take the
+// weight the supplies still need (groundLeavesSupplies) goes back to the
+// ground record (groundSeen), so a scan after the supplies are bought takes
+// it. The bot claims the item it returns and gives back the one it held
+// before.
 func (b *Brain) nextLoot(now time.Time) int32 {
 	b.groundScan(now)
 	l, self := &b.loot, b.world.Self.ObjectID
 	for {
 		id := l.next(b.world.Ground, b.persona.Loot.Timeout, now)
-		if id != 0 && (!b.lootFits(b.world.Ground[id]) || !l.own[id] && !b.groundLeavesSupplies(b.world.Ground[id]) || l.groundPaused(id, now) || !b.cfg.Ground.claim(id, self, now)) {
+		if id != 0 && !l.own[id] && !b.groundLeavesSupplies(b.world.Ground[id]) {
+			l.skip()
+			b.groundSeen(id, now, lootGrace)
+			continue
+		}
+		if id != 0 && (!b.lootFits(b.world.Ground[id]) || l.groundPaused(id, now) || !b.cfg.Ground.claim(id, self, now)) {
 			l.skip()
 			continue
 		}
@@ -569,9 +576,10 @@ func (b *Brain) lootFits(it GroundItem) bool {
 // bag up to Loot.StopAbove, past BuyLoad, and the restock bought no
 // scrolls. An item the bot keeps (keepsItem: its supplies among them) and
 // a bot that lacks no supply take the item as lootFits allows; so does one
-// whose BuyLoad, weight limit or item weights are unknown.
+// whose BuyLoad, weight limit or item weights are unknown, and one whose
+// persona sets no Loot.StopAbove: no loot weight cap, this one among them.
 func (b *Brain) groundLeavesSupplies(it GroundItem) bool {
-	if b.keepsItem(Item{TemplateID: it.TemplateID, Count: it.Count}) {
+	if b.persona.Loot.StopAbove <= 0 || b.keepsItem(Item{TemplateID: it.TemplateID, Count: it.Count}) {
 		return true
 	}
 	short, ok := b.supplyShort()
