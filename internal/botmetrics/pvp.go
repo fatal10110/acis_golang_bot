@@ -59,6 +59,22 @@ func (s *pvpSums) add(c *pvpCounters) {
 	}
 }
 
+// fold adds src's counters to c.
+func (c *pvpCounters) fold(src *pvpCounters) {
+	for i := range src.fights {
+		c.fights[i].Add(src.fights[i].Load())
+	}
+	for i := range src.deaths {
+		c.deaths[i].Add(src.deaths[i].Load())
+	}
+	for i := range src.duels {
+		c.duels[i].Add(src.duels[i].Load())
+	}
+	for i := range src.interrupts {
+		c.interrupts[i].Add(src.interrupts[i].Load())
+	}
+}
+
 // fill stores the sums in snap, every label present.
 func (s *pvpSums) fill(snap *Snapshot) {
 	snap.PvPFights = labeled(pvpFightKinds[:], s.fights[:])
