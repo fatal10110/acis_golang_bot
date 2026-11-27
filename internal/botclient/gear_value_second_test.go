@@ -93,7 +93,7 @@ func TestRowTHSetValue(t *testing.T) {
 	checkSecondSets(t, 8, append(platedLeatherVerdicts(false), mithrilLightVerdicts)...)
 }
 
-// TestRowHKSetValue: Plated Leather (kit: RO's).
+// TestRowHKSetValue: Plated Leather (kit: HK's).
 func TestRowHKSetValue(t *testing.T) { checkSecondSets(t, 9, platedLeatherVerdicts(true)...) }
 
 // TestRowPWSetValue: Plated Leather, else Mithril Light (kit: PW's).
@@ -101,7 +101,7 @@ func TestRowPWSetValue(t *testing.T) {
 	checkSecondSets(t, 23, append(platedLeatherVerdicts(false), mithrilLightVerdicts)...)
 }
 
-// TestRowSRSetValue: Plated Leather (kit: ES's).
+// TestRowSRSetValue: Plated Leather (kit: SR's).
 func TestRowSRSetValue(t *testing.T) { checkSecondSets(t, 24, platedLeatherVerdicts(true)...) }
 
 // TestRowAWSetValue: Plated Leather, else Mithril Light (kit: AW's).
@@ -109,7 +109,7 @@ func TestRowAWSetValue(t *testing.T) {
 	checkSecondSets(t, 36, append(platedLeatherVerdicts(false), mithrilLightVerdicts)...)
 }
 
-// TestRowPRSetValue: Plated Leather (kit: AS's, as AW).
+// TestRowPRSetValue: Plated Leather (kit: PR's).
 func TestRowPRSetValue(t *testing.T) { checkSecondSets(t, 37, platedLeatherVerdicts(false)...) }
 
 // TestRowTYSetValue: Plated Leather (kit: its own, kits_tyrant.go).
