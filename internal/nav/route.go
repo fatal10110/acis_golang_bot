@@ -129,6 +129,81 @@ func (p *Planner) route(s *scratch, from, to location.Location) ([]location.Loca
 	return nil, ErrUnreachable
 }
 
+// RouteToNearest plans a ground route from from (a standstill position) to
+// the nearest cell accept takes, for a walker that has a kind of place to
+// reach rather than a point. The cell search expands outward from from with
+// no heuristic, so in order of path cost, for at most p.Budget cells across
+// its replans, and ends at the first cell it pops that accept takes and
+// that is a click target (the pull exempts a route's last cell from that
+// test); a planner that does not swim takes no cell in water. accept is
+// called once for each cell the search pops. The route's last point is the
+// landing cell's centre on its floor.
+//
+// Otherwise it behaves as Route does: the cell path is pulled into checked
+// segments, a failed pull avoids the failing edge and searches again within
+// what is left of the budget, and a swimming planner whose route swims
+// farther than p.Swim retries dry. With no fixed goal there is no goal
+// column to exempt from p.Avoid: the search takes no cell in an avoided
+// column. It reports ErrBudget when the search expanded the budget without
+// popping a cell accept takes, ErrUnreachable when it ran out of cells or
+// every way it found failed the step-chain check.
+func (p *Planner) RouteToNearest(from location.Location, accept func(Cell) bool) ([]location.Location, error) {
+	s := getScratch()
+	defer putScratch(s)
+	route, _, err := p.routeToNearest(s, from, accept)
+	if errors.Is(err, ErrBreath) {
+		dry := *p
+		dry.Swim = 0
+		if route, _, err = dry.routeToNearest(s, from, accept); errors.Is(err, ErrWater) {
+			err = ErrBreath
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(route), nil
+}
+
+// routeToNearest is RouteToNearest on the given scratch, returning s.route
+// and the cells its searches expanded.
+func (p *Planner) routeToNearest(s *scratch, from location.Location, accept func(Cell) bool) ([]location.Location, int, error) {
+	start, ok := p.Locate(from)
+	if !ok {
+		return nil, 0, ErrNotWalkable
+	}
+	if !p.swims() && p.Water.wet(start.X, start.Y, start.Z) {
+		return nil, 0, ErrWater
+	}
+	from.Z = int(start.Z)
+	lands := func(c Cell) bool {
+		return accept(c) && p.clickable(c, &s.layers) && (p.swims() || !p.Water.wet(c.X, c.Y, c.Z))
+	}
+
+	var avoid map[edgeKey]struct{}
+	budget, expanded := p.Budget, 0
+	s.farEnd = s.work + farWork
+	for range maxReplans + 1 {
+		cells, used, err := p.searchNearest(s, start, budget, avoid, lands)
+		expanded += used
+		if err != nil {
+			return nil, expanded, err
+		}
+		budget -= used
+		bad, ok := p.pull(s, cells, from, cells[len(cells)-1].World())
+		if ok {
+			if p.swims() && !p.breathOK(s.route) {
+				return nil, expanded, ErrBreath
+			}
+			return s.route, expanded, nil
+		}
+		if avoid == nil {
+			avoid = make(map[edgeKey]struct{}, maxReplans)
+		}
+		avoid[bad] = struct{}{}
+	}
+	return nil, expanded, ErrUnreachable
+}
+
 // pull string-pulls the cell path into segments, in s.route. From each
 // waypoint it takes the farthest cell ahead, within the segment cap, that is a
 // click target and passes CanMove and the corridor test. When none does, a
