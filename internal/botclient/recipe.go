@@ -137,6 +137,14 @@ func recipeBookAction(dwarven bool) Action {
 	return Action{kind: actRecipeBook, payload: encodeRequestRecipeBookOpen(dwarven)}
 }
 
+// learnBookAction is the recipe errand's own open of a page (ruleRecipe),
+// the one its attempt waits on (recipeLearn.sent).
+func learnBookAction(dwarven bool) Action {
+	a := recipeBookAction(dwarven)
+	a.learn = true
+	return a
+}
+
 // craftAction crafts recipeID for the bot. It passes the craft gate
 // (gateCraft, craftGap).
 func craftAction(recipeID int32) Action {
@@ -275,13 +283,14 @@ func (e *recipeLearn) end(o LearnOutcome, msg, added int32, now time.Time) {
 }
 
 // sent records a packet of the attempt that went out at now; book is the
-// recipe book then.
+// recipe book then. A book open the errand did not send (the craft row's
+// openBook) is not the attempt's (#652).
 func (e *recipeLearn) sent(a Action, book *RecipeBook, now time.Time) {
 	if e.scroll == 0 {
 		return
 	}
 	switch {
-	case a.kind == actRecipeBook:
+	case a.kind == actRecipeBook && a.learn:
 		e.opening, e.waitUntil = true, now.Add(recipeReplyTimeout)
 	case a.kind == actUseItem && a.item == e.scroll && !e.used:
 		e.used, e.waitUntil = true, now.Add(recipeReplyTimeout)
@@ -295,6 +304,11 @@ func (e *recipeLearn) sent(a Action, book *RecipeBook, now time.Time) {
 // recipeReplyTimeout, and an attempt that adds nothing holds the next for
 // learnRetry. RequestRecipeBookOpen and UseItem have no server reuse gate
 // (network/client_dispatch.go): the frame pacer bounds them on top.
+//
+// The server answers every open with the same page or refusal, so an
+// answer tells not whose open it was: the errand opens no page while the
+// craft row's open waits for its answer (crafterCycle.bookPending), and
+// the craft row opens none during an attempt (ruleCraft).
 func (b *Brain) ruleRecipe(now time.Time) (Action, bool) {
 	e := &b.learn
 	if e.scroll == 0 && !b.startLearn(now) {
@@ -310,11 +324,14 @@ func (b *Brain) ruleRecipe(now time.Time) (Action, bool) {
 	// The scroll's answer is told by its page changing: know both pages
 	// first.
 	book := &b.world.Recipes
+	if !(book.CommonKnown && book.DwarvenKnown) && b.craft.bookPending(now) {
+		return Action{}, false
+	}
 	if !book.CommonKnown {
-		return recipeBookAction(false), true
+		return learnBookAction(false), true
 	}
 	if !book.DwarvenKnown {
-		return recipeBookAction(true), true
+		return learnBookAction(true), true
 	}
 	it, ok := b.world.Inventory.ByTemplate(e.scroll)
 	if !ok {
