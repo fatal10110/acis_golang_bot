@@ -73,6 +73,9 @@ type (
 	ExDuelStart                    = botwire.ExDuelStart
 	ExDuelEnd                      = botwire.ExDuelEnd
 	ExDuelUpdateUserInfo           = botwire.ExDuelUpdateUserInfo
+	ExOlympiadMode                 = botwire.ExOlympiadMode
+	ExOlympiadMatchEnd             = botwire.ExOlympiadMatchEnd
+	ExOlympiadUserInfo             = botwire.ExOlympiadUserInfo
 	MagicSkillCanceled             = botwire.MagicSkillCanceled
 	HennaRow                       = botwire.HennaRow
 	HennaEquipList                 = botwire.HennaEquipList

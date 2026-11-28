@@ -1,7 +1,10 @@
 # The Olympiad
 
-Ships in X16 (#604). Decision D42 (owner approved 2026-11-26). Paths per
-[README](README.md#paths). Today no bot is noble, so none can enter.
+Shipped in X16 (#604). Decision D42 (owner approved 2026-11-26). Paths per
+[README](README.md#paths). The server registers only nobles of a third profession
+(`model/actor/npc/folk_olympiad.go:30-32`), and a third-profession bot plays `Olympiad` as off until
+the owner rules (#729, `OlympiadPolicy.ThirdClass`): with the defaults a bot takes noblesse and
+never registers.
 
 ## Server facts
 
@@ -35,6 +38,26 @@ Ships in X16 (#604). Decision D42 (owner approved 2026-11-26). Paths per
   284 inside a stadium during a match are the stadium's.
 - **After.** Sent back, it resumes its persona.
 - **Never:** spectates, trades points for passes, claims hero status at a Monument of Heroes.
+
+## As built (X16)
+
+- **Noblesse.** `become_noble` is the first link the class master visit follows while the bot is not
+  noble (`UserInfo` noble flag); a bot with no profession due makes the visit for it alone. Its
+  answer page (`50000-6.htm`) has no link, so a visit with a profession due talks to the master
+  again. One `become_noble` per run, and none once noble.
+- **Registering** (`OlympiadPolicy`, rule 9 errand `olympiad entry`): the manager's whitelist takes a
+  bypass only from the last page (`network/bypass.go:138-140`), so the visit follows `Chat 10`,
+  `Chat 12`, then `OlympiadNoble 5` (`noble_main`, `noble_10`, `noble_12.htm`), and `OlympiadNoble 1`
+  from `noble_main`. Answers: 1503 (1689/1690: already listed) registered; 1500-1502, 1651, 1691,
+  1750, 1803, a page (`noble_cant_*`, `noble_nopoints1.htm`), no link or no answer stop it for the
+  day; 1505/1506 unregistered, after which it farms a `Wait` before the next try. The window is
+  `Start` 18:00 for `Period` 6 h in `Zone` (UTC, the stack's TZ), a try counting on the server day.
+- **Waiting and the match** (rules `olympiad wait`, after the rest and buff rules, and `olympiad`,
+  after `duel`): the wait holds every rule below it, registered or in a match; 1492 starts the match
+  (a call without the stadium's `ExOlympiadMode` lapses after 2 minutes, a match after 15), the
+  opponent is the `ExOlympiadUserInfo` not the bot's, the fight runs from 1496 to 1497/1498 or
+  `ExOlympiadMode` 0, and `ExOlympiadMatchEnd` ends it. A shot the strip turned off is turned on
+  again; flee, break-off and the flag guard are off in the match.
 
 ## Risks
 

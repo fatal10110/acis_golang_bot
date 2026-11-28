@@ -12,6 +12,8 @@ const pvp = {
   hunt: false,
   arenas: true,
   pk: false,
+  war: false,
+  olympiad: true,
   pvp_kills: 7,
   pk_kills: 2,
   duels_won: 3,
@@ -47,6 +49,8 @@ describe("PvPCard", () => {
     expect(screen.getByRole("checkbox", { name: "Hunt" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Arenas" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "PK" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "War" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Olympiad" })).toBeChecked();
     expect(screen.getByText("preset defaults")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
@@ -55,20 +59,44 @@ describe("PvPCard", () => {
     expect(screen.getByRole("button", { name: "Defaults" })).toBeDisabled();
   });
 
-  it("flips one switch and posts all four", async () => {
+  it("flips one switch and posts all six", async () => {
     const calls = answers();
     const user = userEvent.setup();
     show(bot("hz1", { online: true, run: "running", live: live({ pvp }) }));
     await user.click(screen.getByRole("checkbox", { name: "Hunt" }));
     expect(calls).toEqual([
-      { url: "/api/bots/hz1/pvp", method: "POST", body: { modes: { duels: true, hunt: true, arenas: true, pk: false } } },
+      {
+        url: "/api/bots/hz1/pvp",
+        method: "POST",
+        body: { modes: { duels: true, hunt: true, arenas: true, pk: false, war: false, olympiad: true } },
+      },
     ]);
+  });
+
+  it("flips the Olympiad and keeps war", async () => {
+    const calls = answers();
+    const user = userEvent.setup();
+    show(bot("hz1", { online: true, run: "running", live: live({ pvp: { ...pvp, war: true, olympiad: false } }) }));
+    await user.click(screen.getByRole("checkbox", { name: "Olympiad" }));
+    expect(calls).toEqual([
+      {
+        url: "/api/bots/hz1/pvp",
+        method: "POST",
+        body: { modes: { duels: true, hunt: false, arenas: true, pk: false, war: true, olympiad: true } },
+      },
+    ]);
+  });
+
+  it("reads switches stored before war and the Olympiad existed as off", () => {
+    show(bot("hz1", { pvp: { duels: true, hunt: false, arenas: false, pk: false } as Bot["pvp"] }));
+    expect(screen.getByRole("checkbox", { name: "War" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Olympiad" })).not.toBeChecked();
   });
 
   it("prefers the panel's switches and resets them to the defaults", async () => {
     const calls = answers();
     const user = userEvent.setup();
-    show(bot("hz1", { pvp: { duels: false, hunt: false, arenas: false, pk: true } }));
+    show(bot("hz1", { pvp: { duels: false, hunt: false, arenas: false, pk: true, war: false, olympiad: false } }));
     expect(screen.getByRole("checkbox", { name: "PK" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Duels" })).not.toBeChecked();
     expect(screen.getByText("set in the panel")).toBeInTheDocument();
@@ -79,7 +107,7 @@ describe("PvPCard", () => {
 
   it("disables the switches until the bot's first session reports its defaults", () => {
     show(bot("hz1"));
-    for (const name of ["Duels", "Hunt", "Arenas", "PK"]) {
+    for (const name of ["Duels", "Hunt", "Arenas", "PK", "War", "Olympiad"]) {
       expect(screen.getByRole("checkbox", { name })).toBeDisabled();
     }
     expect(screen.getByText("preset defaults, shown after the bot's first session")).toBeInTheDocument();

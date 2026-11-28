@@ -240,13 +240,14 @@ func pvpBreakHP(margin float64) int {
 }
 
 // breaksOff reports whether the bot breaks off its fight with player id at
-// now (docs/pvp/layer.md "Break off"): in the open world only, its CP gone,
+// now (docs/pvp/layer.md "Break off"): in the open world only (no duel,
+// Olympiad match or arena), its CP gone,
 // its HP under pvpBreakHP, no heal or potion ready (sustainReady), its pool
 // fraction under id's (losing), and able to get away (outruns); else it
 // fights on, Ultimate Defense included.
 func (b *Brain) breaksOff(id int32, rot []Step, st stepState, now time.Time) bool {
 	s := &b.world.Self
-	if b.inDuel(now) || b.inArena(now) || s.CP > 0 ||
+	if b.inDuel(now) || b.inOlympiad(now) || b.inArena(now) || s.CP > 0 ||
 		!below(s.HP, s.MaxHP, pvpBreakHP(b.build().Kit.SpotMargin)) {
 		return false
 	}

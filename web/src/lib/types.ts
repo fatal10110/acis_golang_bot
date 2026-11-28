@@ -42,17 +42,22 @@ export interface Live {
   pvp?: PvPLive;
 }
 
-/** A bot's PvP mode switches (botregistry.PvPModes, docs/pvp/modes.md). */
+/**
+ * A bot's PvP mode switches (botregistry.PvPModes, docs/pvp/modes.md): war is
+ * clan war enemies (D40), olympiad the Olympiad (D42).
+ */
 export interface PvPModes {
   duels: boolean;
   hunt: boolean;
   arenas: boolean;
   pk: boolean;
+  war: boolean;
+  olympiad: boolean;
 }
 
 /**
  * A bot's PvP view (docs/pvp/modes.md "Panel and metrics (X12)"): the modes
- * it plays, fight back and its four switches, its PvP and PK kill counts and
+ * it plays, fight back and its six switches, its PvP and PK kill counts and
  * its duels this run by result; last_duel is "won", "lost" or "tie", absent
  * for none.
  */

@@ -120,6 +120,10 @@ var extEventDecoders = map[uint16]func(*wire.Reader) Event{
 	OpGameExDuelStart:          func(r *wire.Reader) Event { return ExDuelStart{Party: r.ReadInt32() != 0} },
 	OpGameExDuelEnd:            func(r *wire.Reader) Event { return ExDuelEnd{Party: r.ReadInt32() != 0} },
 	OpGameExDuelUpdateUserInfo: decodeExDuelUpdateUserInfo,
+
+	OpGameExOlympiadUserInfo: decodeExOlympiadUserInfo,
+	OpGameExOlympiadMode:     func(r *wire.Reader) Event { return ExOlympiadMode{Mode: r.ReadUint8()} },
+	OpGameExOlympiadMatchEnd: func(*wire.Reader) Event { return ExOlympiadMatchEnd{} },
 }
 
 // DecodeEvent decodes a non-empty frame; ok is false for an opcode, or an

@@ -75,8 +75,9 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	u.ClassID = r.ReadInt32()
 	r.Skip(4) // 0
 	u.MaxCP, u.CP = r.ReadInt32(), r.ReadInt32()
-	r.Skip(1 + 1 + 4)   // enchant effect, team, large clan crest
-	r.Skip(3 + 3*4 + 4) // noble, hero, fishing, fishing bait x, y, z, name color
+	r.Skip(1 + 1 + 4) // enchant effect, team, large clan crest
+	u.Noble = r.ReadUint8() != 0
+	r.Skip(2 + 3*4 + 4) // hero, fishing, fishing bait x, y, z, name color
 	u.Running = r.ReadUint8() != 0
 	r.Skip(4 * 4) // pledge class, pledge type, title color, cursed weapon stage
 	return u

@@ -247,7 +247,7 @@ func (u uiRunner) brain(p preset, r botregistry.Run) botclient.BrainConfig {
 	cfg.Metrics, cfg.Branch = r.Metrics, r.Branch
 	if m := r.PvP; m != nil {
 		v := &cfg.Persona.PvP
-		v.Duels, v.Hunt, v.Arenas, v.ForceAttack, v.FightWar = m.Duels, m.Hunt, m.Arenas, m.PK, m.War
+		v.Duels, v.Hunt, v.Arenas, v.ForceAttack, v.FightWar, v.Olympiad = m.Duels, m.Hunt, m.Arenas, m.PK, m.War, m.Olympiad
 	}
 	return cfg
 }

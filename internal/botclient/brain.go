@@ -301,6 +301,8 @@ type Brain struct {
 	signs signsErrand
 	// class is the class master visit (rule 9 errand "classchange").
 	class classVisit
+	// oly is the bot's Olympiad registration and match (pvp_olympiad.go).
+	oly olympiad
 	// dyes is the Symbol Maker visit (rule 9 errand "dyes").
 	dyes dyeVisit
 	// ench is the enchant rule's exchange (ruleEnchant).
@@ -762,6 +764,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.newbiePage(e)
 			b.signsPage(e)
 			b.classPage(e)
+			b.olympiadPage(e)
 			b.dyePage(e)
 			b.shopEvent(ev)
 			b.warehouseEvent(ev, now)
@@ -1125,6 +1128,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.newbie.sent(a, now, b.world.Self.Level)
 	b.signs.sent(a, now)
 	b.class.sent(a, now)
+	b.olympiadSent(a, now)
 	b.dyes.sent(a, now)
 	b.ench.sent(a, now)
 	b.shop.sent(a, now)

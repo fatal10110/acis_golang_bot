@@ -308,6 +308,15 @@ const (
 	OpGameRequestPrivateStoreBuy        = 0x79
 )
 
+// The Olympiad match packets (serverpackets/olympiad_match.go), extended
+// (0xfe): a competitor's match window and its mode. ExOlympiadSpelledInfo
+// (0x2a) goes to spectators only, and the bot never watches.
+const (
+	OpGameExOlympiadUserInfo uint16 = 0x0029
+	OpGameExOlympiadMode     uint16 = 0x002b
+	OpGameExOlympiadMatchEnd uint16 = 0x002c
+)
+
 // Duels and the cast cancel, both directions: the extended (0xfe) duel
 // window packets (serverpackets/duel.go), MagicSkillCanceled
 // (serverpackets/magic_skill.go), the extended (0xd0) duel requests
