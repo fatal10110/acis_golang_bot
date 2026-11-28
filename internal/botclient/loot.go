@@ -174,6 +174,9 @@ type lootQueue struct {
 	// full is how many items the bot held when the server refused a
 	// pickup for want of a slot (lootRefused), 0 for none (slotsFit).
 	full int
+	// picked is when the bot last saw its own pickup (GetItem), which
+	// starts the server's pickup lock (lootFailed).
+	picked time.Time
 }
 
 // next drops the head items that left the ground or ran out of time and
@@ -252,7 +255,7 @@ func (b *Brain) lootEvent(ev Event, now time.Time) {
 		delete(b.loot.ground, e.ObjectID)
 		b.cfg.Ground.drop(e.ObjectID)
 		if e.PickerID == self {
-			b.loot.misses, b.loot.pauseUntil = 0, time.Time{}
+			b.loot.misses, b.loot.pauseUntil, b.loot.picked = 0, time.Time{}, now
 		}
 	case DeleteObject:
 		// The record forgets what World.Ground forgets (World.Apply), so it
@@ -441,13 +444,13 @@ func (b *Brain) lootQueued(now time.Time) bool {
 
 // nextLoot is the queued item to pick up at now, 0 for none: the head of
 // the queue, after the ground items due (groundScan), giving up the ones
-// too heavy to carry or with no slot for them (lootFits), the ground items
-// while a loot stall pauses them (groundPaused) and those another bot of
-// the process is after (GroundClaims). A ground item that would take the
-// weight the supplies still need (groundLeavesSupplies) goes back to the
-// ground record (groundSeen), so a scan after the supplies are bought takes
-// it. The bot claims the item it returns and gives back the one it held
-// before.
+// too heavy to carry or with no slot for them (lootFits) and those another
+// bot of the process is after (GroundClaims). A ground item that would take
+// the weight the supplies still need (groundLeavesSupplies) goes back to
+// the ground record (groundSeen), so a scan after the supplies are bought
+// takes it; so does one while a loot stall pauses ground items
+// (groundPaused), so the first scan after the pause takes it (#686). The
+// bot claims the item it returns and gives back the one it held before.
 func (b *Brain) nextLoot(now time.Time) int32 {
 	b.groundScan(now)
 	l, self := &b.loot, b.world.Self.ObjectID
@@ -458,7 +461,12 @@ func (b *Brain) nextLoot(now time.Time) int32 {
 			b.groundSeen(id, now, lootGrace)
 			continue
 		}
-		if id != 0 && (!b.lootFits(b.world.Ground[id]) || l.groundPaused(id, now) || !b.cfg.Ground.claim(id, self, now)) {
+		if id != 0 && l.groundPaused(id, now) {
+			l.skip()
+			b.groundSeen(id, now, 0)
+			continue
+		}
+		if id != 0 && (!b.lootFits(b.world.Ground[id]) || !b.cfg.Ground.claim(id, self, now)) {
 			l.skip()
 			continue
 		}
@@ -527,7 +535,9 @@ func (b *Brain) groundLeavesSupplies(it GroundItem) bool {
 // overweight, else pick up the oldest queued item that fits under
 // Loot.StopAbove, standing up first. A
 // click waits lootRetry, and the walk to the item the server starts, before
-// the next; Timeout after the first, the bot gives the item up.
+// the next; Timeout after the first, the bot gives the item up, and at once
+// when the server refuses a click it sent within pick-up range
+// (lootFailed).
 //
 // It sends Action (frame bucket, lootRetry) and RequestDropItem (gateDrop,
 // dropRetry per stack).

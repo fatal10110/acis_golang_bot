@@ -93,6 +93,39 @@ func (b *Brain) lootRefused(id int32, now time.Time) {
 	}
 }
 
+// pickupLock is how long the server holds a picker after its pickup
+// (pickupParalyzeLock, network/pickup.go lockPickupParalysis): a click it
+// gets meanwhile it answers with ActionFailed and runs once the lock ends
+// (deferOrFailPickup, network/targeting.go).
+const pickupLock = 200 * time.Millisecond
+
+// lootFailed handles an ActionFailed at now. The server answers every
+// pickup click with one (network/pickup.go), but only a click within its
+// pick-up range is answered after the pickup ran: a click from farther
+// starts a walk, answered first, and the pickup runs at the item, and a
+// click the pickup lock holds runs when the lock ends (pickupLock). So
+// with a click on the head item in flight, the bot within pickupStand of
+// the item and the click not sent within pickupLock of its last pickup,
+// the item leaves the queue at once (#686): taken, a GetItem follows;
+// refused (the item locked to another, claimed, an open trade, no slot),
+// the bot no longer waits Loot.Timeout for it. It counts no miss
+// (lootMisses): a refusal holds the loot rule no longer, and the item,
+// out of the queue and the ground record, is clicked again only once it
+// is seen anew.
+func (b *Brain) lootFailed(now time.Time) {
+	l := &b.loot
+	if l.clicked.IsZero() || len(l.items) == 0 {
+		return
+	}
+	if d := l.clicked.Sub(l.picked); d >= 0 && d < pickupLock {
+		return
+	}
+	if it, ok := b.world.Ground[l.items[0]]; ok && !within3(b.world.Self.Position(now), it.Pos, pickupStand) {
+		return
+	}
+	l.skip()
+}
+
 // groundPaused reports whether the bot leaves queued item id alone at now:
 // a ground item, not its own kill's drop, while a loot stall pauses ground
 // pickups (lootMisses).

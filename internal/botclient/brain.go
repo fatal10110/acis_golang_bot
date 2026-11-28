@@ -608,6 +608,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			// A refused click leaves no attack in flight: rule 5 may click
 			// the target again.
 			b.engaged = 0
+			b.lootFailed(now)
 			if l := &b.logout; l.pending && !l.refused {
 				l.refused = true
 				if grace := now.Add(logoutRefusalGrace); grace.Before(l.deadline) {
