@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"cmp"
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,9 +33,9 @@ const summonCast = 40 * time.Second
 
 // TestLiveServitorSummon records a real summon for the servitor world
 // model's replay (#757): a run character given Summon Kat the Cat and
-// crystals by the GM summons, orders the servitor onto a spawned orc
-// (RequestActionUse 22), lets it kill the orc and come back, then
-// unsummons it (RequestActionUse 52). Every frame about the servitor or
+// crystals by the GM summons, walks off with the servitor following,
+// orders it onto a spawned orc (RequestActionUse 22), lets it kill the
+// orc, then unsummons it (RequestActionUse 52). Every frame about the servitor or
 // the orc, after the character's first UserInfo, goes in order into the
 // servitor directory of BOT_E2E_RECORD when set, else a temporary one, as
 // NNN-OP.bin: those are botclient's testdata/servitor_summon fixtures.
@@ -61,7 +60,6 @@ func TestLiveServitorSummon(t *testing.T) {
 
 	var (
 		summon, mob int32
-		ordered     bool // the attack order went out
 		mobDied     bool
 		followed    bool
 		deleted     bool
@@ -78,7 +76,7 @@ func TestLiveServitorSummon(t *testing.T) {
 		case botclient.Die:
 			mobDied = mobDied || (mob != 0 && e.ObjectID == mob)
 		case botclient.MoveToPawn:
-			followed = followed || (ordered && summon != 0 && e.ObjectID == summon && e.TargetID == self)
+			followed = followed || (summon != 0 && e.ObjectID == summon && e.TargetID == self)
 		case botclient.PetDelete:
 			deleted = deleted || (summon != 0 && e.ObjectID == summon)
 		}
@@ -99,30 +97,29 @@ func TestLiveServitorSummon(t *testing.T) {
 	watchUntilBy(t, ctx, c, "the servitor summoned", time.Now().Add(summonCast),
 		func() bool { return summon != 0 }, track)
 
+	// The orc stands where the character stood; the character walks off
+	// followDist, its servitor after it (MoveToPawn to the owner,
+	// move/controller.go FollowTarget), so the order below sends the
+	// servitor walking to the orc (MoveToPawn to the orc).
 	spawned, err := gm.Spawn(ctx, vukuOrc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mob = spawned
-	t.Cleanup(func() {
-		if mobDied || !slices.Contains(gm.Spawned(), mob) {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-		if err := gm.Delete(ctx, mob); err != nil {
-			t.Logf("cleanup: delete the orc %d: %v", mob, err)
-		}
-	})
+	if _, err := c.Move(ctx, botclient.Point{X: c.Pos().X + followDist, Y: c.Pos().Y, Z: c.Pos().Z}); err != nil {
+		t.Fatal(err)
+	}
+	watchUntil(t, ctx, c, "the servitor following its owner", func() bool { return followed }, track)
 	if err := c.Send(ctx, botwire.EncodeAction(mob, c.Pos())); err != nil {
 		t.Fatal(err)
 	}
 	watchUntil(t, ctx, c, "the orc selected", func() bool { return c.Target() == mob }, track)
+	followed = false
 	if err := c.Send(ctx, botwire.EncodeRequestActionUse(actionServitorAtk)); err != nil {
 		t.Fatal(err)
 	}
-	ordered = true
 	watchUntilBy(t, ctx, c, "the servitor killing the orc", time.Now().Add(2*time.Minute), func() bool { return mobDied }, track)
+	gm.Forget(mob)
 	// The server refuses an unsummon while the servitor is in combat
 	// (summon/command.go resolveUnsummonServitor): its stance outlasts the
 	// fight by about 15 s. The order goes out again every unsummonEvery,
@@ -139,8 +136,11 @@ func TestLiveServitorSummon(t *testing.T) {
 		}
 		return deleted
 	}, track)
-	t.Logf("follow walk back to the owner seen: %v", followed)
+	t.Logf("follow walk back to the owner after the fight seen: %v", followed)
 }
+
+// followDist is how far the character walks from its servitor.
+const followDist = 250
 
 // unsummonEvery spaces the unsummon orders; unsummonBound bounds them
 // (the combat stance and a margin).
