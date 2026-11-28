@@ -86,8 +86,9 @@ an even count) skips both the grade's common items and its raid jewelry.
 
 The expected share of won fights over the mix (row `r`, share `s_r`). A **reference opponent**
 plays its row's damage, DOT and control steps under their `Vs` gates against the bot's archetype.
-The mix's reference opponent is the class template at the character's level without gear; giving it
-the engage estimate's grade-typical gear is #600.
+The mix's reference opponent is the engage estimate's (#600): the row's class template at the
+character's level in the grade-typical gear of that class and the row's bow flag (bare below
+level 20, where there is no grade), so pieces are weighed against a geared opponent.
 Every poison step is gated `vs C, H` (`vs H` on HM; [rows](rows.md)), so melee, archer and
 battle-caster bots are never poisoned; bleeds (Bleed 96, Sting 223) are ungated.
 

@@ -124,18 +124,33 @@ func refGearClass(class int32, bow bool) GearClass {
 	return gc
 }
 
-// refKey keys the engage estimate's reference opponents (Brain.pvpRef).
+// refKey keys the reference opponents (TravelMap.refFighter) by class and
+// bow.
 type refKey struct {
 	class int32
 	bow   bool
 }
 
-// pvpRef is the reference opponent of class at level (docs/pvp/model.md
-// "Engage estimate"): its class template at level wearing the
-// grade-typical gear (refGear) of its build (refGearClass, a bow one where
-// bow) at the Expertise grade of level, no dyes, no passive skills. The
-// caller sets Row. Cached per class and bow while level holds, as engages
-// runs per candidate each tick; ok is false without class's template.
+// refFighter is the reference opponent of class at level
+// (docs/pvp/model.md "Engage estimate", "PvP value"): its class template at level
+// wearing the grade-typical gear (refGear) of its build (refGearClass, a
+// bow one where bow) at the Expertise grade of level, no dyes, no passive
+// skills; below level 20 (no grade) the bare template. The caller sets
+// Row; ok is false without class's template. The engage estimate
+// (Brain.pvpRef) and the PvP value mix (mixShares) both use it.
+func (m *TravelMap) refFighter(class int32, bow bool, level int) (charmodel.Fighter, bool) {
+	cl, ok := m.classes[class]
+	if !ok {
+		return charmodel.Fighter{}, false
+	}
+	items, funcs := m.refGear(refGearClass(class, bow), expertiseGrade(level))
+	return charmodel.ModelFighter(charmodel.Build{Class: cl, Level: level, Mage: charmodel.MageClass(m.classes, class), Worn: items, Funcs: funcs}), true
+}
+
+// pvpRef is the engage estimate's reference opponent of class at level
+// (TravelMap.refFighter). The caller sets Row. Cached per class and bow
+// while level holds, as engages runs per candidate each tick; ok is false
+// without class's template.
 func (b *Brain) pvpRef(m *TravelMap, class int32, bow bool, level int) (charmodel.Fighter, bool) {
 	p, key := &b.pvp, refKey{class, bow}
 	if p.refs == nil || p.refsLevel != level {
@@ -144,12 +159,10 @@ func (b *Brain) pvpRef(m *TravelMap, class int32, bow bool, level int) (charmode
 	if f, ok := p.refs[key]; ok {
 		return f, true
 	}
-	cl, ok := m.classes[class]
+	f, ok := m.refFighter(class, bow, level)
 	if !ok {
 		return charmodel.Fighter{}, false
 	}
-	items, funcs := m.refGear(refGearClass(class, bow), expertiseGrade(level))
-	f := charmodel.ModelFighter(charmodel.Build{Class: cl, Level: level, Mage: charmodel.MageClass(m.classes, class), Worn: items, Funcs: funcs})
 	p.refs[key] = f
 	return f, true
 }
