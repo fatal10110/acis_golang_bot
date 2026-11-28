@@ -139,7 +139,15 @@ func (b *Brain) spotFits(s *datapack.Spot, now time.Time) bool {
 // members (fitBand): the pack bounds stay the bot's own.
 func (b *Brain) spotFitsBand(s *datapack.Spot, lo, hi int, now time.Time) bool {
 	self := &b.world.Self
-	return b.persona.Spots.fitsBand(s, lo, hi) && !b.spot.pack.covers(s, int(self.Level), self.RunSpeed, now) && b.packFits(s, now)
+	return b.spotOpen(s, now) && b.persona.Spots.fitsBand(s, lo, hi) && !b.spot.pack.covers(s, int(self.Level), self.RunSpeed, now) && b.packFits(s, now)
+}
+
+// spotOpen reports whether the bot may farm s at now: a spot no event
+// switches on, or a Seven Signs dungeon spot its membership opens
+// (signsFarms). Only a member ever farms one: the dungeon gatekeepers admit
+// no one else (server sevensigns/dungeon.go).
+func (b *Brain) spotOpen(s *datapack.Spot, now time.Time) bool {
+	return s.Event == "" || b.signsFarms(s.Event, now)
 }
 
 // lowerFits reports whether s fits the bot at now as a fallback (claimLower):
@@ -150,7 +158,7 @@ func (b *Brain) spotFitsBand(s *datapack.Spot, lo, hi int, now time.Time) bool {
 func (b *Brain) lowerFits(s *datapack.Spot, now time.Time) bool {
 	self := &b.world.Self
 	level := int(self.Level)
-	return s.MaxLevel < level-b.persona.Spots.Above && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s, now)
+	return b.spotOpen(s, now) && s.MaxLevel < level-b.persona.Spots.Above && !b.spot.pack.covers(s, level, self.RunSpeed, now) && b.packFits(s, now)
 }
 
 // packBound is the pack a death at one taught the bot to pass over

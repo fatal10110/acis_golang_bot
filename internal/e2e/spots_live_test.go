@@ -75,7 +75,8 @@ func TestLiveSpots(t *testing.T) {
 // outlevelTo is the lowest level that outlevels spot from but fits another
 // spot with room in a farmer's reach from at, and that spot's name: an
 // outleveled farmer with no fitting spot keeps the one it has
-// (Brain.pickSpot).
+// (Brain.pickSpot). A Seven Signs dungeon spot is left out: only a member
+// farms one (Brain.spotOpen).
 func outlevelTo(t *testing.T, tg *Target, st []botclient.SpotStatus, from int, at botclient.Point) (int, string) {
 	t.Helper()
 	dp, err := datapack.Load(tg.Config().Datapack)
@@ -87,7 +88,7 @@ func outlevelTo(t *testing.T, tg *Target, st []botclient.SpotStatus, from int, a
 	reach := int64(p.MaxTravel) * int64(p.MaxTravel)
 	for level := all[from].MaxLevel + p.Outlevel + 1; level <= 80; level++ {
 		for i, s := range all {
-			if i == from || st[i].Held >= st[i].Cap || !fitsAny(st[i], []int{level}) {
+			if i == from || s.Event != "" || st[i].Held >= st[i].Cap || !fitsAny(st[i], []int{level}) {
 				continue
 			}
 			dx, dy := int64(s.Center.X-at.X), int64(s.Center.Y-at.Y)

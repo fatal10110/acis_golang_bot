@@ -208,7 +208,7 @@ func TestPvPPKCap(t *testing.T) {
 		}
 		want := []string{
 			"challenge", "valuables", "classchange", "train", "gear", "market", "shop", "dyes",
-			"warehouse", "member", "recipe", "supply", "arena", "newbie", "travel",
+			"warehouse", "member", "recipe", "supply", "arena", "newbie", "signs", "travel",
 		}
 		if !slices.Equal(held, want) {
 			t.Errorf("karma holds %q, want %q", held, want)

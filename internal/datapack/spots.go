@@ -10,6 +10,9 @@ import (
 type Spot struct {
 	// Maker is the maker's name.
 	Maker string
+	// Event is the Seven Signs event that switches the maker on
+	// (SevenSignsEvent), empty for a maker that no event switches.
+	Event string
 	// Territory is the maker's first territory; Center is a point inside it
 	// near its middle and Z the middle of its height band.
 	Territory *Territory
@@ -48,7 +51,8 @@ type Mob struct {
 }
 
 // Spots lists the makers of d fit for farming, in spawnlist order. It
-// leaves out a maker that an event switches on (event=), that carves areas
+// leaves out a maker that an event other than a Seven Signs dungeon event
+// switches on (event=, SevenSignsEvent), that carves areas
 // out of its territories (ban=), that has no territory, or that spawns a
 // raid or grand boss, or that likely spawns quest mobs (questMaker); of the
 // rest it counts only the monsters (Type "Monster") that are not likely
@@ -68,11 +72,11 @@ func (d *Datapack) Spots() []Spot {
 
 // spot is m as a farming spot, if it is one (see Spots).
 func (d *Datapack) spot(m *Maker) (Spot, bool) {
-	if m.Event != "" || len(m.Banned) > 0 || len(m.Territories) == 0 || len(m.Territories[0].Nodes) < 3 || questMaker(m) {
+	if (m.Event != "" && !SevenSignsEvent(m.Event)) || len(m.Banned) > 0 || len(m.Territories) == 0 || len(m.Territories[0].Nodes) < 3 || questMaker(m) {
 		return Spot{}, false
 	}
 	t := m.Territories[0]
-	s := Spot{Maker: m.Name, Territory: t, Center: t.inner(), Z: t.MinZ + (t.MaxZ-t.MinZ)/2, MaximumNPCs: m.MaximumNPCs, Area: t.area()}
+	s := Spot{Maker: m.Name, Event: m.Event, Territory: t, Center: t.inner(), Z: t.MinZ + (t.MaxZ-t.MinZ)/2, MaximumNPCs: m.MaximumNPCs, Area: t.area()}
 	monsters := 0
 	for _, sp := range m.Spawns {
 		npc, ok := d.NPCs[sp.NPCID]
@@ -114,6 +118,16 @@ func (d *Datapack) spot(m *Maker) (Spot, bool) {
 	}
 	return s, monsters > 0
 }
+
+// SevenSignsEvent reports whether event switches on the monsters of a
+// Seven Signs dungeon, a catacomb or a necropolis: ssq_event during
+// recruitment and the competition, and during seal validation
+// ssq_seal1_<owner> in the necropolises (the Seal of Avarice) and
+// ssq_seal2_<owner> in the catacombs (the Seal of Gnosis), by the seal's
+// owner: dawn, twilight (Dusk) or none. Only a Seven Signs member enters
+// those dungeons (server sevensigns/dungeon.go), so the caller keeps
+// their spots for one.
+func SevenSignsEvent(event string) bool { return strings.HasPrefix(event, "ssq_") }
 
 // questMaker reports whether a maker likely spawns quest mobs: the
 // spawnlist names quest monster makers <area>_qm<region>_<n> (the tutorial

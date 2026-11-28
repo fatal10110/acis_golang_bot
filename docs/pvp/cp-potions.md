@@ -57,7 +57,7 @@ is: the priests sell only in a Seal Validation week and only to a member of the 
      than `SevenSigns.MaxMembers` (default 1). The cap is static, so it needs no sign-up count:
      no counter resets on a restart, and no two bots race to the priest for the last place. Each
      member votes the seal Dusk holds when it holds one (it then only strengthens a seal humans
-     already keep), else `PvPPolicy.SignsSeal`. The alternative is to accept
+     already keep), else `SevenSigns.Seal`. The alternative is to accept
      the vote weight without a cap ([owner question 2](#owner-questions)).
    - **3b, contribute.** Bots also turn stones in during Competition. Their cabal then wins any
      cycle humans do not outscore, every cycle on a quiet server, and the bots' seal votes decide
@@ -87,24 +87,47 @@ trip targets of the `pvp` list: rows at no more than `Market.MaxOverReference` p
 reference price (240 and 600), cheapest per CP first, within the budget; never a karma or flagged
 owner. Pacing, refusals and cool-downs are the errand's ([items](../items.md#8-buying-from-player-stores)).
 
-**X18, Seven Signs member (`SevenSigns` mode).**
+**X18, Seven Signs member (`SevenSigns` mode).** Shipped in `internal/botclient/sevensigns.go`.
 
-- *Sign-up.* In Competition, with a first profession and outside a castle-owning clan, at the
-  nearest Dusk Priestess on a supply trip, only for a bot named in `SevenSigns.Members` (the
-  static cap; no run-wide counter): page `1`, then the sign-up links for Dusk and the seal Dusk holds
-  at sign-up (read from the seal status page: the `SevenSigns 20 1` link of `signs_33_dusk.htm`,
-  then `Chat 0` and the sign-up links again; `signspriest.go:622-641`; a Strife it holds is
-  skipped), else `PvPPolicy.SignsSeal` (default Gnosis; Strife refused by config). A page the
-  bot does not expect (`signs_33_dusk_no`, `_firstclass`, `_member`) ends the errand for the cycle; `_member` means
-  already signed. The bot keeps no sign-up record: after a restart it reads its membership from the
-  priest's page, so the server stays the only record (nothing for #404's ledger).
-- *Farming.* The catacombs and necropolises become spot candidates for a member in Competition
-  (and in a validation week for the dungeon of a seal its winning cabal owns, per `dungeon.go`),
-  through the Dungeon Gatekeeper as a travel leg (enter and exit bypasses, the teleport landing as
-  the leg's end). The spot model already counts `ssq_event` makers at half time
-  (`SupplyConfig.SevenSignsShare`); stones join the drop value at 3/5/10 per stone only for a member.
-- *Keep.* Seal stones are kept like CP potions: never sold, deposited or traded. No contribution
-  (`SevenSigns 6` is never sent).
+- *Config.* `Persona.SevenSigns` (`SevenSignsPolicy`): `Members`, the character names that play
+  the mode (none in every preset), `MaxMembers` (default 1) and `Seal`, the seal voted when Dusk
+  holds none (Avarice or Gnosis, default Gnosis). The swarm sets them with `-sevensigns-members a,b`,
+  `-sevensigns-max-members` and `-signs-seal`, for `-persona pvp` only; flag parsing refuses a list
+  longer than the cap and the Seal of Strife (`SevenSignsPolicy.Check`). The cap is static: a bot
+  plays the mode when its own character name (from `UserInfo`) is in the list, so nothing is
+  counted at run time or rebuilt after a restart.
+- *Sign-up (rule `signs`).* A member with a first profession (class tier 1 or more) visits the
+  nearest Dusk Priestess (31085-31091) in sight, or the nearest one's spawn within 4000, in its
+  town on a supply trip, and follows her pages by their links: `SevenSigns 3 1` on page `1` (the
+  competition's greeting), `33 1`, then the seal status page once (`20 1`, the owners read from
+  its text, `Chat 0` back), `3 1` and `33 1` again, `19 1 <seal>` and `4 1 <seal>`. The seal is
+  the preferred one when Dusk holds it, else the other one Dusk holds, else the preferred one;
+  never Strife. `34` (the Dawn fee), `5` and `6` (contribution) are never sent. Pages are told
+  apart by their text, as the dialog keeps only links: `signs_33_dusk_member` and `signs_4_dusk`
+  make the bot a member; `signs_33_dusk_no` (a castle-owning clan, which the bot cannot see) and
+  `_firstclass` end the errand for a cycle (a week); `dusk_priest_2a`/`2c` (validation won by Dusk,
+  `2a` with the Seal of Gnosis, the hunting-grounds link) record the validation; any other greeting
+  (`2b`, `2d`, `4`, `5`, `6`) records a period with no dungeon open. What a page told stands 12
+  hours; then a member visits a priest again. The bot keeps no sign-up record: after a restart it
+  reads its membership from the priest's page, so the server stays the only record.
+- *Farming.* `datapack.Spots` keeps the makers of the Seven Signs dungeon events
+  (`datapack.SevenSignsEvent`: `ssq_event`, `ssq_seal1_*`, `ssq_seal2_*`) tagged with their
+  event; `Brain.spotOpen` lets only a member farm one: in the competition the `ssq_event` spots,
+  in a validation Dusk won `ssq_seal2_twilight` (catacombs) when Dusk owns Gnosis and
+  `ssq_seal1_twilight` (necropolises). Every other bot, and a party band, never counts them.
+- *Gatekeeper leg.* The Dungeon Gatekeepers with a fixed spawn (template alias `enter_necropolis<n>`,
+  `enter_catacomb<n>`, `exit_*`; the boss rooms' left out) join the trip search after the standard
+  gatekeepers, each with one free destination, its first instant teleport (`instantTeleports.xml`,
+  as `dungeonGate` takes the talker there). Only a member's search takes one: a way out always, a
+  way in while its seal is open to it (`signsEnters`, mirroring `sevensigns.DungeonEntry`). On the
+  gatekeeper's first page the bot sends the link whose command starts with `necro`, `cata` or
+  `exit`, read from the page; a page without it shuns the gatekeeper like a standard one's. No
+  teleport after the link (the refusal page) closes that seal's dungeons until the period is read
+  again.
+- *Keep.* Seal stones 6360-6362 are kept by a member like CP potions (`keepsPvPItem`): never sold,
+  deposited or offered, and never contributed. Their drop value is the kill value the earning mode
+  reads (`indexKillValues`, at their reference price); only a member farms the monsters that drop
+  them.
 
 **X19, the priest trip.** In Seal Validation, a `SevenSigns` bot holding stones or Ancient Adena,
 below its CP stock, adds a priest stop to its supply trip:
@@ -133,11 +156,14 @@ on a trip.
 - **X17 (unit):** supply-list rows for 5591/5592 from a store list at, above and below
   `MaxOverReference`; Greater first; `CPStock` counting; a karma owner skipped. E2e: a seller
   character's store with CP potions (GM-seeded) bought by a `pvp` bot (`TestLivePvPCPStore`).
-- **X18 (unit):** sign-up decision by period, profession and clan; the page answers (`_no`,
-  `_firstclass`, `_member`); dungeon spot eligibility by period, membership and seal owner; the
-  gatekeeper leg; the stone keep rule. E2e: sign-up in Competition and dungeon entry
+- **X18 (unit):** the sign-up from recorded frames of every priest page (`sevensigns_test.go`):
+  the link chain, the page answers (`_no`, `_firstclass`, `_member`, `4`, `2a`, `2c`, `6`), the
+  seal chosen from the status page, when a visit is due (membership, profession, rest); dungeon and
+  spot eligibility by period, membership and seal owner; the gatekeeper leg and its refusal
+  (`sevensigns_gate_test.go`); the stone keep rule; the config validation of the list length
+  (`cmd/bots/sevensigns_test.go`). E2e: sign-up in Competition and dungeon entry
   (`TestLiveSevenSignsJoin`), and the refusal of a non-member at the gatekeeper, when the stack is
-  in Competition; skipped with its reason in any other period.
+  in Competition; skipped with the priestess's greeting as its reason in any other period.
 - **X19 (unit):** codec tests for `MultiSellList` and `MultiSellChoose` against the server's
   encoder and golden bytes; the trip from recorded frames of each priest page (`2a`, `2b`, `2c`,
   `2d`, `3`, `4`); amounts from held Ancient Adena, adena and weight; a silent drop ending the

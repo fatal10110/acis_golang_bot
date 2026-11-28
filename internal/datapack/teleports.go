@@ -72,3 +72,35 @@ func LoadTeleports(path string) (map[int32][]Teleport, error) {
 	}
 	return out, nil
 }
+
+// LoadInstantTeleports reads instantTeleports.xml at path: the points each
+// NPC template teleports its talker to with no list page, by template id,
+// in file order (the Seven Signs dungeon gatekeepers take a talker to their
+// first, server gatekeeper.Instant). Only X, Y and Z of a Teleport are set.
+// A list missing npcId, or a <loc> missing or mangling a coordinate, fails
+// the load.
+func LoadInstantTeleports(path string) (map[int32][]Teleport, error) {
+	var f teleportsFile
+	if err := decodeFile(path, &f); err != nil {
+		return nil, err
+	}
+	out := make(map[int32][]Teleport, len(f.Lists))
+	for _, l := range f.Lists {
+		a := foldAttrs(l.Attrs)
+		npcID := a.int32("npcId")
+		if a.err != nil {
+			return nil, fmt.Errorf("datapack: %s: telPosList: %w", path, a.err)
+		}
+		list := make([]Teleport, 0, len(l.Locs))
+		for _, loc := range l.Locs {
+			r := foldAttrs(loc.Attrs)
+			t := Teleport{X: r.int32("x"), Y: r.int32("y"), Z: r.int32("z")}
+			if r.err != nil {
+				return nil, fmt.Errorf("datapack: %s: telPosList %d: %w", path, npcID, r.err)
+			}
+			list = append(list, t)
+		}
+		out[npcID] = list
+	}
+	return out, nil
+}

@@ -4,6 +4,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/charmodel"
@@ -14,8 +15,12 @@ import (
 // adena-priced destinations).
 const adenaID int32 = 57
 
-// npcTypeGatekeeper is the NPC template type of a gatekeeper (npcs/*.xml).
-const npcTypeGatekeeper = "Gatekeeper"
+// npcTypeGatekeeper is the NPC template type of a gatekeeper (npcs/*.xml),
+// npcTypeDungeonGatekeeper the one of a Seven Signs dungeon gatekeeper.
+const (
+	npcTypeGatekeeper        = "Gatekeeper"
+	npcTypeDungeonGatekeeper = "DungeonGatekeeper"
+)
 
 // TravelMap is what the datapack says about getting around: where the
 // gatekeepers stand and where they take a bot for how much adena, and where
@@ -23,6 +28,10 @@ const npcTypeGatekeeper = "Gatekeeper"
 // every bot of a process shares one.
 type TravelMap struct {
 	gatekeepers []gatekeeper
+	// dungeonGates are the Seven Signs dungeon gatekeepers (indexDungeonGates),
+	// the trip search's gatekeepers after gatekeepers (TravelMap.gate): only
+	// a member takes one (Brain.gateOpen).
+	dungeonGates []gatekeeper
 	// spawns are the fixed spawn points of each NPC template.
 	spawns map[int32][]Point
 	// shops are the buylists of each merchant NPC template, and cheapest
@@ -156,11 +165,16 @@ type TravelMap struct {
 }
 
 // gatekeeper is one spawned gatekeeper and its adena-priced standard
-// destinations.
+// destinations, or a Seven Signs dungeon gatekeeper and its one
+// destination.
 type gatekeeper struct {
 	npcID int32
 	at    Point
 	dests []destination
+	// seal is the seal governing a dungeon gatekeeper's way in (Avarice a
+	// necropolis, Gnosis a catacomb); 0 for a way out and for a standard
+	// gatekeeper.
+	seal Seal
 }
 
 // destination is a standard destination of a gatekeeper's list.
@@ -172,6 +186,10 @@ type destination struct {
 	// price is its base price in adena: the server only ever lowers it
 	// (weekend core time) or waives it (free teleports).
 	price int32
+	// cmd, set for a dungeon gatekeeper's destination, is the command
+	// prefix of the link on its first page that teleports the bot there
+	// (folk_dungeon.go: necro, cata, exit); the link is read from the page.
+	cmd string
 }
 
 // NewTravelMap builds the travel map of dp: every gatekeeper template with
@@ -280,7 +298,74 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 			m.gatekeepers = append(m.gatekeepers, gatekeeper{npcID: id, at: at, dests: dests})
 		}
 	}
+	m.dungeonGates = indexDungeonGates(dp, m.spawns)
 	return m
+}
+
+// indexDungeonGates are the Seven Signs dungeon gatekeepers of dp with a
+// fixed spawn, each with its one destination, its first instant teleport
+// (server dungeon_gatekeeper.go dungeonGate, gatekeeper.Instant(npc, 0)),
+// free. The template alias names the side: enter_necropolis<n> asks in
+// past the Seal of Avarice (the necro link), enter_catacomb<n> past the
+// Seal of Gnosis (cata), exit_* out (exit); the boss rooms' gatekeepers are
+// left out.
+func indexDungeonGates(dp *datapack.Datapack, spawns map[int32][]Point) []gatekeeper {
+	ids := make([]int32, 0)
+	for id, n := range dp.NPCs {
+		if n.Type == npcTypeDungeonGatekeeper {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	var out []gatekeeper
+	for _, id := range ids {
+		alias := dp.NPCs[id].Alias
+		var seal Seal
+		var cmd string
+		switch {
+		case strings.Contains(alias, "boss"):
+			continue
+		case strings.HasPrefix(alias, "enter_necropolis"):
+			seal, cmd = SealAvarice, "necro"
+		case strings.HasPrefix(alias, "enter_catacomb"):
+			seal, cmd = SealGnosis, "cata"
+		case strings.HasPrefix(alias, "exit_"):
+			cmd = "exit"
+		default:
+			continue
+		}
+		tps := dp.InstantTeleports[id]
+		if len(tps) == 0 {
+			continue
+		}
+		d := destination{at: Point{X: tps[0].X, Y: tps[0].Y, Z: tps[0].Z}, cmd: cmd}
+		for _, at := range spawns[id] {
+			out = append(out, gatekeeper{npcID: id, at: at, dests: []destination{d}, seal: seal})
+		}
+	}
+	return out
+}
+
+// gate is gatekeeper gi of the trip search: a standard one below
+// len(gatekeepers), a dungeon gatekeeper past them.
+func (m *TravelMap) gate(gi int) *gatekeeper {
+	if gi < len(m.gatekeepers) {
+		return &m.gatekeepers[gi]
+	}
+	return &m.dungeonGates[gi-len(m.gatekeepers)]
+}
+
+// gateOpen reports whether the bot's trip search takes gatekeeper gi at
+// now: every standard one; a dungeon gatekeeper only in Seven Signs member
+// mode, its way out always, its way in while the membership opens its seal
+// (signsEnters).
+func (b *Brain) gateOpen(gi int, now time.Time) bool {
+	m := b.cfg.Travel
+	if gi < len(m.gatekeepers) {
+		return true
+	}
+	g := m.gate(gi)
+	return b.signsMode() && (g.seal == 0 || b.signsEnters(g.seal, now))
 }
 
 // Gatekeepers is the number of spawned gatekeepers on the map.
@@ -344,6 +429,9 @@ type travelTrip struct {
 	// destination the trip heads for.
 	gk   int
 	dest destination
+	// link is the dungeon gatekeeper's link read from its page
+	// (destination.cmd), empty for a standard gatekeeper's trip.
+	link string
 	// endedAt is when the last trip ended, zero before one.
 	endedAt time.Time
 	// onward is how many teleports the planned path takes after this
@@ -372,7 +460,7 @@ func (tr *travelTrip) end(now time.Time, shunFor time.Duration) {
 	if shunFor > 0 {
 		tr.shunned.set(tr.gk, now.Add(shunFor))
 	}
-	tr.v, tr.step, tr.dest, tr.endedAt, tr.onward = npcVisit{}, tripTalk, destination{}, now, 0
+	tr.v, tr.step, tr.dest, tr.link, tr.endedAt, tr.onward = npcVisit{}, tripTalk, destination{}, "", now, 0
 	tr.follow, tr.gatherSince = false, time.Time{}
 }
 
@@ -432,7 +520,10 @@ func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 			return Action{}, true
 		}
 		// No teleport: the server refused the trip (adena short, a
-		// besieged castle).
+		// besieged castle, a dungeon gatekeeper's verdict).
+		if g := b.cfg.Travel.gate(tr.gk); g.seal != 0 {
+			b.signsRefused(g.seal, now)
+		}
 		follow := tr.follow
 		tr.end(now, visitShunFor)
 		if follow {
@@ -445,7 +536,10 @@ func (b *Brain) ruleTravel(now time.Time) (Action, bool) {
 			return Action{}, true
 		}
 		cmd := teleportListBypass(v.obj)
-		if tr.step == tripGo {
+		switch {
+		case tr.step == tripGo && tr.dest.cmd != "":
+			cmd = tr.link
+		case tr.step == tripGo:
 			cmd = teleportBypass(v.obj, tr.dest.index)
 		}
 		if v.waitUntil.IsZero() && b.world.Dialog.Has(cmd) {
@@ -475,6 +569,14 @@ func (b *Brain) tripPage(ev NpcHtmlMessage, now time.Time) {
 		return
 	}
 	switch obj := tr.v.obj; {
+	case tr.dest.cmd != "":
+		// A dungeon gatekeeper: its first page links the teleport itself.
+		i := slices.IndexFunc(b.world.Dialog.Links, func(l string) bool { return strings.HasPrefix(l, npcBypass(obj, tr.dest.cmd)) })
+		if i < 0 {
+			tr.end(now, tripNoLinkShunFor)
+			return
+		}
+		tr.link, tr.step = b.world.Dialog.Links[i], tripGo
 	case b.world.Dialog.Has(teleportBypass(obj, tr.dest.index)):
 		tr.step = tripGo
 	case b.world.Dialog.Has(teleportListBypass(obj)):
@@ -619,7 +721,7 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point, within flo
 		expanded++
 		switch l.key.kind {
 		case tripSpot, tripTown:
-			g := &m.gatekeepers[l.gk]
+			g := m.gate(l.gk)
 			tr.v = npcVisit{npcID: g.npcID, at: g.at}
 			tr.step, tr.gk, tr.dest, tr.onward = tripTalk, l.gk, l.dest, l.hops-1
 			return true
@@ -627,7 +729,7 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point, within flo
 			if l.hops >= maxHops {
 				continue
 			}
-			for _, d := range m.gatekeepers[l.key.i].dests {
+			for _, d := range m.gate(l.key.i).dests {
 				price := l.price + d.price
 				if price > budget {
 					continue
@@ -653,9 +755,9 @@ func (b *Brain) planPath(here navPoint, now time.Time, towns []Point, within flo
 		}
 		// Where the bot stands or a destination: walks to the gatekeepers in
 		// reach, and from a destination to the spots.
-		for gi := range m.gatekeepers {
-			g := &m.gatekeepers[gi]
-			if tr.shunned.held(gi, now) || horizontal2(l.p.at, g.at) > reach {
+		for gi := range len(m.gatekeepers) + len(m.dungeonGates) {
+			g := m.gate(gi)
+			if tr.shunned.held(gi, now) || horizontal2(l.p.at, g.at) > reach || !b.gateOpen(gi, now) {
 				continue
 			}
 			at, seen := gks[gi]

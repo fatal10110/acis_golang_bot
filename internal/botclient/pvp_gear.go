@@ -40,7 +40,8 @@ func (b *Brain) supplyCures() []int32 {
 
 // keepsPvPItem reports whether the bot keeps template id for its PvP fights
 // (D37): every cure while PvPPolicy.CureStock is above 0, the CP potions
-// with PvPPolicy.KeepCPPotions.
+// with PvPPolicy.KeepCPPotions, and the seal stones in Seven Signs member
+// mode (D43): never sold, deposited or traded, and never contributed.
 func (b *Brain) keepsPvPItem(id int32) bool {
 	p := &b.persona.PvP
 	switch id {
@@ -48,6 +49,8 @@ func (b *Brain) keepsPvPItem(id int32) bool {
 		return p.CureStock > 0
 	case itemCPPotion, itemGreaterCPPotion:
 		return p.KeepCPPotions
+	case itemBlueSealStone, itemGreenSealStone, itemRedSealStone:
+		return b.signsMode()
 	}
 	return false
 }

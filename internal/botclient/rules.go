@@ -90,6 +90,11 @@ type Persona struct {
 	BlacklistAfter int
 	BlacklistFor   time.Duration
 	PvP            PvPPolicy
+	// SevenSigns is Seven Signs member mode (docs/pvp/cp-potions.md, D43):
+	// the characters it names sign up with Dusk, farm the dungeons their
+	// membership opens and keep their seal stones (sevensigns.go). No
+	// preset names any.
+	SevenSigns SevenSignsPolicy
 	// SitHP and SitMP are the percents under which a bot out of combat sits
 	// to rest; it stands once both reach StandHP and StandMP (rule 6). 0
 	// never sits for that resource.
@@ -638,6 +643,7 @@ var playRules = []rule{
 	{name: "leader", run: (*Brain).ruleLeader},
 	{name: "follow", run: (*Brain).ruleFollow},
 	{name: "newbie", run: (*Brain).ruleNewbie, karma: true},
+	{name: "signs", run: (*Brain).ruleSigns, karma: true},
 	{name: "travel", run: (*Brain).ruleTravel, karma: true},
 	{name: "spot", run: (*Brain).ruleSpot, stop: (*Brain).leaveSpot},
 	{name: "farm", run: (*Brain).ruleFarm},
