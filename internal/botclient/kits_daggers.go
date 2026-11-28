@@ -16,7 +16,8 @@ const (
 
 // The dagger rows play a dagger alone: each blow's bracket gate is its
 // weaponsAllowed (DAGGER), and Sand Bomb is dropped (owner decision 4 on
-// #624). The PvP row stays the first profession's until #421.
+// #624). PW and AW play their own PvP rows (kits_pvp_daggers.go, X24); TH
+// keeps the rogue's (docs/pvp/rows-second.md O3).
 var (
 	// treasureHunterKit (TH, from RO): Ultimate Evasion under 30 % HP;
 	// Lure opens from 52 (before 52 it walks in), Critical Blow from 55,
@@ -70,7 +71,7 @@ var (
 			{Skill: skillBleed, Weapons: daggerBranch, MinTargetHP: 50},
 			{Skill: skillMortalBlow, Weapons: daggerBranch},
 		},
-		PvP:       elvenScoutPvP,
+		PvP:       plainsWalkerPvP,
 		Buffs:     append(append([]Buff{}, fighterAuras...), Buff{Skill: skillSpiritBarrier, Self: true}),
 		Toggles:   stanceToggles,
 		Flee:      skillSprint,
@@ -88,12 +89,12 @@ var (
 	// Evasion under 30 %, Mortal Strike in combat from 58; Drain Health
 	// opens, Blinding Blow from 66, Deadly Blow, Bleed above 50 % target
 	// HP, Sting, Mortal Blow (fixed); the auras; the stance toggles; sits
-	// plainly.
+	// plainly. It learns Freezing Strike for its PvP row's break-off.
 	abyssWalkerKit = ClassKit{
 		Skills: []int32{
 			skillDrainHealth, skillBlindingBlow, skillDeadlyBlow, skillBleed, skillSting, skillMortalBlow,
 			skillUltimateEvasion, skillMortalStrike, skillAccuracy, skillViciousStance, skillDefenseAura, skillAttackAura,
-			skillPoison, skillPowerBreak, skillStunningShot,
+			skillPoison, skillPowerBreak, skillFreezingStrike, skillStunningShot,
 		},
 		Rotation: []Step{
 			{Skill: skillDrainHealth, SelfHPBelow: 60},
@@ -106,7 +107,7 @@ var (
 			{Skill: skillSting, Weapons: stingWeapons},
 			{Skill: skillMortalBlow, Weapons: daggerBranch},
 		},
-		PvP:     assassinPvP,
+		PvP:     abyssWalkerPvP,
 		Buffs:   fighterAuras,
 		Toggles: stanceToggles,
 		Base:    []int32{skillDefenseAura, skillAttackAura},
