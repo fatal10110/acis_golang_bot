@@ -33,9 +33,13 @@ const summonCast = 40 * time.Second
 
 // TestLiveServitorSummon records a real summon for the servitor world
 // model's replay (#757): a run character given Summon Kat the Cat and
-// crystals by the GM walks off a spawned orc and summons, orders the
-// servitor onto the orc (RequestActionUse 22), lets it kill the orc and
-// walk back, then unsummons it (RequestActionUse 52). Every frame about the servitor or
+// crystals by the GM summons, orders the servitor onto a spawned orc
+// (RequestActionUse 22), lets it kill the orc, then unsummons it
+// (RequestActionUse 52). The character never walks and the orc stands
+// next to it: in runs where the owner walked off, before or after the
+// summon, the server sent it the servitor's DeleteObject and no frame of
+// the servitor after but its remaining time (fatal10110/acis_golang#5589),
+// so the servitor's follow walk is not in the recording yet. Every frame about the servitor or
 // the orc, after the character's first UserInfo, goes in order into the
 // servitor directory of BOT_E2E_RECORD when set, else a temporary one, as
 // NNN-OP.bin: those are botclient's testdata/servitor_summon fixtures.
@@ -60,6 +64,7 @@ func TestLiveServitorSummon(t *testing.T) {
 
 	var (
 		summon, mob int32
+		ordered     bool // the attack order went out
 		mobDied     bool
 		followed    bool
 		deleted     bool
@@ -76,7 +81,7 @@ func TestLiveServitorSummon(t *testing.T) {
 		case botclient.Die:
 			mobDied = mobDied || (mob != 0 && e.ObjectID == mob)
 		case botclient.MoveToPawn:
-			followed = followed || (summon != 0 && e.ObjectID == summon && e.TargetID == self)
+			followed = followed || (ordered && summon != 0 && e.ObjectID == summon && e.TargetID == self)
 		case botclient.PetDelete:
 			deleted = deleted || (summon != 0 && e.ObjectID == summon)
 		}
@@ -91,28 +96,17 @@ func TestLiveServitorSummon(t *testing.T) {
 		}
 		t.Logf("servitor %d, orc %d: %d frames recorded in %s", summon, mob, n, dir)
 	}()
-	// The orc stands where the character stood; the character walks off
-	// followDist and summons there, so the order below sends the servitor
-	// walking to the orc (MoveToPawn to the orc) and, once it is dead, back
-	// to its owner (MoveToPawn to the owner, ai/summon.go FinishedAttack).
-	// The owner stands still from the summon on: an owner that walked away
-	// from its servitor was sent its DeleteObject and nothing of it after
-	// (fatal10110/acis_golang#5589).
-	spawned, err := gm.Spawn(ctx, vukuOrc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mob = spawned
-	if _, err := c.Move(ctx, botclient.Point{X: c.Pos().X + followDist, Y: c.Pos().Y, Z: c.Pos().Z}); err != nil {
-		t.Fatal(err)
-	}
-	arrived := time.Now().Add(moveSettle)
-	watchUntil(t, ctx, c, "the character's walk", func() bool { return time.Now().After(arrived) }, track)
 	if err := c.Send(ctx, botwire.EncodeRequestMagicSkillUse(skillSummonKat, false)); err != nil {
 		t.Fatal(err)
 	}
 	watchUntilBy(t, ctx, c, "the servitor summoned", time.Now().Add(summonCast),
 		func() bool { return summon != 0 }, track)
+
+	spawned, err := gm.Spawn(ctx, vukuOrc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mob = spawned
 	if err := c.Send(ctx, botwire.EncodeAction(mob, c.Pos())); err != nil {
 		t.Fatal(err)
 	}
@@ -120,6 +114,7 @@ func TestLiveServitorSummon(t *testing.T) {
 	if err := c.Send(ctx, botwire.EncodeRequestActionUse(actionServitorAtk)); err != nil {
 		t.Fatal(err)
 	}
+	ordered = true
 	watchUntilBy(t, ctx, c, "the servitor killing the orc", time.Now().Add(2*time.Minute), func() bool { return mobDied }, track)
 	gm.Forget(mob)
 	// The server refuses an unsummon while the servitor is in combat
@@ -138,15 +133,8 @@ func TestLiveServitorSummon(t *testing.T) {
 		}
 		return deleted
 	}, track)
-	t.Logf("follow walk back to the owner after the fight seen: %v", followed)
+	t.Logf("follow walk back to the owner seen: %v", followed)
 }
-
-// followDist is how far the character walks from the orc before it
-// summons; moveSettle bounds the walk.
-const (
-	followDist = 250
-	moveSettle = 5 * time.Second
-)
 
 // unsummonEvery spaces the unsummon orders; unsummonBound bounds them
 // (the combat stance and a margin).
