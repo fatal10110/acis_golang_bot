@@ -232,10 +232,15 @@ func TestLootStall(t *testing.T) {
 	if id, _ := pickedUp(b, now); id != adenaDrop {
 		t.Fatalf("paused: picks up %d, want its own drop %d", id, adenaDrop)
 	}
-	// The item seen during the pause is queued once it ends.
+	// The item seen during the pause and the one the pause sent back to the
+	// ground record (#686) are queued once it ends, in grace order: the
+	// stray's record dates from t0, the deferred one's from the pause.
 	handleAll(t, b, []timed{{now.Sub(t0), GetItem{PickerID: selfID, ObjectID: adenaDrop}}})
 	if id, _ := pickedUp(b, now); id != 0x40000104 {
 		t.Fatalf("after a pickup picks up %d, want %d", id, 0x40000104)
+	}
+	if !slices.Equal(b.loot.items, []int32{0x40000104, 0x40000103}) {
+		t.Fatalf("after a pickup queue %v, want [%d %d]", b.loot.items, 0x40000104, 0x40000103)
 	}
 }
 
