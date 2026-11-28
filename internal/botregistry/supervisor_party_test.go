@@ -25,6 +25,9 @@ type fakeBot struct {
 	// answer channels of those taken.
 	cmds    []botclient.Command
 	answers []chan error
+	// onCommand, when set, is signalled (never blocking) after every
+	// command handed, so a test can wait for the hand-off.
+	onCommand chan struct{}
 }
 
 // newFakeBot is an online bot of character name with no party slot.
@@ -42,6 +45,12 @@ func (f *fakeBot) Command(c botclient.Command) (<-chan error, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cmds = append(f.cmds, c)
+	if f.onCommand != nil {
+		select {
+		case f.onCommand <- struct{}{}:
+		default:
+		}
+	}
 	if f.busy {
 		return nil, botclient.ErrBusy
 	}
