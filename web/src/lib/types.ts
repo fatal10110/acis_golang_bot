@@ -44,7 +44,8 @@ export interface Live {
 
 /**
  * A bot's PvP mode switches (botregistry.PvPModes, docs/pvp/modes.md): war is
- * clan war enemies (D40), olympiad the Olympiad (D42).
+ * clan war enemies (D40), olympiad the Olympiad (D42), siege its clan's
+ * sieges (D41).
  */
 export interface PvPModes {
   duels: boolean;
@@ -53,11 +54,12 @@ export interface PvPModes {
   pk: boolean;
   war: boolean;
   olympiad: boolean;
+  siege: boolean;
 }
 
 /**
  * A bot's PvP view (docs/pvp/modes.md "Panel and metrics (X12)"): the modes
- * it plays, fight back and its six switches, its PvP and PK kill counts and
+ * it plays, fight back and its seven switches, its PvP and PK kill counts and
  * its duels this run by result; last_duel is "won", "lost" or "tie", absent
  * for none.
  */

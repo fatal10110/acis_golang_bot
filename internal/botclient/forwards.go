@@ -76,6 +76,8 @@ type (
 	ExOlympiadMode                 = botwire.ExOlympiadMode
 	ExOlympiadMatchEnd             = botwire.ExOlympiadMatchEnd
 	ExOlympiadUserInfo             = botwire.ExOlympiadUserInfo
+	SiegeAttackerList              = botwire.SiegeAttackerList
+	SiegeDefenderList              = botwire.SiegeDefenderList
 	MagicSkillCanceled             = botwire.MagicSkillCanceled
 	HennaRow                       = botwire.HennaRow
 	HennaEquipList                 = botwire.HennaEquipList

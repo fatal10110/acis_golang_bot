@@ -113,6 +113,10 @@ type UserInfo struct {
 	// ClanID is the character's clan, AllyID its clan's alliance, 0 for
 	// none.
 	ClanID, AllyID int32
+	// Relation is the character's own relation field: the clan leader bit
+	// and the bits of its siege state (userinfo.go userInfoRelation),
+	// read by SiegeSide.
+	Relation int32
 	// Abnormal is the abnormal effect mask drawn on the character; an
 	// invisible game master sees AbnormalStealth in its own.
 	Abnormal int32

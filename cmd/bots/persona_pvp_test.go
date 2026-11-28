@@ -16,7 +16,7 @@ import (
 // no preset lets a third-profession bot play it (D42, #729).
 func TestPresetPvPModes(t *testing.T) {
 	pvp := botclient.PvPPolicy{
-		FightFlagged: true, Duels: true, Hunt: true, Arenas: true, FightWar: true, SupportFlagged: true,
+		FightFlagged: true, Duels: true, Hunt: true, Arenas: true, FightWar: true, Siege: true, SupportFlagged: true,
 		GearWeight: 0.5, CureStock: 5, CPStock: 10, KeepCPPotions: true,
 	}
 	other := botclient.PvPPolicy{FightFlagged: true}

@@ -31,6 +31,7 @@ const (
 	FightUnfought
 	FightWar
 	FightOlympiad
+	FightSiege
 )
 
 // String is the kind's metric label (docs/pvp/modes.md).
@@ -52,6 +53,8 @@ func (k FightKind) String() string {
 		return "war"
 	case FightOlympiad:
 		return "olympiad"
+	case FightSiege:
+		return "siege"
 	}
 	return ""
 }
@@ -207,11 +210,12 @@ type pvpWorld struct {
 	root  rootCast
 	guard guardState
 	stand poleStand
-	// find and arena are the fight finding's (pvp_finding.go,
-	// pvp_arena.go); rows is the engage estimate's row table at character
-	// level rowsLevel (Brain.pvpRows).
+	// find, arena and siege are the fight finding's (pvp_finding.go,
+	// pvp_arena.go, pvp_siege.go); rows is the engage estimate's row table
+	// at character level rowsLevel (Brain.pvpRows).
 	find      findState
 	arena     arenaTrip
+	siege     siegeState
 	rows      charmodel.RowTable
 	rowsLevel int
 	// refs are the engage estimate's reference opponents by class and
@@ -254,6 +258,9 @@ func (b *Brain) pvpEvent(ev Event, now time.Time) time.Time {
 	at := b.pvpKeep(ev, now)
 	if o := b.olympiadEvent(ev, now); !o.IsZero() && (at.IsZero() || o.Before(at)) {
 		at = o
+	}
+	if s := b.siegeEvent(ev, now); !s.IsZero() && (at.IsZero() || s.Before(at)) {
+		at = s
 	}
 	if g := b.guardWake(ev, now); !g.IsZero() && (at.IsZero() || g.Before(at)) {
 		at = g
@@ -551,7 +558,7 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 		// In a match they are the stadium's (olympiad_match.go
 		// stadiumCombatNotice), not a siege's.
 		if !b.inOlympiad(now) {
-			b.siegeSeen(e.ID == msgEnteredCombatZone, now)
+			b.combatZoneSeen(e.ID == msgEnteredCombatZone, now)
 		}
 		return time.Time{}
 	case msgUnableToRequestDuel:
@@ -811,6 +818,18 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 	// Rule 5: a bot only once it hit the bot first (D38).
 	if b.cfg.markers.Marks(o.Name) && !attacking {
 		return fightNone
+	}
+	// Rule 3b: in the running battlefield the bot stands in
+	// (docs/pvp/siege.md), never one of the bot's side or showing Ally;
+	// one hitting it, no flag being possible there; and taking part, the
+	// other side's players inside it by arenaEdge.
+	if b.sameField(id, now) && !b.siegeAlly(id) {
+		if attacking {
+			return FightBack
+		}
+		if b.siegeFoe(id, now) {
+			return FightSiege
+		}
 	}
 	// Rule 6.
 	if b.persona.PvP.FightFlagged && flagged(o) {

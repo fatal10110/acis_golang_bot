@@ -679,6 +679,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					b.landingUntil = time.Time{}
 					gk := b.trip.v.active() && b.trip.step == tripGone
 					b.arenaTeleported(now, gk)
+					b.siegeTeleported()
 					b.tripTeleported(now)
 					if b.supplyTrip.teleported(now, gk, b.trip.onward) {
 						b.townArrival()
@@ -1129,6 +1130,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.signs.sent(a, now)
 	b.class.sent(a, now)
 	b.olympiadSent(a, now)
+	b.siegeSent(a, now)
 	b.dyes.sent(a, now)
 	b.ench.sent(a, now)
 	b.shop.sent(a, now)

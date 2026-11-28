@@ -90,6 +90,7 @@ func (b *Brain) diedPvP(now time.Time) {
 	}
 	name := b.killer(now)
 	b.deathCounted(name)
+	b.siegeDied()
 	if b.inArena(now) {
 		b.arenaDied(now)
 		return

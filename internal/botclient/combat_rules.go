@@ -74,6 +74,12 @@ type PvPPolicy struct {
 	// opponent as the only target from the fight's start to the match's
 	// end. Off for every preset.
 	Olympiad bool
+	// Siege is Siege mode (docs/pvp/siege.md, D41, rule 3b of MayFight):
+	// with its clan registered and the siege running, the bot finds its
+	// castle from the siege lists, walks into the battlefield and fights
+	// the other side there. On for pvp, off for every other preset; every
+	// bot walks out of a running battlefield it does not fight in.
+	Siege bool
 	// SupportFlagged lets the bot heal or buff a flagged or karma player,
 	// which flags the bot (character_pvpflag.go skillTargetFlagsPvP).
 	SupportFlagged bool
@@ -347,11 +353,14 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 // forced reports whether attacking id at now takes a forced attack: a
 // player not attackable without force (character_social.go
 // SocialWithoutForce), so not its duel or Olympiad opponent while fighting, not one in
-// its arena, and neither flagged nor with karma. A summon never is: the bot
-// fights one with plain Action and casts only.
+// its arena or in the running battlefield it stands in but of its own side
+// (model/zone/siege.go, character_social.go inSameActiveSiegeSide), and
+// neither flagged nor with karma. A summon never is: the bot fights one with
+// plain Action and casts only.
 func (b *Brain) forced(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && o.Kind == KindPlayer && id != b.duelFoe(now) && id != b.olympiadFoe(now) && !flagged(o) && !b.sameArena(id, now)
+	return o != nil && o.Kind == KindPlayer && id != b.duelFoe(now) && id != b.olympiadFoe(now) && !flagged(o) && !b.sameArena(id, now) &&
+		(!b.sameField(id, now) || b.siegeAlly(id))
 }
 
 // Cast refusals: the system messages the server answers a player's cast

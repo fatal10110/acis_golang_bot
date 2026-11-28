@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botwire"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 const (
@@ -306,13 +307,13 @@ func TestOlympiadMatch(t *testing.T) {
 	t.Run("the match from the call to its end", func(t *testing.T) {
 		b := huntBrain(t)
 		b.persona.PvP.Olympiad, b.persona.Olympiad.ThirdClass = true, true
-		b.pvp.find.siege = 3
+		b.pvp.siege.field = 3
 		olyStadium(t, b, t0)
 		if !b.inOlympiad(at(time.Second)) {
 			t.Fatal("not in a match after the stadium's entry")
 		}
-		if b.pvp.find.siege != 3 {
-			t.Fatalf("siege %d after 283 in the stadium, want it kept: the stadium's, not a siege's", b.pvp.find.siege)
+		if b.pvp.siege.field != 3 {
+			t.Fatalf("siege %d after 283 in the stadium, want it kept: the stadium's, not a siege's", b.pvp.siege.field)
 		}
 		if b.mayFight(pcID, at(time.Second)) {
 			t.Fatal("MayFight the opponent before the fight, want no target")
@@ -401,10 +402,10 @@ func TestOlympiadMatch(t *testing.T) {
 
 	t.Run("283 outside a match is a siege's", func(t *testing.T) {
 		b := huntBrain(t)
-		b.pvp.find.siege = 3
+		b.cfg.Travel.zones.Sieges = []datapack.Zone{box(-500, -500, 500, 500)}
 		b.handleOne(t, SystemMessage{ID: msgEnteredCombatZone}, t0)
-		if b.pvp.find.siege != 0 {
-			t.Fatalf("siege %d, want siegeSeen to run", b.pvp.find.siege)
+		if b.pvp.siege.field != 1 {
+			t.Fatalf("siege %d, want combatZoneSeen to run", b.pvp.siege.field)
 		}
 	})
 }

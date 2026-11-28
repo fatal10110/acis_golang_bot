@@ -101,7 +101,7 @@ type live struct {
 }
 
 // pvpLive is a bot's PvP view (botclient.PvPStatus, docs/pvp/modes.md
-// "Panel and metrics (X12)"): the modes it plays, fight back and the six
+// "Panel and metrics (X12)"): the modes it plays, fight back and the seven
 // switches, its PvP and PK kill counts (UserInfo), its duels this run by
 // result and its last duel's result ("" for none).
 type pvpLive struct {
@@ -112,6 +112,7 @@ type pvpLive struct {
 	PK        bool   `json:"pk"`
 	War       bool   `json:"war"`
 	Olympiad  bool   `json:"olympiad"`
+	Siege     bool   `json:"siege"`
 	PvPKills  int32  `json:"pvp_kills"`
 	PKKills   int32  `json:"pk_kills"`
 	DuelsWon  int    `json:"duels_won"`
@@ -127,6 +128,7 @@ func pvpOf(s *botclient.PvPStatus) *pvpLive {
 	m := s.Modes
 	return &pvpLive{
 		FightBack: m.FightFlagged, Duels: m.Duels, Hunt: m.Hunt, Arenas: m.Arenas, PK: m.ForceAttack, War: m.FightWar, Olympiad: m.Olympiad,
+		Siege:    m.Siege,
 		PvPKills: s.PvPKills, PKKills: s.PKKills,
 		DuelsWon: s.Duels.Won, DuelsLost: s.Duels.Lost, DuelsTied: s.Duels.Tie, LastDuel: s.LastDuel.String(),
 	}
