@@ -1,5 +1,7 @@
 package botclient
 
+import "slices"
+
 // Skill ids of the heavy damage second-profession rows GL WL DS BH
 // (docs/strategy.md "Second professions (levels 40+)"; data/xml/skills).
 const (
@@ -37,6 +39,17 @@ var (
 	heavyStances = []Toggle{{Skill: skillAccuracy, MPAbove: 30}, {Skill: skillViciousStance, MPAbove: 30}}
 )
 
+// gladiatorAttacks are GL's attacks in M10 order (gladiatorKit's rotation),
+// which its PvP row (gladiatorPvP) repeats.
+var gladiatorAttacks = []Step{
+	{Skill: skillSonicBlaster, From: 43, Weapons: sonicWeapons, Charges: 2, Opener: true},
+	{Skill: skillTripleSonicSlash, From: 55, Weapons: dualOnly, Charges: 4},
+	{Skill: skillDoubleSonicSlash, From: 49, Weapons: dualOnly, Charges: 3},
+	{Skill: skillSonicBuster, From: 43, Weapons: sonicWeapons, Attackers: 2, Charges: 2},
+	{Skill: skillSonicStorm, From: 49, Weapons: sonicWeapons, Attackers: 2, Charges: 2},
+	{Skill: skillTripleSlash, Weapons: dualOnly},
+}
+
 var (
 	// gladiatorKit (GL, from WA): Sonic Focus out of combat below its
 	// maxCharges; Sonic Blaster opens from 43 with 2 charges, Triple Sonic
@@ -52,24 +65,19 @@ var (
 		Skills: []int32{
 			skillSonicFocus, skillSonicBlaster, skillTripleSonicSlash, skillDoubleSonicSlash, skillSonicBuster,
 			skillSonicStorm, skillTripleSlash, skillBattleRoar, skillWarCry, skillDuelistSpirit,
-			skillAccuracy, skillViciousStance, skillWarFrenzy, skillRelax, skillLionheart, skillStunAttack,
+			skillAccuracy, skillViciousStance, skillWarFrenzy, skillRelax, skillLionheart,
 		},
-		Rotation: []Step{
+		Rotation: slices.Concat([]Step{
 			{Skill: skillBattleRoar, Target: TargetSelf, SelfHPBelow: 30},
 			{Skill: skillWarCry, Target: TargetSelf},
 			// Duelist Spirit has no weaponsAllowed: its stats apply only
 			// <using kind="DUAL"/>, so the DUAL gate is a branch gate.
 			{Skill: skillDuelistSpirit, From: 64, Weapons: dualOnly, Branch: true, Target: TargetSelf},
 			{Skill: skillSonicFocus, Weapons: sonicWeapons, Target: TargetSelf, Idle: true, ChargeToMax: true},
-			{Skill: skillSonicBlaster, From: 43, Weapons: sonicWeapons, Charges: 2, Opener: true},
-			{Skill: skillTripleSonicSlash, From: 55, Weapons: dualOnly, Charges: 4},
-			{Skill: skillDoubleSonicSlash, From: 49, Weapons: dualOnly, Charges: 3},
-			{Skill: skillSonicBuster, From: 43, Weapons: sonicWeapons, Attackers: 2, Charges: 2},
-			{Skill: skillSonicStorm, From: 49, Weapons: sonicWeapons, Attackers: 2, Charges: 2},
-			{Skill: skillTripleSlash, Weapons: dualOnly},
+		}, gladiatorAttacks, []Step{
 			{Skill: skillSonicFocus, Weapons: sonicWeapons, Target: TargetSelf, Filler: true, ChargeToMax: true},
-		},
-		PvP:     warlordPvP,
+		}),
+		PvP:     gladiatorPvP,
 		Toggles: append(append([]Toggle{}, heavyStances...), warFrenzy),
 		Relax:   skillRelax,
 		Base:    []int32{skillRelax},
@@ -89,7 +97,7 @@ var (
 		Skills: []int32{
 			skillThunderStorm, skillWhirlwind, skillWildSweep, skillBattleRoar, skillRevival, skillWarCry,
 			skillFellSwoop, skillAccuracy, skillViciousStance, skillPolearmAccuracy, skillWarFrenzy,
-			skillRelax, skillLionheart, skillStunAttack,
+			skillRelax, skillLionheart, skillWrath,
 		},
 		Rotation: []Step{
 			{Skill: skillBattleRoar, Target: TargetSelf, SelfHPBelow: 30},
@@ -100,7 +108,7 @@ var (
 			{Skill: skillWhirlwind, Weapons: poleOnly},
 			{Skill: skillWildSweep, Weapons: poleOnly, Attackers: 2},
 		},
-		PvP: warlordPvP,
+		PvP: warlordSecondPvP,
 		Toggles: append(append([]Toggle{}, heavyStances...),
 			// Polearm Accuracy has no weaponsAllowed: its bonus applies
 			// only <using kind="POLE"/>.
@@ -138,7 +146,7 @@ var (
 			{Skill: skillStunAttack, Weapons: stunWeapons},
 			{Skill: skillPowerSmash, Weapons: smashWeapons},
 		},
-		PvP:     overlordPvP,
+		PvP:     destroyerPvP,
 		Toggles: append(append([]Toggle{}, heavyStances...), warFrenzy),
 		Relax:   skillRelax,
 		Base:    []int32{skillRelax},
@@ -160,7 +168,7 @@ var (
 			{Skill: skillHammerCrush, Weapons: stunWeapons},
 			{Skill: skillStunAttack, Weapons: stunWeapons},
 		},
-		PvP:     scavengerPvP,
+		PvP:     bountyHunterPvP,
 		Sweep:   skillSweeper,
 		Toggles: []Toggle{warFrenzy},
 		Fixed:   []int32{skillStunAttack},
