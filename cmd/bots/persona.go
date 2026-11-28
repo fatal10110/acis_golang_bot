@@ -70,7 +70,8 @@ func damagePersona() botclient.Persona {
 // on, open-world PK off, and SupportFlagged on (its own duel counts it off,
 // docs/pvp/guards.md "Duel support"), and its PvP gear (D37): gear
 // compared by Value and PvP value blended at charmodel.PvPWeight, five of
-// each cure on the supply list, CP potions kept. The other presets keep
+// each cure on the supply list, CP potions kept and ten of them stocked
+// from player sell stores (D43). The other presets keep
 // fight back only, SupportFlagged off, decline duels at once, and compare
 // gear by Value alone.
 func pvpPersona() botclient.Persona {
@@ -82,7 +83,7 @@ func pvpPersona() botclient.Persona {
 // pvpPolicy is the pvp preset's PvP policy.
 var pvpPolicy = botclient.PvPPolicy{
 	FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true,
-	GearWeight: charmodel.PvPWeight, CureStock: 5, KeepCPPotions: true,
+	GearWeight: charmodel.PvPWeight, CureStock: 5, CPStock: 10, KeepCPPotions: true,
 }
 
 // merchantPersona is the merchant preset's persona: the damage persona

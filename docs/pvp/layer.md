@@ -80,8 +80,8 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
 
 - **CP.** CP potion (5592, then 5591) under `CPPotion` (50 %) CP in a PvP fight other than a duel,
   under the 500 ms reuse; HP potions, heals and drains follow M10's `ruleCritical`. CP potions are
-  kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (none are
-  bought, and an uncancelled duel end restores CP, [duel end](server-duels.md)).
+  kept (M8 keep hook: never sold, deposited or used on monsters) and not drunk in a duel (they are
+  bought only from player stores, and an uncancelled duel end restores CP, [duel end](server-duels.md)).
 - **Cures.** In a PvP fight, duels too (cures are cheap and a DOT decides a 2-minute duel): its own `AbnormalStatusUpdate` shows
   a poison or bleed (skill type or resolved effect type POISON, BLEED: what the negate matches,
   `hooks_buff.go` `negateTypeMatches`; a stack type alone, like NPC Bleed 4615's, is not) with half its
