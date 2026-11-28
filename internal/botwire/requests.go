@@ -9,6 +9,13 @@ const (
 	ActionSitStand int32 = 0
 	// ActionWalkRun is the RequestActionUse id that toggles running.
 	ActionWalkRun int32 = 1
+	// ActionServitorAttack orders the servitor onto its owner's target,
+	// ActionServitorStop sends it idle, back to following its owner
+	// (network/summon.go actionServitorAttack, actionServitorStop). The
+	// follow toggle (21) and the unsummon (52) are never sent
+	// (docs/servitors.md section 2).
+	ActionServitorAttack int32 = 22
+	ActionServitorStop   int32 = 23
 	// ChatAll is the Say2 channel heard around the speaker; ChatShout and
 	// ChatTrade the ones the server delivers to the players of a region.
 	ChatAll   int32 = 0

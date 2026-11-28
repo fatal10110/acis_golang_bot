@@ -88,7 +88,12 @@ func TestWorldServitor(t *testing.T) {
 		{"its Attack sets its target and place", []Event{
 			testServitorInfo,
 			Attack{AttackerID: ownServitor, Pos: Point{X: 960}, Hits: []AttackHit{{TargetID: npcID, Damage: 80}}},
-		}, with(func(s *Servitor) { s.Target, s.Pos = npcID, Point{X: 960} })},
+		}, with(func(s *Servitor) { s.Target, s.Struck, s.Pos = npcID, npcID, Point{X: 960} })},
+		{"its MoveToPawn to another target clears the swing", []Event{
+			testServitorInfo,
+			Attack{AttackerID: ownServitor, Pos: Point{X: 960}, Hits: []AttackHit{{TargetID: npcID, Damage: 80}}},
+			MoveToPawn{ObjectID: ownServitor, TargetID: pcID, Distance: 40},
+		}, with(func(s *Servitor) { s.Target, s.Pos = pcID, Point{X: 960} })},
 		{"its MoveToPawn sets its target", []Event{
 			testServitorInfo,
 			MoveToPawn{ObjectID: ownServitor, TargetID: npcID, Distance: 40},
@@ -98,12 +103,12 @@ func TestWorldServitor(t *testing.T) {
 			MoveToPawn{ObjectID: ownServitor, TargetID: npcID, Distance: 40},
 			MoveToPawn{ObjectID: ownServitor, TargetID: selfID, Distance: 36},
 		}, with(func(*Servitor) {})},
-		{"others' Attack and MoveToPawn are ignored", []Event{
+		{"others' Attack and MoveToPawn set no target", []Event{
 			testServitorInfo,
 			Attack{AttackerID: pcID, Hits: []AttackHit{{TargetID: npcID}}},
 			Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: ownServitor}}},
 			MoveToPawn{ObjectID: selfID, TargetID: npcID, Distance: 40},
-		}, with(func(*Servitor) {})},
+		}, with(func(s *Servitor) { s.AttackedBy, s.AttackedAt = npcID, at(2*time.Second) })},
 		{"its target's Die clears the target", []Event{
 			testServitorInfo,
 			MoveToPawn{ObjectID: ownServitor, TargetID: npcID, Distance: 40},

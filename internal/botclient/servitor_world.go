@@ -24,8 +24,13 @@ type Servitor struct {
 	// whole lifetime, zero before the first.
 	Remaining, Lifetime time.Duration
 	// Target is the object it last swung at or walked to (Attack,
-	// MoveToPawn), 0 for none; no pet packet carries it.
-	Target int32
+	// MoveToPawn), 0 for none; no pet packet carries it. Struck is Target
+	// once the servitor swung at it, 0 before (ServitorLead).
+	Target, Struck int32
+	// AttackedBy is the last creature that swung at the servitor, at
+	// AttackedAt (the guard, ruleServitor).
+	AttackedBy int32
+	AttackedAt time.Time
 }
 
 // applyServitor applies one of the servitor's own packets. A pet's (summon
@@ -76,13 +81,22 @@ func (w *World) servitor(summonType, id int32) *Servitor {
 
 // servitorAttack takes the servitor's target from its own swing, and its
 // place: the server stops an attacker before it swings and Pos is where it
-// stands (applyAttack).
-func (w *World) servitorAttack(e Attack) {
+// stands (applyAttack). Another's swing at the servitor names its attacker.
+func (w *World) servitorAttack(e Attack, now time.Time) {
 	s := w.Servitor
-	if s == nil || e.AttackerID != s.ObjectID || len(e.Hits) == 0 {
+	if s == nil || len(e.Hits) == 0 {
+		return
+	}
+	if e.AttackerID != s.ObjectID {
+		for _, h := range e.Hits {
+			if h.TargetID == s.ObjectID {
+				s.AttackedBy, s.AttackedAt = e.AttackerID, now
+			}
+		}
 		return
 	}
 	s.Target, s.Pos = e.Hits[0].TargetID, e.Pos
+	s.Struck = s.Target
 }
 
 // servitorTargets takes the servitor's target from its walk to an object.
@@ -93,6 +107,9 @@ func (w *World) servitorTargets(mover, target int32) {
 		s.Target = target
 		if target == w.Self.ObjectID {
 			s.Target = 0
+		}
+		if s.Struck != s.Target {
+			s.Struck = 0
 		}
 	}
 }
@@ -111,16 +128,16 @@ func (w *World) servitorDie(id int32) {
 	switch {
 	case s == nil:
 	case s.ObjectID == id:
-		s.Dead, s.Target, s.InCombat = true, 0, false
+		s.Dead, s.Target, s.Struck, s.InCombat = true, 0, 0, false
 	case s.Target == id:
-		s.Target = 0
+		s.Target, s.Struck = 0, 0
 	}
 }
 
 // servitorTargetGone drops the servitor's target when it leaves sight.
 func (w *World) servitorTargetGone(id int32) {
 	if s := w.Servitor; s != nil && s.Target == id {
-		s.Target = 0
+		s.Target, s.Struck = 0, 0
 	}
 }
 

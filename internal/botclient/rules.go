@@ -84,6 +84,10 @@ type Persona struct {
 	// bot attacks it too (rule 9 assist); a bare selection by the leader
 	// is no assist. AssistMax 0 never assists.
 	AssistMin, AssistMax time.Duration
+	// ServitorLead is how long a kit with ClassKit.ServitorLead holds its
+	// first attack on a fresh target after the servitor's order onto it,
+	// unless the servitor swings at it first (docs/servitors.md section 2).
+	ServitorLead time.Duration
 	// BlacklistAfter is how many attempts on a target with no swing or cast
 	// landing in between make the bot leave it alone for BlacklistFor; 0
 	// never does.
@@ -263,6 +267,7 @@ func DefaultPersona() Persona {
 		RebuffBefore:   time.Minute,
 		AssistMin:      500 * time.Millisecond,
 		AssistMax:      1500 * time.Millisecond,
+		ServitorLead:   1500 * time.Millisecond,
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
 		ClassChange:    defaultClassChangePolicy(),
@@ -406,6 +411,10 @@ const (
 	// actMultiSellChoose trades a row of the multisell list the server
 	// showed (sevensigns_priest.go).
 	actMultiSellChoose
+	// actServitorAttack orders the servitor onto the bot's target,
+	// actServitorStop recalls it (servitor_orders.go).
+	actServitorAttack
+	actServitorStop
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -522,9 +531,12 @@ type rule struct {
 }
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
-// the party, ahead of fighting so a support in combat still heals; "raise"
-// casts Resurrection out of combat on a dead member of the bot's own bot
-// party, right after "heal" so a living member's heal goes first;
+// the party, ahead of fighting so a support in combat still heals;
+// "servitor" gives the bot's servitor the orders no fight step gives (the
+// guard, a stop off a target the bot dropped; servitor_orders.go), after
+// the bot's own survival and the party's heals, before any new fight;
+// "raise" casts Resurrection out of combat on a dead member of the bot's
+// own bot party, right after "heal" so a living member's heal goes first;
 // "assist" (the leader's target), "classchange" (the class master, ahead
 // of the trainer so the new class learns its skills there), "train" (the
 // trainer), "gear" (wearing
@@ -608,6 +620,7 @@ var playRules = []rule{
 	{name: "escape", run: (*Brain).ruleEscape},
 	{name: "guard", run: (*Brain).ruleGuard},
 	{name: "heal", run: (*Brain).ruleHeal},
+	{name: "servitor", run: (*Brain).ruleServitor},
 	{name: "raise", run: (*Brain).ruleRaise},
 	{name: "duel", run: (*Brain).ruleDuel},
 	{name: "olympiad", run: (*Brain).ruleOlympiad},
@@ -852,6 +865,11 @@ var fleeTurns = [...]float64{0, math.Pi / 4, -math.Pi / 4, math.Pi / 2, -math.Pi
 // (immobile).
 func (b *Brain) flee(id int32, now time.Time) Action {
 	s, v := &b.world.Self, &b.fleeing
+	// The servitor leaves the fight with the bot (docs/servitors.md
+	// section 2).
+	if a, ok := b.servitorStop(0, now); ok {
+		return a
+	}
 	if s.Sitting {
 		return b.toggle(now)
 	}

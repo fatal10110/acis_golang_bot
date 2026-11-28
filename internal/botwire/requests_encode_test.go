@@ -82,6 +82,14 @@ func TestBrainPacketEncoders(t *testing.T) {
 			le(byte(0x45), 1, 0, byte(0)),
 		},
 		{
+			"RequestActionUse servitor attack", EncodeRequestActionUse(ActionServitorAttack),
+			le(byte(0x45), 22, 0, byte(0)),
+		},
+		{
+			"RequestActionUse servitor stop", EncodeRequestActionUse(ActionServitorStop),
+			le(byte(0x45), 23, 0, byte(0)),
+		},
+		{
 			"RequestSocialAction", EncodeRequestSocialAction(7),
 			le(byte(0x1b), 7),
 		},

@@ -152,9 +152,11 @@ func TestPartyRaiseLearned(t *testing.T) {
 	if rule, a := b.decide(at(time.Second)); rule != "raise" || a.kind != actSelect || a.object != pcID {
 		t.Errorf("decide = %q kind %d object %#x, want raise selecting the dead leader", rule, a.kind, a.object)
 	}
+	// Only the servitor's orders run between them (docs/servitors.md
+	// section 2, "Rule order").
 	heal := slices.IndexFunc(playRules, func(r rule) bool { return r.name == "heal" })
-	if heal < 0 || heal+1 >= len(playRules) || playRules[heal+1].name != "raise" {
-		t.Error(`"raise" does not run right after "heal"`)
+	if heal < 0 || heal+2 >= len(playRules) || playRules[heal+1].name != "servitor" || playRules[heal+2].name != "raise" {
+		t.Error(`"raise" does not run right after "heal" and "servitor"`)
 	}
 }
 

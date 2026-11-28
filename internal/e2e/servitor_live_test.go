@@ -24,8 +24,10 @@ const (
 	summonKatLevel           = 5
 	summonKatNPC       int32 = 14115
 	summonerLevel            = 40
-	actionServitorAtk  int32 = 22 // network/summon.go: servitor attack
 	actionUnsummonServ int32 = 52 // network/summon.go: servitor unsummon
+	// msgPetRefusingOrder refuses an order to a servitor out of control
+	// (summon/command.go, serverpackets/systemmessage.go).
+	msgPetRefusingOrder int32 = 1864
 )
 
 // summonCast bounds the cast (15 s) and the PetInfo after it.
@@ -39,12 +41,17 @@ const summonCast = 40 * time.Second
 // next to it: in runs where the owner walked off, before or after the
 // summon, the server sent it the servitor's DeleteObject and no frame of
 // the servitor after but its remaining time (fatal10110/acis_golang#5589),
-// so the servitor's follow walk is not in the recording yet. Every frame about the servitor or
+// so the servitor's follow walk is not in the recording yet. The attack
+// order is the brain's own encoding (botwire.ActionServitorAttack, #758):
+// a 1864 refusal fails the step at once, and the servitor's swing at the
+// orc serves it. Every frame about the servitor or
 // the orc, after the character's first UserInfo, goes in order into the
 // servitor directory of BOT_E2E_RECORD when set, else a temporary one, as
 // NNN-OP.bin: those are botclient's testdata/servitor_summon fixtures.
 // The orders are the scenario's own, sent as a player's client sends them,
-// paced like the brain's; the bot sends none of them (#758 adds them).
+// paced like the brain's; the brain's choice of when to send them is unit
+// tested (botclient servitor_orders_test.go): a brain-run bot has no
+// servitor before its summon rule (#759).
 func TestLiveServitorSummon(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM)
@@ -65,6 +72,8 @@ func TestLiveServitorSummon(t *testing.T) {
 	var (
 		summon, mob int32
 		ordered     bool // the attack order went out
+		struck      bool // the servitor swung at the orc after it
+		refused     bool // the server answered an order with 1864
 		mobDied     bool
 		followed    bool
 		deleted     bool
@@ -78,6 +87,10 @@ func TestLiveServitorSummon(t *testing.T) {
 					t.Errorf("summoned npc %d, want Kat the Cat %d", e.TemplateID, summonKatNPC)
 				}
 			}
+		case botclient.Attack:
+			struck = struck || (ordered && summon != 0 && e.AttackerID == summon && len(e.Hits) > 0 && e.Hits[0].TargetID == mob)
+		case botclient.SystemMessage:
+			refused = refused || (ordered && e.ID == msgPetRefusingOrder)
 		case botclient.Die:
 			mobDied = mobDied || (mob != 0 && e.ObjectID == mob)
 		case botclient.MoveToPawn:
@@ -111,10 +124,14 @@ func TestLiveServitorSummon(t *testing.T) {
 		t.Fatal(err)
 	}
 	watchUntil(t, ctx, c, "the orc selected", func() bool { return c.Target() == mob }, track)
-	if err := c.Send(ctx, botwire.EncodeRequestActionUse(actionServitorAtk)); err != nil {
+	if err := c.Send(ctx, botwire.EncodeRequestActionUse(botwire.ActionServitorAttack)); err != nil {
 		t.Fatal(err)
 	}
 	ordered = true
+	watchUntil(t, ctx, c, "the servitor swinging at the orc", func() bool { return struck || refused }, track)
+	if refused {
+		t.Fatal("the server refused the attack order: SystemMessage 1864")
+	}
 	watchUntilBy(t, ctx, c, "the servitor killing the orc", time.Now().Add(2*time.Minute), func() bool { return mobDied }, track)
 	gm.Forget(mob)
 	// The server refuses an unsummon while the servitor is in combat
