@@ -279,22 +279,23 @@ func TestRowSK(t *testing.T) {
 
 // TestCompileTankBuilds checks the tank rows compile, at every level and in
 // both roles, none of the skills the plan leaves out: no cubic summon (S17,
-// #636) and none of PL's, TK's or SK's other dropped skills.
+// #636) and none of PL's, TK's or SK's other dropped skills; Shackle (PL)
+// and Arrest (TK, SK) only as PvP steps (docs/pvp/rows-second.md O1, D50),
+// never in the rotation against a monster.
 func TestCompileTankBuilds(t *testing.T) {
 	for _, tt := range []struct {
 		class int32
 		race  int32
 		never []int32
+		pvp   int32
 	}{
-		// Holy Strike, Sanctuary, Banish Undead, Shackle, Mass Shackling,
-		// Sacrifice.
-		{classPaladin, RaceHuman, []int32{49, 97, 405, 403, 404, 69}},
-		// Holy Aura, Arrest, Summon Attractive Cubic, Storm Cubic, Life
+		// Holy Strike, Sanctuary, Banish Undead, Mass Shackling, Sacrifice.
+		{classPaladin, RaceHuman, []int32{49, 97, 405, 404, 69}, skillShackle},
+		// Holy Aura, Summon Attractive Cubic, Storm Cubic, Life Cubic.
+		{classTempleKnight, RaceElf, []int32{107, 449, 10, 67}, skillArrest},
+		// Corpse Plague, Hex, Summon Viper Cubic, Phantom Cubic, Vampiric
 		// Cubic.
-		{classTempleKnight, RaceElf, []int32{107, 402, 449, 10, 67}},
-		// Corpse Plague, Arrest, Hex, Summon Viper Cubic, Phantom Cubic,
-		// Vampiric Cubic.
-		{classShillienKnight, RaceDarkElf, []int32{103, 402, 122, 278, 33, 22}},
+		{classShillienKnight, RaceDarkElf, []int32{103, 122, 278, 33, 22}, skillArrest},
 	} {
 		for _, level := range []int32{40, 55, 64, 75} {
 			for _, role := range []Role{RoleDamage, RoleSupport} {
@@ -302,6 +303,10 @@ func TestCompileTankBuilds(t *testing.T) {
 				var buffs []int32
 				for _, bf := range k.Buffs {
 					buffs = append(buffs, bf.Skill)
+				}
+				if slices.Contains(stepSkills(k.Rotation), tt.pvp) || slices.Contains(stepSkills(k.PvP), tt.pvp) != (level >= 55) {
+					t.Errorf("class %d at %d %v: skill %d in the rotation %v, in PvP %v; want PvP only from 55",
+						tt.class, level, role, tt.pvp, stepSkills(k.Rotation), stepSkills(k.PvP))
 				}
 				for _, never := range tt.never {
 					if slices.Contains(k.Skills, never) || slices.Contains(stepSkills(k.Rotation), never) || slices.Contains(buffs, never) {

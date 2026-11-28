@@ -17,6 +17,7 @@ var (
 	vsMA  = []charmodel.Archetype{charmodel.Melee, charmodel.Archer}
 	vsCA  = []charmodel.Archetype{charmodel.Caster, charmodel.Archer}
 	vsCH  = []charmodel.Archetype{charmodel.Caster, charmodel.Healer}
+	vsCHA = []charmodel.Archetype{charmodel.Caster, charmodel.Healer, charmodel.Archer}
 	vsCHB = []charmodel.Archetype{charmodel.Caster, charmodel.Healer, charmodel.BattleCaster}
 )
 

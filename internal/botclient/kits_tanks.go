@@ -11,6 +11,8 @@ const (
 	skillShieldFortress  int32 = 322
 	skillTribunal        int32 = 400
 	skillJudgment        int32 = 401
+	skillArrest          int32 = 402
+	skillShackle         int32 = 403
 )
 
 // The tanks' combat toggles (docs/strategy.md, Design section 9): Guard
@@ -34,7 +36,7 @@ var (
 		Skills: []int32{
 			skillAggression, skillAuraOfHate, skillDrainHealth, skillShieldStun, skillTribunal, skillPowerStrike,
 			skillHolyBlessing, skillDivineHeal, skillUltimateDefense, skillMajesty, skillIronWill,
-			skillShieldFortress, skillRelax, skillDeflectArrow,
+			skillShieldFortress, skillRelax, skillDeflectArrow, skillShackle,
 		},
 		Rotation: []Step{
 			{Skill: skillDivineHeal, Target: TargetSelf, SelfHPBelow: 40},
@@ -46,7 +48,7 @@ var (
 			{Skill: skillTribunal, From: 55, Weapons: smashWeapons},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
-		PvP:     knightPvP,
+		PvP:     paladinPvP,
 		Heals:   []Heal{{Skill: skillHolyBlessing, HP: 50}},
 		Buffs:   []Buff{{Skill: skillMajesty, Self: true}, {Skill: skillIronWill, From: 43, Self: true}},
 		Toggles: []Toggle{shieldFortress},
@@ -69,7 +71,7 @@ var (
 		Skills: []int32{
 			skillAggression, skillEntangle, skillAuraOfHate, skillTribunal, skillPowerStrike, skillElementalHeal,
 			skillUltimateDefense, skillDefenseAura, skillAttackAura, skillSpiritBarrier, skillGuardStance,
-			skillShieldFortress, skillDeflectArrow,
+			skillShieldFortress, skillDeflectArrow, skillArrest,
 		},
 		Rotation: []Step{
 			{Skill: skillElementalHeal, Target: TargetSelf, SelfHPBelow: 50},
@@ -80,7 +82,7 @@ var (
 			{Skill: skillTribunal, From: 55, Weapons: smashWeapons},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
-		PvP:     elvenKnightPvP,
+		PvP:     templeKnightPvP,
 		Buffs:   append(append([]Buff{}, fighterAuras...), Buff{Skill: skillSpiritBarrier, Self: true}),
 		Toggles: []Toggle{guardStance, shieldFortress},
 		Base:    []int32{skillDefenseAura, skillAttackAura},
@@ -102,7 +104,7 @@ var (
 		Skills: []int32{
 			skillAggression, skillDrainHealth, skillAuraOfHate, skillLifeLeech, skillJudgment, skillLightningStrike,
 			skillSting, skillFreezingStrike, skillPowerStrike, skillUltimateDefense, skillDefenseAura, skillAttackAura,
-			skillGuardStance, skillShieldFortress, skillDeflectArrow, skillPoison, skillPowerBreak,
+			skillGuardStance, skillShieldFortress, skillDeflectArrow, skillPoison, skillPowerBreak, skillArrest,
 		},
 		Rotation: []Step{
 			{Skill: skillLifeLeech, SelfHPBelow: 70},
@@ -118,7 +120,7 @@ var (
 			{Skill: skillFreezingStrike},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
-		PvP:     palusKnightPvP,
+		PvP:     shillienKnightPvP,
 		Buffs:   fighterAuras,
 		Toggles: []Toggle{guardStance, shieldFortress},
 		Base:    []int32{skillDefenseAura, skillAttackAura},
