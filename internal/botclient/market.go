@@ -198,13 +198,18 @@ func (b *Brain) startMarket(now time.Time) bool {
 // marketWants are what a store visit looks for, in budget order: the
 // supplies tier, each trip target of the use meter (supplies) carried
 // under SupplyPolicy.Refill percent, up to the target, wherever it is
-// sold; then the gear tier, the gear goal's pieces (gearGoal).
+// sold, then the CP stock's difference (cpShort) as one want of CP
+// Potions a Greater one counts cpGreaterUnits of (storeUnits); then the
+// gear tier, the gear goal's pieces (gearGoal).
 func (b *Brain) marketWants() []want {
 	var out []want
 	for _, s := range b.supplies() {
 		if have := b.carried(s.item); b.refills(have, s.count) {
 			out = append(out, want{buyRow: buyRow{Item: s.item, Count: s.count - have}, tier: tierSupplies})
 		}
+	}
+	if n := b.cpShort(); n > 0 {
+		out = append(out, want{buyRow: buyRow{Item: itemCPPotion, Count: n}, tier: tierSupplies})
 	}
 	goal, _ := b.gearGoal()
 	for _, id := range goal {
@@ -234,9 +239,11 @@ func (b *Brain) marketCap(item, ref int32) (int64, bool) {
 
 // marketRows is the purchase from store window l, the budget spent tier
 // by tier above each tier's floor (docs/items.md section 5): per wanted
-// item, its rows at or under the price cap, cheapest first, each at its
-// listed price exactly (the server refuses the whole purchase otherwise),
-// as many as the row lists, the want needs and the adena allows; of the
+// item, its rows at or under the price cap, cheapest per unit first
+// (offers), each at its listed price exactly (the server refuses the whole
+// purchase otherwise), as many as the row lists, the want needs (a row
+// worth more units than the want still needs is passed over: the CP stock
+// is never overfilled) and the adena allows; of the
 // gear, one piece per slot, and a piece of the planned set (gearGoal) only
 // with the rest of the set still paid at its cheapest base price. A package
 // store sells only its whole list: nothing is bought from one.
@@ -267,17 +274,20 @@ func (b *Brain) marketRows(l PrivateStoreListSell) []storeRow {
 		}
 		need := int64(w.Count)
 		for _, it := range b.offers(l, w.Item) {
-			n := min(need, int64(it.Count))
+			u := int64(storeUnits(w.Item, it.TemplateID))
+			n := min(need/u, int64(it.Count))
 			if it.Price > 0 {
 				n = min(n, (int64(l.BuyerAdena)-spent-b.floor(t)-rest)/int64(it.Price))
 			}
 			if n < 1 {
-				// The cheaper rows came first: no other row fits either.
-				break
+				// A later row may still fit: a CP Potion where a Greater
+				// one is worth more than the want needs or costs more
+				// than the adena left.
+				continue
 			}
 			bought[slot] = true
 			spent += n * int64(it.Price)
-			need -= n
+			need -= n * u
 			rows = append(rows, storeRow{Object: it.ObjectID, Count: int32(n), Price: it.Price})
 			got = append(got, w.Item)
 			if len(rows) == shopMaxRows {
@@ -291,20 +301,38 @@ func (b *Brain) marketRows(l PrivateStoreListSell) []storeRow {
 	return rows
 }
 
-// offers are the rows of window l listing item at or under its price cap
-// (marketCap), cheapest first.
+// offers are the rows of window l listing a template that counts toward
+// want item (storeUnits) at or under its own price cap (marketCap),
+// cheapest per unit first, and of an equal price per unit the one worth
+// more units first: for the CP want, cheapest per CP, Greater first.
 func (b *Brain) offers(l PrivateStoreListSell, item int32) []StoreItem {
 	var out []StoreItem
 	for _, it := range l.Items {
-		if it.TemplateID != item || it.Count < 1 || it.Price < 0 {
+		if storeUnits(item, it.TemplateID) == 0 || it.Count < 1 || it.Price < 0 {
 			continue
 		}
-		if limit, ok := b.marketCap(item, it.ReferencePrice); ok && int64(it.Price) <= limit {
+		if limit, ok := b.marketCap(it.TemplateID, it.ReferencePrice); ok && int64(it.Price) <= limit {
 			out = append(out, it)
 		}
 	}
-	slices.SortStableFunc(out, func(x, y StoreItem) int { return cmp.Compare(x.Price, y.Price) })
+	slices.SortStableFunc(out, func(x, y StoreItem) int {
+		ux, uy := int64(storeUnits(item, x.TemplateID)), int64(storeUnits(item, y.TemplateID))
+		return cmp.Or(cmp.Compare(int64(x.Price)*uy, int64(y.Price)*ux), cmp.Compare(uy, ux))
+	})
 	return out
+}
+
+// storeUnits is how many of want item one of template id counts for: 1
+// for item itself; for the CP want (itemCPPotion, cpShort) a Greater CP
+// Potion counts cpGreaterUnits; 0 for any other template.
+func storeUnits(item, id int32) int32 {
+	if id == item {
+		return 1
+	}
+	if item == itemCPPotion {
+		return cpUnits(id)
+	}
+	return 0
 }
 
 // marketEvent moves the visit on with the server's answer ev: the store's

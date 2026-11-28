@@ -78,8 +78,14 @@ type PvPPolicy struct {
 	// where a merchant the shop errand can visit sells them. While it is
 	// above 0 the bot keeps every cure it carries.
 	CureStock int32
+	// CPStock is how many CP Potions the bot holds for its PvP fights, a
+	// Greater CP Potion counted as cpGreaterUnits (docs/pvp/cp-potions.md
+	// "Stock", D43): under Supply.Refill percent of it the supply list asks
+	// for the difference (cpShort), which the market errand buys from
+	// player sell stores. 0 buys none.
+	CPStock int32
 	// KeepCPPotions keeps the CP potions the bot carries for its PvP fights
-	// (docs/pvp/layer.md "CP"): never sold or deposited; none are bought.
+	// (docs/pvp/layer.md "CP"): never sold or deposited. CPStock buys them.
 	KeepCPPotions bool
 }
 

@@ -129,7 +129,8 @@ set swap.
   (5) Antidotes 1831 and Bandages 1833, from level 20 as many 1832 and 1834 where its trip's
   merchant sells them (23 buy lists each, 30 for the plain); 86-270 adena, bought on the usual
   trips, kept by the junk rule, used per [cures](layer.md#cp-cures-pool-break-off). CP potions:
-  kept, PvP only, bought per D43 ([CP potions](cp-potions.md)). HP and M8 buff potions as today.
+  kept, PvP only, `PvPPolicy.CPStock` (10, a Greater one counted as 4) bought from player sell
+  stores per D43 ([CP potions](cp-potions.md)). HP and M8 buff potions as today.
 
 ## Tests
 
