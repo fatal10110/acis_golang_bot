@@ -1,9 +1,12 @@
 package botclient
 
 import (
+	"bytes"
 	"slices"
 	"strconv"
 	"time"
+
+	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
 // The class master's commands (classmaster/command.go): the menu of the
@@ -85,6 +88,10 @@ type classVisit struct {
 	// menu is set once the visit sent the tier's menu link, asked once
 	// set when a bypass went out and its answer is still awaited.
 	menu, asked bool
+	// nobleAsked is set once become_noble went out (one per bot: the
+	// server shows it noble from then on), nobling while its page is
+	// awaited.
+	nobleAsked, nobling bool
 	// retryAt is when the next visit may start after one that changed
 	// nothing.
 	retryAt time.Time
@@ -93,7 +100,7 @@ type classVisit struct {
 // backOff ends the visit, changing nothing, and leaves the masters alone
 // for RetryAfter.
 func (c *classVisit) backOff(now time.Time, d time.Duration) {
-	c.v, c.menu, c.asked, c.retryAt = npcVisit{}, false, false, now.Add(d)
+	c.v, c.menu, c.asked, c.nobling, c.retryAt = npcVisit{}, false, false, false, now.Add(d)
 }
 
 // sent records a packet of the visit that went out at now: a bypass to the
@@ -104,6 +111,9 @@ func (c *classVisit) sent(a Action, now time.Time) {
 	}
 	if a.kind == actBypass && a.object != 0 && a.object == c.v.obj {
 		c.asked = true
+		if bytes.Equal(a.payload, botwire.EncodeRequestBypassToServer(npcBypass(c.v.obj, becomeNobleCommand))) {
+			c.nobleAsked, c.nobling = true, true
+		}
 	}
 	c.v.sent(a, now)
 }
@@ -151,10 +161,15 @@ func (b *Brain) ruleClassChange(now time.Time) (Action, bool) {
 }
 
 // classLink is the link of the master's last page the visit follows: the
-// change_class link of the build's profession on the menu, else the tier's
-// menu link once. A page with neither offers the bot nothing.
+// become_noble link of an Olympiad bot not noble yet (nobleDue,
+// docs/pvp/olympiad.md "Noblesse"), else the change_class link of the
+// build's profession on the menu, else the tier's menu link once. A page
+// with none offers the bot nothing.
 func (b *Brain) classLink() (string, bool) {
 	c, s := &b.class, &b.world.Self
+	if cmd := npcBypass(c.v.obj, becomeNobleCommand); b.nobleDue() && b.world.Dialog.Has(cmd) {
+		return cmd, true
+	}
 	want := b.build().Race.Professions[s.ClassID]
 	if cmd := npcBypass(c.v.obj, changeClassCommand+" "+strconv.Itoa(int(want))); b.world.Dialog.Has(cmd) {
 		return cmd, true
@@ -177,13 +192,11 @@ func (b *Brain) classChanged() {
 }
 
 // startClassChange starts a visit when the build's next profession is due
-// at the bot's level (pickVisit), reporting whether it did.
+// at the bot's level, or an Olympiad bot's noblesse (nobleDue), at a master
+// nearby (pickVisit), reporting whether it did.
 func (b *Brain) startClassChange(now time.Time) bool {
 	c, s, p := &b.class, &b.world.Self, &b.persona.ClassChange
-	if b.build().Race.Professions[s.ClassID] == 0 || now.Before(c.retryAt) {
-		return false
-	}
-	if level, _ := transferTier(s.ClassID); s.Level < level {
+	if now.Before(c.retryAt) || !b.professionDue() && !b.nobleDue() {
 		return false
 	}
 	best, ok := b.pickVisit(p.Masters, p.Reach, now)
@@ -194,9 +207,33 @@ func (b *Brain) startClassChange(now time.Time) bool {
 	return true
 }
 
-// classPage moves the visit on with the master's page.
+// professionDue reports whether the build's next profession is due at the
+// bot's level.
+func (b *Brain) professionDue() bool {
+	s := &b.world.Self
+	if b.build().Race.Professions[s.ClassID] == 0 {
+		return false
+	}
+	level, _ := transferTier(s.ClassID)
+	return s.Level >= level
+}
+
+// classPage moves the visit on with the master's page. The page answering
+// become_noble has no link (classmaster/dialog.go NoblePage, 50000-6.htm):
+// a visit with a profession due talks to the master again for its main
+// page, else it is over.
 func (b *Brain) classPage(ev NpcHtmlMessage) {
-	if b.class.v.active() && b.class.v.page(ev) {
-		b.class.asked = false
+	c := &b.class
+	if !c.v.active() || !c.v.page(ev) {
+		return
+	}
+	c.asked = false
+	if c.nobling {
+		c.nobling = false
+		if b.professionDue() {
+			c.v.opened = false
+		} else {
+			c.v, c.menu = npcVisit{}, false
+		}
 	}
 }

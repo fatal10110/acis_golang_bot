@@ -86,6 +86,9 @@ type UserInfo struct {
 	// twice; the server's Character.MoveSpeed swims at SwimSpeed in water).
 	RunSpeed, WalkSpeed, SwimSpeed int32
 	Running                        bool
+	// Noble is set for a noble (userinfo.go IsNoble): only nobles enter the
+	// Olympiad.
+	Noble bool
 	// PAtkSpd is the attack speed a melee swing lasts by: about
 	// 500000/PAtkSpd ms (the server's formulas.TimeBetweenAttacks).
 	PAtkSpd int32

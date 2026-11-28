@@ -19,6 +19,8 @@ const switches: { key: keyof PvPModes; label: string }[] = [
   { key: "hunt", label: "Hunt" },
   { key: "arenas", label: "Arenas" },
   { key: "pk", label: "PK" },
+  { key: "war", label: "War" },
+  { key: "olympiad", label: "Olympiad" },
 ];
 
 /**
@@ -28,12 +30,19 @@ const switches: { key: keyof PvPModes; label: string }[] = [
  */
 export function modesOf(b: Bot): PvPModes {
   const m = b.pvp ?? b.live?.pvp;
-  return { duels: m?.duels ?? false, hunt: m?.hunt ?? false, arenas: m?.arenas ?? false, pk: m?.pk ?? false };
+  return {
+    duels: m?.duels ?? false,
+    hunt: m?.hunt ?? false,
+    arenas: m?.arenas ?? false,
+    pk: m?.pk ?? false,
+    war: m?.war ?? false,
+    olympiad: m?.olympiad ?? false,
+  };
 }
 
 /**
  * PvPCard is a bot's PvP modes (docs/pvp/modes.md "Panel and metrics
- * (X12)"): the four switches the operator flips, a reset to the preset's
+ * (X12)"): the six switches the operator flips, a reset to the preset's
  * defaults, fight back, the kill counts and the duels of this run.
  */
 export function PvPCard({ bot: b }: { bot: Bot }) {

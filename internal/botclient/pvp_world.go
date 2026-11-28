@@ -30,6 +30,7 @@ const (
 	FightPK
 	FightUnfought
 	FightWar
+	FightOlympiad
 )
 
 // String is the kind's metric label (docs/pvp/modes.md).
@@ -49,6 +50,8 @@ func (k FightKind) String() string {
 		return "unfought"
 	case FightWar:
 		return "war"
+	case FightOlympiad:
+		return "olympiad"
 	}
 	return ""
 }
@@ -249,6 +252,9 @@ func (b *Brain) pvpEvent(ev Event, now time.Time) time.Time {
 		b.pvp.mix.now = now
 	}
 	at := b.pvpKeep(ev, now)
+	if o := b.olympiadEvent(ev, now); !o.IsZero() && (at.IsZero() || o.Before(at)) {
+		at = o
+	}
 	if g := b.guardWake(ev, now); !g.IsZero() && (at.IsZero() || g.Before(at)) {
 		at = g
 	}
@@ -542,7 +548,11 @@ func (b *Brain) duelMessage(e SystemMessage, now time.Time) time.Time {
 	case msgS1WithdrewS2Won, msgS1PartyWithdrewS2Won:
 		d.over(now)
 	case msgEnteredCombatZone, msgLeftCombatZone:
-		b.siegeSeen(e.ID == msgEnteredCombatZone, now)
+		// In a match they are the stadium's (olympiad_match.go
+		// stadiumCombatNotice), not a siege's.
+		if !b.inOlympiad(now) {
+			b.siegeSeen(e.ID == msgEnteredCombatZone, now)
+		}
 		return time.Time{}
 	case msgUnableToRequestDuel:
 		b.unableSeen(now)
@@ -755,6 +765,14 @@ func (b *Brain) fightKind(id int32, o *Object, now time.Time) FightKind {
 
 // fightRule applies MayFight's rules to o at now.
 func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
+	// Rule 0: in an Olympiad match only the drawn opponent, any class, a
+	// bot too, and only while fighting (docs/pvp/olympiad.md).
+	if b.inOlympiad(now) {
+		if o.Kind == KindPlayer && id == b.olympiadFoe(now) && id != 0 {
+			return FightOlympiad
+		}
+		return fightNone
+	}
 	// Rule 1: from the countdown to the end only the duel opponent, and
 	// only while fighting, even a clan mate or a party member.
 	if b.inDuel(now) {

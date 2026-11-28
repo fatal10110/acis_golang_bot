@@ -157,6 +157,9 @@ type Persona struct {
 	// ClassChange is when and to what the bot changes class at the class
 	// master (rule 9 errand "classchange").
 	ClassChange ClassChangePolicy
+	// Olympiad is how an Olympiad bot (PvP.Olympiad) registers (rule 9
+	// errand "olympiad entry").
+	Olympiad OlympiadPolicy
 	// Dyes is which dye symbols the bot wears and where it draws them
 	// (rule 9 errand "dyes").
 	Dyes DyePolicy
@@ -263,6 +266,7 @@ func DefaultPersona() Persona {
 		Follow:         defaultFollowPolicy(),
 		Newbie:         defaultNewbiePolicy(),
 		ClassChange:    defaultClassChangePolicy(),
+		Olympiad:       defaultOlympiadPolicy(),
 		Dyes:           defaultDyePolicy(),
 		Enchant:        defaultEnchantPolicy(),
 		Travel:         defaultTravelPolicy(),
@@ -580,6 +584,10 @@ type rule struct {
 // holds them, and the fight against the party's enemy (the enemy healer
 // first), right after "sweep": "outnumbered" leaves its target to it once
 // past its flee, and it goes ahead of "attacked" and "assist".
+// "olympiad" is MayFight rule 0's fight, right after "duel"; "olympiad
+// wait" holds every rule after the rest and buff rules in an Olympiad match
+// and on its waiting list; "olympiad entry" is the registration errand
+// (pvp_olympiad.go, docs/pvp/olympiad.md).
 var playRules = []rule{
 	{name: "dead", run: (*Brain).ruleDead},
 	{name: "prompt", run: (*Brain).rulePrompt},
@@ -590,6 +598,7 @@ var playRules = []rule{
 	{name: "heal", run: (*Brain).ruleHeal},
 	{name: "raise", run: (*Brain).ruleRaise},
 	{name: "duel", run: (*Brain).ruleDuel},
+	{name: "olympiad", run: (*Brain).ruleOlympiad},
 	{name: "party buff", run: (*Brain).rulePartyBuff},
 	{name: "outnumbered", run: (*Brain).ruleOutnumbered},
 	{name: "sweep", run: (*Brain).ruleSweep},
@@ -607,6 +616,7 @@ var playRules = []rule{
 	{name: "rest", run: (*Brain).ruleRest},
 	{name: "rebuff", run: (*Brain).ruleRebuff},
 	{name: "buffpotion", run: (*Brain).ruleBuffPotion},
+	{name: "olympiad wait", run: (*Brain).ruleOlympiadWait},
 	{name: "arena fight", run: (*Brain).ruleArenaFight},
 	{name: "hunt", run: (*Brain).ruleHunt},
 	{name: "challenge", run: (*Brain).ruleChallenge, karma: true},
@@ -617,6 +627,7 @@ var playRules = []rule{
 	{name: "store", run: (*Brain).ruleStore, stop: (*Brain).releaseStore},
 	{name: "assist", run: (*Brain).ruleAssist},
 	{name: "classchange", run: (*Brain).ruleClassChange, karma: true},
+	{name: "olympiad entry", run: (*Brain).ruleOlympiadEntry},
 	{name: "train", run: (*Brain).ruleTrain, karma: true},
 	{name: "gear", run: (*Brain).ruleGear, karma: true},
 	{name: "market", run: (*Brain).ruleMarket, karma: true},
@@ -794,7 +805,7 @@ func (b *Brain) ruleCritical(now time.Time) (Action, bool) {
 	if a, ok := b.heal(s.ObjectID, now); ok {
 		return a, true
 	}
-	if !b.mayFlee(now) || b.pvpFoe(now) || b.inDuel(now) {
+	if !b.mayFlee(now) || b.pvpFoe(now) || b.inDuel(now) || b.inOlympiad(now) {
 		return Action{}, false
 	}
 	return b.flee(b.world.Target, now), true
