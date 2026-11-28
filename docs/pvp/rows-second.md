@@ -144,8 +144,9 @@ PvP steps (`Vs`, `Sighted`, `Hold`, `Int`, `Break`, `Peel`) are new list entries
 ## Left out, and why
 
 - **404 Mass Shackling** (PL): an aura root of power 40 (half Dryad Root's base: about 31-35 %, at
-  or under `MinLand`), reuse 40 s; it roots bystanders too. 1208 Seal of Binding (WC) is not left
-  out on those grounds: it is the Break OS already plays, cast on the one melee opponent next to it.
+  or under `MinLand`), reuse 40 s; it roots bystanders too. 1208 Seal of Binding (AURA, power 40,
+  radius 200) shares both reasons; WC keeps it only because it is the approved OS row's Break, which
+  this design does not reopen.
 - **1069 Sleep** (SN, SG, SH, BI, EE): hit 10000, too slow for an interrupt and barred from
   break-off ([break-cast gate](layer.md#cp-cures-pool-break-off)); **1072 Sleeping Cloud** (SN,
   SG): an area sleep of hit 15000.
