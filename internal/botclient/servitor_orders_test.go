@@ -297,7 +297,8 @@ func TestServitorStop(t *testing.T) {
 
 // TestServitorReorderAfterStop checks a stop drops the servitor's target
 // at once: after a flee from the monster it fought (23) and no servitor
-// frame since, a new fight on that monster orders the servitor again (22).
+// frame since, or only a swing the server sent before it took the stop, a
+// new fight on that monster orders the servitor again (22).
 func TestServitorReorderAfterStop(t *testing.T) {
 	b := servitorBrain(t, ClassKit{Rotation: []Step{{Skill: skillWindStrike}}})
 	now := at(time.Second)
@@ -312,6 +313,13 @@ func TestServitorReorderAfterStop(t *testing.T) {
 	b.world.Target = npcID
 	if a := b.fight(npcID, at(3*time.Second)); !bytes.Equal(a.payload, servitorAttackFrame) {
 		t.Fatalf("fight %v % x, want the attack order", a.kind, a.payload)
+	}
+	// A late swing, broadcast before the server took the stop.
+	if err := b.handle([]Event{Attack{AttackerID: ownServitor, Hits: []AttackHit{{TargetID: npcID}}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	if a := b.fight(npcID, at(3*time.Second)); !bytes.Equal(a.payload, servitorAttackFrame) {
+		t.Fatalf("fight after a late swing %v % x, want the attack order", a.kind, a.payload)
 	}
 }
 

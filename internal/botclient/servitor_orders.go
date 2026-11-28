@@ -49,14 +49,15 @@ func (b *Brain) liveServitor() *Servitor {
 // servitor onto id, the bot's target, at now: the server gives the
 // servitor its owner's target (summon/command.go resolveAttack), so the
 // caller selects id first. None (ok false) without a live servitor, when
-// the servitor's target is id already, when id is no monster (never a
+// the servitor's target is id already (unless the last stop gave up id: a
+// swing the server sent before it took the stop says nothing), when id is no monster (never a
 // player or a player's summon, owner question 5), while a refusal holds
 // the orders, or within servitorOrderRetry of a 22 onto id the servitor
 // did not answer. Its bound: the frame bucket and servitorOrderRetry.
 func (b *Brain) servitorOrder(id int32, now time.Time) (Action, bool) {
 	s, o := b.liveServitor(), &b.servitorOrders
 	switch {
-	case s == nil, s.Target == id, b.world.Target != id, !b.world.monster(id), now.Before(o.held):
+	case s == nil, s.Target == id && o.stopped != id, b.world.Target != id, !b.world.monster(id), now.Before(o.held):
 		return Action{}, false
 	case o.servitor == s.ObjectID && o.target == id && now.Sub(o.at) < servitorOrderRetry:
 		return Action{}, false
