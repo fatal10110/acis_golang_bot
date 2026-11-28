@@ -193,7 +193,8 @@ type Brain struct {
 	// summonReady is the summon skill level the bot can cast now, crystals
 	// held for the cast and one upkeep step (docs/servitors.md section 4),
 	// the zero value for none: what the model counts a servitor not yet out
-	// by (servitorModel). The servitor upkeep (#759) sets it.
+	// by (servitorModel) and what ruleSummon casts. decide sets it
+	// (summonGate) before the rules run.
 	summonReady datapack.SkillRef
 	// pvp is the PvP world model: opponent records, the duel.
 	pvp pvpWorld
@@ -413,6 +414,9 @@ type Brain struct {
 	// servitorOrders records the orders the servitor got
 	// (servitor_orders.go).
 	servitorOrders servitorOrders
+	// upkeep records the summons, servitor buffs and servitor deaths
+	// (servitor_upkeep.go).
+	upkeep servitorUpkeep
 	// walk walks the bot on checked segments (BrainConfig.Nav).
 	walk walker
 	// engage is the stand point the fight walks to (engageWalk).
@@ -731,6 +735,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if e.CasterID == self {
 				b.standCaster(e)
 				b.onceCast(e, now)
+				b.servitorBuffStarted(e, now)
 				b.castAt = time.Time{}
 				if e.TargetID == b.unseen.id {
 					// The server took a cast at it: it is in sight.
@@ -741,6 +746,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 			b.leaderHit(e.CasterID, e.TargetID, now)
 			b.lootEvent(ev, now)
+		case MagicSkillCanceled:
+			b.servitorBuffCanceled(e, now)
 		case DropItem, SpawnItem, GetItem:
 			b.lootEvent(ev, now)
 		case Die:
@@ -756,6 +763,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 			b.forgetOnce(e.ObjectID)
 			b.forgetSide(e.ObjectID)
+			b.servitorDied(e.ObjectID, now)
 			b.spoilEvent(ev, now)
 			// A dead bot frees its spot for another and avoids it for a
 			// while; it picks again once back on its feet.
@@ -1061,6 +1069,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		b.attempt(a.object, now)
 		b.world.holdSkill(a.skill, now.Add(castTimeout))
 		b.buffSent(a, now)
+		b.upkeepSent(a, now)
 		if a.interrupts {
 			b.interruptSent(a.object)
 		}

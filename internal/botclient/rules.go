@@ -88,6 +88,20 @@ type Persona struct {
 	// first attack on a fresh target after the servitor's order onto it,
 	// unless the servitor swings at it first (docs/servitors.md section 2).
 	ServitorLead time.Duration
+	// ServitorHealHP is the servitor's HP percent under which the bot
+	// casts its kit's ServitorHeal on it; in combat only under half of it
+	// (docs/servitors.md section 3). ServitorDeathWindow is how close two
+	// deaths of its servitor at one spot mark the spot too hard for it, as
+	// the bot's own death does (SpotPolicy.DeathAvoid); 0 never does.
+	ServitorHealHP      int
+	ServitorDeathWindow time.Duration
+	// Summons, ServitorHeal and ServitorBuffs replace the build's
+	// (ClassKit.Summons, ServitorHeal, ServitorBuffs) when set: a summoner
+	// of a scenario's own before the summoner rows (#761). No preset sets
+	// them.
+	Summons       []int32
+	ServitorHeal  int32
+	ServitorBuffs []int32
 	// BlacklistAfter is how many attempts on a target with no swing or cast
 	// landing in between make the bot leave it alone for BlacklistFor; 0
 	// never does.
@@ -246,44 +260,46 @@ type Hold struct {
 // thresholds are its build's (CompileBuild), which it overrides none of.
 func DefaultPersona() Persona {
 	return Persona{
-		Role:           RoleSupport,
-		Death:          restartToVillage,
-		Recover:        defaultRecoverPolicy(),
-		Lead:           defaultLeadPolicy(),
-		Rooms:          defaultRoomPolicy(),
-		JoinParty:      acceptParty,
-		FleeOutrun:     true,
-		FleeDistance:   600,
-		BlacklistAfter: 4,
-		BlacklistFor:   3 * time.Minute,
-		PvP:            PvPPolicy{FightFlagged: true},
-		Potions:        healingPotions,
-		AutoShots:      true,
-		IdleChance:     0.1,
-		IdleRadius:     250,
-		Emotes:         []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
-		TrainerReach:   8000,
-		Spots:          defaultSpotPolicy(),
-		RebuffBefore:   time.Minute,
-		AssistMin:      500 * time.Millisecond,
-		AssistMax:      1500 * time.Millisecond,
-		ServitorLead:   1500 * time.Millisecond,
-		Follow:         defaultFollowPolicy(),
-		Newbie:         defaultNewbiePolicy(),
-		ClassChange:    defaultClassChangePolicy(),
-		Olympiad:       defaultOlympiadPolicy(),
-		Dyes:           defaultDyePolicy(),
-		Enchant:        defaultEnchantPolicy(),
-		Travel:         defaultTravelPolicy(),
-		Shop:           defaultShopPolicy(),
-		Market:         defaultMarketPolicy(),
-		Supply:         defaultSupplyPolicy(),
-		Gear:           defaultGearPolicy(),
-		Warehouse:      defaultWarehousePolicy(),
-		Loot:           defaultLootPolicy(),
-		Trade:          defaultTradePolicy(),
-		Store:          defaultStorePolicy(),
-		Chat:           defaultChatPolicy(),
+		Role:                RoleSupport,
+		Death:               restartToVillage,
+		Recover:             defaultRecoverPolicy(),
+		Lead:                defaultLeadPolicy(),
+		Rooms:               defaultRoomPolicy(),
+		JoinParty:           acceptParty,
+		FleeOutrun:          true,
+		FleeDistance:        600,
+		BlacklistAfter:      4,
+		BlacklistFor:        3 * time.Minute,
+		PvP:                 PvPPolicy{FightFlagged: true},
+		Potions:             healingPotions,
+		AutoShots:           true,
+		IdleChance:          0.1,
+		IdleRadius:          250,
+		Emotes:              []int32{2, 6, 7, 10, 11}, // greet, yes, bow, laugh, applaud
+		TrainerReach:        8000,
+		Spots:               defaultSpotPolicy(),
+		RebuffBefore:        time.Minute,
+		AssistMin:           500 * time.Millisecond,
+		AssistMax:           1500 * time.Millisecond,
+		ServitorLead:        1500 * time.Millisecond,
+		ServitorHealHP:      50,
+		ServitorDeathWindow: 10 * time.Minute,
+		Follow:              defaultFollowPolicy(),
+		Newbie:              defaultNewbiePolicy(),
+		ClassChange:         defaultClassChangePolicy(),
+		Olympiad:            defaultOlympiadPolicy(),
+		Dyes:                defaultDyePolicy(),
+		Enchant:             defaultEnchantPolicy(),
+		Travel:              defaultTravelPolicy(),
+		Shop:                defaultShopPolicy(),
+		Market:              defaultMarketPolicy(),
+		Supply:              defaultSupplyPolicy(),
+		Gear:                defaultGearPolicy(),
+		Warehouse:           defaultWarehousePolicy(),
+		Loot:                defaultLootPolicy(),
+		Trade:               defaultTradePolicy(),
+		Store:               defaultStorePolicy(),
+		Chat:                defaultChatPolicy(),
 	}
 }
 
@@ -532,9 +548,12 @@ type rule struct {
 
 // playRules are rules 1-10, first match wins. "heal" is rule 3's heal of
 // the party, ahead of fighting so a support in combat still heals;
-// "servitor" gives the bot's servitor the orders no fight step gives (the
-// guard, a stop off a target the bot dropped; servitor_orders.go), after
-// the bot's own survival and the party's heals, before any new fight;
+// "servitor" heals the bot's servitor and gives it the orders no fight
+// step gives (the guard, a stop off a target the bot dropped;
+// servitor_orders.go), after the bot's own survival and the party's heals,
+// before any new fight; "summon" summons the servitor out of combat after
+// "rest", so the bot summons rested, and ahead of "rebuff", whose servitor
+// buffs then go on it (servitor_upkeep.go);
 // "raise" casts Resurrection out of combat on a dead member of the bot's
 // own bot party, right after "heal" so a living member's heal goes first;
 // "assist" (the leader's target), "classchange" (the class master, ahead
@@ -640,6 +659,7 @@ var playRules = []rule{
 	{name: "overweight hold", run: (*Brain).ruleOverweightHold},
 	{name: "recover", run: (*Brain).ruleRecover},
 	{name: "rest", run: (*Brain).ruleRest},
+	{name: "summon", run: (*Brain).ruleSummon},
 	{name: "rebuff", run: (*Brain).ruleRebuff},
 	{name: "buffpotion", run: (*Brain).ruleBuffPotion},
 	{name: "olympiad wait", run: (*Brain).ruleOlympiadWait},
@@ -710,6 +730,7 @@ func (b *Brain) decide(now time.Time) (string, Action) {
 	}
 	b.syncValuables(now)
 	b.endStaleRound(now)
+	b.summonReady = b.summonGate()
 	b.karmaTick(now)
 	karma := b.world.Self.Karma > 0
 	for _, r := range rules {

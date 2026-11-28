@@ -127,7 +127,8 @@ func (b *Brain) servitorLeading(id int32, now time.Time) bool {
 		now.Sub(o.at) < b.persona.ServitorLead
 }
 
-// ruleServitor gives the servitor the orders no fight step gives
+// ruleServitor heals the servitor first (servitorHeal), then gives it the
+// orders no fight step gives
 // (docs/servitors.md section 2, "Rule order"): it recalls the servitor
 // (23) from a target the bot may no longer fight (another player's claim,
 // a blacklist, a creature out of sight), and guards the bot: with the
@@ -140,6 +141,9 @@ func (b *Brain) ruleServitor(now time.Time) (Action, bool) {
 	s, o := b.liveServitor(), &b.servitorOrders
 	if s == nil {
 		return Action{}, false
+	}
+	if a, ok := b.servitorHeal(s, now); ok {
+		return a, true
 	}
 	if s.Target != 0 {
 		if b.mayFight(s.Target, now) {

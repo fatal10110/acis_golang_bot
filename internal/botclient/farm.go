@@ -17,6 +17,10 @@ import (
 // leader waiting for a bot member behind (gathering) picks no new target
 // and its wait is no idle stretch.
 //
+// While its servitor's next upkeep checkpoint is due and the bot cannot
+// pay it (upkeepBlocks), it starts no fight on a fresh target (freshPull):
+// it goes on with a fight the bot or its servitor is in.
+//
 // It sends what fight sends, a selection or one attack per target paced by
 // the brain's decision tick and the frame pacer, plus the stand-up toggle
 // of a bot that sat down idling.
@@ -32,6 +36,11 @@ func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	id := b.farmTarget(now)
+	if id != 0 && b.upkeepBlocks() && b.freshPull(id, now) {
+		// No new pull: the servitor's next checkpoint is due and unpaid,
+		// so it would leave mid-fight; it runs out first.
+		return Action{}, false
+	}
 	if id == 0 {
 		if b.gathering(now) {
 			v.idleSince = time.Time{}

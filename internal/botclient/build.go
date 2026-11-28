@@ -295,6 +295,20 @@ type ClassKit struct {
 	// hate (a mystic summoner row's "after ServitorLead",
 	// docs/servitors.md section 2).
 	ServitorLead bool
+	// Summons are the row's summon skills, its own first: the summon rule
+	// casts the first the bot knows, of an XP penalty under expPenaltyMax,
+	// whose crystals it carries for the cast plus one upkeep step
+	// (summonGate). A line lists its first-profession Crystal D summon
+	// (1111, 1226, 1128) after its own as the fallback of a bot holding
+	// only Crystal D (owner answer 1, D51). ServitorHeal is the servitor
+	// heal the servitor rule casts (1127 Servitor Heal), 0 for none;
+	// ServitorBuffs the buffs the rebuff rule keeps on the servitor (1140,
+	// 1139, 1141, the line's 1144, 1145 or 1146; never 1299, which holds
+	// the servitor in place). All empty for a row without a servitor
+	// (docs/servitors.md sections 3 and 4).
+	Summons       []int32
+	ServitorHeal  int32
+	ServitorBuffs []int32
 	// Toggles are the combat toggles; Relax is the toggle ruleRest sits
 	// with instead of a plain sit (226 Relax, 296 Chameleon Rest), 0 for
 	// none; RelaxFrom is the level it starts at (the row's "@N"):
@@ -583,6 +597,15 @@ func (p *Persona) override(bd Build, class int32) Build {
 	}
 	if p.Buffs != nil {
 		k.Buffs = p.Buffs
+	}
+	if p.Summons != nil {
+		k.Summons = p.Summons
+	}
+	if p.ServitorHeal != 0 {
+		k.ServitorHeal = p.ServitorHeal
+	}
+	if p.ServitorBuffs != nil {
+		k.ServitorBuffs = p.ServitorBuffs
 	}
 	if p.Gear.Classes != nil {
 		k.Gear = gearClassOf(p.Gear.Classes, class)

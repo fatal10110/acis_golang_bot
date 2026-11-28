@@ -42,6 +42,26 @@ type Skill struct {
 	// summons, read per level from its #npcIds table (skill 1276 level 1
 	// summons 14207, level 14 summons 14220; docs/servitors.md section 3).
 	NPCID int32
+	// The summon's lifetime and upkeep (a SUMMON skill's; data/xml/skill.go
+	// skillExtra, network/summon_spawn.go): ItemConsumeIDOT is
+	// itemConsumeIdOT and ItemConsumeCountOT itemConsumeCountOT (both
+	// default 0), the item and count the owner pays at each upkeep
+	// checkpoint; ItemConsumeSteps is itemConsumeSteps (default 0), the
+	// lifetime cut into ItemConsumeSteps+1 checkpoints, none with steps 0
+	// or no item (summon/lifetime.go InitialNextConsumeTime);
+	// SummonLifetime is summonTotalLifeTime (default 1200000 ms; read for a
+	// SUMMON skill only, 0 for any other), and
+	// SummonLostIdle and SummonLostActive summonTimeLostIdle and
+	// summonTimeLostActive (default 0): the lifetime a second costs it
+	// with its owner out of and in combat (summon/live_lifecycle.go
+	// TickServitor).
+	ItemConsumeIDOT, ItemConsumeCountOT int32
+	ItemConsumeSteps                    int32
+	SummonLifetime                      time.Duration
+	SummonLostIdle, SummonLostActive    time.Duration
+	// ExpPenalty is expPenalty (default 0): the share of the experience
+	// its owner loses while the summon is out (data/manager/npcs_rewards.go).
+	ExpPenalty float64
 	// Power is power (default 0), the skill's base damage or heal.
 	Power float64
 	// NumCharges is numCharges, the charges a cast spends (or a charging
@@ -264,7 +284,8 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	for level := 1; level <= levels; level++ {
 		res := resolver{tables: tables, row: level}
 		r := res.reader(sets, "isPotion", "castRange", "skillType", "operateType", "target", "weaponsAllowed",
-			"hitTime", "reuseDelay", "mpConsume", "mpInitialConsume", "itemConsumeId", "itemConsumeCount", "npcId", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
+			"hitTime", "reuseDelay", "mpConsume", "mpInitialConsume", "itemConsumeId", "itemConsumeCount", "npcId",
+			"itemConsumeIdOT", "itemConsumeCountOT", "itemConsumeSteps", "summonTotalLifeTime", "summonTimeLostIdle", "summonTimeLostActive", "expPenalty", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
 			"isDebuff", "offensive", "nextActionAttack", "magicLvl", "lvlDepend", "abnormalLvl", "effectAbnormalLvl",
 			"effectType", "effectPower", "negateStats", "negateLvl")
 		sk := Skill{
@@ -275,9 +296,14 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			ReuseDelay:     time.Duration(r.intDefault("reuseDelay", 0)) * time.Millisecond,
 			MPConsume:      r.intDefault("mpConsume", 0), MPInitialConsume: r.intDefault("mpInitialConsume", 0),
 			ItemConsumeID: r.int32Default("itemConsumeId", 0), ItemConsumeCount: r.int32Default("itemConsumeCount", 0),
-			NPCID:      r.int32Default("npcId", 0),
-			Power:      r.floatDefault("power", 0),
-			NumCharges: r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
+			NPCID:           r.int32Default("npcId", 0),
+			ItemConsumeIDOT: r.int32Default("itemConsumeIdOT", 0), ItemConsumeCountOT: r.int32Default("itemConsumeCountOT", 0),
+			ItemConsumeSteps: r.int32Default("itemConsumeSteps", 0),
+			SummonLostIdle:   time.Duration(r.intDefault("summonTimeLostIdle", 0)) * time.Millisecond,
+			SummonLostActive: time.Duration(r.intDefault("summonTimeLostActive", 0)) * time.Millisecond,
+			ExpPenalty:       r.floatDefault("expPenalty", 0),
+			Power:            r.floatDefault("power", 0),
+			NumCharges:       r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
 			Charges: chargeCond(el.Conds, &res),
 			Radius:  r.int32Default("skillRadius", 80), Magic: r.boolDefault("isMagic", false),
 			Debuff: r.boolDefault("isDebuff", false), NextActionAttack: r.boolDefault("nextActionAttack", false),
@@ -285,6 +311,9 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			AbnormalLevel: r.intDefault("abnormalLvl", -1), EffectAbnormalLevel: r.intDefault("effectAbnormalLvl", -1),
 			EffectType: r.strDefault("effectType", ""), EffectPower: r.intDefault("effectPower", 0),
 			NegateStats: strings.Fields(r.strDefault("negateStats", "")), NegateLevel: r.intDefault("negateLvl", -1),
+		}
+		if sk.Type == "SUMMON" {
+			sk.SummonLifetime = time.Duration(r.intDefault("summonTotalLifeTime", 1200000)) * time.Millisecond
 		}
 		sk.Offensive = r.boolDefault("offensive", offensiveSkillTypes[sk.Type] || sk.Debuff || sk.Target == "CORPSE_MOB")
 		if len(sk.NegateStats) == 0 {
