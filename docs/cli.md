@@ -94,6 +94,7 @@ Used by `swarm` and `ui`; `navbuild` and `geoquery` take the map flags too.
 | `-nav-lru-bytes N` | 64 MiB | Bound of the process-wide cluster result cache of the nav hierarchy. |
 | `-spawn-multiplier F` | `1` | The server's `SpawnMultiplier` (`npcs.properties`); scales how many bots a spot takes. |
 | `-spawn-events LIST` | `extra_mob;18age;start_weapon` | The server's `SpawnEvents`, semicolon-separated: which event spawns run. |
+| `-servitor-lines` | off | Draw the bots' branches with the servitor lines (Dark Avenger, Necromancer, Warlock, Elemental Summoner, Phantom Summoner; `docs/servitors.md`). Off keeps the branch tables without them (D51). |
 
 The bots read both caches without changing them, and never rebuild them. If a cache is missing or
 out of date, the error message names the command that rebuilds it.

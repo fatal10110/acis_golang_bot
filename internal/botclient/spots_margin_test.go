@@ -29,6 +29,7 @@ var rowSpotMargins = map[int32]float64{
 	12: marginGlassCannon, 27: marginGlassCannon, 40: marginGlassCannon, 52: marginNormal,
 	5: marginTank, 20: marginTank, 33: marginTank,
 	16: marginGlassCannon, 17: marginGlassCannon, 30: marginGlassCannon, 43: marginGlassCannon,
+	6: marginTank, 13: marginGlassCannon, 14: marginGlassCannon, 28: marginGlassCannon, 41: marginGlassCannon,
 }
 
 // TestSpotMarginRows checks every role of every class of rowSpotMargins

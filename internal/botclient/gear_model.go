@@ -94,7 +94,7 @@ type gearInputs struct {
 // chat line) keeps it.
 func (b *Brain) valuer() *gearModel {
 	v, m, s := b.gearVal, b.cfg.Travel, &b.world.Self
-	key := buildKey{s.ClassID, s.Level, b.persona.Role}
+	key := buildKey{s.ClassID, s.Level, b.persona.Role, b.persona.ServitorLines}
 	if v != nil && v.gen == b.world.gen && v.in.key == key {
 		return v
 	}

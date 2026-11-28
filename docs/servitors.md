@@ -1,7 +1,9 @@
 # Servitor lines: summon control and the five rows (#592)
 
 Status: **approved as written** (owner, 2026-11-28, #592 comment; D51 in [`plan.md`](plan.md)).
-The implementation issues it lists are in M10.
+The implementation issues it lists are in M10. The five rows ship (`kits_servitor.go`, #761); the
+branch tables pick them behind `ServitorLines` (`-servitor-lines`), off by default. The
+Necromancer's corpse rule is #762.
 
 Five second professions are never picked and play their first profession's row today
 ([`strategy.md`](strategy.md) "Second professions (levels 40+)", "Servitor lines"; D23): Dark
@@ -311,9 +313,10 @@ and SH's, as the curse nuker it is.
 | EL | 1277 Summon Merrow the Unicorn, 1332 Summon Unicorn Seraphim @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1145 @48 | fixed EW nukes, spot glass cannon |
 | PS | 1278 Summon Soulless, 1333 Summon Nightshade @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1146 @48 | fixed DW nukes, spot glass cannon |
 
-The row summons its newest summon it can pay for (section 4); the D-crystal first-profession
-summons (1111, 1226, 1128) are not used: a C-crystal line that holds only D crystals plays without
-a servitor (owner question 1).
+The row summons its newest summon it can pay for (section 4). Owner answer 1 (D51) lets a line
+holding only Crystal D fall back on its first-profession D summon, so WK, EL and PS list 1111 Kat
+the Cat, 1226 Boxer the Unicorn and 1128 Shadow last (XP penalty 0.3). The Necromancer lists no
+summon for the summon rule: its corpse summons are the corpse rule's (section 6, #762).
 
 ### Branch tables
 

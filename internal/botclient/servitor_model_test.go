@@ -41,7 +41,7 @@ func summonerKit(b *Brain) {
 	race, _ := datapack.ClassRace(s.ClassID)
 	b.built = CompileBuild(race, s.ClassID, s.Level, b.persona.Role, BranchChoice{})
 	b.built.Kit.SpotMargin, b.built.Kit.ServitorSpotMargin = marginGlassCannon, marginNormal
-	b.builtFor, b.builtOK = buildKey{s.ClassID, s.Level, b.persona.Role}, true
+	b.builtFor, b.builtOK = buildKey{s.ClassID, s.Level, b.persona.Role, b.persona.ServitorLines}, true
 }
 
 // TestServitorModel checks the servitor the model counts: the live one's

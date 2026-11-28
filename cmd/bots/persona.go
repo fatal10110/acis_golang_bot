@@ -167,6 +167,9 @@ type shared struct {
 	sevenSigns botclient.SevenSignsPolicy
 	// outcomes is the outcome log's queue (-outcome-log), nil without one.
 	outcomes *botclient.OutcomeQueue
+	// servitorLines is every bot's persona switch ServitorLines
+	// (-servitor-lines).
+	servitorLines bool
 }
 
 // brain returns the BrainConfig of a bot of p over s; the caller sets its
@@ -180,7 +183,7 @@ type shared struct {
 // potions and shots.
 func (p preset) brain(s shared) botclient.BrainConfig {
 	cfg := botclient.BrainConfig{Persona: p.persona(), Travel: s.travel, CraftBoard: s.board, Ground: s.ground, Challenges: s.challenges}
-	cfg.Persona.ClanMember = p.member
+	cfg.Persona.ClanMember, cfg.Persona.ServitorLines = p.member, s.servitorLines
 	if p.walks {
 		cfg.Nav = s.nav
 	}

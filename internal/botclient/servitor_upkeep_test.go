@@ -14,13 +14,11 @@ func encodeCast(skill int32) []byte { return botwire.EncodeRequestMagicSkillUse(
 
 // Skills of the servitor upkeep tests (aCis_datapack/data/xml/skills).
 const (
-	skillSummonKai     int32 = 1276
-	skillSummonKat     int32 = 1111
-	skillSummonMew     int32 = 1225
-	skillServitorHeal  int32 = 1127
-	skillServitorPDef  int32 = 1140
-	skillServitorHaste int32 = 1141
-	kaiServitor              = int32(0x10000888)
+	skillSummonKai    int32 = 1276
+	skillSummonKat    int32 = 1111
+	skillSummonMew    int32 = 1225
+	skillServitorPDef int32 = 1140
+	kaiServitor             = int32(0x10000888)
 )
 
 // upkeepSkills are the upkeep tests' skill levels, as the datapack writes
