@@ -294,6 +294,15 @@ const (
 	OpGameRequestBuyItem  = 0x1f
 )
 
+// Multisell, both directions: MultiSellList (serverpackets/multisell.go)
+// and MultiSellChoose (clientpackets/multisell.go). MultiSellList shares
+// its byte with OpGameClientExtended, the lead of a client packet, and
+// MultiSellChoose its byte with OpGamePartyMemberPosition, a server packet.
+const (
+	OpGameMultiSellList   = 0xd0
+	OpGameMultiSellChoose = 0xa7
+)
+
 // Private sell store, both directions: PrivateStoreManageListSell,
 // PrivateStoreListSell and PrivateStoreMsgSell
 // (serverpackets/privatestore.go), RequestPrivateStoreManageSell,

@@ -48,6 +48,7 @@ func FuzzDecodeEvent(f *testing.F) {
 	f.Add(packet(OpGameDropItem, npcID, junkDrop, junkTemplate, 950, 0, 0, 1, 3, 1))
 	f.Add(packet(OpGameGetItem, pcID, adenaDrop, 900, 20, -5))
 	f.Add(shopWindow(OpGameBuyList, 5000, 29, 3, bookOffer, potionOffer))
+	f.Add(multiSellPage(500, 1, 1, 2, cpRow, greaterCPRow))
 	f.Add(shopWindow(OpGameSellList, 300, 0, 1, skinRow))
 	f.Add(manageList(selfID, 1000, []StoreItem{skinCand, swordCand}, []StoreItem{swordListed}))
 	f.Add(packet(OpGamePrivateStoreListSell, append([]any{selfID, int32(0), int32(5000)}, storeRowFields(true, swordListed)...)...))

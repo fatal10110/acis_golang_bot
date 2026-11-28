@@ -777,6 +777,9 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			if _, ok := ev.(ItemList); ok {
 				b.answerInspect(now, false)
 			}
+			if u, ok := ev.(InventoryUpdate); ok {
+				b.signsInventory(u)
+			}
 			b.dyeSettled()
 			b.shopEvent(ev)
 			b.marketEvent(ev)
@@ -789,6 +792,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.craftEvent(ev, now)
 		case HennaEquipList:
 			b.dyeList(e)
+		case MultiSellList:
+			b.signsList(e)
 		case HennaInfo:
 			b.dyeAnswered()
 		case ChooseInventoryItem:

@@ -403,6 +403,9 @@ const (
 	// actSiegeList asks a castle's attacker or defender list
 	// (pvp_siege.go).
 	actSiegeList
+	// actMultiSellChoose trades a row of the multisell list the server
+	// showed (sevensigns_priest.go).
+	actMultiSellChoose
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -459,6 +462,8 @@ func (a Action) gate() gate {
 		return gateBypass
 	case actDrop:
 		return gateDrop
+	case actMultiSellChoose:
+		return gateMultiSell
 	case actCraft, actCrystallize:
 		// RequestCrystallizeItem has no server gate (network/client_dispatch.go
 		// registers it whenLive, no flood protector): the crafter sends one
