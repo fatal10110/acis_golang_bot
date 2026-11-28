@@ -52,6 +52,14 @@ func shippedSetBonus(t *testing.T, class, level int32, role Role, chest int32, h
 // calibrates the model's max HP to it; 0 reports none.
 func shippedSetBonusHP(t *testing.T, class, level int32, role Role, chest int32, harmless bool, maxHP int32) float64 {
 	t.Helper()
+	return shippedSetBonusArmed(t, class, level, role, chest, harmless, maxHP, 0)
+}
+
+// shippedSetBonusArmed is shippedSetBonusHP with weapon template weapon
+// worn too, 0 for none. The bonus stays a fraction of the naked bot's
+// value, so only its sign and its rank against another set's read.
+func shippedSetBonusArmed(t *testing.T, class, level int32, role Role, chest int32, harmless bool, maxHP, weapon int32) float64 {
+	t.Helper()
 	if os.Getenv("BOT_DATAPACK_XML") == "" {
 		t.Skip("BOT_DATAPACK_XML not set")
 	}
@@ -96,6 +104,9 @@ func shippedSetBonusHP(t *testing.T, class, level int32, role Role, chest int32,
 		if id := set.pieces[slot]; id != 0 {
 			w[slot] = Item{ObjectID: 400 + int32(slot), TemplateID: id, Count: 1, Equipped: true}
 		}
+	}
+	if weapon != 0 {
+		w[slotWeapon] = Item{ObjectID: 399, TemplateID: weapon, Count: 1, Equipped: true}
 	}
 	return b.setBonus(&w)
 }
