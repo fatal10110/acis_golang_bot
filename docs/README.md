@@ -44,7 +44,7 @@ the reference. For a summary of the decisions, see [`decisions.md`](decisions.md
 | M7 | [`navigation.md`](navigation.md), [`walking.md`](walking.md) | Bots planning their own routes on the server's map data; walking smoothly. |
 | M8 | [`items.md`](items.md) | Gear, supplies and consumables, managed like a real player. |
 | M9 | [`crafting.md`](crafting.md) | A dwarf bot that crafts for its clan. |
-| M10 | [`strategy.md`](strategy.md) | Each bot playing its race, class and role. |
+| M10 | [`strategy.md`](strategy.md), [`servitors.md`](servitors.md) | Each bot playing its race, class and role; the servitor lines (plan, #592). |
 | M11 | [`parties/`](parties/README.md) | Bots forming parties with each other and with players. |
 | M12 | [`valuables/`](valuables/README.md) | Merchants selling rare loot by advertising, haggling and trading. |
 | M13 | [`pvp/`](pvp/README.md) | Bots that fight players: duels, arenas, flagged and karma players, clan wars, sieges, the Olympiad. |
