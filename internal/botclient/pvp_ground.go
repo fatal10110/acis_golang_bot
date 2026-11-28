@@ -181,10 +181,12 @@ func (b *Brain) castInRange(id, skill int32, now time.Time) bool {
 }
 
 // duelHeld reports whether the server's follow toward duel opponent id
-// would walk the bot onto forbidden ground at now: the bot stands within
-// duelEdge of it, or the straight segment to id comes within duelEdge. The
-// bot then sends no swing or cast it would walk for (docs/pvp/finding.md
-// "The server's follow").
+// would walk the bot onto forbidden ground or into a monster's clearance at
+// now: the bot stands within duelEdge of forbidden ground, or the straight
+// segment to id comes within duelEdge of it or fails duelClearOK. The bot
+// then sends no swing or cast it would walk for (docs/pvp/finding.md "The
+// server's follow"). The server's follow path is its own: the straight
+// segment is the bot's model of it.
 func (b *Brain) duelHeld(id int32, now time.Time) bool {
 	if !b.inDuel(now) || id != b.duelOpponent(now) {
 		return false
@@ -194,13 +196,22 @@ func (b *Brain) duelHeld(id int32, now time.Time) bool {
 		return false
 	}
 	from := b.world.Self.Position(now)
-	return b.groundDist(from, from) < duelEdge || b.segmentNear(from, o.Position(now))
+	return b.groundDist(from, from) < duelEdge || b.followBlocked(from, o.Position(now), now)
+}
+
+// followBlocked reports whether the server's follow from from toward to
+// would leave the duel's ground or clearance at now: the straight segment
+// comes within duelEdge of forbidden ground or fails duelClearOK.
+func (b *Brain) followBlocked(from, to Point, now time.Time) bool {
+	return b.segmentNear(from, to) || !b.duelClearOK(from, to, now)
 }
 
 // duelGroundStop reports whether the bot must drop its intention on duel
 // opponent id at now: it stands within duelEdge of forbidden ground, or id
 // is out of its reach and the straight segment to it or to the end of its
-// walk, or the bot's own leg's destination, comes within duelEdge of it.
+// walk comes within duelEdge of it or crosses an aggressive monster's
+// clearance (followBlocked), or the bot's own leg's destination comes
+// within duelEdge of it.
 func (b *Brain) duelGroundStop(id int32, now time.Time) bool {
 	if !b.inDuel(now) || id != b.duelOpponent(now) || id != b.pvp.guard.intent {
 		return false
@@ -218,7 +229,7 @@ func (b *Brain) duelGroundStop(id int32, now time.Time) bool {
 	}
 	// The follow walks the bot after the opponent along its path: a walk
 	// toward ground near forbidden stops as soon as it is seen.
-	if o := b.world.object(id); o != nil && o.Moving(now) && b.segmentNear(from, o.move.to) {
+	if o := b.world.object(id); o != nil && o.Moving(now) && b.followBlocked(from, o.move.to, now) {
 		return true
 	}
 	return b.duelHeld(id, now)
