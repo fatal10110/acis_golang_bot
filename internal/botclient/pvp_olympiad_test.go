@@ -131,7 +131,7 @@ func TestOlympiadRegister(t *testing.T) {
 	}{
 		{name: "Olympiad off", class: classCleric, setup: func(b *Brain) { b.persona.PvP.Olympiad = false }},
 		{name: "already noble", class: classCleric, setup: func(b *Brain) { b.world.Self.Noble = true }},
-		{name: "a third profession, ThirdClass off", class: olyCardinal},
+		{name: "a third profession, ThirdClass off", class: olyCardinal, setup: func(b *Brain) { b.persona.Olympiad.ThirdClass = false }},
 	} {
 		t.Run("no noblesse: "+tc.name, func(t *testing.T) {
 			b := newClassBrain(t, tc.class, 30)

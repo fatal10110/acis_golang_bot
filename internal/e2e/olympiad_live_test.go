@@ -51,8 +51,8 @@ func olympiadWindowOpen(now time.Time) (bool, string) {
 
 // TestLiveOlympiadRegister checks the Olympiad's registration
 // (docs/pvp/olympiad.md, X16, D42): a bot of a third profession with
-// Olympiad on and OlympiadPolicy.ThirdClass on (the owner's ruling, #729,
-// is pending; the scenario lets it) takes noblesse at the class master with
+// Olympiad on and the default OlympiadPolicy (ThirdClass on: the owner's
+// ruling on #729) takes noblesse at the class master with
 // one become_noble, walks to the Grand Olympiad Manager, registers for
 // classed games once (the manager answers 1503) and unregisters after its
 // shortened OlympiadWait (1505). It runs only inside the competition
@@ -80,7 +80,6 @@ func TestLiveOlympiadRegister(t *testing.T) {
 			p.ClassChange = botclient.DefaultPersona().ClassChange
 			p.ClassChange.Builds = map[int32]int32{}
 			p.PvP.Olympiad = true
-			p.Olympiad.ThirdClass = true
 			p.Olympiad.Wait = time.Minute
 			return p
 		},
