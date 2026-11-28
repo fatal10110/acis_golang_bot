@@ -141,7 +141,7 @@ P.Atk per STR). Race changes what an item or a dye is worth through:
 | Doom Light | +3 DEX, −1 STR, −2 CON, ×1.027 P.Atk | elven scout, archer |
 | Blue Wolf Robe | +206 max MP, +3 WIT, −2 INT, −1 MEN | elven mystic (cast speed) |
 | Doom Robe | +2 INT, +1 MEN, −3 WIT, +7 run | dark mystic (M.Atk) |
-| Demon | +4 INT, −1 WIT, **−270 max HP** | a caster with HP to spare, not a low-CON one at 40 |
+| Demon | +4 INT, −1 WIT, **−270 max HP** | no row: Karmian's cast speed outranks it for SN and SG at every max HP (#676) |
 | Composite, Avadon Light | +5795 weight limit | dwarven looter, merchant |
 
 The bot today values every set as 15 % of its pieces, so it cannot tell a Demon set from a Doom
@@ -310,22 +310,27 @@ a tank with Holy Blessing known (gearRole).
   they buy nothing and the sets are model-chosen there.
 - TH, HK, PW, SR, AW, PR, TY, Plated Leather: against the reference monster the CON it takes costs
   more HP than its STR adds, in either role, and it is model-chosen (TH, PW and AW take Mithril
-  Light). Against a harmless target its STR gains for the Damage builds of HK, SR and TY (TY's
-  with its own row, #633); for TH, PW and AW's (their rows, #631: their first damage step at 40 is
-  Deadly Blow, whose kill the STR does not speed past the tie-break), PR's, and every Support build
-  (a tank), it is model-chosen.
+  Light). Against a harmless target its STR gains for the Damage builds of HK, SR, PR and TY (TY's
+  with its own row, #633; PR's since its Drain Health under 60 % HP is passed over for Stunning
+  Shot, #676); for TH, PW and AW's (their rows, #631: their first damage step at 40 is Deadly
+  Blow, whose kill the STR does not speed past the tie-break) and every Support build (a tank), it
+  is model-chosen.
 - SN and SG, Demon: its -270 max HP and -1 WIT lose value against the reference monster in either
-  role, and Karmian's cast speed outranks its +4 INT at every max HP, over 810 too: the row's
-  "Demon once max HP covers the loss" does not hold through the model, and Demon is model-chosen
-  (the sorcerer's Damage build gains from its INT only against a harmless target). The owner's
-  call on the rule is #676.
+  role, and Karmian's cast speed outranks its +4 INT at 40, 52 and 60, at every max HP, naked or
+  with a C-grade magic weapon, so Demon is model-chosen and the rows name Karmian (#676: the rule
+  "Demon once max HP covers the loss, over 810" is dropped, not hand-coded). The server shortens a
+  nuke's reuse by cast speed as it does its cast time (`cast/controller.go` buildPlan), so a
+  reuse-bound Prominence casts more often with Karmian, while -1 WIT takes back 5 % of the cast
+  speed that +4 INT's 8 % damage would add. The sorcerer's and the spellhowler's model attacks are
+  Prominence and Hurricane: their Vampiric Touch and Claw, cast only under an HP threshold, are
+  passed over (Design section 3, Value).
 - SN, SG, SH and WC, Karmian, Support: the build is a tank, whose P. Def gain counts against the
   reference monster; against a harmless target the set is model-chosen. WC's Damage build: the same.
 - BI, PP, EE and SE, Divine and Karmian: they gain in both roles against either target (at 40 the
   naked healer lasts its survival floor), so neither is model-chosen.
 
 `TestRow<ID>SetValue` (`gear_value_rows_test.go`, `gear_value_second_test.go`) holds each row of
-the shipped datapack to this; `TestRowSNDemonRule` holds the sorcerer's Demon rule.
+the shipped datapack to this; `TestRowSNDemonRule` holds Karmian over Demon for SN and SG.
 
 ### Combat (columns 3-7)
 
@@ -483,8 +488,8 @@ professions): the column lists, per direction, the +1 symbol of each price tier 
 | PP | Prophet (17), Support ← CL | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (buffs are cast speed), else Divine. | Cast 600; buffs 400 | WIT+1 MEN− (48, 60, 120) |
 | EE | Elven Elder (30), Support ← EO | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Divine Set, else Karmian. | Cast 600 | WIT+1 MEN− (48, 60, 120) |
 | SE | Shillien Elder (43), Support ← SO | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Divine Set, else Karmian. | Cast 600 | MEN+1 WIT− (46, 58, 118) |
-| SN | Sorcerer (12), Damage ← HW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Demon Set (441, 472, gloves 2459: +4 INT −1 WIT, −270 HP) once its max HP covers the loss (over 810, three times the 270), else Karmian. | Cast 900 (Prominence) | INT+1 WIT− (44, 56, 116) and INT+1 MEN− (43, 55, 115) |
-| SG | Spellsinger (27), Damage ← EW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set, else Demon as SN. | Cast 900 (Hydro Blast) | INT+1 MEN− (43, 55, 115): WIT is its strength |
+| SN | Sorcerer (12), Damage ← HW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (Demon's +4 INT −1 WIT never outranks its cast speed through the model, #676). | Cast 900 (Prominence) | INT+1 WIT− (44, 56, 116) and INT+1 MEN− (43, 55, 115) |
+| SG | Spellsinger (27), Damage ← EW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (Demon model-chosen, as SN). | Cast 900 (Hydro Blast) | INT+1 MEN− (43, 55, 115): WIT is its strength |
 | SH | Spellhowler (40), Damage ← DW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (Demon's −270 HP is a third of its HP at 40). | Cast 900 (Hurricane) | INT+1 WIT− (44, 56, 116) |
 | WC | Warcryer (52), Support and Damage ← OS | BLUNT/MAGIC (casts; Hammer Crush and Stun Attack take BLUNT). | Heavy; Full Plate Set, else Composite; the Karmian robe is the fallback with no heavy pair affordable. | Cast 900 (Steal Essence); melee with Hammer Crush | MEN+1 WIT− (46, 58, 118): chants run on MP |
 
@@ -660,7 +665,11 @@ behavior").
   rest that wins the bar back, with a survival floor. Max MP counts for a damage role where the
   kill's MP binds the rest; a support's max MP, cast speed and M.Atk count while it lasts the
   survival floor (#369). A damage role fights with its first known rotation step that deals
-  damage (not a heal or a bleed). A role's weights are persona defaults (D6).
+  damage (not a heal or a bleed), passing over a step gated on its own HP (`SelfHPBelow`, a drain
+  it casts only when hurt: the mystics', HW's, DW's and SN's Vampiric Touch, SH's Vampiric Claw,
+  SK's Life Leech, PL's and PR's Drain Health; #676). Cast speed shortens a magic cast's
+  reuse as it does its cast time (`cast/controller.go` buildPlan, unless the skill's reuse is
+  static), so it counts for a reuse-bound nuke too. A role's weights are persona defaults (D6).
 
 ### 4. The build (`internal/botclient`)
 

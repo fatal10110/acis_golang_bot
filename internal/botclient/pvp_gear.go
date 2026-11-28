@@ -76,7 +76,7 @@ type mixSeen struct {
 }
 
 // mixRow is a class and the row it plays: one share of the mix, its
-// reference opponent the class template.
+// reference opponent the class in grade-typical gear (TravelMap.refFighter).
 type mixRow struct {
 	class int32
 	row   charmodel.Row
@@ -178,10 +178,11 @@ func (b *Brain) gearPvP(m *TravelMap, v *gearModel) {
 }
 
 // mixShares are the shares of the mix rows, each of the players playing
-// it, with its reference opponent: its class template at character level,
-// no gear (docs/pvp/model.md "PvP value"). Unlike the engage estimate's
-// reference opponent (Brain.pvpRef) it is not geared yet (#600). A class
-// the travel map lacks is left out.
+// it, with its reference opponent (docs/pvp/model.md "PvP value"): the same
+// one as the engage estimate's (TravelMap.refFighter), its class template
+// at character level in the grade-typical gear of its class and the row's
+// bow flag, built once per class and bow. A class the travel map lacks is
+// left out.
 func mixShares(m *TravelMap, rows map[mixRow]int, level int) []charmodel.Share {
 	known := slices.SortedFunc(maps.Keys(rows), func(x, y mixRow) int {
 		return cmp.Or(cmp.Compare(x.class, y.class), cmp.Compare(x.row.ID, y.row.ID), boolCmp(x.row.Bow, y.row.Bow))
@@ -191,9 +192,15 @@ func mixShares(m *TravelMap, rows map[mixRow]int, level int) []charmodel.Share {
 	for _, r := range known {
 		total += rows[r]
 	}
+	refs := make(map[refKey]charmodel.Fighter)
 	var out []charmodel.Share
 	for _, r := range known {
-		opp := charmodel.ModelFighter(charmodel.Build{Class: m.classes[r.class], Level: level, Mage: charmodel.MageClass(m.classes, r.class)})
+		key := refKey{r.class, r.row.Bow}
+		opp, ok := refs[key]
+		if !ok {
+			opp, _ = m.refFighter(r.class, r.row.Bow, level)
+			refs[key] = opp
+		}
 		opp.Row = r.row
 		out = append(out, charmodel.Share{Opponent: opp, Share: float64(rows[r]) / float64(total)})
 	}

@@ -46,8 +46,8 @@ var tyrantKit = ClassKit{
 	},
 	PvP: monkPvP,
 	Buffs: []Buff{
-		{Skill: skillPumaTotem, Weapons: fistWeapons},
-		{Skill: skillBisonTotem, From: 68, Weapons: fistWeapons, Replaces: skillPumaTotem},
+		{Skill: skillPumaTotem, Weapons: fistWeapons, Self: true},
+		{Skill: skillBisonTotem, From: 68, Weapons: fistWeapons, Replaces: skillPumaTotem, Self: true},
 	},
 	Toggles: []Toggle{warFrenzy},
 	Relax:   skillRelax,

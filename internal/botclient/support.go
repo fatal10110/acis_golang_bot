@@ -92,11 +92,13 @@ type Heal struct {
 }
 
 // Buff is a buff skill the bot keeps up. A Party buff is cast on the bot
-// and lands on the members around it; any other is cast on each member.
+// and lands on the members around it; a Self one and one of a
+// caster-centred datapack target (SELF: the fighter auras, Spirit Barrier,
+// Majesty) are cast on the bot only; any other is cast on each member.
 // Weapons casts it only while the bot wields one of those datapack weapon
 // kinds; Members casts a member buff only on a member of those classes;
 // Self casts it on the bot only (a row's self-buff with a target ONE skill,
-// Concentration).
+// Concentration, or one of target SELF).
 // From is the level the buff starts at, as Step.From; Replaces is the
 // buff it replaces from that level (a row's "replaced by"): CompileBuild
 // leaves that one out. Role puts it in that role's buffs only, as
@@ -328,6 +330,11 @@ const partyBuffReach = 1000
 // RebuffBefore left), one cast at a time; between the Idle steps and the
 // kit buffs it puts up a Sighted PvP step (sightedBuff). A Party buff is cast on the bot
 // while some patient within partyBuffReach, the bot included, needs it.
+// A Self buff, and any non-Party buff of a caster-centred datapack target
+// (the server casts it on the caster whatever is selected, so a member
+// never shows its effect), is due only on the bot; a caster-centred one
+// goes out without selecting the bot first. A buff with no datapack entry
+// goes as its flags say.
 func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 	s := &b.world.Self
 	kit := b.build().Kit
@@ -361,11 +368,13 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 					continue
 				}
 			}
-			if bf.Self && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
+			sk, known := b.skillData(bf.Skill)
+			centred := !bf.Party && known && casterCentered(sk.Target)
+			if (bf.Self || centred) && id != s.ObjectID || !bf.fits(weapon, b.classOf(id)) || !b.buffDue(id, bf.Skill, now) ||
 				!b.castReady(bf.Skill, now) || now.Sub(b.buffedAt[buffKey{on, bf.Skill}]) < buffRetry {
 				continue
 			}
-			return b.castOn(on, bf.Skill, !bf.Party, now), true
+			return b.castOn(on, bf.Skill, !bf.Party && !centred, now), true
 		}
 	}
 	return Action{}, false
