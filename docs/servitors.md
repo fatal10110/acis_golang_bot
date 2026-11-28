@@ -43,7 +43,7 @@ cannons (the M9 crafter line, D18). Fighting *other players'* summons is M13
 | Kill credit | The servitor's damage counts as its owner's; the owner gets the kill's XP and SP, and the drop goes to the owner as top damage dealer. The servitor takes no XP share. | `S/data/manager/npcs_rewards.go:127-140`, `:166-168`, `:188-199`, `:321-327` |
 | XP penalty | While the owner has a servitor out, *every* kill's XP is cut by the summon skill's `expPenalty` (0.05-0.15 for the second-profession summons, 0.9 for 1154 and the first-profession Mew, Mirage and Silhouette), whether or not the servitor fought. | `S/data/manager/npcs_rewards.go:283-292`; `S/network/summon_spawn.go:481` |
 | Lifetime | `summonTotalLifeTime` 1200000. Each second the servitor loses `summonTimeLostIdle` 500, or `summonTimeLostActive` 1000 while the **owner** is in combat stance; a dead servitor's lifetime stands still. So a life lasts 40 min idle, 20 min if the owner fights throughout. | `S/model/actor/summon/live_lifecycle.go:53-82`, `live_accessors.go:644-649`; `D/skills/1200-1299.xml:1946-1948` |
-| Upkeep | With `itemConsumeSteps` N > 0 the servitor pays `itemConsumeCountOT` of `itemConsumeIdOT` each time its remaining lifetime crosses a multiple of total/(N+1): N payments over a full life. An owner who cannot pay loses it at once. | `S/model/actor/summon/lifetime.go:18-50`; `live_lifecycle.go:80-82` |
+| Upkeep | With `itemConsumeSteps` N > 0 the servitor pays `itemConsumeCountOT` of `itemConsumeIdOT` each time its remaining lifetime reaches a multiple of total/(N+1), down to 0: N+1 payments over a full life, the last one tick before it ends (remaining reaches exactly 0, and `Tick` expires only below 0). An owner who cannot pay loses it at once. | `S/model/actor/summon/lifetime.go:18-50`; `live_lifecycle.go:80-82` |
 | Remaining-time bar | `SetSummonRemainTime` (0xd1) is sent whenever the remaining lifetime dropped 1/352 of the total since it was last shown (about every 3.4 s of lifetime). | `live_lifecycle.go:74-77`; `S/network/summon_events.go:258-260` |
 | Pet orders | `RequestActionUse` (0x45): no flood protector of its own (only the 160 frames/s connection cap); refused while the owner is dead, fake-dead, out of control or observing. | `S/network/floodprotector.go:10-24`; `S/network/client_ingame.go:257-290`; `S/network/clientstats.go:10` |
 | Corpse age | A `CORPSE_MOB` skill is refused (SystemMessage 1247) once a corpse is older than half its `corpseTime`, unless it was spoiled or seeded; checked at cast commit. A landed corpse skill consumes the corpse at once. | `S/handler/target/target_predicates.go:63-78`; `target_handlers_corpse.go:77-94`; `S/model/actor/cast/ai.go:231-247`; `cast/effects.go:250-270` |
@@ -81,13 +81,13 @@ fixed bytes.
 | +36, +40 | 2 × int32 | SP, level | level |
 | +44-+60 | 3 × int64 | exp, exp at this level, exp at the next | no |
 | +68, +72 | 2 × int32 | weight, weight limit | no |
-| +76-+120 | 12 × int32 | P.Atk, P.Def, M.Atk, M.Def, accuracy, evasion, critical, move speed, P.Atk speed, M.Atk speed | P.Atk, P.Def, M.Atk, M.Def (the model's live numbers, buffs included) |
-| +124 | int32 | abnormal effect mask | yes (stun 0x40, sleep 0x80, root 0x200, as `CharInfo`) |
-| +128 | uint16 | mountable | no |
-| +130 | uint8 | move type (1 swimming) | no |
-| +131 | uint16 | 0 | no |
-| +133 | uint8 | team | no |
-| +134, +138 | 2 × int32 | soulshots and spiritshots per hit | no |
+| +76-+112 | 10 × int32 | P.Atk, P.Def, M.Atk, M.Def, accuracy, evasion, critical, move speed, P.Atk speed, M.Atk speed | P.Atk, P.Def, M.Atk, M.Def (the model's live numbers, buffs included) |
+| +116 | int32 | abnormal effect mask | yes (stun 0x40, sleep 0x80, root 0x200, as `CharInfo`) |
+| +120 | uint16 | mountable | no |
+| +122 | uint8 | move type (1 swimming) | no |
+| +123 | uint16 | 0 | no |
+| +125 | uint8 | team | no |
+| +126, +130 | 2 × int32 | soulshots and spiritshots per hit (ends at +134) | no |
 
 **`PetStatusUpdate` (0xb5)**, `petinfo.go:64-83`: int32 summon type, int32 object id, int32 x, y,
 z, string title, then int32 current feed, max feed, current HP, max HP, current MP, max MP, level,
@@ -222,19 +222,19 @@ XP, paid back by the faster kills (`TimeToKill`).
 
 **What each summon costs** (`D/skills/*.xml`; C = Crystal: C-Grade 1459, D = Crystal: D-Grade 1458):
 
-| Summon | Learned (row) | Cast cost | Upkeep: count per checkpoint, checkpoints per life | One full life | XP penalty |
+| Summon | Learned (row) | Cast cost | Upkeep: count per checkpoint, checkpoints per life (N+1) | One full life | XP penalty |
 | --- | --- | --- | --- | --- | --- |
-| 283 Summon Dark Panther | 40-74, 7 levels (DA) | 1-4 C | 1-4 C, 4 | 5-20 C | 0.15 |
-| 1276 Kai the Cat, 1277 Merrow the Unicorn, 1278 Soulless | 40-74, 14 levels (WK, ES, PS) | 1-4 C | 1-3 C, 14 | 15-46 C | 0.10 |
-| 1331 Feline Queen, 1332 Unicorn Seraphim, 1333 Nightshade | 56-74, 10 levels (WK, ES, PS) | 1-4 C | 1-3 C, 14 | 15-46 C | 0.05 |
-| 1129 Summon Reanimated Man | 44-74, 7 levels (NC, a corpse) | 2-4 C | 1-4 C, 4 | 6-20 C | 0.15 |
-| 1334 Summon Cursed Man | 56-74, 7 levels (NC, a corpse) | 1-3 C | 2-4 C, 4 | 9-19 C | 0.15 |
+| 283 Summon Dark Panther | 40-74, 7 levels (DA) | 1-4 C | 1-4 C, 5 | 6-24 C | 0.15 |
+| 1276 Kai the Cat, 1277 Merrow the Unicorn, 1278 Soulless | 40-74, 14 levels (WK, EL, PS) | 1-4 C | 1-3 C, 15 | 16-49 C | 0.10 |
+| 1331 Feline Queen, 1332 Unicorn Seraphim, 1333 Nightshade | 56-74, 10 levels (WK, EL, PS) | 1-4 C | 1-3 C, 15 | 16-49 C | 0.05 |
+| 1129 Summon Reanimated Man | 44-74, 7 levels (NC, a corpse) | 2-4 C | 1-4 C, 5 | 7-24 C | 0.15 |
+| 1334 Summon Cursed Man | 56-74, 7 levels (NC, a corpse) | 1-3 C | 2-4 C, 5 | 11-23 C | 0.15 |
 | 1154 Summon Corrupted Man | 40-70, 6 levels (NC, a corpse) | 3 D | none | 3 D | 0.9 (never used to level) |
-| 1111 Kat the Cat, 1226 Boxer the Unicorn, 1128 Summon Shadow | 20-74, 18 levels (HW, EW, DW and their lines) | 3-8 D | 0-6 D, 0-14 by level | per level | 0.3 |
+| 1111 Kat the Cat, 1226 Boxer the Unicorn, 1128 Summon Shadow | 20-74, 18 levels (HW, EW, DW and their lines) | 3-8 D | 0-6 D, none or N+1 (N 0-14 by level) | per level | 0.3 |
 | 1225 Mew the Cat, 1227 Mirage the Unicorn, 1228 Summon Silhouette | 20-74, 18 levels (HW, EW, DW) | 1 D | none | 1 D | 0.9 (never used to level) |
 
 A life is 20 min of lifetime at combat cost, so a bot fighting without pause spends three lives an
-hour: about 45 C an hour for a level-40 Warlock, up to about 140 C at 74; a Dark Avenger 15 to 60.
+hour: about 50 C an hour for a level-40 Warlock, up to about 150 C at 74; a Dark Avenger 18 to 72.
 
 **Sources.** No spawned NPC sells crystals: the only buy lists holding 1458 and 1459 are 5720 of
 the Sales Cat of Ivory Tower (31075), which no spawn list places, and 300534 (npc -1, the GM shop)
@@ -263,7 +263,7 @@ skill, so a full life's crystals count as one cast.
 Rows in the three-table form and notation of [`strategy.md`](strategy.md) "Second professions
 (levels 40+)" (row start 40, `@N` first learned past 40, `(fixed)` an attack step the own tree does
 not raise), plus a fourth table for the servitor. Row ids: DA Dark Avenger, WK Warlock, NC
-Necromancer, ES Elemental Summoner, PS Phantom Summoner (WL is the Warlord). Skill lists are the
+Necromancer, EL Elemental Summoner, PS Phantom Summoner (WL is the Warlord). Skill lists are the
 class trees, `D/classes/humanFighter.xml` (6), `humanMystic.xml` (13, 14), `elvenMystic.xml` (28),
 `darkMystic.xml` (41). Dyes are the second-profession symbols every one of these classes may draw
 (`D/hennas.xml` 37+); the Dark Avenger cannot draw the MEN symbols, and needs none.
@@ -275,7 +275,7 @@ class trees, `D/classes/humanFighter.xml` (6), `humanMystic.xml` (13, 14), `elve
 | DA | Dark Avenger (6), Support ← KN | SWORD or BLUNT with a SHIELD: Shield Stun keeps its shield gate, Judgment takes SWORD or BLUNT. | Heavy; Full Plate Set (as PL). | Melee; Aggression 400; Drain Health 600 | CON+1 DEX− (40, 52, 112) |
 | WK | Warlock (14), Damage ← HW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (as SN). | Cast 750 (Blaze, fixed), behind its servitor | INT+1 WIT− (44, 56, 116) and INT+1 MEN− (43, 55, 115) |
 | NC | Necromancer (13), Damage ← HW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (as SN). | Cast 900 (Death Spike, Vampiric Claw); corpse skills 400, corpse summons 40 (section 6) | INT+1 WIT− (44, 56, 116) and INT+1 MEN− (43, 55, 115) |
-| ES | Elemental Summoner (28), Damage ← EW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (as SG). | Cast 750 (Solar Spark, Aqua Swirl, fixed); Wind Shackle 600 | INT+1 MEN− (43, 55, 115): WIT is its strength |
+| EL | Elemental Summoner (28), Damage ← EW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (as SG). | Cast 750 (Solar Spark, Aqua Swirl, fixed); Wind Shackle 600 | INT+1 MEN− (43, 55, 115): WIT is its strength |
 | PS | Phantom Summoner (41), Damage ← DW | BLUNT/MAGIC or SWORD/MAGIC. | Robe; Karmian Set (as SH). | Cast 750 (Shadow Spark, Twister, fixed); Wind Shackle 600 | INT+1 WIT− (44, 56, 116) |
 
 #### Combat (columns 3-7)
@@ -285,7 +285,7 @@ class trees, `D/classes/humanFighter.xml` (6), `humanMystic.xml` (13, 14), `elve
 | DA | 28 Aggression from 400, a pull; the servitor is ordered onto the target once the pull lands. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 92 Shield Stun [SHIELD]; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (fixed); melee. | 70 Drain Health S<60; 46 Life Scavenge S<70 on a fresh corpse (section 6); 45 Divine Heal (fixed) S<40; 110 Ultimate Defense S<20 | 82 Majesty, 72 Iron Will @43, 86 Reflect Damage (out of combat); 322 Shield Fortress @64 (combat toggle, MP>30) | HP; 226 Relax (base tree) |
 | WK | Servitor order, then 1220 Blaze (fixed) from 750 after `ServitorLead`. | 1220 Blaze (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal under 50 % (rule `servitor`). | 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind (fixed) when MP under 30 % and S≥70 | 1078 Concentration; 1262 Transfer Pain (combat toggle while the servitor is out, MP>30); servitor buffs 1140, 1139 @44, 1141 @44, 1144 Fast Servitor @48 | MP; plain sit |
 | NC | 1168 Curse: Poison MP>60 from 600, else 1148 Death Spike @44 from 900; before 44 1220 Blaze (fixed) from 750. | 1168 Curse: Poison open MP>60; 1148 Death Spike @44; 1234 Vampiric Claw; 1155 Corpse Burst @48 on a fresh corpse A≥2 (section 6); 1220 Blaze (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal (fixed) under 50 %. | 1234 Vampiric Claw S<70; 1151 Corpse Life Drain S<70 on a fresh corpse (section 6); 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind when MP under 30 % and S≥70 | 1078 Concentration | MP; plain sit |
-| ES | Servitor order, then 1206 Wind Shackle MP>50 from 600 after `ServitorLead`, else the first ready nuke from 750. | 1206 Wind Shackle open MP>50; 1264 Solar Spark (fixed); 1175 Aqua Swirl (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal under 50 %. | 1216 Self Heal (base) S<40 (no drain) | 1078 Concentration; 1262 Transfer Pain (as WK); servitor buffs 1140, 1139 @44, 1141 @44, 1145 Bright Servitor @48 | MP; plain sit |
+| EL | Servitor order, then 1206 Wind Shackle MP>50 from 600 after `ServitorLead`, else the first ready nuke from 750. | 1206 Wind Shackle open MP>50; 1264 Solar Spark (fixed); 1175 Aqua Swirl (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal under 50 %. | 1216 Self Heal (base) S<40 (no drain) | 1078 Concentration; 1262 Transfer Pain (as WK); servitor buffs 1140, 1139 @44, 1141 @44, 1145 Bright Servitor @48 | MP; plain sit |
 | PS | Servitor order, then 1206 Wind Shackle MP>50 from 600 after `ServitorLead`, else the first ready nuke from 750. | 1206 Wind Shackle open MP>50; 1266 Shadow Spark (fixed); 1178 Twister (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal under 50 %. | 1147 Vampiric Touch (fixed) S<70; 1157 Body To Mind (fixed) when MP under 30 % and S≥70 | 1078 Concentration; 1262 Transfer Pain (as WK); servitor buffs 1140, 1139 @44, 1141 @44, 1146 Mighty Servitor @48 | MP; plain sit |
 
 #### Numbers and summary (columns 8, 10, 12)
@@ -295,7 +295,7 @@ class trees, `D/classes/humanFighter.xml` (6), `humanMystic.xml` (13, 14), `elve
 | DA | 20 | 35 / 20 | 90 / 80 | 15 | 60 | 30 | tank 1.5 | A shield tank with a panther: pulls with Aggression, holds the pack, the panther adds damage. |
 | WK | 20 | 50 / 30 | 90 / 90 | 30 | 85 | 60 | normal 2.0 with a servitor out, else glass cannon 3.0 | A cat summoner: Kai, then the Feline Queen, tanks and kills; the Warlock heals and buffs it and adds its Human Wizard nukes. |
 | NC | 10 | 55 / 20 | 95 / 90 | 35 | 90 | 65 | glass cannon 3.0 | A curse nuker: Curse: Poison, Death Spike and Vampiric Claw from 900; raises a corpse servitor when one falls close. |
-| ES | 20 | 50 / 30 | 90 / 90 | 30 | 85 | 60 | normal 2.0 with a servitor out, else glass cannon 3.0 | A unicorn summoner: Merrow, then the Seraphim, tanks; the Summoner shackles, heals it and adds water nukes. |
+| EL | 20 | 50 / 30 | 90 / 90 | 30 | 85 | 60 | normal 2.0 with a servitor out, else glass cannon 3.0 | A unicorn summoner: Merrow, then the Seraphim, tanks; the Summoner shackles, heals it and adds water nukes. |
 | PS | 20 | 55 / 30 | 95 / 90 | 35 | 90 | 65 | normal 2.0 with a servitor out, else glass cannon 3.0 | A shadow summoner: Soulless, then Nightshade, tanks; the Summoner shackles, heals it and drains. |
 
 The summoners keep 20 % MP for Servitor Heal (96 MP at the top level) and sit at 30 % MP; their
@@ -309,7 +309,7 @@ and SH's, as the curse nuker it is.
 | DA | 283 Summon Dark Panther | none (the Dark Avenger has no Servitor Heal) | none | plays the row as a tank |
 | WK | 1276 Summon Kai the Cat, 1331 Summon Feline Queen @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1144 @48 | fixed HW nukes, spot glass cannon |
 | NC | 1129 Summon Reanimated Man @44, 1334 Summon Cursed Man @56, each from a fresh corpse (section 6); never 1154 (XP penalty 0.9) | 1127 (fixed) under 50 % | none | plays the row as a nuker |
-| ES | 1277 Summon Merrow the Unicorn, 1332 Summon Unicorn Seraphim @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1145 @48 | fixed EW nukes, spot glass cannon |
+| EL | 1277 Summon Merrow the Unicorn, 1332 Summon Unicorn Seraphim @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1145 @48 | fixed EW nukes, spot glass cannon |
 | PS | 1278 Summon Soulless, 1333 Summon Nightshade @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1146 @48 | fixed DW nukes, spot glass cannon |
 
 The row summons its newest summon it can pay for (section 4); the D-crystal first-profession
