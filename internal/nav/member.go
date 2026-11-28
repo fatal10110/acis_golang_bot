@@ -90,6 +90,12 @@ func NewHierarchy(g *Graph, e *engine.Engine, w *Water, cacheBytes int64) *Hiera
 // Graph returns the abstract graph.
 func (h *Hierarchy) Graph() *Graph { return h.graph }
 
+// Planner returns base weighing covered ground as h's nav cache was built
+// (Graph.CoveredCost), so a cell search of its own, such as a swim or a drop
+// search, costs a route as the hierarchy's legs do (docs/navigation.md,
+// "Covered ground").
+func (h *Hierarchy) Planner(base Planner) Planner { return base.withCovered(h.graph.covered) }
+
 // Member is a cell's place in the hierarchy, from Locate. It holds the
 // cell's cluster result, so a Member a walker keeps also pins that result.
 type Member struct {

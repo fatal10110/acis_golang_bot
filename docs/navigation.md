@@ -411,9 +411,9 @@ server's pathfinder.
   building's two doorways. A border crossing pays no covered weight: it is one step, ranked by the
   straight line as before. The cost is a build parameter (`bots navbuild -covered`, 0 weighs
   none, at most 100) recorded in the nav cache header (format 7), and a hierarchy's legs weigh
-  covered ground as its cache was built; a planner without a hierarchy weighs the default. So
-  does the walker's own planner (its swim route and its drop search, `walker.go`), whatever the
-  cache was built with, until it takes the graph's cost (#698). The
+  covered ground as its cache was built; a planner without a hierarchy weighs the default. The
+  walker's own planner (its swim route and its drop search, `walker.go`) takes the graph's cost
+  from `Hierarchy.Planner` (#698), so its searches weigh covered ground as the legs do. The
   weight covers the whole route, not the stretches near its ends: the abstract graph's costs are
   built before any end is known, and a pass-through is often chosen there.
   - **Measured on the owner's data** (`TestOwnerOrcCovered` and `BenchmarkOwnerCovered`, local
@@ -436,8 +436,24 @@ server's pathfinder.
     The route to the trainers inside still enters. The sample's extra failure is a 145,712-unit
     route that runs 90,000 of them under a roof: the weight weakens the straight-line estimate on
     covered ground, and it needs a node budget of 600,000, over the walker's 400,000
-    (`walkBudget`): a shipped regression for that pair, tracked in #697. Every cost left
-    `BenchmarkOwnerNav` within its noise (main's format 6 cache: cold p50 94 ms, p99 573 ms).
+    (`walkBudget`). Every cost left `BenchmarkOwnerNav` within its noise (main's format 6 cache:
+    cold p50 94 ms, p99 573 ms).
+  - **That pair is left failing** (#697), decided on main's format 8 cache at cost 10, where the
+    sample fails 3 (pairs 51 and 82 fail at cost 0 too, the 145,712-unit route is the third):
+
+    | Variant | Sample failed | `RouteCold` p50 / p99 / max | `RouteWarm` p50 / p99 / max |
+    | --- | --- | --- | --- |
+    | main, budget 400,000 | 3 | 85 / 488 / 1221 ms | 62 / 453 / 1045 ms |
+    | estimate plus a covered cell's own step extra, 400,000 | 3 | 90 / 471 / 1220 ms | 66 / 460 / 1061 ms |
+    | budget 500,000 | 3 | 86 / 492 / 1445 ms | 63 / 508 / 1276 ms |
+    | budget 600,000 | 1 | 84 / 683 / 1711 ms | 62 / 672 / 1480 ms |
+
+    The only admissible covered term is the extra of a covered cell's own first step (every way
+    out of it pays it): it breaks ties toward open cells but bounds nothing, rescues no pair and
+    costs a layer read per push. A budget of 600,000 routes that pair and pair 82, but raises both
+    p99s by 40%, the warm one to within 10% of its 750 ms ceiling, and every walker's worst-case
+    search, which runs on its brain goroutine, by half. One pair in 200 does not pay for that:
+    `walkBudget` stays 400,000. A pair that needs more ends `budget` (docs/walking.md).
 - **Hierarchy (HPA\*)**:
   - clusters of 32×32 geodata blocks: 256×256 cells, 4096 units, 64 per region, about 8900 over
     139 regions;

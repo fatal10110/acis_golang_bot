@@ -55,6 +55,12 @@ func buildTestNav(t *geotest.Terrain, keys []nav.ClusterKey) (*Nav, error) {
 
 // buildTestNavWater is buildTestNav with the water zones water.
 func buildTestNavWater(t *geotest.Terrain, keys []nav.ClusterKey, water *nav.Water) (*Nav, error) {
+	return buildTestNavCovered(t, keys, water, 0)
+}
+
+// buildTestNavCovered is buildTestNavWater built at the covered cost covered
+// (nav.BuildConfig.CoveredCost).
+func buildTestNavCovered(t *geotest.Terrain, keys []nav.ClusterKey, water *nav.Water, covered int) (*Nav, error) {
 	dir, err := os.MkdirTemp("", "botnav")
 	if err != nil {
 		return nil, err
@@ -81,7 +87,7 @@ func buildTestNavWater(t *geotest.Terrain, keys []nav.ClusterKey, water *nav.Wat
 		return nil, err
 	}
 	key := nav.NavKey{ClusterCells: navTestCluster, WaterHash: water.Hash()}
-	image, _, err := nav.Build(context.Background(), nav.BuildConfig{Engine: e, Water: water, Clusters: keys, ClusterCells: navTestCluster, Workers: 2, Key: key})
+	image, _, err := nav.Build(context.Background(), nav.BuildConfig{Engine: e, Water: water, Clusters: keys, ClusterCells: navTestCluster, Workers: 2, CoveredCost: covered, Key: key})
 	if err != nil {
 		return nil, err
 	}
