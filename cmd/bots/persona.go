@@ -81,7 +81,7 @@ func pvpPersona() botclient.Persona {
 
 // pvpPolicy is the pvp preset's PvP policy.
 var pvpPolicy = botclient.PvPPolicy{
-	FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true,
+	FightFlagged: true, Duels: true, Hunt: true, Arenas: true, FightWar: true, SupportFlagged: true,
 	GearWeight: charmodel.PvPWeight, CureStock: 5, KeepCPPotions: true,
 }
 

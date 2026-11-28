@@ -241,9 +241,11 @@ func (b *Brain) pvpCast(id int32, rot []Step, underReserve bool, now time.Time) 
 		return a, true
 	}
 	rot = pvpSteps(b.build().Kit.PvP, rot)
-	if b.forced(id, now) {
+	if b.forced(id, now) && !b.atWar(id) {
 		// A clean player: only the non-debuff direct damage goes
-		// (docs/pvp/karma.md "PK mode").
+		// (docs/pvp/karma.md "PK mode"). At mutual war every offensive
+		// skill passes with ctrl (character_social.go
+		// OffensiveCastAllowed; docs/pvp/war.md "Hunting").
 		rot = b.pkSteps(rot)
 	}
 	st := b.stepState(id, rot, now)

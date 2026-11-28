@@ -21,8 +21,8 @@ Ships in X14 (#602). Decision D40 (owner approved 2026-11-26). Paths per
 - **No war packets.** The bot never declares, answers, stops or surrenders a war (0x4d-0x52,
   `RequestPledgeWarList`): bots join a player's clan only as its clan member (D20) and are never
   its leader. X14 adds no sender; attacks and casts keep today's pacing.
-- **War mark.** The opponent record gains the relation bits of its last `RelationChanged` (today
-  `decodeRelationChanged` skips them, `internal/botclient/combat.go:189-196`). A player is a war
+- **War mark.** The opponent record gains the relation bits of its last `RelationChanged` (`RelationChanged.Relation`, decoded by
+  `internal/botwire/combat.go` `decodeRelationChanged`). A player is a war
   enemy while its last bits hold `MutualWar`. The bit already excludes academies, so it matches
   the server's kill credit exactly.
 - **Staleness.** A war declared while the enemy is in sight shows only on its next

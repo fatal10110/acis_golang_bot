@@ -30,13 +30,14 @@ For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summ
 5. never a bot (nickname marker) unless it hit the bot first (an `Attack` or hostile cast in the
    attackers table, D38);
 6. `FightFlagged` and `o` flagged or with karma (today);
+   6b. `FightWar` (`War` mode) and `o` marked at mutual war ([war](war.md), X14, D40);
 7. PK mode (today's `ForceAttack`) on and the D39 limits pass ([PK mode](karma.md#pk-mode)), a clean attacker of a karma
    bot included ([with karma](karma.md#with-karma));
 8. else no.
 
 ## Hunting
 
-Attacking a player that has not touched the bot also needs, for rule 6: `o`'s class tier equal to
+Attacking a player that has not touched the bot also needs, for rules 6 and 6b (6b with `Hunt` on): `o`'s class tier equal to
 the bot's (`CharInfo` has no level); the bot's HP and MP above `StandHP` and `StandMP`; neither in a
 peace zone, town or the Derby track (X2; the server refuses with 84, 85,
 `model/zone/kinds.go:394-406`); the [engage estimate](model.md#engage-estimate) passing. A PK-mode

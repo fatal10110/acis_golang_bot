@@ -14,7 +14,7 @@ import (
 // and compares gear by Value alone.
 func TestPresetPvPModes(t *testing.T) {
 	pvp := botclient.PvPPolicy{
-		FightFlagged: true, Duels: true, Hunt: true, Arenas: true, SupportFlagged: true,
+		FightFlagged: true, Duels: true, Hunt: true, Arenas: true, FightWar: true, SupportFlagged: true,
 		GearWeight: 0.5, CureStock: 5, KeepCPPotions: true,
 	}
 	other := botclient.PvPPolicy{FightFlagged: true}
