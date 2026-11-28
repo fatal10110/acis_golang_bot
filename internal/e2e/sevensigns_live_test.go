@@ -66,7 +66,9 @@ func TestLiveSevenSignsJoin(t *testing.T) {
 	alone(t, &townNPCs)
 	masterAt(t, ctx, gm)
 	memberAcc := freshAccount(tg, "ssj")
-	name := character(t, memberAcc, &botclient.HumanFighter).Name
+	// The bot's character takes one of its account's candidate names
+	// (botclient.NewCharacter): the list names one character all the same.
+	names := character(t, memberAcc, &botclient.HumanFighter).Names
 	member := runWatched(t, ctx, tg, memberAcc, botSetup{
 		class: &botclient.HumanFighter,
 		persona: func() botclient.Persona {
@@ -75,7 +77,7 @@ func TestLiveSevenSignsJoin(t *testing.T) {
 			errandsOff(&p)
 			p.ClassChange = botclient.DefaultPersona().ClassChange
 			p.ClassChange.Builds = map[int32]int32{botclient.HumanFighter.ID: classWarrior}
-			p.SevenSigns = botclient.SevenSignsPolicy{Members: []string{name}, MaxMembers: botclient.DefaultSignsMembers}
+			p.SevenSigns = botclient.SevenSignsPolicy{Members: names, MaxMembers: len(names)}
 			return p
 		},
 		brain: withTravel(travel),
@@ -85,6 +87,7 @@ func TestLiveSevenSignsJoin(t *testing.T) {
 			t.Log(member.visits())
 		}
 	})
+	name := member.name
 	recallBot(t, ctx, tg, gm, member.name)
 	levelTo(t, ctx, gm, member, 20)
 	becomes(t, ctx, member, classWarrior)
