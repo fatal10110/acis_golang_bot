@@ -42,8 +42,9 @@ var (
 )
 
 // fighterAuras are the elven and dark elven fighters' out-of-combat self
-// buffs (rows EF DF, column 6): Defense Aura from 5, Attack Aura from 10.
-var fighterAuras = []Buff{{Skill: skillDefenseAura}, {Skill: skillAttackAura}}
+// buffs (rows EF DF, column 6): Defense Aura from 5, Attack Aura from 10,
+// each of target SELF, so cast on the bot only.
+var fighterAuras = []Buff{{Skill: skillDefenseAura, Self: true}, {Skill: skillAttackAura, Self: true}}
 
 // The fighter base rows (docs/strategy.md, "Behavior per class", columns
 // 3-8): every one melees whenever no step passes. Skills lists what each

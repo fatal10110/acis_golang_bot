@@ -101,7 +101,7 @@ var professionKits = map[int32]ClassKit{
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
 		PvP:   knightPvP,
-		Buffs: []Buff{{Skill: skillMajesty}},
+		Buffs: []Buff{{Skill: skillMajesty, Self: true}},
 		Relax: skillRelax,
 		Base:  []int32{skillRelax},
 		Thresholds: Thresholds{
@@ -286,8 +286,8 @@ var professionKits = map[int32]ClassKit{
 		},
 		PvP: monkPvP,
 		Buffs: []Buff{
-			{Skill: skillWolfTotem, Weapons: fistWeapons},
-			{Skill: skillBearTotem, From: 28, Weapons: fistWeapons, Replaces: skillWolfTotem},
+			{Skill: skillWolfTotem, Weapons: fistWeapons, Self: true},
+			{Skill: skillBearTotem, From: 28, Weapons: fistWeapons, Replaces: skillWolfTotem, Self: true},
 		},
 		Relax: skillRelax,
 		Base:  []int32{skillRelax},
