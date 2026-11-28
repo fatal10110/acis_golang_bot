@@ -38,6 +38,10 @@ type Skill struct {
 	// nothing unless both are above 0.
 	ItemConsumeID    int32
 	ItemConsumeCount int32
+	// NPCID is npcId (default 0): the NPC template a SUMMON skill's level
+	// summons, read per level from its #npcIds table (skill 1276 level 1
+	// summons 14207, level 14 summons 14220; docs/servitors.md section 3).
+	NPCID int32
 	// Power is power (default 0), the skill's base damage or heal.
 	Power float64
 	// NumCharges is numCharges, the charges a cast spends (or a charging
@@ -260,7 +264,7 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 	for level := 1; level <= levels; level++ {
 		res := resolver{tables: tables, row: level}
 		r := res.reader(sets, "isPotion", "castRange", "skillType", "operateType", "target", "weaponsAllowed",
-			"hitTime", "reuseDelay", "mpConsume", "mpInitialConsume", "itemConsumeId", "itemConsumeCount", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
+			"hitTime", "reuseDelay", "mpConsume", "mpInitialConsume", "itemConsumeId", "itemConsumeCount", "npcId", "power", "numCharges", "maxCharges", "skillRadius", "isMagic",
 			"isDebuff", "offensive", "nextActionAttack", "magicLvl", "lvlDepend", "abnormalLvl", "effectAbnormalLvl",
 			"effectType", "effectPower", "negateStats", "negateLvl")
 		sk := Skill{
@@ -271,6 +275,7 @@ func buildSkill(el skillElement, skills map[SkillRef]Skill) error {
 			ReuseDelay:     time.Duration(r.intDefault("reuseDelay", 0)) * time.Millisecond,
 			MPConsume:      r.intDefault("mpConsume", 0), MPInitialConsume: r.intDefault("mpInitialConsume", 0),
 			ItemConsumeID: r.int32Default("itemConsumeId", 0), ItemConsumeCount: r.int32Default("itemConsumeCount", 0),
+			NPCID:      r.int32Default("npcId", 0),
 			Power:      r.floatDefault("power", 0),
 			NumCharges: r.intDefault("numCharges", 0), MaxCharges: r.intDefault("maxCharges", 0),
 			Charges: chargeCond(el.Conds, &res),

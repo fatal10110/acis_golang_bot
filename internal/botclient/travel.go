@@ -146,6 +146,9 @@ type TravelMap struct {
 	// aggro are the aggro ranges of the aggressive NPC templates
 	// (indexAggro): what a duel keeps clear of (clearOfMonsters).
 	aggro map[int32]int
+	// servitors are the NPC templates of type Servitor (indexServitors): the
+	// stats the model counts a servitor with (servitorModel).
+	servitors map[int32]datapack.NPC
 	// killValues are the adena a kill of each NPC template that drops
 	// anything is worth (indexKillValues): what the earning mode ranks
 	// spots by (earnRate, #527).
@@ -230,6 +233,7 @@ func NewTravelMap(dp *datapack.Datapack, supply SupplyConfig) *TravelMap {
 	m.refMobs = indexRefMobs(dp.NPCs)
 	m.corpseTimes = indexCorpseTimes(dp.NPCs)
 	m.aggro = indexAggro(dp.NPCs)
+	m.servitors = indexServitors(dp.NPCs)
 	m.killValues = indexKillValues(dp.NPCs, dp.Prices)
 	m.products, m.itemNames = indexProductNames(dp.Recipes, dp.Items, dp.EtcItems)
 	for id, name := range dp.Names {

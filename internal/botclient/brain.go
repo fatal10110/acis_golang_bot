@@ -12,6 +12,7 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botmetrics"
 	"github.com/fatal10110/acis_golang_bot/internal/botnames"
 	"github.com/fatal10110/acis_golang_bot/internal/botwire"
+	"github.com/fatal10110/acis_golang_bot/internal/datapack"
 )
 
 // Brain timing defaults and fixed waits.
@@ -189,6 +190,11 @@ type Brain struct {
 	// nextTick is the next regular decision; reactAt, when set, replaces it
 	// with the reaction to an event.
 	nextTick, reactAt time.Time
+	// summonReady is the summon skill level the bot can cast now, crystals
+	// held for the cast and one upkeep step (docs/servitors.md section 4),
+	// the zero value for none: what the model counts a servitor not yet out
+	// by (servitorModel). The servitor upkeep (#759) sets it.
+	summonReady datapack.SkillRef
 	// pvp is the PvP world model: opponent records, the duel.
 	pvp pvpWorld
 	// karma is the death and karma memory (pvp_karma.go).
