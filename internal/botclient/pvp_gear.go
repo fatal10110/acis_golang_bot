@@ -125,7 +125,7 @@ func (b *Brain) mixRows() map[mixRow]int {
 	}
 	if len(out) == 0 {
 		for _, id := range charmodel.RowClasses(classTier(b.world.Self.ClassID)) {
-			if row, ok := charmodel.ClassRow(id, false); ok {
+			if row, ok := charmodel.OwnRow(id); ok {
 				out[mixRow{id, row}] = 1
 			}
 		}
@@ -183,8 +183,9 @@ func (b *Brain) gearPvP(m *TravelMap, v *gearModel) {
 // mixShares are the shares of the mix rows, each of the players playing
 // it, with its reference opponent (docs/pvp/model.md "PvP value"): the same
 // one as the engage estimate's (TravelMap.refFighter), its class template
-// at character level in the grade-typical gear of its class and the row's
-// bow flag, built once per class and bow. A class the travel map lacks is
+// at character level in the grade-typical gear of its class, a bow where
+// the row shoots (charmodel.Row.Shoots: a scout's bow branch, an archer
+// row), built once per class and bow. A class the travel map lacks is
 // left out.
 func mixShares(m *TravelMap, rows map[mixRow]int, level int) []charmodel.Share {
 	known := slices.SortedFunc(maps.Keys(rows), func(x, y mixRow) int {
@@ -198,10 +199,10 @@ func mixShares(m *TravelMap, rows map[mixRow]int, level int) []charmodel.Share {
 	refs := make(map[refKey]charmodel.Fighter)
 	var out []charmodel.Share
 	for _, r := range known {
-		key := refKey{r.class, r.row.Bow}
+		key := refKey{r.class, r.row.Shoots()}
 		opp, ok := refs[key]
 		if !ok {
-			opp, _ = m.refFighter(r.class, r.row.Bow, level)
+			opp, _ = m.refFighter(r.class, r.row.Shoots(), level)
 			refs[key] = opp
 		}
 		opp.Row = r.row

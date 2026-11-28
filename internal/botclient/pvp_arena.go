@@ -108,14 +108,14 @@ func (b *Brain) deepArena(h int32) (int, Point) {
 // longCastRow reports whether the bot plays a row whose damage steps the
 // arena-edge guard holds in a square arena (docs/pvp/guards.md "Arena
 // edge"): the OM row, a mystic row with no spiritshot expected charged
-// (its hit times 1/0.70 longer), or a bow branch (Power Shot, Stunning
-// Shot).
+// (its hit times 1/0.70 longer), or a row that shoots (a scout's bow
+// branch, an archer row: Power Shot, Stunning Shot).
 func (b *Brain) longCastRow() bool {
 	row, ok := charmodel.ClassRow(b.world.Self.ClassID, b.bowEquipped())
 	switch {
 	case !ok || row.Archetype() == charmodel.Melee:
 		return false
-	case row.ID == "OM" || row.Bow:
+	case row.ID == "OM" || row.Shoots():
 		return true
 	}
 	return !b.spiritshotCharged()

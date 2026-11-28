@@ -632,13 +632,18 @@ func (b *Brain) pvpRows() charmodel.RowTable {
 var shippedKits = []map[int32]ClassKit{lineKits, professionKits}
 
 // pvpRowTable is the PvP row table of kits at character level
-// (docs/pvp/model.md "Row table"): per row whose PvP row ships
+// (docs/pvp/model.md "Row table"): per class with a row of its own
+// (charmodel.OwnRow: a base class, a first profession, the 24 second
+// professions of docs/pvp/rows-second.md) whose PvP row ships
 // (ClassKit.PvP: the fighter rows from X7, the mystic rows from X8), the
 // steps it plays against a player (pvpSteps) of RoleNone or RoleDamage
 // from level on, filtered to damage, DOT and control skills, each at the
 // highest skill level its class tree grants by level, Vs copied; a scout
 // row's bow steps go to its bow branch, its other weapon steps to its
-// dagger branch, the rest to both. Empty without a travel map.
+// dagger branch, the rest to both; a bow-paired second row (TH-HK, PW-SR,
+// AW-PR, charmodel.ClassRow) keeps the steps of its own side only: the
+// archer row its bow and unweaponed steps, the dagger row its other
+// steps. Empty without a travel map.
 func pvpRowTable(m *TravelMap, kits []map[int32]ClassKit, level int) charmodel.RowTable {
 	t := charmodel.RowTable{}
 	if m == nil {
@@ -647,14 +652,12 @@ func pvpRowTable(m *TravelMap, kits []map[int32]ClassKit, level int) charmodel.R
 	for _, table := range kits {
 		for _, class := range slices.Sorted(maps.Keys(table)) {
 			kit := table[class]
-			if len(kit.PvP) == 0 || !rowClass(class) {
+			own, ok := charmodel.OwnRow(class)
+			if len(kit.PvP) == 0 || !ok {
 				continue
 			}
-			row, ok := charmodel.ClassRow(class, false)
+			row, _ := charmodel.ClassRow(class, false)
 			bow, _ := charmodel.ClassRow(class, true)
-			if !ok {
-				continue
-			}
 			for _, st := range pvpSteps(kit.PvP, kit.Rotation) {
 				ref, ok := m.refStep(class, st, level)
 				if !ok {
@@ -662,30 +665,21 @@ func pvpRowTable(m *TravelMap, kits []map[int32]ClassKit, level int) charmodel.R
 				}
 				rows := []charmodel.Row{row}
 				switch {
-				case !bow.Bow:
+				case bow == row:
 				case slices.Contains(st.Weapons, "BOW"):
 					rows = []charmodel.Row{bow}
 				case len(st.Weapons) == 0:
 					rows = append(rows, bow)
 				}
 				for _, r := range rows {
-					t[r] = append(t[r], ref)
+					if r.ID == own.ID {
+						t[r] = append(t[r], ref)
+					}
 				}
 			}
 		}
 	}
 	return t
-}
-
-// rowClass reports whether class plays a row of its own: a base class or a
-// first profession.
-func rowClass(class int32) bool {
-	parent, ok := datapack.ParentClass(class)
-	if !ok || parent < 0 {
-		return ok
-	}
-	grand, ok := datapack.ParentClass(parent)
-	return ok && grand < 0
 }
 
 // refStep is step st of class's PvP row as the row table holds it at
