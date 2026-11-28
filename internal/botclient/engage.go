@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -77,12 +78,23 @@ type engageState struct {
 	rng             float64
 	stand, standFor Point
 	held            time.Time
+	// skipped are the duel's stand points whose walked route failed
+	// moveOK, since the search last started afresh (routeClear).
+	skipped []Point
 }
 
-// duelStandRetry is how long a duel's hold for want of a stand point lasts
-// before the search runs again (the monsters around move; the opponent
-// moving walkSameDest searches at once).
-const duelStandRetry = 2 * time.Second
+const (
+	// duelStandRetry is how long a duel's hold for want of a stand point
+	// lasts before the search runs again (the monsters around move; the
+	// opponent moving walkSameDest searches at once).
+	duelStandRetry = 2 * time.Second
+	// duelStandSkips is how many stand points whose walked route fails
+	// moveOK a duel's chase skips before it holds for duelStandRetry.
+	duelStandSkips = 3
+	// duelSkipNear is how near a skipped stand point another one is
+	// skipped too: its route would bend the same way.
+	duelSkipNear = 100
+)
 
 // engageWalk is the walker's packet while the bot must walk before it may
 // attack or cast on id from r: the straight line to id is closed, and id is
@@ -94,7 +106,12 @@ const duelStandRetry = 2 * time.Second
 // monster clearance, docs/pvp/finding.md): a point failing it is skipped
 // like a blocked one, one already chosen that fails it is chosen again, and
 // with none the bot holds where it stands (no walk, and no attack the
-// server would walk for) until id moves or duelStandRetry passed; a hold
+// server would walk for) until id moves or duelStandRetry passed. The
+// walked route bends where the straight line is closed, so each walker
+// segment as it goes out is checked with the rest of the route
+// (routeClear): a stand point whose route fails is skipped, the points
+// within duelSkipNear of it with it, and the search runs again at the next
+// decision; after duelStandSkips of them the bot holds. A hold or skip
 // that starts while the bot still walks a segment toward a point it dropped
 // sends one move to where it stands first, since the server walks a sent
 // segment to its end. It
@@ -117,12 +134,17 @@ func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 	e := &b.engage
 	mode, rng := r.stand()
 	duel := b.inDuel(now)
-	if e.id != id || e.mode != mode || e.rng != rng || horizontal2(to, e.standFor) > walkSameDest*walkSameDest ||
+	fresh := e.id != id || e.mode != mode || e.rng != rng || horizontal2(to, e.standFor) > walkSameDest*walkSameDest
+	if fresh ||
 		e.stand == (Point{}) && (!duel || e.held.IsZero() || now.Sub(e.held) >= duelStandRetry) ||
 		duel && e.stand != (Point{}) && !b.moveOK(from, e.stand, now) {
 		var accept func(Point) bool
+		skipped := e.skipped
+		if fresh || !e.held.IsZero() {
+			skipped = nil
+		}
 		if duel {
-			accept = func(p Point) bool { return b.moveOK(from, p, now) }
+			accept = func(p Point) bool { return b.moveOK(from, p, now) && !nearAny(p, skipped, duelSkipNear) }
 		}
 		st, ok := w.standPointWhere(from, to, rng, mode, defaultTargetHeight, accept)
 		switch {
@@ -135,7 +157,7 @@ func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 			b.unreachableTarget(id, now)
 			return Action{}, true
 		default:
-			*e = engageState{id: id, mode: mode, rng: rng, stand: st, standFor: to}
+			*e = engageState{id: id, mode: mode, rng: rng, stand: st, standFor: to, skipped: skipped}
 		}
 	}
 	if e.stand == (Point{}) {
@@ -146,6 +168,17 @@ func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 		purpose = walkRanged
 	}
 	a, st := b.goTo(e.stand, walkSlop, purpose, now)
+	if duel && a.kind == actMove && a.walk && !b.routeClear(now) {
+		e.skipped = append(e.skipped, e.stand)
+		e.stand = Point{}
+		if len(e.skipped) >= duelStandSkips {
+			e.held = now
+		}
+		if b.world.Self.Moving(now) {
+			return b.orStay(Action{}, now), true
+		}
+		return Action{}, true
+	}
 	switch st {
 	case walkArrived:
 		return Action{}, false
@@ -154,6 +187,37 @@ func (b *Brain) engageWalk(id int32, r reach, now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	return a, true
+}
+
+// routeClear reports whether the walker segment about to go out and the
+// rest of the walk's route after it pass moveOK at now, segment by segment
+// (docs/pvp/finding.md "Duel ground": every point of the M7 path).
+func (b *Brain) routeClear(now time.Time) bool {
+	w := &b.walk
+	n := w.next
+	if !b.moveOK(n.from, n.to, now) {
+		return false
+	}
+	i := slices.Index(w.route, n.to)
+	if i < 0 {
+		return true
+	}
+	for ; i+1 < len(w.route); i++ {
+		if !b.moveOK(w.route[i], w.route[i+1], now) {
+			return false
+		}
+	}
+	return true
+}
+
+// nearAny reports whether p lies within d of any of ps, in the plane.
+func nearAny(p Point, ps []Point, d int64) bool {
+	for _, q := range ps {
+		if horizontal2(p, q) <= d*d {
+			return true
+		}
+	}
+	return false
 }
 
 // castReach is the reach of a cast of skill at the level the bot knows it:

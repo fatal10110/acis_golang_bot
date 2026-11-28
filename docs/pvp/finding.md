@@ -40,8 +40,11 @@ Any hit between a duellist and an NPC cancels the duel ([duel end](server-duels.
 challenges only with no NPC in its attackers table and no aggressive monster in sight (`aggroRange`
 above 0, `internal/datapack/npc.go` `AggroRange`) within its aggro range plus `DuelClear` (300).
 From the challenge until idle it starts no monster fight (also refused as combat at the answer,
-`network/duel.go:166-173`), and its duel chase and kite moves keep that clearance. A monster that
-attacks anyway cancels the duel; the bot then fights it ([rule 1](targets.md#mayfight)).
+`network/duel.go:166-173`), and its duel chase and kite moves keep that clearance: a chase's stand
+point is skipped when the straight segment to it, or any segment of the walked M7 route to it
+(checked with the rest of the route as each walker segment goes out), crosses such a disc; after
+three such route skips the bot holds for 2 s. The server's follow keeps it too (below). A monster
+that attacks anyway cancels the duel; the bot then fights it ([rule 1](targets.md#mayfight)).
 
 ## Duel ground
 
@@ -65,8 +68,10 @@ position.
   `:376`) until a move replaces the intention (`combat_rules.go:347-351`). So while it has an attack
   or cast intention on the opponent, on every decision and every own `MoveToLocation` or
   `MoveToPawn` (`world.go:682-694`), the bot checks the straight segment to the opponent and its
-  current leg's destination. With the opponent out of range and either within `DuelEdge` of such a
-  polygon, or itself already within `DuelEdge` of one, it sends the checked disengage move; then,
+  current leg's destination (the server's follow path is its own; the straight segment models it).
+  With the opponent out of range and either within `DuelEdge` of such a polygon or across an
+  aggressive monster's aggro range plus `DuelClear` ([clear of monsters](#clear-of-monsters)), or
+  itself already within `DuelEdge` of one, it sends the checked disengage move; then,
   and whenever the segment fails before an attack, no `Action` or out-of-range skill, only steps
   castable where it stands. Otherwise a chase only closes in, so an opponent beyond `DuelLeash` is
   chased at once.
