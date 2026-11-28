@@ -91,6 +91,7 @@ func TestPvPRowsShipped(t *testing.T) {
 	}
 	t.Run("mystic rows", func(t *testing.T) { checkMysticPvPRows(t, classes, skills) })
 	t.Run("second rows", func(t *testing.T) { checkSecondPvPRows(t, classes, skills) })
+	t.Run("heavy rows", func(t *testing.T) { checkHeavyPvPRows(t, classes, skills) })
 	t.Run("dagger rows at 66", func(t *testing.T) { checkDaggerPvPRows(t, classes, skills) })
 	t.Run("tyrant row at 58", func(t *testing.T) { checkTyrantPvPRow(t, classes, skills) })
 	skill := func(id int32) datapack.Skill {
