@@ -2,7 +2,6 @@ package botclient
 
 import (
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -347,41 +346,25 @@ func (b *Brain) ruleSigns(now time.Time) (Action, bool) {
 }
 
 // startSigns starts a visit when one is due: at the nearest Dusk
-// Priestess in sight, else at the nearest one's spawn within signsReach,
-// reporting whether it did.
+// Priestess in sight, else at the nearest one's spawn within signsReach
+// (pickVisit: a bot in a player's party or told to follow walks to none out
+// of sight), its shunned priestesses left out, reporting whether it did.
 func (b *Brain) startSigns(now time.Time) bool {
 	s, self := &b.signs, &b.world.Self
 	if !b.signsMode() || now.Before(s.restUntil) || classTier(self.ClassID) < 1 {
 		return false
 	}
-	from := self.Position(now)
-	var best npcVisit
-	bestDist := int64(math.MaxInt64)
+	npcs := make([]int32, 0, len(duskPriestesses))
 	for _, npcID := range duskPriestesses {
-		if s.shunned.held(npcID, now) {
-			continue
-		}
-		if id := b.nearestNPC(npcID, from, now); id != 0 {
-			at := b.world.Objects[id].Position(now)
-			if d := dist2(from, at); d < bestDist || best.obj == 0 {
-				best, bestDist = npcVisit{npcID: npcID, at: at, obj: id}, d
-			}
-			continue
-		}
-		if b.cfg.Travel == nil || best.obj != 0 {
-			continue
-		}
-		for _, at := range b.cfg.Travel.spawns[npcID] {
-			if d := dist2(from, at); d <= signsReach*signsReach && d < bestDist {
-				best, bestDist = npcVisit{npcID: npcID, at: at}, d
-			}
+		if !s.shunned.held(npcID, now) {
+			npcs = append(npcs, npcID)
 		}
 	}
-	if !best.active() {
-		return false
+	v, ok := b.pickVisit(npcs, signsReach, now)
+	if ok {
+		s.v = v
 	}
-	s.v = best
-	return true
+	return ok
 }
 
 // signsNext is the next link of the visit on the priest's open page, or ""
@@ -420,6 +403,13 @@ func (b *Brain) signsNext(now time.Time) (string, time.Duration) {
 	case has(signsAsk):
 		return signsAsk, 0
 	case has(signsJoin):
+		// The server clears every cabal when a validation ends (server
+		// sevensigns.go, the turn out of SealValidation): a membership
+		// read in another period, or a cycle ago, is of a past
+		// competition; a member's sign-up pages tell it again.
+		if s.period != signsCompetition || now.Sub(s.readAt) >= signsCycle {
+			s.member = false
+		}
 		s.period, s.readAt = signsCompetition, now
 		if s.member {
 			return "", signsFresh
@@ -427,8 +417,8 @@ func (b *Brain) signsNext(now time.Time) (string, time.Duration) {
 		return signsJoin, 0
 	}
 	// Any other greeting: no competition, and no validation Dusk won with
-	// the bot a member.
-	s.period, s.readAt = signsOther, now
+	// the bot a member; a validation's 2a or 2c tells a membership again.
+	s.member, s.period, s.readAt = false, signsOther, now
 	return "", signsFresh
 }
 

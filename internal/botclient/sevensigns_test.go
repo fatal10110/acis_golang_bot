@@ -172,6 +172,7 @@ func TestSevenSignsPages(t *testing.T) {
 	tests := []struct {
 		name       string
 		member     bool
+		setup      func(s *signsErrand)
 		html       string
 		wantCmd    string
 		wantRest   time.Duration
@@ -180,7 +181,17 @@ func TestSevenSignsPages(t *testing.T) {
 		wantGnosis bool
 	}{
 		{name: "competition, not a member: participate", html: duskPriest1, wantCmd: signsJoin, wantPeriod: signsCompetition},
-		{name: "competition, a member: done", member: true, html: duskPriest1, wantRest: signsFresh, wantMember: true, wantPeriod: signsCompetition},
+		{name: "competition, a member: done", member: true, setup: competition, html: duskPriest1, wantRest: signsFresh, wantMember: true, wantPeriod: signsCompetition},
+		{
+			name: "a member of the last validation: participate again", member: true, html: duskPriest1, wantCmd: signsJoin, wantPeriod: signsCompetition,
+			setup: func(s *signsErrand) { s.period, s.readAt = signsValidation, at(-time.Hour) },
+		},
+		{
+			name: "a membership read a cycle ago: participate again", member: true, html: duskPriest1, wantCmd: signsJoin, wantPeriod: signsCompetition,
+			setup: func(s *signsErrand) { competition(s); s.readAt = at(-signsCycle) },
+		},
+		{name: "a member never told a period: participate", member: true, html: duskPriest1, wantCmd: signsJoin, wantPeriod: signsCompetition},
+		{name: "recruitment: the membership of a cycle past", member: true, setup: competition, html: duskPriest6, wantRest: signsFresh, wantPeriod: signsOther},
 		{name: "already a member", html: signs33DuskMember, wantRest: signsFresh, wantMember: true, wantPeriod: signsCompetition},
 		{name: "accepted", html: signs4Dusk, wantRest: signsFresh, wantMember: true, wantPeriod: signsCompetition},
 		{name: "castle clan: the cycle over", html: signs33DuskNo, wantRest: signsCycle},
@@ -195,6 +206,9 @@ func TestSevenSignsPages(t *testing.T) {
 			b := newSignsBrain(t)
 			priestInSight(b)
 			s := &b.signs
+			if tt.setup != nil {
+				tt.setup(s)
+			}
 			s.v, s.member = npcVisit{npcID: 31085, at: Point{X: 200}, obj: priestObj}, tt.member
 			b.handleOne(t, NpcHtmlMessage{ObjectID: priestObj, HTML: tt.html}, t0)
 			cmd, rest := b.signsNext(t0)
@@ -229,6 +243,9 @@ func TestSevenSignsDue(t *testing.T) {
 		{name: "no first profession", setup: func(b *Brain) { priestInSight(b); b.world.Self.ClassID = 0 }},
 		{name: "resting", setup: func(b *Brain) { priestInSight(b); b.signs.restUntil = at(time.Hour) }},
 		{name: "the priestess shunned", setup: func(b *Brain) { priestInSight(b); b.signs.shunned.set(31085, at(time.Hour)) }},
+		{name: "in a player's party: no walk to the spawn", setup: func(b *Brain) { b.world.Party.LeaderID = 999 }},
+		{name: "told to follow: no walk to the spawn", setup: func(b *Brain) { b.orders.follow = 999 }},
+		{name: "in a player's party: the priestess in sight", setup: func(b *Brain) { priestInSight(b); b.world.Party.LeaderID = 999 }, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
