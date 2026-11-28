@@ -1,8 +1,7 @@
 # Servitor lines: summon control and the five rows (#592)
 
-Status: **plan, waiting for owner approval** (#592). No code ships from this document until the
-owner approves it; the implementation issues it lists are filed with no milestone (owner decision
-2 of #624: the owner picks it), each naming the milestone it proposes.
+Status: **approved as written** (owner, 2026-11-28, #592 comment; D51 in [`plan.md`](plan.md)).
+The implementation issues it lists are in M10.
 
 Five second professions are never picked and play their first profession's row today
 ([`strategy.md`](strategy.md) "Second professions (levels 40+)", "Servitor lines"; D23): Dark
@@ -371,6 +370,11 @@ their own; it does not change how it fights to make one (owner question 4).
 
 ## Owner questions
 
+Answered: D51 in [`plan.md`](plan.md) (owner, 2026-11-28, #592 comment). Every question below
+took its recommendation: crystals carried only, with the Crystal D fallback; `ServitorLines` off
+by default; monsters only; the NC a nuker with corpses in reach only; milestone M10; the DA a
+Support line; never unsummon; no special skills.
+
 1. **Crystal source.** No spawned NPC sells Crystal: C-Grade or D-Grade (section 4). Should the
    servitor lines ship now as "plays its servitor while it holds crystals" (GM-given, crafter- or
    player-supplied, carried by the persona), or wait for a source (a spawned seller in the server's
@@ -397,8 +401,7 @@ their own; it does not change how it fights to make one (owner question 4).
 
 ## Implementation issues
 
-Filed from this plan with no milestone (the owner picks; each names the milestone it proposes),
-in build order. Each depends on the plan's approval.
+Filed from this plan in build order, milestone M10 (D51); the plan is approved.
 
 | Issue | What | Depends on |
 | --- | --- | --- |

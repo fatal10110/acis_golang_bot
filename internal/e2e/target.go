@@ -219,7 +219,7 @@ func (t *Target) OwnDoor(id int32) {
 // recording every game frame read into rec when it is set. A refused
 // credential trips the breaker. The character becomes one of the
 // scenario's.
-func (t *Target) Enter(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*Client, error) {
+func (t *Target) Enter(ctx context.Context, account, password string, ch botclient.Character, rec botclient.FrameTap) (*Client, error) {
 	release, err := t.Hold(ctx)
 	if err != nil {
 		return nil, err
@@ -249,13 +249,13 @@ const inUseRetry = 3 * time.Second
 
 // EnterWhenFree is Enter with the account's derived password, tried again
 // while the account is in use (InUse) until ctx ends.
-func (t *Target) EnterWhenFree(ctx context.Context, account string, ch botclient.Character, rec *botclient.Recorder) (*Client, error) {
+func (t *Target) EnterWhenFree(ctx context.Context, account string, ch botclient.Character, rec botclient.FrameTap) (*Client, error) {
 	return t.enterWhenFree(ctx, account, t.Password(account), ch, rec)
 }
 
 // enterWhenFree is Enter tried again while the account is in use (InUse)
 // until ctx ends: the login server kicks the session still holding it.
-func (t *Target) enterWhenFree(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*Client, error) {
+func (t *Target) enterWhenFree(ctx context.Context, account, password string, ch botclient.Character, rec botclient.FrameTap) (*Client, error) {
 	for {
 		c, err := t.Enter(ctx, account, password, ch, rec)
 		if !InUse(err) {
@@ -272,7 +272,7 @@ func (t *Target) enterWhenFree(ctx context.Context, account, password string, ch
 }
 
 // enter takes a turn of the gate for the two dials of an entry.
-func (t *Target) enter(ctx context.Context, account, password string, ch botclient.Character, rec *botclient.Recorder) (*botclient.GameConn, botclient.Self, error) {
+func (t *Target) enter(ctx context.Context, account, password string, ch botclient.Character, rec botclient.FrameTap) (*botclient.GameConn, botclient.Self, error) {
 	// The marker of a refusal in another process halts this one's next
 	// login, not only its next scenario: a mint retried after another
 	// process's refused one would be refused again.

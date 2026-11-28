@@ -194,6 +194,19 @@ const (
 	OpGameSiegeDefenderList = 0xcb
 )
 
+// The owner's summon (serverpackets/pet.go, serverpackets/petinfo.go):
+// PetInfo opens or refreshes the summon's window, PetStatusUpdate refreshes
+// its position and HP, PetDelete removes it, SetSummonRemainTime is a
+// servitor's lifetime bar, and PetStatusShow the window toggle sent when the
+// owner targets its summon. The server sends them to the owner alone.
+const (
+	OpGamePetStatusShow       = 0xb0
+	OpGamePetInfo             = 0xb1
+	OpGamePetStatusUpdate     = 0xb5
+	OpGamePetDelete           = 0xb6
+	OpGameSetSummonRemainTime = 0xd1
+)
+
 // Dye symbols, both directions: HennaEquipList (serverpackets/henna.go),
 // HennaInfo (serverpackets/hennainfo.go), and RequestHennaEquip and
 // RequestHennaUnequip (clientpackets/henna.go). The draw window opens from

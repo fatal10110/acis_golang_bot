@@ -401,6 +401,9 @@ type Brain struct {
 	// decodeLogged holds the opcodes whose undecodable frames the session
 	// already logged (skipped); bounded by the decoder tables.
 	decodeLogged map[opcodeKey]bool
+	// petLogged is set once the session logged a pet's window it ignores
+	// (petEvent).
+	petLogged bool
 	// walk walks the bot on checked segments (BrainConfig.Nav).
 	walk walker
 	// engage is the stand point the fight walks to (engageWalk).
@@ -586,6 +589,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 		// Before Apply: the leader's jump is read from where it stood.
 		b.partyTripEvent(ev, now)
 		b.world.Apply(ev, now)
+		b.petEvent(ev)
 		pvpAt := b.pvpEvent(ev, now)
 		b.meter.fighting = b.world.Self.InCombat
 		b.leaderEvent(ev, now)
