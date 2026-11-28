@@ -119,6 +119,10 @@ func TestWorldServitor(t *testing.T) {
 			MoveToPawn{ObjectID: ownServitor, TargetID: npcID, Distance: 40},
 			DeleteObject{ObjectID: npcID},
 		}, with(func(*Servitor) {})},
+		{"its own DeleteObject keeps it: only PetDelete removes it", []Event{
+			testServitorInfo,
+			DeleteObject{ObjectID: ownServitor},
+		}, with(func(*Servitor) {})},
 		{"its Die marks it dead and keeps it", []Event{
 			testServitorInfo,
 			AutoAttackStart{ObjectID: ownServitor},
