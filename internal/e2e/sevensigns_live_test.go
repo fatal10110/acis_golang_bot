@@ -17,8 +17,6 @@ const (
 	// type SignsPriest); cataGate the Dungeon Gatekeeper enter_catacomb1.
 	duskPriestess int32 = 31085
 	cataGate      int32 = 31114
-	// warriorClass is the Human Fighter's first profession.
-	warriorClass = 1
 	// gateRefusalWait is how long a refused gatekeeper link is watched for
 	// a teleport that must not come.
 	gateRefusalWait = 5 * time.Second
@@ -50,7 +48,6 @@ func TestLiveSevenSignsJoin(t *testing.T) {
 		t.Fatalf("no fixed spawn or instant teleport of the Dungeon Gatekeeper %d", cataGate)
 	}
 	gm := enterGM(t, ctx, tg)
-	memberAcc, _ := tg.Account("ssj", 1)
 	otherAcc, _ := tg.Account("ssj", 2)
 
 	// The period, from the priestess's greeting to a non-member.
@@ -62,26 +59,37 @@ func TestLiveSevenSignsJoin(t *testing.T) {
 		t.Skipf("Seven Signs period is not the competition (the Dusk Priestess greets a non-member with no sign-up link: %.160q); join needs Competition", greeting.page)
 	}
 
-	// The member: a Warrior, a first profession, at the priestess.
-	seed := enter(t, ctx, tg, memberAcc, character(t, memberAcc, &botclient.HumanFighter), nil)
-	recallClient(t, ctx, gm, seed)
-	if err := gm.Select(ctx, seed.Self.ObjectID); err != nil {
-		t.Fatal(err)
-	}
-	if err := gm.Command(ctx, fmt.Sprintf("set class %d", warriorClass)); err != nil {
-		t.Fatal(err)
-	}
-	name := seed.Self.Name
-	if err := seed.Logout(ctx); err != nil {
-		t.Fatal(err)
-	}
-	member := runTownBot(t, ctx, tg, memberAcc, &botclient.HumanFighter, travel, func(p *botclient.Persona) {
-		p.Newbie.MaxLevel = 0
-		p.Shop.Reach = 0
-		p.Gear.Buy = false
-		p.Potions, p.Supply.Escapes = nil, 0
-		p.SevenSigns = botclient.SevenSignsPolicy{Members: []string{name}, MaxMembers: botclient.DefaultSignsMembers}
+	// The member: a new human fighter (a class change and a membership
+	// cannot be undone) levelled to 20 by the class master, where it
+	// becomes a Warrior, a first profession, then brought to the
+	// priestess.
+	alone(t, &townNPCs)
+	masterAt(t, ctx, gm)
+	memberAcc := freshAccount(tg, "ssj")
+	name := character(t, memberAcc, &botclient.HumanFighter).Name
+	member := runWatched(t, ctx, tg, memberAcc, botSetup{
+		class: &botclient.HumanFighter,
+		persona: func() botclient.Persona {
+			p := botclient.DefaultPersona()
+			p.IdleChance = 0
+			errandsOff(&p)
+			p.ClassChange = botclient.DefaultPersona().ClassChange
+			p.ClassChange.Builds = map[int32]int32{botclient.HumanFighter.ID: classWarrior}
+			p.SevenSigns = botclient.SevenSignsPolicy{Members: []string{name}, MaxMembers: botclient.DefaultSignsMembers}
+			return p
+		},
+		brain: withTravel(travel),
 	})
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(member.visits())
+		}
+	})
+	recallBot(t, ctx, tg, gm, member.name)
+	levelTo(t, ctx, gm, member, 20)
+	becomes(t, ctx, member, classWarrior)
+	gmTeleport(t, ctx, gm, priestAt)
+	recallBot(t, ctx, tg, gm, member.name)
 	waitFor(t, ctx, name+" signs up with Dusk", func() bool {
 		for _, e := range member.watch.Seen(0) {
 			if p, ok := e.Event.(botclient.NpcHtmlMessage); ok &&
