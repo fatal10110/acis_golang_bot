@@ -2,9 +2,10 @@
 
 Shipped in X16 (#604). Decision D42 (owner approved 2026-11-26). Paths per
 [README](README.md#paths). The server registers only nobles of a third profession
-(`model/actor/npc/folk_olympiad.go:30-32`), and a third-profession bot plays `Olympiad` as off until
-the owner rules (#729, `OlympiadPolicy.ThirdClass`): with the defaults a bot takes noblesse and
-never registers.
+(`model/actor/npc/folk_olympiad.go:30-32`). By the owner's ruling (2026-11-28, #729) a
+third-profession bot with `Olympiad` on competes: `OlympiadPolicy.ThirdClass` is on by default, so
+such a bot takes noblesse and registers; a bot below its third profession takes noblesse only.
+`Olympiad` itself stays off in every preset.
 
 ## Server facts
 
@@ -63,9 +64,10 @@ never registers.
 
 - **Players' games.** Every registered bot fills a draw a player could have had, and a noble bot
   makes draws happen that would not have (5 of a class); opt-in per bot keeps the number known.
-- **Heroes.** A bot cannot be elected before its third profession (out of M10-M13's scope); a third
-  profession bot would compete for a hero slot. Until the owner rules, `Olympiad` is refused for a
-  third profession bot, and a bot never claims at a Monument.
+- **Heroes.** A bot cannot be elected before its third profession; a third-profession bot with
+  `Olympiad` on competes for a hero slot by the owner's decision (2026-11-28, #729). It never claims
+  at a Monument, spectates or trades points. `OlympiadPolicy.ThirdClass` off turns that back off
+  (the bot then plays `Olympiad` as off).
 - **Noblesse.** Taking it is a lasting character change (noble skills, the noble record), on the
   bots' own characters only.
 - **Time.** A registered bot waits in town; `OlympiadWait` and `OlympiadTries` bound it.
