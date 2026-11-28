@@ -54,8 +54,9 @@ var recharge = Heal{Skill: skillRecharge, HP: 40, MP: true}
 // professions (levels 40+)", rows BI PP EE SE), registered in
 // professionKits. Each heals the leader first, nukes the leader's target
 // with Wind Strike above its 50 % MPReserve and melees only alone and under
-// it; Resurrection is cast by ruleRaise as the Cleric's. Their PvP rows are
-// their first profession's until #421.
+// it; Resurrection is cast by ruleRaise as the Cleric's. BI and EE play
+// their own PvP rows (kits_pvp_healers.go, X28); PP plays the Cleric's and
+// SE the Shillien Oracle's (docs/pvp/rows-second.md, O3).
 var (
 	// bishopKit (BI, from CL): Restore Life from 44 under 20 % HP, Greater
 	// Battle Heal under 35 %, Major Group Heal from 58 with two members
@@ -67,7 +68,7 @@ var (
 		Skills: []int32{
 			skillRestoreLife, skillGreaterBattleHeal, skillMajorGroupHeal, skillGreaterGroupHeal, skillMajorHeal,
 			skillGreaterHeal, skillVitalize, skillMight, skillShield, skillWindWalk, skillAcumen, skillConcentration,
-			skillPrayer, skillWindStrike, skillResurrection, skillDryadRoot, skillIceBolt, skillMentalShield,
+			skillPrayer, skillWindStrike, skillResurrection, skillDryadRoot, skillIceBolt, skillMentalShield, skillTrance,
 		},
 		Rotation: []Step{{Skill: skillWindStrike, Target: TargetLeaderTarget}},
 		Heals: []Heal{
@@ -88,7 +89,7 @@ var (
 		Base:       []int32{skillMight, skillShield},
 		Fixed:      []int32{skillWindStrike},
 		Thresholds: healerThresholds,
-		PvP:        clericPvP,
+		PvP:        bishopPvP,
 		SpotMargin: marginGlassCannon,
 	}
 
@@ -144,7 +145,7 @@ var (
 			skillHeal, skillBattleHeal, skillGroupHeal, skillMajorHeal, skillGreaterHeal, skillVitalize, skillRecharge,
 			skillMight, skillShield, skillWindWalk, skillAgility, skillHolyWeapon, skillBlessShield, skillAdvancedBlock,
 			skillClarity, skillWildMagic, skillDryadRoot, skillWindStrike, skillResurrection, skillWindShackle,
-			skillIceBolt, skillMentalShield,
+			skillIceBolt, skillMentalShield, skillTrance,
 		},
 		Rotation: []Step{
 			{Skill: skillDryadRoot, Target: TargetOtherAttacker, Attackers: 2},
@@ -171,7 +172,7 @@ var (
 		Base:       []int32{skillMight, skillShield},
 		Fixed:      []int32{skillWindStrike},
 		Thresholds: healerThresholds,
-		PvP:        elvenOraclePvP,
+		PvP:        elvenElderPvP,
 		SpotMargin: marginGlassCannon,
 	}
 
