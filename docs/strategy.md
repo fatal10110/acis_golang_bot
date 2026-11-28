@@ -665,8 +665,9 @@ behavior").
   rest that wins the bar back, with a survival floor. Max MP counts for a damage role where the
   kill's MP binds the rest; a support's max MP, cast speed and M.Atk count while it lasts the
   survival floor (#369). A damage role fights with its first known rotation step that deals
-  damage (not a heal or a bleed), passing over a step gated on its own HP (`SelfHPBelow`: SN's
-  Vampiric Touch, a drain it casts only when hurt; #676). Cast speed shortens a magic cast's
+  damage (not a heal or a bleed), passing over a step gated on its own HP (`SelfHPBelow`, a drain
+  it casts only when hurt: the mystics', HW's, DW's and SN's Vampiric Touch, SH's Vampiric Claw,
+  SK's Life Leech, PL's and PR's Drain Health; #676). Cast speed shortens a magic cast's
   reuse as it does its cast time (`cast/controller.go` buildPlan, unless the skill's reuse is
   static), so it counts for a reuse-bound nuke too. A role's weights are persona defaults (D6).
 
