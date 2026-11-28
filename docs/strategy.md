@@ -601,9 +601,10 @@ Cat, 1331 Summon Feline Queen), Necromancer (13, ← HW: 1154, 1129, 1334 summon
 Elemental Summoner (28, ← EW: 1277 Summon Merrow the Unicorn, 1332 Summon Unicorn Seraphim),
 Phantom Summoner (41, ← DW: 1278 Summon Soulless, 1333 Summon Nightshade), with their servitor
 buffs (1139-1141, 1299-1301). They need summon control (the servitor's own target, follow and
-attack orders, its HP in the bot's rules), which the bot does not have: #592. The Overlord (51) is not
-picked (a group class, D23), and the Warsmith (57, Summon Siege Golem 13 and the cannons) is the
-crafter's line (M9, D18).
+attack orders, its HP in the bot's rules), which the bot does not have: #592. The plan for summon
+control, crystal upkeep and the five rows, waiting for owner approval, is
+[`servitors.md`](servitors.md). The Overlord (51) is not picked (a group class, D23), and the
+Warsmith (57, Summon Siege Golem 13 and the cannons) is the crafter's line (M9, D18).
 
 ## Design
 
@@ -1098,7 +1099,7 @@ and A-grade sets are left to the gear model (no follow-up); the servitor issue #
 | S16a (#634) | Nukers SN, SG, SH and the Warcryer WC. | S13a, S13c |
 | S16b (#635) | Healers and buffers BI, PP, EE, SE: heals from a level, Recharge, member buffs. | S13a, S13c |
 | S17 (#636) | Cubics for TK and SK, deferred (owner, 2026-11-26): no cubics in M10 until a Crystal: D-Grade source exists. | S14a, S13c, a crystal source |
-| Later (#592) | Servitor lines with summon control (D23). | — |
+| Later (#592) | Servitor lines with summon control (D23); plan: [`servitors.md`](servitors.md). | — |
 
 Most urgent: S1, S2 and S4 unblock everything; S6 and S6b give half the bots their skills.
 
