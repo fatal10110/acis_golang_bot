@@ -1,7 +1,7 @@
 // Package botpanel is the web control panel of `bots ui` (docs/plan.md
 // section 8): a JSON API over the supervisor, server-sent events for live
-// updates, the log ring, and a plain HTML and JavaScript page embedded in the
-// binary. It serves on loopback only. No password, secret or DSN reaches it:
+// updates, the log ring, and the page embedded in the binary. It serves on
+// loopback only. No password, secret or DSN reaches it:
 // it sees the registry, the bots' snapshots, the gate, the metrics, the
 // spots and the log lines, none of which carries one.
 //

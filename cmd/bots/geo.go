@@ -23,8 +23,8 @@ type geoOptions struct {
 func addGeoFlags(fs *flag.FlagSet, o *geoOptions) {
 	fs.StringVar(&o.geodata, "geodata", "", "directory of the geodata region files the caches were built from (only stat'ed); the walking personas need it with -geoengine, -geodata-cache, -nav-cache and -datapack")
 	fs.StringVar(&o.geoengine, "geoengine", "", "local copy of the server's geoengine.properties: region list and GeoDataType")
-	fs.StringVar(&o.cache, "geodata-cache", "", "geodata cache written by `bots geopack`")
-	fs.StringVar(&o.navCache, "nav-cache", "", "nav cache written by `bots navbuild`")
+	fs.StringVar(&o.cache, "geodata-cache", "", "geodata cache written by bots geopack")
+	fs.StringVar(&o.navCache, "nav-cache", "", "nav cache written by bots navbuild")
 	fs.Int64Var(&o.lruBytes, "nav-lru-bytes", nav.DefaultMemberCacheBytes, "bound of the process-wide cluster result cache of the nav hierarchy, in bytes")
 }
 
