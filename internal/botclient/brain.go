@@ -296,6 +296,9 @@ type Brain struct {
 	// 9 errands).
 	newbie newbieVisit
 	trip   travelTrip
+	// signs is the Seven Signs errand and what the priests told (rule 9
+	// errand "signs").
+	signs signsErrand
 	// class is the class master visit (rule 9 errand "classchange").
 	class classVisit
 	// dyes is the Symbol Maker visit (rule 9 errand "dyes").
@@ -457,6 +460,7 @@ func NewBrain(w *World, q *Events, out Sender, clock Clock, cfg BrainConfig) *Br
 		verdicts: make(chan verdict, verdictQueue),
 		spot:     spotVisit{avoid: make(holds[int])}, trip: travelTrip{shunned: make(holds[int])},
 		shop: shopVisit{shunned: make(holds[int32])}, newbie: newbieVisit{shunned: make(holds[int32])},
+		signs:  signsErrand{shunned: make(holds[int32]), refused: make(holds[Seal])},
 		train:  trainerVisit{shunned: make(holds[int32]), walkShunned: make(holds[int32])},
 		market: marketVisit{cooled: make(holds[int32])}, wh: warehouseErrand{shunned: make(holds[int32])},
 		partyLead: partyLead{heard: make(holds[string]), retry: make(holds[string])},
@@ -756,6 +760,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.trainEvent(ev, now)
 			b.tripPage(e, now)
 			b.newbiePage(e)
+			b.signsPage(e)
 			b.classPage(e)
 			b.dyePage(e)
 			b.shopEvent(ev)
@@ -1113,6 +1118,7 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 	b.train.sent(a, now)
 	b.trip.sent(a, now)
 	b.newbie.sent(a, now, b.world.Self.Level)
+	b.signs.sent(a, now)
 	b.class.sent(a, now)
 	b.dyes.sent(a, now)
 	b.ench.sent(a, now)

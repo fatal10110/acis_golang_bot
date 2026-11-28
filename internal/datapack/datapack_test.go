@@ -24,16 +24,16 @@ func TestLoadSamples(t *testing.T) {
 
 	wantNPCs := map[int32]NPC{
 		20001: {
-			ID: 20001, Name: "Gremlin", Type: "Monster", Level: 1, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300,
+			ID: 20001, Name: "Gremlin", Alias: "gremlin", Type: "Monster", Level: 1, AggroRange: 1000, RunSpeed: 108.9, ClanRange: 300,
 			Combat:     Combat{HP: 39, PAtk: 7.56, PDef: 39, AtkSpd: 247.42, Crit: 4, STR: 40, CON: 43, DEX: 30, INT: 20, WIT: 43, MEN: 20},
 			CorpseTime: corpseDefault,
 			Drops:      []DropCategory{{Kind: DropKindDrop, Chance: 50, Drops: []Drop{{ItemID: 57, Min: 1, Max: 2, Chance: 70}}}},
 		},
-		20002: {ID: 20002, Name: "Rabbit", Type: "Monster", Level: 3, Combat: combatDefaults, CorpseTime: corpseDefault},
+		20002: {ID: 20002, Name: "Rabbit", Alias: "rabbit", Type: "Monster", Level: 3, Combat: combatDefaults, CorpseTime: corpseDefault},
 		20101: {ID: 20101, Name: "Set Name", Type: "Folk", Level: 1, Combat: combatDefaults, CorpseTime: corpseDefault},
 		25001: {ID: 25001, Name: "Greyclaw Kutus", Type: "RaidBoss", Level: 23, AggroRange: 300, Combat: combatDefaults, CorpseTime: corpseDefault},
 		30010: {
-			ID: 30010, Name: "Auron", Type: "Trainer", Level: 70,
+			ID: 30010, Name: "Auron", Alias: "auron", Type: "Trainer", Level: 70,
 			Combat:     Combat{MAtk: 430, MDef: 350, AtkSpd: 300, Crit: 4, STR: 40, CON: 21, DEX: 30, INT: 21, WIT: 20, MEN: 10},
 			CorpseTime: 10 * time.Second,
 			TeachTo:    []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},

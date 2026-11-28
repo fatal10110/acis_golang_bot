@@ -76,7 +76,9 @@ func (b *Brain) fitBand() (lo, hi int, band bool) {
 	}
 	r, p := b.cfg.Spots, &b.persona.Spots
 	for i := range r.spots {
-		if p.fitsBand(&r.spots[i], lo, hi) {
+		// A Seven Signs dungeon spot opens to no band: only to a member
+		// (spotOpen).
+		if r.spots[i].Event == "" && p.fitsBand(&r.spots[i], lo, hi) {
 			return lo, hi, true
 		}
 	}

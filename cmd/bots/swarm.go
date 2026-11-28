@@ -65,6 +65,9 @@ type swarmOptions struct {
 	persona string
 	// clanInviters are the -clan-inviters names.
 	clanInviters []string
+	// sevenSigns is Seven Signs member mode (-sevensigns-members,
+	// -sevensigns-max-members, -signs-seal).
+	sevenSigns botclient.SevenSignsPolicy
 	// support is how many of a -persona farmer swarm's bots, the last
 	// accounts, play the support preset instead (-support).
 	support int
@@ -99,6 +102,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.IntVar(&o.support, "support", 0, "how many of a -persona farmer swarm's bots, the last accounts, play -persona support instead: the Support members the party organizer groups with the farmers")
 	fs.BoolVar(&o.noParties, "no-parties", false, "run no bot party organizer: the bots only join the parties players invite them to; default: farmer and support bots form bot parties")
 	inviters := fs.String("clan-inviters", "", "comma-separated character names whose clan invitation a crafter accepts while clanless; default: any player's")
+	signsMembers := addSevenSignsFlags(fs, &o.sevenSigns)
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	addSpawnEventsFlag(fs, &o.spawnEvents)
@@ -170,6 +174,9 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	if p, _ := findPreset(o.persona); !p.inviters && flagSet(fs, "clan-inviters") {
 		return o, fmt.Errorf("-clan-inviters applies to -persona crafter, not %s", o.persona)
 	}
+	if err := checkSevenSignsFlags(fs, o.persona, *signsMembers, &o.sevenSigns); err != nil {
+		return o, err
+	}
 	if o.metrics != "" {
 		if err := botmetrics.CheckAddr(o.metrics); err != nil {
 			return o, fmt.Errorf("-metrics: %w", err)
@@ -229,6 +236,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	defer cleanup()
 	gate, sh := w.gate, w.shared
 	sh.clanInviters = o.clanInviters
+	sh.sevenSigns = o.sevenSigns
 	cfg := botclient.SessionConfig{
 		LoginAddr:  o.loginAddr,
 		GameAddr:   o.gameAddr,
