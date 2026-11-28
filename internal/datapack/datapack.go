@@ -32,6 +32,9 @@ type Datapack struct {
 	Spawnlist *Spawnlist
 	// Teleports maps a gatekeeper's NPC template id to its destinations.
 	Teleports map[int32][]Teleport
+	// InstantTeleports maps an NPC template id to the points it teleports
+	// its talker to with no list page (instantTeleports.xml).
+	InstantTeleports map[int32][]Teleport
 	// BuyLists are the merchant buylists in file order.
 	BuyLists []BuyList
 	// Items maps a weapon, armor or arrow template id to its template.
@@ -72,7 +75,7 @@ type Datapack struct {
 
 // Load reads the datapack whose XML directory is xmlDir (the server's
 // aCis_datapack/data/xml): every npcs/*.xml, spawnlist/*.xml, items/*.xml
-// and skills/*.xml file directly under it, its teleports.xml, its
+// and skills/*.xml file directly under it, its teleports.xml, its instantTeleports.xml, its
 // buyLists.xml, its recipes.xml, its armorSets.xml, its hennas.xml, its
 // zones/WaterZone.xml, the six zone files LoadZones reads, every
 // classes/*.xml and multisell/*.xml file and its restartPointAreas.xml.
@@ -87,6 +90,10 @@ func Load(xmlDir string) (*Datapack, error) {
 		return nil, err
 	}
 	teleports, err := LoadTeleports(filepath.Join(xmlDir, "teleports.xml"))
+	if err != nil {
+		return nil, err
+	}
+	instant, err := LoadInstantTeleports(filepath.Join(xmlDir, "instantTeleports.xml"))
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +142,7 @@ func Load(xmlDir string) (*Datapack, error) {
 		return nil, err
 	}
 	return &Datapack{
-		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, BuyLists: buyLists,
+		NPCs: npcs, Spawnlist: spawns, Teleports: teleports, InstantTeleports: instant, BuyLists: buyLists,
 		Items: items.Items, EtcItems: items.Etc, Prices: items.Prices, Names: items.Names, Stackable: items.Stackable, Herbs: items.Herbs,
 		Skills: skills, Recipes: recipes, ArmorSets: armorSets, Hennas: hennas, WaterZones: water, Zones: zones,
 		Classes: classes, Multisells: multisells, RestartPoints: restarts,

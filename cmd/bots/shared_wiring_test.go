@@ -48,7 +48,7 @@ func lakeDatapack(t *testing.T) (string, geoOptions) {
 	</npcmaker>
 </list>
 `, x+32, y+32, x+128, y+32, x+128, y+128, x+32, y+128)
-	for name, body := range map[string]string{"doors.xml": corridorDoorXML(), "npcs/20000-20999.xml": spotsNPCs, "spawnlist/20_18.xml": lakeSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes, "armorSets.xml": spotsArmorSets, "classes/humanFighter.xml": spotsClasses, "hennas.xml": "<list/>", "zones/ArenaZone.xml": "<list/>", "zones/PeaceZone.xml": "<list/>", "zones/TownZone.xml": "<list/>", "zones/DerbyTrackZone.xml": "<list/>", "zones/SiegeZone.xml": "<list/>", "zones/NoRestartZone.xml": "<list/>", "multisell/001.xml": "<list/>", "restartPointAreas.xml": "<list/>"} {
+	for name, body := range map[string]string{"doors.xml": corridorDoorXML(), "npcs/20000-20999.xml": spotsNPCs, "spawnlist/20_18.xml": lakeSpawnlist, "teleports.xml": spotsTeleports, "buyLists.xml": spotsBuyLists, "items/0000-0099.xml": spotsItems, "skills/2000-2099.xml": spotsSkills, "recipes.xml": spotsRecipes, "armorSets.xml": spotsArmorSets, "classes/humanFighter.xml": spotsClasses, "hennas.xml": "<list/>", "zones/ArenaZone.xml": "<list/>", "zones/PeaceZone.xml": "<list/>", "zones/TownZone.xml": "<list/>", "zones/DerbyTrackZone.xml": "<list/>", "zones/SiegeZone.xml": "<list/>", "zones/NoRestartZone.xml": "<list/>", "multisell/001.xml": "<list/>", "restartPointAreas.xml": "<list/>", "instantTeleports.xml": "<list/>"} {
 		path := filepath.Join(xml, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)

@@ -51,7 +51,7 @@ var presets = []preset{
 		name: "crafter", help: "clan crafter, a Dwarven Fighter: joins the clan of any player (or only of -clan-inviters), crafts from the clan warehouse and deposits the products, farms the datapack's spots between checks (needs -datapack)",
 		datapack: true, persona: crafterPersona, farms: true, class: &botclient.DwarvenFighter, inviters: true, walks: true,
 	},
-	{name: "pvp", help: "damage dealer that farms the datapack's spots alone between fights; takes duels, fights flagged and karma players and in arenas, never PKs by default (needs -datapack: its guards read the skills and zones)", datapack: true, persona: pvpPersona, farms: true, walks: true, member: true},
+	{name: presetPvP, help: "damage dealer that farms the datapack's spots alone between fights; takes duels, fights flagged and karma players and in arenas, never PKs by default (needs -datapack: its guards read the skills and zones)", datapack: true, persona: pvpPersona, farms: true, walks: true, member: true},
 }
 
 // damagePersona is the farmer and merchant presets' persona: the default
@@ -162,6 +162,9 @@ type shared struct {
 	// clanInviters are the names a crafter accepts a clan invitation from
 	// (-clan-inviters); none accepts any player's.
 	clanInviters []string
+	// sevenSigns is Seven Signs member mode (-sevensigns-members), for the
+	// pvp preset only.
+	sevenSigns botclient.SevenSignsPolicy
 	// outcomes is the outcome log's queue (-outcome-log), nil without one.
 	outcomes *botclient.OutcomeQueue
 }
@@ -199,6 +202,9 @@ func (p preset) brain(s shared) botclient.BrainConfig {
 	}
 	if p.inviters && len(s.clanInviters) > 0 {
 		cfg.Persona.JoinClan = botclient.AcceptClanFrom(s.clanInviters...)
+	}
+	if p.name == presetPvP {
+		cfg.Persona.SevenSigns = s.sevenSigns
 	}
 	applyPartyAndAuthority(&cfg, s.claims, s.auth)
 	return cfg

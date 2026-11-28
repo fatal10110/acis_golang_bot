@@ -31,6 +31,18 @@ func TestSpots(t *testing.T) {
 			ok:    true,
 		},
 		{name: "event", maker: Maker{Name: "m", Territories: []*Territory{square}, Event: "christmas", Spawns: []Spawn{{NPCID: 20001}}}},
+		{
+			name:  "seven signs dungeon event, tagged",
+			maker: Maker{Name: "m", Territories: []*Territory{square}, Event: "ssq_event", MaximumNPCs: 2, Spawns: []Spawn{{NPCID: 20001}}},
+			want:  Spot{Maker: "m", Event: "ssq_event", Territory: square, Center: Point{500, 500}, Z: -3250, MinLevel: 3, MaxLevel: 3, MaximumNPCs: 2, Area: 1e6},
+			ok:    true,
+		},
+		{
+			name:  "seven signs seal event, tagged",
+			maker: Maker{Name: "m", Territories: []*Territory{square}, Event: "ssq_seal2_twilight", MaximumNPCs: 2, Spawns: []Spawn{{NPCID: 20001}}},
+			want:  Spot{Maker: "m", Event: "ssq_seal2_twilight", Territory: square, Center: Point{500, 500}, Z: -3250, MinLevel: 3, MaxLevel: 3, MaximumNPCs: 2, Area: 1e6},
+			ok:    true,
+		},
 		{name: "ban", maker: Maker{Name: "m", Territories: []*Territory{square}, Banned: []*Territory{square}, Spawns: []Spawn{{NPCID: 20001}}}},
 		{name: "no territory", maker: Maker{Name: "m", Spawns: []Spawn{{NPCID: 20001}}}},
 		{name: "raid boss", maker: Maker{Name: "m", Territories: []*Territory{square}, Spawns: []Spawn{{NPCID: 20001}, {NPCID: 25001}}}},

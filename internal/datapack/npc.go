@@ -10,6 +10,10 @@ import (
 type NPC struct {
 	ID   int32
 	Name string
+	// Alias is the template's alias attribute, empty when absent: what
+	// names a Seven Signs dungeon gatekeeper's side (enter_catacomb1,
+	// exit_necropolis2, ...).
+	Alias string
 	// Type is the template's instance type, such as "Monster", "RaidBoss",
 	// "GrandBoss", "Folk" or "Merchant".
 	Type  string
@@ -166,6 +170,7 @@ func buildNPC(el npcElement) (NPC, error) {
 	npc := NPC{
 		ID:         a.literal("id"),
 		Name:       a.str("name"),
+		Alias:      a.strDefault("alias", ""),
 		Type:       a.str("type"),
 		Level:      a.intDefault("level", 1),
 		AggroRange: a.intDefault("aggroRange", 0),
