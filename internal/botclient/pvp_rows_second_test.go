@@ -24,8 +24,8 @@ func secondRowIDs() map[string]bool {
 }
 
 // checkSecondPvPRows checks the 24 second rows of the row table
-// (pvpRowTable, docs/pvp/rows-second.md "Tests") at levels 40, 55 and
-// 74 against secondRowTable: each row's damage, DOT and control steps,
+// (pvpRowTable, docs/pvp/rows-second.md "Tests") at each level of
+// secondRowTable against it: each row's damage, DOT and control steps,
 // "skill" or "skill/vs", in the order the row plays them; the bow-paired
 // rows (TH-HK, PW-SR, AW-PR) each with its own side's steps.
 func checkSecondPvPRows(t *testing.T, classes map[int32]datapack.Class, skills map[datapack.SkillRef]datapack.Skill) {
@@ -75,8 +75,9 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // secondRowTable is the 24 second rows' row table at a level with today's
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
-// (pvpSteps), or its own list once shipped (SS, BD: X22). X21-X28 change a
-// row's line when they ship its list; 55 is where Arrest (O1) comes in.
+// (pvpSteps), or its own list once shipped (PL, TK, SK: X21; SS, BD:
+// X22). X21-X28 change a row's line when they ship its list, and add the
+// level where a new step starts (55: Shackle and Arrest, O1).
 var secondRowTable = map[int]map[string]string{
 	40: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
@@ -113,19 +114,19 @@ var secondRowTable = map[int]map[string]string{
 		"EE": "1206/M 1201/M 1184/M 1177",
 		"GL": "100 6 261 5 9 7 1",
 		"HK": "101 19 24 56",
-		"PL": "70 70/CA 92 400 3",
+		"PL": "70 70/CA 92 403/CHA 400 3",
 		"PP": "1201/M 1184/M 1177",
 		"PR": "101 70 19 56",
 		"PW": "102/CA 263 96 16",
 		"SE": "1147 1206/M 1201/M 1168/CH 1184/M 1177",
 		"SG": "1206/M 1206/A 1264 1175 1184/M 1264 1175 1274 1172 1235 1237 1265 1275 1231",
 		"SH": "1206/M 1206/A 1168/CH 1266 1160/M 1184/M 1266 1178 1172 1234 1147 1239 1148 1267 1176",
-		"SK": "129/CH 115/MA 105/M 289 70 70 289 401 223 3",
+		"SK": "129/CH 115/MA 105/M 402/CHA 289 70 70 289 401 223 3",
 		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1275 1231",
 		"SR": "102/M 101 19 24 56",
 		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
-		"TK": "102/CA 400 3",
+		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
 		"WL": "100 48 36 245",
@@ -139,19 +140,19 @@ var secondRowTable = map[int]map[string]string{
 		"EE": "1206/M 1201/M 1184/M 1177",
 		"GL": "100 6 261 5 9 7 1",
 		"HK": "101 19 24 56",
-		"PL": "70 70/CA 92 400 3",
+		"PL": "70 70/CA 92 403/CHA 400 3",
 		"PP": "1201/M 1184/M 1177",
 		"PR": "101 70 314 19 56",
 		"PW": "102/CA 321 263 96 16",
 		"SE": "1147 1206/M 1201/M 1168/CH 1184/M 1177",
 		"SG": "1206/M 1206/A 1264 1175 1184/M 1264 1175 1274 1172 1235 1237 1265 1295 1275 1231",
 		"SH": "1206/M 1206/A 1168/CH 1266 1160/M 1184/M 1266 1178 1172 1234 1147 1239 1148 1267 1176",
-		"SK": "129/CH 115/MA 105/M 289 70 70 289 401 279 223 3",
+		"SK": "129/CH 115/MA 105/M 402/CHA 289 70 70 289 401 279 223 3",
 		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1296 1275 1231",
 		"SR": "102/M 101 19 24 56",
 		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
-		"TK": "102/CA 400 3",
+		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
 		"WL": "100 48 36 245",

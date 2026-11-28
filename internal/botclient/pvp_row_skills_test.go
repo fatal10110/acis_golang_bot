@@ -75,12 +75,16 @@ var rowSkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: 120, Level: 1}: {Type: "PDAM", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"}, HitTime: 1604 * time.Millisecond, Power: 45, Offensive: true, Debuff: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 18, Effects: []datapack.Effect{{Name: "Stun", Time: 9, Count: 1, EffectType: "STUN", EffectPower: 50}}},
 	// Hurricane Assault
 	{ID: 284, Level: 1}: {Type: "CHARGEDAM", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"}, HitTime: 1360 * time.Millisecond, Power: 501, Offensive: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 34},
+	// Lightning Strike
+	{ID: 279, Level: 1}: {Type: "MDAM", Target: "ONE", HitTime: 3 * time.Second, Power: 82, Magic: true, Offensive: true, Debuff: true, NextActionAttack: true, CastRange: 400, Radius: 80, MagicLevel: 58, Effects: []datapack.Effect{{Name: "Paralyze", Time: 30, Count: 1, EffectType: "PARALYZE", EffectPower: 25}}},
+	// Arrest
+	{ID: 402, Level: 1}: {Type: "ROOT", Target: "ONE", HitTime: 2 * time.Second, Power: 70, Offensive: true, Debuff: true, CastRange: 150, Radius: 80, MagicLevel: 55, Effects: []datapack.Effect{{Name: "TargetMe", Time: 1, Count: 1, EffectPower: -1}, {Name: "Root", Time: 8, Count: 1, EffectPower: -1}}},
+	// Shackle
+	{ID: 403, Level: 1}: {Type: "ROOT", Target: "ONE", HitTime: 2 * time.Second, Power: 80, Offensive: true, Debuff: true, CastRange: 600, Radius: 80, MagicLevel: 55, Effects: []datapack.Effect{{Name: "Root", Time: 10, Count: 1, EffectPower: -1}}},
 	// Heal
 	{ID: 1011, Level: 1}: {Type: "HEAL", Target: "ONE", HitTime: 5 * time.Second, Power: 49, Magic: true, CastRange: 600, Radius: 80, MagicLevel: 3},
 	// Battle Heal
 	{ID: 1015, Level: 1}: {Type: "HEAL", Target: "ONE", HitTime: 2 * time.Second, Power: 83, Magic: true, CastRange: 600, Radius: 80, MagicLevel: 10},
-	// Arrest
-	{ID: 402, Level: 1}: {Type: "ROOT", Target: "ONE", HitTime: 2 * time.Second, Power: 70, Offensive: true, Debuff: true, CastRange: 150, Radius: 80, MagicLevel: 55, Effects: []datapack.Effect{{Name: "TargetMe", Time: 1, Count: 1, EffectPower: -1}, {Name: "Root", Time: 8, Count: 1, EffectPower: -1}}},
 	// Poison Blade Dance
 	{ID: 84, Level: 1}: {Type: "PDAM", Target: "AURA", WeaponsAllowed: []string{"DUAL"}, HitTime: 1833 * time.Millisecond, Power: 1, Offensive: true, Debuff: true, EffectType: "POISON", Radius: 150, MagicLevel: 55, Effects: []datapack.Effect{{Name: "DamOverTime", Time: 3, Count: 10, EffectType: "POISON", EffectPower: 35}}},
 	// Demonic Blade Dance
