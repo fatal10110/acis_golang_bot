@@ -76,9 +76,10 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
 // (pvpSteps), or its own list once shipped (PL, TK, SK: X21; SS, BD:
-// X22; GL, WL, DS, BH: X23). X21-X28 change a row's line when they ship
-// its list, and add the level where a new step starts (55: Shackle and
-// Arrest, O1; checkHeavyPvPRows checks GL, WL, DS, BH at 60 and 66).
+// X22; GL, WL, DS, BH: X23; PW, AW: X24). X21-X28 change a row's line
+// when they ship its list, and add the level where a new step starts (55:
+// Shackle and Arrest, O1; checkHeavyPvPRows checks GL, WL, DS, BH at 60
+// and 66).
 var secondRowTable = map[int]map[string]string{
 	40: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
@@ -102,7 +103,7 @@ var secondRowTable = map[int]map[string]string{
 		"SS": "102/CA 3",
 		"TH": "263 96 16",
 		"TK": "102/CA 3",
-		"TY": "54/CA 95/CA 120 284 54 280 281 29",
+		"TY": "54/CA 95/CA 281 120 284 280 54 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
 		"WL": "48 36 245",
 	},
@@ -128,7 +129,7 @@ var secondRowTable = map[int]map[string]string{
 		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
 		"TK": "102/CA 402/CHA 400 3",
-		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
+		"TY": "54/CA 95/CA 281 120 35 17 284 280 54 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
 		"WL": "48 36 245",
 	},
@@ -154,7 +155,7 @@ var secondRowTable = map[int]map[string]string{
 		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
 		"TK": "102/CA 402/CHA 400 3",
-		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
+		"TY": "54/CA 95/CA 281 120 35 17 284 280 54 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
 		"WL": "320 48 36 245",
 	},

@@ -27,6 +27,8 @@ var rowSkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: 92, Level: 1}: {Type: "STUN", Target: "ONE", WeaponsAllowed: []string{"SHIELD"}, HitTime: 1200 * time.Millisecond, Power: 80, Offensive: true, Debuff: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 18, Effects: []datapack.Effect{{Name: "Stun", Time: 9, Count: 1, EffectPower: -1}}},
 	// Aggression
 	{ID: 28, Level: 1}: {Type: "AGGDAMAGE", Target: "ONE", HitTime: 1 * time.Second, Power: 655, Offensive: true, CastRange: 400, Radius: 80, MagicLevel: 22, Effects: []datapack.Effect{{Name: "TargetMe", Time: 1, Count: 1, EffectPower: -1}}},
+	// Lure: an AGGDAMAGE without TargetMe, which does nothing to a player
+	{ID: 51, Level: 1}: {Type: "AGGDAMAGE", Target: "ONE", HitTime: 1500 * time.Millisecond, Power: 500, Offensive: true, CastRange: 400, Radius: 80, MagicLevel: 52},
 	// Divine Heal
 	{ID: 45, Level: 1}: {Type: "HEAL", Target: "SELF", HitTime: 4 * time.Second, Power: 143, Magic: true, Radius: 80, MagicLevel: 26},
 	// Ultimate Defense
@@ -75,6 +77,10 @@ var rowSkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: 120, Level: 1}: {Type: "PDAM", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"}, HitTime: 1604 * time.Millisecond, Power: 45, Offensive: true, Debuff: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 18, Effects: []datapack.Effect{{Name: "Stun", Time: 9, Count: 1, EffectType: "STUN", EffectPower: 50}}},
 	// Hurricane Assault
 	{ID: 284, Level: 1}: {Type: "CHARGEDAM", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"}, HitTime: 1360 * time.Millisecond, Power: 501, Offensive: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 34},
+	// Burning Fist
+	{ID: 280, Level: 1}: {Type: "PDAM", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"}, HitTime: 1900 * time.Millisecond, Power: 431, Offensive: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 38},
+	// Soul Breaker
+	{ID: 281, Level: 1}: {Type: "PDAM", Target: "ONE", WeaponsAllowed: []string{"DUALFIST"}, HitTime: 1360 * time.Millisecond, Power: 406, Offensive: true, NextActionAttack: true, CastRange: 40, Radius: 80, MagicLevel: 38, Effects: []datapack.Effect{{Name: "Stun", Time: 9, Count: 1, EffectType: "STUN", EffectPower: 50}}},
 	// Lightning Strike
 	{ID: 279, Level: 1}: {Type: "MDAM", Target: "ONE", HitTime: 3 * time.Second, Power: 82, Magic: true, Offensive: true, Debuff: true, NextActionAttack: true, CastRange: 400, Radius: 80, MagicLevel: 58, Effects: []datapack.Effect{{Name: "Paralyze", Time: 30, Count: 1, EffectType: "PARALYZE", EffectPower: 25}}},
 	// Arrest

@@ -192,6 +192,9 @@ type stepState struct {
 	// the bot took it as its target (Brain.once): a Once step's skill
 	// among them does not go again.
 	onced []int32
+	// monsterOnly are the skills of the steps that do nothing to a player
+	// (Brain.monsterOnly), set only against one: their steps do not go.
+	monsterOnly []int32
 }
 
 // passes reports whether every gate of the step holds in st. Target is not
@@ -217,6 +220,7 @@ func (s Step) passes(st stepState) bool {
 		s.Opener && !st.fresh,
 		s.Once && slices.Contains(st.onced, s.Skill),
 		s.Spoil && !st.spoilable,
+		slices.Contains(st.monsterOnly, s.Skill),
 		len(s.Vs) > 0 && (!st.player || !slices.Contains(s.Vs, st.vs)),
 		s.PvP && !st.player,
 		s.Interrupt && !st.interrupt,
@@ -645,6 +649,11 @@ func (b *Brain) stepState(id int32, steps []Step, now time.Time) stepState {
 		// No Spoil on a player: the server spoils only a monster
 		// (handler/skill/spoil.go), so it would waste the cast.
 		st.player, st.spoilable = true, false
+		for _, x := range steps {
+			if b.monsterOnly(x.Skill) {
+				st.monsterOnly = append(st.monsterOnly, x.Skill)
+			}
+		}
 		if r := b.pvp.opponents[id]; r != nil {
 			st.vs = r.Archetype
 		}
