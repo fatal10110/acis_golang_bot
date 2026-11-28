@@ -18,7 +18,7 @@ rules 1-8; from X11 it attacks under the limits of [PK mode](karma.md#pk-mode).
 | Open-world PK | Force-attacks clean players under the D39 limits ([PK mode](karma.md#pk-mode)) | off (opt-in per bot) | off |
 | War (`FightWar`, X14) | Fights and, with hunting on, attacks mutual clan-war enemies by force ([war](war.md), D40) | on | off |
 | Siege (`Siege`, X15) | With its clan registered and the siege running, finds the castle from the siege lists, walks into the battlefield and fights the other side ([sieges](siege.md), D41); every bot, mode on or off, walks out of a running battlefield it does not fight in | on | off |
-| Olympiad (`Olympiad`, X16) | Takes noblesse at the class master, registers for classed games inside the window, fights the drawn opponent ([Olympiad](olympiad.md), D42); refused for a third-profession bot until the owner rules (#729) | off | off |
+| Olympiad (`Olympiad`, X16) | Takes noblesse at the class master, registers for classed games inside the window, fights the drawn opponent ([Olympiad](olympiad.md), D42); a third-profession bot competes (owner, 2026-11-28, #729; `OlympiadPolicy.ThirdClass`) | off | off |
 
 `pvp` is M10's Damage role (build, branch weights, gear) farming like `farmer` between fights. Its
 `SupportFlagged` is on (it keeps supporting a flagged party member, which flags it) except in its
