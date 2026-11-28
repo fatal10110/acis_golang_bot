@@ -4,7 +4,7 @@ Status: owner approved D35-D39 as proposed on 2026-11-25 (`docs/plan.md`, "Owner
 The owner approved D40-D43 as proposed on 2026-11-26, with the proposed answers to every owner
 question in [war](war.md), [Olympiad](olympiad.md) and [CP potions](cp-potions.md): X14-X19 may start.
 Milestone M13 ("PvP persona"): epic #405, issues #406-#420, follow-ups #421-#429, #602-#604,
-#612-#614.
+#612-#614, #718-#726.
 
 ## Paths
 
@@ -35,8 +35,8 @@ accident; and handles death and karma per the server's rules.
 
 Clan wars as targets ([war](war.md)), sieges ([siege](siege.md)) and the Olympiad
 ([Olympiad](olympiad.md)) ship in X14-X16 (D40-D42). Out of scope: fighting summons for their own sake beyond killing one before its owner when that pays off (#428,
-[summons](targets.md#summons-and-pets)), second-profession
-PvP rows (first profession's row until M10's #332), kiting monsters.
+[summons](targets.md#summons-and-pets)), kiting monsters. Second-profession PvP rows are planned in
+[second-profession rows](rows-second.md) (#421, X20-X28).
 
 ## Approach
 
@@ -116,7 +116,9 @@ X5), [flags, arenas and karma](server-karma.md) (X2, X4, X4b, X5, X11), [casts](
 | X17 | CP potions from player sell stores (#612): `CPStock`, store rows on the `pvp` list. | D43, X10, M8 store buying | [CP potions](cp-potions.md) |
 | X18 | Seven Signs member mode (#613): sign-up, dungeon gatekeeper leg, catacomb spots, stone keep. | D43, M8 supply trip | [CP potions](cp-potions.md) |
 | X19 | Priest trip in Seal Validation (#614): multisell wire, stones to Ancient Adena, CP potions by multisell 500. | D43, X18 | [CP potions](cp-potions.md) |
-| Backlog | Second-profession rows (with #332), the gaps below; party duels shipped with M11 (#424, [party duels](party.md#party-duels)). | X7, X8 | [Risks and gaps](#risks-and-gaps) |
+| X20 | Second-profession rows in the row table (#718): 24 row ids, class-to-row map, `RowClasses` tier 2. | X7, X8, M10 #332 | [second-profession rows](rows-second.md#delivery) |
+| X21-X28 | Second-profession PvP rows (#719-#726): tanks, songs, heavy damage, daggers, archers, tyrant, nukers, healers. | X20 | [second-profession rows](rows-second.md) |
+| Backlog | The gaps below; party duels shipped with M11 (#424, [party duels](party.md#party-duels)). | X7, X8 | [Risks and gaps](#risks-and-gaps) |
 
 Most urgent: X1-X5 (X4b included) give a bot that takes duels and fights in arenas with its M10
 rotation; X6-X8 make it fight like its class.
@@ -134,7 +136,8 @@ wandering monster, the opponent's own move, a siege starting, a server follow le
 assumes equal level; hunting only flagged and karma players keeps this fair); **size** (X6 lands
 with no row); **arena deaths** (the 5-death cap and stay limit).
 
-To file in the M13 backlog: second-profession rows (#332); a Colosseum preference for the OM row,
+To file in the M13 backlog: second-profession rows (#421, planned in
+[second-profession rows](rows-second.md), #718-#726); a Colosseum preference for the OM row,
 shot-less mystics and bow rows, when a gatekeeper reaches it (#422, shipped); party PvP with a `farmer` in a bot-led party (M11, #423, `TestPvPTargetHealerFarmer`); party duels
 (M11, #424, shipped: [party duels](party.md#party-duels)); a challenge hold shared by all bots (#425, shipped); buying CP potions (#427, planned in
 [CP potions](cp-potions.md), #612-#614, D43);
@@ -150,7 +153,8 @@ packets, datapack, opponent record, states, code changes · [modes](modes.md) mo
 [targets](targets.md) `MayFight`, hunting, arena targets, summons · [guards](guards.md) flag
 guard, arena edge, bystanders, duel support · [finding](finding.md) duels, arenas, duel ground ·
 [layer](layer.md) PvP order, interrupts, CP, cures, break off · [model](model.md) land rates,
-archetypes, PvP value, gear · [rows](rows.md) per-class rows · [party](party.md) party PvP ·
+archetypes, PvP value, gear · [rows](rows.md) per-class rows ·
+[second-profession rows](rows-second.md) · [party](party.md) party PvP ·
 [karma](karma.md) death, PK mode, karma · [war](war.md) clan-war targets ·
 [siege](siege.md) siege battlefields · [Olympiad](olympiad.md) noblesse, registration, matches ·
 [CP potions](cp-potions.md) buying CP potions, Seven Signs.
