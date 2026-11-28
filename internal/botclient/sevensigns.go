@@ -245,23 +245,18 @@ func (s *signsErrand) shun(now time.Time) {
 }
 
 // sent records a packet of the visit that went out at now: a bypass or a
-// talk leaves the page behind (the talk after the stone exchange awaits
-// the greeting), a MultiSellChoose awaits its InventoryUpdate for
-// trainerReplyTimeout.
+// talk leaves the page behind, and the priest stop moves on (priestSent).
 func (s *signsErrand) sent(a Action, now time.Time) {
 	if !s.v.active() || a.object == 0 || a.object != s.v.obj {
 		return
 	}
+	s.priestSent(a, now)
 	if a.kind == actMultiSellChoose {
-		s.step, s.chooses, s.v.waitUntil = priestChose, s.chooses+1, now.Add(trainerReplyTimeout)
 		return
 	}
 	s.v.sent(a, now)
 	if a.kind == actBypass || a.kind == actTalk {
 		s.page = signsLinks
-	}
-	if a.kind == actTalk && s.step == priestExchanged {
-		s.step = priestGreet
 	}
 }
 

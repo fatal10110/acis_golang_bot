@@ -137,7 +137,12 @@ func TestSevenSignsPriestTrip(t *testing.T) {
 	if sent, err := b.send(a, now); err != nil || sent {
 		t.Fatalf("a choice 300 ms after the last: sent %v, %v, want it held by the multisell gate", sent, err)
 	}
-	if sent, err := b.send(a, at(7500*time.Millisecond)); err != nil || !sent {
+	// The held choice is decided again, its row not passed.
+	now = at(7500 * time.Millisecond)
+	if rule, a = b.decide(now); rule != "signs" || a.kind != actMultiSellChoose || !bytes.Equal(a.payload, choose(33, 1)) {
+		t.Fatalf("after the held choice: decide = %q %d % x, want the CP Potion row for 1 again", rule, a.kind, a.payload)
+	}
+	if sent, err := b.send(a, now); err != nil || !sent {
 		t.Fatalf("a choice multiSellGap after the last: sent %v, %v", sent, err)
 	}
 	if err := b.handle([]Event{changed(cpOf(itemCPPotion, 1)), changed(ancientAA(60))}, at(8*time.Second)); err != nil {

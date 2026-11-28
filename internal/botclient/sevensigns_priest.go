@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/botwire"
@@ -80,7 +81,9 @@ func (b *Brain) priestDue(now time.Time) bool {
 // priestNext is the stop's next link on the priest's open page, "" when
 // the stop ends or none is due. Only a page linking both multisell 500 and
 // the stone exchange (2a, 2c) starts it or goes on to the list: the bot
-// reads links, not text, and any other page ends the stop.
+// reads links, not text, and any other page ends the stop. It changes no
+// state: the stop moves on once the link goes out (priestSent), so a link
+// the pacer holds is offered again.
 func (b *Brain) priestNext(now time.Time) string {
 	s := &b.signs
 	has := func(cmd string) bool { return b.world.Dialog.Has(npcBypass(s.v.obj, cmd)) }
@@ -88,7 +91,6 @@ func (b *Brain) priestNext(now time.Time) string {
 	switch s.step {
 	case priestExchanging:
 		if has(priestAllStone) {
-			s.step = priestExchanged
 			return priestAllStone
 		}
 		return ""
@@ -96,10 +98,7 @@ func (b *Brain) priestNext(now time.Time) string {
 		if !greeting || !b.priestDue(now) {
 			return ""
 		}
-		// One stop a signsFresh, however it ends.
-		s.stopUntil = now.Add(signsFresh)
 		if b.sealStones() > 0 {
-			s.step = priestExchanging
 			return priestExchange
 		}
 	case priestGreet:
@@ -112,8 +111,39 @@ func (b *Brain) priestNext(now time.Time) string {
 	default:
 		return ""
 	}
-	s.step = priestList
 	return priestShop
+}
+
+// priestSent moves the stop on with a packet of the visit that went out at
+// now, and only then, so a link, talk or choice the pacer holds is offered
+// again: a link to where it goes, the first one starting the stop (one a
+// signsFresh, however it ends); the talk after the stone exchange to the
+// greeting; a MultiSellChoose past its row, awaiting its InventoryUpdate
+// for trainerReplyTimeout.
+func (s *signsErrand) priestSent(a Action, now time.Time) {
+	link := func(cmd string) bool {
+		return a.kind == actBypass && bytes.Equal(a.payload, botwire.EncodeRequestBypassToServer(npcBypass(s.v.obj, cmd)))
+	}
+	start := func(step priestStep) {
+		if s.step == priestNone {
+			s.stopUntil = now.Add(signsFresh)
+		}
+		s.step = step
+	}
+	switch {
+	case a.kind == actMultiSellChoose:
+		s.step, s.row, s.chooses, s.v.waitUntil = priestChose, s.row+1, s.chooses+1, now.Add(trainerReplyTimeout)
+	case a.kind == actTalk:
+		if s.step == priestExchanged {
+			s.step = priestGreet
+		}
+	case link(priestAllStone):
+		s.step = priestExchanged
+	case link(priestExchange):
+		start(priestExchanging)
+	case link(priestShop):
+		start(priestList)
+	}
 }
 
 // priestTalk talks to the priest again once the stone exchange answered:
@@ -148,10 +178,11 @@ func (b *Brain) priestTrade(now time.Time) (Action, bool) {
 		s.end(now, signsFresh)
 		return Action{}, false
 	}
-	for s.chooses < priestChooses && s.row < len(priestRows) {
-		r := priestRows[s.row]
-		s.row++
+	for i := s.row; s.chooses < priestChooses && i < len(priestRows); i++ {
+		r := priestRows[i]
 		if id, n := b.priestAmount(r.item, r.units); n > 0 {
+			// The row moves on once the choice goes out (priestSent).
+			s.row = i
 			return Action{kind: actMultiSellChoose, payload: botwire.EncodeMultiSellChoose(priestListID, id, n), object: s.v.obj}, true
 		}
 	}
