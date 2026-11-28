@@ -65,9 +65,10 @@ func TestBrainCrafterCarriedOrderFlow(t *testing.T) {
 
 // TestBrainCrafterCarriedOrder: a claimed order the plan holds no chain
 // for is crafted from the bag only for its whole count and beyond what the
-// bot's crafted orders take; an order the plan crafts is not filled from
-// the bag; a plan without the warehouse list never fills (the order's
-// materials may still lie in the pool).
+// bot's crafted orders take; an own supply (a shot) only out of what the
+// chains for the clan made, never the bot's own (#688); an order the plan
+// crafts is not filled from the bag; a plan without the warehouse list
+// never fills (the order's materials may still lie in the pool).
 func TestBrainCrafterCarriedOrder(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -76,29 +77,62 @@ func TestBrainCrafterCarriedOrder(t *testing.T) {
 		// crafted posts an earlier order of one steel, crafted by the bot.
 		crafted bool
 		// noList plans without the warehouse list (craftPlan(now, false)).
-		noList    bool
-		wantState OrderState
-		wantPhase crafterPhase
+		noList bool
+		// notShot leaves steel an ordinary product, not an own supply.
+		notShot bool
+		// clanMade is the steel the chains for the clan made.
+		clanMade int64
+		// stored is the steel the warehouse list holds.
+		stored        int32
+		wantState     OrderState
+		wantPhase     crafterPhase
+		wantClanMade  int64
+		wantDelivered bool
 	}{
 		{
-			name:  "whole count carried",
+			name:  "own shots carried: not filled",
 			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 3}}, count: 3,
+			wantState: OrderClaimed, wantPhase: craftIdle,
+		},
+		{
+			name:  "own shots carried, the warehouse holds the count",
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 3}}, count: 3, stored: 3,
+			wantState: OrderDelivered, wantPhase: craftIdle, wantDelivered: true,
+		},
+		{
+			name:  "the clan's shots cover the count",
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 5}}, count: 3, clanMade: 4,
+			wantState: OrderCrafted, wantPhase: craftDeposit, wantClanMade: 1,
+		},
+		{
+			name:  "the clan's shots cover part of the count",
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 5}}, count: 3, clanMade: 2,
+			wantState: OrderClaimed, wantPhase: craftDeposit, wantClanMade: 2,
+		},
+		{
+			name:  "the clan's shots cover part, the warehouse the count",
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 5}}, count: 3, clanMade: 2, stored: 3,
+			wantState: OrderDelivered, wantPhase: craftDeposit, wantClanMade: 2, wantDelivered: true,
+		},
+		{
+			name:  "not an own supply: whole count carried",
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 3}}, count: 3, notShot: true,
 			wantState: OrderCrafted, wantPhase: craftDeposit,
 		},
 		{
 			name:  "part of the count carried",
-			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 2}}, count: 3,
-			wantState: OrderClaimed, wantPhase: craftIdle,
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 2}}, count: 3, notShot: true,
+			wantState: OrderClaimed, wantPhase: craftDeposit,
 		},
 		{
 			name:  "equipped copies do not count",
-			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 1, Equipped: true}}, count: 1,
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 1, Equipped: true}}, count: 1, notShot: true,
 			wantState: OrderClaimed, wantPhase: craftIdle,
 		},
 		{
 			name:  "carried for a crafted order",
-			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 1}}, count: 1, crafted: true,
-			wantState: OrderClaimed, wantPhase: craftDeposit,
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 1}}, count: 1, crafted: true, clanMade: 1,
+			wantState: OrderClaimed, wantPhase: craftDeposit, wantClanMade: 1,
 		},
 		{
 			name: "materials carried: crafted, not filled",
@@ -109,14 +143,19 @@ func TestBrainCrafterCarriedOrder(t *testing.T) {
 		},
 		{
 			name:  "planned without the list: not filled",
-			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 3}}, count: 3, noList: true,
-			wantState: OrderClaimed, wantPhase: craftIdle,
+			items: []Item{{ObjectID: 300, TemplateID: steel, Count: 3}}, count: 3, noList: true, notShot: true,
+			wantState: OrderClaimed, wantPhase: craftDeposit,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newCrafterBrain(t, append([]Item{adenaStack(1000)}, tt.items...)...)
-			asShot(b)
+			if !tt.notShot {
+				asShot(b)
+			}
+			if tt.clanMade > 0 {
+				b.craft.clanMade = map[int32]int64{steel: tt.clanMade}
+			}
 			board, clan := b.cfg.CraftBoard, b.world.Clan.ID
 			var first OrderID
 			if tt.crafted {
@@ -129,15 +168,26 @@ func TestBrainCrafterCarriedOrder(t *testing.T) {
 			board.MaterialsIn(clan, id)
 			now := at(time.Minute)
 			b.wh.status.Known, b.wh.status.Contents = true, nil
+			if tt.stored > 0 {
+				b.wh.status.Contents = []WarehouseItem{{ObjectID: 0x10000500, TemplateID: steel, Count: tt.stored}}
+			}
 			b.craftPlan(now, !tt.noList)
-			var got CraftOrder
-			for _, o := range board.Orders(clan, now) {
-				if o.ID == id {
-					got = o
+			if delivered := board.Owned(clan, "Member")[steel] == tt.count; delivered != tt.wantDelivered {
+				t.Fatalf("owned %v, want delivered %v", board.Owned(clan, "Member"), tt.wantDelivered)
+			}
+			if !tt.wantDelivered {
+				var got CraftOrder
+				for _, o := range board.Orders(clan, now) {
+					if o.ID == id {
+						got = o
+					}
+				}
+				if got.State != tt.wantState || got.Crafter != selfID {
+					t.Fatalf("order %+v, want %v by the crafter", got, tt.wantState)
 				}
 			}
-			if got.State != tt.wantState || got.Crafter != selfID {
-				t.Fatalf("order %+v, want %v by the crafter", got, tt.wantState)
+			if got := b.craft.clanMade[steel]; got != tt.wantClanMade {
+				t.Fatalf("clanMade %d, want %d", got, tt.wantClanMade)
 			}
 			c := &b.craft
 			if c.phase != tt.wantPhase {

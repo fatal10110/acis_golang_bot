@@ -178,8 +178,9 @@ of it as the pool covers.
   and those shots stay carried.
 - **Orders from products already made.** A claimed order the plan holds no chain for (a chain for
   the clan used its materials before the member posted it, #577) is filled for its whole count:
-  from what the crafter carries beyond its crafted orders and the plan's keep, the clan's counted
-  shots first, deposited and delivered with the cycle's deposit; else from the warehouse list's
+  from what the crafter carries, deposited and delivered with the cycle's deposit (an own supply
+  only out of the clan's counted shots, never its own; any other product beyond its crafted orders
+  and the plan's keep); else from the warehouse list's
   free count of the product (beyond the board's reservations and the plan's withdrawal), delivered
   at once. A partial count stays claimed.
 

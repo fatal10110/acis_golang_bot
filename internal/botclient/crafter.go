@@ -457,8 +457,9 @@ func (b *Brain) claimCraftOrders(now time.Time) []CraftOrder {
 // clan used the materials a member deposited before posting the order
 // (#577). An order whose count the bot carries, beyond what its crafted
 // orders take and the plan keeps, moves to crafted, so the cycle deposits
-// and delivers it; carried shots the chains for the clan made serve it
-// before they go back as the clan's (clanMade). Else an order whose count
+// and delivers it; for one of the bot's own supplies (shots, potions,
+// Scrolls of Escape) only what the chains for the clan made counts
+// (clanMade): its own stay in its bag. Else an order whose count
 // the clan warehouse holds free, beyond the board's reservations and the
 // plan's withdrawal, is delivered from it at once: the cycle that made the
 // shots deposited them as the clan's (#688). An order the plan crafts is
@@ -478,9 +479,13 @@ func (b *Brain) fillCarriedOrders(now time.Time) {
 		}
 	}
 	for i, o := range c.orders {
+		carried := b.carriedLoose(o.Product) - taken[o.Product]
+		if b.ownSupply(o.Product) {
+			carried = min(carried, c.clanMade[o.Product])
+		}
 		switch {
 		case planned[i]:
-		case b.carriedLoose(o.Product)-taken[o.Product] >= o.Count:
+		case carried >= o.Count:
 			if board.Crafted(clan, o.ID, self, now) {
 				taken[o.Product] += o.Count
 				if n := c.clanMade[o.Product] - o.Count; n > 0 {
