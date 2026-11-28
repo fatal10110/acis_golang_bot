@@ -61,6 +61,7 @@ func TestLiveServitorSummon(t *testing.T) {
 
 	var (
 		summon, mob int32
+		ordered     bool // the attack order went out
 		mobDied     bool
 		followed    bool
 		deleted     bool
@@ -77,11 +78,21 @@ func TestLiveServitorSummon(t *testing.T) {
 		case botclient.Die:
 			mobDied = mobDied || (mob != 0 && e.ObjectID == mob)
 		case botclient.MoveToPawn:
-			followed = followed || (mobDied && summon != 0 && e.ObjectID == summon && e.TargetID == self)
+			followed = followed || (ordered && summon != 0 && e.ObjectID == summon && e.TargetID == self)
 		case botclient.PetDelete:
 			deleted = deleted || (summon != 0 && e.ObjectID == summon)
 		}
 	}
+	// What was recorded is written however the scenario ends: a failed run
+	// leaves its frames to look at.
+	defer func() {
+		dir := filepath.Join(cmp.Or(os.Getenv("BOT_E2E_RECORD"), t.TempDir()), "servitor")
+		n, err := tap.write(dir, self, summon, mob)
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("servitor %d, orc %d: %d frames recorded in %s", summon, mob, n, dir)
+	}()
 	if err := c.Send(ctx, botwire.EncodeRequestMagicSkillUse(skillSummonKat, false)); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +105,7 @@ func TestLiveServitorSummon(t *testing.T) {
 	}
 	mob = spawned
 	t.Cleanup(func() {
-		if !slices.Contains(gm.Spawned(), mob) {
+		if mobDied || !slices.Contains(gm.Spawned(), mob) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -110,25 +121,33 @@ func TestLiveServitorSummon(t *testing.T) {
 	if err := c.Send(ctx, botwire.EncodeRequestActionUse(actionServitorAtk)); err != nil {
 		t.Fatal(err)
 	}
+	ordered = true
 	watchUntilBy(t, ctx, c, "the servitor killing the orc", time.Now().Add(2*time.Minute), func() bool { return mobDied }, track)
-	// The servitor follows its owner again after the fight (ai/summon.go
-	// FinishedAttack); a run where it stood next to the owner already may
-	// send no walk, so its absence only shows in the log.
-	due := time.Now().Add(10 * time.Second)
-	watchUntilBy(t, ctx, c, "the servitor's follow walk", due.Add(stepBound), func() bool { return followed || time.Now().After(due) }, track)
-	t.Logf("follow walk after the fight seen: %v", followed)
-	if err := c.Send(ctx, botwire.EncodeRequestActionUse(actionUnsummonServ)); err != nil {
-		t.Fatal(err)
-	}
-	watchUntil(t, ctx, c, "the servitor unsummoned", func() bool { return deleted }, track)
-
-	dir := filepath.Join(cmp.Or(os.Getenv("BOT_E2E_RECORD"), t.TempDir()), "servitor")
-	n, err := tap.write(dir, self, summon, mob)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("servitor %d, orc %d: %d frames recorded in %s", summon, mob, n, dir)
+	// The server refuses an unsummon while the servitor is in combat
+	// (summon/command.go resolveUnsummonServitor): its stance outlasts the
+	// fight by about 15 s. The order goes out again every unsummonEvery,
+	// one frame each, until the PetDelete. The wait also takes the
+	// servitor's follow walk back to its owner (ai/summon.go
+	// FinishedAttack), which a servitor standing next to it may skip.
+	next := time.Now()
+	watchUntilBy(t, ctx, c, "the servitor unsummoned", time.Now().Add(unsummonBound), func() bool {
+		if !deleted && time.Now().After(next) {
+			if err := c.Send(ctx, botwire.EncodeRequestActionUse(actionUnsummonServ)); err != nil {
+				t.Fatal(err)
+			}
+			next = time.Now().Add(unsummonEvery)
+		}
+		return deleted
+	}, track)
+	t.Logf("follow walk back to the owner seen: %v", followed)
 }
+
+// unsummonEvery spaces the unsummon orders; unsummonBound bounds them
+// (the combat stance and a margin).
+const (
+	unsummonEvery = 5 * time.Second
+	unsummonBound = 90 * time.Second
+)
 
 // summonTap keeps, in arrival order, every server frame the servitor's
 // world model reads (botclient World.applyServitor and its hooks), for
