@@ -136,9 +136,11 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 				fail("skill %d level %d charge condition %+v, the step has charges %d to max %v", g.ID, g.Level, sk.Charges, st.Charges, st.ChargeToMax)
 			}
 			// A Within is the castRange; an aura's (castRange 0) is its
-			// radius, the OS Stun Attack's its padded reach (X8).
+			// radius, the OS and WC Stun Attack's and the WC Hammer
+			// Crush's (castRange 40) their padded reach (X8, X27).
 			aura := sk.CastRange <= 0 && st.Within == sk.Radius
-			if st.Within != 0 && st.Within != sk.CastRange && !aura && (st.Skill != skillStunAttack || st.Within != stunAttackReach) {
+			padded := sk.CastRange == 40 && st.Within == stunAttackReach && (st.Skill == skillStunAttack || st.Skill == skillHammerCrush)
+			if st.Within != 0 && st.Within != sk.CastRange && !aura && !padded {
 				fail("skill %d level %d castRange %d, the step's Within is %d", g.ID, g.Level, sk.CastRange, st.Within)
 			}
 		}

@@ -96,6 +96,7 @@ func TestPvPRowsShipped(t *testing.T) {
 	t.Run("archer rows at 46 and 60", func(t *testing.T) { checkArcherPvPRows(t, classes, skills) })
 	t.Run("tyrant row at 58", func(t *testing.T) { checkTyrantPvPRow(t, classes, skills) })
 	t.Run("healer rows at 56", func(t *testing.T) { checkHealerPvPRows(t, classes, skills) })
+	t.Run("nuker rows at 44 and 58", func(t *testing.T) { checkNukerPvPRows(t, classes, skills) })
 	skill := func(id int32) datapack.Skill {
 		s, ok := skills[datapack.SkillRef{ID: id, Level: 1}]
 		if !ok {

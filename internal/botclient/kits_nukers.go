@@ -1,5 +1,7 @@
 package botclient
 
+import "slices"
+
 // Skill ids of the Sorcerer, Spellsinger, Spellhowler and Warcryer rows
 // (docs/strategy.md "Second professions (levels 40+)", rows SN SG SH WC;
 // data/xml/skills): the 900 nukes Prominence, Hydro Blast, Hurricane, Ice
@@ -40,6 +42,40 @@ var (
 	auraFlare = Step{Skill: skillAuraFlare, Within: 150}
 )
 
+// The nukers' second-tree attacks in M10 order (their kits' rotations),
+// which their PvP rows repeat (kits_pvp_nukers.go): a row naming one of
+// them drops its M10 step (pvpSteps), so the row lists the whole run and
+// the other M10 steps keep their place behind it.
+var (
+	// sorcererAttacks: Prominence to Aura Flare (sorcererKit).
+	sorcererAttacks = []Step{
+		{Skill: skillProminence},
+		{Skill: skillSurrenderToFire, MinTargetHP: 70, MPAbove: 50, Once: true},
+		{Skill: skillRainOfFire, From: 58, Attackers: 2},
+		auraBolt,
+		auraFlare,
+	}
+	// spellsingerAttacks: Hydro Blast to Aura Flare (spellsingerKit).
+	spellsingerAttacks = []Step{
+		{Skill: skillHydroBlast},
+		{Skill: skillIceDagger, From: 44},
+		{Skill: skillSolarFlare},
+		{Skill: skillAquaSplash, From: 58, Attackers: 2},
+		auraBolt,
+		auraFlare,
+	}
+	// spellhowlerAttacks: Hurricane to Aura Burn (spellhowlerKit).
+	spellhowlerAttacks = []Step{
+		{Skill: skillHurricane},
+		{Skill: skillDeathSpike, From: 44},
+		{Skill: skillShadowFlare},
+		{Skill: skillTempest, From: 48, Attackers: 2},
+		{Skill: skillShadowSpark},
+		{Skill: skillTwister},
+		auraBurn,
+	}
+)
+
 // nukerBodyToMind is Body To Mind with MP under 30 % and HP above 70 %
 // (rows SN SH, column 5; "S≥70" as Step.SelfHPAbove, as rows HW DW).
 var nukerBodyToMind = Step{Skill: skillBodyToMind, Target: TargetSelf, MPBelow: 30, SelfHPAbove: 70}
@@ -49,7 +85,7 @@ var nukerBodyToMind = Step{Skill: skillBodyToMind, Target: TargetSelf, MPBelow: 
 // Drain, Curse Fear, Sleeping Cloud, Silence, Curse Death Link, Decay,
 // Freezing Shackle, Freezing Flame, the seeds and symphonies, Cancellation
 // and Resist Aqua are left out (docs/strategy.md "Left out, and why"). The
-// PvP row stays the first profession's until #421.
+// PvP rows are the second profession's own (kits_pvp_nukers.go, X27).
 var (
 	// sorcererKit (SN, from HW): Vampiric Touch under 60 % HP, Body To
 	// Mind; Prominence from 900, Surrender To Fire once per target at 70 %
@@ -63,17 +99,13 @@ var (
 			skillVampiricTouch, skillBodyToMind, skillConcentration, skillBlazingSkin,
 			skillEnergyBolt, skillAuraBurn, skillSlow, skillCurseChaos,
 		},
-		Rotation: []Step{
+		Rotation: slices.Concat([]Step{
 			{Skill: skillVampiricTouch, SelfHPBelow: 60},
 			nukerBodyToMind,
-			{Skill: skillProminence},
-			{Skill: skillSurrenderToFire, MinTargetHP: 70, MPAbove: 50, Once: true},
-			{Skill: skillRainOfFire, From: 58, Attackers: 2},
-			auraBolt,
-			auraFlare,
+		}, sorcererAttacks, []Step{
 			{Skill: skillBlaze},
 			{Skill: skillIceBolt},
-		},
+		}),
 		Buffs: []Buff{{Skill: skillConcentration, Self: true}, {Skill: skillBlazingSkin, Self: true}},
 		Melee: MeleeUnderReserve,
 		Fixed: []int32{skillBlaze, skillIceBolt, skillVampiricTouch},
@@ -81,7 +113,7 @@ var (
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 10,
 			SitHP: 50, SitMP: 20, StandHP: 90, StandMP: 90,
 		},
-		PvP:        humanWizardPvP,
+		PvP:        sorcererPvP,
 		SpotMargin: marginGlassCannon,
 	}
 	// spellsingerKit (SG, from EW): Self Heal under 40 % HP; Wind Shackle
@@ -94,20 +126,15 @@ var (
 			skillHydroBlast, skillIceDagger, skillSolarFlare, skillAquaSplash, skillAuraBolt, skillAuraFlare,
 			skillWindShackle, skillSolarSpark, skillAquaSwirl, skillSelfHeal,
 			skillConcentration, skillManaRegeneration, skillFreezingSkin,
-			skillIceBolt, skillEnergyBolt, skillAuraBurn,
+			skillIceBolt, skillEnergyBolt, skillAuraBurn, skillFrostBolt, skillCurseWeakness,
 		},
-		Rotation: []Step{
+		Rotation: slices.Concat([]Step{
 			{Skill: skillSelfHeal, Target: TargetSelf, SelfHPBelow: 40},
 			{Skill: skillWindShackle, Opener: true, MPAbove: 50},
-			{Skill: skillHydroBlast},
-			{Skill: skillIceDagger, From: 44},
-			{Skill: skillSolarFlare},
-			{Skill: skillAquaSplash, From: 58, Attackers: 2},
-			auraBolt,
-			auraFlare,
+		}, spellsingerAttacks, []Step{
 			{Skill: skillSolarSpark},
 			{Skill: skillAquaSwirl},
-		},
+		}),
 		Buffs: []Buff{
 			{Skill: skillConcentration, Self: true},
 			{Skill: skillManaRegeneration, Self: true},
@@ -120,7 +147,7 @@ var (
 			CriticalHP: 30, CrowdedHP: 85, OutmatchedHP: 60, MPReserve: 10,
 			SitHP: 50, SitMP: 20, StandHP: 90, StandMP: 90,
 		},
-		PvP:        elvenWizardPvP,
+		PvP:        spellsingerPvP,
 		SpotMargin: marginGlassCannon,
 	}
 	// spellhowlerKit (SH, from DW): Vampiric Claw under 70 % HP before
@@ -132,21 +159,14 @@ var (
 		Skills: []int32{
 			skillHurricane, skillDeathSpike, skillShadowFlare, skillTempest, skillCursePoison,
 			skillShadowSpark, skillTwister, skillAuraBurn, skillVampiricClaw, skillVampiricTouch, skillBodyToMind,
-			skillConcentration, skillWindShackle, skillSlow, skillIceBolt,
+			skillConcentration, skillWindShackle, skillSlow, skillIceBolt, skillSilence,
 		},
-		Rotation: []Step{
+		Rotation: slices.Concat([]Step{
 			{Skill: skillVampiricClaw, SelfHPBelow: 70},
 			{Skill: skillVampiricTouch, SelfHPBelow: 60},
 			nukerBodyToMind,
 			{Skill: skillCursePoison, Opener: true, MPAbove: 60},
-			{Skill: skillHurricane},
-			{Skill: skillDeathSpike, From: 44},
-			{Skill: skillShadowFlare},
-			{Skill: skillTempest, From: 48, Attackers: 2},
-			{Skill: skillShadowSpark},
-			{Skill: skillTwister},
-			auraBurn,
-		},
+		}, spellhowlerAttacks),
 		Buffs: selfConcentration,
 		Melee: MeleeUnderReserve,
 		Fixed: []int32{skillShadowSpark, skillTwister, skillAuraBurn, skillVampiricTouch},
@@ -154,7 +174,7 @@ var (
 			CriticalHP: 35, CrowdedHP: 90, OutmatchedHP: 65, MPReserve: 10,
 			SitHP: 55, SitMP: 20, StandHP: 95, StandMP: 90,
 		},
-		PvP:        darkWizardPvP,
+		PvP:        spellhowlerPvP,
 		SpotMargin: marginGlassCannon,
 	}
 	// warcryerKit (WC, from OS): Steal Essence and Life Drain (fixed) under
@@ -200,7 +220,7 @@ var (
 			SitHP: 45, SitMP: 25, StandHP: 90, StandMP: 90,
 		},
 		Roles:      map[Role]RolePart{RoleSupport: {Melee: MeleeAlways, Thresholds: Thresholds{MPReserve: 50}}},
-		PvP:        orcShamanPvP,
+		PvP:        warcryerPvP,
 		SpotMargin: marginNormal,
 	}
 )

@@ -76,11 +76,13 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
 // (pvpSteps), or its own list once shipped (PL, TK, SK: X21; SS, BD:
-// X22; GL, WL, DS, BH: X23; PW, AW: X24; SR, PR: X25; BI, EE: X28, whose
-// Trance Int and Break steps stay outside the table). X21-X28 change a
-// row's line when they ship its list, and add the level where a new step
-// starts (55: Shackle and Arrest, O1; checkHeavyPvPRows checks GL, WL, DS,
-// BH at 60 and 66; checkArcherPvPRows HK, SR, PR at 46 and 60).
+// X22; GL, WL, DS, BH: X23; PW, AW: X24; SR, PR: X25; SN, SG, SH, WC:
+// X27; BI, EE: X28, whose Trance Int and Break steps stay outside the
+// table). X21-X28 change a row's line when they ship its list, and add
+// the level where a new step starts (55: Shackle and Arrest, O1;
+// checkHeavyPvPRows checks GL, WL, DS, BH at 60 and 66;
+// checkArcherPvPRows HK, SR, PR at 46 and 60; checkNukerPvPRows SN, SG,
+// SH, WC at 44 and 58).
 var secondRowTable = map[int]map[string]string{
 	40: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
@@ -96,16 +98,16 @@ var secondRowTable = map[int]map[string]string{
 		"PR": "105/M 129/CH 101 70 19 56",
 		"PW": "102/CA 263 96 16",
 		"SE": "1147 1206/M 1201/M 1168/CH 1184/M 1177",
-		"SG": "1206/M 1206/A 1264 1175 1184/M 1264 1175 1274 1172 1235 1265 1275 1231",
-		"SH": "1206/M 1206/A 1168/CH 1266 1160/M 1184/M 1266 1178 1172 1234 1147 1239 1267",
+		"SG": "1206/M 1206/A 1235 1236/M 1164/M 1235 1265 1275 1231 1264 1175",
+		"SH": "1206/M 1206/A 1064/CHB 1168/CH 1160/M 1184/M 1239 1267 1266 1178 1172 1234 1147",
 		"SK": "129/CH 115/MA 105/M 289 70 70 289 223 3",
-		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1275 1231",
+		"SN": "1184/MA 1230/CH 1160/M 1222/MA 1184/M 1230 1275 1231 1147 1220",
 		"SR": "102/M 101 19 56",
 		"SS": "102/CA 3",
 		"TH": "263 96 16",
 		"TK": "102/CA 3",
 		"TY": "54/CA 95/CA 281 120 284 280 54 29",
-		"WC": "1090 1107 1107 1090 100 1245 1245 260",
+		"WC": "260 100 1245 1090 1245 1107",
 		"WL": "48 36 245",
 	},
 	55: {
@@ -122,16 +124,16 @@ var secondRowTable = map[int]map[string]string{
 		"PR": "105/M 129/CH 101 70 19 56",
 		"PW": "102/CA 263 96 16",
 		"SE": "1147 1206/M 1201/M 1168/CH 1184/M 1177",
-		"SG": "1206/M 1206/A 1264 1175 1184/M 1264 1175 1274 1172 1235 1237 1265 1275 1231",
-		"SH": "1206/M 1206/A 1168/CH 1266 1160/M 1184/M 1266 1178 1172 1234 1147 1239 1148 1267 1176",
+		"SG": "1206/M 1206/A 1235 1236/M 1164/M 1235 1237 1265 1275 1231 1264 1175",
+		"SH": "1206/M 1206/A 1064/CHB 1168/CH 1160/M 1184/M 1239 1148 1267 1176 1266 1178 1172 1234 1147",
 		"SK": "129/CH 115/MA 105/M 402/CHA 289 70 70 289 401 223 3",
-		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1275 1231",
+		"SN": "1184/MA 1230/CH 1160/M 1222/MA 1184/M 1230 1275 1231 1147 1220",
 		"SR": "102/M 101 19 24 56",
 		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
 		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 281 120 35 17 284 280 54 29",
-		"WC": "1090 1107 1107 1090 100 1245 1245 260",
+		"WC": "260 100 1245 1090 1245 1107",
 		"WL": "48 36 245",
 	},
 	74: {
@@ -148,16 +150,16 @@ var secondRowTable = map[int]map[string]string{
 		"PR": "105/M 129/CH 101 70 314 19 56",
 		"PW": "102/CA 321 263 96 16",
 		"SE": "1147 1206/M 1201/M 1168/CH 1184/M 1177",
-		"SG": "1206/M 1206/A 1264 1175 1184/M 1264 1175 1274 1172 1235 1237 1265 1295 1275 1231",
-		"SH": "1206/M 1206/A 1168/CH 1266 1160/M 1184/M 1266 1178 1172 1234 1147 1239 1148 1267 1176",
+		"SG": "1206/M 1206/A 1235 1236/M 1164/M 1235 1237 1265 1295 1275 1231 1264 1175",
+		"SH": "1206/M 1206/A 1064/CHB 1168/CH 1160/M 1184/M 1239 1148 1267 1176 1266 1178 1172 1234 1147",
 		"SK": "129/CH 115/MA 105/M 402/CHA 289 70 70 289 401 279 223 3",
-		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1296 1275 1231",
+		"SN": "1184/MA 1230/CH 1160/M 1222/MA 1184/M 1230 1296 1275 1231 1147 1220",
 		"SR": "102/M 101 19 24 56",
 		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
 		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 281 120 35 17 284 280 54 29",
-		"WC": "1090 1107 1107 1090 100 1245 1245 260",
+		"WC": "260 100 1245 1090 1245 1107",
 		"WL": "320 48 36 245",
 	},
 }

@@ -206,6 +206,16 @@ var mysticPvPSkills = map[int32]datapack.Skill{
 	skillShadowSpark:    {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 5 * time.Second, Power: 39, CastRange: 750},
 	skillEnergyBolt:     {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 2 * time.Second, Power: 13, CastRange: 400},
 	skillBodyToMind:     {Type: "MANAHEAL", Target: "SELF", Magic: true, HitTime: 4 * time.Second, Power: 22},
+	// The nuker second rows' (X27, pvp_row_nukers_test.go).
+	skillProminence:   {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 4 * time.Second, Power: 49, CastRange: 900},
+	skillHydroBlast:   {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 4 * time.Second, Power: 49, CastRange: 900},
+	skillHurricane:    {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 4 * time.Second, Power: 49, CastRange: 900},
+	skillAuraBolt:     {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 2 * time.Second, Power: 26, CastRange: 400},
+	skillAuraFlare:    {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, HitTime: 1500 * time.Millisecond, Power: 39, CastRange: 150},
+	skillFrostBolt:    {Type: "MDAM", Target: "ONE", Magic: true, Offensive: true, Debuff: true, HitTime: 3100 * time.Millisecond, Power: 30, CastRange: 900, Effects: []datapack.Effect{{Name: "Debuff", StackType: "speed_down", Time: 30, Count: 1, EffectType: "DEBUFF", EffectPower: 60, Funcs: []datapack.StatFunc{{Op: "mul", Stat: "runSpd", Value: 0.7}}}}},
+	skillSilence:      {Type: "MUTE", Target: "ONE", Magic: true, Offensive: true, Debuff: true, HitTime: 4 * time.Second, Power: 80, CastRange: 600, Effects: []datapack.Effect{{Name: "Mute", StackType: "silence", Time: 30, Count: 1, EffectPower: -1}}},
+	skillStealEssence: {Type: "DRAIN", Target: "ONE", Magic: true, Offensive: true, HitTime: 4 * time.Second, Power: 52, CastRange: 900},
+	skillHammerCrush:  {Type: "PDAM", Target: "ONE", Offensive: true, Debuff: true, HitTime: 1080 * time.Millisecond, Power: 406, CastRange: 40, WeaponsAllowed: []string{"BLUNT", "BIGBLUNT"}, Effects: []datapack.Effect{{Name: "Stun", Time: 9, Count: 1, EffectType: "STUN", EffectPower: 50}}},
 }
 
 // mysticRowBrain is layerBrain for a bot of class at level in the Damage
