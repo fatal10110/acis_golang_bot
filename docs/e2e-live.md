@@ -132,6 +132,15 @@ at the same time. A scenario asserts only on its own characters, the monsters it
 packets about them (the bot's own inventory, a skill cast on the bot, a GM seeing the bot), never
 on a global count, on who else is in sight, or on the absence of everyone else.
 
+A crowded town is safe for an idle scenario character too (#743). The server aborts a connection
+whose outbound backlog passes 2 MiB (`outboundHighWater`, gameserver `network/conn.go`), which
+Gludin's broadcasts fill within minutes for a client that does not read. So each `e2e.Client` (a
+GM's included) reads its connection all the time on a reader goroutine of its own, joined by
+`Close`, not only inside `Await`. It keeps the unread events in a bounded inbox (4096) that `Await`
+consumes in arrival order. A full inbox drops its oldest broadcast about others and keeps the
+session's end, the answers to the character's own requests and its own moves and teleports.
+`Close` logs the count of dropped events (`dropped_events`) when it is not zero.
+
 ## Safety envelope
 
 Operational limits, not persona defaults; unit-tested with a fake target (`internal/e2e`):
