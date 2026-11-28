@@ -37,6 +37,11 @@ const (
 	// one (client_ingame.go handleRequestRecipeItemMakeSelf); the crafter
 	// stays well clear of it (docs/crafting.md, "Pacing").
 	craftGap = 500 * time.Millisecond
+	// multiSellGap spaces MultiSellChoose. The server drops the shown
+	// multisell list in silence on a choice within MultisellTime (100 ms by
+	// default) of the previous one (network/multisell.go
+	// requestMultiSellChoose), so every later choice is silent too.
+	multiSellGap = 500 * time.Millisecond
 	// keepaliveAfter is how long the brain may stay silent before it sends
 	// ValidatePosition. The server closes an authenticated connection that
 	// sends nothing for 15 minutes (session.go clientReadIdleTimeout).
@@ -53,11 +58,12 @@ const (
 	gateBypass
 	gateDrop
 	gateCraft
+	gateMultiSell
 	gateCount
 )
 
 // gateGaps is the least time between two frames of one gate.
-var gateGaps = [gateCount]time.Duration{gateEmote: emoteGap, gateChat: chatGap, gateBypass: bypassGap, gateDrop: dropGap, gateCraft: craftGap}
+var gateGaps = [gateCount]time.Duration{gateEmote: emoteGap, gateChat: chatGap, gateBypass: bypassGap, gateDrop: dropGap, gateCraft: craftGap, gateMultiSell: multiSellGap}
 
 // pacer applies the send limits. It is owned by the brain goroutine, the
 // connection's only writer while the brain runs.

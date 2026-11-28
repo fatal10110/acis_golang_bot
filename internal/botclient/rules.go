@@ -396,6 +396,9 @@ const (
 	// actChannelAsk asks for the bot's command channel: its overview or a
 	// party's members (channel.go).
 	actChannelAsk
+	// actMultiSellChoose trades a row of the multisell list the server
+	// showed (sevensigns_priest.go).
+	actMultiSellChoose
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -448,6 +451,8 @@ func (a Action) gate() gate {
 		return gateBypass
 	case actDrop:
 		return gateDrop
+	case actMultiSellChoose:
+		return gateMultiSell
 	case actCraft, actCrystallize:
 		// RequestCrystallizeItem has no server gate (network/client_dispatch.go
 		// registers it whenLive, no flood protector): the crafter sends one

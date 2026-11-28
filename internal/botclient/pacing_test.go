@@ -38,6 +38,7 @@ func TestPacerGates(t *testing.T) {
 	}{
 		{"emote waits emoteGap", []try{{0, gateEmote, true}, {emoteGap - time.Millisecond, gateEmote, false}, {emoteGap, gateEmote, true}}},
 		{"chat waits chatGap", []try{{0, gateChat, true}, {chatGap - time.Millisecond, gateChat, false}, {chatGap, gateChat, true}}},
+		{"multisell waits multiSellGap", []try{{0, gateMultiSell, true}, {multiSellGap - time.Millisecond, gateMultiSell, false}, {multiSellGap, gateMultiSell, true}}},
 		{"gates are separate", []try{{0, gateEmote, true}, {time.Millisecond, gateChat, true}, {2 * time.Millisecond, gateNone, true}}},
 	}
 	for _, tc := range tests {

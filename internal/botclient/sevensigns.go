@@ -213,6 +213,17 @@ type signsErrand struct {
 	gnosis bool
 	// restUntil is when the next visit may start.
 	restUntil time.Time
+	// The priest stop (X19, sevensigns_priest.go): step is where it is,
+	// list the rows of multisell 500 shown and listed whether its last
+	// page came, row the next CP row it trades (priestRows), chooses how
+	// many MultiSellChoose it sent, and stopUntil when the next stop may
+	// start.
+	step      priestStep
+	list      []MultiSellEntry
+	listed    bool
+	row       int
+	chooses   int
+	stopUntil time.Time
 	// shunned are the priests, by template id, that served the bot
 	// nothing, and refused the seals whose dungeon gatekeeper turned the
 	// bot away, until a time.
@@ -223,6 +234,7 @@ type signsErrand struct {
 // end ends the visit; the next one starts no sooner than rest from now.
 func (s *signsErrand) end(now time.Time, rest time.Duration) {
 	s.v, s.page, s.held, s.statusRead, s.bypasses = npcVisit{}, signsLinks, nil, false, 0
+	s.step, s.list, s.listed, s.row, s.chooses = priestNone, nil, false, 0, 0
 	s.restUntil = now.Add(rest)
 }
 
@@ -233,14 +245,23 @@ func (s *signsErrand) shun(now time.Time) {
 }
 
 // sent records a packet of the visit that went out at now: a bypass or a
-// talk leaves the page behind.
+// talk leaves the page behind (the talk after the stone exchange awaits
+// the greeting), a MultiSellChoose awaits its InventoryUpdate for
+// trainerReplyTimeout.
 func (s *signsErrand) sent(a Action, now time.Time) {
 	if !s.v.active() || a.object == 0 || a.object != s.v.obj {
+		return
+	}
+	if a.kind == actMultiSellChoose {
+		s.step, s.chooses, s.v.waitUntil = priestChose, s.chooses+1, now.Add(trainerReplyTimeout)
 		return
 	}
 	s.v.sent(a, now)
 	if a.kind == actBypass || a.kind == actTalk {
 		s.page = signsLinks
+	}
+	if a.kind == actTalk && s.step == priestExchanged {
+		s.step = priestGreet
 	}
 }
 
@@ -310,13 +331,20 @@ func (b *Brain) signsFarms(ev string, now time.Time) bool {
 // whose pages lead nowhere, or that no route reaches, is shunned. Bypasses
 // pass the bypass gate (gateBypass, bypassGap above the server's
 // ServerBypassTime); legs and clicks the frame pacer, at most
-// signsBypasses links a visit.
+// signsBypasses links a visit. In a validation Dusk won, the visit goes on
+// to the priest stop (priestNext, priestTrade) while the CP stock is short.
 func (b *Brain) ruleSigns(now time.Time) (Action, bool) {
 	s := &b.signs
 	if b.world.Self.InCombat || (!s.v.active() && !b.startSigns(now)) {
 		return Action{}, false
 	}
 	v := &s.v
+	switch {
+	case s.step == priestChose || s.listed:
+		return b.priestTrade(now)
+	case v.opened && s.step == priestExchanged:
+		return b.priestTalk(now)
+	}
 	if v.opened {
 		cmd, rest := b.signsNext(now)
 		if cmd == "" {
@@ -345,13 +373,14 @@ func (b *Brain) ruleSigns(now time.Time) (Action, bool) {
 	return a, true
 }
 
-// startSigns starts a visit when one is due: at the nearest Dusk
-// Priestess in sight, else at the nearest one's spawn within signsReach
-// (pickVisit: a bot in a player's party or told to follow walks to none out
-// of sight), its shunned priestesses left out, reporting whether it did.
+// startSigns starts a visit when one is due (its rest is over, or a
+// priest stop is, priestDue): at the nearest Dusk Priestess in sight, else
+// at the nearest one's spawn within signsReach (pickVisit: a bot in a
+// player's party or told to follow walks to none out of sight), its
+// shunned priestesses left out, reporting whether it did.
 func (b *Brain) startSigns(now time.Time) bool {
 	s, self := &b.signs, &b.world.Self
-	if !b.signsMode() || now.Before(s.restUntil) || classTier(self.ClassID) < 1 {
+	if !b.signsMode() || classTier(self.ClassID) < 1 || (now.Before(s.restUntil) && !b.priestDue(now)) {
 		return false
 	}
 	npcs := make([]int32, 0, len(duskPriestesses))
@@ -372,6 +401,12 @@ func (b *Brain) startSigns(now time.Time) bool {
 // page told: the period, the membership, the seals Dusk holds.
 func (b *Brain) signsNext(now time.Time) (string, time.Duration) {
 	s := &b.signs
+	if s.step != priestNone {
+		if cmd := b.priestNext(now); cmd != "" {
+			return cmd, 0
+		}
+		return "", signsFresh
+	}
 	has := func(cmd string) bool { return b.world.Dialog.Has(npcBypass(s.v.obj, cmd)) }
 	switch s.page {
 	case signsMember, signsAccepted:
@@ -388,6 +423,9 @@ func (b *Brain) signsNext(now time.Time) (string, time.Duration) {
 		// Only a member of the winning cabal is greeted with 2a or 2c
 		// (folk_chat_signs.go priestPage).
 		s.member, s.period, s.readAt, s.gnosis = true, signsValidation, now, has(signsHunting)
+		if cmd := b.priestNext(now); cmd != "" {
+			return cmd, 0
+		}
 		return "", signsFresh
 	case signsLinks:
 	}
