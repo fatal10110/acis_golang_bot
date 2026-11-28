@@ -16,6 +16,8 @@ const (
 	brkSleep = int32(9320) // a magic sleep, hit 4000, landing at effect power 90
 	brkFear  = int32(9321) // a magic fear, hit 1000, landing at effect power 90
 	brkDot   = int32(9322) // a magic DOT ticking 10 times 3 s apart
+
+	brkRange = 600 // the sleep's and the fear's cast range, as 1097 Dreaming Spirit's and 1092 Fear's
 )
 
 // breakSkills are the datapack entries the break-off cases cast.
@@ -26,7 +28,8 @@ var breakSkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: skillUltimateDefense, Level: 1}: {Type: "BUFF", Target: "SELF", HitTime: time.Second, Effects: []datapack.Effect{{Name: "ImobileBuff", Time: 30}}},
 }
 
-// breakBrain is layerBrain against a Warrior 300 away with steps, a normal
+// breakBrain is layerBrain against a Warrior 300 away with steps (the
+// sleep and the fear of cast range brkRange), a normal
 // row (breaks off under 30 %) of margin, its CP gone, HP 250 of 1000, run
 // speed 150 against the Warrior's 124, and the Warrior at 800 of 1000 HP:
 // every break-off condition holds; on the test geodata, so the flee walks.
@@ -36,8 +39,14 @@ func breakBrain(t *testing.T, margin float64, steps ...Step) *Brain {
 	b.cfg.Nav = testNav(t)
 	b.walk = newWalker(b.cfg.Nav)
 	b.world.SetGround(b.cfg.Nav.Engine)
+	if b.cfg.Travel.castRanges == nil {
+		b.cfg.Travel.castRanges = make(map[datapack.SkillRef]int32)
+	}
 	for ref, s := range breakSkills {
 		b.cfg.Travel.skills[ref] = s
+		if ref.ID == brkSleep || ref.ID == brkFear {
+			b.cfg.Travel.castRanges[ref] = brkRange
+		}
 	}
 	withKit(b, ClassKit{Rotation: steps, SpotMargin: margin})
 	b.world.Inventory.Items = map[int32]Item{}
@@ -110,16 +119,16 @@ func TestPvPBreakOff(t *testing.T) {
 		},
 		{
 			name: "a sleep Break on an opponent free of DOTs: the sleep", steps: []Step{sleep, fear, ws}, kind: actCast, skill: brkSleep,
-			setup: func(t *testing.T, b *Brain) { b.handleOne(t, foeAt(Point{Y: 900}, 1, 0, 0), at(time.Second)) },
+			setup: func(t *testing.T, b *Brain) { b.handleOne(t, foeAt(Point{Y: 600}, 1, 0, 0), at(time.Second)) },
 		},
 		{
 			name: "a sleep Break on a poison mask bit: the fear", steps: []Step{sleep, fear, ws}, kind: actCast, skill: brkFear,
-			setup: func(t *testing.T, b *Brain) { b.handleOne(t, foeAt(Point{Y: 900}, 1, 0, 0x2), at(time.Second)) },
+			setup: func(t *testing.T, b *Brain) { b.handleOne(t, foeAt(Point{Y: 600}, 1, 0, 0x2), at(time.Second)) },
 		},
 		{
 			name: "a sleep Break 5 s after its own DOT landed: the fear", steps: []Step{sleep, fear, ws, {Skill: brkDot}}, kind: actCast, skill: brkFear,
 			setup: func(t *testing.T, b *Brain) {
-				b.handleOne(t, foeAt(Point{Y: 900}, 1, 0, 0), at(time.Second))
+				b.handleOne(t, foeAt(Point{Y: 600}, 1, 0, 0), at(time.Second))
 				b.handleOne(t, selfCast(brkDot, time.Second), at(4*time.Second))
 			},
 		},
@@ -161,7 +170,9 @@ func TestPvPBreakCastGate(t *testing.T) {
 		{name: "a melee opponent next to it: flees", foe: foeAt(Point{Y: 300}, 1, 0, 0)},
 		{name: "the opponent stunned: the sleep", foe: foeAt(Point{Y: 300}, 1, 0, 0x40), cast: true},
 		{name: "the opponent rooted: the sleep", foe: foeAt(Point{Y: 300}, 1, 0, rootAbnormal), cast: true},
-		{name: "a melee opponent 900 away: the sleep", foe: foeAt(Point{Y: 900}, 1, 0, 0), cast: true},
+		{name: "a melee opponent 600 away: the sleep", foe: foeAt(Point{Y: 600}, 1, 0, 0), cast: true},
+		{name: "a melee opponent 900 away, beyond the sleep's 600: flees", foe: foeAt(Point{Y: 900}, 1, 0, 0)},
+		{name: "an opponent rooted 900 away, beyond the sleep's 600: flees", foe: foeAt(Point{Y: 900}, 1, 0, rootAbnormal)},
 		{
 			name: "a fast cast: under 4 s the sleep goes", foe: foeAt(Point{Y: 300}, 1, 0, 0), cast: true,
 			edit: func(b *Brain) { b.world.Self.CastSpd = 400 },

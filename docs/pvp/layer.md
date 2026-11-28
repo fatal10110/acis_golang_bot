@@ -95,7 +95,9 @@ prediction costs one late interrupt; the arena-edge rule re-checks against its o
   from the latest `CharInfo` or duel window; each 35 since that read comes off CP, then HP. It drives finishers and the break-off, never a re-selection.
 - **Break off** (open world only): CP gone, HP under the row's `PvPBreakHP` (tank 20, normal 30,
   glass cannon 40 %, by the class's M10 spot margin, which names the same three), no heal or potion ready, its pool fraction under the opponent's → its ready
-  `Break` step (root, stun, fear, slow, Dash, a sleep under the rule above), then M10's flee
+  `Break` step (root, stun, fear, slow, Dash, a sleep under the rule above) that reaches the opponent
+  from where the bot stands (its cast range; a cast anchored on the bot, an `AURA`, always does: out
+  of range the server would walk the bot back toward the opponent first), then M10's flee
   (`FleeOutrun` against the opponent's `CharInfo` run speed). Unable to outrun: fights on.
 - **Break-cast gate.** A `Break` step only when its scaled hit time is under 4 s, the opponent is
   stunned, asleep or rooted, a melee opponent cannot reach it first ((distance − attack range) /

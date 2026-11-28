@@ -36,7 +36,7 @@ var (
 		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA, Sighted: true},
 		{Skill: skillEntangle, From: 36, Vs: vsCA},
 		{Skill: skillArrest, From: 55, Vs: vsCHA},
-		{Skill: skillArrest, From: 55, Within: arrestReach, Break: true},
+		{Skill: skillArrest, From: 55, Break: true},
 		{Skill: skillEntangle, From: 36, Break: true},
 		{Skill: skillAggression, From: 24, Peel: true},
 	}
@@ -52,13 +52,8 @@ var (
 		{Skill: skillPowerBreak, From: 32, Vs: vsMA},
 		{Skill: skillFreezingStrike, From: 36, Vs: vsM},
 		{Skill: skillArrest, From: 55, Vs: vsCHA},
-		{Skill: skillArrest, From: 55, Within: arrestReach, Break: true},
+		{Skill: skillArrest, From: 55, Break: true},
 		{Skill: skillFreezingStrike, From: 36, Break: true},
 		{Skill: skillAggression, From: 24, Peel: true},
 	}
 )
-
-// arrestReach is 402 Arrest's castRange: as a Break step it casts only
-// on a foe that close, since a break-off cast never walks the bot back in
-// (Entangle or Freezing Strike covers a farther foe).
-const arrestReach = 150

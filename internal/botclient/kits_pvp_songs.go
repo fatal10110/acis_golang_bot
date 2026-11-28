@@ -15,8 +15,8 @@ const skillArrest int32 = 402
 var (
 	// swordSingerPvP (SS, as TK without Tribunal): Ultimate Defense under
 	// 20 % HP only vs M, Deflect Arrow vs A (Sighted), as KN; Entangle vs
-	// C, A; Arrest from 55 vs C, H, A; Arrest from 55, then Entangle, to
-	// break off; Aggression only as a Peel. Then M10: Power Strike (fixed),
+	// C, A; Arrest from 55 vs C, H, A; Arrest from 55 within its 150
+	// reach, then Entangle, to break off; Aggression only as a Peel. Then M10: Power Strike (fixed),
 	// Elemental Heal under 50 %, the songs out of combat.
 	swordSingerPvP = []Step{
 		{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20, Vs: vsM},
@@ -29,10 +29,10 @@ var (
 	}
 	// bladedancerPvP (BD): Ultimate Defense and Deflect Arrow as SS; Poison
 	// vs C, H; Power Break vs M, A; Freezing Strike only vs M; Arrest from
-	// 55 vs C, H, A; Arrest from 55, then Freezing Strike, to break off;
-	// Aggression only as a Peel. Then M10: Drain Health as the opener and
-	// under 60 %, the blade dances with duals and two attackers from 55
-	// (under the area rule), Sting.
+	// 55 vs C, H, A; Arrest from 55 within its 150 reach, then Freezing
+	// Strike, to break off; Aggression only as a Peel. Then M10: Drain
+	// Health as the opener and under 60 %, the blade dances with duals and
+	// two attackers from 55 (under the area rule), Sting.
 	bladedancerPvP = []Step{
 		{Skill: skillUltimateDefense, Target: TargetSelf, SelfHPBelow: 20, Vs: vsM},
 		{Skill: skillDeflectArrow, From: 24, Target: TargetSelf, Vs: vsA, Sighted: true},

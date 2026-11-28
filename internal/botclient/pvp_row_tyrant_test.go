@@ -56,8 +56,8 @@ func TestPvPRowTYKit(t *testing.T) {
 // Soul Breaker at reuse on a Warrior, then Stunning Fist; both held on a
 // Cleric until its Heal, Soul Breaker first; the M10 attacks (Hurricane
 // Assault with two charges, Burning Fist, Force Blaster with one, Iron
-// Punch) in M10 order with no list damage step ahead; Cripple to break
-// off.
+// Punch) in M10 order with no list damage step ahead; Cripple within its
+// 40 reach to break off, else the flee.
 func TestPvPRowTY(t *testing.T) {
 	all := []int32{
 		skillForceBlaster, skillCripple, skillSoulBreaker, skillStunningFist,
@@ -105,6 +105,10 @@ func TestPvPRowTY(t *testing.T) {
 			name: "a Warrior, stuns and Burning Fist cooling, no charge: Iron Punch", level: 40, weapon: "DUALFIST", skills: all, opp: lyrWarrior,
 			setup: both(opened, stuns, cooling(skillBurningFist)), want: skillIronPunch,
 		},
-		{name: "breaking off: Cripple", level: 40, weapon: "DUALFIST", skills: all, opp: lyrWarrior, setup: both(opened, charges(1), breakingOff), want: skillCripple},
+		{name: "breaking off from a foe at 30: Cripple", level: 40, weapon: "DUALFIST", skills: all, opp: lyrWarrior, setup: both(opened, charges(1), warriorAt(30), breakingOff), want: skillCripple},
+		{
+			name: "breaking off from a foe at 300, beyond Cripple's 40: the flee, no Cripple", level: 40, weapon: "DUALFIST", skills: all, opp: lyrWarrior,
+			setup: both(opened, charges(1), breakingOff), kind: actMove, not: []int32{skillCripple},
+		},
 	})
 }
