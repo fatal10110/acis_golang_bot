@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +35,7 @@ func TestPvPRowsShipped(t *testing.T) {
 	m := &TravelMap{classes: classes, skills: skills}
 	// The row table: each row's damage, DOT and control steps, "skill" or
 	// "skill/vs", in the order the row plays them.
+	second := secondRowIDs()
 	row := func(id string) charmodel.Row { return charmodel.Row{ID: id} }
 	bow := func(id string) charmodel.Row { return charmodel.Row{ID: id, Bow: true} }
 	for _, tc := range []struct {
@@ -61,22 +60,10 @@ func TestPvPRowsShipped(t *testing.T) {
 	} {
 		got := map[charmodel.Row]string{}
 		for r, refs := range pvpRowTable(m, shippedKits, tc.level) {
-			if _, mystic := mysticRowTable[40][r.ID]; mystic {
-				continue // checkMysticPvPRows
+			if _, mystic := mysticRowTable[40][r.ID]; mystic || second[r.ID] {
+				continue // checkMysticPvPRows, checkSecondPvPRows
 			}
-			var ids []string
-			for _, ref := range refs {
-				id := strconv.Itoa(int(skillOf(t, skills, ref.Skill)))
-				if len(ref.Vs) > 0 {
-					var vs strings.Builder
-					for _, a := range ref.Vs {
-						vs.WriteString(a.String())
-					}
-					id += "/" + vs.String()
-				}
-				ids = append(ids, id)
-			}
-			got[r] = strings.Join(ids, " ")
+			got[r] = refWords(t, skills, refs)
 		}
 		if !maps.Equal(got, tc.want) {
 			t.Errorf("level %d: row table\n%v\nwant\n%v", tc.level, got, tc.want)
@@ -103,6 +90,7 @@ func TestPvPRowsShipped(t *testing.T) {
 		}
 	}
 	t.Run("mystic rows", func(t *testing.T) { checkMysticPvPRows(t, classes, skills) })
+	t.Run("second rows", func(t *testing.T) { checkSecondPvPRows(t, classes, skills) })
 	skill := func(id int32) datapack.Skill {
 		s, ok := skills[datapack.SkillRef{ID: id, Level: 1}]
 		if !ok {

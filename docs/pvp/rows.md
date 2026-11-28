@@ -8,8 +8,10 @@ professions with its row ids and notation (`docs/strategy.md` "Behavior per clas
 (`classes/*.xml`), land bases from `skills/*.xml`; a row lists only what differs from M10.
 Against a player a row's steps replace the M10 row's steps of every skill they list (a side cast
 on another attacker stays), so the shipped row lists each such skill's whole PvP play.
-[Who plays which row](modes.md#who-plays-which-row); second professions play their first
-profession's list until their [second-profession rows](rows-second.md) ship (#421, X20-X28).
+[Who plays which row](modes.md#who-plays-which-row); since X20 (#718) each of the 24 second
+professions has a row of its own in the row table ([second-profession rows](rows-second.md)), which
+plays its first profession's list joined to its own M10 rotation until its group PR (X21-X28, #421)
+ships its list.
 
 ## Opener, control and interrupt
 

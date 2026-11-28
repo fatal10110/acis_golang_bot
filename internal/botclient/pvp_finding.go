@@ -424,7 +424,7 @@ func (b *Brain) pvpFighters(id int32) (bot, opp charmodel.Fighter, ok bool) {
 	if r := b.pvp.opponents[id]; r != nil {
 		row = r.Row
 	}
-	if opp, ok = b.pvpRef(m, o.ClassID, row.Bow, level); !ok {
+	if opp, ok = b.pvpRef(m, o.ClassID, row.Shoots(), level); !ok {
 		return bot, opp, false
 	}
 	opp.Row = row

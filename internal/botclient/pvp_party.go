@@ -209,8 +209,8 @@ func (b *Brain) enemyHealer(enemies []int32, now time.Time) int32 {
 	return prior
 }
 
-// partyHealer reports whether member id plays a Healer row (CL, EO, SO) by
-// its party window class.
+// partyHealer reports whether member id plays a Healer row (CL, EO, SO,
+// BI, PP, EE, SE) by its party window class.
 func (b *Brain) partyHealer(id int32) bool {
 	m := b.world.Party.Members[id]
 	if m == nil {

@@ -55,8 +55,13 @@ melee with 100 Stun Attack from 20 (`classes/dwarfFighter.xml:94`).
 `charmodel` is pure (`docs/strategy.md` section 3) while `Step` and the rows live in
 `internal/botclient` (its section 4, `type Step`), so rows come as data. X3 defines `Archetype`
 (`Step.Vs`, from X6, is a list of it), `RowTable` (per row, `RefStep{Skill, Level, Vs}` for its
-damage, DOT and control steps at the bot's level; skill data from X2) and the class-to-row map
-(second professions as their first, scouts by weapon branch, Artisan as SC). `PvPValue(profile, mix,
+damage, DOT and control steps at the bot's level; skill data from X2) and the class-to-row map:
+each base class, first profession and the 24 second professions of
+[second-profession rows](rows-second.md) (X20) its own row; the servitor lines (Dark Avenger,
+Warlock, Necromancer, Elemental Summoner, Phantom Summoner), the Overlord and the Warsmith as their
+first, third professions as their second, Artisan as SC; scouts (RO, ES, AS) by weapon branch, and
+the bow pairing TH-HK, PW-SR, AW-PR (a bow in the right hand plays the archer row, any other weapon
+the dagger row). `PvPValue(profile, mix,
 rows)` and the engage estimate take a `RowTable`; a missing row plays only plain attacks with
 grade-typical gear. The brain's `pvpRowTable` (X6; each shipped `Step` list filtered to damage, DOT
 and control, `Vs` copied) is filled by X7 and X8; X5 passes an empty table until X6 swaps in
@@ -64,7 +69,9 @@ and control, `Vs` copied) is filled by X7 and X8; X5 passes an empty table until
 
 The **mix** (X10, its only reader; owned by the brain goroutine): per non-bot player seen in a
 `CharInfo`, object id, class id, last seen; older than an hour drops out; each class maps to its
-row. Nobody seen: equal shares over the rows of the bot's tier.
+row. Nobody seen: equal shares over the rows of the bot's tier (`RowClasses`): the base rows for a
+base class, the first-profession rows for a first profession, the 24 second rows for a second or
+third profession (X20).
 
 ## Engage estimate
 
@@ -77,7 +84,7 @@ Grade-typical gear (#553) is the loadout of the Expertise grade of the bot's lev
 for the opponent class's default gear build (`defaultGearClasses`: weapon type, armor type,
 shield): the median-priced complete armor set of that armor type, the median-priced weapon of the
 build's first weapon type (a bow where the opponent's row shoots: a scout line seen wielding a bow,
-`ClassRow`), with a one-handed weapon on a shield build the set's shield (else the
+or an archer row HK, SR, PR; `ClassRow`, `Row.Shoots`), with a one-handed weapon on a shield build the set's shield (else the
 grade's median-priced shield), and the grade's median-priced necklace, two earrings and two rings;
 the complete set's skills count, enchants, dyes and passive skills do not. The median (the lower of
 an even count) skips both the grade's common items and its raid jewelry.
@@ -87,7 +94,7 @@ an even count) skips both the grade's common items and its raid jewelry.
 The expected share of won fights over the mix (row `r`, share `s_r`). A **reference opponent**
 plays its row's damage, DOT and control steps under their `Vs` gates against the bot's archetype.
 The mix's reference opponent is the engage estimate's (#600): the row's class template at the
-character's level in the grade-typical gear of that class and the row's bow flag (bare below
+character's level in the grade-typical gear of that class, a bow where the row shoots (bare below
 level 20, where there is no grade), so pieces are weighed against a geared opponent.
 Every poison step is gated `vs C, H` (`vs H` on HM; [rows](rows.md)), so melee, archer and
 battle-caster bots are never poisoned; bleeds (Bleed 96, Sting 223) are ungated.
