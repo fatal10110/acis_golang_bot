@@ -230,7 +230,7 @@ func (t *Target) Enter(ctx context.Context, account, password string, ch botclie
 		return nil, fmt.Errorf("account %s: %w", account, err)
 	}
 	t.Own(self.Name, self.ObjectID)
-	return &Client{Account: account, Self: self, conn: conn, clock: t.clock, pacer: botclient.NewPacer(t.clock), release: release, pos: botclient.Point{X: self.X, Y: self.Y, Z: self.Z}}, nil
+	return newClient(account, self, conn, t.clock, release), nil
 }
 
 // accountInUse is the login server's LoginFail reason for an account a game
@@ -375,17 +375,31 @@ func (t *Target) WrongPassword(ctx context.Context, account string) error {
 }
 
 // Client is a character of the run online on a connection the scenario
-// drives itself: one goroutine reads it (Await) and sends on it, each send
-// paced like the brain's.
+// drives itself: one goroutine (the scenario's) consumes its events (Await)
+// and sends on it, each send paced like the brain's.
+//
+// The connection is drained all the time, not only inside Await: a reader
+// goroutine the Client owns decodes every frame into a bounded inbox
+// (inboxLimit) that Await consumes in arrival order, so a client the
+// scenario leaves idle in a crowded town never stalls the server's outbound
+// queue, which aborts a connection past its high water (2 MiB, gameserver
+// network/conn.go outboundHighWater). The reader never blocks: a full inbox
+// drops its oldest event that is not the session's end, an answer to the
+// character's own request or about the character itself (retained), and
+// counts it (Dropped). Close joins the reader.
 type Client struct {
 	Account string
 	Self    botclient.Self
-	conn    *botclient.GameConn
+	conn    gameConn
 	clock   botclient.Clock
 	pacer   *botclient.Pacer
 	release func()
 	once    sync.Once
 	closed  atomic.Bool
+	// in is what the reader decoded and Await has not consumed yet.
+	in *inbox
+	// drained closes when the reader returns.
+	drained chan struct{}
 	// pos is the character's position as the server last placed or sent
 	// it: entry, its own teleports, moves and stops.
 	pos botclient.Point
@@ -394,6 +408,24 @@ type Client struct {
 	// none.
 	target int32
 }
+
+// newClient makes the Client of a character in the world on conn and
+// starts its reader, the connection's only reader from then on.
+func newClient(account string, self botclient.Self, conn gameConn, clock botclient.Clock, release func()) *Client {
+	c := &Client{
+		Account: account, Self: self, conn: conn, clock: clock, pacer: botclient.NewPacer(clock), release: release,
+		in: newInbox(inboxLimit, self.ObjectID), drained: make(chan struct{}),
+		pos: botclient.Point{X: self.X, Y: self.Y, Z: self.Z},
+	}
+	go func() {
+		defer close(c.drained)
+		drain(conn, c.in)
+	}()
+	return c
+}
+
+// Dropped is how many events the reader dropped from a full inbox.
+func (c *Client) Dropped() uint64 { return c.in.drops() }
 
 // Pos is where the character stands, or heads to while it moves: where it
 // entered, or where the server last put it (its own teleport, stop or
@@ -412,36 +444,55 @@ func (c *Client) Send(ctx context.Context, payload []byte) error {
 	return c.conn.Send(payload)
 }
 
-// Await reads the connection until a frame decodes to an event match
-// accepts, for at most timeout (and not past ctx's deadline); other frames
-// are skipped. A teleport of the character itself is completed on the way:
-// its position follows and Appearing goes out, without which the server
-// keeps the character out of the world. Its own moves, stops and position
-// fixes move Pos too.
+// Await consumes the connection's events, in the order they arrived, until
+// one match accepts, for at most timeout (and not past ctx's deadline, which
+// also fails with os.ErrDeadlineExceeded); other events are skipped. A frame
+// that fails to decode is its error; once the connection ended, its read
+// error, on this and every later call. A teleport of the character itself
+// is completed on the way: its position follows and Appearing goes out,
+// without which the server keeps the character out of the world. Its own
+// moves, stops and position fixes move Pos too.
 func (c *Client) Await(ctx context.Context, timeout time.Duration, match func(botclient.Event) bool) (botclient.Event, error) {
-	deadline := time.Now().Add(timeout)
-	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
-	}
+	timer := c.clock.NewTimer(timeout)
+	defer timer.Stop()
 	for {
-		raw, err := c.conn.Read(deadline)
-		if err != nil {
-			return nil, err
+		select {
+		case <-timer.C():
+			return nil, os.ErrDeadlineExceeded
+		case <-ctx.Done():
+			return nil, awaitCtxErr(ctx)
+		default:
 		}
-		ev, ok, err := botclient.DecodeEvent(raw)
-		if err != nil {
-			return nil, err
-		}
+		it, ok := c.in.pop()
 		if !ok {
-			continue
+			select {
+			case <-c.in.ready:
+				continue
+			case <-timer.C():
+				return nil, os.ErrDeadlineExceeded
+			case <-ctx.Done():
+				return nil, awaitCtxErr(ctx)
+			}
 		}
-		if err := c.follow(ctx, ev); err != nil {
+		if it.err != nil {
+			return nil, it.err
+		}
+		if err := c.follow(ctx, it.ev); err != nil {
 			return nil, err
 		}
-		if match(ev) {
-			return ev, nil
+		if match(it.ev) {
+			return it.ev, nil
 		}
 	}
+}
+
+// awaitCtxErr is why Await stopped on ctx: os.ErrDeadlineExceeded past
+// ctx's deadline, as the timeout, else ctx's error.
+func awaitCtxErr(ctx context.Context) error {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return os.ErrDeadlineExceeded
+	}
+	return ctx.Err()
 }
 
 // follow moves Pos after an event about the character itself, answers its
@@ -476,10 +527,9 @@ func (c *Client) follow(ctx context.Context, ev botclient.Event) error {
 	return nil
 }
 
-// Watch reads the connection for d (not past ctx's deadline), handing fn
-// every event, as Await does with a match that never accepts; the time
-// running out is no error. A frame the deadline cuts in two is finished by
-// the next read (wire.FrameReader keeps what it read).
+// Watch consumes the connection's events for d (not past ctx's deadline),
+// handing fn every one, as Await does with a match that never accepts; the
+// time running out is no error.
 func (c *Client) Watch(ctx context.Context, d time.Duration, fn func(botclient.Event)) error {
 	_, err := c.Await(ctx, d, func(ev botclient.Event) bool {
 		fn(ev)
@@ -534,10 +584,7 @@ func (c *Client) Closed() bool { return c.closed.Load() }
 // Logout logs the character out and closes the connection. A refused
 // logout (ErrLogoutRefused) leaves it online and open.
 func (c *Client) Logout(ctx context.Context) error {
-	if err := c.pacer.Frame(ctx); err != nil {
-		return err
-	}
-	err := c.conn.Logout(ctx)
+	err := c.logout(ctx)
 	if errors.Is(err, botclient.ErrLogoutRefused) {
 		return err
 	}
@@ -592,13 +639,57 @@ func leave(ctx context.Context, s leaver) error {
 	return errors.Join(err, s.wait(ctx, leaveLinger))
 }
 
-// logout sends Logout, paced; the server closes the connection when it
-// accepts it.
+// logoutRefusalGrace is how long logout waits for LeaveWorld after an
+// ActionFailed: one already in flight before the Logout is followed by
+// LeaveWorld and the close, a refusal by nothing (as botclient.GameConn's
+// Logout).
+const logoutRefusalGrace = time.Second
+
+// errServerClose reports a logout the server answered ServerClose.
+var errServerClose = errors.New("server closed the session")
+
+// logout sends Logout, paced, and waits on the drained events for the
+// server's answer, as botclient.GameConn's Logout does on a connection it
+// reads itself: LeaveWorld is nil, an ActionFailed followed by nothing
+// within logoutRefusalGrace is botclient.ErrLogoutRefused (the character
+// stays in the world), ServerClose, the connection ending or no answer
+// within EntryTimeout is an error. The server closes the connection when it
+// accepts the logout.
 func (c *Client) logout(ctx context.Context) error {
-	if err := c.pacer.Frame(ctx); err != nil {
-		return err
+	if err := c.Send(ctx, botwire.EncodeLogout()); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("send Logout: %w", err)
 	}
-	return c.conn.Logout(ctx)
+	answer := func(failed bool) func(botclient.Event) bool {
+		return func(ev botclient.Event) bool {
+			switch ev.(type) {
+			case botclient.LeaveWorld, botclient.ServerClose:
+				return true
+			case botclient.ActionFailed:
+				return failed
+			}
+			return false
+		}
+	}
+	ev, err := c.Await(ctx, EntryTimeout, answer(true))
+	if _, ok := ev.(botclient.ActionFailed); ok {
+		ev, err = c.Await(ctx, logoutRefusalGrace, answer(false))
+		if errors.Is(err, os.ErrDeadlineExceeded) && ctx.Err() == nil {
+			return botclient.ErrLogoutRefused
+		}
+	}
+	switch {
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case err != nil:
+		return fmt.Errorf("read LeaveWorld: %w", err)
+	}
+	if _, ok := ev.(botclient.ServerClose); ok {
+		return errServerClose
+	}
+	return nil
 }
 
 // drop closes the connection without giving the place back.
@@ -616,13 +707,17 @@ func (c *Client) wait(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// Close drops the connection with no Logout and gives the place back; the
-// server keeps the character in the world a moment longer. Later calls do
-// nothing.
+// Close drops the connection with no Logout, joins the reader and gives the
+// place back; the server keeps the character in the world a moment longer.
+// Await then fails with the read error. Later calls do nothing.
 func (c *Client) Close() {
 	c.once.Do(func() {
 		c.closed.Store(true)
 		c.conn.Close()
+		<-c.drained
+		if n := c.Dropped(); n > 0 {
+			slog.Info("e2e client closed", "account", c.Account, "dropped_events", n)
+		}
 		c.release()
 	})
 }
