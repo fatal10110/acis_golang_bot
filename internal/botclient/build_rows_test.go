@@ -42,7 +42,7 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 // charge gate equals the skill's charge condition, every Within gate equals
 // the skill's castRange, every toggle is a TOGGLE skill, a Party buff and a
 // party heal (Heal.Members) are exactly the PARTY-target skills among the
-// buffs and heals, every skill tagged (base) (ClassKit.Base) is first
+// buffs and heals, every SELF-target buff is a Self one, every skill tagged (base) (ClassKit.Base) is first
 // granted under 20, every skill tagged (fixed) (ClassKit.Fixed) is in the
 // merged tree and not in the class's own, and the next profession is a
 // direct child of the class.
@@ -157,6 +157,12 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 			known(bf.Skill)
 		}
 		party("buff", bf.Skill, bf.Party)
+		for _, sk := range templates(bf.Skill) {
+			if sk.Target == "SELF" && !bf.Self {
+				fail("buff %d targets SELF, the row does not cast it as a Self one", bf.Skill)
+				break
+			}
+		}
 	}
 	for _, id := range r.kit.Base {
 		if lvl, ok := known(id); ok && lvl >= 20 {
@@ -348,7 +354,7 @@ func TestBehaviorRowsShipped(t *testing.T) {
 // with From 43.
 func TestBehaviorRowsCheck(t *testing.T) {
 	const sword, plain, charged, late, aura, chant = int32(100), int32(101), int32(102), int32(103), int32(104), int32(105)
-	const first38, own40, own43 = int32(106), int32(107), int32(108)
+	const first38, own40, own43, ward = int32(106), int32(107), int32(108), int32(109)
 	classes := map[int32]datapack.Class{
 		10: {ID: 10, Parent: -1, Skills: []datapack.SkillGrant{
 			{ID: sword, Level: 1, MinLevel: 1},
@@ -358,6 +364,7 @@ func TestBehaviorRowsCheck(t *testing.T) {
 			{ID: late, Level: 1, MinLevel: 20},
 			{ID: aura, Level: 1, MinLevel: 7},
 			{ID: chant, Level: 1, MinLevel: 1},
+			{ID: ward, Level: 1, MinLevel: 1},
 		}},
 		11: {ID: 11, Parent: 10},
 		12: {ID: 12, Parent: 11},
@@ -382,6 +389,7 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{ID: late, Level: 1}:    {},
 		{ID: aura, Level: 1}:    {OperateType: "TOGGLE"},
 		{ID: chant, Level: 1}:   {Target: "PARTY"},
+		{ID: ward, Level: 1}:    {Target: "SELF"},
 	}
 	row := func(next int32, steps ...Step) behaviorRow {
 		return behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Rotation: steps, Heals: []Heal{{Skill: plain, From: 7, HP: 50}}}, next: next}
@@ -403,6 +411,8 @@ func TestBehaviorRowsCheck(t *testing.T) {
 		{"party buff and heal", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: chant, Party: true}}, Heals: []Heal{{Skill: chant, HP: 50, Members: 1}}}}, false},
 		{"party buff of a single target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: plain, From: 7, Party: true}}}}, true},
 		{"member buff of a party target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: chant}}}}, true},
+		{"self buff of a self target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: ward, Self: true}}}}, false},
+		{"member buff of a self target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Buffs: []Buff{{Skill: ward}}}}, true},
 		{"party heal of a single target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: plain, HP: 60, Members: 2}}}}, true},
 		{"single heal of a party target", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Heals: []Heal{{Skill: chant, HP: 60}}}}, true},
 		{"relax not in the tree", behaviorRow{name: "fixture", class: 10, start: 1, end: 19, kit: ClassKit{Relax: 999}}, true},
