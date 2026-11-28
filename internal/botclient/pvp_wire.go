@@ -26,6 +26,12 @@ const (
 	msgDuelEndedInTie        = 1952
 	msgS1WithdrewS2Won       = 1955
 
+	// A clan war's end, to every online member of both clans
+	// (network/clan_war.go broadcastWarEnded,
+	// serverpackets/systemmessage_clan_subunit_war.go): S1 the other clan.
+	msgClanS1DecidedToStopWar = 1566
+	msgWarAgainstS1Stopped    = 1567
+
 	// The party duel's (network/duel.go requestDuelStart, answerDuel,
 	// beginDuel, duelEndMessages): the acceptances name the other side's
 	// leader, the results a side by its leader's name; 1944 goes to every

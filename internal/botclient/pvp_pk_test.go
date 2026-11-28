@@ -162,11 +162,11 @@ func TestPvPPKCap(t *testing.T) {
 		b := pvpRowBrain(t, 1, 36, "BIGBLUNT", lyrWarrior, skillPowerSmash, skillStunAttack)
 		pkVictimFight(t, b, lyrWarrior, Point{X: 90})
 		b.handleOne(t, RelationChanged{ObjectID: pcID, PvPFlag: 2}, t0)
-		if o := b.world.object(pcID); b.blinking(o, at(time.Second)) {
+		if o := b.world.object(pcID); b.blinking(pcID, o, at(time.Second)) {
 			t.Fatal("the flag guard holds the PK victim")
 		}
 		b.karma.victim = 0
-		if o := b.world.object(pcID); !b.blinking(o, at(time.Second)) {
+		if o := b.world.object(pcID); !b.blinking(pcID, o, at(time.Second)) {
 			t.Fatal("the flag guard lets a blinking non-victim through")
 		}
 	})

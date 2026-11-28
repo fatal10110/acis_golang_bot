@@ -70,7 +70,7 @@ func TestDecodeCombatEvents(t *testing.T) {
 		{
 			"RelationChanged",
 			packet(OpGameRelationChanged, pcID, 0x2, 1, 120, 1),
-			RelationChanged{ObjectID: pcID, AutoAttackable: true, Karma: 120, PvPFlag: 1},
+			RelationChanged{ObjectID: pcID, Relation: 0x2, AutoAttackable: true, Karma: 120, PvPFlag: 1},
 		},
 	}
 	for _, tc := range tests {

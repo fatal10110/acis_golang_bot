@@ -77,6 +77,10 @@ type SkillCoolTime struct{ Timers []SkillTimer }
 // UserInfo to the player alone (player/character_pvpflag.go).
 type RelationChanged struct {
 	ObjectID int32
+	// Relation is the player's relation bits as the bot sees them
+	// (serverpackets/relationchanged.go, network/relations.go relationTo):
+	// RelationMutualWar while both clans declared war on each other.
+	Relation int32
 	// AutoAttackable is set when the bot may attack the player without
 	// force (Character.AttackableWithoutForceBy): flagged, with karma, in a
 	// PvP zone or arena with the bot, or in its duel.
@@ -84,6 +88,19 @@ type RelationChanged struct {
 	Karma          int32
 	PvPFlag        uint8
 }
+
+// Relation bits of RelationChanged (serverpackets/relationchanged.go). The
+// server sets RelationOneSidedWar with RelationMutualWar at mutual war
+// (network/relations.go relationTo), so a mutual war reads 0x18000.
+const (
+	RelationMutualWar   int32 = 0x8000
+	RelationOneSidedWar int32 = 0x10000
+)
+
+// MutualWar reports whether the player's clan and the bot's are at war
+// with each other, neither of them in an academy: the war a kill is a PvP
+// kill in (docs/pvp/war.md).
+func (e RelationChanged) MutualWar() bool { return e.Relation&RelationMutualWar != 0 }
 
 func (Attack) IsEvent() {}
 
@@ -192,8 +209,7 @@ func decodeSkillCoolTime(r *wire.Reader) Event {
 // decodeRelationChanged: object id, relation bits, auto-attackable flag,
 // karma, PvP flag (serverpackets/relationchanged.go).
 func decodeRelationChanged(r *wire.Reader) Event {
-	e := RelationChanged{ObjectID: r.ReadInt32()}
-	r.Skip(4) // relation
+	e := RelationChanged{ObjectID: r.ReadInt32(), Relation: r.ReadInt32()}
 	e.AutoAttackable = r.ReadInt32() != 0
 	e.Karma = r.ReadInt32()
 	e.PvPFlag = uint8(r.ReadInt32())

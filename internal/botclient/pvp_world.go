@@ -29,6 +29,7 @@ const (
 	FightFlagged
 	FightPK
 	FightUnfought
+	FightWar
 )
 
 // String is the kind's metric label (docs/pvp/modes.md).
@@ -46,6 +47,8 @@ func (k FightKind) String() string {
 		return "pk"
 	case FightUnfought:
 		return "unfought"
+	case FightWar:
+		return "war"
 	}
 	return ""
 }
@@ -92,6 +95,15 @@ type Opponent struct {
 	// flag is the flag state last seen, what FlagBlinkAt and a change of
 	// CharInfo are told from.
 	flag uint8
+	// Relation is the relation bits of its last RelationChanged.
+	Relation int32
+	// War is the war mark (docs/pvp/war.md "War mark"): its last
+	// RelationChanged held RelationMutualWar, and no war ended (1566,
+	// 1567), the bot's clan id did not change and no CharInfo showed it in
+	// another clan than WarClan since.
+	War bool
+	// WarClan is its clan id (from its last CharInfo) when War was set.
+	WarClan int32
 }
 
 // DuelPhase is where the bot's duel stands.
@@ -181,7 +193,10 @@ type pvpWorld struct {
 	// radii are the decoded collision radii of the players, summons and
 	// NPCs in sight, what the area rule reaches them by.
 	radii map[int32]float64
-	duel  Duel
+	// clan is the bot's clan id the war marks were set under: a change
+	// clears them all (Brain.warClear).
+	clan int32
+	duel Duel
 	// asked is the duel challenge open for an answer, of either kind
 	// (Brain.declineDuel).
 	asked duelAsk
@@ -248,6 +263,13 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 		p.opponents, p.owners, p.radii = make(map[int32]*Opponent), make(map[int32]string), make(map[int32]float64)
 	}
 	self := b.world.Self.ObjectID
+	if b.world.Clan.ID != p.clan {
+		// The bot joined, left or changed its clan (UserInfo, JoinPledge,
+		// PledgeShowMemberListAll or DeleteAll): its wars are not the
+		// marks' (docs/pvp/war.md "Staleness").
+		p.clan = b.world.Clan.ID
+		b.warClear()
+	}
 	switch e := ev.(type) {
 	case CharInfo:
 		p.radii[e.ObjectID] = e.CollisionRadius
@@ -265,6 +287,7 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 	case RelationChanged:
 		if r := p.opponents[e.ObjectID]; r != nil {
 			r.blink(uint8(e.PvPFlag), now)
+			r.Relation, r.War, r.WarClan = e.Relation, e.MutualWar(), r.ClanID
 		}
 	case StatusUpdate:
 		if r := p.opponents[e.ObjectID]; r != nil {
@@ -319,6 +342,12 @@ func (b *Brain) pvpKeep(ev Event, now time.Time) time.Time {
 			return b.pvpReact(now)
 		}
 	case SystemMessage:
+		if e.ID == msgClanS1DecidedToStopWar || e.ID == msgWarAgainstS1Stopped {
+			// A war ended: which one the text names, not which players
+			// were in it (docs/pvp/war.md "Staleness").
+			b.warClear()
+			return time.Time{}
+		}
 		return b.duelMessage(e, now)
 	case ExDuelAskStart:
 		due := b.pvpReact(now)
@@ -361,6 +390,12 @@ func (b *Brain) charInfo(e CharInfo, now time.Time) bool {
 		b.pvp.opponents[e.ObjectID] = r
 	}
 	changed := seen && (r.Abnormal != e.Abnormal || r.flag != uint8(e.PvPFlag))
+	if r.War && e.ClanID != r.WarClan {
+		// It left, was dismissed from or changed its clan: the server
+		// sends only this CharInfo (network/clan.go sendLeftClan), no
+		// RelationChanged (docs/pvp/war.md "The enemy leaves its clan").
+		r.War, changed = false, true
+	}
 	_, bow := b.cfg.Travel.arrowsOf(e.RHand)
 	if row, ok := charmodel.ClassRow(e.ClassID, bow); ok {
 		r.Archetype, r.Row = row.Archetype(), row
@@ -374,6 +409,19 @@ func (b *Brain) charInfo(e CharInfo, now time.Time) bool {
 	r.CP, r.MaxCP, r.SeenAt = e.CP, e.MaxCP, now
 	r.blink(uint8(e.PvPFlag), now)
 	return changed && b.fights(e.ObjectID, now)
+}
+
+// warClear clears every war mark until a new RelationChanged sets it again.
+func (b *Brain) warClear() {
+	for _, r := range b.pvp.opponents {
+		r.War = false
+	}
+}
+
+// atWar reports whether player id carries the war mark: a mutual-war enemy.
+func (b *Brain) atWar(id int32) bool {
+	r := b.pvp.opponents[id]
+	return r != nil && r.War
 }
 
 // blink keeps flag as the record's flag state: one turning to 2 (blinking,
@@ -752,6 +800,14 @@ func (b *Brain) fightRule(id int32, o *Object, now time.Time) FightKind {
 			return FightBack
 		}
 		return FightFlagged
+	}
+	// Rule 6b: a mutual-war enemy (docs/pvp/war.md, D40), attacked by
+	// force (Brain.forced).
+	if b.persona.PvP.FightWar && b.atWar(id) {
+		if attacking {
+			return FightBack
+		}
+		return FightWar
 	}
 	// Rule 7: PK mode (docs/pvp/karma.md): its victim, or a clean attacker
 	// of a karma bot with the limits passing.

@@ -190,10 +190,12 @@ func guarded(o *Object) bool { return o != nil && (o.Kind == KindPlayer || o.Sum
 
 // blinking reports whether the flag guard holds damage on o (object id) at
 // now (docs/pvp/guards.md "Flag guard"): a karma-free player or summon
-// whose flag blinks (state 2), outside a duel and unless both stand in an
-// arena (a PvP zone, where a kill is free).
-func (b *Brain) blinking(o *Object, now time.Time) bool {
-	if o.Karma > 0 || o.PvPFlag != 2 || b.inDuel(now) {
+// whose flag blinks (state 2), outside a duel, unless both stand in an
+// arena (a PvP zone, where a kill is free) and unless the bot fights it as
+// a mutual-war enemy (rule 6b: a kill is a PvP kill, docs/pvp/war.md
+// "Guards").
+func (b *Brain) blinking(id int32, o *Object, now time.Time) bool {
+	if o.Karma > 0 || o.PvPFlag != 2 || b.inDuel(now) || b.persona.PvP.FightWar && b.atWar(id) {
 		return false
 	}
 	if v := b.karma.victim; b.pkVictim(v, now) && b.world.object(v) == o {
@@ -250,7 +252,7 @@ func (b *Brain) damageHeld(id int32, landing time.Duration, now time.Time) bool 
 	if !guarded(o) {
 		return false
 	}
-	if b.blinking(o, now) {
+	if b.blinking(id, o, now) {
 		return true
 	}
 	w, ok := b.edgeWatched(id, o, now)
@@ -361,7 +363,7 @@ func (b *Brain) guardDue(now time.Time) int32 {
 	if !guarded(o) || o.Dead {
 		return 0
 	}
-	if !b.mayFight(id, now) || b.blinking(o, now) || b.duelGroundStop(id, now) {
+	if !b.mayFight(id, now) || b.blinking(id, o, now) || b.duelGroundStop(id, now) {
 		return id
 	}
 	if id == g.intent && id == b.engaged && b.poleHeld(id, now) {
@@ -433,7 +435,8 @@ func (b *Brain) guardTarget(now time.Time) int32 {
 // (Brain.edgeCross) when none is due yet, zero otherwise.
 func (b *Brain) guardWake(ev Event, now time.Time) time.Time {
 	switch ev.(type) {
-	case RelationChanged, CharInfo, MoveToLocation, MagicSkillUse, MagicSkillCanceled, TargetUnselected, StopMove, ValidateLocation:
+	case RelationChanged, CharInfo, MoveToLocation, MagicSkillUse, MagicSkillCanceled, TargetUnselected, StopMove, ValidateLocation,
+		SystemMessage, UserInfo, JoinPledge, PledgeShowMemberListAll, PledgeShowMemberListDeleteAll:
 		if b.guardTarget(now) != 0 {
 			return now.Add(time.Second / frameRate)
 		}
