@@ -93,6 +93,11 @@ func TestWorldServitor(t *testing.T) {
 			testServitorInfo,
 			MoveToPawn{ObjectID: ownServitor, TargetID: npcID, Distance: 40},
 		}, with(func(s *Servitor) { s.Target = npcID })},
+		{"its follow walk to the bot clears the target", []Event{
+			testServitorInfo,
+			MoveToPawn{ObjectID: ownServitor, TargetID: npcID, Distance: 40},
+			MoveToPawn{ObjectID: ownServitor, TargetID: selfID, Distance: 36},
+		}, with(func(*Servitor) {})},
 		{"others' Attack and MoveToPawn are ignored", []Event{
 			testServitorInfo,
 			Attack{AttackerID: pcID, Hits: []AttackHit{{TargetID: npcID}}},

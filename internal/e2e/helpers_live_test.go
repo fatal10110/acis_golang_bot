@@ -44,7 +44,7 @@ func character(t *testing.T, account string, class *botclient.StartingClass) bot
 
 // enter enters the world as ch on account, retrying while the account is
 // still in use, and logs the character out when the test ends.
-func enter(t *testing.T, ctx context.Context, tg *Target, account string, ch botclient.Character, rec *botclient.Recorder) *Client {
+func enter(t *testing.T, ctx context.Context, tg *Target, account string, ch botclient.Character, rec botclient.FrameTap) *Client {
 	t.Helper()
 	c, err := tg.EnterWhenFree(ctx, account, ch, rec)
 	if err != nil {

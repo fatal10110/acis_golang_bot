@@ -86,9 +86,14 @@ func (w *World) servitorAttack(e Attack) {
 }
 
 // servitorTargets takes the servitor's target from its walk to an object.
+// Its walk to the bot is the follow (move/controller.go FollowTarget, sent
+// as MoveToPawn after the summon and after every fight): no target.
 func (w *World) servitorTargets(mover, target int32) {
 	if s := w.Servitor; s != nil && s.ObjectID == mover {
 		s.Target = target
+		if target == w.Self.ObjectID {
+			s.Target = 0
+		}
 	}
 }
 
