@@ -31,12 +31,14 @@ var (
 	// swordSingerKit (SS, from EK): Elemental Heal under 50 % HP, Ultimate
 	// Defense under 20 %; Aggression and Entangle open, Power Strike (fixed);
 	// the auras, Spirit Barrier and the songs. Sword Symphony is dropped
-	// (owner decision 4 on #624).
+	// (owner decision 4 on #624). Arrest plays against players only
+	// (swordSingerPvP).
 	swordSingerKit = ClassKit{
 		Skills: []int32{
 			skillAggression, skillEntangle, skillPowerStrike, skillElementalHeal, skillUltimateDefense,
 			skillDefenseAura, skillAttackAura, skillDeflectArrow, skillSpiritBarrier,
 			skillSongOfWarding, skillSongOfWind, skillSongOfHunter, skillSongOfEarth, skillSongOfVitality,
+			skillArrest,
 		},
 		Rotation: []Step{
 			{Skill: skillElementalHeal, Target: TargetSelf, SelfHPBelow: 50},
@@ -45,7 +47,7 @@ var (
 			{Skill: skillEntangle, Opener: true},
 			{Skill: skillPowerStrike, Weapons: meleeWeapons},
 		},
-		PvP: elvenKnightPvP,
+		PvP: swordSingerPvP,
 		Buffs: append(append([]Buff{}, fighterAuras...),
 			Buff{Skill: skillSpiritBarrier, Self: true},
 			Buff{Skill: skillSongOfWarding, Party: true},
@@ -65,13 +67,15 @@ var (
 	// bladedancerKit (BD, from PK): Drain Health under 60 % HP, Ultimate
 	// Defense under 20 %; Drain Health and Power Break open, the blade dances
 	// with duals and two attackers from 55, Sting, Freezing Strike; the
-	// auras and, with duals, the dances.
+	// auras and, with duals, the dances. Arrest plays against players only
+	// (bladedancerPvP).
 	bladedancerKit = ClassKit{
 		Skills: []int32{
 			skillAggression, skillDrainHealth, skillPowerBreak, skillSting, skillFreezingStrike, skillPowerStrike,
 			skillUltimateDefense, skillDefenseAura, skillAttackAura, skillDeflectArrow, skillPoison,
 			skillPoisonBladeDance, skillDemonicBladeDance,
 			skillDanceOfFire, skillDanceOfInspiration, skillDanceOfWarrior, skillDanceOfFury, skillDanceOfVampire,
+			skillArrest,
 		},
 		Rotation: []Step{
 			{Skill: skillDrainHealth, SelfHPBelow: 60},
@@ -83,7 +87,7 @@ var (
 			{Skill: skillSting, Weapons: stingWeapons},
 			{Skill: skillFreezingStrike},
 		},
-		PvP: palusKnightPvP,
+		PvP: bladedancerPvP,
 		Buffs: append(append([]Buff{}, fighterAuras...),
 			Buff{Skill: skillDanceOfFire, Party: true, Weapons: dualOnly},
 			Buff{Skill: skillDanceOfInspiration, Party: true, Weapons: dualOnly, From: 46},

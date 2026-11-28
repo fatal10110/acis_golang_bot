@@ -11,7 +11,6 @@ const (
 	skillShieldFortress  int32 = 322
 	skillTribunal        int32 = 400
 	skillJudgment        int32 = 401
-	skillArrest          int32 = 402
 	skillShackle         int32 = 403
 )
 

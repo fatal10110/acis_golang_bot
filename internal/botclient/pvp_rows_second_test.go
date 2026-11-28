@@ -75,9 +75,9 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // secondRowTable is the 24 second rows' row table at a level with today's
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
-// (pvpSteps). X21-X28 change a row's line when they ship its list, and add
-// the level where a new step starts (55: PL's Shackle, TK's and SK's
-// Arrest, X21).
+// (pvpSteps), or its own list once shipped (PL, TK, SK: X21; SS, BD:
+// X22). X21-X28 change a row's line when they ship its list, and add the
+// level where a new step starts (55: Shackle and Arrest, O1).
 var secondRowTable = map[int]map[string]string{
 	40: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
@@ -107,7 +107,7 @@ var secondRowTable = map[int]map[string]string{
 	},
 	55: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
-		"BD": "129/CH 115/MA 105/M 70 70 84 408 223",
+		"BD": "129/CH 115/MA 105/M 402/CHA 70 70 84 408 223",
 		"BH": "100 260",
 		"BI": "1201/M 1184/M 1177",
 		"DS": "100 260 190 255",
@@ -124,7 +124,7 @@ var secondRowTable = map[int]map[string]string{
 		"SK": "129/CH 115/MA 105/M 402/CHA 289 70 70 289 401 223 3",
 		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1275 1231",
 		"SR": "102/M 101 19 24 56",
-		"SS": "102/CA 3",
+		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
 		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
@@ -133,7 +133,7 @@ var secondRowTable = map[int]map[string]string{
 	},
 	74: {
 		"AW": "129/CH 115/M 70 70 321 263 96 223 16",
-		"BD": "129/CH 115/MA 105/M 70 70 84 408 223",
+		"BD": "129/CH 115/MA 105/M 402/CHA 70 70 84 408 223",
 		"BH": "100 260",
 		"BI": "1201/M 1184/M 1177",
 		"DS": "100 315 260 190 255",
@@ -150,7 +150,7 @@ var secondRowTable = map[int]map[string]string{
 		"SK": "129/CH 115/MA 105/M 402/CHA 289 70 70 289 401 279 223 3",
 		"SN": "1184/MA 1220/CH 1160/M 1222/MA 1184/M 1220 1274 1172 1147 1230 1296 1275 1231",
 		"SR": "102/M 101 19 24 56",
-		"SS": "102/CA 3",
+		"SS": "102/CA 402/CHA 3",
 		"TH": "409 263 96 16",
 		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",

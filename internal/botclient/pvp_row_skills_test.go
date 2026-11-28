@@ -85,6 +85,10 @@ var rowSkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: 1011, Level: 1}: {Type: "HEAL", Target: "ONE", HitTime: 5 * time.Second, Power: 49, Magic: true, CastRange: 600, Radius: 80, MagicLevel: 3},
 	// Battle Heal
 	{ID: 1015, Level: 1}: {Type: "HEAL", Target: "ONE", HitTime: 2 * time.Second, Power: 83, Magic: true, CastRange: 600, Radius: 80, MagicLevel: 10},
+	// Poison Blade Dance
+	{ID: 84, Level: 1}: {Type: "PDAM", Target: "AURA", WeaponsAllowed: []string{"DUAL"}, HitTime: 1833 * time.Millisecond, Power: 1, Offensive: true, Debuff: true, EffectType: "POISON", Radius: 150, MagicLevel: 55, Effects: []datapack.Effect{{Name: "DamOverTime", Time: 3, Count: 10, EffectType: "POISON", EffectPower: 35}}},
+	// Demonic Blade Dance
+	{ID: 408, Level: 1}: {Type: "PDAM", Target: "AURA", WeaponsAllowed: []string{"DUAL"}, HitTime: 3 * time.Second, Power: 229, Offensive: true, Debuff: true, Radius: 150, MagicLevel: 55, Effects: []datapack.Effect{{Name: "Debuff", Time: 15, Count: 1, EffectType: "DEBUFF", EffectPower: 40}}},
 }
 
 // slowFuncs are a run speed slow's stat functions (Entangle, Cripple,
