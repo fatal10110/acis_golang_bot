@@ -396,13 +396,13 @@ func loadSpots(dir string, multiplier float64, supply botclient.SupplyConfig, n 
 	return botclient.NewSpotRegistry(spots, multiplier), travel, dp, nil
 }
 
-// addSpawnEventsFlag adds -spawn-events, the server's SpawnEvents the bot
-// cannot read, to fs.
 // addServitorLinesFlag adds -servitor-lines, off by default (D51 answer 2).
 func addServitorLinesFlag(fs *flag.FlagSet, on *bool) {
 	fs.BoolVar(on, "servitor-lines", false, "draw the bots' branches with the servitor lines: a Support Knight may go on to the Dark Avenger, a Damage wizard to the Necromancer, the Warlock, the Elemental Summoner or the Phantom Summoner (docs/servitors.md); default: the branch tables without them")
 }
 
+// addSpawnEventsFlag adds -spawn-events, the server's SpawnEvents the bot
+// cannot read, to fs.
 func addSpawnEventsFlag(fs *flag.FlagSet, events *string) {
 	fs.StringVar(events, "spawn-events", strings.Join(botclient.DefaultSupplyConfig().SpawnEvents, ";"),
 		"semicolon-separated SpawnEvents of the server (npcs.properties): the events whose spawns run, what the items' supply counts")

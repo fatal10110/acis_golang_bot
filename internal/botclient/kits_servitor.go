@@ -82,7 +82,7 @@ var (
 	// attackers, Shield Stun with a shield, Judgment from 55, Power Strike
 	// (fixed); Majesty, Iron Will from 43 and Reflect Damage out of combat;
 	// Shield Fortress from 64; rests with Relax; summons its Dark Panther,
-	// which it orders onto the target once the pull lands (no ServitorLead,
+	// which it orders onto the target before the pull (no ServitorLead,
 	// no servitor heal or buffs). Its Support role is a tank, as the
 	// Paladin's (gearRole: MeleeAlways).
 	darkAvengerKit = ClassKit{

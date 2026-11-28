@@ -146,7 +146,7 @@ func TestRowDA(t *testing.T) {
 		wearShield(b)
 		wantFrame(t, fightCast(t, b, now, skillAggression, npcID), skillAggression)
 	})
-	t.Run("the panther's order once the pull lands", func(t *testing.T) {
+	t.Run("the panther's order before the pull", func(t *testing.T) {
 		// No ServitorLead: the order goes first, the opener right after.
 		b := rowBrain(t, classDarkAvenger, 40, "SWORD", attacks...)
 		wearShield(b)
