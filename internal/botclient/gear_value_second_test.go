@@ -78,10 +78,11 @@ func TestRowBHSetValue(t *testing.T) {
 // Plated Leather (+4 STR, -1 CON): against the reference monster the CON
 // it takes costs more HP than the STR adds damage, in either role, and the
 // set is model-chosen; against a harmless target the STR gains for the
-// Damage builds of HK, SR and TY (strDamage; TY's with its own row, #633)
-// and stays at the tie-break for TH, PW, AW and PR's (the daggers' first
-// damage step at 40 is Deadly Blow, #631) and every Support build (a
-// tank: no heal the model times), model-chosen. Mithril Light (+4 evasion) gains against the
+// Damage builds of HK, SR, PR and TY (strDamage; TY's with its own row,
+// #633; PR's since its Drain Health under 60 % HP is passed over for
+// Stunning Shot, #676) and stays at the tie-break for TH, PW and AW's (the
+// daggers' first damage step at 40 is Deadly Blow, #631) and every Support
+// build (a tank: no heal the model times), model-chosen. Mithril Light (+4 evasion) gains against the
 // reference monster and is model-chosen against a harmless one.
 func platedLeatherVerdicts(strDamage bool) [][]setGain {
 	return [][]setGain{setVerdict(RoleDamage, setPlatedLeather, strDamage, false), setVerdict(RoleSupport, setPlatedLeather, false, false)}
@@ -111,7 +112,7 @@ func TestRowAWSetValue(t *testing.T) {
 }
 
 // TestRowPRSetValue: Plated Leather (kit: PR's).
-func TestRowPRSetValue(t *testing.T) { checkSecondSets(t, 37, platedLeatherVerdicts(false)...) }
+func TestRowPRSetValue(t *testing.T) { checkSecondSets(t, 37, platedLeatherVerdicts(true)...) }
 
 // TestRowTYSetValue: Plated Leather (kit: its own, kits_tyrant.go).
 func TestRowTYSetValue(t *testing.T) { checkSecondSets(t, 48, platedLeatherVerdicts(true)...) }
@@ -138,16 +139,18 @@ func TestRowSESetValue(t *testing.T) { checkSecondSets(t, 43, healerVerdicts) }
 // gains against the reference monster and it is model-chosen against a
 // harmless one. Demon (+4 INT, -1 WIT, -270 max HP) loses value against
 // the reference monster in either role, and Karmian outranks it at every
-// max HP (TestRowSNDemonRule): model-chosen.
+// max HP (TestRowSNDemonRule): model-chosen. The sorcerer and the
+// spellhowler are valued by Prominence and Hurricane, their Vampiric Touch
+// and Claw under an HP threshold passed over (gearRole, #676).
 var nukerKarmianVerdicts = append(setVerdict(RoleDamage, setKarmian, true, true), setVerdict(RoleSupport, setKarmian, false, true)...)
 
-// TestRowSNSetValue: Demon, else Karmian (kit: SN's). Against a harmless
-// target the sorcerer's Demon INT gains in the Damage role.
+// TestRowSNSetValue: Karmian (kit: SN's); Demon is model-chosen. Against a
+// harmless target the sorcerer's Demon INT gains in the Damage role.
 func TestRowSNSetValue(t *testing.T) {
 	checkSecondSets(t, 12, setVerdict(RoleDamage, setDemon, true, false), setVerdict(RoleSupport, setDemon, false, false), nukerKarmianVerdicts)
 }
 
-// TestRowSGSetValue: Karmian, else Demon (kit: SG's). The spellsinger's
+// TestRowSGSetValue: Karmian (kit: SG's); Demon is model-chosen. The spellsinger's
 // Demon loses value against a harmless target too, its lost WIT costing
 // more cast speed than the INT adds.
 func TestRowSGSetValue(t *testing.T) {
@@ -172,24 +175,39 @@ func TestRowWCSetValue(t *testing.T) {
 	)
 }
 
-// TestRowSNDemonRule checks the sorcerer's Demon rule through the model
-// (docs/strategy.md row SN: Demon once max HP covers its -270, over 810,
-// else Karmian), at 40 and 60 against the reference monster with max HP
-// reported: at 810 or less the model picks Karmian, Demon's lost HP
-// counted as lost survival. Over 810 it picks Karmian too: Karmian's cast
-// speed is worth more than Demon's +4 INT -1 WIT at every max HP, so
-// Demon is model-chosen (docs/strategy.md, "Model-chosen sets"; the
-// rule's fate is #676).
+// homunkulusSword is a C-grade magic sword (M. Atk 101), what a
+// sorcerer at 40 casts with.
+const homunkulusSword int32 = 84
+
+// TestRowSNDemonRule checks that the model never picks Demon over Karmian
+// for SN and SG (#676; the rows' "Demon once max HP covers the loss, over
+// 810" is dropped, never hand-coded): at 40, 52 and 60, naked and with a
+// C-grade magic sword, against the reference monster with max HP reported
+// from 500 to 5000 and against a harmless target, Karmian's x1.15 cast
+// speed outranks Demon's +4 INT -1 WIT, and against the reference monster
+// Demon gains nothing over its lost 270 HP. The server shortens a nuke's
+// reuse by cast speed as it does its cast time (TestCastSpeedShortensReuse),
+// so a reuse-bound Prominence casts more often with Karmian, and -1 WIT
+// takes back 5 % of the cast speed that +4 INT's 8 % damage would add.
 func TestRowSNDemonRule(t *testing.T) {
-	for _, level := range []int32{40, 60} {
-		for _, hp := range []int32{500, 810, 811, 1500, 5000} {
-			demon := shippedSetBonusHP(t, 12, level, RoleDamage, setDemon, false, hp)
-			karmian := shippedSetBonusHP(t, 12, level, RoleDamage, setKarmian, false, hp)
-			if demon >= karmian {
-				t.Errorf("level %d max HP %d: Demon bonus %v, Karmian %v; want Karmian picked", level, hp, demon, karmian)
-			}
-			if hp <= 810 && demon > statTieBreakOnly {
-				t.Errorf("level %d max HP %d: Demon bonus %v, want no model gain", level, hp, demon)
+	type target struct {
+		harmless bool
+		hp       int32
+	}
+	targets := []target{{true, 0}, {false, 500}, {false, 810}, {false, 811}, {false, 1500}, {false, 5000}}
+	for _, class := range []int32{12, 27} {
+		for _, level := range []int32{40, 52, 60} {
+			for _, weapon := range []int32{0, homunkulusSword} {
+				for _, tg := range targets {
+					demon := shippedSetBonusArmed(t, class, level, RoleDamage, setDemon, tg.harmless, tg.hp, weapon)
+					karmian := shippedSetBonusArmed(t, class, level, RoleDamage, setKarmian, tg.harmless, tg.hp, weapon)
+					if demon >= karmian {
+						t.Errorf("class %d level %d weapon %d %+v: Demon bonus %v, Karmian %v; want Karmian picked", class, level, weapon, tg, demon, karmian)
+					}
+					if !tg.harmless && demon > statTieBreakOnly {
+						t.Errorf("class %d level %d weapon %d max HP %d: Demon bonus %v, want no model gain", class, level, weapon, tg.hp, demon)
+					}
+				}
 			}
 		}
 	}
