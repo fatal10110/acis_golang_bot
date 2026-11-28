@@ -76,7 +76,8 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
 // (pvpSteps), or its own list once shipped (PL, TK, SK: X21; SS, BD:
-// X22; GL, WL, DS, BH: X23; PW, AW: X24; SR, PR: X25). X21-X28 change a
+// X22; GL, WL, DS, BH: X23; PW, AW: X24; SR, PR: X25; BI, EE: X28, whose
+// Trance Int and Break steps stay outside the table). X21-X28 change a
 // row's line when they ship its list, and add the level where a new step
 // starts (55: Shackle and Arrest, O1; checkHeavyPvPRows checks GL, WL, DS,
 // BH at 60 and 66; checkArcherPvPRows HK, SR, PR at 46 and 60).

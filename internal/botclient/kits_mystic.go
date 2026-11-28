@@ -49,6 +49,7 @@ const (
 	skillShadowSpark    int32 = 1266
 	skillVampiricRage   int32 = 1268
 	skillEnergyBolt     int32 = 1274
+	skillTrance         int32 = 1394
 )
 
 // Class ids of the wizard first professions (data/xml/classes).
