@@ -136,6 +136,11 @@ func (p Planner) withCovered(cost int32) Planner {
 	return p
 }
 
+// CoveredCost returns the extra cost of a step out of covered ground p
+// weighs, in tenths of a cell: DefaultCoveredCost for the zero Planner, the
+// nav cache's for one from Hierarchy.Planner.
+func (p *Planner) CoveredCost() int { return int(p.coveredCost()) }
+
 // isCovered reports whether a layer of c's column lies more than coverClear
 // over c's floor.
 func (p *Planner) isCovered(c Cell, buf *[block.MaxLayers]block.Cell) bool {

@@ -280,6 +280,11 @@ func newWalker(n *Nav) walker {
 	w := walker{nav: n}
 	if n != nil {
 		w.plan = nav.Planner{Engine: n.Engine, Budget: walkBudget, Water: n.Water}
+		if n.Hier != nil {
+			// The swim and drop searches weigh covered ground as the nav
+			// cache was built, as the hierarchy's legs do (#698).
+			w.plan = n.Hier.Planner(w.plan)
+		}
 	}
 	return w
 }
