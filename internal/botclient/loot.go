@@ -150,6 +150,10 @@ type lootQueue struct {
 	// started and clicked are the first and the last click on items[0],
 	// zero before the first.
 	started, clicked time.Time
+	// pending is whether the server's answer to the last click on items[0]
+	// is still due: no other action went out since, and no ActionFailed
+	// answered it (lootFailed).
+	pending bool
 	// fought is when the bot last exchanged a blow with each creature.
 	fought map[int32]time.Time
 	// dropped is when the bot last asked to drop each carried stack.
@@ -194,7 +198,7 @@ func (l *lootQueue) next(ground map[int32]GroundItem, timeout time.Duration, now
 		}
 		l.items = l.items[1:]
 		delete(l.own, id)
-		l.started, l.clicked = time.Time{}, time.Time{}
+		l.started, l.clicked, l.pending = time.Time{}, time.Time{}, false
 	}
 	return 0
 }
@@ -205,18 +209,21 @@ func (l *lootQueue) skip() {
 		delete(l.own, l.items[0])
 		l.items = l.items[1:]
 	}
-	l.started, l.clicked, l.standFor = time.Time{}, time.Time{}, 0
+	l.started, l.clicked, l.standFor, l.pending = time.Time{}, time.Time{}, 0, false
 }
 
-// sent records a pickup or a drop that went out at now.
+// sent records a pickup or a drop that went out at now. Any other action
+// leaves no click's answer pending: an ActionFailed after it may answer it
+// (a refused cast or item use, lootFailed).
 func (l *lootQueue) sent(a Action, now time.Time) {
+	l.pending = false
 	switch a.kind {
 	case actPickup:
 		if len(l.items) > 0 && l.items[0] == a.object {
 			if l.started.IsZero() {
 				l.started = now
 			}
-			l.clicked = now
+			l.clicked, l.pending = now, true
 		}
 	case actDrop:
 		if l.dropped == nil {

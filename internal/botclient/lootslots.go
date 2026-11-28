@@ -101,29 +101,53 @@ const pickupLock = 200 * time.Millisecond
 
 // lootFailed handles an ActionFailed at now. The server answers every
 // pickup click with one (network/pickup.go), but only a click within its
-// pick-up range is answered after the pickup ran: a click from farther
-// starts a walk, answered first, and the pickup runs at the item, and a
-// click the pickup lock holds runs when the lock ends (pickupLock). So
-// with a click on the head item in flight, the bot within pickupStand of
-// the item and the click not sent within pickupLock of its last pickup,
-// the item leaves the queue at once (#686): taken, a GetItem follows;
-// refused (the item locked to another, claimed, an open trade, no slot),
-// the bot no longer waits Loot.Timeout for it. It counts no miss
-// (lootMisses): a refusal holds the loot rule no longer, and the item,
-// out of the queue and the ground record, is clicked again only once it
-// is seen anew.
+// pick-up range it runs at once is answered after the pickup ran:
+//   - a click from farther starts a walk, answered first, and the pickup
+//     runs at the item, answered there (walkOrForwardPickup,
+//     network/targeting.go);
+//   - a click during the pickup lock (pickupLock), the bot's own cast or
+//     swing (livePickupBlockedDeferrable, network/pickup.go) or its
+//     stand-up (inPostureTransition, network/targeting.go, 2.5 s:
+//     storeStandSettle covers it) is deferred: answered at once, run once
+//     the hold ends. The server keeps one deferred pickup, so retiring the
+//     item would make the next click replace it, and so on through the
+//     hold.
+//
+// So with the answer to a click on the head item pending (lootQueue.sent:
+// no other action since, whose refusal the ActionFailed may be), the bot
+// within pickupStand of the item and the click not held, the item leaves
+// the queue at once (#686): taken, a GetItem follows; refused (the item
+// locked to another, claimed, an open trade, no slot), the bot no longer
+// waits Loot.Timeout for it. It counts no miss (lootMisses): a refusal
+// holds the loot rule no longer, and the item, out of the queue and the
+// ground record, is clicked again only once it is seen anew. Otherwise
+// the lootRetry re-click and Loot.Timeout stand.
 func (b *Brain) lootFailed(now time.Time) {
 	l := &b.loot
-	if l.clicked.IsZero() || len(l.items) == 0 {
-		return
-	}
-	if d := l.clicked.Sub(l.picked); d >= 0 && d < pickupLock {
+	if !l.pending || len(l.items) == 0 {
 		return
 	}
 	if it, ok := b.world.Ground[l.items[0]]; ok && !within3(b.world.Self.Position(now), it.Pos, pickupStand) {
+		// The walk's answer: the pickup's own follows at the item.
+		return
+	}
+	l.pending = false
+	if b.pickupHeld(l.clicked) {
 		return
 	}
 	l.skip()
+}
+
+// pickupHeld reports whether the server defers a pickup click the bot
+// sent at t rather than run it (lootFailed): within pickupLock of its last
+// pickup, during its own cast or swing, or within storeStandSettle of its
+// stand-up.
+func (b *Brain) pickupHeld(t time.Time) bool {
+	s := &b.world.Self
+	if d := t.Sub(b.loot.picked); d >= 0 && d < pickupLock {
+		return true
+	}
+	return s.Casting(t) || s.Swinging(t) || t.Sub(b.store.stoodAt) < storeStandSettle
 }
 
 // groundPaused reports whether the bot leaves queued item id alone at now:

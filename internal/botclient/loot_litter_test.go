@@ -13,10 +13,12 @@ func litter(obj int32, x int32) timed {
 
 // TestLootFailed checks the ActionFailed reply to a pickup click
 // (lootFailed): with the bot within pick-up range of the clicked item and
-// the click not sent during the server's pickup lock, the item leaves the
-// queue at once and counts no stall miss; a click from farther, which the
-// server answers when it starts the walk, one the pickup lock holds, and
-// an ActionFailed with no click in flight leave the queue alone.
+// the click not held, the item leaves the queue at once and counts no
+// stall miss; a click from farther, which the server answers when it
+// starts the walk, one the server defers (the pickup lock, the bot's own
+// cast or swing, its stand-up), an ActionFailed with no click in flight
+// and one after another action went out (a refused cast or potion) leave
+// the queue alone.
 func TestLootFailed(t *testing.T) {
 	const near, far = 20, 100
 	tests := []struct {
@@ -26,13 +28,28 @@ func TestLootFailed(t *testing.T) {
 		// own pickup of another item.
 		picked  time.Duration
 		noClick bool
-		retired bool
+		// before edits the brain before the click at now, after between the
+		// click and the ActionFailed.
+		before, after func(b *Brain, now time.Time)
+		retired       bool
 	}{
 		{name: "within range", x: near, retired: true},
 		{name: "from farther: the server walks", x: far},
 		{name: "no click in flight", x: near, noClick: true},
 		{name: "during the pickup lock", x: near, picked: pickupLock - time.Millisecond},
 		{name: "after the pickup lock", x: near, picked: pickupLock, retired: true},
+		{name: "during the bot's cast", x: near, before: func(b *Brain, now time.Time) { b.world.Self.castEnd = now.Add(time.Second) }},
+		{name: "after the bot's cast", x: near, retired: true, before: func(b *Brain, now time.Time) { b.world.Self.castEnd = now }},
+		{name: "during the bot's swing", x: near, before: func(b *Brain, now time.Time) { b.world.Self.swingEnd = now.Add(time.Millisecond) }},
+		{name: "during the stand-up", x: near, before: func(b *Brain, now time.Time) {
+			b.store.stoodAt = now.Add(-storeStandSettle + time.Millisecond)
+		}},
+		{name: "after the stand-up", x: near, retired: true, before: func(b *Brain, now time.Time) {
+			b.store.stoodAt = now.Add(-storeStandSettle)
+		}},
+		{name: "another action after the click", x: near, after: func(b *Brain, now time.Time) {
+			b.loot.sent(Action{kind: actUseItem}, now.Add(10*time.Millisecond))
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -44,12 +61,18 @@ func TestLootFailed(t *testing.T) {
 			if tt.picked > 0 {
 				handleAll(t, b, []timed{{lootGrace - tt.picked, GetItem{PickerID: selfID, ObjectID: 0x40000999}}})
 			}
+			if tt.before != nil {
+				tt.before(b, now)
+			}
 			if tt.noClick {
 				if id := b.nextLoot(now); id != first {
 					t.Fatalf("queue head %d, want %d", id, first)
 				}
 			} else if id, _ := pickedUp(b, now); id != first {
 				t.Fatalf("picks up %d, want %d", id, first)
+			}
+			if tt.after != nil {
+				tt.after(b, now)
 			}
 			handleAll(t, b, []timed{{lootGrace + 50*time.Millisecond, ActionFailed{}}})
 			want := int32(first)

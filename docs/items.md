@@ -650,10 +650,15 @@ grocer lists).
     next pickup, still taking its own kills' drops, so the errands and farming run. The ground
     items queued meanwhile go back to the ground record and are queued again once the pause ends
     (#686).
-  - A pickup the server answers with ActionFailed, clicked within pick-up range and not during
-    the server's 200 ms pickup lock, leaves the queue at once (#686): a success follows with
-    GetItem, and a refused item (town litter, another's loot) costs one click, not
+  - A pickup the server answers with ActionFailed leaves the queue at once (#686): a success
+    follows with GetItem, and a refused item (town litter, another's loot) costs one click, not
     `Loot.Timeout`. It counts no stall miss; the item is clicked again only once it is seen anew.
+    Only the click's own answer counts: no other action went out since the click (a refused cast
+    or potion is answered with ActionFailed too), the bot stands within pick-up range (a click
+    from farther is answered when the server starts the walk), and the click was not one the
+    server defers and runs later (sent within its 200 ms pickup lock, during the bot's own cast or
+    swing, or within 3 s of its stand-up, the 2.5 s posture change). Any other ActionFailed
+    leaves the 3 s re-click and `Loot.Timeout` to it.
 
   Besides the drops of the creatures it fought, a bot picks up other ground items within
   `Loot.Radius` (`Loot.Ground`, #435), through the same queue, weight and slot caps and timeout.
