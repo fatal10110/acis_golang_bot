@@ -289,6 +289,12 @@ type ClassKit struct {
 	// Flee is the skill flee casts first when ready (Dash, Sprint); 0 none.
 	Flee  int32
 	Melee MeleePolicy
+	// ServitorLead holds the first attack on a fresh target, after the
+	// servitor's order onto it, for Persona.ServitorLead or until the
+	// servitor's first swing at it, so the servitor holds the monster's
+	// hate (a mystic summoner row's "after ServitorLead",
+	// docs/servitors.md section 2).
+	ServitorLead bool
 	// Toggles are the combat toggles; Relax is the toggle ruleRest sits
 	// with instead of a plain sit (226 Relax, 296 Chameleon Rest), 0 for
 	// none; RelaxFrom is the level it starts at (the row's "@N"):

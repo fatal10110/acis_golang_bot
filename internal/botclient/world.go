@@ -857,7 +857,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.setCombat(e.ObjectID, false)
 		w.servitorCombat(e.ObjectID, false)
 	case Attack:
-		w.servitorAttack(e)
+		w.servitorAttack(e, now)
 		w.applyAttack(e, now)
 	case PetInfo, PetStatusUpdate, PetDelete, SetSummonRemainTime:
 		w.applyServitor(e)

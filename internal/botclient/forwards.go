@@ -261,9 +261,13 @@ type (
 const (
 	actionSitStand = botwire.ActionSitStand
 	actionWalkRun  = botwire.ActionWalkRun
-	chatAll        = botwire.ChatAll
-	chatTell       = botwire.ChatTell
-	restartVillage = botwire.RestartVillage
+	// actionServitorAttack and actionServitorStop are the servitor orders
+	// (servitor_orders.go).
+	actionServitorAttack = botwire.ActionServitorAttack
+	actionServitorStop   = botwire.ActionServitorStop
+	chatAll              = botwire.ChatAll
+	chatTell             = botwire.ChatTell
+	restartVillage       = botwire.RestartVillage
 )
 
 // The login and handshake types: the session API and cmd/bots name them.

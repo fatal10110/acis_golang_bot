@@ -287,6 +287,11 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 		}
 		return selectAction(id, from)
 	}
+	// The servitor goes first onto the bot's target (docs/servitors.md
+	// section 2); its order does not wait for a cast in flight.
+	if a, ok := b.servitorOrder(id, now); ok {
+		return a
+	}
 	if s.Casting(now) || b.castPending(now) {
 		return Action{}
 	}
@@ -294,6 +299,10 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 	bd := b.build()
 	if a, ok := b.toggleCast(bd.Kit.Toggles, true, now); ok {
 		return a
+	}
+	if bd.Kit.ServitorLead && b.opened != id && b.engaged != id && b.servitorLeading(id, now) {
+		// The servitor takes the monster's hate first.
+		return Action{}
 	}
 	underReserve := below(s.MP, s.MaxMP, bd.Thresholds.MPReserve)
 	cast := b.rotationCast

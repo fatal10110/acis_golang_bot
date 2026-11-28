@@ -404,6 +404,9 @@ type Brain struct {
 	// petLogged is set once the session logged a pet's window it ignores
 	// (petEvent).
 	petLogged bool
+	// servitorOrders records the orders the servitor got
+	// (servitor_orders.go).
+	servitorOrders servitorOrders
 	// walk walks the bot on checked segments (BrainConfig.Nav).
 	walk walker
 	// engage is the stand point the fight walks to (engageWalk).
@@ -636,6 +639,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.crystallizeEvent(e.ID, now)
 			b.dyeRefused(e.ID, now)
 			b.lootRefused(e.ID, now)
+			b.servitorRefused(e.ID, now)
 		case ExAutoSoulShot:
 			if e.Enabled {
 				delete(b.shotOff, e.TemplateID)
@@ -1054,6 +1058,8 @@ func (b *Brain) send(a Action, now time.Time) (bool, error) {
 		if a.interrupts {
 			b.interruptSent(a.object)
 		}
+	case actServitorAttack, actServitorStop:
+		b.servitorSent(a, now)
 	case actMove:
 		// A move replaces the attack intention on the server.
 		b.engaged = 0
