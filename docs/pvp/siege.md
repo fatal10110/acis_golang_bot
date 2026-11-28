@@ -27,9 +27,10 @@ stayed there.
   end); inside an Olympiad stadium during a match they are the stadium's ([Olympiad](olympiad.md));
   elsewhere they are logged and ignored.
 - **Not taking part** (no siege state in `UserInfo`, or `Siege` off, or a clan-hall siege): on 283
-  in a siege polygon the bot leaves it by the nearest point outside, marks it blocked (no spot,
-  route or duel inside) until the siege ends, and fights back on the way only an attacker that
-  hits it (no karma is possible inside). Its PvE spot inside a castle battlefield waits.
+  in a siege polygon the bot leaves it by the nearest point outside, marks it blocked (no spot or
+  duel inside, and its walks route around it) until the siege ends, and fights back on the way
+  only an attacker that hits it (no karma is possible inside). Its PvE spot inside a castle
+  battlefield waits.
 - **Taking part** (`UserInfo` attacker or defender, `Siege` on): the castle is found from the
   attacker and defender lists, 0xa2 and 0xa3 for each of the 9 castles, one request per
   `bypassGap`, once per siege state change (at most 18 frames per siege). It walks to the
@@ -60,15 +61,23 @@ stayed there.
   the observer's (`network/relations.go:104-121`), so `Ally` and `Enemy` may still show the bot's
   state from before the siege.
 - **Block.** A battlefield a 283 showed running is blocked until a 284 while the bot stands inside
-  it and does not walk out (the zone turned off around it, `model/zone/siege.go` `replay`), the
-  bot's own state cleared for its castle's, or `SiegeLength` (120 minutes,
-  `ops/docker/config/siege.properties`) after the 283.
+  it and does not walk out of it (the zone turned off around it, `model/zone/siege.go` `replay`),
+  the bot's own state cleared for its castle's, or `SiegeLength` (120 minutes,
+  `ops/docker/config/siege.properties`) after the 283. Each battlefield is blocked on its own, with
+  its own end: when two sieges run at once, a 283 in the second keeps the first blocked.
 - **Walks.** Out by the point `siegeMargin` (300) past the nearest edge, the next edge's when the
   walker answers one unreachable; in by the point `siegeDepth` (400) inside the nearest edge, on
   foot only (the castle towns' gatekeepers refuse a trip there during the siege,
   `serverpackets` `SystemMessageCannotPortVillageInSiege`); no way in and it takes no part. A
-  defender inside at the start stays while its lists are out. Routes around a blocked battlefield
-  are #734.
+  defender inside at the start stays while its lists are out.
+- **Routes.** Every walk keeps `siegeClear` (100) from each blocked battlefield the bot does not
+  fight in (the walker's avoid area, beside a karma bot's town margin), but one the walk starts or
+  ends in or by: the walk out leaves straight, a walk to a point inside enters straight. 100 is past
+  a geodata cell's diagonal, so a segment between two kept columns never clips the polygon, and
+  short of `siegeMargin` less `siegeArrive`, so a bot that walked out stands clear of it. When no
+  route keeps out (or the search runs out of budget), the walk crosses as before and the walk out
+  above is the backstop. A route planned before a 283 is not dropped: a 283 only reaches a bot
+  inside the battlefield, where the walk out replaces it.
 - **Live test.** Not shipped: the e2e GM scope has no `//siege`, and a siege started on the shared
   live server banishes real players from the castle zone. Tracked in #735.
 
@@ -83,6 +92,12 @@ holds for every bot.
   to attacker and defender; `RelationChanged` 0x200, 0x400, 0x800, 0x1000 to the record.
 - `TestPvPSiegeZoneNotice` (X15): 283 inside an arena polygon → arena; inside a siege polygon →
   siege running there, blocked; in neither → ignored.
+- `TestPvPSiegeRoute` (#734): a walk past a running battlefield keeps out of it, and out of each
+  of two; one the bot stands in or walks to is crossed; its own castle's is crossed by a bot taking
+  part; a karma margin and a battlefield are both kept out; no way around → the walk crosses; a
+  lapsed block → straight.
+- `TestPvPSiegeFields` (#734): 283s in two battlefields block both; a 284 or a lapse ends only its
+  own.
 - `TestPvPSiegeLeave` (X15): no siege state, 283 inside a castle polygon → walks out by the nearest
   exit, no target picked; an attacker hits it → fought back.
 - `TestPvPSiegeFight` (X15): attacker state, `Siege` on → 0xa2 and 0xa3 paced by `bypassGap`, walk

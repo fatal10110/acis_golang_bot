@@ -543,13 +543,36 @@ func (w *walker) segmentDone(now, end time.Time) bool {
 // took on the injected clock (botmetrics.Bot.NavPlan): the one place every
 // walk plans, whatever rule asked for it (#497).
 func (b *Brain) planWalk(pos Point, now time.Time) (Action, bool) {
+	w := &b.walk
 	// A karma bot's walk keeps karmaClear from towns and guards (its karma
-	// route, docs/pvp/karma.md); none without karma.
-	b.walk.plan.Avoid.Area = b.karmaArea(pos, b.walk.dest)
+	// route, docs/pvp/karma.md); none without karma. Every walk keeps out
+	// of the running battlefields it does not fight in (docs/pvp/siege.md
+	// "Not taking part").
+	karma, siege := b.karmaArea(pos, w.dest), b.siegeArea(pos, w.dest, now)
+	w.plan.Avoid.Area = joinAreas(karma, siege)
 	start := b.clock.Now()
 	a, ok := b.planRoute(pos, now)
-	b.metrics.NavPlan(b.walk.planOutcome(ok), b.clock.Now().Sub(start))
+	if !ok && siege != nil && w.status == walkUnreachable && (w.reason == reasonNoRoute || w.reason == reasonBlocked || w.reason == reasonBudget) {
+		// No way around the battlefields: the walk crosses them as before,
+		// and ruleSiegeLeave walks the bot out of one it enters.
+		w.status, w.reason = walkWalking, ""
+		w.plan.Avoid.Area = karma
+		a, ok = b.planRoute(pos, now)
+	}
+	b.metrics.NavPlan(w.planOutcome(ok), b.clock.Now().Sub(start))
 	return a, ok
+}
+
+// joinAreas is the planner area holding the columns a or c holds, nil when
+// both are.
+func joinAreas(a, c func(x, y int) bool) func(x, y int) bool {
+	switch {
+	case a == nil:
+		return c
+	case c == nil:
+		return a
+	}
+	return func(x, y int) bool { return a(x, y) || c(x, y) }
 }
 
 // planOutcome is how the plan that just ran ended: ok with a route, else

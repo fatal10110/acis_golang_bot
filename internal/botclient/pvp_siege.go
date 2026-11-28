@@ -23,7 +23,11 @@ import (
 // siegeDeaths is SiegeDeaths: the fifth death in a siege sends the bot back
 // to its spot. siegeMargin is how far past the polygon's edge a walk out
 // ends, siegeDepth how far inside it a walk in does, siegeArrive how close
-// to either point the walk ends.
+// to either point the walk ends. siegeClear is how far other walks keep
+// from a running battlefield they do not end in (siegeArea): past a
+// geodata cell's diagonal, so a segment between two columns kept out
+// never clips the polygon, and short of siegeMargin less siegeArrive, so a
+// bot that walked out stands clear of it.
 const (
 	siegeLength   = 120 * time.Minute
 	siegeCastles  = 9
@@ -32,26 +36,27 @@ const (
 	siegeMargin   = 300
 	siegeDepth    = 400
 	siegeArrive   = 100
+	siegeClear    = 100
 )
 
-// siegeState is the bot's siege memory. field is the battlefield (1-based,
-// the travel map's Sieges) a 283 showed running, until when its block
-// lapses at the latest. leaving is the walk out of a battlefield the bot
-// does not fight in, entering the walk into its castle's; to is that
-// walk's end and tried how many of its candidate points (siegeExits,
-// siegeEntries) went unreachable; stuck is the battlefield whose exits
-// all went unreachable, latched until the bot stands outside it, takes a
-// loading-screen teleport or the running field changes, so the walk out is
-// not planned again every decide. side is the bot's own siege state
+// siegeState is the bot's siege memory. fields are the battlefields (1-based,
+// the travel map's Sieges) a 283 showed running, each with when its block
+// lapses at the latest: two sieges may run at once, and a 283 in one keeps
+// the other's block. leaving is the battlefield the bot walks out of, one
+// it does not fight in (0 for none), entering the walk into its castle's;
+// to is that walk's end and tried how many of its candidate points
+// (siegeExits, siegeEntries) went unreachable; stuck is the battlefield
+// whose exits all went unreachable, latched until the bot stands outside
+// it, takes a loading-screen teleport or that field's siege ends, so the
+// walk out is not planned again every decide. side is the bot's own siege state
 // (UserInfo); asked counts the list requests sent since it last changed,
 // askedAt the last one's time, answered the answers read; castle is the
 // castle id whose list holds the bot's clan, 0 while unknown; deaths count
 // its deaths in the siege; quit is set when it takes no part in this siege
 // after all (no castle found, no way in, siegeDeaths deaths).
 type siegeState struct {
-	field    int
-	until    time.Time
-	leaving  bool
+	fields   map[int]time.Time
+	leaving  int
 	entering bool
 	to       Point
 	tried    int
@@ -77,12 +82,12 @@ func (b *Brain) siegeEvent(ev Event, now time.Time) time.Time {
 			return time.Time{}
 		}
 		b.log.Info("siege: own state", "side", side, "was", s.side)
-		if side == botwire.SiegeNone && s.castle != 0 && s.field != 0 && b.fieldZone(s.field).ResidenceCastle == int(s.castle) {
+		if f := b.castleField(); side == botwire.SiegeNone && f != 0 {
 			// Its siege ended (siege/lifecycle.go clears the states at
 			// the end): the battlefield is open again.
-			s.field, s.until, s.stuck = 0, time.Time{}, 0
+			b.siegeEnded(f)
 		}
-		*s = siegeState{field: s.field, until: s.until, leaving: s.leaving, to: s.to, tried: s.tried, stuck: s.stuck, side: side}
+		*s = siegeState{fields: s.fields, leaving: s.leaving, to: s.to, tried: s.tried, stuck: s.stuck, side: side}
 		return b.pvpReact(now)
 	case SiegeAttackerList:
 		if b.siegeListed(e.CastleID, e.Clans, botwire.SiegeAttacker) {
@@ -129,7 +134,7 @@ func (b *Brain) siegeSent(a Action, now time.Time) {
 // its point again.
 func (b *Brain) siegeTeleported() {
 	s := &b.pvp.siege
-	s.leaving, s.entering, s.to, s.tried, s.stuck = false, false, Point{}, 0, 0
+	s.leaving, s.entering, s.to, s.tried, s.stuck = 0, false, Point{}, 0, 0
 }
 
 // siegeDied keeps a death at now while the bot takes part in a siege: the
@@ -154,6 +159,7 @@ func (b *Brain) siegeDied() {
 // that it ended (the zone turned off around the bot, model/zone/siege.go
 // replay); elsewhere it is logged and ignored. A 284 at the edge of the
 // battlefield the bot walks out of keeps the block: the siege still runs.
+// Each battlefield is kept apart: a 283 in one leaves another's block.
 func (b *Brain) combatZoneSeen(entered bool, now time.Time) {
 	if b.cfg.Travel == nil {
 		return
@@ -165,15 +171,30 @@ func (b *Brain) combatZoneSeen(entered bool, now time.Time) {
 	s, i := &b.pvp.siege, b.siegeAt(p)
 	switch {
 	case entered && i != 0:
-		if s.field != i {
+		if _, ok := s.fields[i]; !ok {
 			b.log.Info("siege: battlefield running", "field", i, "castle", b.fieldZone(i).ResidenceCastle, "hall", b.fieldZone(i).ResidenceClanHall)
 		}
-		s.field, s.until = i, now.Add(siegeLength)
+		if s.fields == nil {
+			s.fields = make(map[int]time.Time)
+		}
+		s.fields[i] = now.Add(siegeLength)
 	case entered:
 		b.log.Info("siege: combat zone notice outside every arena and battlefield", "at", p)
-	case i != 0 && i == s.field && !s.leaving:
-		b.log.Info("siege: battlefield ended", "field", i)
-		s.field, s.until, s.stuck = 0, time.Time{}, 0
+	case i != 0 && s.leaving != i:
+		if _, ok := s.fields[i]; ok {
+			b.log.Info("siege: battlefield ended", "field", i)
+			b.siegeEnded(i)
+		}
+	}
+}
+
+// siegeEnded forgets battlefield f's siege: open again for spots, duels
+// and walks.
+func (b *Brain) siegeEnded(f int) {
+	s := &b.pvp.siege
+	delete(s.fields, f)
+	if s.stuck == f {
+		s.stuck = 0
 	}
 }
 
@@ -193,39 +214,91 @@ func (b *Brain) siegeAt(p Point) int {
 // fieldZone is battlefield i (1-based) of the travel map.
 func (b *Brain) fieldZone(i int) datapack.Zone { return b.cfg.Travel.zones.Sieges[i-1] }
 
-// blockedField is the battlefield the bot saw running at now, 0 for none:
-// its block lapses siegeLength after the last 283 inside it.
-func (b *Brain) blockedField(now time.Time) int {
+// runningFields are the battlefields the bot saw running at now, in
+// travel map order: each block lapses siegeLength after the last 283
+// inside it.
+func (b *Brain) runningFields(now time.Time) []int {
 	s := &b.pvp.siege
-	if s.field != 0 && !now.Before(s.until) {
-		b.log.Info("siege: battlefield block lapsed", "field", s.field)
-		s.field, s.until, s.stuck = 0, time.Time{}, 0
+	if len(s.fields) == 0 || b.cfg.Travel == nil {
+		return nil
 	}
-	if b.cfg.Travel == nil || s.field > len(b.cfg.Travel.zones.Sieges) {
-		return 0
+	var fs []int
+	for f := 1; f <= len(b.cfg.Travel.zones.Sieges); f++ {
+		until, ok := s.fields[f]
+		switch {
+		case !ok:
+		case !now.Before(until):
+			b.log.Info("siege: battlefield block lapsed", "field", f)
+			b.siegeEnded(f)
+		default:
+			fs = append(fs, f)
+		}
 	}
-	return s.field
+	return fs
 }
 
-// siegeBlocks reports whether p lies in the battlefield the bot saw running
+// siegeRunning reports whether battlefield f runs at now (runningFields).
+func (b *Brain) siegeRunning(f int, now time.Time) bool {
+	return f != 0 && slices.Contains(b.runningFields(now), f)
+}
+
+// siegeBlocks reports whether p lies in a battlefield the bot saw running
 // at now and does not fight in: no spot, duel or walk in there.
 func (b *Brain) siegeBlocks(p Point, now time.Time) bool {
-	f := b.blockedField(now)
-	return f != 0 && !b.takesPart(f) && b.fieldZone(f).Contains(p.X, p.Y, p.Z)
+	for _, f := range b.runningFields(now) {
+		if !b.takesPart(f) && b.fieldZone(f).Contains(p.X, p.Y, p.Z) {
+			return true
+		}
+	}
+	return false
+}
+
+// siegeArea is the ground a walk from from to dest keeps out of at now
+// (docs/pvp/siege.md "Not taking part"), for the walker's avoid set: within
+// siegeClear of a running battlefield the bot does not fight in, but those
+// from or dest lie in or by, which the walk must leave (ruleSiegeLeave's
+// walk out) or enter. A battlefield is read flat, as zoneDist reads it:
+// the planner's area callback carries no height. nil when no such
+// battlefield runs.
+func (b *Brain) siegeArea(from, dest Point, now time.Time) func(x, y int) bool {
+	type keep struct {
+		z                      datapack.Zone
+		minX, minY, maxX, maxY int32
+	}
+	var ks []keep
+	for _, f := range b.runningFields(now) {
+		z := b.fieldZone(f)
+		if b.takesPart(f) || zoneDist(z, from) < siegeClear || zoneDist(z, dest) < siegeClear {
+			continue
+		}
+		k := keep{z: z, minX: slices.Min(z.X) - siegeClear, minY: slices.Min(z.Y) - siegeClear, maxX: slices.Max(z.X) + siegeClear, maxY: slices.Max(z.Y) + siegeClear}
+		ks = append(ks, k)
+	}
+	if len(ks) == 0 {
+		return nil
+	}
+	return func(x, y int) bool {
+		p := Point{X: int32(x), Y: int32(y)}
+		for _, k := range ks {
+			if p.X >= k.minX && p.X <= k.maxX && p.Y >= k.minY && p.Y <= k.maxY && zoneDist(k.z, p) < siegeClear {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // battlefield is the running battlefield the bot stands in at now, 0 for
 // none: anyone attacks anyone there without force but its own side, with
 // no flag and no karma (model/zone/siege.go setBattlefieldHolds).
 func (b *Brain) battlefield(now time.Time) int {
-	f := b.blockedField(now)
-	if f == 0 {
-		return 0
+	p := b.world.Self.Position(now)
+	for _, f := range b.runningFields(now) {
+		if b.fieldZone(f).Contains(p.X, p.Y, p.Z) {
+			return f
+		}
 	}
-	if p := b.world.Self.Position(now); !b.fieldZone(f).Contains(p.X, p.Y, p.Z) {
-		return 0
-	}
-	return f
+	return 0
 }
 
 // sameField reports whether player id stands in the running battlefield
@@ -324,7 +397,7 @@ func (b *Brain) ruleSiegeLeave(now time.Time) (Action, bool) {
 		// It fights here, or its lists are still out: a defender's
 		// castle holds it from the start (BanishForeigners spares the
 		// owner's clan), and the 283 comes ahead of its siege state.
-		s.leaving, s.to = false, Point{}
+		s.leaving, s.to = 0, Point{}
 		return Action{}, false
 	}
 	inside := f != 0
@@ -335,22 +408,25 @@ func (b *Brain) ruleSiegeLeave(now time.Time) (Action, bool) {
 		// No way out of this battlefield: the later rules run.
 		return Action{}, false
 	}
-	if !inside && !s.leaving || b.blockedField(now) == 0 || self.Dead || b.inOlympiad(now) || b.inDuel(now) {
-		s.leaving = false
+	if inside && s.leaving != f {
+		s.leaving, s.to, s.tried = 0, Point{}, 0
+	}
+	if !inside && s.leaving == 0 || !b.siegeRunning(max(f, s.leaving), now) || self.Dead || b.inOlympiad(now) || b.inDuel(now) {
+		s.leaving = 0
 		return Action{}, false
 	}
-	if inside && !s.leaving {
-		s.leaving, s.to, s.tried = true, Point{}, 0
+	if s.leaving == 0 {
+		s.leaving = f
 		b.log.Info("siege: leaving a running battlefield", "field", f)
 	}
 	if b.immobile(now) {
 		return Action{}, true
 	}
 	if s.to == (Point{}) {
-		exits := siegeExits(b.fieldZone(s.field), self.Position(now))
+		exits := siegeExits(b.fieldZone(s.leaving), self.Position(now))
 		if s.tried >= len(exits) {
-			b.log.Info("siege: no way out of the battlefield", "field", s.field)
-			s.leaving, s.stuck = false, f
+			b.log.Info("siege: no way out of the battlefield", "field", s.leaving)
+			s.leaving, s.stuck = 0, f
 			return Action{}, false
 		}
 		s.to = exits[s.tried]
@@ -363,7 +439,7 @@ func (b *Brain) ruleSiegeLeave(now time.Time) (Action, bool) {
 		s.to, s.tried = Point{}, s.tried+1
 		return Action{}, true
 	}
-	s.leaving, s.to = false, Point{}
+	s.leaving, s.to = 0, Point{}
 	return Action{}, false
 }
 
