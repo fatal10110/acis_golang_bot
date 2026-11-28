@@ -25,6 +25,10 @@ type fakeClock struct {
 	mu     sync.Mutex
 	now    time.Time
 	timers []*fakeTimer
+	// armed, when set, is signalled (never blocking) by every timer
+	// created or reset, so a test can wait for the code under test to arm
+	// its timer.
+	armed chan struct{}
 }
 
 func (c *fakeClock) Now() time.Time {
@@ -75,6 +79,12 @@ func (t *fakeTimer) Reset(d time.Duration) {
 	t.drainLocked()
 	t.when, t.active = c.now.Add(d), true
 	c.fireLocked()
+	if c.armed != nil {
+		select {
+		case c.armed <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (t *fakeTimer) Stop() {

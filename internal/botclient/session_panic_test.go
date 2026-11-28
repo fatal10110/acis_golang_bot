@@ -32,6 +32,72 @@ func newPanicBot(t *testing.T, n sessionNet, gate *LoginGate, clock *fakeClock, 
 	return b
 }
 
+// sessionBudget bounds the time the brain's timers may move botClock in one
+// session of runPanicBot: well under stableSession.
+const sessionBudget = stableSession / 4
+
+// runPanicBot runs b, timed by botClock, and keeps the session time a
+// panic is counted against below stableSession, which would reset the panic
+// count: botClock moves freely only while b waits out its backoff, and by at
+// most sessionBudget in all while it enters or plays (past that the brain's
+// timers fire without the time moving), whichever other bot shares the
+// gate. Until ready closes (nil: from the start) a playing b's timers do
+// not fire at all, so a brain waiting for the test's cue does not spend its
+// budget. gateClock, the clock of the gate and of every other bot, moves
+// whenever a timer is armed.
+func runPanicBot(ctx context.Context, b *Bot, botClock, gateClock *fakeClock, ready <-chan struct{}) error {
+	errc := make(chan error, 1)
+	go func() { errc <- b.Run(ctx) }()
+	var spent time.Duration
+	cued := ready == nil
+	drive := func() {
+		switch {
+		case b.Status().State == StateReconnecting:
+			spent = 0
+			botClock.advanceToNext()
+		case cued:
+			spent += botClock.advanceWithin(sessionBudget - spent)
+		}
+	}
+	for {
+		select {
+		case err := <-errc:
+			return err
+		case <-gateClock.armed:
+			gateClock.advanceToNext()
+		case <-botClock.armed:
+			drive()
+		case <-ready:
+			ready, cued = nil, true
+			drive()
+		}
+	}
+}
+
+// advanceWithin moves the time on to the earliest active timer when that is
+// within limit, else leaves it; either way it fires that timer. It returns
+// how far the time moved.
+func (c *fakeClock) advanceWithin(limit time.Duration) time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var next *fakeTimer
+	for _, t := range c.timers {
+		if t.active && (next == nil || t.when.Before(next.when)) {
+			next = t
+		}
+	}
+	if next == nil {
+		return 0
+	}
+	var moved time.Duration
+	if d := next.when.Sub(c.now); d > 0 && d <= limit {
+		c.now, moved = next.when, d
+	}
+	next.active = false
+	next.ch <- c.now
+	return moved
+}
+
 // checkTurnBack fails unless the gate's turn is free.
 func checkTurnBack(t *testing.T, gate *LoginGate) {
 	t.Helper()
@@ -63,7 +129,7 @@ func checkPanics(t *testing.T, err error, reg *botmetrics.Registry, clock *fakeC
 func TestPanicBrainRule(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	clock := newFakeClock(t0)
+	clock, botClock := newFakeClock(t0), newFakeClock(t0)
 	gate := NewLoginGate(clock, rand.New(rand.NewPCG(3, 4)))
 	reg := botmetrics.NewRegistry(RuleNames()...)
 
@@ -94,9 +160,9 @@ func TestPanicBrainRule(t *testing.T) {
 			return Action{}, false
 		}
 	}
-	b := newPanicBot(t, n, gate, clock, reg, BrainConfig{Persona: Persona{Goal: goal}})
-	err := runBot(ctx, b, clock)
-	checkPanics(t, err, reg, clock)
+	b := newPanicBot(t, n, gate, botClock, reg, BrainConfig{Persona: Persona{Goal: goal}})
+	err := runPanicBot(ctx, b, botClock, clock, otherIn)
+	checkPanics(t, err, reg, botClock)
 	if n.entered != maxAborts {
 		t.Errorf("entered %d times, want %d", n.entered, maxAborts)
 	}
@@ -132,14 +198,14 @@ func TestPanicBrainRule(t *testing.T) {
 func TestPanicEnterGame(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	clock := newFakeClock(t0)
+	clock, botClock := newFakeClock(t0), newFakeClock(t0)
 	gate := NewLoginGate(clock, rand.New(rand.NewPCG(3, 4)))
 	reg := botmetrics.NewRegistry(RuleNames()...)
 	n := &fakeNet{t: t}
 	n.onEnter = func(int, Character, func(string, int32)) error { panic("entry bug") }
-	b := newPanicBot(t, n, gate, clock, reg, BrainConfig{})
-	err := runBot(ctx, b, clock)
-	checkPanics(t, err, reg, clock)
+	b := newPanicBot(t, n, gate, botClock, reg, BrainConfig{})
+	err := runPanicBot(ctx, b, botClock, clock, nil)
+	checkPanics(t, err, reg, botClock)
 	if n.nEnter != maxAborts || len(n.played) != maxAborts {
 		t.Errorf("entries %d, dials %d; want %d each", n.nEnter, len(n.played), maxAborts)
 	}
@@ -176,13 +242,13 @@ func (n panicNet) enterGame(ctx context.Context, g gameSession, account string, 
 func TestPanicReader(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	clock := newFakeClock(t0)
+	clock, botClock := newFakeClock(t0), newFakeClock(t0)
 	gate := NewLoginGate(clock, rand.New(rand.NewPCG(3, 4)))
 	reg := botmetrics.NewRegistry(RuleNames()...)
 	n := &fakeNet{t: t}
-	b := newPanicBot(t, panicNet{n}, gate, clock, reg, BrainConfig{})
-	err := runBot(ctx, b, clock)
-	checkPanics(t, err, reg, clock)
+	b := newPanicBot(t, panicNet{n}, gate, botClock, reg, BrainConfig{})
+	err := runPanicBot(ctx, b, botClock, clock, nil)
+	checkPanics(t, err, reg, botClock)
 	if !errors.Is(err, errConnLost) {
 		t.Errorf("Run = %v, want the session ended by %v", err, errConnLost)
 	}

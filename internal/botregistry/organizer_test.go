@@ -3,7 +3,6 @@ package botregistry
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -162,37 +161,34 @@ func TestOrganizerOrders(t *testing.T) {
 // its timer stopped, once its context is done.
 func TestOrganizerRun(t *testing.T) {
 	clock := newClock()
+	clock.armed = make(chan struct{}, 1)
 	o, f := organizerOf(t, clock, botparty.PresetFarmer, botparty.PresetSupport)
+	f[1].onCommand = make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		o.Run(ctx)
 	}()
-	timer := func() *fakeTimer {
-		for range 10000 {
-			clock.mu.Lock()
-			n := len(clock.timers)
-			clock.mu.Unlock()
-			if n == 1 {
-				clock.mu.Lock()
-				defer clock.mu.Unlock()
-				return clock.timers[0]
-			}
-			runtime.Gosched()
-		}
+	select {
+	case <-clock.armed:
+	case <-ctx.Done():
 		t.Fatal("Run never armed its timer")
-		return nil
-	}()
+	}
+	clock.mu.Lock()
+	if len(clock.timers) != 1 {
+		t.Fatalf("Run armed %d timers, want 1", len(clock.timers))
+	}
+	timer := clock.timers[0]
+	clock.mu.Unlock()
 
 	clock.Advance(PartyTick - 1)
 	wantHanded(t, "before the tick", f[1])
 	clock.Advance(1)
-	for range 10000 {
-		if len(f[1].handed()) > 0 {
-			break
-		}
-		runtime.Gosched()
+	select {
+	case <-f[1].onCommand:
+	case <-ctx.Done():
+		t.Fatal("the first tick handed nothing")
 	}
 	wantHanded(t, "first tick", f[1], "join Bot1")
 
