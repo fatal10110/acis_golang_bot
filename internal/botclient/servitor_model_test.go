@@ -46,8 +46,8 @@ func summonerKit(b *Brain) {
 
 // TestServitorModel checks the servitor the model counts: the live one's
 // template with its PetInfo numbers, else the template the summon the bot
-// can cast names; none without either, with a dead servitor, an unknown
-// template or no travel map.
+// can cast names (also for a dead one); none without either, with a dead
+// servitor and no summon, an unknown template or no travel map.
 func TestServitorModel(t *testing.T) {
 	live := charmodel.Servitor(kaiCat, charmodel.ServitorLive{MaxHP: 1100, PAtk: 260, PDef: 210, PAtkSpd: 300})
 	tmpl := charmodel.Servitor(kaiCat, charmodel.ServitorLive{})
@@ -62,7 +62,7 @@ func TestServitorModel(t *testing.T) {
 		{"out and summonable: the live one", func(b *Brain) { kaiOut(b); b.summonReady = summonKai1 }, live, true},
 		{"summonable", func(b *Brain) { b.summonReady = summonKai1 }, tmpl, true},
 		{"dead", func(b *Brain) { kaiOut(b).Dead = true }, charmodel.Profile{}, false},
-		{"dead, summonable before its PetDelete", func(b *Brain) { kaiOut(b).Dead = true; b.summonReady = summonKai1 }, charmodel.Profile{}, false},
+		{"dead, summonable: the template", func(b *Brain) { kaiOut(b).Dead = true; b.summonReady = summonKai1 }, tmpl, true},
 		{"out with an unknown template", func(b *Brain) { kaiOut(b).TemplateID = 14999 }, charmodel.Profile{}, false},
 		{"summonable, a skill naming no servitor", func(b *Brain) { b.summonReady = datapack.SkillRef{ID: 1177, Level: 1} }, charmodel.Profile{}, false},
 		{"out, no travel map", func(b *Brain) { kaiOut(b); b.cfg.Travel = nil }, charmodel.Profile{}, false},
@@ -81,9 +81,10 @@ func TestServitorModel(t *testing.T) {
 }
 
 // TestSpotMarginServitor checks the margin switch: a summoner row's normal
-// 2.0 while its servitor is out, its glass cannon 3.0 with none, a dead one
-// or one it could summon; a row without ServitorSpotMargin (the human
-// fighter's normal 2.0) and SpotPolicy.Margin are unchanged by a servitor.
+// 2.0 while its servitor is out or it can summon one (a dead one counts
+// through summonReady), its glass cannon 3.0 with neither; a row without
+// ServitorSpotMargin (the human fighter's normal 2.0) and
+// SpotPolicy.Margin are unchanged by a servitor.
 func TestSpotMarginServitor(t *testing.T) {
 	tests := []struct {
 		name string
@@ -93,9 +94,10 @@ func TestSpotMarginServitor(t *testing.T) {
 		{"fighter, no servitor", func(*Brain) {}, marginNormal},
 		{"fighter, servitor out", func(b *Brain) { kaiOut(b) }, marginNormal},
 		{"summoner, no servitor", summonerKit, marginGlassCannon},
-		{"summoner, summonable", func(b *Brain) { summonerKit(b); b.summonReady = summonKai1 }, marginGlassCannon},
+		{"summoner, summonable", func(b *Brain) { summonerKit(b); b.summonReady = summonKai1 }, marginNormal},
 		{"summoner, servitor out", func(b *Brain) { summonerKit(b); kaiOut(b) }, marginNormal},
 		{"summoner, servitor dead", func(b *Brain) { summonerKit(b); kaiOut(b).Dead = true }, marginGlassCannon},
+		{"summoner, servitor dead, summonable", func(b *Brain) { summonerKit(b); kaiOut(b).Dead = true; b.summonReady = summonKai1 }, marginNormal},
 		{"summoner, SpotPolicy.Margin with a servitor out", func(b *Brain) { summonerKit(b); kaiOut(b); b.persona.Spots.Margin = 1.25 }, 1.25},
 	}
 	for _, tt := range tests {
@@ -115,7 +117,7 @@ func TestSpotMarginServitor(t *testing.T) {
 // section 3): with Kai out, or summonable, the level 14 squire kills the
 // werewolves together with it (1/(1/T_bot + 1/T_servitor)) and fits them,
 // which it does not alone (TestPackFit); a dead servitor counts for
-// nothing; and how long it lasts against the pack is the same either way,
+// nothing unless the bot can summon one again; and how long it lasts against the pack is the same either way,
 // the conservative "Pack threat".
 func TestPackFitServitor(t *testing.T) {
 	alone := newSquireBrain(t, squire14, 0)
@@ -134,6 +136,7 @@ func TestPackFitServitor(t *testing.T) {
 		{"Kai out", func(b *Brain) { kaiOut(b) }, true, true},
 		{"Kai summonable", func(b *Brain) { b.summonReady = summonKai1 }, true, true},
 		{"Kai dead", func(b *Brain) { kaiOut(b).Dead = true }, false, false},
+		{"Kai dead, summonable", func(b *Brain) { kaiOut(b).Dead = true; b.summonReady = summonKai1 }, true, true},
 		{"Kai out, dealing no damage", func(b *Brain) { kaiOut(b).PAtk = 0; b.cfg.Travel.servitors[kaiCat.ID] = noAttack(kaiCat) }, false, false},
 	}
 	for _, tt := range tests {
@@ -176,13 +179,17 @@ func TestPackFitPickServitor(t *testing.T) {
 		name     string
 		summoner bool
 		out      bool
+		// dead kills the servitor out with a re-summon ready: the spot
+		// stays (docs/servitors.md section 3).
+		dead bool
 		// want is the spot held, -1 for none.
 		want int
 	}{
-		{"fighter alone: the orcs", false, false, 1},
-		{"fighter with Kai: the werewolves", false, true, 0},
-		{"summoner alone: none", true, false, -1},
-		{"summoner with Kai: the werewolves", true, true, 0},
+		{"fighter alone: the orcs", false, false, false, 1},
+		{"fighter with Kai: the werewolves", false, true, false, 0},
+		{"summoner alone: none", true, false, false, -1},
+		{"summoner with Kai: the werewolves", true, true, false, 0},
+		{"summoner, Kai dead, summonable: the werewolves", true, true, true, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -194,7 +201,10 @@ func TestPackFitPickServitor(t *testing.T) {
 				summonerKit(b)
 			}
 			if tt.out {
-				kaiOut(b)
+				kaiOut(b).Dead = tt.dead
+			}
+			if tt.dead {
+				b.summonReady = summonKai1
 			}
 			b.decide(at(time.Second))
 			got := -1

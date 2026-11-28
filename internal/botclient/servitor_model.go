@@ -18,34 +18,29 @@ func indexServitors(npcs map[int32]datapack.NPC) map[int32]datapack.NPC {
 	return out
 }
 
-// servitorOut reports whether the bot's servitor is out and alive: a
-// dead one fights no more, and none can be summoned before its PetDelete
-// (docs/servitors.md section 3).
-func (b *Brain) servitorOut() bool {
-	s := b.world.Servitor
-	return s != nil && !s.Dead
-}
-
 // servitorModel is the servitor the model counts as the bot's second
-// attacker (docs/servitors.md section 3, "TimeToKill"): while one is out,
-// its template's stats with the live P.Atk, P.Def, attack speed and max HP
-// of its PetInfo; else, while the bot can summon one (summonReady), the
-// template its summon skill level names (npcId). Not ok with neither, with
-// a dead servitor, without a travel map or when the template is not a
-// servitor's: the bot then counts itself alone, as before servitors.
+// attacker (docs/servitors.md section 3, "TimeToKill"): one the bot has out
+// or can summon. While one is out and alive, its template's stats with the
+// live P.Atk, P.Def, attack speed and max HP of its PetInfo; else, while the
+// bot can summon one (summonReady), the template its summon skill level
+// names (npcId). A dead or expired servitor counts through summonReady: the
+// bot re-summons it out of combat after its PetDelete, a wait of seconds
+// that does not matter for spot choice, so the spot it holds does not flip
+// on each death (section 3: only two deaths within ServitorDeathWindow make
+// a spot too hard). Not ok with neither, without a travel map or when the
+// template is not a servitor's: the bot then counts itself alone, as
+// before servitors.
 func (b *Brain) servitorModel() (charmodel.Profile, bool) {
 	m := b.cfg.Travel
 	if m == nil {
 		return charmodel.Profile{}, false
 	}
-	if s := b.world.Servitor; s != nil {
-		n, ok := m.servitors[s.TemplateID]
-		if s.Dead || !ok {
-			return charmodel.Profile{}, false
+	if s := b.world.Servitor; s != nil && !s.Dead {
+		if n, ok := m.servitors[s.TemplateID]; ok {
+			return charmodel.Servitor(n, charmodel.ServitorLive{
+				MaxHP: float64(s.MaxHP), PAtk: float64(s.PAtk), PDef: float64(s.PDef), PAtkSpd: float64(s.PAtkSpd),
+			}), true
 		}
-		return charmodel.Servitor(n, charmodel.ServitorLive{
-			MaxHP: float64(s.MaxHP), PAtk: float64(s.PAtk), PDef: float64(s.PDef), PAtkSpd: float64(s.PAtkSpd),
-		}), true
 	}
 	if b.summonReady == (datapack.SkillRef{}) {
 		return charmodel.Profile{}, false
@@ -58,12 +53,15 @@ func (b *Brain) servitorModel() (charmodel.Profile, bool) {
 }
 
 // spotMargin is the spot margin the bot's row fits spots by now
-// (packFits): its ServitorSpotMargin while its servitor is out, else its
-// SpotMargin. Only the summoner rows set a ServitorSpotMargin
+// (packFits): its ServitorSpotMargin while it has a servitor out or can
+// summon one (servitorModel, the same condition as the kill credit), else
+// its SpotMargin. Only the summoner rows set a ServitorSpotMargin
 // (docs/servitors.md section 5), so every other row's margin is as before.
 func (b *Brain) spotMargin(bd *Build) float64 {
-	if m := bd.Kit.ServitorSpotMargin; m > 0 && b.servitorOut() {
-		return m
+	if m := bd.Kit.ServitorSpotMargin; m > 0 {
+		if _, ok := b.servitorModel(); ok {
+			return m
+		}
 	}
 	return bd.Kit.SpotMargin
 }

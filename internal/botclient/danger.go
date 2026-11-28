@@ -52,7 +52,7 @@ func killAttack(st Step, sk datapack.Skill) (charmodel.Attack, bool) {
 // by (packFight not ok) only the level and a death's teaching bound a spot.
 // A leader fits it with the bot members present at now (partyCrew,
 // docs/parties/model.md), by its own row's margin; a summoner by its
-// servitor's while one is out (spotMargin).
+// servitor's while it has one out or can summon one (spotMargin).
 func (b *Brain) packFits(s *datapack.Spot, now time.Time) bool {
 	bd := b.build()
 	margin := b.spotMargin(&bd)

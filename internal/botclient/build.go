@@ -308,9 +308,10 @@ type ClassKit struct {
 	// without one, leaves the model bound off; SpotPolicy.Margin replaces
 	// it.
 	SpotMargin float64
-	// ServitorSpotMargin replaces SpotMargin while the bot's servitor is
-	// out (spotMargin): a summoner row's normal 2.0 over its glass cannon
-	// 3.0 (docs/servitors.md section 5). 0 keeps SpotMargin.
+	// ServitorSpotMargin replaces SpotMargin while the bot has a servitor
+	// out or can summon one (spotMargin): a summoner row's normal 2.0 over
+	// its glass cannon 3.0 (docs/servitors.md section 5). 0 keeps
+	// SpotMargin.
 	ServitorSpotMargin float64
 	// Gear is the class's gear table entry, Dyes its dye symbols: the
 	// table the dye errand draws where the model cannot value dyes
