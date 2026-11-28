@@ -16,11 +16,6 @@ import (
 const (
 	skillServitorHeal int32 = 1127
 	skillServitorPDef int32 = 1140
-	// upkeepFights bounds the gremlins the scenario spawns before the
-	// servitor swings at one the bot fights.
-	upkeepFights = 3
-	// fightBoundUpkeep bounds one gremlin's fight.
-	fightBoundUpkeep = 2 * time.Minute
 )
 
 // TestLiveServitorUpkeep runs a brain-run summoner (#759): a Human Mystic
@@ -29,13 +24,14 @@ const (
 // summon, heal and servitor buff (the summoner rows are #761's). Its
 // summon rule casts the summon (cast plus one upkeep step: 6 Crystal D),
 // its rebuff rule puts the buff on the new servitor (MagicSkillLaunched on
-// it), and a gremlin spawned next to it starts a fight: the bot orders the
-// servitor onto it (RequestActionUse 22, #758) and the servitor's swing at
-// it follows. No GM command summons for a player
-// (network/admin_summon.go), so the brain's own summon brings the servitor
-// out. Servitor Heal is not seen live: no GM command hurts a servitor, and
-// a monster that takes Kat the Cat's HP down kills the summoner first
-// (#768); botclient TestServitorHeal covers when it is cast.
+// it). No GM command summons for a player (network/admin_summon.go), so the
+// brain's own summon brings the servitor out. Not seen live yet (#768): the
+// brain's attack order onto a monster it fights followed by the servitor's
+// swing, and Servitor Heal on a hurt servitor; no GM command hurts a
+// servitor, a monster that takes Kat the Cat's HP down kills the summoner
+// first, and an owner that walks loses sight of its servitor
+// (fatal10110/acis_golang#5589). botclient TestServitorHeal and the
+// servitor order tests cover when they are sent.
 func TestLiveServitorUpkeep(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -82,20 +78,18 @@ func TestLiveServitorUpkeep(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 
 	var (
-		servitor, mob int32
-		mobs          []int32
-		buffed        bool
-		struck        bool
-		from          int
+		servitor int32
+		buffed   bool
+		from     int
 	)
 	// A failed run logs what the bot saw.
 	t.Cleanup(func() {
 		if t.Failed() {
-			logServitorFight(t, f, servitor, mobs)
+			logServitorRun(t, f, servitor)
 		}
 	})
 	// scan reads what the bot saw since the last scan.
-	scan := func() (mobDied bool) {
+	scan := func() {
 		seen := f.watch.Seen(from)
 		from += len(seen)
 		for _, s := range seen {
@@ -111,20 +105,12 @@ func TestLiveServitorUpkeep(t *testing.T) {
 				if e.CasterID == f.id && e.SkillID == skillServitorPDef && servitor != 0 {
 					buffed = buffed || slices.Contains(e.Targets, servitor)
 				}
-			case botclient.Attack:
-				// The servitor's swing at the gremlin after the bot's
-				// attack order (22) went out.
-				if servitor != 0 && mob != 0 && e.AttackerID == servitor && len(e.Hits) > 0 && e.Hits[0].TargetID == mob {
-					struck = struck || orderedBy(f.watch.Sent(), s.SentBefore)
-				}
 			case botclient.Die:
-				mobDied = mobDied || mob != 0 && e.ObjectID == mob
 				if servitor != 0 && e.ObjectID == servitor {
 					t.Fatalf("servitor %d died", servitor)
 				}
 			}
 		}
-		return mobDied
 	}
 
 	waitForBy(t, ctx, f.name+" summoning Kat the Cat", time.Now().Add(2*time.Minute), func() bool {
@@ -142,44 +128,14 @@ func TestLiveServitorUpkeep(t *testing.T) {
 		scan()
 		return buffed
 	})
-
-	for n := 1; !struck; n++ {
-		if n > upkeepFights {
-			t.Fatalf("no swing of the servitor at a gremlin after its order, %d gremlins", upkeepFights)
-		}
-		gmTo(t, ctx, gm, f)
-		spawned, err := gm.Spawn(ctx, gremlin)
-		if err != nil {
-			t.Fatal(err)
-		}
-		mob = spawned
-		mobs = append(mobs, mob)
-		gmTeleport(t, ctx, gm, townTI)
-		waitForBy(t, ctx, fmt.Sprintf("gremlin %d fought with the servitor", n), time.Now().Add(fightBoundUpkeep), func() bool {
-			return scan() || struck
-		})
-		gm.Forget(mob)
-	}
-	t.Logf("%s ordered servitor %d onto gremlin %d and it swung", f.name, servitor, mob)
 }
 
-// orderedBy reports whether a servitor attack order (RequestActionUse 22)
-// is among the first n packets of sent.
-func orderedBy(sent []Sent, n int) bool {
-	for _, p := range sent[:min(n, len(sent))] {
-		if p.Op == botwire.OpGameRequestActionUse && p.Target == botwire.ActionServitorAttack {
-			return true
-		}
-	}
-	return false
-}
-
-// logServitorFight logs, in order, what the summoner f saw and sent about
-// its servitor and the Crokians: the servitor's HP, swings between them
-// and the bot, deaths, the bot's casts and its servitor orders; the
+// logServitorRun logs, in order, what the summoner f saw and sent about
+// itself and its servitor: the servitor's HP, swings at or by either,
+// deaths, casts, system messages and its casts and servitor orders; the
 // servitor's HP and repeated swings are logged on change only.
-func logServitorFight(t *testing.T, f *farmer, servitor int32, mobs []int32) {
-	ours := func(id int32) bool { return id != 0 && (id == f.id || id == servitor || slices.Contains(mobs, id)) }
+func logServitorRun(t *testing.T, f *farmer, servitor int32) {
+	ours := func(id int32) bool { return id != 0 && (id == f.id || id == servitor) }
 	sent := f.watch.Sent()
 	lines, lastHP, lastSwing, at := 0, int32(-1), "", 0
 	logf := func(format string, args ...any) {
@@ -224,5 +180,5 @@ func logServitorFight(t *testing.T, f *farmer, servitor int32, mobs []int32) {
 			logf("%s PetDelete %d", ts, e.ObjectID)
 		}
 	}
-	t.Logf("bot %d, servitor %d, Crokians %v: %d lines", f.id, servitor, mobs, lines)
+	t.Logf("bot %d, servitor %d: %d lines", f.id, servitor, lines)
 }
