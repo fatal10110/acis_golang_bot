@@ -41,10 +41,11 @@ const (
 // own summon brings the servitor out.
 func TestLiveServitorUpkeep(t *testing.T) {
 	t.Parallel()
-	tg := Live(t, NeedGM)
+	tg := Live(t, NeedGM, NeedDatapack)
 	ctx := scenarioCtx(t, 20*time.Minute)
+	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
-	account, _ := tg.Account("su", 1)
+	account, _ := tg.Account("sk", 1)
 	f := runWatched(t, ctx, tg, account, botSetup{
 		class: &botclient.HumanMystic,
 		persona: func() botclient.Persona {
@@ -60,8 +61,13 @@ func TestLiveServitorUpkeep(t *testing.T) {
 			p.TrainerReach = 0
 			p.ClassChange = botclient.ClassChangePolicy{}
 			p.Newbie = botclient.NewbiePolicy{}
+			p.Supply = botclient.SupplyPolicy{}
+			p.Travel = botclient.TravelPolicy{}
 			return p
 		},
+		// The travel map as cmd/bots' bots have it: the summon gate reads
+		// the summon's crystals and upkeep from its skills.
+		brain: func(cfg *botclient.BrainConfig) { cfg.Travel = travel },
 	})
 	t.Cleanup(func() { backToLevel1(t, gm, f) })
 	gmOn(t, ctx, gm, f,
