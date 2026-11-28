@@ -76,17 +76,18 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
 // (pvpSteps), or its own list once shipped (PL, TK, SK: X21; SS, BD:
-// X22). X21-X28 change a row's line when they ship its list, and add the
-// level where a new step starts (55: Shackle and Arrest, O1).
+// X22; GL, WL, DS, BH: X23). X21-X28 change a row's line when they ship
+// its list, and add the level where a new step starts (55: Shackle and
+// Arrest, O1; checkHeavyPvPRows checks GL, WL, DS, BH at 60 and 66).
 var secondRowTable = map[int]map[string]string{
 	40: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
 		"BD": "129/CH 115/MA 105/M 70 70 223",
-		"BH": "100 260",
+		"BH": "260 100",
 		"BI": "1201/M 1184/M 1177",
-		"DS": "100 260 190 255",
+		"DS": "260 100 190 255",
 		"EE": "1206/M 1201/M 1184/M 1177",
-		"GL": "100 1",
+		"GL": "1",
 		"HK": "101 19 56",
 		"PL": "70 70/CA 92 3",
 		"PP": "1201/M 1184/M 1177",
@@ -103,16 +104,16 @@ var secondRowTable = map[int]map[string]string{
 		"TK": "102/CA 3",
 		"TY": "54/CA 95/CA 120 284 54 280 281 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
-		"WL": "100 48 36 245",
+		"WL": "48 36 245",
 	},
 	55: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",
 		"BD": "129/CH 115/MA 105/M 402/CHA 70 70 84 408 223",
-		"BH": "100 260",
+		"BH": "260 100",
 		"BI": "1201/M 1184/M 1177",
-		"DS": "100 260 190 255",
+		"DS": "260 100 190 255",
 		"EE": "1206/M 1201/M 1184/M 1177",
-		"GL": "100 6 261 5 9 7 1",
+		"GL": "6 261 5 9 7 1",
 		"HK": "101 19 24 56",
 		"PL": "70 70/CA 92 403/CHA 400 3",
 		"PP": "1201/M 1184/M 1177",
@@ -129,16 +130,16 @@ var secondRowTable = map[int]map[string]string{
 		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
-		"WL": "100 48 36 245",
+		"WL": "48 36 245",
 	},
 	74: {
 		"AW": "129/CH 115/M 70 70 321 263 96 223 16",
 		"BD": "129/CH 115/MA 105/M 402/CHA 70 70 84 408 223",
-		"BH": "100 260",
+		"BH": "260 100",
 		"BI": "1201/M 1184/M 1177",
-		"DS": "100 315 260 190 255",
+		"DS": "260 100 315 190 255",
 		"EE": "1206/M 1201/M 1184/M 1177",
-		"GL": "100 6 261 5 9 7 1",
+		"GL": "6 261 5 9 7 1",
 		"HK": "101 19 24 56",
 		"PL": "70 70/CA 92 403/CHA 400 3",
 		"PP": "1201/M 1184/M 1177",
@@ -155,7 +156,7 @@ var secondRowTable = map[int]map[string]string{
 		"TK": "102/CA 402/CHA 400 3",
 		"TY": "54/CA 95/CA 120 284 54 35 17 280 281 29",
 		"WC": "1090 1107 1107 1090 100 1245 1245 260",
-		"WL": "100 48 36 245",
+		"WL": "320 48 36 245",
 	},
 }
 
