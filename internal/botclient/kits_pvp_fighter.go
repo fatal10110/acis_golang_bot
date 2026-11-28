@@ -18,6 +18,7 @@ var (
 	vsCA  = []charmodel.Archetype{charmodel.Caster, charmodel.Archer}
 	vsCH  = []charmodel.Archetype{charmodel.Caster, charmodel.Healer}
 	vsCHB = []charmodel.Archetype{charmodel.Caster, charmodel.Healer, charmodel.BattleCaster}
+	vsCHA = []charmodel.Archetype{charmodel.Caster, charmodel.Healer, charmodel.Archer}
 )
 
 // The fighter PvP rows (docs/pvp/rows.md, rows HF to SC; X7): the steps
