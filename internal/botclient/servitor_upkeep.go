@@ -43,6 +43,12 @@ type servitorUpkeep struct {
 	// from there), keyed by the servitor's object id and the skill: a new
 	// servitor has none.
 	buffSent, buffed map[buffKey]time.Time
+	// casting is the servitor buff whose cast is in flight until castEnd
+	// (its MagicSkillUse plus its hit time): the bot's own
+	// MagicSkillCanceled before then drops its buffed record, so it is due
+	// again after buffRetry.
+	casting buffKey
+	castEnd time.Time
 	// died is the servitor whose death counted, deaths the spots and times
 	// of the deaths within ServitorDeathWindow.
 	died   int32
@@ -203,6 +209,20 @@ func (b *Brain) upkeepBlocks() bool {
 	return ok && s.Remaining.Milliseconds()-next <= upkeepHorizon.Milliseconds()
 }
 
+// freshPull reports whether id is a target nobody on the bot's side has
+// engaged at now: it attacks neither the bot nor its servitor, no attack of
+// the bot's went out on it, and the servitor fights it not. The upkeep gate
+// (upkeepBlocks) keeps the bot off such a target only, never off a fight
+// it is in.
+func (b *Brain) freshPull(id int32, now time.Time) bool {
+	if id == b.engaged || id == b.opened || slices.Contains(b.attackers(now), id) {
+		return false
+	}
+	s := b.liveServitor()
+	return s == nil || (id != s.Target && id != s.Struck &&
+		(id != s.AttackedBy || now.Sub(s.AttackedAt) > attackerWindow))
+}
+
 // ruleSummon summons the servitor out of combat (docs/servitors.md section
 // 2, "Rule order"): the summon the gate opens (summonReady), once no
 // servitor stands (a dead one stays until its PetDelete, and the server
@@ -312,14 +332,35 @@ func (b *Brain) upkeepSent(a Action, now time.Time) {
 
 // servitorBuffStarted records the start of the bot's cast of a servitor
 // buff on its servitor (MagicSkillUse): the buff's time runs from there.
+// Any other cast of the bot's ends the one in flight.
 func (b *Brain) servitorBuffStarted(e MagicSkillUse, now time.Time) {
-	s := b.world.Servitor
-	if s == nil || e.CasterID != b.world.Self.ObjectID || !slices.Contains(b.build().Kit.ServitorBuffs, e.SkillID) {
+	if e.CasterID != b.world.Self.ObjectID {
 		return
 	}
 	u := &b.upkeep
+	u.casting, u.castEnd = buffKey{}, time.Time{}
+	s := b.world.Servitor
+	if s == nil || !slices.Contains(b.build().Kit.ServitorBuffs, e.SkillID) {
+		return
+	}
+	k := buffKey{s.ObjectID, e.SkillID}
 	u.buffed = keepServitor(u.buffed, s.ObjectID)
-	u.buffed[buffKey{s.ObjectID, e.SkillID}] = now
+	u.buffed[k] = now
+	u.casting, u.castEnd = k, now.Add(e.HitTime)
+}
+
+// servitorBuffCanceled drops the record of the servitor buff in flight
+// when the bot's own cast stops at now before it hits (MagicSkillCanceled):
+// the buff never landed.
+func (b *Brain) servitorBuffCanceled(e MagicSkillCanceled, now time.Time) {
+	u := &b.upkeep
+	if e.CasterID != b.world.Self.ObjectID || u.casting == (buffKey{}) {
+		return
+	}
+	if !now.After(u.castEnd) {
+		delete(u.buffed, u.casting)
+	}
+	u.casting, u.castEnd = buffKey{}, time.Time{}
 }
 
 // keepServitor drops from m the records of servitors other than id,

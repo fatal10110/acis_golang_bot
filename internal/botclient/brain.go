@@ -746,6 +746,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			}
 			b.leaderHit(e.CasterID, e.TargetID, now)
 			b.lootEvent(ev, now)
+		case MagicSkillCanceled:
+			b.servitorBuffCanceled(e, now)
 		case DropItem, SpawnItem, GetItem:
 			b.lootEvent(ev, now)
 		case Die:

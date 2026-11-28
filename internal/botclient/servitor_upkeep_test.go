@@ -355,6 +355,46 @@ func TestServitorBuffs(t *testing.T) {
 	}
 }
 
+// TestServitorBuffCanceled checks a servitor buff cast canceled before it
+// hits (the bot's own MagicSkillCanceled) is due again after buffRetry,
+// while a cancel after the buff's hit time, or another caster's, leaves
+// the buff counted.
+func TestServitorBuffCanceled(t *testing.T) {
+	pdef := encodeCast(skillServitorPDef)
+	for _, tt := range []struct {
+		name     string
+		caster   int32
+		cancelAt time.Duration
+		due      bool
+	}{
+		{name: "canceled in flight", caster: selfID, cancelAt: 2 * time.Second, due: true},
+		{name: "canceled after its hit time", caster: selfID, cancelAt: 6 * time.Second},
+		{name: "another caster's cancel", caster: npcID, cancelAt: 2 * time.Second},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			b := upkeepBrain(t, summonerTestKit, allSummons)
+			b.world.Apply(kaiInfo(1000), t0)
+			sendNow(t, b, Action{kind: actCast, payload: pdef, object: kaiServitor, skill: skillServitorPDef}, at(time.Second))
+			b.castAt = time.Time{}
+			b.world.holdSkill(skillServitorPDef, time.Time{})
+			events := []Event{
+				MagicSkillUse{CasterID: selfID, TargetID: kaiServitor, SkillID: skillServitorPDef, Level: 1, HitTime: 4 * time.Second},
+			}
+			if err := b.handle(events, at(time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.handle([]Event{MagicSkillCanceled{CasterID: tt.caster}}, at(tt.cancelAt)); err != nil {
+				t.Fatal(err)
+			}
+			b.castAt = time.Time{}
+			a, ok := b.ruleRebuff(at(time.Second + buffRetry))
+			if got := ok && bytes.Equal(a.payload, pdef); got != tt.due {
+				t.Fatalf("Servitor Physical Shield due after buffRetry = %v, want %v", got, tt.due)
+			}
+		})
+	}
+}
+
 // TestUpkeepBlocks checks the pull gate: no new pull while the servitor's
 // next checkpoint is due within upkeepHorizon and the bot cannot pay it.
 func TestUpkeepBlocks(t *testing.T) {
@@ -395,13 +435,16 @@ func TestUpkeepBlocks(t *testing.T) {
 // fights an attacker.
 func TestFarmUpkeepGate(t *testing.T) {
 	for _, tt := range []struct {
-		name           string
-		attacked, paid bool
-		want           bool
+		name                        string
+		attacked, servitorHit, paid bool
+		opened                      bool
+		want                        bool
 	}{
 		{name: "fresh monster"},
 		{name: "fresh monster, upkeep carried", paid: true, want: true},
 		{name: "attacker", attacked: true, want: true},
+		{name: "target hits only the servitor: the fight goes on", servitorHit: true, want: true},
+		{name: "target the bot opened on: the fight goes on", opened: true, want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newSpotBrain(t, 1, testSpot("a", 0, 0, 1, 3, 3))
@@ -421,6 +464,12 @@ func TestFarmUpkeepGate(t *testing.T) {
 			b.world.Apply(NPCInfo{ObjectID: npcID, NPCID: 20001, Attackable: true, Pos: Point{X: 30}}, t0)
 			if tt.attacked {
 				b.world.Apply(Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: selfID, Damage: 5}}}, at(2*time.Second))
+			}
+			if tt.servitorHit {
+				b.world.Apply(Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: kaiServitor, Damage: 5}}}, at(2*time.Second))
+			}
+			if tt.opened {
+				b.opened = npcID
 			}
 			b.world.Self.InCombat = false
 			_, ok := b.ruleFarm(at(2 * time.Second))
