@@ -75,8 +75,9 @@ func refWords(t *testing.T, skills map[datapack.SkillRef]datapack.Skill, refs []
 // secondRowTable is the 24 second rows' row table at a level with today's
 // lists (X20, #718): each second profession's kit plays its first
 // profession's PvP list (ClassKit.PvP) joined to its own M10 rotation
-// (pvpSteps), or its own list once shipped (SS, BD: X22). X21-X28 change a
-// row's line when they ship its list; 55 is where Arrest (O1) comes in.
+// (pvpSteps), or its own list once shipped (SS, BD: X22; PW, AW: X24).
+// X21-X28 change a row's line when they ship its list; 55 is where Arrest
+// (O1) comes in.
 var secondRowTable = map[int]map[string]string{
 	40: {
 		"AW": "129/CH 115/M 70 70 263 96 223 16",

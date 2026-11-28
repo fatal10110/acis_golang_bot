@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -47,6 +48,16 @@ func (b *Brain) skillData(skill int32) (datapack.Skill, bool) {
 	}
 	s, ok := b.cfg.Travel.skills[datapack.SkillRef{ID: skill, Level: b.world.Skills[skill].Level}]
 	return s, ok
+}
+
+// monsterOnly reports whether skill does nothing to a player: an
+// AGGDAMAGE without a TargetMe effect (51 Lure), whose aggression the
+// server notifies only an attackable (handler/skill/disablers.go
+// disableAggDamage); 28 Aggression and 18 Aura of Hate land TargetMe on a
+// player too. A skill the bot has no datapack entry for is not.
+func (b *Brain) monsterOnly(skill int32) bool {
+	s, ok := b.skillData(skill)
+	return ok && s.Type == "AGGDAMAGE" && !slices.ContainsFunc(s.Effects, func(e datapack.Effect) bool { return e.Name == "TargetMe" })
 }
 
 // damageStep reports whether skill is a damage step (docs/pvp/guards.md):

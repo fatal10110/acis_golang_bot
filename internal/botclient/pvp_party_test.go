@@ -31,12 +31,12 @@ var (
 
 // partySkills are the datapack entries the party tests cast or see cast:
 // 1015 Battle Heal (HEAL), 1027 Group Heal (HEAL, target PARTY), 1035 Mental
-// Shield (a target ONE buff, hit 4000), 28 Aggression (AGGDAMAGE) and 112
+// Shield (a target ONE buff, hit 4000), 28 Aggression (AGGDAMAGE with TargetMe) and 112
 // Deflect Arrow (a target SELF buff).
 var partySkills = map[datapack.SkillRef]datapack.Skill{
 	{ID: skillBattleHeal, Level: 1}:   {Type: "HEAL", Target: "ONE", Magic: true, HitTime: time.Second, Power: 100},
 	{ID: skillMentalShield, Level: 1}: {Type: "BUFF", Target: "ONE", Magic: true, HitTime: 4 * time.Second},
-	{ID: skillAggression, Level: 1}:   {Type: "AGGDAMAGE", Target: "ONE", Offensive: true, HitTime: time.Second},
+	{ID: skillAggression, Level: 1}:   {Type: "AGGDAMAGE", Target: "ONE", Offensive: true, HitTime: time.Second, Effects: []datapack.Effect{{Name: "TargetMe"}}},
 	{ID: skillGroupHeal, Level: 1}:    {Type: "HEAL", Target: "PARTY", Magic: true, HitTime: time.Second, Power: 100},
 	{ID: skillDeflectArrow, Level: 1}: {Type: "BUFF", Target: "SELF", HitTime: time.Second},
 }
