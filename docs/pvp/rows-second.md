@@ -1,7 +1,8 @@
 # Second-profession PvP rows (#421)
 
-Status: design, for owner approval before implementation (#421). Docs only; no behavior changes
-until the issues in [Delivery](#delivery) ship.
+Status: design, approved as written by the owner on 2026-11-28 (O1-O4, `docs/plan.md` D50).
+X20 (#718) ships the row table foundation; the group PRs X21-X28 ship the lists
+([Delivery](#delivery)).
 
 The 24 second professions of M10's "Second professions" (`docs/strategy.md`; epic #624, rows
 shipped in #625-#635) get PvP rows of their own, in the [rows](rows.md) notation (`@N`, `[KIND]`,
@@ -30,7 +31,8 @@ not name. Three faults follow:
   Trance and 1064 Silence are not cast at all (M10 left them out against monsters).
 - **The row table has no second rows.** `rowClass` (`pvp_layer.go`) admits base classes and first
   professions only, and `charmodel.ClassRow` walks a second profession to its first, so the engage
-  estimate and the PvP value see a Sorcerer as a Human Wizard with a Human Wizard's steps.
+  estimate and the PvP value see a Sorcerer as a Human Wizard with a Human Wizard's steps. X20
+  (#718) fixed this one: the 24 rows are in `classRows`, `RowClasses(2)` and the row table.
 
 ## Conventions
 
@@ -52,6 +54,9 @@ not name. Three faults follow:
   summary", column 10): tank 20, normal 30, glass cannon 40.
 
 ## Owner decisions to approve
+
+Approved as written by the owner on 2026-11-28 (comment on #421 and #718), recorded as
+`docs/plan.md` D50.
 
 - **O1, own-target holds against players.** M10 left out 402 Arrest, 403 Shackle, 1394 Trance and
   1064 Silence because they stop a kill against a monster. Against a player they are the second

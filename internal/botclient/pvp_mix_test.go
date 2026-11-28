@@ -20,7 +20,8 @@ func TestPvPMix(t *testing.T) {
 	tier := func(t int) map[mixRow]int {
 		out := make(map[mixRow]int)
 		for _, id := range charmodel.RowClasses(t) {
-			out[row(id)] = 1
+			r, _ := charmodel.OwnRow(id)
+			out[mixRow{id, r}] = 1
 		}
 		return out
 	}
@@ -35,6 +36,8 @@ func TestPvPMix(t *testing.T) {
 		{name: "Warrior seen 61 min ago: only the Mystics", weight: 0.5, after: 61 * time.Minute, want: map[mixRow]int{row(10): 2}},
 		{name: "all seen over an hour ago, a base class: its tier's rows", weight: 0.5, after: 71 * time.Minute, want: tier(0)},
 		{name: "all seen over an hour ago, a Knight: the first professions' rows", weight: 0.5, class: 4, after: 71 * time.Minute, want: tier(1)},
+		{name: "all seen over an hour ago, a Hawkeye: the second professions' rows", weight: 0.5, class: 9, after: 71 * time.Minute, want: tier(2)},
+		{name: "all seen over an hour ago, a Duelist: the second professions' rows", weight: 0.5, class: 88, after: 71 * time.Minute, want: tier(2)},
 		{name: "GearWeight 0: no table", weight: 0, after: time.Minute},
 	}
 	for _, tc := range tests {

@@ -27,7 +27,7 @@ repository.
 | M10 - Race and class strategy | #319 | #320-#333 (`docs/strategy.md`, PR #318; backlog #332); second professions epic #624 (#625-#636, S17 deferred); servitor lines #592 (no milestone yet) |
 | M11 - Bot parties | #371 | #373-#392 (`docs/parties/`, PRs P1a-P8, 13 PRs, D25-D29); follow-ups #395, #397, #398, #438 |
 | M12 - Merchant valuables | #376 | #378-#402 (`docs/valuables/`, PRs V1-V9, 13 PRs, D30-D34); follow-ups #403, #404 |
-| M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42 approved 2026-11-26); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43 approved 2026-11-26); X20-X28 #718-#726 (`docs/pvp/rows-second.md`, second-profession rows, #421; for owner approval) |
+| M13 - PvP persona | #405 | #406-#420 (`docs/pvp/`, PRs X1-X13, 15 PRs, D35-D39); follow-ups #421-#429; X14-X16 #602-#604 (`docs/pvp/war.md`, `siege.md`, `olympiad.md`; D40-D42 approved 2026-11-26); X17-X19 #612-#614 (`docs/pvp/cp-potions.md`; D43 approved 2026-11-26); X20-X28 #718-#726 (`docs/pvp/rows-second.md`, second-profession rows, #421; D50 approved 2026-11-28) |
 | M14 - Hardening and structure | #641 | #642-#661 (`docs/structure.md`, PRs HD1-HD6, RT1-RT2, BR1a-BR3, GM1-GM3, WR1, WP1-WP3, OP0, D45-D48; #661 is the backlog issue OP4; OP1, OP2 and BR1b open, not filed) |
 
 
@@ -96,6 +96,7 @@ the goal.
 | D47 | Outcome log | The bots write what they measure at their spots (experience, adena, deaths, kill times against the model's) to a bounded JSONL file, off unless `-outcome-log` is given; no names or text. Owner, 2026-11-26. Design: `docs/structure.md` (OP0) |
 | D48 | Human-looking delays; a language model for whispers | No log-normal delays: the bots are not meant to pass for people. A small language model for whisper replies is a backlog issue, not scheduled. Owner, 2026-11-26. Design: `docs/structure.md` (Options) |
 | D49 | Skill reagents | Amends `docs/strategy.md` (S13c): a skill is never cast without the item its level consumes (`itemConsumeId`/`itemConsumeCount`; the server's refusal, SystemMessage 113, is not a charge refusal), and the shop errand restocks reagents at spawned merchants, `ReagentCastsMin` 20 / `ReagentCastsMax` 100 casts per skill summed per item (persona defaults, D6), only from the adena past the supplies tier's floor (M8 tiers), after potions, shots and arrows. Crystal D has no spawned seller: the cubic summons stay silent (#636 deferred). Owner, 2026-11-26 (epic #624, decision 3). Design: `docs/strategy.md` Design 4 "Skill reagents" (#627) |
+| D50 | Second-profession PvP rows | `docs/pvp/rows-second.md` approved as written: O1, 403 Shackle, 402 Arrest, 1394 Trance and 1064 Silence are cast against players; O2, 320 Wrath is the Warlord's opener from 66, under the area rule; O3, TH and HK keep RO's list, PP CL's and SE SO's; O4, the 24 second rows are in the row table (engage estimate and PvP value mix), which changes the gear and hunting decisions of every bot past 40 (D24). X20 (#718) first, then X21-X28 (#719-#726) in any order. Owner, 2026-11-28 (#421 and #718 comment). Design: `docs/pvp/rows-second.md` (#718) |
 
 ## Consequences of a separate repository (D5)
 
