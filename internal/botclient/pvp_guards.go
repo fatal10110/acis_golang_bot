@@ -190,12 +190,12 @@ func guarded(o *Object) bool { return o != nil && (o.Kind == KindPlayer || o.Sum
 
 // blinking reports whether the flag guard holds damage on o (object id) at
 // now (docs/pvp/guards.md "Flag guard"): a karma-free player or summon
-// whose flag blinks (state 2), outside a duel, unless both stand in an
+// whose flag blinks (state 2), outside a duel or an Olympiad match, unless both stand in an
 // arena (a PvP zone, where a kill is free) and unless the bot fights it as
 // a mutual-war enemy (rule 6b: a kill is a PvP kill, docs/pvp/war.md
 // "Guards").
 func (b *Brain) blinking(id int32, o *Object, now time.Time) bool {
-	if o.Karma > 0 || o.PvPFlag != 2 || b.inDuel(now) || b.persona.PvP.FightWar && b.atWar(id) {
+	if o.Karma > 0 || o.PvPFlag != 2 || b.inDuel(now) || b.inOlympiad(now) || b.persona.PvP.FightWar && b.atWar(id) {
 		return false
 	}
 	if v := b.karma.victim; b.pkVictim(v, now) && b.world.object(v) == o {

@@ -8,6 +8,9 @@ What keeps a fight from giving karma: [guards](guards.md).
 For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summons by
 [Summons and pets](#summons-and-pets)):
 
+0. **Olympiad.** From the call to a stadium (1492) to `ExOlympiadMatchEnd`, only the drawn opponent
+   (its `ExOlympiadUserInfo`), any class, a bot too, and only from the fight's start (1496) to the
+   result; plain Action, no force ([Olympiad](olympiad.md), X16, D42).
 1. **Duel.** From the countdown to the end, only the duel opponent, and only while fighting
    ([wire](wire.md#world-model-x4)); in a party duel any live foe of the other side
    ([party duels](party.md#party-duels)). In the countdown nobody; an opponent's countdown hit cancels

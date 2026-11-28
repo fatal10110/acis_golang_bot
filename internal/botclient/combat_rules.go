@@ -68,6 +68,12 @@ type PvPPolicy struct {
 	// a mutual-war enemy is a target like a flagged player, attacked by
 	// force, hunted with Hunt on.
 	FightWar bool
+	// Olympiad is Olympiad mode (docs/pvp/olympiad.md, D42, rule 0 of
+	// MayFight): noblesse at the class master, registration for classed
+	// games inside the window as OlympiadPolicy says, and the drawn
+	// opponent as the only target from the fight's start to the match's
+	// end. Off for every preset.
+	Olympiad bool
 	// SupportFlagged lets the bot heal or buff a flagged or karma player,
 	// which flags the bot (character_pvpflag.go skillTargetFlagsPvP).
 	SupportFlagged bool
@@ -340,12 +346,12 @@ func (b *Brain) fight(id int32, now time.Time) Action {
 
 // forced reports whether attacking id at now takes a forced attack: a
 // player not attackable without force (character_social.go
-// SocialWithoutForce), so not its duel opponent while fighting, not one in
+// SocialWithoutForce), so not its duel or Olympiad opponent while fighting, not one in
 // its arena, and neither flagged nor with karma. A summon never is: the bot
 // fights one with plain Action and casts only.
 func (b *Brain) forced(id int32, now time.Time) bool {
 	o := b.world.object(id)
-	return o != nil && o.Kind == KindPlayer && id != b.duelFoe(now) && !flagged(o) && !b.sameArena(id, now)
+	return o != nil && o.Kind == KindPlayer && id != b.duelFoe(now) && id != b.olympiadFoe(now) && !flagged(o) && !b.sameArena(id, now)
 }
 
 // Cast refusals: the system messages the server answers a player's cast

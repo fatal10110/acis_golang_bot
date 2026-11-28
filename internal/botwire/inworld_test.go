@@ -79,7 +79,7 @@ func userInfoPacket(u UserInfo, run, walk int32, mult float64, cubics int) []byt
 	w.WriteUint8(16)
 	w.WriteUint8(1)
 	w.WriteInt32(900)
-	w.WriteUint8(1)
+	w.WriteUint8(wire.BoolByte(u.Noble))
 	w.WriteUint8(1)
 	w.WriteUint8(1)
 	for _, v := range []int32{100, 200, 300, 0xffffff} { // bait x, y, z, name color
@@ -219,7 +219,7 @@ var (
 		ObjectID: 0x10000001, Name: "bot7", Pos: Point{X: -71000, Y: 258000, Z: -3100}, Heading: 49152,
 		Race: 1, Sex: 1, BaseClass: 25, ClassID: 26, Level: 20, Exp: 1 << 33, SP: 5000,
 		HP: 300, MaxHP: 410, MP: 120, MaxMP: 150, CP: 90, MaxCP: 200, Load: 1500, MaxLoad: 80000, InvLimit: 100,
-		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
+		PvPFlag: 1, Karma: 7, RunSpeed: 156, WalkSpeed: 104, SwimSpeed: 65, Running: true, Noble: true, PAtk: 300, PAtkSpd: 301, PDef: 302, Evasion: 303, Accuracy: 304, CollisionHeight: 23.5, StoreType: 3, IsGM: true,
 		Abnormal: AbnormalStealth | 0x2000, ClanID: 0x0a000001, AllyID: 0x0a000002,
 		CollisionRadius: 9, PKKills: 11, PvPKills: 12,
 		STR: 40, DEX: 41, CON: 42, INT: 43, WIT: 44, MEN: 45, Critical: 305, MAtk: 306, CastSpd: 307, MDef: 309,
