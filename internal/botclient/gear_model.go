@@ -347,14 +347,12 @@ var magicSkillTypes = []string{"MDAM", "DRAIN", "DEATHLINK"}
 // Bishop is valued by Greater Battle Heal; any other Support build is a
 // tank, which values how long it lasts (tank): a fighter that heals, PL
 // with Holy Blessing, still wears its plate and sword; any other build,
-// the kills a minute of the first rotation step it knows that deals damage
-// (damageSkillTypes, as the spot fit's spotAttack: not Self Heal's HEAL),
-// else of its melee hits. A step gated on the bot's own HP (SelfHPBelow) is
-// passed over: it is cast only when the bot is hurt, not what it kills
-// with, so the sorcerer is valued by Prominence, not by Vampiric Touch
-// (12 s reuse, under 60 % HP; #676). A cast costs its mpInitialConsume and
-// mpConsume as the server charges them (cast/controller.go CanCast); a
-// heal that costs no MP is no heal.
+// the kills a minute of the first rotation step it knows that it kills
+// with (killAttack, the spot fit's rule: not Self Heal's HEAL, and not a
+// step gated on its own HP, so the sorcerer is valued by Prominence, not by
+// Vampiric Touch; #676), else of its melee hits. A heal costs its
+// mpInitialConsume and mpConsume as the server charges them
+// (cast/controller.go CanCast); a heal that costs no MP is no heal.
 func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	bd, m := b.build(), b.cfg.Travel
 	known := func(id int32) (datapack.Skill, bool) {
@@ -378,9 +376,11 @@ func (b *Brain) gearRole() (role charmodel.Role, tank bool) {
 	}
 	role = charmodel.Role{Kind: charmodel.Damage, RestTime: charmodel.DefaultRestTime}
 	for _, st := range bd.Kit.Rotation {
-		if sk, ok := known(st.Skill); ok && st.SelfHPBelow == 0 && slices.Contains(damageSkillTypes, sk.Type) {
-			role.Attack = charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}
-			break
+		if sk, ok := known(st.Skill); ok {
+			if a, ok := killAttack(st, sk); ok {
+				role.Attack = a
+				break
+			}
 		}
 	}
 	return role, tank

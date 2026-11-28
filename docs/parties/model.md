@@ -21,7 +21,9 @@ weight ([spots](spots.md#claim-weight)).
 As shipped (#384, `party_danger.go`): a bot member is a healer when its class's Support build
 heals with a skill its class tree grants by its level (the [healer](composition.md#healer) rows: a
 human, elven or dark mystic from 7, a Cleric or Oracle, an Orc Shaman from 20), else a Damage
-member through its Damage build's first damage step or its melee, whichever kills faster. A member's
+member through its Damage build's first damage step or its melee, whichever kills faster; a step
+gated on its own HP (`SelfHPBelow`, a drain cast only when hurt) is passed over, as the solo fit and
+the gear model do (`killAttack`, #712). A member's
 profile wears nothing the model knows of (its gear is not in the window), so its damage and its
 heal's √M.Atk are low bounds. Each healer counts the heal of its kit that restores most over the
 leader's margin kills, at one cast a cast period, for as many casts as its window MP pays, shared
