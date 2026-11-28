@@ -24,7 +24,8 @@ nor its player may stand in a peace, town, Derby track, arena, water or no-resta
 (`zones/PeaceZone.xml`, `TownZone.xml`, `DerbyTrackZone.xml`, `ArenaZone.xml`, `WaterZone.xml`,
 `NoRestartZone.xml`, X2). A siege zone blocks only during its siege (`model/zone/siege.go:45-57`),
 which the bot sees only from inside (283 at its start or on entry, 284 on leaving,
-`network/siege.go:220-229`); it then counts that polygon as blocked.
+`network/siege.go:220-229`); it then counts that polygon as blocked until a 284 inside it (the
+siege's end) or `SiegeLength` (120 minutes) from the 283 ([sieges](siege.md), X15).
 
 1940 covers every reason the bot's side cannot duel (`network/duel.go:37-40`, `:170-173`), passing
 ones included (combat stance, HP or MP under half, `:202-205`), and always returns the state to

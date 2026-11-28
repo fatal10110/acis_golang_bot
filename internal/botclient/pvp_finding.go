@@ -37,9 +37,8 @@ const (
 // findState is the memory of the bot's duel finding: when its last
 // RequestDuelStart went out (own or whispered), when it challenged each
 // player last, the players its own challenges hold off and until when, the
-// unexplained 1940 hold (when and where it came), the whispered duel
-// waiting for its reaction, and the siege polygon (1-based) the bot saw a
-// 283 inside, 0 for none, until its 284.
+// unexplained 1940 hold (when and where it came) and the whispered duel
+// waiting for its reaction.
 type findState struct {
 	lastAsk  time.Time
 	asked    map[string]time.Time
@@ -47,7 +46,6 @@ type findState struct {
 	blockAt  time.Time
 	blockPos Point
 	whisper  duelWhisper
-	siege    int
 }
 
 // duelWhisper is a player's whispered duel: its name and when the PvP
@@ -98,7 +96,7 @@ func (b *Brain) duelReady() bool {
 // duelGround reports whether a duellist may stand at p
 // (docs/pvp/finding.md "Where a duel is allowed"): in no peace, town, Derby
 // track, arena, no-restart or water zone, nor in the siege polygon the bot
-// saw a running siege in (283).
+// saw a running siege in (283, siegeState.field).
 func (b *Brain) duelGround(p Point) bool {
 	if n := b.cfg.Nav; n != nil && n.Water != nil && n.Water.Contains(int(p.X), int(p.Y), int(p.Z)) {
 		return false
@@ -113,7 +111,7 @@ func (b *Brain) duelGround(p Point) bool {
 			return false
 		}
 	}
-	i := b.pvp.find.siege
+	i := b.pvp.siege.field
 	return i <= 0 || i > len(zs.Sieges) || !zs.Sieges[i-1].Contains(p.X, p.Y, p.Z)
 }
 
@@ -125,25 +123,6 @@ func zoneHolds(set []datapack.Zone, p Point) bool {
 		}
 	}
 	return false
-}
-
-// siegeSeen keeps the siege polygon a 283 (entered a combat zone) found the
-// bot in at now, or forgets it on a 284 (left it): a running siege is
-// invisible from outside (model/zone/siege.go), so only one the bot saw
-// counts as blocked ground.
-func (b *Brain) siegeSeen(entered bool, now time.Time) {
-	f := &b.pvp.find
-	f.siege = 0
-	if !entered || b.cfg.Travel == nil {
-		return
-	}
-	p := b.world.Self.Position(now)
-	for i, z := range b.cfg.Travel.zones.Sieges {
-		if z.Contains(p.X, p.Y, p.Z) {
-			f.siege = i + 1
-			return
-		}
-	}
 }
 
 // clearOfMonsters reports whether the bot may start a duel at now

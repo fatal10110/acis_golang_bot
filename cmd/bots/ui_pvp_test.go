@@ -16,12 +16,12 @@ func TestUIRunnerPvPModes(t *testing.T) {
 	u := uiRunner{shared: shared{claims: botclient.NewPartyClaims()}}
 	pvp, _ := findPreset("pvp")
 	farmer, _ := findPreset("farmer")
-	// switched is the pvp persona's policy with the six switches set: the
-	// rest (fight back, SupportFlagged, gear and cure settings) stays the
-	// preset's.
-	switched := func(duels, hunt, arenas, pk, war, olympiad bool) botclient.PvPPolicy {
+	// switched is the pvp persona's policy with the seven switches set:
+	// the rest (fight back, SupportFlagged, gear and cure settings) stays
+	// the preset's.
+	switched := func(duels, hunt, arenas, pk, war, olympiad, siege bool) botclient.PvPPolicy {
 		p := pvpPersona().PvP
-		p.Duels, p.Hunt, p.Arenas, p.ForceAttack, p.FightWar, p.Olympiad = duels, hunt, arenas, pk, war, olympiad
+		p.Duels, p.Hunt, p.Arenas, p.ForceAttack, p.FightWar, p.Olympiad, p.Siege = duels, hunt, arenas, pk, war, olympiad, siege
 		return p
 	}
 	tests := []struct {
@@ -31,14 +31,16 @@ func TestUIRunnerPvPModes(t *testing.T) {
 		want  botclient.PvPPolicy
 	}{
 		{"pvp defaults", pvp, nil, pvpPersona().PvP},
-		{"pvp with PK on and arenas off", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, PK: true, War: true}, switched(true, true, false, true, true, false)},
-		{"pvp with War off", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, Arenas: true}, switched(true, true, true, false, false, false)},
-		{"pvp with every switch off", pvp, &botregistry.PvPModes{}, switched(false, false, false, false, false, false)},
-		{"pvp in the Olympiad", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, Arenas: true, War: true, Olympiad: true}, switched(true, true, true, false, true, true)},
+		{"pvp with PK on and arenas off", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, PK: true, War: true, Siege: true}, switched(true, true, false, true, true, false, true)},
+		{"pvp with War off", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, Arenas: true, Siege: true}, switched(true, true, true, false, false, false, true)},
+		{"pvp with every switch off", pvp, &botregistry.PvPModes{}, switched(false, false, false, false, false, false, false)},
+		{"pvp in the Olympiad", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, Arenas: true, War: true, Olympiad: true, Siege: true}, switched(true, true, true, false, true, true, true)},
+		{"pvp with Siege off", pvp, &botregistry.PvPModes{Duels: true, Hunt: true, Arenas: true, War: true}, switched(true, true, true, false, true, false, false)},
 		{"farmer defaults", farmer, nil, botclient.PvPPolicy{FightFlagged: true}},
 		{"farmer taking duels", farmer, &botregistry.PvPModes{Duels: true}, botclient.PvPPolicy{FightFlagged: true, Duels: true}},
 		{"farmer at war", farmer, &botregistry.PvPModes{War: true}, botclient.PvPPolicy{FightFlagged: true, FightWar: true}},
 		{"farmer in the Olympiad", farmer, &botregistry.PvPModes{Olympiad: true}, botclient.PvPPolicy{FightFlagged: true, Olympiad: true}},
+		{"farmer in sieges", farmer, &botregistry.PvPModes{Siege: true}, botclient.PvPPolicy{FightFlagged: true, Siege: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

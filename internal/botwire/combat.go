@@ -79,7 +79,8 @@ type RelationChanged struct {
 	ObjectID int32
 	// Relation is the player's relation bits as the bot sees them
 	// (serverpackets/relationchanged.go, network/relations.go relationTo):
-	// RelationMutualWar while both clans declared war on each other.
+	// RelationMutualWar while both clans declared war on each other, the
+	// siege bits while the player takes part in a siege.
 	Relation int32
 	// AutoAttackable is set when the bot may attack the player without
 	// force (Character.AttackableWithoutForceBy): flagged, with karma, in a
@@ -95,6 +96,21 @@ type RelationChanged struct {
 const (
 	RelationMutualWar   int32 = 0x8000
 	RelationOneSidedWar int32 = 0x10000
+)
+
+// The siege bits of RelationChanged (serverpackets/relationchanged.go,
+// network/relations.go relationTo): a player with a siege state shows
+// RelationInSiege, RelationAttacker on the attacking side, and
+// RelationAlly to an observer of the same siege state or RelationEnemy to
+// any other, a non-participant included (docs/pvp/siege.md). The server
+// resends them only when the player's own state changes, not the
+// observer's, so a side read from RelationAttacker stays right where
+// RelationAlly and RelationEnemy may lag.
+const (
+	RelationInSiege  int32 = 0x200
+	RelationAttacker int32 = 0x400
+	RelationAlly     int32 = 0x800
+	RelationEnemy    int32 = 0x1000
 )
 
 // MutualWar reports whether the player's clan and the bot's are at war

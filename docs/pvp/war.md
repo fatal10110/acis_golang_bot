@@ -26,7 +26,7 @@ Ships in X14 (#602). Decision D40 (owner approved 2026-11-26). Paths per
   enemy while its last bits hold `MutualWar`. The bit already excludes academies, so it matches
   the server's kill credit exactly.
 - **Staleness.** A war declared while the enemy is in sight shows only on its next
-  `RelationChanged` (a sighting, a flag, karma or siege change): the bot misses a target, never
+  `RelationChanged` (a sighting, a flag, karma or [siege](siege.md) change): the bot misses a target, never
   takes a wrong one. A war that ends while the mark is set is the danger (a kill would be a PK):
   on 1566 or 1567, on leaving or being dismissed from its clan, and on any change of its own clan
   id in `UserInfo`, every war mark is cleared until a new `RelationChanged` sets it again.

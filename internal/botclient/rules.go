@@ -400,6 +400,9 @@ const (
 	// actChannelAsk asks for the bot's command channel: its overview or a
 	// party's members (channel.go).
 	actChannelAsk
+	// actSiegeList asks a castle's attacker or defender list
+	// (pvp_siege.go).
+	actSiegeList
 )
 
 // gate is the reuse gate the action's frame passes. Appearing,
@@ -448,7 +451,11 @@ func (a Action) gate() gate {
 		return gateEmote
 	case actSay, actTell, actChatReply, actAnswer, actAnnounce:
 		return gateChat
-	case actBypass:
+	case actBypass, actSiegeList:
+		// RequestSiegeAttackerList and RequestSiegeDefenderList have no
+		// flood protector (network/client_dispatch.go registers them
+		// whenLive): the siege errand keeps the bypass gate, at most
+		// siegeCastles a siege state change.
 		return gateBypass
 	case actDrop:
 		return gateDrop
@@ -611,6 +618,7 @@ var playRules = []rule{
 	{name: "overweight", run: (*Brain).ruleOverweight},
 	{name: "arena leave", run: (*Brain).ruleArenaLeave},
 	{name: "attacked", run: (*Brain).ruleAttacked},
+	{name: "siege leave", run: (*Brain).ruleSiegeLeave},
 	{name: "overweight hold", run: (*Brain).ruleOverweightHold},
 	{name: "recover", run: (*Brain).ruleRecover},
 	{name: "rest", run: (*Brain).ruleRest},
@@ -618,6 +626,8 @@ var playRules = []rule{
 	{name: "buffpotion", run: (*Brain).ruleBuffPotion},
 	{name: "olympiad wait", run: (*Brain).ruleOlympiadWait},
 	{name: "arena fight", run: (*Brain).ruleArenaFight},
+	{name: "siege fight", run: (*Brain).ruleSiegeFight},
+	{name: "siege", run: (*Brain).ruleSiege},
 	{name: "hunt", run: (*Brain).ruleHunt},
 	{name: "challenge", run: (*Brain).ruleChallenge, karma: true},
 	{name: "rooms", run: (*Brain).ruleRooms, stop: (*Brain).releasePartyClaim},

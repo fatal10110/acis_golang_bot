@@ -145,9 +145,11 @@ func (b *Brain) spotFitsBand(s *datapack.Spot, lo, hi int, now time.Time) bool {
 // spotOpen reports whether the bot may farm s at now: a spot no event
 // switches on, or a Seven Signs dungeon spot its membership opens
 // (signsFarms). Only a member ever farms one: the dungeon gatekeepers admit
-// no one else (server sevensigns/dungeon.go).
+// no one else (server sevensigns/dungeon.go). A spot inside a running
+// battlefield the bot does not fight in waits for the siege's end
+// (siegeBlocks, docs/pvp/siege.md "Not taking part").
 func (b *Brain) spotOpen(s *datapack.Spot, now time.Time) bool {
-	return s.Event == "" || b.signsFarms(s.Event, now)
+	return (s.Event == "" || b.signsFarms(s.Event, now)) && !b.siegeBlocks(Point{X: s.Center.X, Y: s.Center.Y, Z: s.Z}, now)
 }
 
 // lowerFits reports whether s fits the bot at now as a fallback (claimLower):
@@ -297,6 +299,12 @@ func (b *Brain) ruleSpot(now time.Time) (Action, bool) {
 		// The town preparation gate: no spot before the errands ahead
 		// stocked the bot up.
 		return Action{}, false
+	}
+	if v.farming() && b.siegeBlocks(v.at, now) {
+		// Its spot lies in a running battlefield it does not fight in:
+		// given back, and spotOpen passes over the battlefield's spots
+		// until the siege ends (docs/pvp/siege.md "Not taking part").
+		b.leaveSpot()
 	}
 	if !now.Before(v.retryAt) && (!v.held || v.lower || v.earning || b.outleveled() || b.misfit() || b.overRisk(now) || r.overCap(v.idx)) {
 		b.pickSpot(now)

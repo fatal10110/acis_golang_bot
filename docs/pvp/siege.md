@@ -1,9 +1,9 @@
 # Sieges
 
 Ships in X15 (#603). Decision D41 (owner approved 2026-11-26). Paths per
-[README](README.md#paths). Today a running siege is only [forbidden duel
-ground](finding.md#duel-ground); a bot farming or walking in a battlefield when a siege starts stays
-there.
+[README](README.md#paths). Before X15 a running siege was only [forbidden duel
+ground](finding.md#duel-ground); a bot farming or walking in a battlefield when a siege started
+stayed there.
 
 ## Server facts
 
@@ -46,6 +46,31 @@ there.
 - **Guards.** The [flag guard](guards.md) is off inside a running battlefield (no karma there);
   the [arena edge](guards.md#arena-edge) applies to its polygon: an enemy who stepped out of it is
   no longer hit (a kill outside is a PK unless the enemy is flagged, which leaving does).
+
+## As shipped (X15)
+
+- **Lists.** The bot asks its own side's list only (0xa2 for an attacker, 0xa3 for a defender),
+  castles 1 to 9 in order, one per `bypassGap` (`actSiegeList` keeps the bypass gate; the server
+  has no flood protector on them, `network/client_dispatch.go:150-151`), and stops at the first
+  list holding its clan (a defender clan waiting for approval does not count): at most 9 frames
+  per siege state change, inside the 18 above. No list holding its clan after all nine are
+  answered or `siegeListWait` (5 s) after the last, and it takes no part (a clan hall's siege).
+- **Sides.** A player's side is read from its `Attacker` bit against the bot's own state, and
+  `Ally` is never fought: the server resends a player's relation when its own state changes, not
+  the observer's (`network/relations.go:104-121`), so `Ally` and `Enemy` may still show the bot's
+  state from before the siege.
+- **Block.** A battlefield a 283 showed running is blocked until a 284 while the bot stands inside
+  it and does not walk out (the zone turned off around it, `model/zone/siege.go` `replay`), the
+  bot's own state cleared for its castle's, or `SiegeLength` (120 minutes,
+  `ops/docker/config/siege.properties`) after the 283.
+- **Walks.** Out by the point `siegeMargin` (300) past the nearest edge, the next edge's when the
+  walker answers one unreachable; in by the point `siegeDepth` (400) inside the nearest edge, on
+  foot only (the castle towns' gatekeepers refuse a trip there during the siege,
+  `serverpackets` `SystemMessageCannotPortVillageInSiege`); no way in and it takes no part. A
+  defender inside at the start stays while its lists are out. Routes around a blocked battlefield
+  are #734.
+- **Live test.** Not shipped: the e2e GM scope has no `//siege`, and a siege started on the shared
+  live server banishes real players from the castle zone. Tracked in #735.
 
 ## Mode
 

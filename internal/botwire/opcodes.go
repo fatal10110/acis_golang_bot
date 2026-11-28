@@ -181,6 +181,19 @@ const (
 // item into crystals.
 const OpGameRequestCrystallizeItem = 0x72
 
+// Siege lists, both directions: RequestSiegeAttackerList and
+// RequestSiegeDefenderList (clientpackets/siege.go), SiegeAttackerList and
+// SiegeDefenderList (serverpackets/siege.go). The bot never sends
+// RequestJoinSiege (0xa4) or RequestConfirmSiegeWaitingList (0xa5): it
+// never registers (D41).
+const (
+	OpGameRequestSiegeAttackerList = 0xa2
+	OpGameRequestSiegeDefenderList = 0xa3
+
+	OpGameSiegeAttackerList = 0xca
+	OpGameSiegeDefenderList = 0xcb
+)
+
 // Dye symbols, both directions: HennaEquipList (serverpackets/henna.go),
 // HennaInfo (serverpackets/hennainfo.go), and RequestHennaEquip and
 // RequestHennaUnequip (clientpackets/henna.go). The draw window opens from

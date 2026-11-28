@@ -61,8 +61,9 @@ func decodeUserInfoEvent(r *wire.Reader) Event {
 	u.ClanID = r.ReadInt32()
 	r.Skip(4) // crest
 	u.AllyID = r.ReadInt32()
-	r.Skip(2 * 4) // ally crest, relation
-	r.Skip(1)     // mount type
+	r.Skip(4) // ally crest
+	u.Relation = r.ReadInt32()
+	r.Skip(1) // mount type
 	u.StoreType = r.ReadUint8()
 	r.Skip(1) // can crystallize
 	u.PKKills, u.PvPKills = r.ReadInt32(), r.ReadInt32()

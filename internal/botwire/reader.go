@@ -47,6 +47,8 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	OpGameSkillList:                 decodeSkillList,
 	OpGameSkillCoolTime:             decodeSkillCoolTime,
 	OpGameRelationChanged:           decodeRelationChanged,
+	OpGameSiegeAttackerList:         decodeSiegeAttackerList,
+	OpGameSiegeDefenderList:         decodeSiegeDefenderList,
 	OpGameAbnormalStatusUpdate:      decodeAbnormalStatusUpdate,
 	OpGameEtcStatusUpdate:           decodeEtcStatusUpdate,
 	OpGamePartySpelled:              decodePartySpelled,

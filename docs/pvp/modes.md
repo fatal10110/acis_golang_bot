@@ -17,6 +17,7 @@ rules 1-8; from X11 it attacks under the limits of [PK mode](karma.md#pk-mode).
 | Arenas | Visits an arena on a timer and fights there | on | off |
 | Open-world PK | Force-attacks clean players under the D39 limits ([PK mode](karma.md#pk-mode)) | off (opt-in per bot) | off |
 | War (`FightWar`, X14) | Fights and, with hunting on, attacks mutual clan-war enemies by force ([war](war.md), D40) | on | off |
+| Siege (`Siege`, X15) | With its clan registered and the siege running, finds the castle from the siege lists, walks into the battlefield and fights the other side ([sieges](siege.md), D41); every bot, mode on or off, walks out of a running battlefield it does not fight in | on | off |
 | Olympiad (`Olympiad`, X16) | Takes noblesse at the class master, registers for classed games inside the window, fights the drawn opponent ([Olympiad](olympiad.md), D42); refused for a third-profession bot until the owner rules (#729) | off | off |
 
 `pvp` is M10's Damage role (build, branch weights, gear) farming like `farmer` between fights. Its
@@ -44,9 +45,10 @@ server's PvP count, which under the shipped `AwardPKKillPVPPoint = False` skips 
 and its duel results. Counters:
 
 - `bot_pvp_fights_total{kind}`: per opponent at the first attack, by its record's kind: `duel`,
-  `fight_back` (X4), `arena` (X4b), `flagged` (X5), `pk` (X11), `war` (X14), `olympiad` (X16);
+  `fight_back` (X4), `arena` (X4b), `flagged` (X5), `pk` (X11), `war` (X14), `olympiad` (X16),
+  `siege` (X15);
 - `bot_pvp_deaths_total{kind}`: per death to a player or its summon, by the killer's kind
-  (`fight_back`, `arena`, `flagged`, `pk`, `war`, `olympiad`, or `unfought`, set by X4 on an attacker `MayFight`
+  (`fight_back`, `arena`, `flagged`, `pk`, `war`, `olympiad`, `siege`, or `unfought`, set by X4 on an attacker `MayFight`
   refused, such as a clean attacker fled with karma); a duel defeat leaves 1 HP and counts in
   `bot_duels_total`;
 - `bot_duels_total{result}` from X4's duel result, read before `ExDuelEnd`: 1950 with the bot's
@@ -57,9 +59,9 @@ and its duel results. Counters:
   on the opponent's `MagicSkillCanceled` before its landing time, else `too late` at that time.
 
 The switches are stored per bot in the registry: `POST /api/bots/{account}/pvp` with
-`{"modes": {"duels": …, "hunt": …, "arenas": …, "pk": …, "war": …, "olympiad": …}}` replaces the persona's six defaults
-(fight back and `SupportFlagged` stay the preset's; switches stored before X14 or X16 have no `war`
-or `olympiad` and read them off), `{"modes": null}` gives the defaults back, and
+`{"modes": {"duels": …, "hunt": …, "arenas": …, "pk": …, "war": …, "olympiad": …, "siege": …}}` replaces the persona's seven
+defaults (fight back and `SupportFlagged` stay the preset's; switches stored before X14, X15 or X16
+have no `war`, `siege` or `olympiad` and read them off), `{"modes": null}` gives the defaults back, and
 an online bot respawns with the change through the login gate. The bot's live view carries `pvp`
 (the modes played, `pvp_kills`, `pk_kills`, the run's duels by result, `last_duel`). The metrics
 snapshot names the counters without the `bot_` prefix, as its other fields: `pvp_fights_total`,
