@@ -86,8 +86,8 @@ type SpotPolicy struct {
 	// in the datapack, so a death is what tells it a pack is too much. 0
 	// avoids the one spot alone.
 	PackShare float64
-	// Margin replaces the build's spot margin (ClassKit.SpotMargin) when
-	// not 0; below 0 it turns the model bound off. A spot fits only while
+	// Margin replaces the build's spot margins (ClassKit.SpotMargin, and
+	// ServitorSpotMargin with a servitor out) when not 0; below 0 it turns the model bound off. A spot fits only while
 	// the bot lasts against its likely pack at least Margin times as long as
 	// it takes to kill one of its monsters (packFits, docs/strategy.md
 	// Design section 11): a persona default (D6), not a safety boundary.
