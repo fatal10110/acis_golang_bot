@@ -44,7 +44,7 @@ var tyrantKit = ClassKit{
 		{Skill: skillIronPunch, Weapons: fistWeapons},
 		{Skill: skillFocusedForce, Weapons: fistWeapons, Target: TargetSelf, Filler: true, ChargeToMax: true},
 	},
-	PvP: monkPvP,
+	PvP: tyrantPvP,
 	Buffs: []Buff{
 		{Skill: skillPumaTotem, Weapons: fistWeapons, Self: true},
 		{Skill: skillBisonTotem, From: 68, Weapons: fistWeapons, Replaces: skillPumaTotem, Self: true},
