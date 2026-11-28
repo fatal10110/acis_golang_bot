@@ -81,8 +81,14 @@ stayed there.
   route keeps out (or the search runs out of budget), the walk crosses as before and the walk out
   above is the backstop. A route planned before a 283 is not dropped: a 283 only reaches a bot
   inside the battlefield, where the walk out replaces it.
-- **Live test.** Not shipped: the e2e GM scope has no `//siege`, and a siege started on the shared
-  live server banishes real players from the castle zone. Tracked in #735.
+- **Live test.** `TestLivePvPSiege` skips with its reason: the e2e GM scope has no `//siege`, and
+  the shared live server cannot host a harness siege safely. `//siege start` banishes real players
+  from the castle zone and is announced server-wide; a scripted defender needs a castle some clan
+  owns (an unowned castle refuses defenders, and `//castle set` changes real ownership); `//siege
+  end` sets the castle's next date and drops its registrations; the GM client decodes no siege info
+  window, so an idle castle cannot be told from a scheduled one; a run that dies before its cleanup
+  leaves the siege running for its length (120 minutes). The owner's call on a dedicated castle or
+  a test-only server is tracked in #735.
 
 ## Mode
 
@@ -106,7 +112,8 @@ holds for every bot.
 - `TestPvPSiegeFight` (X15): attacker state, `Siege` on → 0xa2 and 0xa3 paced by `bypassGap`, walk
   in after the start; targets an `InSiege`+`Enemy` player, never an `Ally`, a non-participant or a
   bot that has not hit; an enemy outside the polygon → not hit; the fifth death → its spot.
-- `TestLivePvPSiege` (X15, live, at most 4 characters): a GM registers clan A (the bot's, level 4
+- `TestLivePvPSiege` (X15, live, at most 4 characters; skips until a siege-safe stack exists, see
+  "Live test" above, #735): a GM registers clan A (the bot's, level 4
   by the GM) as attacker of a castle and a scripted clan B as defender (`//siege attack|defend`,
   `network/admin_siege.go:11-64`), starts it (`//siege start`); the bot walks in, 283, attacks the
   scripted defender, never a second, clanless bot standing inside; that bot, inside at the start,
