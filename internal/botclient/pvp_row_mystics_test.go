@@ -162,9 +162,11 @@ func TestPvPRowDM(t *testing.T) {
 // or healer, Chill Flame, Life Drain, each DOT not again while it ticks;
 // Dreaming Spirit answers a Cleric's Heal cast without a spiritshot (5 s),
 // not one with (3.5 s); Break: Dreaming Spirit on an opponent free of
-// DOTs that cannot reach it first.
+// DOTs that cannot reach it first, within its 600 range.
 func TestPvPRowOM(t *testing.T) {
-	far := foeSeen(lyrWarrior, Point{Y: 900}, 0)
+	// far is a melee opponent 600 away: within Dreaming Spirit's 600
+	// range, too far to break its cast (breakCastOK).
+	far := foeSeen(lyrWarrior, Point{Y: 600}, 0)
 	runPvPRowCases(t, []pvpRowCase{
 		{name: "vs melee: Chill Flame", class: classOrcMystic, level: 15, opp: lyrWarrior, skill: skillChillFlame},
 		{name: "vs a caster, opened: Venom", class: classOrcMystic, level: 15, opp: lyrMystic, setup: opened, skill: skillVenom},
@@ -173,6 +175,10 @@ func TestPvPRowOM(t *testing.T) {
 		{name: "vs a Cleric's Heal (5 s): Dreaming Spirit", class: classOrcMystic, level: 15, opp: lyrCleric, setup: both(opened, healCast(5*time.Second)), skill: skillDreamingSpirit},
 		{name: "vs a Cleric's Heal with a spiritshot (3.5 s): no Int", class: classOrcMystic, level: 15, opp: lyrCleric, setup: both(opened, healCast(3500*time.Millisecond)), skill: skillVenom},
 		{name: "breaking off, no DOT, out of reach: Dreaming Spirit", class: classOrcMystic, level: 15, opp: lyrWarrior, setup: both(breaking, far, reusing(skillLifeDrain)), skill: skillDreamingSpirit},
+		{
+			name: "breaking off from a foe at 900, beyond Dreaming Spirit's 600: the flee", class: classOrcMystic, level: 15, opp: lyrWarrior,
+			setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 900}, 0), reusing(skillLifeDrain)), move: true,
+		},
 	})
 }
 

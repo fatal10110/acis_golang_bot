@@ -255,7 +255,8 @@ func (b *Brain) breaksOff(id int32, rot []Step, st stepState, now time.Time) boo
 }
 
 // breakAway is the break-off from player id at now: the first Break step
-// of rot that is due (breakDue) and goes, else M10's flee away from id.
+// of rot that is due (breakDue: on id only in cast range) and goes, else
+// M10's flee away from id.
 func (b *Brain) breakAway(id int32, rot []Step, st stepState, now time.Time) Action {
 	st.breaking = true
 	bot, opp, fighters := b.pvpFighters(id)
@@ -274,11 +275,12 @@ func (b *Brain) breakAway(id int32, rot []Step, st stepState, now time.Time) Act
 // at now: none while its last landing still holds id, a slow none while
 // any slow of the bot still holds id (docs/pvp/rows.md, "Ice Bolt unless
 // the opponent is still slowed"), a control step only when due
-// (controlDue: a sleep under the sleep rule, at MinLand or more), and only
+// (controlDue: a sleep under the sleep rule, at MinLand or more), only
+// when it reaches id from where the bot stands (breakReaches), and only
 // under the break-cast gate (breakCastOK).
 func (b *Brain) breakDue(id, skill int32, bot, opp charmodel.Fighter, fighters bool, now time.Time) bool {
 	s, ok := b.skillData(skill)
-	if !ok {
+	if !ok || !b.breakReaches(id, s, skill, now) {
 		return false
 	}
 	if r := b.pvp.opponents[id]; r != nil {
@@ -297,6 +299,16 @@ func (b *Brain) breakDue(id, skill int32, bot, opp charmodel.Fighter, fighters b
 		return false
 	}
 	return b.breakCastOK(id, s, skill, bot, opp, fighters, now)
+}
+
+// breakReaches reports whether the bot's Break step of skill (its datapack
+// entry s) reaches player id from where the bot stands at now: a cast the
+// server anchors on the caster (an AURA, auraHandler.FinalTarget, or a
+// casterCentered target) always does, any other only in cast range
+// (castInRange). Out of range the server walks the caster to its target
+// first, back toward the foe the break-off flees.
+func (b *Brain) breakReaches(id int32, s datapack.Skill, skill int32, now time.Time) bool {
+	return strings.Contains(s.Target, "AURA") || casterCentered(s.Target) || b.castInRange(id, skill, now)
 }
 
 // breakCastOK is the break-cast gate on the bot's Break step of skill (its

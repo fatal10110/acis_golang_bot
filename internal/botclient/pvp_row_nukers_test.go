@@ -229,7 +229,9 @@ func TestPvPRowWC(t *testing.T) {
 	near := foeSeen(lyrCleric, Point{Y: 50}, 0)
 	blunt := wield("BLUNT")
 	sustain := reusing(skillStealEssence, skillLifeDrain)
-	far := func(abnormal int32) func(*testing.T, *Brain) { return foeSeen(lyrWarrior, Point{Y: 900}, abnormal) }
+	// far is a melee opponent 600 away: within Dreaming Spirit's and
+	// Fear's 600 range, too far to break their cast (breakCastOK).
+	far := func(abnormal int32) func(*testing.T, *Brain) { return foeSeen(lyrWarrior, Point{Y: 600}, abnormal) }
 	runPvPRowCases(t, []pvpRowCase{
 		{name: "vs a Cleric in reach: no Hammer Crush at reuse", class: classWarcryer, level: 40, opp: lyrCleric, setup: both(blunt, opened, near, reusing(skillAuraSink)), skill: skillFrostFlame},
 		{name: "vs a Cleric's Heal in reach: Hammer Crush", class: classWarcryer, level: 40, opp: lyrCleric, setup: both(blunt, opened, near, healCast(5*time.Second)), skill: skillHammerCrush},
@@ -248,6 +250,10 @@ func TestPvPRowWC(t *testing.T) {
 			setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 50}, 0x40), sustain, matk(2000)), skill: skillSealBinding,
 		},
 		{name: "breaking off, no DOT, out of reach: Dreaming Spirit", class: classWarcryer, level: 40, opp: lyrWarrior, setup: both(breaking, far(0), sustain), skill: skillDreamingSpirit},
+		{
+			name: "breaking off from a foe at 900, beyond Dreaming Spirit's and Fear's 600: the flee", class: classWarcryer, level: 40, opp: lyrWarrior,
+			setup: both(breaking, foeSeen(lyrWarrior, Point{Y: 900}, 0), sustain), move: true,
+		},
 		{name: "breaking off, poisoned, out of reach: Fear", class: classWarcryer, level: 40, opp: lyrWarrior, setup: both(breaking, far(poisoned), sustain), skill: skillFear},
 	})
 }

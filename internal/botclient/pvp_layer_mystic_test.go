@@ -132,7 +132,7 @@ func TestPvPControlLandRateCL(t *testing.T) {
 // Venom on an opponent that cannot reach it first → 1092 Fear (the sleep
 // rule); below 14, no Fear: the flee at once.
 func TestPvPBreakOffOM(t *testing.T) {
-	poisoned := foeSeen(lyrWarrior, Point{Y: 900}, 0x2)
+	poisoned := foeSeen(lyrWarrior, Point{Y: 600}, 0x2)
 	tests := []struct {
 		name  string
 		level int32

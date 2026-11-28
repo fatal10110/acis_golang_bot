@@ -52,8 +52,8 @@ func TestPvPRowSongKits(t *testing.T) {
 }
 
 // TestPvPRowSS checks the sword singer's PvP row: Entangle on a caster,
-// not on a Warrior; Arrest on a Cleric from 55, not at 54; Arrest, then
-// Entangle, to break off; never Aggression against a lone opponent.
+// not on a Warrior; Arrest on a Cleric from 55, not at 54; Arrest within its
+// 150 reach, then Entangle, to break off; never Aggression against a lone opponent.
 func TestPvPRowSS(t *testing.T) {
 	all := []int32{skillEntangle, skillArrest, skillPowerStrike, skillAggression}
 	playRow(t, classSwordSinger, []rowCase{
@@ -63,7 +63,11 @@ func TestPvPRowSS(t *testing.T) {
 		{name: "a Cleric at 54: no Arrest", level: 54, weapon: "SWORD", skills: all, opp: lyrCleric, want: skillPowerStrike},
 		{name: "a Human Mystic, Entangle cooling: Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrMystic, setup: cooling(skillEntangle), want: skillArrest},
 		{name: "an archer: Entangle", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: func(_ *testing.T, b *Brain) { asArcher(b) }, want: skillEntangle},
-		{name: "breaking off at 55: Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: breakingOff, want: skillArrest},
+		{name: "breaking off from a foe at 100: Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: both(warriorAt(100), breakingOff), want: skillArrest},
+		{
+			name: "breaking off from a foe at 450, beyond Arrest's 150: Entangle, no Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior,
+			setup: both(warriorAt(450), breakingOff), want: skillEntangle, not: []int32{skillArrest},
+		},
 		{name: "breaking off, Arrest cooling: Entangle", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: both(breakingOff, cooling(skillArrest)), want: skillEntangle},
 		{name: "breaking off at 54: Entangle", level: 54, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: breakingOff, want: skillEntangle},
 	})
@@ -72,8 +76,8 @@ func TestPvPRowSS(t *testing.T) {
 // TestPvPRowBD checks the bladedancer's PvP row: Arrest on a Cleric from
 // 55, not at 54 (a control step, it goes before the DOT: docs/pvp/layer.md
 // "PvP order"); Poison on a Cleric, not on a Warrior; Power Break, then
-// Freezing Strike, on a Warrior; Arrest, then Freezing Strike, to break
-// off (Drain Health, the sustain, cooling); Deflect Arrow against an
+// Freezing Strike, on a Warrior; Arrest within its 150 reach, then
+// Freezing Strike, to break off (Drain Health, the sustain, cooling); Deflect Arrow against an
 // archer.
 func TestPvPRowBD(t *testing.T) {
 	all := []int32{skillPoison, skillPowerBreak, skillFreezingStrike, skillArrest, skillDrainHealth, skillSting, skillAggression, skillDeflectArrow}
@@ -87,7 +91,14 @@ func TestPvPRowBD(t *testing.T) {
 			name: "a Warrior, Power Break and Freezing Strike cooling: no Poison, no Arrest, no Aggression", level: 55, weapon: "DUAL", skills: all, opp: lyrWarrior,
 			setup: both(opened, cooling(skillPowerBreak, skillFreezingStrike)), want: skillSting,
 		},
-		{name: "breaking off at 55: Arrest", level: 55, weapon: "DUAL", skills: all, opp: lyrWarrior, setup: both(opened, breakingOff, cooling(skillDrainHealth)), want: skillArrest},
+		{
+			name: "breaking off from a foe at 100: Arrest", level: 55, weapon: "DUAL", skills: all, opp: lyrWarrior,
+			setup: both(opened, warriorAt(100), breakingOff, cooling(skillDrainHealth)), want: skillArrest,
+		},
+		{
+			name: "breaking off from a foe at 450, beyond Arrest's 150: Freezing Strike, no Arrest", level: 55, weapon: "DUAL", skills: all, opp: lyrWarrior,
+			setup: both(opened, warriorAt(450), breakingOff, cooling(skillDrainHealth)), want: skillFreezingStrike, not: []int32{skillArrest},
+		},
 		{
 			name: "breaking off, Arrest cooling: Freezing Strike", level: 55, weapon: "DUAL", skills: all, opp: lyrWarrior,
 			setup: both(opened, breakingOff, cooling(skillDrainHealth, skillArrest)), want: skillFreezingStrike,
