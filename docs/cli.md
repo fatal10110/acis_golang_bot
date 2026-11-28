@@ -1,40 +1,51 @@
 # `bots` command reference
 
-`bots` is the one binary of this repository (`cmd/bots`). It has six subcommands:
+Everything this project does is one program, `bots`, with six subcommands. This page describes
+each of them, every flag, and what the exit codes mean. For a step-by-step setup (server
+configuration, the secret file, WSL2 and Windows), follow [`home.md`](home.md) first.
 
-| Command | What it does |
-| --- | --- |
-| [`bots geopack`](#bots-geopack) | Packs the server's geodata regions into the read-only cache the bots map. |
-| [`bots navbuild`](#bots-navbuild) | Builds the navigation hierarchy (nav cache) the walking bots plan routes on. |
-| [`bots geoquery`](#bots-geoquery) | Writes a parity query file to check the bot's geodata answers against the server's engine. |
-| [`bots accounts`](#bots-accounts) | Creates or verifies the accounts of one swarm instance, one paced login at a time. |
-| [`bots swarm`](#bots-swarm) | Plays a fixed set of bots, all with one persona, until a signal. |
-| [`bots ui`](#bots-ui) | Runs the bots of a local registry under a web control panel. |
+`bots <command> -h` prints the flags of the version you have.
 
-`bots <command> -h` prints the flags of the binary you have; this page explains them and groups
-them. The step-by-step run (secret file, server configuration, WSL2, Windows) is
-[`docs/home.md`](home.md).
+## Contents
 
-## Typical order
+- [Commands](#commands)
+- [Exit codes](#exit-codes)
+- [Shared flags](#shared-flags): server and login, accounts and names, game data and maps, GM
+  control, merchants, diagnostics
+- Commands in detail: [`geopack`](#bots-geopack), [`navbuild`](#bots-navbuild),
+  [`geoquery`](#bots-geoquery), [`accounts`](#bots-accounts), [`swarm`](#bots-swarm),
+  [`ui`](#bots-ui)
+- [Personas](#personas)
+- [Files](#files)
 
-```bash
-bots geopack  ...   # once per geodata update
-bots navbuild ...   # after every geopack, doors.xml update or nav-cache format change
-bots accounts ...   # once per swarm instance (optional: the first login also creates an account)
-bots swarm    ...   # or: bots ui ...
-```
+## Commands
 
-Every persona walks on geodata (`docs/navigation.md`, D13a), so `swarm` and `ui` need both caches
-and the datapack before a bot can play.
+| Command | What it does | When you run it |
+| --- | --- | --- |
+| [`bots geopack`](#bots-geopack) | Packs the server's map data (geodata) into a cache file. | Once, and after each geodata update. |
+| [`bots navbuild`](#bots-navbuild) | Builds the route cache that bots plan their walks on. | After each `geopack`, after a `doors.xml` change, and after an update that changes the cache format. |
+| [`bots geoquery`](#bots-geoquery) | Writes a test file to check the bot's map answers against the server's. | Before changing the map code in `internal/geo`. |
+| [`bots accounts`](#bots-accounts) | Creates or checks a swarm's accounts, one slow login at a time. | Optional, before the first swarm run. A bot's first login also creates its account. |
+| [`bots swarm`](#bots-swarm) | Runs a fixed group of bots, all with one persona, until stopped. | To run bots from the command line or a service. |
+| [`bots ui`](#bots-ui) | Runs bots under a local web control panel and remembers them. | To manage bots one by one from a browser. |
+
+Every persona walks using the map caches
+([D13a](decisions.md#d13a-no-walking-without-geodata)), so `swarm` and `ui` need both caches and
+the datapack before any bot can play.
 
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Done, or stopped by `SIGINT`/`SIGTERM`, or `-h`. |
-| 1 | A run-time error: unreadable secret file, stale or missing cache, a taken port, a refused login in `accounts`, ... The message on stderr names it. |
-| 2 | Bad flags or arguments, or an unknown subcommand. |
-| 3 | `swarm` only: it stopped by itself. The credential breaker tripped, or every bot stopped for a reason a restart would repeat (refused credential, account in use, repeated aborts). **Do not restart on 3**: a restart loop is a login loop, and three refused logins in a row ban the IP. `ops/acis-bots.service` sets `RestartPreventExitStatus=3`. |
+| 0 | Finished, or stopped by `Ctrl+C` or `SIGTERM`, or `-h` was given. |
+| 1 | Something went wrong while running: the secret file could not be read, a cache is missing or out of date, a port is taken, a login was refused during `accounts`, ... The error message says which. |
+| 2 | The flags or arguments are wrong, or the subcommand is unknown. |
+| 3 | `swarm` only: the swarm stopped itself because restarting would not help. Either a password was refused (the credential breaker), or every bot stopped for a reason that would happen again: a refused password, an account kept in use elsewhere, or repeated disconnects. |
+
+> [!WARNING]
+> **Never restart automatically on exit code 3.** A restart loop is a login loop, and three refused
+> logins in a row get the IP banned. The sample systemd unit (`ops/acis-bots.service`) sets
+> `RestartPreventExitStatus=3` for this reason.
 
 ## Shared flags
 
@@ -51,11 +62,12 @@ Used by `accounts`, `swarm` and `ui`.
 | `-local-addr IP` | OS picks | Source IP of every dial, when the host has several and only one is allowlisted. |
 | `-allowlisted` | off | The source address is on `AcceptFilterAllowlist` of both servers, so logins are not spaced. Never pass it from an address the servers do not allowlist. |
 
-Without `-allowlisted`, no two dials start within 1.25 s of each other (plus jitter): the login
-server's accept filter bans an IP on the fourth connection that arrives under 1 s after the
-previous one. With it, the spacing is 0 until a connection is closed at accept, then 1.25 s for the
-rest of the run. Logins are always one at a time, and the first refused credential stops every
-later login (the credential breaker).
+**How logins are paced.** The server bans an IP that opens four connections less than a second
+apart. So, without `-allowlisted`, the bots leave at least 1.25 seconds (plus a little random
+jitter) between connections. With `-allowlisted` there is no spacing, until the first time the
+server closes a connection the moment it opens; from then on the spacing is back for the rest of
+the run. Either way, bots log in one at a time, and the first refused password stops all further
+logins (the credential breaker).
 
 ### Accounts and names
 
@@ -68,9 +80,9 @@ later login (the credential breaker).
 | `-name-marker TEXT` | `swarm`, `ui` | Text that marks the bots' character names (default `Bot`; D7). |
 | `-name-marker-at suffix\|prefix` | `swarm`, `ui` | Where the marker goes (default `suffix`). |
 
-### Datapack and geodata
+### Game data and maps
 
-Used by `swarm` and `ui`; `navbuild` and `geoquery` take the geodata ones too.
+Used by `swarm` and `ui`; `navbuild` and `geoquery` take the map flags too.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -83,12 +95,12 @@ Used by `swarm` and `ui`; `navbuild` and `geoquery` take the geodata ones too.
 | `-spawn-multiplier F` | `1` | The server's `SpawnMultiplier` (`npcs.properties`); scales how many bots a spot takes. |
 | `-spawn-events LIST` | `extra_mob;18age;start_weapon` | The server's `SpawnEvents`, semicolon-separated: which event spawns run. |
 
-The bots map both caches read-only and never rebuild them. A missing or stale cache is an error
-that names the command to run.
+The bots read both caches without changing them, and never rebuild them. If a cache is missing or
+out of date, the error message names the command that rebuilds it.
 
 ### GM control
 
-Used by `swarm` and `ui`. See [`docs/gm-control.md`](gm-control.md).
+Used by `swarm` and `ui`. See [`gm-control.md`](gm-control.md).
 
 | Flag | Meaning |
 | --- | --- |
@@ -96,7 +108,8 @@ Used by `swarm` and `ui`. See [`docs/gm-control.md`](gm-control.md).
 | `-gm-dsn-file PATH` | File (mode `0600`) holding the game database DSN the bots check a whispering GM's access level in. Excludes `-commanders`. |
 | `-gm-min-level N` | Access level (1-8) from which a character commands the bots, in place of the server's `isGM` levels. Needs `-gm-dsn-file`. |
 
-With neither flag, no whisper commands a bot.
+With neither flag, bots ignore command whispers. Who may command a bot, and why, is explained in
+[D3](decisions.md#d3-only-gms-command-bots).
 
 ### Merchants
 
@@ -105,7 +118,7 @@ Used by `swarm` and `ui`; they bound the `merchant` persona.
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `-store-budget N` | `50000` | Adena each merchant's private store may sell for per session. |
-| `-valuables-budget N` | `2000000` | Adena each merchant's valuables may sell for per session, by trade and store, apart from `-store-budget` (`docs/valuables/`). |
+| `-valuables-budget N` | `2000000` | Adena each merchant's valuables may sell for per session, by trade and store, apart from `-store-budget` ([valuables](valuables/README.md)). |
 | `-stores-per-town N` | `5` | Most bot stores open in one town at a time. |
 | `-store-spacing N` | `150` | Least distance between two bot stores, in game units. |
 | `-ad-region-gap D` | `1m` | Least time between two Trade ad lines of the process's merchants in one region. |
@@ -122,8 +135,8 @@ Used by `swarm` and `ui`. All endpoints accept loopback addresses only.
 | `-outcome-log FILE` | One JSON line per farming bot's spot stay (spot, class, level, minutes, experience, adena, deaths, kills, the model's estimate). No names, no chat. Rotated past 64 MiB, one older file kept. |
 | `-crash-file FILE` | `swarm` only: where the Go runtime's crash output is kept besides stderr. Default `crash.log` in `acis-bots` under the user's config directory; `ui` writes it to `-data-dir`. |
 
-`GOMEMLIMIT` (for example `GOMEMLIMIT=1GiB`) and the bot cap (`-bots`, `-max-online`) bound the
-process's memory on the owner's machine.
+To bound memory, cap the number of bots (`-bots`, `-max-online`) and set the `GOMEMLIMIT`
+environment variable, for example `GOMEMLIMIT=1GiB`.
 
 ## `bots geopack`
 
@@ -131,10 +144,12 @@ process's memory on the owner's machine.
 bots geopack -geodata DIR -geoengine FILE [-out geodata.cache]
 ```
 
-Packs the regions listed in `geoengine.properties` into one cache file the bots map read-only, and
-prints the region-list hash. The bots never load geodata onto their heap. Copy the geodata with
-`rsync -a`, which keeps each file's size and mtime: the cache is keyed on them, and any changed
-region file makes the bots refuse the cache until it is packed again.
+Packs the map regions listed in `geoengine.properties` into one cache file, and prints a hash of
+the region list. The bots map this file into memory read-only instead of loading the geodata.
+
+Copy the geodata with `rsync -a`, which keeps each file's size and modification time. The cache
+records them, and the bots refuse the cache as soon as any region file changes, until you pack it
+again.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -148,10 +163,10 @@ region file makes the bots refuse the cache until it is packed again.
 bots navbuild -geodata DIR -geoengine FILE -geodata-cache FILE -datapack DIR [-out nav.cache]
 ```
 
-Builds the cluster hierarchy walking bots plan routes on (`docs/navigation.md`, section 2). Reads
-the geodata cache, `doors.xml` and `zones/WaterZone.xml`, never the region files. Takes about ten
-minutes on half the cores. Build it again after every `geopack`, every `doors.xml` change, and every
-bots update that changes the cache's format version.
+Builds the route hierarchy that bots plan their walks on ([`navigation.md`](navigation.md),
+section 2). It reads the geodata cache, `doors.xml` and `zones/WaterZone.xml`, and takes about ten
+minutes on half the CPU cores. Build it again after every `geopack`, every `doors.xml` change, and
+every bots update that changes the cache format (the bots will tell you).
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -167,9 +182,10 @@ bots update that changes the cache's format version.
 bots geoquery -geodata DIR -geoengine FILE -geodata-cache FILE [-out geoquery.dump] [-seed 1] [-n 1000]
 ```
 
-Samples wall, ledge, multilayer and random sites and writes the bot's answers for them. Run the
-server's `geoprobe -expected-dump FILE` on the result from the server checkout before any change to
-`internal/geo`: it must report `agreement=100.00%`. The same seed gives the same file.
+Picks sample points (walls, ledges, places with several floors, random spots), records what the
+bot's map code answers for each, and writes them to a file. Then run the server's
+`geoprobe -expected-dump FILE` from a server checkout: it must report `agreement=100.00%`. Do this
+before any change to `internal/geo`. The same seed always gives the same file.
 
 ## `bots accounts`
 
@@ -177,10 +193,10 @@ server's `geoprobe -expected-dump FILE` on the result from the server checkout b
 bots accounts -secret-file PATH -prefix P -bots N [-persistent] [-login host:port] [-interval 1.5s] [-allowlisted]
 ```
 
-Logs each account in once, up to the server list. With `AutoCreateAccounts` on, the login server
-creates it with its derived password; an existing account has its password verified. The first
-failure stops the run, since refused credentials count toward the IP ban. Run it before a swarm,
-never beside one on the same IP.
+Logs each account in once, just far enough to see the server list. If the login server has
+`AutoCreateAccounts` on, this creates the account with its derived password; for an existing
+account it checks the password. The first failure stops the run, because refused passwords count
+toward an IP ban. Run it before a swarm, never at the same time as one from the same IP.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -195,17 +211,17 @@ GOMEMLIMIT=1GiB bots swarm -secret-file PATH -prefix P -bots N -persistent \
   [-persona farmer] [-support K] [-metrics 127.0.0.1:6060] [-gm-dsn-file PATH]
 ```
 
-Plays accounts `P1` to `PN` until `SIGINT` or `SIGTERM`, each logging in one at a time through the
-login gate. With `-persistent` a bot reconnects whenever its session ends (`docs/home.md`, section
-5); without it, a bot whose session in the world ends stops.
+Plays accounts `P1` to `PN` until you stop it with `Ctrl+C` or `SIGTERM`. The bots log in one at
+a time. With `-persistent`, a bot reconnects whenever its session ends ([`home.md`](home.md),
+section 5); without it, a bot stops once its session ends.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `-persona NAME` | `farmer` | What every bot plays; see [Personas](#personas). |
 | `-support K` | `0` | With `-persona farmer`, the last K accounts play `support` instead: the healers the party organizer groups with the farmers. |
-| `-no-parties` | off | Run no bot party organizer; bots only join parties players invite them to (`docs/parties/`). |
+| `-no-parties` | off | Run no bot party organizer; bots only join parties players invite them to ([parties](parties/README.md)). |
 | `-clan-inviters NAMES` | any player | Characters whose clan invitation a `crafter` accepts while clanless. |
-| `-sevensigns-members NAMES` | none | `pvp` bots that play Seven Signs member mode (`docs/pvp/`). |
+| `-sevensigns-members NAMES` | none | `pvp` bots that play Seven Signs member mode ([CP potions](pvp/cp-potions.md)). |
 | `-sevensigns-max-members N` | `1` | The most names `-sevensigns-members` may list. |
 | `-signs-seal avarice\|gnosis` | `gnosis` | The seal a Seven Signs member votes when Dusk holds none. |
 | `-record DIR` | none | Writes the first frame of every game opcode read: test fixtures for the decoders. |
@@ -218,10 +234,11 @@ bots ui -secret-file PATH -prefix P -login host:port -max-online 10 \
   [-import-prefix hz -import 20]
 ```
 
-Runs bots in-process under a web panel instead of a fixed swarm (`docs/plan.md`, D10). Every bot
-created is stored in a local registry, and a restart logs the bots marked online back in as the
-same characters. Open `http://127.0.0.1:8090/`. The panel's pages are described in
-[`docs/home.md`](home.md), section 8.
+Runs bots under a web control panel instead of a fixed swarm
+([D10](decisions.md#d10-a-local-control-panel)). Every bot you create is saved in a local registry,
+and when the panel restarts, the bots that were online log back in as the same characters. Open
+<http://127.0.0.1:8090/> in a browser. The panel's pages are described in [`home.md`](home.md),
+section 8.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -236,21 +253,23 @@ serves a page that says so, and the API still works.
 
 ## Personas
 
-`-persona` (swarm) and the panel's preset picker choose from one catalog (`cmd/bots/persona.go`).
-Every preset farms the datapack's spots and walks on the nav cache.
+`-persona` (for `swarm`) and the panel's preset picker choose from the same list
+(`cmd/bots/persona.go`). Every preset farms at the datapack's spots and walks using the route
+cache. Each preset's role is set by [D21](decisions.md#d21-each-preset-plays-a-role-and-farmer-is-the-default).
 
 | Preset | What the bot does | Design |
 | --- | --- | --- |
-| `farmer` | Damage dealer that farms alone, or leads a bot party. | `docs/strategy.md`, `docs/parties/` |
-| `support` | Party support (heals, buffs) that farms with its party. | `docs/plan.md` (M2), `docs/parties/` |
-| `town` | Idles in town and runs errands (merchants, trainer, Newbie Helper, gatekeeper hops) for 10-20 minutes, then farms for 30-60. | `docs/plan.md` (M4) |
-| `merchant` | Farms for loot and sells it in a private store; sells valuables by Trade ads, whispers and trades. | `docs/plan.md` (M4), `docs/valuables/` |
-| `crafter` | Dwarven Fighter that joins a player's clan, crafts from the clan warehouse and deposits the products. | `docs/crafting.md` |
-| `pvp` | Farms between fights; takes duels, fights flagged and karma players, arenas, clan wars and sieges. Never PKs by default. | `docs/pvp/` |
+| `farmer` | Deals damage. Hunts monsters alone or leads a party of bots. | [strategy](strategy.md), [parties](parties/README.md) |
+| `support` | Heals and buffs its party while farming with it. | [plan](plan.md) (M2), [parties](parties/README.md) |
+| `town` | Spends 10-20 minutes in town running errands (shops, trainer, Newbie Helper, gatekeepers), then farms for 30-60 minutes. | [plan](plan.md) (M4), [D44](decisions.md#d44-town-bots-also-farm) |
+| `merchant` | Farms for loot and sells it in a private store. Sells rare finds by advertising on Trade and haggling by whisper. | [plan](plan.md) (M4), [valuables](valuables/README.md) |
+| `crafter` | A Dwarven Fighter that joins a player's clan, crafts from the clan warehouse and puts the products back. | [crafting](crafting.md) |
+| `pvp` | Farms between fights. Takes duels, fights flagged and karma players, visits arenas, joins clan wars and sieges. Never attacks innocent players unless enabled. | [pvp](pvp/README.md) |
 
-Every bot, whatever its preset, levels, equips, buys supplies, rests, dies and returns, answers GM
-whispers, and fights back when attacked. What bots may do in game is configurable (D6): persona
-defaults are not a safety boundary, the operational limits above are.
+Whatever its preset, every bot levels up, equips better gear, buys supplies, rests, dies and comes
+back, obeys GM whispers, and fights back when attacked. What bots do in the game is a matter of
+persona defaults, which can be changed
+([D6](decisions.md#d6-bots-may-do-anything-a-player-may)). The safety limits are not.
 
 ## Files
 

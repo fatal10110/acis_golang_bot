@@ -45,6 +45,9 @@ the goal.
 
 ## Owner decisions
 
+A plain-language summary of every decision below, with its reason, is in
+[`decisions.md`](decisions.md).
+
 | # | Decision | Answer |
 | --- | --- | --- |
 | D1 | First persona | Follow/assist a player (support), before autonomous farming |
