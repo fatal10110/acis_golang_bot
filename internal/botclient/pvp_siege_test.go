@@ -201,6 +201,28 @@ func TestPvPSiegeLeave(t *testing.T) {
 		}
 	})
 
+	t.Run("no way out latches: the later rules run until a teleport", func(t *testing.T) {
+		b := siegeBrain(t, false, Point{X: 4500, Y: 2000})
+		b.walk.nav = nil // every walk ends unreachable
+		b.handleOne(t, entered, t0)
+		var leaves []int
+		for i := 1; i <= 12; i++ {
+			if rule, _ := b.decide(at(time.Duration(i) * time.Second)); rule == "siege leave" {
+				leaves = append(leaves, i)
+			}
+		}
+		if want := []int{1, 2, 3, 4}; !slices.Equal(leaves, want) {
+			t.Fatalf("siege leave at decides %v, want %v (one per exit, then latched)", leaves, want)
+		}
+		if b.pvp.siege.stuck != 2 {
+			t.Fatalf("stuck %d, want field 2", b.pvp.siege.stuck)
+		}
+		b.siegeTeleported()
+		if rule, _ := b.decide(at(13 * time.Second)); rule != "siege leave" {
+			t.Fatalf("after a teleport rule %q, want siege leave again", rule)
+		}
+	})
+
 	t.Run("outside, a spot inside waits; another outside is open", func(t *testing.T) {
 		b := siegeBrain(t, false, Point{X: 3000, Y: 2000})
 		b.handleOne(t, entered, t0)

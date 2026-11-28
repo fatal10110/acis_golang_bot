@@ -39,7 +39,10 @@ const (
 // lapses at the latest. leaving is the walk out of a battlefield the bot
 // does not fight in, entering the walk into its castle's; to is that
 // walk's end and tried how many of its candidate points (siegeExits,
-// siegeEntries) went unreachable. side is the bot's own siege state
+// siegeEntries) went unreachable; stuck is the battlefield whose exits
+// all went unreachable, latched until the bot stands outside it, takes a
+// loading-screen teleport or the running field changes, so the walk out is
+// not planned again every decide. side is the bot's own siege state
 // (UserInfo); asked counts the list requests sent since it last changed,
 // askedAt the last one's time, answered the answers read; castle is the
 // castle id whose list holds the bot's clan, 0 while unknown; deaths count
@@ -52,6 +55,7 @@ type siegeState struct {
 	entering bool
 	to       Point
 	tried    int
+	stuck    int
 	side     botwire.SiegeSide
 	asked    int
 	askedAt  time.Time
@@ -76,9 +80,9 @@ func (b *Brain) siegeEvent(ev Event, now time.Time) time.Time {
 		if side == botwire.SiegeNone && s.castle != 0 && s.field != 0 && b.fieldZone(s.field).ResidenceCastle == int(s.castle) {
 			// Its siege ended (siege/lifecycle.go clears the states at
 			// the end): the battlefield is open again.
-			s.field, s.until = 0, time.Time{}
+			s.field, s.until, s.stuck = 0, time.Time{}, 0
 		}
-		*s = siegeState{field: s.field, until: s.until, leaving: s.leaving, to: s.to, tried: s.tried, side: side}
+		*s = siegeState{field: s.field, until: s.until, leaving: s.leaving, to: s.to, tried: s.tried, stuck: s.stuck, side: side}
 		return b.pvpReact(now)
 	case SiegeAttackerList:
 		if b.siegeListed(e.CastleID, e.Clans, botwire.SiegeAttacker) {
@@ -125,7 +129,7 @@ func (b *Brain) siegeSent(a Action, now time.Time) {
 // its point again.
 func (b *Brain) siegeTeleported() {
 	s := &b.pvp.siege
-	s.leaving, s.entering, s.to, s.tried = false, false, Point{}, 0
+	s.leaving, s.entering, s.to, s.tried, s.stuck = false, false, Point{}, 0, 0
 }
 
 // siegeDied keeps a death at now while the bot takes part in a siege: the
@@ -169,7 +173,7 @@ func (b *Brain) combatZoneSeen(entered bool, now time.Time) {
 		b.log.Info("siege: combat zone notice outside every arena and battlefield", "at", p)
 	case i != 0 && i == s.field && !s.leaving:
 		b.log.Info("siege: battlefield ended", "field", i)
-		s.field, s.until = 0, time.Time{}
+		s.field, s.until, s.stuck = 0, time.Time{}, 0
 	}
 }
 
@@ -195,7 +199,7 @@ func (b *Brain) blockedField(now time.Time) int {
 	s := &b.pvp.siege
 	if s.field != 0 && !now.Before(s.until) {
 		b.log.Info("siege: battlefield block lapsed", "field", s.field)
-		s.field, s.until = 0, time.Time{}
+		s.field, s.until, s.stuck = 0, time.Time{}, 0
 	}
 	if b.cfg.Travel == nil || s.field > len(b.cfg.Travel.zones.Sieges) {
 		return 0
@@ -324,6 +328,13 @@ func (b *Brain) ruleSiegeLeave(now time.Time) (Action, bool) {
 		return Action{}, false
 	}
 	inside := f != 0
+	if s.stuck != f {
+		s.stuck = 0
+	}
+	if s.stuck != 0 {
+		// No way out of this battlefield: the later rules run.
+		return Action{}, false
+	}
 	if !inside && !s.leaving || b.blockedField(now) == 0 || self.Dead || b.inOlympiad(now) || b.inDuel(now) {
 		s.leaving = false
 		return Action{}, false
@@ -339,7 +350,7 @@ func (b *Brain) ruleSiegeLeave(now time.Time) (Action, bool) {
 		exits := siegeExits(b.fieldZone(s.field), self.Position(now))
 		if s.tried >= len(exits) {
 			b.log.Info("siege: no way out of the battlefield", "field", s.field)
-			s.leaving = false
+			s.leaving, s.stuck = false, f
 			return Action{}, false
 		}
 		s.to = exits[s.tried]
