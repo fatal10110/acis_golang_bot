@@ -81,10 +81,15 @@ func (b *Brain) servitorStop(target int32, now time.Time) (Action, bool) {
 	return Action{kind: actServitorStop, payload: botwire.EncodeRequestActionUse(actionServitorStop), object: s.Target}, true
 }
 
-// servitorSent records an order a sent at now.
+// servitorSent records an order a sent at now. A stop drops the servitor's
+// target in the world at once: the server makes the servitor idle
+// (summon/live_accessors.go), and the follow walk that would tell the bot so
+// may never come (a servitor already within its follow offset, acis_golang
+// #5589), so a later fight on the same target still orders it. A refused
+// stop gets the target back from the servitor's next swing.
 func (b *Brain) servitorSent(a Action, now time.Time) {
-	o := &b.servitorOrders
-	if s := b.world.Servitor; s != nil {
+	o, s := &b.servitorOrders, b.world.Servitor
+	if s != nil {
 		o.servitor = s.ObjectID
 	}
 	switch a.kind {
@@ -92,18 +97,22 @@ func (b *Brain) servitorSent(a Action, now time.Time) {
 		o.target, o.at, o.stopped = a.object, now, 0
 	case actServitorStop:
 		o.target, o.stopped = 0, a.object
+		if s != nil {
+			s.Target, s.Struck = 0, 0
+		}
 	}
 }
 
 // servitorRefused holds the orders for servitorOrderRetry after the
 // server refused one with SystemMessage id at now; a stop it refused may
-// go out again after the hold.
+// go out again after the hold, and a refused attack order ends the
+// ServitorLead wait (servitorLeading).
 func (b *Brain) servitorRefused(id int32, now time.Time) {
 	if id != msgPetRefusingOrder || b.world.Servitor == nil {
 		return
 	}
 	o := &b.servitorOrders
-	o.held, o.stopped = now.Add(servitorOrderRetry), 0
+	o.held, o.target, o.stopped = now.Add(servitorOrderRetry), 0, 0
 }
 
 // servitorLeading reports whether the first attack on id waits for the
@@ -158,16 +167,17 @@ func (b *Brain) ruleServitor(now time.Time) (Action, bool) {
 // servitorGuardTarget is the monster the guard sends the idle servitor s onto at
 // now: the bot's target when it hits the bot or the servitor, else the
 // bot's hardest hitter, else the servitor's last attacker, 0 for none. A
-// target the bot fights already is its fight step's to order (Brain.fight).
+// target the bot fights already, a monster or a player, is its fight
+// step's: the guard never switches the selection off it.
 func (b *Brain) servitorGuardTarget(s *Servitor, now time.Time) int32 {
 	hitsServitor := func(id int32) bool {
 		return id != 0 && id == s.AttackedBy && now.Sub(s.AttackedAt) <= attackerWindow
 	}
-	if t := b.world.Target; b.world.monster(t) && b.mayFight(t, now) {
+	if t := b.world.Target; t != 0 && b.mayFight(t, now) {
 		if b.engaged == t || b.opened == t {
 			return 0
 		}
-		if b.world.attacking(t, now) || hitsServitor(t) {
+		if b.world.monster(t) && (b.world.attacking(t, now) || hitsServitor(t)) {
 			return t
 		}
 	}

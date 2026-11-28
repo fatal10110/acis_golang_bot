@@ -146,13 +146,16 @@ func TestServitorLead(t *testing.T) {
 		name  string
 		lead  bool
 		swing bool // the servitor swings at the target at t0+0.5s
-		at    time.Duration
-		cast  bool
+		// refused: the server refuses the order (1864) at t0+0.5s.
+		refused bool
+		at      time.Duration
+		cast    bool
 	}{
 		{name: "no lead: the opener right after the order", at: 500 * time.Millisecond, cast: true},
 		{name: "the lead holds the opener", lead: true, at: time.Second},
 		{name: "the lead ends", lead: true, at: 1500 * time.Millisecond, cast: true},
 		{name: "the servitor's first swing ends it", lead: true, swing: true, at: time.Second, cast: true},
+		{name: "a refusal ends it", lead: true, refused: true, at: time.Second, cast: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -164,6 +167,11 @@ func TestServitorLead(t *testing.T) {
 			sendNow(t, b, a, t0)
 			if tt.swing {
 				b.world.Apply(Attack{AttackerID: ownServitor, Hits: []AttackHit{{TargetID: npcID}}}, at(500*time.Millisecond))
+			}
+			if tt.refused {
+				if err := b.handle([]Event{SystemMessage{ID: msgPetRefusingOrder}}, at(500*time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
 			}
 			a = b.fight(npcID, at(tt.at))
 			if got := a.kind == actCast && a.skill == skillWindStrike; got != tt.cast {
@@ -184,6 +192,7 @@ func TestServitorGuard(t *testing.T) {
 	hitBot := Attack{AttackerID: npcID, Hits: []AttackHit{{TargetID: selfID, Damage: 9}}}
 	tests := []struct {
 		name   string
+		setup  func(b *Brain) // runs before the events
 		events []Event
 		want   bool // the guard selects npcID, then orders 22
 	}{
@@ -197,11 +206,24 @@ func TestServitorGuard(t *testing.T) {
 		},
 		{name: "dead servitor", events: []Event{hitServitor(npcID), Die{ObjectID: ownServitor}}},
 		{name: "no servitor", events: []Event{hitServitor(npcID), PetDelete{SummonType: SummonServitor, ObjectID: ownServitor}}},
+		{
+			name: "the bot fights a player", events: []Event{hitBot},
+			setup: func(b *Brain) {
+				b.world.Apply(CharInfo{ObjectID: pcID, Name: "foe", Pos: Point{X: 30}, PvPFlag: 1}, t0)
+				b.world.Target, b.engaged = pcID, pcID
+				if !b.mayFight(pcID, at(time.Second)) {
+					t.Fatal("the bot may not fight the player")
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := servitorBrain(t, ClassKit{Rotation: []Step{{Skill: skillWindStrike}}})
 			b.world.Target, b.world.Self.InCombat = 0, false
+			if tt.setup != nil {
+				tt.setup(b)
+			}
 			for _, ev := range tt.events {
 				b.world.Apply(ev, at(time.Second))
 			}
@@ -270,6 +292,26 @@ func TestServitorStop(t *testing.T) {
 				t.Fatal("a second stop order for the same give-up")
 			}
 		})
+	}
+}
+
+// TestServitorReorderAfterStop checks a stop drops the servitor's target
+// at once: after a flee from the monster it fought (23) and no servitor
+// frame since, a new fight on that monster orders the servitor again (22).
+func TestServitorReorderAfterStop(t *testing.T) {
+	b := servitorBrain(t, ClassKit{Rotation: []Step{{Skill: skillWindStrike}}})
+	now := at(time.Second)
+	if err := b.handle([]Event{Attack{AttackerID: ownServitor, Hits: []AttackHit{{TargetID: npcID}}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	a := b.flee(npcID, now)
+	if !bytes.Equal(a.payload, servitorStopFrame) {
+		t.Fatalf("flee %v % x, want the stop order", a.kind, a.payload)
+	}
+	sendNow(t, b, a, now)
+	b.world.Target = npcID
+	if a := b.fight(npcID, at(3*time.Second)); !bytes.Equal(a.payload, servitorAttackFrame) {
+		t.Fatalf("fight %v % x, want the attack order", a.kind, a.payload)
 	}
 }
 
