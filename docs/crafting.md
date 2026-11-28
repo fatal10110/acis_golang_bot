@@ -169,6 +169,20 @@ of it as the pool covers.
   chain are reserved on the board. A chain the warehouse no longer covers is re-planned; what it
   made goes back into the pool. Leftovers the next plan needs stay in the crafter's inventory
   instead of being deposited and withdrawn again.
+- **Shots for the clan** (#688). The crafter's own supplies (every shot, its healing potions,
+  Scrolls of Escape) are not in the plan's inventory, so a plan neither uses nor keeps them. What a
+  chain for the clan makes of them is the clan's: the crafter counts the yield of every successful
+  top craft of such a chain and deposits that count, at most what it carries, with the rest of the
+  cycle's output (the weight guard's deposit too). Its own shots stay in its bag. A failed deposit
+  leaves the count for the next cycle, cut to what the crafter still carries; a reconnect drops it,
+  and those shots stay carried.
+- **Orders from products already made.** A claimed order the plan holds no chain for (a chain for
+  the clan used its materials before the member posted it, #577) is filled for its whole count:
+  from what the crafter carries, deposited and delivered with the cycle's deposit (an own supply
+  only out of the clan's counted shots, never its own; any other product beyond its crafted orders
+  and the plan's keep); else from the warehouse list's
+  free count of the product (beyond the board's reservations and the plan's withdrawal), delivered
+  at once. A partial count stays claimed.
 
 ### 5. The `crafter` preset
 
@@ -207,6 +221,10 @@ Graded shots are D14 (b), and their inputs cannot be looted.
   preparation gate (#182) nor the run-out trigger (#175): an unfilled ore order never holds a member
   in town or sends it home; the member orders as many shots as the ore it carries covers. The crafter
   never buys with clan adena (D19); the owner may deposit ore too.
+- **Shots made for the clan.** Shots a chain for the clan makes, from ore the owner deposited or
+  ore no order follows, go back to the clan warehouse as the clan's; the crafter tells them from its
+  own shots by counting what the cycle's chains for the clan made (section 4). There they serve
+  the board's orders: a member's shot order whose materials are gone is delivered from them.
 
 ### 7. Clan member option (farmer, support, merchant presets)
 
