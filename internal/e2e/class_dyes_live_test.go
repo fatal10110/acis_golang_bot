@@ -29,9 +29,11 @@ const (
 // to 40 at the master, it becomes a Gladiator; back in Gludin, given its
 // three symbols' dyes and fees, it removes the two first-profession
 // symbols the new class leaves inactive and draws its three. Every draw is
-// answered before the next goes out (drawReplies). A class change cannot
-// be undone, so every run starts from a new character; the class master
-// missing at its spawn (fatal10110/acis_golang#5419) fails the scenario.
+// answered before the next goes out (drawReplies). While the bot shops and
+// draws, the GM waits at the master, away from Gludin's crowd (gmAway). A
+// class change cannot be undone, so every run starts from a new character;
+// the class master missing at its spawn (fatal10110/acis_golang#5419) fails
+// the scenario.
 func TestLiveClassChangeDyes(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
@@ -78,6 +80,7 @@ func TestLiveClassChangeDyes(t *testing.T) {
 	from := f.seen()
 	gmOn(t, ctx, gm, f)
 	gmGiveAdena(t, ctx, gm, f, firstDyesAdena)
+	gmAway(t, ctx, gm)
 	draws(t, ctx, f, from, []int32{symbolStr1, symbolDex1}, 0)
 	for _, dye := range []int32{dyeStr1, dyeDex1} {
 		if run := f.counts(dye, from); !rose(run) || run[len(run)-1] != 0 {
@@ -100,6 +103,7 @@ func TestLiveClassChangeDyes(t *testing.T) {
 	gmGive(t, ctx, gm, f, dyeStr3, 2*dyesPerDraw)
 	gmGive(t, ctx, gm, f, dyeDex3, dyesPerDraw)
 	gmGiveAdena(t, ctx, gm, f, secondDyesAdena)
+	gmAway(t, ctx, gm)
 	draws(t, ctx, f, from, []int32{symbolStr3, symbolDex3, symbolStr3}, 2)
 	// A removed symbol hands back dyesReturned of its dye.
 	for _, dye := range []int32{dyeStr1, dyeDex1} {
@@ -107,6 +111,18 @@ func TestLiveClassChangeDyes(t *testing.T) {
 			t.Errorf("%s's dyes %d after the removals: %v, want %d handed back", f.name, dye, run, dyesReturned)
 		}
 	}
+}
+
+// gmAway sends the GM to the class master while the bot works on its own
+// in Gludin (#732). A Client reads only while it awaits, and Gludin's
+// crowd (over a hundred characters, some 30 broadcasts a second) fills
+// the server's outbound backlog to an idle GM past its 2 MiB high water
+// within minutes, which aborts the GM's connection (network/conn.go
+// outboundHighWater); Talking Island's master is quiet and the GM's next
+// stop. gmOn brings the GM back to the bot.
+func gmAway(t *testing.T, ctx context.Context, gm *GMClient) {
+	t.Helper()
+	masterAt(t, ctx, gm)
 }
 
 // masterAt teleports the GM to the class master's Talking Island spawn and
