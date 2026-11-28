@@ -71,23 +71,7 @@ type servitorDeath struct {
 // none, without a travel map, or for a kit without Summons (every row
 // before #761: the rules that read it do nothing, D24).
 func (b *Brain) summonGate() datapack.SkillRef {
-	m := b.cfg.Travel
-	if m == nil {
-		return datapack.SkillRef{}
-	}
-	for _, id := range b.build().Kit.Summons {
-		k, ok := b.world.Skills[id]
-		if !ok {
-			continue
-		}
-		ref := datapack.SkillRef{ID: id, Level: k.Level}
-		sk, ok := m.skills[ref]
-		if !ok || sk.Type != "SUMMON" || sk.ExpPenalty >= expPenaltyMax || !b.summonAffords(sk) {
-			continue
-		}
-		return ref
-	}
-	return datapack.SkillRef{}
+	return b.summonFrom(b.build().Kit.Summons)
 }
 
 // upkeepCost is what one upkeep checkpoint of a servitor of summon skill
@@ -165,13 +149,16 @@ func upkeepNext(remaining, total int64, steps int32) (int64, bool) {
 
 // servitorSummon is the summon skill level the bot's servitor s came from:
 // the kit's Summons at the levels up to the one the bot knows whose npcId
-// is s's template, ok false for none (a summon the kit does not list).
+// is s's template, ok false for none (a summon the kit does not list). Its
+// corpse summons (CorpseKit.Summons) count too: a corpse servitor pays its
+// upkeep as any.
 func (b *Brain) servitorSummon(s *Servitor) (datapack.Skill, bool) {
 	m := b.cfg.Travel
 	if m == nil {
 		return datapack.Skill{}, false
 	}
-	for _, id := range b.build().Kit.Summons {
+	kit := b.build().Kit
+	for _, id := range slices.Concat(kit.Summons, kit.Corpse.Summons) {
 		k, ok := b.world.Skills[id]
 		if !ok {
 			continue

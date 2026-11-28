@@ -1,6 +1,7 @@
 package botclient
 
 import (
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -155,7 +156,7 @@ func (b *Brain) reagentNeeds() []reagentNeed {
 			add(r)
 		}
 	}
-	for _, id := range kit.Summons {
+	for _, id := range slices.Concat(kit.Summons, kit.Corpse.Summons) {
 		if seen[id] {
 			continue
 		}

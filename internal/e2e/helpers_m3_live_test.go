@@ -88,9 +88,9 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 }
 
 // runWatched runs a whole Bot of account as setup says, through runBotWith
-// with a Watch as its frame tap (setup.tap is replaced). It returns once the
-// bot is in the world, its character one of the run's; a failed test logs
-// the bot's digest. Its walker must never desync from the server on its own
+// with a Watch as its frame tap (a setup.tap sees every frame after it). It
+// returns once the bot is in the world, its character one of the run's; a
+// failed test logs the bot's digest. Its walker must never desync from the server on its own
 // moves (docs/navigation.md, Testing): nav_desync_total stays 0, door
 // replans counted apart, nav_blocked_total at most 1 per 100 segments, and
 // every blocked stop is one the bot's step chain (WalkSteps) predicts or one
@@ -98,7 +98,11 @@ func runFarmer(t *testing.T, ctx context.Context, tg *Target, account string, sp
 func runWatched(t *testing.T, ctx context.Context, tg *Target, account string, setup botSetup) *farmer {
 	t.Helper()
 	w := NewWatch(botclient.SystemClock{})
-	setup.tap = w
+	if setup.tap != nil {
+		setup.tap = teeTap{w, setup.tap}
+	} else {
+		setup.tap = w
+	}
 	n := tg.Nav(t)
 	var self, collision int32
 	var speed float64
