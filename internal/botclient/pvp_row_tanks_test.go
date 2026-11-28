@@ -49,15 +49,19 @@ func TestPvPRowTK(t *testing.T) {
 			name: "a Warrior: no Entangle, no Arrest, no Aggression", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior,
 			want: skillPowerStrike, not: []int32{skillEntangle, skillArrest, skillAggression},
 		},
-		{name: "breaking off: Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: breakingOff, want: skillArrest},
+		{name: "breaking off from a foe at 100: Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: both(warriorAt(100), breakingOff), want: skillArrest},
 		{name: "breaking off, Arrest cooling: Entangle", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior, setup: both(breakingOff, cooling(skillArrest)), want: skillEntangle},
+		{
+			name: "breaking off from a foe at 450, beyond Arrest's 150: Entangle, no Arrest", level: 55, weapon: "SWORD", skills: all, opp: lyrWarrior,
+			setup: both(warriorAt(450), breakingOff), want: skillEntangle, not: []int32{skillArrest},
+		},
 	})
 }
 
 // TestPvPRowSK checks the shillien knight's PvP row: Arrest from 55 on a
 // healer ahead of Poison (control first), Poison once Arrest is out or
 // before 55, Power Break on a Warrior; Lightning Strike (a Paralyze under MinLand) never on a player;
-// Arrest, then Freezing Strike, to break off.
+// Arrest within its reach, then Freezing Strike, to break off.
 func TestPvPRowSK(t *testing.T) {
 	all := []int32{
 		skillPoison, skillPowerBreak, skillFreezingStrike, skillArrest, skillDrainHealth, skillLightningStrike,
@@ -78,7 +82,20 @@ func TestPvPRowSK(t *testing.T) {
 			name: "a Human Mystic at 58, opened, Poison and Arrest cooling: no Lightning Strike", level: 58, weapon: "SWORD", skills: all, opp: lyrMystic,
 			setup: both(opened, cooling(skillPoison, skillArrest)), want: skillSting, not: []int32{skillLightningStrike},
 		},
-		{name: "breaking off: Arrest", level: 55, weapon: "SWORD", skills: brk, opp: lyrWarrior, setup: breakingOff, want: skillArrest},
+		{name: "breaking off from a foe at 100: Arrest", level: 55, weapon: "SWORD", skills: brk, opp: lyrWarrior, setup: both(warriorAt(100), breakingOff), want: skillArrest},
 		{name: "breaking off, Arrest cooling: Freezing Strike", level: 55, weapon: "SWORD", skills: brk, opp: lyrWarrior, setup: both(breakingOff, cooling(skillArrest)), want: skillFreezingStrike},
+		{
+			name: "breaking off from a foe at 450, beyond Arrest's 150: Freezing Strike, no Arrest", level: 55, weapon: "SWORD", skills: brk, opp: lyrWarrior,
+			setup: both(warriorAt(450), breakingOff), want: skillFreezingStrike, not: []int32{skillArrest},
+		},
 	})
+}
+
+// warriorAt moves pcID, a Warrior, to y away: 100 is within 402 Arrest's 150,
+// 450 beyond it but within Entangle's and Freezing Strike's reach.
+func warriorAt(y int32) func(*testing.T, *Brain) {
+	return func(t *testing.T, b *Brain) {
+		t.Helper()
+		foeOf(t, b, lyrWarrior, Point{Y: y}, 0)
+	}
 }
