@@ -70,23 +70,23 @@ func TestPvPSiegeZoneNotice(t *testing.T) {
 	t.Run("283 inside an arena polygon is the arena's", func(t *testing.T) {
 		b := siegeBrain(t, false, Point{X: -22000, Y: 2000})
 		b.handleOne(t, entered, t0)
-		if b.pvp.siege.field != 0 {
-			t.Fatalf("field %d, want none", b.pvp.siege.field)
+		if len(b.pvp.siege.fields) != 0 {
+			t.Fatalf("fields %v, want none", b.pvp.siege.fields)
 		}
 	})
 	t.Run("283 where an arena and a battlefield overlap is the arena's", func(t *testing.T) {
 		b := siegeBrain(t, false, inside)
 		b.cfg.Travel.zones.Arenas = append(b.cfg.Travel.zones.Arenas, box(2000, 1500, 4000, 2500))
 		b.handleOne(t, entered, t0)
-		if b.pvp.siege.field != 0 {
-			t.Fatalf("field %d, want none", b.pvp.siege.field)
+		if len(b.pvp.siege.fields) != 0 {
+			t.Fatalf("fields %v, want none", b.pvp.siege.fields)
 		}
 	})
 	t.Run("283 inside a siege polygon: running there, blocked", func(t *testing.T) {
 		b := siegeBrain(t, false, inside)
 		b.handleOne(t, entered, t0)
-		if b.pvp.siege.field != 2 || !b.pvp.siege.until.Equal(t0.Add(siegeLength)) {
-			t.Fatalf("field %d until %v, want 2 until %v", b.pvp.siege.field, b.pvp.siege.until, t0.Add(siegeLength))
+		if until, ok := b.pvp.siege.fields[2]; len(b.pvp.siege.fields) != 1 || !ok || !until.Equal(t0.Add(siegeLength)) {
+			t.Fatalf("fields %v, want 2 until %v", b.pvp.siege.fields, t0.Add(siegeLength))
 		}
 		if !b.siegeBlocks(Point{X: 1500, Y: 2000}, at(time.Second)) || b.duelGround(Point{X: 1500, Y: 2000}) {
 			t.Fatal("ground inside not blocked")
@@ -94,15 +94,15 @@ func TestPvPSiegeZoneNotice(t *testing.T) {
 		if b.siegeBlocks(Point{X: 500, Y: 2000}, at(time.Second)) || !b.duelGround(Point{X: 500, Y: 2000}) {
 			t.Fatal("ground outside blocked")
 		}
-		if b.blockedField(t0.Add(siegeLength)) != 0 {
+		if b.siegeRunning(2, t0.Add(siegeLength)) {
 			t.Fatal("the block outlasts siegeLength")
 		}
 	})
 	t.Run("283 in neither: ignored", func(t *testing.T) {
 		b := siegeBrain(t, false, Point{X: 7000, Y: 2000})
 		b.handleOne(t, entered, t0)
-		if b.pvp.siege.field != 0 {
-			t.Fatalf("field %d, want none", b.pvp.siege.field)
+		if len(b.pvp.siege.fields) != 0 {
+			t.Fatalf("fields %v, want none", b.pvp.siege.fields)
 		}
 	})
 	t.Run("284 inside: the siege ended", func(t *testing.T) {
@@ -111,8 +111,8 @@ func TestPvPSiegeZoneNotice(t *testing.T) {
 		b.pvp.siege.castle = siegeCastle
 		b.handleOne(t, entered, t0)
 		b.handleOne(t, left, at(time.Second))
-		if b.pvp.siege.field != 0 {
-			t.Fatalf("field %d after 284 inside, want none", b.pvp.siege.field)
+		if len(b.pvp.siege.fields) != 0 {
+			t.Fatalf("fields %v after 284 inside, want none", b.pvp.siege.fields)
 		}
 	})
 	t.Run("284 at the edge walking out: still running", func(t *testing.T) {
@@ -122,8 +122,8 @@ func TestPvPSiegeZoneNotice(t *testing.T) {
 			t.Fatalf("rule %q, want siege leave", rule)
 		}
 		b.handleOne(t, left, at(2*time.Second))
-		if b.pvp.siege.field != 2 {
-			t.Fatalf("field %d after 284 on the way out, want 2", b.pvp.siege.field)
+		if _, ok := b.pvp.siege.fields[2]; !ok {
+			t.Fatalf("fields %v after 284 on the way out, want 2", b.pvp.siege.fields)
 		}
 	})
 }
@@ -243,7 +243,7 @@ func TestPvPSiegeLeave(t *testing.T) {
 		if rule, a := b.decide(at(time.Second)); rule != "spot" || a.kind != actMove || b.spot.idx != 0 {
 			t.Fatalf("first decide = %q %d spot %d, want the walk to spot 0", rule, a.kind, b.spot.idx)
 		}
-		b.pvp.siege.field, b.pvp.siege.until = 1, t0.Add(siegeLength) // a 283 there
+		b.pvp.siege.fields = map[int]time.Time{1: t0.Add(siegeLength)} // a 283 there
 		rule, a := b.decide(at(2 * time.Second))
 		if rule != "spot" || a.kind != actMove || b.spot.idx != 1 || b.cfg.Spots.Held(0) != 0 {
 			t.Fatalf("decide = %q %d spot %d, spot 0 held %d, want spot 0 given back and the walk to spot 1", rule, a.kind, b.spot.idx, b.cfg.Spots.Held(0))
@@ -491,8 +491,8 @@ func TestPvPSiegeFight(t *testing.T) {
 		b := taking(t, inside)
 		b.handleOne(t, entered, t0)
 		siegeSide(b, 0, at(time.Second))
-		if b.pvp.siege.field != 0 || b.pvp.siege.castle != 0 {
-			t.Fatalf("field %d castle %d after the end, want none", b.pvp.siege.field, b.pvp.siege.castle)
+		if len(b.pvp.siege.fields) != 0 || b.pvp.siege.castle != 0 {
+			t.Fatalf("fields %v castle %d after the end, want none", b.pvp.siege.fields, b.pvp.siege.castle)
 		}
 		if rule, _ := b.decide(at(2 * time.Second)); rule == "siege" || rule == "siege leave" || rule == "siege fight" {
 			t.Fatalf("rule %q after the end", rule)

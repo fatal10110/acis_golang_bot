@@ -96,7 +96,7 @@ func (b *Brain) duelReady() bool {
 // duelGround reports whether a duellist may stand at p
 // (docs/pvp/finding.md "Where a duel is allowed"): in no peace, town, Derby
 // track, arena, no-restart or water zone, nor in the siege polygon the bot
-// saw a running siege in (283, siegeState.field).
+// saw a running siege in (283, siegeState.fields).
 func (b *Brain) duelGround(p Point) bool {
 	if n := b.cfg.Nav; n != nil && n.Water != nil && n.Water.Contains(int(p.X), int(p.Y), int(p.Z)) {
 		return false
@@ -111,8 +111,12 @@ func (b *Brain) duelGround(p Point) bool {
 			return false
 		}
 	}
-	i := b.pvp.siege.field
-	return i <= 0 || i > len(zs.Sieges) || !zs.Sieges[i-1].Contains(p.X, p.Y, p.Z)
+	for i := range b.pvp.siege.fields {
+		if i > 0 && i <= len(zs.Sieges) && zs.Sieges[i-1].Contains(p.X, p.Y, p.Z) {
+			return false
+		}
+	}
+	return true
 }
 
 // zoneHolds reports whether a zone of set holds p.
