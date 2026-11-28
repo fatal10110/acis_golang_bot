@@ -307,13 +307,13 @@ func TestOlympiadMatch(t *testing.T) {
 	t.Run("the match from the call to its end", func(t *testing.T) {
 		b := huntBrain(t)
 		b.persona.PvP.Olympiad, b.persona.Olympiad.ThirdClass = true, true
-		b.pvp.siege.field = 3
+		b.pvp.siege.fields = map[int]time.Time{3: t0.Add(siegeLength)}
 		olyStadium(t, b, t0)
 		if !b.inOlympiad(at(time.Second)) {
 			t.Fatal("not in a match after the stadium's entry")
 		}
-		if b.pvp.siege.field != 3 {
-			t.Fatalf("siege %d after 283 in the stadium, want it kept: the stadium's, not a siege's", b.pvp.siege.field)
+		if _, ok := b.pvp.siege.fields[3]; !ok || len(b.pvp.siege.fields) != 1 {
+			t.Fatalf("sieges %v after 283 in the stadium, want 3 kept: the stadium's, not a siege's", b.pvp.siege.fields)
 		}
 		if b.mayFight(pcID, at(time.Second)) {
 			t.Fatal("MayFight the opponent before the fight, want no target")
@@ -404,8 +404,8 @@ func TestOlympiadMatch(t *testing.T) {
 		b := huntBrain(t)
 		b.cfg.Travel.zones.Sieges = []datapack.Zone{box(-500, -500, 500, 500)}
 		b.handleOne(t, SystemMessage{ID: msgEnteredCombatZone}, t0)
-		if b.pvp.siege.field != 1 {
-			t.Fatalf("siege %d, want combatZoneSeen to run", b.pvp.siege.field)
+		if _, ok := b.pvp.siege.fields[1]; !ok {
+			t.Fatalf("sieges %v, want combatZoneSeen to run", b.pvp.siege.fields)
 		}
 	})
 }
