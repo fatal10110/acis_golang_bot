@@ -51,10 +51,11 @@ func killAttack(st Step, sk datapack.Skill) (charmodel.Attack, bool) {
 // SpotPolicy.Margin below 0) or nothing to judge
 // by (packFight not ok) only the level and a death's teaching bound a spot.
 // A leader fits it with the bot members present at now (partyCrew,
-// docs/parties/model.md), by its own row's margin.
+// docs/parties/model.md), by its own row's margin; a summoner by its
+// servitor's while it has one out or can summon one (spotMargin).
 func (b *Brain) packFits(s *datapack.Spot, now time.Time) bool {
 	bd := b.build()
-	margin := bd.Kit.SpotMargin
+	margin := b.spotMargin(&bd)
 	if margin <= 0 {
 		return true
 	}
@@ -76,7 +77,11 @@ func (b *Brain) packFits(s *datapack.Spot, now time.Time) bool {
 // travel map to price (spotAttack). Regeneration, shots and its own buffs beyond
 // what UserInfo carries are left out. A leader's crew c kills each monster
 // with it (crew.kill) and heals it over margin kills as its potions do
-// (crew.healed); the whole pack still hits the leader.
+// (crew.healed); the whole pack still hits the leader. The bot's servitor,
+// out or one it can summon (servitorModel), kills each monster with it with
+// its melee (charmodel.TimeWithServitor); the pack is still all on the bot
+// (docs/servitors.md section 3, "Pack threat"): it gives itself no credit
+// for the hate the servitor holds.
 func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) (kill, die float64, ok bool) {
 	self := b.reported()
 	if self.PAtk <= 0 || self.PDef <= 0 || self.PAtkSpd <= 0 || self.MaxHP <= 0 {
@@ -86,6 +91,7 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) 
 	if !priced {
 		return 0, 0, false
 	}
+	sv, withServitor := b.servitorModel()
 	var n, k, dps float64
 	for i := range s.Mobs {
 		m := &s.Mobs[i]
@@ -96,6 +102,9 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) 
 		t := charmodel.TimeToKill(self, charmodel.Attack{}, mob)
 		if skill {
 			t = min(t, charmodel.TimeToKill(self, attack, mob))
+		}
+		if withServitor {
+			t = charmodel.TimeWithServitor(t, sv, mob)
 		}
 		t = c.kill(t, mob)
 		cnt := float64(m.Count)

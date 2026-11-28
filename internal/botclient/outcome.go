@@ -28,7 +28,7 @@ type Outcome struct {
 	X    int32  `json:"x"`
 	Y    int32  `json:"y"`
 	// Class, Level and Role are the bot's at arrival; Margin is its row's
-	// spot margin (ClassKit.SpotMargin), 0 for a row without one.
+	// spot margin at arrival (spotMargin), 0 for a row without one.
 	Class  int32   `json:"class"`
 	Level  int32   `json:"level"`
 	Role   string  `json:"role"`
@@ -166,14 +166,14 @@ func (b *Brain) stayRecord(now time.Time) Outcome {
 	bd := b.build()
 	o := Outcome{
 		Start: now.UTC(), Spot: sp.Maker, X: sp.Center.X, Y: sp.Center.Y,
-		Class: s.ClassID, Level: s.Level, Role: b.persona.Role.String(), Margin: max(bd.Kit.SpotMargin, 0),
+		Class: s.ClassID, Level: s.Level, Role: b.persona.Role.String(), Margin: max(b.spotMargin(&bd), 0),
 		Party:  1 + len(b.world.Party.Members),
 		Beside: v.beside, Earning: v.earning, Lower: v.lower,
 	}
 	if !b.world.Party.In() {
 		o.Party = 1
 	}
-	if margin := bd.Kit.SpotMargin; margin > 0 {
+	if margin := b.spotMargin(&bd); margin > 0 {
 		c := b.partyCrew(now)
 		if kill, die, ok := b.packFight(sp, &bd, margin, &c); ok {
 			o.ModelKill, o.ModelDie = &kill, &die

@@ -308,6 +308,11 @@ type ClassKit struct {
 	// without one, leaves the model bound off; SpotPolicy.Margin replaces
 	// it.
 	SpotMargin float64
+	// ServitorSpotMargin replaces SpotMargin while the bot has a servitor
+	// out or can summon one (spotMargin): a summoner row's normal 2.0 over
+	// its glass cannon 3.0 (docs/servitors.md section 5). 0 keeps
+	// SpotMargin.
+	ServitorSpotMargin float64
 	// Gear is the class's gear table entry, Dyes its dye symbols: the
 	// table the dye errand draws where the model cannot value dyes
 	// (dyePlan).
@@ -511,7 +516,7 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 	if line.RelaxFrom <= level {
 		k.Relax, k.RelaxFrom = line.Relax, line.RelaxFrom
 	}
-	k.Sweep, k.SpotMargin = line.Sweep, line.SpotMargin
+	k.Sweep, k.SpotMargin, k.ServitorSpotMargin = line.Sweep, line.SpotMargin, line.ServitorSpotMargin
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
@@ -583,7 +588,7 @@ func (p *Persona) override(bd Build, class int32) Build {
 		bd.Race.Professions = p.ClassChange.Builds
 	}
 	if p.Spots.Margin != 0 {
-		k.SpotMargin = p.Spots.Margin
+		k.SpotMargin, k.ServitorSpotMargin = p.Spots.Margin, 0
 	}
 	bd.Thresholds = bd.Thresholds.override(Thresholds{
 		CriticalHP: p.CriticalHP, CrowdedHP: p.CrowdedHP, OutmatchedHP: p.OutmatchedHP,
