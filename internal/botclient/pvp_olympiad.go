@@ -93,25 +93,29 @@ type OlympiadPolicy struct {
 	// unregisters; Tries how many registrations it makes a day.
 	Wait  time.Duration
 	Tries int
-	// ThirdClass lets a third-profession bot play Olympiad. Off, it plays
-	// it as off (docs/pvp/olympiad.md "Risks": hero slots), until the owner
-	// rules (#729). The server registers only nobles of a third profession
-	// (folk_olympiad.go olympiadNobleCommand), so with it off no bot
-	// registers; a bot below its third profession still takes noblesse.
+	// ThirdClass lets a third-profession bot play Olympiad; off, it plays it
+	// as off. On by default (owner, 2026-11-28, #729, D42): the server
+	// registers only nobles of a third profession (folk_olympiad.go
+	// olympiadNobleCommand), so with it off no bot registers, though a bot
+	// below its third profession still takes noblesse. It has no effect
+	// unless PvP.Olympiad is on, which is opt-in per bot. A competing bot
+	// still never claims hero status, spectates or trades points.
 	ThirdClass bool
 }
 
 // defaultOlympiadPolicy registers at a Grand Olympiad Manager nearby inside
-// the owner's window, waits 30 minutes for a draw, twice a day at most.
+// the owner's window, waits 30 minutes for a draw, twice a day at most, and
+// lets a third-profession bot compete (#729).
 func defaultOlympiadPolicy() OlympiadPolicy {
 	return OlympiadPolicy{
-		Managers: []int32{olympiadManager},
-		Reach:    8000,
-		Start:    18 * time.Hour,
-		Period:   6 * time.Hour,
-		Zone:     time.UTC,
-		Wait:     30 * time.Minute,
-		Tries:    2,
+		Managers:   []int32{olympiadManager},
+		Reach:      8000,
+		Start:      18 * time.Hour,
+		Period:     6 * time.Hour,
+		Zone:       time.UTC,
+		Wait:       30 * time.Minute,
+		Tries:      2,
+		ThirdClass: true,
 	}
 }
 

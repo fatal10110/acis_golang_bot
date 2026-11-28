@@ -75,7 +75,8 @@ PvP value blended into M10's gear score, a karma policy. No server change.
   fights the other side's players there, bots only after their hit (D38). [siege](siege.md)
 - **D42, the Olympiad (approved 2026-11-26).** Opt-in per bot, off for every preset: noblesse at the class
   master, bounded registration, the drawn opponent fought whoever it is (a bot too: D38 gains the
-  stadium); never spectates, trades points or claims hero status. [Olympiad](olympiad.md)
+  stadium); never spectates, trades points or claims hero status. A third-profession bot competes
+  too (owner, 2026-11-28, #729). [Olympiad](olympiad.md)
 
 - **D43, buying CP potions (approved 2026-11-26).** CP potions are bought (amends D37; the keep rule stays):
   from player sell stores for `pvp` bots; an opt-in `SevenSigns` mode (off for every preset) signs

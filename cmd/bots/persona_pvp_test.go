@@ -12,8 +12,8 @@ import (
 // carries five of each cure and keeps its CP potions (D37), stocking ten
 // (D43); every other
 // preset fights back only, with SupportFlagged off, and so declines duels,
-// and compares gear by Value alone. Olympiad is off for every preset, and
-// no preset lets a third-profession bot play it (D42, #729).
+// and compares gear by Value alone. Olympiad is off for every preset (D42);
+// a bot that turns it on competes at its third profession too (#729).
 func TestPresetPvPModes(t *testing.T) {
 	pvp := botclient.PvPPolicy{
 		FightFlagged: true, Duels: true, Hunt: true, Arenas: true, FightWar: true, Siege: true, SupportFlagged: true,
@@ -28,8 +28,11 @@ func TestPresetPvPModes(t *testing.T) {
 		if got := p.persona().PvP; got != want {
 			t.Errorf("preset %s: PvP %+v, want %+v", p.name, got, want)
 		}
-		if p.persona().Olympiad.ThirdClass {
-			t.Errorf("preset %s: OlympiadPolicy.ThirdClass on, want off", p.name)
+		if p.persona().PvP.Olympiad {
+			t.Errorf("preset %s: Olympiad on, want off (D42)", p.name)
+		}
+		if !p.persona().Olympiad.ThirdClass {
+			t.Errorf("preset %s: OlympiadPolicy.ThirdClass off, want on (#729)", p.name)
 		}
 	}
 	if _, ok := findPreset("pvp"); !ok {
