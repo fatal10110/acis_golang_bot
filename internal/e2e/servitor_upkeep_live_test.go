@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -89,7 +90,14 @@ func TestLiveServitorUpkeep(t *testing.T) {
 		ordered, struck  bool
 		hurtAt           time.Time
 		from             int
+		mobs             []int32
 	)
+	// A failed run logs what the bot saw of the fight.
+	t.Cleanup(func() {
+		if t.Failed() {
+			logServitorFight(t, f, servitor, mobs)
+		}
+	})
 	// scan reads what the bot saw since the last scan.
 	scan := func() (died, mobDied, healed bool) {
 		seen := f.watch.Seen(from)
@@ -164,6 +172,7 @@ func TestLiveServitorUpkeep(t *testing.T) {
 			t.Fatal(err)
 		}
 		mob = spawned
+		mobs = append(mobs, mob)
 		gmTeleport(t, ctx, gm, townTI)
 		healed, over := false, false
 		waitForBy(t, ctx, fmt.Sprintf("warrior %d fought and the servitor healed", n), time.Now().Add(fightBoundUpkeep), func() bool {
@@ -199,4 +208,57 @@ func orderedBy(sent []Sent, n int) bool {
 		}
 	}
 	return false
+}
+
+// logServitorFight logs, in order, what the summoner f saw and sent about
+// its servitor and the warriors: the servitor's HP, swings between them
+// and the bot, deaths, the bot's casts and its servitor orders; the
+// servitor's HP and repeated swings are logged on change only.
+func logServitorFight(t *testing.T, f *farmer, servitor int32, mobs []int32) {
+	ours := func(id int32) bool { return id != 0 && (id == f.id || id == servitor || slices.Contains(mobs, id)) }
+	sent := f.watch.Sent()
+	lines, lastHP, lastSwing, at := 0, int32(-1), "", 0
+	logf := func(format string, args ...any) {
+		if lines < 120 {
+			t.Logf(format, args...)
+		}
+		lines++
+	}
+	for _, s := range f.watch.Seen(0) {
+		for ; at < min(s.SentBefore, len(sent)); at++ {
+			if p := sent[at]; p.Op == botwire.OpGameRequestActionUse || p.Op == botclient.OpRequestMagicSkillUse {
+				logf("%s sent %#02x %d", p.At.Format("15:04:05.0"), p.Op, p.Target)
+			}
+		}
+		ts := s.At.Format("15:04:05.0")
+		switch e := s.Event.(type) {
+		case botclient.PetInfo:
+			logf("%s PetInfo %d npc %d HP %d/%d dead %v", ts, e.ObjectID, e.TemplateID, e.CurHP, e.MaxHP, e.Dead)
+		case botclient.PetStatusUpdate:
+			if e.ObjectID == servitor && e.CurHP != lastHP {
+				lastHP = e.CurHP
+				logf("%s servitor HP %d/%d", ts, e.CurHP, e.MaxHP)
+			}
+		case botclient.Attack:
+			if len(e.Hits) > 0 && (ours(e.AttackerID) || ours(e.Hits[0].TargetID)) {
+				if k := fmt.Sprintf("%d>%d", e.AttackerID, e.Hits[0].TargetID); k != lastSwing {
+					lastSwing = k
+					logf("%s swing %s", ts, k)
+				}
+			}
+		case botclient.Die:
+			if ours(e.ObjectID) {
+				logf("%s Die %d", ts, e.ObjectID)
+			}
+		case botclient.MagicSkillUse:
+			if ours(e.CasterID) {
+				logf("%s cast %d by %d on %d", ts, e.SkillID, e.CasterID, e.TargetID)
+			}
+		case botclient.SystemMessage:
+			logf("%s SystemMessage %d", ts, e.ID)
+		case botclient.PetDelete:
+			logf("%s PetDelete %d", ts, e.ObjectID)
+		}
+	}
+	t.Logf("bot %d, servitor %d, warriors %v: %d lines", f.id, servitor, mobs, lines)
 }
