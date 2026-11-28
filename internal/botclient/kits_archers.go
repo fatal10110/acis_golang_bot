@@ -27,8 +27,9 @@ var spiritOfSagittarius = Step{Skill: skillSpiritOfSagittarius, From: 58, Target
 // weaponsAllowed (BOW); Rapid Shot (no weaponsAllowed) keeps the bow
 // branch gate of the first professions. Snipe, Pain of Sagittarius, Hex,
 // the Quivers and Fatal Counter outside PR are left out (docs/strategy.md
-// "Left out, and why"). The PvP row stays the first profession's until
-// #421; its dagger steps never pass with a bow.
+// "Left out, and why"). SR and PR play their own PvP rows
+// (kits_pvp_archers.go, X25); HK keeps the rogue's (docs/pvp/rows-second.md
+// O3), whose dagger steps never pass with a bow.
 var (
 	// hawkeyeKit (HK, from RO): Ultimate Evasion under 30 % HP; Rapid Shot
 	// and Spirit of Sagittarius from 58 in combat; Stunning Shot opens,
@@ -95,7 +96,7 @@ var (
 			{Skill: skillStunningShot, Weapons: bowBranch},
 			{Skill: skillPowerShot, Weapons: bowBranch},
 		},
-		PvP: elvenScoutPvP,
+		PvP: silverRangerPvP,
 		Buffs: append(append([]Buff{}, fighterAuras...),
 			Buff{Skill: skillSpiritBarrier, Self: true},
 			Buff{Skill: skillSoulOfSagittarius, From: 46, Self: true},
@@ -116,13 +117,14 @@ var (
 	// 58 and Dead Eye from 60 in combat; Stunning Shot opens, Fatal Counter
 	// from 60 under 50 % HP, Double Shot, Stunning Shot, Power Shot
 	// (fixed); the auras and Soul of Sagittarius from 46 out of combat; the
-	// stance toggles; sits plainly, no flee skill.
+	// stance toggles; sits plainly, no flee skill. It learns Freezing
+	// Strike for its PvP row.
 	phantomRangerKit = ClassKit{
 		Skills: []int32{
 			skillStunningShot, skillFatalCounter, skillDoubleShot, skillPowerShot, skillDrainHealth,
 			skillUltimateEvasion, skillRapidShot, skillSpiritOfSagittarius, skillDeadEye,
 			skillDefenseAura, skillAttackAura, skillSoulOfSagittarius, skillAccuracy, skillViciousStance,
-			skillPoison, skillPowerBreak,
+			skillPoison, skillPowerBreak, skillFreezingStrike,
 		},
 		Rotation: []Step{
 			{Skill: skillDrainHealth, SelfHPBelow: 60},
@@ -136,7 +138,7 @@ var (
 			{Skill: skillStunningShot, Weapons: bowBranch},
 			{Skill: skillPowerShot, Weapons: bowBranch},
 		},
-		PvP:     assassinPvP,
+		PvP:     phantomRangerPvP,
 		Buffs:   append(append([]Buff{}, fighterAuras...), Buff{Skill: skillSoulOfSagittarius, From: 46, Self: true}),
 		Toggles: stanceToggles,
 		Base:    []int32{skillDefenseAura, skillAttackAura},
