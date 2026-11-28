@@ -681,6 +681,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 					b.arenaTeleported(now, gk)
 					b.siegeTeleported()
 					b.tripTeleported(now)
+					b.shop.teleported(now)
 					if b.supplyTrip.teleported(now, gk, b.trip.onward) {
 						b.townArrival()
 					}
