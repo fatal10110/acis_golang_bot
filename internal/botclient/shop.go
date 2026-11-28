@@ -270,6 +270,22 @@ func (sh *shopVisit) end(now time.Time, shun bool) {
 	}
 }
 
+// teleported drops the visit a loading-screen teleport cut short (a GM's
+// recall, a restart in town, an escape): its merchant is left behind,
+// through no fault of its own, so it is not shunned, and the next visit,
+// to a merchant near the landing, is due at once instead of shopRetry
+// later (#732). The drop ends no round, the visit near the landing does:
+// the town preparation gate (preparing) stays as it was.
+func (sh *shopVisit) teleported(now time.Time) {
+	if !sh.v.active() {
+		return
+	}
+	*sh = shopVisit{
+		nextAt: now, shunned: sh.shunned, unsellable: sh.unsellable, books: sh.books, held: sh.held,
+		rounds: sh.rounds,
+	}
+}
+
 // dropList leaves the first buylist of the visit out of it.
 func (sh *shopVisit) dropList() {
 	if len(sh.lists) > 0 {
