@@ -99,6 +99,12 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	OpGameTradePressOtherOk: func(*wire.Reader) Event { return TradePressOtherOk{} },
 	OpGameSendTradeDone:     func(r *wire.Reader) Event { return SendTradeDone{Success: r.ReadInt32() == 1} },
 
+	OpGamePetStatusShow:       func(r *wire.Reader) Event { return PetStatusShow{SummonType: r.ReadInt32()} },
+	OpGamePetInfo:             decodePetInfo,
+	OpGamePetStatusUpdate:     decodePetStatusUpdate,
+	OpGamePetDelete:           func(r *wire.Reader) Event { return PetDelete{SummonType: r.ReadInt32(), ObjectID: r.ReadInt32()} },
+	OpGameSetSummonRemainTime: decodeSetSummonRemainTime,
+
 	OpGameAskJoinPledge:                 decodeAskJoinPledge,
 	OpGameJoinPledge:                    func(r *wire.Reader) Event { return JoinPledge{ClanID: r.ReadInt32()} },
 	OpGamePledgeShowMemberListAll:       decodePledgeShowMemberListAll,

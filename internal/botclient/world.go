@@ -61,6 +61,8 @@ type World struct {
 	Recipes RecipeBook
 	// Symbols are the bot's dye symbols (HennaInfo).
 	Symbols Symbols
+	// Servitor is the bot's own servitor, nil for none (servitor_world.go).
+	Servitor *Servitor
 }
 
 // Symbols are the bot's dye symbols as the last HennaInfo told them: the
@@ -773,6 +775,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 			*m = m.moveTo(now, e.Origin, e.Dest, w.speedOf(e.ObjectID))
 		}
 	case MoveToPawn:
+		w.servitorTargets(e.ObjectID, e.TargetID)
 		if m := w.motionOf(e.ObjectID); m != nil {
 			from := m.sample(now, e.Origin)
 			dest := from
@@ -815,6 +818,7 @@ func (w *World) Apply(ev Event, now time.Time) {
 	case TeleportToLocation:
 		w.applyTeleport(e)
 	case DeleteObject:
+		w.servitorTargetGone(e.ObjectID)
 		delete(w.Objects, e.ObjectID)
 		delete(w.Attackers, e.ObjectID)
 		delete(w.Ground, e.ObjectID)
@@ -822,8 +826,12 @@ func (w *World) Apply(ev Event, now time.Time) {
 			w.Target = 0
 		}
 	case Die:
+		w.servitorDie(e.ObjectID)
 		w.applyDie(e, now)
 	case Revive:
+		if s := w.Servitor; s != nil && s.ObjectID == e.ObjectID {
+			s.Dead = false
+		}
 		if e.ObjectID == w.Self.ObjectID {
 			w.Self.Dead = false
 			w.Prompts.Restart = RestartPrompt{}
@@ -844,10 +852,15 @@ func (w *World) Apply(ev Event, now time.Time) {
 		w.applyWaitType(e, now)
 	case AutoAttackStart:
 		w.setCombat(e.ObjectID, true)
+		w.servitorCombat(e.ObjectID, true)
 	case AutoAttackStop:
 		w.setCombat(e.ObjectID, false)
+		w.servitorCombat(e.ObjectID, false)
 	case Attack:
+		w.servitorAttack(e)
 		w.applyAttack(e, now)
+	case PetInfo, PetStatusUpdate, PetDelete, SetSummonRemainTime:
+		w.applyServitor(e)
 	case MagicSkillUse:
 		w.applyMagicSkillUse(e, now)
 	case MagicSkillCanceled:

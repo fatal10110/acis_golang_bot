@@ -140,6 +140,11 @@ type (
 	WarehouseItem                  = botwire.WarehouseItem
 	WarehouseDepositList           = botwire.WarehouseDepositList
 	WarehouseWithdrawList          = botwire.WarehouseWithdrawList
+	PetInfo                        = botwire.PetInfo
+	PetStatusUpdate                = botwire.PetStatusUpdate
+	PetDelete                      = botwire.PetDelete
+	SetSummonRemainTime            = botwire.SetSummonRemainTime
+	PetStatusShow                  = botwire.PetStatusShow
 )
 
 // The constants typed by the events' types.
@@ -175,6 +180,8 @@ const (
 	ItemModified              = botwire.ItemModified
 	ItemRemoved               = botwire.ItemRemoved
 	classMaster               = botwire.ClassMaster
+	SummonServitor            = botwire.SummonServitor
+	SummonPet                 = botwire.SummonPet
 )
 
 // The game opcodes, server to client and client to server.
