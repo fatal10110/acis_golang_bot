@@ -312,6 +312,10 @@ type ClassKit struct {
 	Summons       []int32
 	ServitorHeal  int32
 	ServitorBuffs []int32
+	// Corpse are the row's CORPSE_MOB casts the corpse rule makes
+	// (docs/servitors.md section 6): the Necromancer's and the Dark
+	// Avenger's; the zero value for every other row.
+	Corpse CorpseKit
 	// Toggles are the combat toggles; Relax is the toggle ruleRest sits
 	// with instead of a plain sit (226 Relax, 296 Chameleon Rest), 0 for
 	// none; RelaxFrom is the level it starts at (the row's "@N"):
@@ -541,6 +545,7 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 	}
 	k.Sweep, k.SpotMargin, k.ServitorSpotMargin = line.Sweep, line.SpotMargin, line.ServitorSpotMargin
 	k.ServitorLead, k.Summons, k.ServitorHeal, k.ServitorBuffs = line.ServitorLead, line.Summons, line.ServitorHeal, line.ServitorBuffs
+	k.Corpse = line.Corpse
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
@@ -607,6 +612,9 @@ func (p *Persona) override(bd Build, class int32) Build {
 	}
 	if p.ServitorHeal != 0 {
 		k.ServitorHeal = p.ServitorHeal
+	}
+	if p.CorpseSummons != nil {
+		k.Corpse.Summons = p.CorpseSummons
 	}
 	if p.ServitorBuffs != nil {
 		k.ServitorBuffs = p.ServitorBuffs

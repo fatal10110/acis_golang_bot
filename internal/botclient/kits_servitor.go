@@ -73,7 +73,7 @@ var summonerThresholds = Thresholds{
 // ServitorBuffs and ServitorLead (servitor_upkeep.go, servitor_orders.go).
 // The corpse skills (Life Scavenge, Corpse Life Drain, Corpse Burst and the
 // Necromancer's corpse summons) are learned here and cast by the corpse
-// rule (#762): no step casts them yet. No row has a PvP row of its own
+// rule (ClassKit.Corpse, corpse.go): no step casts them. No row has a PvP row of its own
 // (docs/pvp/rows-second.md).
 var (
 	// darkAvengerKit (DA, from KN): Divine Heal (fixed) under 40 % HP,
@@ -83,8 +83,9 @@ var (
 	// (fixed); Majesty, Iron Will from 43 and Reflect Damage out of combat;
 	// Shield Fortress from 64; rests with Relax; summons its Dark Panther,
 	// which it orders onto the target before the pull (no ServitorLead,
-	// no servitor heal or buffs). Its Support role is a tank, as the
-	// Paladin's (gearRole: MeleeAlways).
+	// no servitor heal or buffs); drains a corpse in reach with Life
+	// Scavenge under its 60 % sustain bound (the corpse rule). Its Support
+	// role is a tank, as the Paladin's (gearRole: MeleeAlways).
 	darkAvengerKit = ClassKit{
 		Skills: []int32{
 			skillAggression, skillDrainHealth, skillAuraOfHate, skillShieldStun, skillJudgment, skillPowerStrike,
@@ -110,6 +111,7 @@ var (
 		Toggles: []Toggle{shieldFortress},
 		Relax:   skillRelax,
 		Summons: []int32{skillSummonDarkPanther},
+		Corpse:  CorpseKit{Drain: skillLifeScavenge},
 		Base:    []int32{skillRelax},
 		Fixed:   []int32{skillDivineHeal, skillPowerStrike},
 		Thresholds: Thresholds{
@@ -154,9 +156,11 @@ var (
 	// above 60 % MP, else Death Spike from 44 at 900, Vampiric Claw, Blaze,
 	// Ice Bolt and Aura Burn within 150 (fixed); Concentration. A curse
 	// nuker (D51 answer 4): its corpse summons need a fresh corpse in reach,
-	// which the corpse rule casts (#762), so it lists no Summons the
-	// summon rule would cast with none; its Servitor Heal (fixed) keeps a
-	// corpse servitor up.
+	// which the corpse rule casts (Corpse: Summon Cursed Man from 56, else
+	// Summon Reanimated Man; Corpse Life Drain under its 70 % sustain bound;
+	// Corpse Burst among two attackers), so it lists no Summons the summon
+	// rule would cast with none; its Servitor Heal (fixed) keeps a corpse
+	// servitor up.
 	necromancerKit = ClassKit{
 		Skills: []int32{
 			skillCursePoison, skillDeathSpike, skillVampiricClaw, skillBodyToMind, skillCorpseLifeDrain, skillCorpseBurst,
@@ -177,7 +181,11 @@ var (
 		Buffs:        selfConcentration,
 		Melee:        MeleeUnderReserve,
 		ServitorHeal: skillServitorHeal,
-		Fixed:        []int32{skillBlaze, skillIceBolt, skillAuraBurn, skillVampiricTouch, skillServitorHeal},
+		Corpse: CorpseKit{
+			Summons: []int32{skillSummonCursedMan, skillSummonReanimatedMan},
+			Drain:   skillCorpseLifeDrain, Burst: skillCorpseBurst,
+		},
+		Fixed: []int32{skillBlaze, skillIceBolt, skillAuraBurn, skillVampiricTouch, skillServitorHeal},
 		Thresholds: Thresholds{
 			CriticalHP: 35, CrowdedHP: 90, OutmatchedHP: 65, MPReserve: 10,
 			SitHP: 55, SitMP: 20, StandHP: 95, StandMP: 90,

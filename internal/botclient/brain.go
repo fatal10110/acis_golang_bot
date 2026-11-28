@@ -220,6 +220,9 @@ type Brain struct {
 	// Spoil on, until the monster dies, its sweep ends or it leaves sight.
 	spoilTarget int32
 	spoils      map[int32]spoilMark
+	// mobCorpses are the monsters' corpses in sight whose CORPSE_MOB window
+	// is open, for a row with corpse casts (corpseEvent, ruleCorpse).
+	mobCorpses map[int32]corpse
 	// sweepHeld is when the server's refusal of the last Sweeper cast
 	// (castRefused) stops holding the sweep: until then ruleSweep yields
 	// so the bot rests or fights.
@@ -642,6 +645,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			// Before castRefused: a refusal of Sweeper counts only while
 			// its cast is in flight (spoilEvent).
 			b.spoilEvent(ev, now)
+			// Before castRefused, which ends the cast in flight on 109.
+			b.corpseEvent(ev, now)
 			b.castRefused(e.ID, now)
 			b.warehouseEvent(ev, now)
 			b.recipeEvent(ev, now)
@@ -743,6 +748,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 				}
 				b.landed(e.TargetID, now.Add(e.HitTime))
 				b.spoilEvent(ev, now)
+				b.corpseEvent(ev, now)
 			}
 			b.leaderHit(e.CasterID, e.TargetID, now)
 			b.lootEvent(ev, now)
@@ -764,6 +770,8 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.forgetOnce(e.ObjectID)
 			b.forgetSide(e.ObjectID)
 			b.servitorDied(e.ObjectID, now)
+			// Before spoilEvent, which forgets the spoil marks of the dead.
+			b.corpseEvent(ev, now)
 			b.spoilEvent(ev, now)
 			// A dead bot frees its spot for another and avoids it for a
 			// while; it picks again once back on its feet.
@@ -777,6 +785,7 @@ func (b *Brain) handle(batch []Event, now time.Time) error {
 			b.lootEvent(ev, now)
 			delete(b.tries, e.ObjectID)
 			delete(b.spoils, e.ObjectID)
+			b.corpseEvent(ev, now)
 			if e.ObjectID == b.opened {
 				b.opened = 0
 			}

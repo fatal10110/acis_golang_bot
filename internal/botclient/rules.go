@@ -109,6 +109,10 @@ type Persona struct {
 	Summons       []int32
 	ServitorHeal  int32
 	ServitorBuffs []int32
+	// CorpseSummons replace the build's corpse summons
+	// (ClassKit.Corpse.Summons) when set: a scenario's own corpse summoner
+	// over its row's. No preset sets it.
+	CorpseSummons []int32
 	// BlacklistAfter is how many attempts on a target with no swing or cast
 	// landing in between make the bot leave it alone for BlacklistFor; 0
 	// never does.
@@ -653,6 +657,7 @@ var playRules = []rule{
 	{name: "party buff", run: (*Brain).rulePartyBuff},
 	{name: "outnumbered", run: (*Brain).ruleOutnumbered},
 	{name: "sweep", run: (*Brain).ruleSweep},
+	{name: "corpse", run: (*Brain).ruleCorpse},
 	{name: "party fight", run: (*Brain).rulePartyFight},
 	{name: "chat", run: (*Brain).ruleChat},
 	{name: "announce", run: (*Brain).ruleAnnounce},
