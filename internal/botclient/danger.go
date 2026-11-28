@@ -21,6 +21,29 @@ const (
 // the rotation steps the spot fit may kill with (spotAttack).
 var damageSkillTypes = []string{"PDAM", "BLOW", "MDAM", "DRAIN", "DEATHLINK"}
 
+// sustainStep reports whether st is gated on the bot's own HP
+// (SelfHPBelow): a drain it casts only when hurt, not what it kills with,
+// so the attack every model times (killAttack) passes over it: the
+// sorcerer kills with Prominence, not Vampiric Touch (12 s reuse, under
+// 60 % HP), PR with Stunning Shot, not Drain Health (#676, #712).
+func sustainStep(st Step) bool {
+	return st.SelfHPBelow > 0
+}
+
+// killAttack is skill sk of rotation step st as the attack the bot kills
+// with (charmodel.Attack), each cast costing its mpInitialConsume and
+// mpConsume as the server charges them (cast/controller.go CanCast): the
+// one rule the solo spot fit (spotAttack), the party fit (memberModel) and
+// the gear model (gearRole) take the first such step of a rotation by. Not
+// ok for a sustain step (sustainStep) or a skill that deals its target no
+// damage (damageSkillTypes, power above 0).
+func killAttack(st Step, sk datapack.Skill) (charmodel.Attack, bool) {
+	if sustainStep(st) || sk.Power <= 0 || !slices.Contains(damageSkillTypes, sk.Type) {
+		return charmodel.Attack{}, false
+	}
+	return charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}, true
+}
+
 // packFits reports whether s fits the bot's stats by the model
 // (docs/strategy.md, Design section 11): it lasts against the spot's likely
 // pack at least its margin times as long as it takes to kill one of the
@@ -43,7 +66,7 @@ func (b *Brain) packFits(s *datapack.Spot, now time.Time) bool {
 // packFight is how long, in seconds, the bot takes to kill one of s's monsters and how
 // long it lasts against its likely pack, both averaged over the monsters by
 // their spawn totals: charmodel.TimeToKill with its melee or the first
-// damage step of its rotation it knows, whichever is faster (spotAttack),
+// rotation step it knows that it kills with, whichever is faster (spotAttack),
 // and charmodel.TimeToDie against each monster's final stats
 // (charmodel.Monster), its own stats as its UserInfo reports them, with the
 // HP its healing potions restore over margin kills added (potionsHeal). The
@@ -88,28 +111,29 @@ func (b *Brain) packFight(s *datapack.Spot, bd *Build, margin float64, c *crew) 
 	return k, hp / dps, true
 }
 
-// spotAttack is the first step of bd's rotation the bot knows that deals
-// its target damage, as a charmodel.Attack, each cast costing its
-// mpInitialConsume and mpConsume as the server charges them
-// (cast/controller.go CanCast); not ok without one. Its weapon gate is left
-// out: the fit takes the faster of it and the melee. priced is
-// false when the bot knows a step of its rotation it casts on its target
-// but has no travel map to read the skill from: its melee is no measure of
-// a caster's kills, so the fit falls back to the level (a brain given spots
-// without a travel map, as TestLiveFarmMage's).
+// spotAttack is the first step of bd's rotation the bot knows and casts
+// on its target that it kills with (killAttack: not a sustain step); not
+// ok without one. Its weapon gate is left out: the fit takes the faster of
+// it and the melee. priced is false when the bot knows a step of its
+// rotation it casts on its target, a sustain step aside, but has no travel
+// map to read the skill from: its melee is no measure of a caster's kills,
+// so the fit falls back to the level (a brain given spots without a travel
+// map, as TestLiveFarmMage's). A bot that knows only sustain steps melees
+// until hurt, so its melee is priced.
 func (b *Brain) spotAttack(bd *Build) (a charmodel.Attack, ok, priced bool) {
 	m := b.cfg.Travel
 	for _, st := range bd.Kit.Rotation {
 		k, known := b.world.Skills[st.Skill]
-		if st.Target != TargetEnemy || !known || k.Disabled {
+		if st.Target != TargetEnemy || sustainStep(st) || !known || k.Disabled {
 			continue
 		}
 		if m == nil {
 			return charmodel.Attack{}, false, false
 		}
-		sk, found := m.skills[datapack.SkillRef{ID: st.Skill, Level: k.Level}]
-		if found && sk.Power > 0 && slices.Contains(damageSkillTypes, sk.Type) {
-			return charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}, true, true
+		if sk, found := m.skills[datapack.SkillRef{ID: st.Skill, Level: k.Level}]; found {
+			if a, ok := killAttack(st, sk); ok {
+				return a, true, true
+			}
 		}
 	}
 	return charmodel.Attack{}, false, true

@@ -21,7 +21,7 @@ func runGeoquery(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	geodataDir := fs.String("geodata", "", "directory of the geodata region files the cache was packed from")
 	geoengine := fs.String("geoengine", "", "local copy of the server's geoengine.properties: region list and GeoDataType")
-	cache := fs.String("geodata-cache", "geodata.cache", "geodata cache written by `bots geopack`")
+	cache := fs.String("geodata-cache", "geodata.cache", "geodata cache written by bots geopack")
 	out := fs.String("out", "geoquery.dump", "query file to write, for geoprobe -expected-dump")
 	seed := fs.Uint64("seed", 1, "seed of the site sampling; the same seed gives the same file")
 	n := fs.Int("n", 1000, "sites of each kind (wall, ledge, multilayer, random)")

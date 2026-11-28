@@ -41,7 +41,8 @@ type memberModel struct {
 	// heals are the heals it casts on the leader; a member with one is a
 	// healer and adds no damage.
 	heals []charmodel.Heal
-	// attack is the first damage step of its Damage rotation, skill false
+	// attack is the first step of its Damage rotation it casts on its
+	// target and kills with (killAttack: not a sustain step), skill false
 	// with none: it then fights in melee alone.
 	attack charmodel.Attack
 	skill  bool
@@ -124,10 +125,11 @@ func (b *Brain) memberModel(k memberKey) (memberModel, bool) {
 			if st.Target != TargetEnemy {
 				continue
 			}
-			if sk, ok := learned(st.Skill); ok && sk.Power > 0 && slices.Contains(damageSkillTypes, sk.Type) {
-				mm.attack = charmodel.Attack{Magic: slices.Contains(magicSkillTypes, sk.Type), Power: sk.Power, HitTime: sk.HitTime, Reuse: sk.ReuseDelay, MPCost: float64(sk.MPInitialConsume + sk.MPConsume)}
-				mm.skill = true
-				break
+			if sk, ok := learned(st.Skill); ok {
+				if a, ok := killAttack(st, sk); ok {
+					mm.attack, mm.skill = a, true
+					break
+				}
 			}
 		}
 	}

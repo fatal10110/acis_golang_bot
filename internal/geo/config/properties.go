@@ -1,3 +1,5 @@
+// Package config parses Java .properties files, such as the copy of the
+// server's geoengine.properties the geodata cache is built and checked from.
 package config
 
 import (

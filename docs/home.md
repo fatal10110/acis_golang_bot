@@ -114,8 +114,8 @@ bots navbuild -geodata ~/acis-datapack/geodata -geoengine ~/acis-datapack/geoeng
   -out ~/acis-datapack/nav.cache
 ```
 
-The walking presets (`support`, `town`, `merchant`) run only on both caches: `bots swarm` refuses
-to start them, and `bots ui` does not offer them, without the run-time flags below. Both commands
+Every preset walks (D13a), so the bots run only on both caches: `bots swarm` refuses to start, and
+`bots ui` does not offer a preset, without the run-time flags below. Both commands
 map the caches read-only, log the region-list hash at start, and never rebuild a cache: a missing
 or stale one is an error naming `bots geopack` or `bots navbuild`. `-nav-lru-bytes` bounds the
 process-wide cluster cache of the hierarchy (default 64 MB); each walking bot pins up to two more

@@ -28,7 +28,7 @@ func runNavbuild(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	fs.SetOutput(stderr)
 	geodataDir := fs.String("geodata", "", "directory of the geodata region files the cache was packed from (only stat'ed)")
 	geoengine := fs.String("geoengine", "", "local copy of the server's geoengine.properties: region list and GeoDataType")
-	cache := fs.String("geodata-cache", "geodata.cache", "geodata cache written by `bots geopack`")
+	cache := fs.String("geodata-cache", "geodata.cache", "geodata cache written by bots geopack")
 	datapack := fs.String("datapack", "", "local copy of the datapack's data/xml directory, holding doors.xml and zones/WaterZone.xml")
 	out := fs.String("out", "nav.cache", "nav cache file to write")
 	workers := fs.Int("workers", max(1, runtime.NumCPU()/2), "clusters built at once (default half the cores)")
