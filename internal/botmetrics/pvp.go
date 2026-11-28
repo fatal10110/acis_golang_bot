@@ -10,9 +10,9 @@ import (
 var (
 	// pvpFightKinds label Snapshot.PvPFights: the opponent record's kind at
 	// the bot's first attack on it.
-	pvpFightKinds = [...]string{"duel", "fight_back", "arena", "flagged", "pk"}
+	pvpFightKinds = [...]string{"duel", "fight_back", "arena", "flagged", "pk", "war"}
 	// pvpDeathKinds label Snapshot.PvPDeaths: the killer's kind.
-	pvpDeathKinds = [...]string{"fight_back", "arena", "flagged", "pk", "unfought"}
+	pvpDeathKinds = [...]string{"fight_back", "arena", "flagged", "pk", "war", "unfought"}
 	// duelResults label Snapshot.Duels.
 	duelResults = [...]string{"won", "lost", "tie"}
 	// interruptResults label Snapshot.PvPInterrupts.

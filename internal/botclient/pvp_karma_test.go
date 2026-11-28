@@ -148,7 +148,7 @@ func TestPvPKarma(t *testing.T) {
 			t.Fatalf("action %v, want the flagged attacker fought", a.kind)
 		}
 		b.handleOne(t, RelationChanged{ObjectID: pcID, PvPFlag: 2}, at(1500*time.Millisecond))
-		if o := b.world.object(pcID); !b.blinking(o, at(2*time.Second)) {
+		if o := b.world.object(pcID); !b.blinking(pcID, o, at(2*time.Second)) {
 			t.Fatal("the flag guard is off for a blinking attacker")
 		}
 	})

@@ -66,8 +66,12 @@ not name. Three faults follow:
   - 1064 Silence (SH): MUTE, power 80, hit 4000, reuse 60 s, mute 30 s (a muted player casts no
     magic skill: server `model/actor/cast/player_actor.go` `MagicMuted`).
   - Kept left out: 404 Mass Shackling, 1072 Sleeping Cloud, 1069 Sleep ([left out](#left-out-and-why)).
-- **O2, 320 Wrath.** CPDAMPERCENT, power 30 (30 % of the targets' CP), AREA radius 80, hit 1080,
-  reuse 120 s, `weaponsAllowed` POLE (`skills/0300-0399.xml`). M10 left it out as "CP only: PvP,
+- **O2, 320 Wrath.** CPDAMPERCENT with a level table, `#power` 7 10 12 15 17 20 22 25 27 30 over
+  `magicLvl` 65-74 (`skills/0300-0399.xml`): levels 1 and 2 come at 66 (`classes/humanFighter.xml`,
+  Warlord), so a WL at 66 takes 10 % of each target's CP and only 30 % at 74. The server takes that
+  percentage of the target's **current** CP (`handler/skill/resources.go`
+  `cpDamagePercentHandler.UseResult`), so Wrath is worth most as the opener on full CP. AREA radius
+  80, hit 1080, reuse 120 s, `weaponsAllowed` POLE. M10 left it out as "CP only: PvP,
   #421". Proposed: WL's opener from 66, under the area rule. DS and BH learn it but never wield a
   pole, so it stays out of their rows.
 - **O3, rows kept as the first profession's.** TH and HK (as RO), PP (as CL), SE (as SO): their
@@ -115,7 +119,7 @@ not name. Three faults follow:
 | SS | As TK; songs up before the fight (M10). | As TK. | 58 Elemental Heal S<50 (long-cast rule); 110 Ultimate Defense S<20 vs M; 112 Deflect Arrow vs A. | normal 30 |
 | BD | Power Break, Freezing Strike; blade dances only where the area rule allows. | Poisons, arrests a kiter. | 70 Drain Health S<60; 110 Ultimate Defense S<20 vs M; 112 Deflect Arrow vs A. | normal 30 |
 | GL | Sonic slashes. | Lionheart, Sonic Blaster to close; Triple Slash breaks a magic cast. | 121 Battle Roar S<30. | normal 30 |
-| WL | Pole sweeps under the area rule. | Lionheart; Wrath strips CP at 66; holds Thunder Storm for casts. | 121 Battle Roar S<30; 181 Revival @55 S<15. | normal 30 |
+| WL | Pole sweeps under the area rule. | Lionheart; Wrath strips 10 % of CP at 66, 30 % at 74; holds Thunder Storm for casts. | 121 Battle Roar S<30; 181 Revival @55 S<15. | normal 30 |
 | DS | Hammer Crush at reuse, Crush of Doom. | Rage and Lionheart, holds Hammer Crush. | 121 Battle Roar S<30; 176 Frenzy S<30, else 139 Guts; 420 Zealot @58 S<30. | tank 20 |
 | BH | Hammer Crush at reuse. | Holds Hammer Crush for casts. | none | tank 20 |
 | TH | As RO (dagger). | As RO. | 111 Ultimate Evasion S<30 vs M, A. | normal 30 |
@@ -140,7 +144,8 @@ PvP steps (`Vs`, `Sighted`, `Hold`, `Int`, `Break`, `Peel`) are new list entries
 ## Left out, and why
 
 - **404 Mass Shackling** (PL): an aura root of power 40 (half Dryad Root's base: about 31-35 %, at
-  or under `MinLand`), reuse 40 s; it roots bystanders too.
+  or under `MinLand`), reuse 40 s; it roots bystanders too. 1208 Seal of Binding (WC) is not left
+  out on those grounds: it is the Break OS already plays, cast on the one melee opponent next to it.
 - **1069 Sleep** (SN, SG, SH, BI, EE): hit 10000, too slow for an interrupt and barred from
   break-off ([break-cast gate](layer.md#cp-cures-pool-break-off)); **1072 Sleeping Cloud** (SN,
   SG): an area sleep of hit 15000.

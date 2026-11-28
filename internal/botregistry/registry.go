@@ -98,14 +98,16 @@ type Bot struct {
 }
 
 // PvPModes are a bot's PvP mode switches (docs/pvp/modes.md, D35): duels,
-// hunting flagged and karma players, arena trips and open-world PK. Set,
-// they replace its persona's defaults of those four modes (D6: defaults,
-// not a safety boundary); fight back stays the preset's.
+// hunting flagged and karma players, arena trips, open-world PK and clan
+// war enemies (D40). Set, they replace its persona's defaults of those five
+// modes (D6: defaults, not a safety boundary); fight back stays the
+// preset's. Switches stored before War existed read it off.
 type PvPModes struct {
 	Duels  bool `json:"duels"`
 	Hunt   bool `json:"hunt"`
 	Arenas bool `json:"arenas"`
 	PK     bool `json:"pk"`
+	War    bool `json:"war"`
 }
 
 // Tombstone is an account the registry dropped: a deleted bot's, or one

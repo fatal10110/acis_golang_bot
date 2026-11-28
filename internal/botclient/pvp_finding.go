@@ -366,22 +366,25 @@ func (b *Brain) noHunt(p Point) bool {
 // ruleHunt is hunting (docs/pvp/targets.md "Hunting", PvPPolicy.Hunt): out
 // of combat with no attacker, no duel, no karma and its HP and MP at its
 // stand levels, off peace, town and Derby ground, the bot attacks the
-// nearest flagged or karma player of its tier rule 6 lets it fight, off
+// nearest flagged or karma player of its tier rule 6 lets it fight, or
+// mutual-war enemy rule 6b does (docs/pvp/war.md "Hunting"), off
 // that ground too, not avoided after a death (avoidAfterDeath), that the
 // engage estimate passes; else, in PK mode, its PK victim (pkHunt). The
 // fight is the fight rules' (fight): the attack's own frame pacing; PK
 // mode's limits bound the PKs.
 func (b *Brain) ruleHunt(now time.Time) (Action, bool) {
 	p, s := b.persona.PvP, &b.world.Self
-	if !(p.Hunt && p.FightFlagged || p.ForceAttack) || s.InCombat || s.Dead || s.Karma > 0 || b.duel(now).Phase != DuelIdle ||
+	hunt := p.Hunt && (p.FightFlagged || p.FightWar)
+	if !(hunt || p.ForceAttack) || s.InCombat || s.Dead || s.Karma > 0 || b.duel(now).Phase != DuelIdle ||
 		len(b.attackers(now)) > 0 || !b.aboveStand() || b.noHunt(s.Position(now)) {
 		return Action{}, false
 	}
 	tier := classTier(s.ClassID)
 	var id int32
-	if p.Hunt && p.FightFlagged {
+	if hunt {
 		id = b.nearestPlayer(now, func(id int32, o *Object) bool {
-			return b.mayFight(id, now) && b.fightRule(id, o, now) == FightFlagged && classTier(o.ClassID) == tier &&
+			k := b.fightRule(id, o, now)
+			return b.mayFight(id, now) && (k == FightFlagged || k == FightWar) && classTier(o.ClassID) == tier &&
 				!b.noHunt(o.Position(now)) && !b.avoided(o.Name, now) && b.engages(id)
 		})
 	}

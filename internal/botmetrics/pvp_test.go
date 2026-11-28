@@ -41,9 +41,11 @@ func TestRegistryPvP(t *testing.T) {
 	a.PvPFight("duel")
 	b.PvPFight("duel")
 	a.PvPFight("pk")
+	b.PvPFight("war")
 	a.PvPFight("unfought") // no fight kind
 	a.PvPDeath("unfought")
 	b.PvPDeath("arena")
+	a.PvPDeath("war")
 	b.PvPDeath("duel") // a duel defeat is no death
 	a.Duel("won")
 	b.Duel("tie")
@@ -58,8 +60,8 @@ func TestRegistryPvP(t *testing.T) {
 		name      string
 		got, want map[string]uint64
 	}{
-		{"fights", s.PvPFights, map[string]uint64{"duel": 2, "fight_back": 0, "arena": 0, "flagged": 0, "pk": 1}},
-		{"deaths", s.PvPDeaths, map[string]uint64{"fight_back": 0, "arena": 1, "flagged": 0, "pk": 0, "unfought": 1}},
+		{"fights", s.PvPFights, map[string]uint64{"duel": 2, "fight_back": 0, "arena": 0, "flagged": 0, "pk": 1, "war": 1}},
+		{"deaths", s.PvPDeaths, map[string]uint64{"fight_back": 0, "arena": 1, "flagged": 0, "pk": 0, "war": 1, "unfought": 1}},
 		{"duels", s.Duels, map[string]uint64{"won": 1, "lost": 0, "tie": 1}},
 		{"interrupts", s.PvPInterrupts, map[string]uint64{"cast": 2, "landed": 1, "too_late": 1}},
 	} {

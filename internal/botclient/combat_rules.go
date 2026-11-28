@@ -64,6 +64,10 @@ type PvPPolicy struct {
 	// per pkEvery and none at pkCap PK kills, and a karma bot's clean
 	// attacker under the same limits.
 	ForceAttack bool
+	// FightWar is War mode (docs/pvp/war.md, D40, rule 6b of MayFight):
+	// a mutual-war enemy is a target like a flagged player, attacked by
+	// force, hunted with Hunt on.
+	FightWar bool
 	// SupportFlagged lets the bot heal or buff a flagged or karma player,
 	// which flags the bot (character_pvpflag.go skillTargetFlagsPvP).
 	SupportFlagged bool
