@@ -162,6 +162,9 @@ func (b *Brain) craftEvent(ev Event, now time.Time) {
 		switch {
 		case m.Status == RecipeMadeSuccess, c.failure == CraftMixingFailed:
 			// A failed roll spent the materials as a success does.
+			if m.Status == RecipeMadeSuccess {
+				b.noteClanMade(step)
+			}
 			c.fails, c.made = 0, true
 			c.done++
 			b.craftAdvance(now)
@@ -175,6 +178,22 @@ func (b *Brain) craftEvent(ev Event, now time.Time) {
 			b.craftFailed(now)
 		}
 	}
+}
+
+// noteClanMade counts what a successful craft of step made for the clan:
+// the product of a chain for the clan's top step that craftStock leaves out
+// as an own supply (ownSupply), its yield (#688).
+func (b *Brain) noteClanMade(step craftplan.Step) {
+	c := &b.craft
+	ch := c.plan.Chains[c.chain]
+	r, ok := b.cfg.Travel.recipes[step.Recipe]
+	if ch.Order >= 0 || !ok || r.Product.ItemID != ch.Product || !b.ownSupply(ch.Product) {
+		return
+	}
+	if c.clanMade == nil {
+		c.clanMade = make(map[int32]int64)
+	}
+	c.clanMade[ch.Product] += int64(max(r.Product.Count, 1))
 }
 
 // craftFailed counts a craft result that is neither a success nor a
@@ -226,10 +245,12 @@ func (b *Brain) beginDeposit(rows []WarehouseRow, now time.Time) {
 }
 
 // noteDelivering notes the products of the bot's crafted orders that the
-// deposit of rows carries, by order, for deliverOrders once it lands.
+// deposit of rows carries, by order, for deliverOrders once it lands, and
+// what it carries beyond them of the products the chains for the clan made
+// (clanDepositing).
 func (b *Brain) noteDelivering(rows []WarehouseRow, now time.Time) {
 	c := &b.craft
-	c.delivering = nil
+	c.delivering, c.clanDepositing = nil, nil
 	carried := make(map[int32]int64)
 	for _, r := range rows {
 		carried[r.TemplateID] += int64(r.Count)
@@ -245,12 +266,27 @@ func (b *Brain) noteDelivering(rows []WarehouseRow, now time.Time) {
 		}
 		c.delivering[o.ID] = n
 	}
+	for t, n := range c.clanMade {
+		if n = min(n, carried[t]); n > 0 {
+			if c.clanDepositing == nil {
+				c.clanDepositing = make(map[int32]int64)
+			}
+			c.clanDepositing[t] = n
+		}
+	}
 }
 
 // deliverOrders closes the crafted orders the deposit carried at now and
-// announces the GM orders among them.
+// announces the GM orders among them, and takes what it carried of the
+// clan's products off clanMade.
 func (b *Brain) deliverOrders(now time.Time) {
-	for id, n := range b.craft.delivering {
+	c := &b.craft
+	for t, n := range c.clanDepositing {
+		if c.clanMade[t] -= n; c.clanMade[t] <= 0 {
+			delete(c.clanMade, t)
+		}
+	}
+	for id, n := range c.delivering {
 		if o, ok := b.cfg.CraftBoard.Deliver(b.world.Clan.ID, id, b.world.Self.ObjectID, n); ok {
 			b.announceOrder(o, now)
 		}
@@ -277,10 +313,25 @@ func (b *Brain) endCraftCycle(now time.Time, ok bool) {
 	}
 	c.noteCraftEnd(now, now.Add(wait), ok)
 	b.notePoolGear()
-	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended}
+	*c = crafterCycle{nextCheck: now.Add(wait), bookAt: c.bookAt, learn: c.learn, ended: c.ended, clanMade: b.clanCarried()}
 	if l := b.cfg.link; l != nil {
 		l.crafter = c.ended
 	}
+}
+
+// clanCarried is clanMade cut to what the bot carries, for the next cycle:
+// a failed deposit left it carried (#688).
+func (b *Brain) clanCarried() map[int32]int64 {
+	var out map[int32]int64
+	for t, n := range b.craft.clanMade {
+		if n = min(n, b.carriedLoose(t)); n > 0 {
+			if out == nil {
+				out = make(map[int32]int64)
+			}
+			out[t] = n
+		}
+	}
+	return out
 }
 
 // craftLearn takes the first recipe scroll of the plan's to learn that the

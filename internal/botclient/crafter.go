@@ -196,6 +196,13 @@ type crafterCycle struct {
 	// delivering are the products of crafted orders the deposit under way
 	// carries, by order.
 	delivering map[OrderID]int64
+	// clanMade are the products the chains for the clan made that
+	// craftStock leaves out as the bot's own supplies (shots, potions,
+	// Scrolls of Escape), by template: the clan's, deposited with the
+	// cycle's output (#688). A deposit that lands takes off what it
+	// carried of them (clanDepositing); what a failed deposit leaves
+	// carries over to the next cycle, at most what the bot carries.
+	clanMade, clanDepositing map[int32]int64
 	// ended is how the last cycle ended; it survives the cycle's reset.
 	ended craftEnded
 }
@@ -359,7 +366,7 @@ func (b *Brain) craftErrandDone(now time.Time) {
 		if r := st.Deposit; !r.At.Before(c.askedAt) && r.Outcome == WarehouseDone {
 			b.deliverOrders(now)
 		}
-		c.delivering = nil
+		c.delivering, c.clanDepositing = nil, nil
 		if r := st.Withdraw; r.At.Before(c.askedAt) || r.Outcome != WarehouseDone {
 			// Nothing came: plan again from what the bot carries.
 			b.craftPlan(now, false)
@@ -370,7 +377,7 @@ func (b *Brain) craftErrandDone(now time.Time) {
 		if r := st.Deposit; !r.At.Before(c.askedAt) && r.Outcome == WarehouseDone {
 			b.deliverOrders(now)
 		}
-		c.delivering = nil
+		c.delivering, c.clanDepositing = nil, nil
 		if c.resume {
 			c.resume, c.made = false, false
 			c.phase, c.deadline = craftMake, now.Add(crafterPhaseTimeout)
@@ -444,15 +451,20 @@ func (b *Brain) claimCraftOrders(now time.Time) []CraftOrder {
 	return append(mine, commanded...)
 }
 
-// fillCarriedOrders moves to crafted the cycle's claimed orders the plan
-// holds no chain for whose whole count the bot carries, beyond what its
-// crafted orders take and the plan keeps, so the cycle deposits and
-// delivers them. Such a product was made before its order could be
-// claimed: a chain for the clan used the materials a member deposited
-// before posting the order, and a shot it made stays carried as a supply
-// (#577). An order the plan crafts is never filled from the bag, and a
-// partial count stays claimed. Only a plan from the fresh warehouse list
-// fills: there a missing chain means the pool holds no materials for it.
+// fillCarriedOrders fills the cycle's claimed orders the plan holds no
+// chain for from products already made, for their whole count. Such a
+// product was made before its order could be claimed: a chain for the
+// clan used the materials a member deposited before posting the order
+// (#577). An order whose count the bot carries, beyond what its crafted
+// orders take and the plan keeps, moves to crafted, so the cycle deposits
+// and delivers it; carried shots the chains for the clan made serve it
+// before they go back as the clan's (clanMade). Else an order whose count
+// the clan warehouse holds free, beyond the board's reservations and the
+// plan's withdrawal, is delivered from it at once: the cycle that made the
+// shots deposited them as the clan's (#688). An order the plan crafts is
+// never filled, and a partial count stays claimed. Only a plan from the
+// fresh warehouse list fills: there a missing chain means the pool holds
+// no materials for it.
 func (b *Brain) fillCarriedOrders(now time.Time) {
 	c, board, clan, self := &b.craft, b.cfg.CraftBoard, b.world.Clan.ID, b.world.Self.ObjectID
 	planned := make(map[int]bool)
@@ -466,13 +478,40 @@ func (b *Brain) fillCarriedOrders(now time.Time) {
 		}
 	}
 	for i, o := range c.orders {
-		if planned[i] || b.carriedLoose(o.Product)-taken[o.Product] < o.Count {
-			continue
-		}
-		if board.Crafted(clan, o.ID, self, now) {
-			taken[o.Product] += o.Count
+		switch {
+		case planned[i]:
+		case b.carriedLoose(o.Product)-taken[o.Product] >= o.Count:
+			if board.Crafted(clan, o.ID, self, now) {
+				taken[o.Product] += o.Count
+				if n := c.clanMade[o.Product] - o.Count; n > 0 {
+					c.clanMade[o.Product] = n
+				} else {
+					delete(c.clanMade, o.Product)
+				}
+			}
+		case b.warehouseFree(o.Product) >= o.Count:
+			if !board.Crafted(clan, o.ID, self, now) {
+				continue
+			}
+			if d, ok := board.Deliver(clan, o.ID, self, o.Count); ok {
+				b.announceOrder(d, now)
+			}
 		}
 	}
+}
+
+// warehouseFree is how many of item template the clan warehouse's last
+// list holds beyond the board's reservations (members' counts, the other
+// crafters' chains) and the cycle plan's withdrawal.
+func (b *Brain) warehouseFree(item int32) int64 {
+	var n int64
+	for _, it := range b.wh.status.Contents {
+		if it.TemplateID == item {
+			n += int64(it.Count)
+		}
+	}
+	n -= b.cfg.CraftBoard.Reserved(b.world.Clan.ID, b.world.Self.ObjectID)[item]
+	return n - ingredientCounts(b.craft.plan.Withdraw)[item]
 }
 
 // carriedLoose is how many of item template the bot carries unequipped.
@@ -539,13 +578,10 @@ func (b *Brain) craftInput(orders []CraftOrder, fromWarehouse bool, now time.Tim
 // a recipe uses or makes, less adena, every shot, its healing potions and
 // Scrolls of Escape, which are its own supplies (craftplan.Input.Inventory).
 func (b *Brain) craftStock() map[int32]int64 {
-	m, p := b.cfg.Travel, &b.persona
 	stock := make(map[int32]int64)
 	for _, it := range b.world.Inventory.Items {
 		t := it.TemplateID
-		_, shot := m.shots[t]
-		if it.Equipped || !m.craftItems[t] || t == adenaID || t == scrollOfEscape || shot ||
-			slices.Contains(p.Shots, t) || slices.Contains(p.Potions, t) {
+		if it.Equipped || !b.cfg.Travel.craftItems[t] || b.ownSupply(t) {
 			continue
 		}
 		stock[t] += int64(it.Count)
@@ -553,10 +589,20 @@ func (b *Brain) craftStock() map[int32]int64 {
 	return stock
 }
 
+// ownSupply reports whether craftStock leaves template t out as the bot's
+// own supply: adena, every shot, its healing potions and Scrolls of
+// Escape.
+func (b *Brain) ownSupply(t int32) bool {
+	_, shot := b.cfg.Travel.shots[t]
+	return shot || t == adenaID || t == scrollOfEscape ||
+		slices.Contains(b.persona.Shots, t) || slices.Contains(b.persona.Potions, t)
+}
+
 // craftDepositRows are the deposit rows of the crafting stock beyond keep,
 // of the gear withdrawn to crystallize and left whole (crystalLeftovers),
-// and of the bot's crafted orders whose product the stock leaves out as
-// its own supplies (shots, potions, Scrolls of Escape), as many as it
+// and of the products the stock leaves out as the bot's own supplies
+// (shots, potions, Scrolls of Escape) that are not its own: its crafted
+// orders' and what the chains for the clan made (clanMade), as many as it
 // carries, by template.
 func (b *Brain) craftDepositRows(keep map[int32]int64, now time.Time) []WarehouseRow {
 	rows := b.crystalLeftovers()
@@ -571,6 +617,9 @@ func (b *Brain) craftDepositRows(keep map[int32]int64, now time.Time) []Warehous
 		if _, inStock := stock[o.Product]; o.State == OrderCrafted && o.Crafter == b.world.Self.ObjectID && !inStock {
 			ordered[o.Product] += o.Count
 		}
+	}
+	for t, n := range b.craft.clanMade {
+		ordered[t] += n
 	}
 	for t, n := range ordered {
 		if n = min(n, b.carriedLoose(t)); n > 0 {
