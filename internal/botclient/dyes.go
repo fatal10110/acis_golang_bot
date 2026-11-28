@@ -58,10 +58,12 @@ type DyePolicy struct {
 // fighters; DEX+1 CON-3 (42) twice and 37 for the treasure hunter and
 // hawkeye; WIT+1 MEN-3 (48) for the bishop, prophet and elven elder; MEN+1
 // WIT-3 (46) for the shillien elder and warcryer; INT+1 WIT-3 (44) for the
-// spellhowler, INT+1 MEN-3 (43) for the spellsinger, 44 twice and 43 for
-// the sorcerer. The professions without a row of their own (dark avenger,
-// warsmith, the servitor lines, overlord) keep the fighters' 37, 42, 37,
-// the nukers' 44 and the healers' 46.
+// spellhowler and the phantom summoner, INT+1 MEN-3 (43) for the
+// spellsinger and the elemental summoner, 44 twice and 43 for the
+// sorcerer, the warlock and the necromancer; the dark avenger is a knight
+// (docs/servitors.md section 5, column 11). The professions without a row
+// of their own (warsmith, overlord) keep the fighters' 37, 42, 37 and the
+// healers' 46.
 func defaultDyeTable() map[int32][]int32 {
 	t := make(map[int32][]int32)
 	set := func(symbols []int32, classes ...int32) {
@@ -72,17 +74,16 @@ func defaultDyeTable() map[int32][]int32 {
 	set([]int32{1, 6}, 1, 4, 7, 19, 22, 32, 35, 45, 47, 54, 56)
 	set([]int32{8, 8}, 11, 26, 39)
 	set([]int32{10, 10}, 15, 29, 42, 50)
-	set([]int32{40, 40, 40}, 5, 20, 33)
+	set([]int32{40, 40, 40}, 5, 6, 20, 33)
 	set([]int32{38, 38, 38}, 21, 23, 24, 34, 36, 37)
 	set([]int32{37, 37, 37}, 2, 3, 46, 48, 55)
 	set([]int32{42, 37, 42}, 8, 9)
 	set([]int32{48, 48, 48}, 16, 17, 30)
 	set([]int32{46, 46, 46}, 43, 52)
-	set([]int32{44, 43, 44}, 12)
-	set([]int32{43, 43, 43}, 27)
-	set([]int32{44, 44, 44}, 40)
-	set([]int32{37, 42, 37}, 6, 57)
-	set([]int32{44, 44, 44}, 13, 14, 28, 41)
+	set([]int32{44, 43, 44}, 12, 13, 14)
+	set([]int32{43, 43, 43}, 27, 28)
+	set([]int32{44, 44, 44}, 40, 41)
+	set([]int32{37, 42, 37}, 57)
 	set([]int32{46, 46, 46}, 51)
 	return t
 }

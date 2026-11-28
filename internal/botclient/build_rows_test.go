@@ -33,7 +33,8 @@ func firstMinLevel(c datapack.Class, skill int32) (int32, bool) {
 }
 
 // checkRow checks a row against the class trees and skill templates: every
-// skill is in the class's merged tree by the row's end, every step and
+// skill, summon, servitor heal and servitor buff is in the class's merged
+// tree by the row's end, every step and
 // toggle starts at max(row start, the skill's first merged minLvl) (its
 // "@N"), as does every buff with a From and a Relax with a RelaxFrom, every
 // bracket gate equals the skill's weaponsAllowed and every branch gate
@@ -147,6 +148,12 @@ func checkRow(r behaviorRow, classes map[int32]datapack.Class, skills map[datapa
 	}
 	for _, id := range r.kit.Skills {
 		known(id)
+	}
+	for _, id := range slices.Concat(r.kit.Summons, r.kit.ServitorBuffs) {
+		known(id)
+	}
+	if r.kit.ServitorHeal != 0 {
+		known(r.kit.ServitorHeal)
 	}
 	for _, h := range r.kit.Heals {
 		starts(h.Skill, h.From)
@@ -308,15 +315,18 @@ func TestBehaviorRowsShipped(t *testing.T) {
 			t.Errorf("%s takes no profession next (branchTables)", r.name)
 		}
 	}
-	// Every line of the branch tables goes from its base class to a
-	// direct child and on to that one's direct child (#328).
-	for role, tab := range branchTables {
-		for base, ls := range tab {
-			for _, l := range ls {
-				first, ok1 := classes[l.first]
-				second, ok2 := classes[l.second]
-				if !ok1 || !ok2 || first.Parent != base || second.Parent != l.first || second.Race != classes[base].Race {
-					t.Errorf("%v class %d: line %d -> %d is not in its tree", role, base, l.first, l.second)
+	// Every line of the branch tables, with the servitor lines and
+	// without, goes from its base class to a direct child and on to that
+	// one's direct child (#328).
+	for _, tabs := range []map[Role]map[int32][]line{branchTables, servitorTables} {
+		for role, tab := range tabs {
+			for base, ls := range tab {
+				for _, l := range ls {
+					first, ok1 := classes[l.first]
+					second, ok2 := classes[l.second]
+					if !ok1 || !ok2 || first.Parent != base || second.Parent != l.first || second.Race != classes[base].Race {
+						t.Errorf("%v class %d: line %d -> %d is not in its tree", role, base, l.first, l.second)
+					}
 				}
 			}
 		}

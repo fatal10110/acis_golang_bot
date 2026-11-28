@@ -64,10 +64,11 @@ Every bot plays a **build**: what its race, its class and its persona's role mak
 - One character model, fed by the bot's own reported stats, scores gear, sets, dyes and spots
   alike, so race counts through numbers rather than hand-written exceptions.
 
-Out of scope: servitor professions (Warlock, Elemental Summoner, Phantom Summoner, and
-Necromancer for its summons), the Overlord (no branch picks it: its seals and clan buffs serve a
-group), and kiting. Second-profession kits are planned in "Second professions (levels 40+)" and ship
-as S13a-S17 (epic #624, #625-#636); servitor lines are #592 (a later milestone).
+Out of scope: the Overlord (no branch picks it: its seals and clan buffs serve a group) and
+kiting. Second-profession kits are planned in "Second professions (levels 40+)" and ship as
+S13a-S17 (epic #624, #625-#636); the servitor lines (Dark Avenger, Warlock, Necromancer, Elemental
+Summoner, Phantom Summoner) are [`servitors.md`](servitors.md) (#592, D51): their rows ship, and
+the branch tables pick them only behind the persona switch `ServitorLines`, off by default.
 
 ## Race and class data
 
@@ -178,8 +179,9 @@ This section is the spec that S5 (gear and dyes, columns 1, 2 and 11), S6 and S6
 (mystic rows), S8 (the professions, the branch weapon and the class change between rows), S10
 (spoil and sweep) and S11 (spot margins, column 10) implement, and that the brain tests check row by row (section
 "Testing"). It covers the nine base classes (levels 1-19) and every first profession (20-39) of
-the branch table in Design section 6, for the Support and Damage roles. The servitor lines are out
-(D23): Human, Elven and Dark Wizard keep their nukes here and never cast their summon skills.
+the branch table in Design section 6, for the Support and Damage roles. Human, Elven and Dark
+Wizard keep their nukes here and never cast their summon skills; the servitor lines summon from 40
+([`servitors.md`](servitors.md), D51).
 The second professions (40+) have their own section at the end.
 
 Every skill below is in its class's skill tree (`classes/*.xml`, merged with the parents' as the
@@ -455,7 +457,10 @@ by X from N" is the stack rule's "replaced by" (CompileBuild drops the earlier s
 Row ids: PL Paladin, TK Temple Knight, SK Shillien Knight, SS Sword Singer, GL Gladiator, WL
 Warlord, DS Destroyer, BD Bladedancer, BH Bounty Hunter, TH Treasure Hunter, HK Hawkeye, PW Plains
 Walker, SR Silver Ranger, AW Abyss Walker, PR Phantom Ranger, TY Tyrant, BI Bishop, PP Prophet,
-EE Elven Elder, SE Shillien Elder, SN Sorcerer, SG Spellsinger, SH Spellhowler, WC Warcryer.
+EE Elven Elder, SE Shillien Elder, SN Sorcerer, SG Spellsinger, SH Spellhowler, WC Warcryer; and
+the servitor lines DA Dark Avenger, WK Warlock, NC Necromancer, EL Elemental Summoner, PS Phantom
+Summoner, whose rows are [`servitors.md`](servitors.md) section 5 (four tables: these three and the
+servitor's).
 
 **Grade C and dyes.** C-grade sets are worn from 40 (Expertise C); the pieces are the ones
 `armorSets.xml` checks (a full-body chest has no legs). A second profession has 3 dye slots and
@@ -595,16 +600,15 @@ dances (`MPReserve` gates attack steps only), the Gladiator and Warlord reserve 
 and buff skills and sit and stand on MP as RO (20 / 80), and the Warlord's pack sweep fights on to
 Crowded 50 and Outmatched 25, as the orc rows do. WC is Support / Damage as OS.
 
-**Servitor lines (a later milestone, D23).** These second professions are never picked and get no
-row here: Dark Avenger (6, ← KN: 283 Summon Dark Panther), Warlock (14, ← HW: 1276 Summon Kai the
-Cat, 1331 Summon Feline Queen), Necromancer (13, ← HW: 1154, 1129, 1334 summon from a corpse),
-Elemental Summoner (28, ← EW: 1277 Summon Merrow the Unicorn, 1332 Summon Unicorn Seraphim),
-Phantom Summoner (41, ← DW: 1278 Summon Soulless, 1333 Summon Nightshade), with their servitor
-buffs (1139-1141, 1299-1301). They need summon control (the servitor's own target, follow and
-attack orders, its HP in the bot's rules), which the bot does not have: #592. The plan for summon
-control, crystal upkeep and the five rows, waiting for owner approval, is
-[`servitors.md`](servitors.md). The Overlord (51) is not picked (a group class, D23), and the
-Warsmith (57, Summon Siege Golem 13 and the cannons) is the crafter's line (M9, D18).
+**Servitor lines (D51).** The rows DA Dark Avenger (6, ← KN), WK Warlock (14, ← HW), NC
+Necromancer (13, ← HW), EL Elemental Summoner (28, ← EW) and PS Phantom Summoner (41, ← DW) are
+[`servitors.md`](servitors.md) section 5, in these three tables plus one for the servitor (its
+summons newest first with the line's Crystal D summon last, Servitor Heal, the servitor buffs), and
+ship in `kits_servitor.go` (#761). The branch tables reach them only with the persona switch
+`ServitorLines` on (Design section 6); off, its default, they are reached by a bot made that way.
+The Necromancer's corpse skills and corpse summons are the corpse rule's (#762). The Overlord (51)
+is not picked (a group class, D23), and the Warsmith (57, Summon Siege Golem 13 and the cannons) is
+the crafter's line (M9, D18).
 
 ## Design
 
@@ -839,7 +843,13 @@ type Build struct {
 | Orc Mystic | Orc Shaman → Warcryer | Orc Shaman → Warcryer (the Overlord serves a group, D23) |
 
 The weights put the race's best fit first: dark elven STR to daggers and duals, elven DEX to
-scouts and archers, orc CON to two-handed weapons. The branch is chosen as follows (D22):
+scouts and archers, orc CON to two-handed weapons. With the persona switch `ServitorLines` on
+(`-servitor-lines`; off by default, D51) four entries take the servitor lines too: the Human
+Fighter's Support Knight → Paladin 2, Dark Avenger 1; the Human Mystic's Damage Human Wizard →
+Sorcerer 2, Necromancer 1, Warlock 1; the Elven Mystic's Elven Wizard → Spellsinger 2, Elemental
+Summoner 1; the Dark Mystic's Dark Wizard → Spellhowler 2, Phantom Summoner 1
+([`servitors.md`](servitors.md) section 5). The first professions do not change, so neither do the
+branch pins. The branch is chosen as follows (D22):
 
 - **A base-class bot** draws its branch from a hash of its account name and its role, so every
   session of the bot picks the same one, and its base row's weapon follows the branch from level 1.
@@ -999,7 +1009,7 @@ Approved by the owner on 2026-11-24, as proposed (also in `docs/plan.md`, "Owner
 | --- | --- | --- |
 | D21 | Which role does each preset play, and which is the default? | New `farmer`: Damage, and the new default for `-persona`, the panel and imported bots (`ImportPreset`); `support`: Support (healer and buffer mystics, tank-line fighters); `merchant`: Damage; `crafter`: Crafter; `town`: Support (as today; since D44 it rotates between town and farming spells). |
 | D22 | How does a bot pick its profession branch? | Weighted by race fit (section 6), drawn from a hash of the account name and role while a base class; a bot with a profession keeps its line; the panel may pin a branch per bot (registry field). |
-| D23 | Which professions are out of scope? | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone; the Overlord is not picked (a group class). |
+| D23 | Which professions are out of scope? | Servitor lines (Warlock, Elemental Summoner, Phantom Summoner) and Necromancer for its summons, a later milestone; the Overlord is not picked (a group class). Superseded for the servitor lines by D51: their rows ship (#761), picked behind `ServitorLines`. |
 | D24 | May the rewrite change today's behavior? | Yes, per PR: S4 lands behavior-neutral, every later PR states the behavior it changes. |
 
 Second professions (owner, 2026-11-26, epic #624): no cubics in M10 until a Crystal: D-Grade source
@@ -1099,7 +1109,7 @@ and A-grade sets are left to the gear model (no follow-up); the servitor issue #
 | S16a (#634) | Nukers SN, SG, SH and the Warcryer WC. | S13a, S13c |
 | S16b (#635) | Healers and buffers BI, PP, EE, SE: heals from a level, Recharge, member buffs. | S13a, S13c |
 | S17 (#636) | Cubics for TK and SK, deferred (owner, 2026-11-26): no cubics in M10 until a Crystal: D-Grade source exists. | S14a, S13c, a crystal source |
-| Later (#592) | Servitor lines with summon control (D23); plan: [`servitors.md`](servitors.md). | — |
+| M10 (#592) | Servitor lines with summon control (D51); plan: [`servitors.md`](servitors.md); the five rows #761, the corpse rule #762. | #757-#760 |
 
 Most urgent: S1, S2 and S4 unblock everything; S6 and S6b give half the bots their skills.
 

@@ -20,6 +20,8 @@ type wiringOptions struct {
 	// stores builds the store registry over the travel map: the swarm's
 	// store presets only, the panel always (it picks presets at runtime).
 	stores bool
+	// servitorLines turns every bot's persona switch ServitorLines on.
+	servitorLines bool
 }
 
 // wiring is the set both commands build the same way (buildShared).
@@ -48,7 +50,7 @@ func buildShared(o wiringOptions, clock botclient.Clock, log *slog.Logger) (w wi
 	}
 	w.shared = shared{
 		claims: botclient.NewPartyClaims(), ground: botclient.NewGroundClaims(), challenges: botclient.NewChallengeHolds(), board: botclient.NewCraftBoard(), storeBudget: o.store.budget,
-		ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget,
+		ads: o.store.adBoard(), valuablesBudget: o.store.valuablesBudget, servitorLines: o.servitorLines,
 	}
 	outcomes, stopOutcomes, err := startOutcomeLog(o.outcomeLog, log)
 	if err != nil {

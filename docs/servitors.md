@@ -1,7 +1,9 @@
 # Servitor lines: summon control and the five rows (#592)
 
 Status: **approved as written** (owner, 2026-11-28, #592 comment; D51 in [`plan.md`](plan.md)).
-The implementation issues it lists are in M10.
+The implementation issues it lists are in M10. The five rows ship (`kits_servitor.go`, #761); the
+branch tables pick them behind `ServitorLines` (`-servitor-lines`), off by default. The
+Necromancer's corpse rule is #762.
 
 Five second professions are never picked and play their first profession's row today
 ([`strategy.md`](strategy.md) "Second professions (levels 40+)", "Servitor lines"; D23): Dark
@@ -281,7 +283,7 @@ class trees, `D/classes/humanFighter.xml` (6), `humanMystic.xml` (13, 14), `elve
 
 | Row | 3. Opener | 4. Rotation (priority order, gates) | 5. Sustain | 6. Self-buffs and toggles | 7. Rest |
 | --- | --- | --- | --- | --- | --- |
-| DA | 28 Aggression from 400, a pull; the servitor is ordered onto the target once the pull lands. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 92 Shield Stun [SHIELD]; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (fixed); melee. | 70 Drain Health S<60; 46 Life Scavenge S<70 on a fresh corpse (section 6); 45 Divine Heal (fixed) S<40; 110 Ultimate Defense S<20 | 82 Majesty, 72 Iron Will @43, 86 Reflect Damage (out of combat); 322 Shield Fortress @64 (combat toggle, MP>30) | HP; 226 Relax (base tree) |
+| DA | 28 Aggression from 400, a pull; the servitor is ordered onto the target before the pull. | 28 Aggression open; 70 Drain Health open; 18 Aura of Hate A≥2; 92 Shield Stun [SHIELD]; 401 Judgment [SWORD, BLUNT, BIGBLUNT, BIGSWORD] @55; 3 Power Strike [SWORD, BLUNT, BIGSWORD, BIGBLUNT] (fixed); melee. | 70 Drain Health S<60; 46 Life Scavenge S<70 on a fresh corpse (section 6); 45 Divine Heal (fixed) S<40; 110 Ultimate Defense S<20 | 82 Majesty, 72 Iron Will @43, 86 Reflect Damage (out of combat); 322 Shield Fortress @64 (combat toggle, MP>30) | HP; 226 Relax (base tree) |
 | WK | Servitor order, then 1220 Blaze (fixed) from 750 after `ServitorLead`. | 1220 Blaze (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal under 50 % (rule `servitor`). | 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind (fixed) when MP under 30 % and S≥70 | 1078 Concentration; 1262 Transfer Pain (combat toggle while the servitor is out, MP>30); servitor buffs 1140, 1139 @44, 1141 @44, 1144 Fast Servitor @48 | MP; plain sit |
 | NC | 1168 Curse: Poison MP>60 from 600, else 1148 Death Spike @44 from 900; before 44 1220 Blaze (fixed) from 750. | 1168 Curse: Poison open MP>60; 1148 Death Spike @44; 1234 Vampiric Claw; 1155 Corpse Burst @48 on a fresh corpse A≥2 (section 6); 1220 Blaze (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal (fixed) under 50 %. | 1234 Vampiric Claw S<70; 1151 Corpse Life Drain S<70 on a fresh corpse (section 6); 1147 Vampiric Touch (fixed) S<60; 1157 Body To Mind when MP under 30 % and S≥70 | 1078 Concentration | MP; plain sit |
 | EL | Servitor order, then 1206 Wind Shackle MP>50 from 600 after `ServitorLead`, else the first ready nuke from 750. | 1206 Wind Shackle open MP>50; 1264 Solar Spark (fixed); 1175 Aqua Swirl (fixed); 1184 Ice Bolt (fixed); 1172 Aura Burn (fixed) ≤150; melee only under MPReserve. Servitor: 1127 Servitor Heal under 50 %. | 1216 Self Heal (base) S<40 (no drain) | 1078 Concentration; 1262 Transfer Pain (as WK); servitor buffs 1140, 1139 @44, 1141 @44, 1145 Bright Servitor @48 | MP; plain sit |
@@ -311,9 +313,10 @@ and SH's, as the curse nuker it is.
 | EL | 1277 Summon Merrow the Unicorn, 1332 Summon Unicorn Seraphim @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1145 @48 | fixed EW nukes, spot glass cannon |
 | PS | 1278 Summon Soulless, 1333 Summon Nightshade @56 | 1127 under 50 % | 1140, 1139 @44, 1141 @44, 1146 @48 | fixed DW nukes, spot glass cannon |
 
-The row summons its newest summon it can pay for (section 4); the D-crystal first-profession
-summons (1111, 1226, 1128) are not used: a C-crystal line that holds only D crystals plays without
-a servitor (owner question 1).
+The row summons its newest summon it can pay for (section 4). Owner answer 1 (D51) lets a line
+holding only Crystal D fall back on its first-profession D summon, so WK, EL and PS list 1111 Kat
+the Cat, 1226 Boxer the Unicorn and 1128 Shadow last (XP penalty 0.3). The Necromancer lists no
+summon for the summon rule: its corpse summons are the corpse rule's (section 6, #762).
 
 ### Branch tables
 

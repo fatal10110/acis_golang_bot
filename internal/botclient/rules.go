@@ -84,6 +84,14 @@ type Persona struct {
 	// bot attacks it too (rule 9 assist); a bare selection by the leader
 	// is no assist. AssistMax 0 never assists.
 	AssistMin, AssistMax time.Duration
+	// ServitorLines draws the bot's branch from the tables with the
+	// servitor lines (docs/servitors.md section 5 "Branch tables"): a Human
+	// Fighter's Support Knight goes on to the Paladin or the Dark Avenger,
+	// a mystic's Damage wizard to its nuker or its line's summoners, and the
+	// Human Wizard to the Necromancer too. Off, the default (D51 answer 2),
+	// the tables are those before the servitor lines. A D6 persona default,
+	// no safety boundary.
+	ServitorLines bool
 	// ServitorLead is how long a kit with ClassKit.ServitorLead holds its
 	// first attack on a fresh target after the servitor's order onto it,
 	// unless the servitor swings at it first (docs/servitors.md section 2).
@@ -96,9 +104,8 @@ type Persona struct {
 	ServitorHealHP      int
 	ServitorDeathWindow time.Duration
 	// Summons, ServitorHeal and ServitorBuffs replace the build's
-	// (ClassKit.Summons, ServitorHeal, ServitorBuffs) when set: a summoner
-	// of a scenario's own before the summoner rows (#761). No preset sets
-	// them.
+	// (ClassKit.Summons, ServitorHeal, ServitorBuffs) when set: a
+	// scenario's own summoner over its row's. No preset sets them.
 	Summons       []int32
 	ServitorHeal  int32
 	ServitorBuffs []int32

@@ -21,10 +21,12 @@ type line struct {
 // Scavenger for the orc and the dwarf, which have none); Damage farms alone,
 // weighted by race fit: dark elven STR to daggers, elven DEX to scouts and
 // archers, orc CON to two-handed weapons. The crafter role is the dwarven
-// Artisan line (D18). The servitor lines (Warlock, Elemental Summoner,
-// Phantom Summoner) and the Necromancer are never picked, and neither is
-// the Overlord (D23). Every first profession is a direct child of its base
-// class and every second one of its first (TestBranchTables).
+// Artisan line (D18). These are the tables with the persona switch
+// ServitorLines off, its default (D51): the servitor lines (Dark Avenger,
+// Warlock, Elemental Summoner, Phantom Summoner) and the Necromancer are
+// picked only with it on (servitorBranches), and the Overlord never (D23).
+// Every first profession is a direct child of its base class and every
+// second one of its first (TestBranchTables).
 var branchTables = map[Role]map[int32][]line{
 	RoleSupport: {
 		0:  {{4, 5, 1}},                // Knight → Paladin
@@ -53,6 +55,40 @@ var branchTables = map[Role]map[int32][]line{
 	},
 }
 
+// servitorBranches are the lines that replace branchTables' for their role
+// and base class while the persona switch ServitorLines is on
+// (docs/servitors.md section 5 "Branch tables", D51 answers 2, 4 and 6):
+// the Dark Avenger a Support line next to the Paladin, the Necromancer and
+// the summoners Damage lines next to their first profession's nuker. The
+// first professions are the tables' own, so the branch pins
+// (BranchPins) do not change with the switch.
+var servitorBranches = map[Role]map[int32][]line{
+	RoleSupport: {
+		0: {{4, classPaladin, 2}, {4, classDarkAvenger, 1}}, // Knight → Paladin, Dark Avenger
+	},
+	RoleDamage: {
+		10: {{11, classSorcerer, 2}, {11, classNecromancer, 1}, {11, classWarlock, 1}}, // Human Wizard → Sorcerer, Necromancer, Warlock
+		25: {{26, classSpellsinger, 2}, {26, classElementalSummoner, 1}},               // Elven Wizard → Spellsinger, Elemental Summoner
+		38: {{39, classSpellhowler, 2}, {39, classPhantomSummoner, 1}},                 // Dark Wizard → Spellhowler, Phantom Summoner
+	},
+}
+
+// servitorTables are branchTables with servitorBranches' lines in place of
+// theirs: the tables of a bot whose persona turns ServitorLines on.
+var servitorTables = func() map[Role]map[int32][]line {
+	tabs := make(map[Role]map[int32][]line, len(branchTables))
+	for r, tab := range branchTables {
+		tabs[r] = make(map[int32][]line, len(tab))
+		for base, ls := range tab {
+			tabs[r][base] = ls
+		}
+		for base, ls := range servitorBranches[r] {
+			tabs[r][base] = ls
+		}
+	}
+	return tabs
+}()
+
 // tableOrder is the order the kept-line rule reads the other roles' tables
 // in when the bot's own names nothing for its class.
 var tableOrder = []Role{RoleSupport, RoleDamage, RoleCrafter}
@@ -61,10 +97,21 @@ var tableOrder = []Role{RoleSupport, RoleDamage, RoleCrafter}
 // account name whose hash, with the role, draws the branch, so every session
 // of the bot picks the same one, and the pinned branch (a first profession's
 // class id, 0 for none) that wins over the hash while the bot is a base
-// class (D22).
+// class (D22). ServitorLines draws from the tables with the servitor lines
+// (servitorTables), the persona switch's (Persona.ServitorLines, D51);
+// false draws from branchTables, as before the switch.
 type BranchChoice struct {
-	Account string
-	Pin     int32
+	Account       string
+	Pin           int32
+	ServitorLines bool
+}
+
+// tables are the branch tables the choice draws from.
+func (c BranchChoice) tables() map[Role]map[int32][]line {
+	if c.ServitorLines {
+		return servitorTables
+	}
+	return branchTables
 }
 
 // hash is the draw's 64 bits for role: FNV-1a of the account name and the
@@ -75,21 +122,22 @@ func (c BranchChoice) hash(role Role) uint64 {
 	return h.Sum64()
 }
 
-// branchLines are the lines of role's table for base, the Damage table's
-// when role's names none (a role that farms alone).
-func branchLines(role Role, base int32) []line {
-	if ls := branchTables[role][base]; len(ls) > 0 {
+// branchLines are the lines of role's table of tabs for base, the Damage
+// table's when role's names none (a role that farms alone).
+func branchLines(tabs map[Role]map[int32][]line, role Role, base int32) []line {
+	if ls := tabs[role][base]; len(ls) > 0 {
 		return ls
 	}
-	return branchTables[RoleDamage][base]
+	return tabs[RoleDamage][base]
 }
 
-// keptLines are the lines that go on from first: role's table's when it
-// names first, else the first other table's in tableOrder that does.
-func keptLines(role Role, first int32) []line {
+// keptLines are the lines of tabs that go on from first: role's table's
+// when it names first, else the first other table's in tableOrder that
+// does.
+func keptLines(tabs map[Role]map[int32][]line, role Role, first int32) []line {
 	of := func(r Role) []line {
 		var ls []line
-		for _, tab := range branchTables[r] {
+		for _, tab := range tabs[r] {
 			for _, l := range tab {
 				if l.first == first {
 					ls = append(ls, l)
@@ -138,16 +186,16 @@ func drawLine(ls []line, r uint64) (line, bool) {
 // agree while the role does not change. A second profession's line is its
 // own; ok is false for a class no table goes on from.
 func chooseLine(class int32, role Role, c BranchChoice) (line, bool) {
-	h := c.hash(role)
+	h, tabs := c.hash(role), c.tables()
 	parent, ok := datapack.ParentClass(class)
 	switch {
 	case !ok:
 		return line{}, false
 	case parent < 0:
 		first := c.Pin
-		if first == 0 || !slices.ContainsFunc(keptLines(role, first), func(l line) bool { return isChildOf(l.first, class) }) {
+		if first == 0 || !slices.ContainsFunc(keptLines(tabs, role, first), func(l line) bool { return isChildOf(l.first, class) }) {
 			var firsts []line
-			for _, l := range branchLines(role, class) {
+			for _, l := range branchLines(tabs, role, class) {
 				if i := slices.IndexFunc(firsts, func(f line) bool { return f.first == l.first }); i >= 0 {
 					firsts[i].weight += l.weight
 				} else {
@@ -160,10 +208,10 @@ func chooseLine(class int32, role Role, c BranchChoice) (line, bool) {
 			}
 			first = f.first
 		}
-		return drawLine(keptLines(role, first), h>>32)
+		return drawLine(keptLines(tabs, role, first), h>>32)
 	}
 	if grand, _ := datapack.ParentClass(parent); grand < 0 {
-		return drawLine(keptLines(role, class), h>>32)
+		return drawLine(keptLines(tabs, role, class), h>>32)
 	}
 	return line{first: parent, second: class}, true
 }

@@ -263,11 +263,14 @@ func (m MeleePolicy) allows(underReserve, alone bool) bool {
 // is the level it starts at, as Step.From. Weapons keeps it on only while
 // the worn weapon's datapack kind is one of them, as Step.Weapons (WL's
 // Polearm Accuracy, whose bonus applies only <using kind="POLE"/>); it goes
-// off with another weapon.
+// off with another weapon. Servitor keeps it on only while the bot's
+// servitor is out and alive (Transfer Pain, rows WK EL PS); it goes off
+// once the servitor dies or leaves.
 type Toggle struct {
 	Skill, From int32
 	MPAbove     int
 	Weapons     []string
+	Servitor    bool
 }
 
 // ClassKit is what one class plays (docs/strategy.md, Design section 4): the
@@ -537,6 +540,7 @@ func CompileBuild(race, class, level int32, role Role, choice BranchChoice) Buil
 		k.Relax, k.RelaxFrom = line.Relax, line.RelaxFrom
 	}
 	k.Sweep, k.SpotMargin, k.ServitorSpotMargin = line.Sweep, line.SpotMargin, line.ServitorSpotMargin
+	k.ServitorLead, k.Summons, k.ServitorHeal, k.ServitorBuffs = line.ServitorLead, line.Summons, line.ServitorHeal, line.ServitorBuffs
 	if line.Thresholds != (Thresholds{}) {
 		bd.Thresholds = line.Thresholds
 	}
@@ -627,25 +631,28 @@ func (p *Persona) override(bd Build, class int32) Build {
 	return bd
 }
 
-// buildKey is what a compiled build is for.
+// buildKey is what a compiled build is for: the persona's switch to the
+// servitor lines (Persona.ServitorLines) among it, as it changes the
+// branch.
 type buildKey struct {
-	class, level int32
-	role         Role
+	class, level  int32
+	role          Role
+	servitorLines bool
 }
 
 // build is the bot's build now, with the class's trainers from the travel
 // map (TravelMap.trainers) and the persona's overrides: CompileBuild
-// runs again whenever the bot's class, level or role differs from the last
-// compile's (the account and the pinned branch it draws the line from are
+// runs again whenever the bot's class, level, role or servitor lines switch
+// differs from the last compile's (the account and the pinned branch it draws the line from are
 // the brain's, fixed for its life), so at entry and on every UserInfo that changed its class or
 // level. The overrides are applied at each call, so a persona edited between
 // compiles still wins.
 func (b *Brain) build() Build {
 	s := &b.world.Self
-	k := buildKey{s.ClassID, s.Level, b.persona.Role}
+	k := buildKey{s.ClassID, s.Level, b.persona.Role, b.persona.ServitorLines}
 	if !b.builtOK || b.builtFor != k {
 		race, _ := datapack.ClassRace(s.ClassID)
-		choice := BranchChoice{Account: b.cfg.account, Pin: b.cfg.Branch}
+		choice := BranchChoice{Account: b.cfg.account, Pin: b.cfg.Branch, ServitorLines: k.servitorLines}
 		b.built, b.builtFor, b.builtOK = CompileBuild(race, s.ClassID, s.Level, k.role, choice), k, true
 	}
 	bd := b.built

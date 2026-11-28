@@ -67,9 +67,12 @@ type uiOptions struct {
 	spawnMultiplier float64
 	// spawnEvents is the server's SpawnEvents (-spawn-events).
 	spawnEvents string
-	gm          gmOptions
-	store       storeOptions
-	geo         geoOptions
+	// servitorLines turns the persona switch ServitorLines on
+	// (-servitor-lines).
+	servitorLines bool
+	gm            gmOptions
+	store         storeOptions
+	geo           geoOptions
 }
 
 func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
@@ -98,6 +101,7 @@ func parseUIFlags(args []string, stderr io.Writer) (uiOptions, error) {
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml); the presets town and merchant and farming need it")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	addSpawnEventsFlag(fs, &o.spawnEvents)
+	addServitorLinesFlag(fs, &o.servitorLines)
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none (the panel's dashboard shows them)")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	addOutcomeLogFlag(fs, &o.outcomeLog)
@@ -309,7 +313,7 @@ func playUI(ctx context.Context, o uiOptions, stderr io.Writer) error {
 	clock := botclient.SystemClock{}
 	w, cleanup, err := buildShared(wiringOptions{
 		allowlisted: o.allowlisted, outcomeLog: o.outcomeLog, datapack: o.datapack, spawnMultiplier: o.spawnMultiplier,
-		spawnEvents: o.spawnEvents, store: o.store, geo: o.geo, stores: true,
+		spawnEvents: o.spawnEvents, store: o.store, geo: o.geo, stores: true, servitorLines: o.servitorLines,
 	}, clock, log)
 	if err != nil {
 		return err

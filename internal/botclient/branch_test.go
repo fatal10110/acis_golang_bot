@@ -26,9 +26,9 @@ func accountFor(t *testing.T, base int32, role Role, want line) string {
 // TestBranchTables checks every line of the tables goes from its base class
 // to a direct child and on to the child's direct child, in one race, and
 // that no line picks a servitor line, the Necromancer or the Overlord
-// (D23).
+// (D23): the tables with ServitorLines off (TestBranchServitorLines).
 func TestBranchTables(t *testing.T) {
-	never := []int32{13, 14, 28, 41, 51} // Necromancer, Warlock, Elemental Summoner, Phantom Summoner, Overlord
+	never := []int32{6, 13, 14, 28, 41, 51} // Dark Avenger, Necromancer, Warlock, Elemental Summoner, Phantom Summoner, Overlord
 	for role, tab := range branchTables {
 		for base, ls := range tab {
 			if p, ok := datapack.ParentClass(base); !ok || p >= 0 {

@@ -343,6 +343,9 @@ var professionKits = map[int32]ClassKit{
 	classSpellsinger: spellsingerKit,
 	classSpellhowler: spellhowlerKit,
 	classWarcryer:    warcryerKit,
+	// The servitor lines (kits_servitor.go).
+	classDarkAvenger: darkAvengerKit, classWarlock: warlockKit, classNecromancer: necromancerKit,
+	classElementalSummoner: elementalSummonerKit, classPhantomSummoner: phantomSummonerKit,
 	// The healers and buffers (kits_healers.go).
 	classBishop: bishopKit, classProphet: prophetKit, classElvenElder: elvenElderKit, classShillienElder: shillienElderKit,
 }

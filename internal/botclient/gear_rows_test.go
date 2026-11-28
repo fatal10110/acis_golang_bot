@@ -93,6 +93,12 @@ var gearRows = map[int32]gearRow{
 	27: {sets: []int32{setKarmian, setDemon}, dyes: []int32{43, 55, 115}},
 	40: {sets: []int32{setKarmian}, dyes: []int32{44, 56, 116}},
 	52: {sets: []int32{setFullPlate, setComposite, setKarmian}, dyes: []int32{46, 58, 118}},
+	// The servitor lines (docs/servitors.md section 5, #761).
+	6:  {sets: []int32{setFullPlate}, dyes: []int32{40, 52, 112}},
+	14: {sets: []int32{setKarmian}, dyes: []int32{44, 56, 116, 43, 55, 115}},
+	13: {sets: []int32{setKarmian}, dyes: []int32{44, 56, 116, 43, 55, 115}},
+	28: {sets: []int32{setKarmian}, dyes: []int32{43, 55, 115}},
+	41: {sets: []int32{setKarmian}, dyes: []int32{44, 56, 116}},
 }
 
 // checkGearRow checks class's gear row against the datapack and the

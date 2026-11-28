@@ -234,7 +234,7 @@ func defaultGearClasses() []GearClass {
 		{Classes: []int32{46, 113}, Weapons: []string{"BIGBLUNT", "BIGSWORD"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{1}, Weapons: []string{"BIGBLUNT", "POLE"}, Armor: "HEAVY", Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{0, 18, 31, 44, 53}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "LIGHT", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
-		{Classes: []int32{5}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
+		{Classes: []int32{5, 6}, Weapons: []string{"SWORD", "BLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{20, 21, 33}, Weapons: []string{"SWORD"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Classes: []int32{55}, Weapons: []string{"BLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},
 		{Weapons: []string{"SWORD", "BLUNT", "BIGSWORD", "BIGBLUNT"}, Armor: "HEAVY", Shield: true, Weights: fighterWeights, BuffPotion: alacrityPotion},

@@ -10,7 +10,7 @@ import (
 func withKit(b *Brain, k ClassKit) {
 	s := &b.world.Self
 	b.built = Build{Role: b.persona.Role, Kit: k, Thresholds: defaultThresholds}
-	b.builtFor, b.builtOK = buildKey{s.ClassID, s.Level, b.persona.Role}, true
+	b.builtFor, b.builtOK = buildKey{s.ClassID, s.Level, b.persona.Role, b.persona.ServitorLines}, true
 }
 
 // kitBrain is a brain of the default persona fighting npcID next to it at

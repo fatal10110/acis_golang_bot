@@ -14,10 +14,9 @@ import (
 const lastClassID = 200
 
 // neverRows are the second professions that never get a row of their own
-// (epic #624): the servitor lines Dark Avenger, Necromancer, Warlock,
-// Elemental Summoner and Phantom Summoner (#592), the Overlord (D23) and the
-// Warsmith (the M9 crafter line).
-var neverRows = []int32{6, 13, 14, 28, 41, 51, 57}
+// (epic #624): the Overlord (D23) and the Warsmith (the M9 crafter line).
+// The servitor lines have theirs (kits_servitor.go, #761).
+var neverRows = []int32{51, 57}
 
 // TestSecondProfessionFallback checks every second profession without a row
 // of its own (no professionKits entry) plays its first profession's row: at

@@ -58,9 +58,12 @@ type swarmOptions struct {
 	datapack        string
 	spawnMultiplier float64
 	spawnEvents     string
-	gm              gmOptions
-	store           storeOptions
-	geo             geoOptions
+	// servitorLines turns the persona switch ServitorLines on
+	// (-servitor-lines).
+	servitorLines bool
+	gm            gmOptions
+	store         storeOptions
+	geo           geoOptions
 	// persona is what every bot plays (-persona).
 	persona string
 	// clanInviters are the -clan-inviters names.
@@ -106,6 +109,7 @@ func parseSwarmFlags(args []string, stderr io.Writer) (swarmOptions, error) {
 	fs.StringVar(&o.datapack, "datapack", "", "server datapack XML directory (aCis_datapack/data/xml) the bots pick farming spots from; default: farm nowhere")
 	fs.Float64Var(&o.spawnMultiplier, "spawn-multiplier", 1, "the server's SpawnMultiplier (npcs.properties), which scales how many bots a farming spot takes")
 	addSpawnEventsFlag(fs, &o.spawnEvents)
+	addServitorLinesFlag(fs, &o.servitorLines)
 	fs.StringVar(&o.metrics, "metrics", "", "loopback address (for example 127.0.0.1:6060) that serves live metrics at "+botmetrics.VarsPath+"; default: serve none")
 	fs.StringVar(&o.pprof, "pprof", "", pprofUsage)
 	addOutcomeLogFlag(fs, &o.outcomeLog)
@@ -225,7 +229,7 @@ func runSwarm(ctx context.Context, args []string, stderr io.Writer) int {
 	p, _ := findPreset(o.persona) // validated by parseSwarmFlags
 	w, cleanup, err := buildShared(wiringOptions{
 		allowlisted: o.allowlisted, outcomeLog: o.outcomeLog, datapack: o.datapack, spawnMultiplier: o.spawnMultiplier,
-		spawnEvents: o.spawnEvents, store: o.store, geo: o.geo, stores: p.store,
+		spawnEvents: o.spawnEvents, store: o.store, geo: o.geo, stores: p.store, servitorLines: o.servitorLines,
 	}, clock, log)
 	if err != nil {
 		fmt.Fprintf(stderr, "bots swarm: %v\n", err)
@@ -390,6 +394,11 @@ func loadSpots(dir string, multiplier float64, supply botclient.SupplyConfig, n 
 	travel := botclient.NewTravelMap(dp, supply)
 	log.Info("travel map", "gatekeepers", travel.Gatekeepers())
 	return botclient.NewSpotRegistry(spots, multiplier), travel, dp, nil
+}
+
+// addServitorLinesFlag adds -servitor-lines, off by default (D51 answer 2).
+func addServitorLinesFlag(fs *flag.FlagSet, on *bool) {
+	fs.BoolVar(on, "servitor-lines", false, "draw the bots' branches with the servitor lines: a Support Knight may go on to the Dark Avenger, a Damage wizard to the Necromancer, the Warlock, the Elemental Summoner or the Phantom Summoner (docs/servitors.md); default: the branch tables without them")
 }
 
 // addSpawnEventsFlag adds -spawn-events, the server's SpawnEvents the bot
