@@ -204,7 +204,10 @@ func TestPackFitPickServitor(t *testing.T) {
 				kaiOut(b).Dead = tt.dead
 			}
 			if tt.dead {
-				b.summonReady = summonKai1
+				// The summon gate (decide sets summonReady) opens on the
+				// kit's summon the bot knows, crystals free here.
+				b.built.Kit.Summons = []int32{summonKai1.ID}
+				b.world.Skills[summonKai1.ID] = KnownSkill{ID: summonKai1.ID, Level: summonKai1.Level}
 			}
 			b.decide(at(time.Second))
 			got := -1

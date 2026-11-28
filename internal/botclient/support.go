@@ -328,7 +328,8 @@ const partyBuffReach = 1000
 // then cast the Idle steps, then put up a buff the stack rule lets go out
 // on a patient (buffDue: missing, or its own effect with under
 // RebuffBefore left), one cast at a time; between the Idle steps and the
-// kit buffs it puts up a Sighted PvP step (sightedBuff). A Party buff is cast on the bot
+// kit buffs it puts up a Sighted PvP step (sightedBuff), then a servitor
+// buff on its servitor (servitorBuff). A Party buff is cast on the bot
 // while some patient within partyBuffReach, the bot included, needs it.
 // A Self buff, and any non-Party buff of a caster-centred datapack target
 // (the server casts it on the caster whatever is selected, so a member
@@ -348,6 +349,9 @@ func (b *Brain) ruleRebuff(now time.Time) (Action, bool) {
 		return a, true
 	}
 	if a, ok := b.sightedBuff(kit.PvP, now); ok {
+		return a, true
+	}
+	if a, ok := b.servitorBuff(now); ok {
 		return a, true
 	}
 	if len(kit.Buffs) == 0 {

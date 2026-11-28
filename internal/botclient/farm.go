@@ -2,6 +2,7 @@ package botclient
 
 import (
 	"cmp"
+	"slices"
 	"time"
 
 	"github.com/fatal10110/acis_golang_bot/internal/datapack"
@@ -16,6 +17,10 @@ import (
 // then it moves on and avoids the spot for AvoidFor (idleOut, #360). A
 // leader waiting for a bot member behind (gathering) picks no new target
 // and its wait is no idle stretch.
+//
+// While its servitor's next upkeep checkpoint is due and the bot cannot
+// pay it (upkeepBlocks), it starts no fight on a fresh target, only on an
+// attacker.
 //
 // It sends what fight sends, a selection or one attack per target paced by
 // the brain's decision tick and the frame pacer, plus the stand-up toggle
@@ -32,6 +37,11 @@ func (b *Brain) ruleFarm(now time.Time) (Action, bool) {
 		return Action{}, true
 	}
 	id := b.farmTarget(now)
+	if id != 0 && b.upkeepBlocks() && !slices.Contains(b.attackers(now), id) {
+		// No new pull: the servitor's next checkpoint is due and unpaid,
+		// so it would leave mid-fight; it runs out first.
+		return Action{}, false
+	}
 	if id == 0 {
 		if b.gathering(now) {
 			v.idleSince = time.Time{}

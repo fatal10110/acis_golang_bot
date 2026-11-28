@@ -104,7 +104,11 @@ type reagentNeed struct {
 // rotation, buffs, heals, toggles, Relax and flee skill), in kit order,
 // each sized ReagentCastsMin and ReagentCastsMax casts per skill at the
 // level the bot knows it, summed per item: a bishop's Major Heal (1 Spirit
-// Ore) and Major Group Heal (4) make 500 at ReagentCastsMax 100. A skill
+// Ore) and Major Group Heal (4) make 500 at ReagentCastsMax 100. A
+// summon skill of the kit's Summons counts one full life (summonLife: the
+// cast and every upkeep checkpoint) as one cast (docs/servitors.md section
+// 4); no spawned merchant sells its crystals, so reagentWants buys none and
+// the count only keeps them from the junk sale (usesReagent). A skill
 // listed twice counts once.
 func (b *Brain) reagentNeeds() []reagentNeed {
 	if b.cfg.Travel == nil {
@@ -128,15 +132,7 @@ func (b *Brain) reagentNeeds() []reagentNeed {
 	p := &b.persona.Shop
 	seen := make(map[int32]bool, len(skills))
 	var out []reagentNeed
-	for _, id := range skills {
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		r := b.reagentOf(id)
-		if r.count == 0 {
-			continue
-		}
+	add := func(r reagent) {
 		i := -1
 		for j := range out {
 			if out[j].item == r.item {
@@ -149,6 +145,24 @@ func (b *Brain) reagentNeeds() []reagentNeed {
 		}
 		out[i].min += p.ReagentCastsMin * r.count
 		out[i].max += p.ReagentCastsMax * r.count
+	}
+	for _, id := range skills {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if r := b.reagentOf(id); r.count > 0 {
+			add(r)
+		}
+	}
+	for _, id := range kit.Summons {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		for _, r := range b.summonLife(id) {
+			add(r)
+		}
 	}
 	return out
 }
