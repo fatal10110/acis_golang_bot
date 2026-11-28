@@ -10,48 +10,36 @@ import (
 	"github.com/fatal10110/acis_golang_bot/internal/botwire"
 )
 
-// Skills and monster of the servitor upkeep scenario
-// (aCis_datapack/data/xml): Servitor Heal (skills/1100-1199.xml 1127,
-// target SUMMON, range 600), Servitor Physical Shield (1140, a 1200 s
-// buff) and Crokian (npcs/20000-20999.xml 20789), an aggressive level 36
-// melee monster of 809 HP and 131 P.Atk: it goes for the summoner first and
-// turns on the servitor once the servitor's swings outweigh the bot's, and
-// Kat the Cat kills it in a few swings. A level 40 summoner died to two
-// swings of a level 38 Crokian Warrior in an earlier run: the scenario's
-// is level 76.
+// Skills of the servitor upkeep scenario (aCis_datapack/data/xml):
+// Servitor Heal (skills/1100-1199.xml 1127, target SUMMON, range 600) and
+// Servitor Physical Shield (1140, a 1200 s buff).
 const (
 	skillServitorHeal int32 = 1127
 	skillServitorPDef int32 = 1140
-	crokian           int32 = 20789
-	upkeepLevel             = 76
-	// upkeepFights bounds the Crokians the scenario spawns before the
-	// servitor is hurt and healed.
-	upkeepFights = 5
-	// fightBoundUpkeep bounds one Crokian's fight and the heal after it
-	// (the combat stance outlasts the fight by about 15 s).
-	fightBoundUpkeep = 3 * time.Minute
+	// upkeepFights bounds the gremlins the scenario spawns before the
+	// servitor swings at one the bot fights.
+	upkeepFights = 3
+	// fightBoundUpkeep bounds one gremlin's fight.
+	fightBoundUpkeep = 2 * time.Minute
 )
 
 // TestLiveServitorUpkeep runs a brain-run summoner (#759): a Human Mystic
-// set to level 76 by the GM, given Summon Kat the Cat level 5, Servitor
+// set to level 40 by the GM, given Summon Kat the Cat level 5, Servitor
 // Heal, Servitor Physical Shield and Crystal D, with them as its persona's
 // summon, heal and servitor buff (the summoner rows are #761's). Its
 // summon rule casts the summon (cast plus one upkeep step: 6 Crystal D),
-// its rebuff rule puts the buff on the new servitor, and a Crokian Warrior
-// spawned next to it starts a fight: the bot orders the servitor onto the
-// Crokian (RequestActionUse 22, #758) and the servitor's swing at it
-// follows; once the servitor is hurt the bot casts Servitor Heal on it. A
-// Crokian seldom takes Kat under half its HP before it dies, so the
-// persona heals the servitor under 99 % (ServitorHealHP; in combat under
-// half of it, else once out of combat): the threshold logic is unit tested
-// (botclient TestServitorHeal), the scenario shows the heal reaching the
-// servitor on the server. No GM
-// command summons for a player (network/admin_summon.go), so the brain's
-// own summon brings the servitor out.
+// its rebuff rule puts the buff on the new servitor (MagicSkillLaunched on
+// it), and a gremlin spawned next to it starts a fight: the bot orders the
+// servitor onto it (RequestActionUse 22, #758) and the servitor's swing at
+// it follows. No GM command summons for a player
+// (network/admin_summon.go), so the brain's own summon brings the servitor
+// out. Servitor Heal is not seen live: no GM command hurts a servitor, and
+// a monster that takes Kat the Cat's HP down kills the summoner first
+// (#768); botclient TestServitorHeal covers when it is cast.
 func TestLiveServitorUpkeep(t *testing.T) {
 	t.Parallel()
 	tg := Live(t, NeedGM, NeedDatapack)
-	ctx := scenarioCtx(t, 20*time.Minute)
+	ctx := scenarioCtx(t, 15*time.Minute)
 	travel := travelMap(t, tg)
 	gm := enterGM(t, ctx, tg)
 	account, _ := tg.Account("sk", 1)
@@ -63,8 +51,9 @@ func TestLiveServitorUpkeep(t *testing.T) {
 			p.Summons = []int32{skillSummonKat}
 			p.ServitorHeal = skillServitorHeal
 			p.ServitorBuffs = []int32{skillServitorPDef}
-			p.ServitorHealHP = 99
-			// Nothing walks it off the place the GM finds it at.
+			// Nothing walks it off the place the GM finds it at: the
+			// server stops showing a servitor to an owner that walked
+			// (fatal10110/acis_golang#5589).
 			p.Loot.Pickup = false
 			p.Gear.Buy = false
 			p.Shop.Reach = 0
@@ -81,7 +70,7 @@ func TestLiveServitorUpkeep(t *testing.T) {
 	})
 	t.Cleanup(func() { backToLevel1(t, gm, f) })
 	gmOn(t, ctx, gm, f,
-		"set level "+fmt.Sprint(upkeepLevel),
+		"set level "+fmt.Sprint(summonerLevel),
 		fmt.Sprintf("skill set %d %d", skillSummonKat, summonKatLevel),
 		fmt.Sprintf("skill set %d 1", skillServitorHeal),
 		fmt.Sprintf("skill set %d 1", skillServitorPDef),
@@ -93,66 +82,49 @@ func TestLiveServitorUpkeep(t *testing.T) {
 	gmTeleport(t, ctx, gm, townTI)
 
 	var (
-		servitor, mob    int32
-		hp, maxHP        int32
-		buffed, hurtSeen bool
-		ordered, struck  bool
-		hurtAt           time.Time
-		from             int
-		mobs             []int32
+		servitor, mob int32
+		mobs          []int32
+		buffed        bool
+		struck        bool
+		from          int
 	)
-	// A failed run logs what the bot saw of the fight.
+	// A failed run logs what the bot saw.
 	t.Cleanup(func() {
 		if t.Failed() {
 			logServitorFight(t, f, servitor, mobs)
 		}
 	})
 	// scan reads what the bot saw since the last scan.
-	scan := func() (died, mobDied, healed bool) {
+	scan := func() (mobDied bool) {
 		seen := f.watch.Seen(from)
 		from += len(seen)
 		for _, s := range seen {
 			switch e := s.Event.(type) {
 			case botclient.PetInfo:
-				if e.SummonType != botclient.SummonServitor {
-					continue
-				}
-				if servitor == 0 {
+				if e.SummonType == botclient.SummonServitor && servitor == 0 {
 					servitor = e.ObjectID
 					if e.TemplateID != summonKatNPC {
 						t.Errorf("summoned npc %d, want Kat the Cat %d", e.TemplateID, summonKatNPC)
 					}
 				}
-				if e.ObjectID == servitor {
-					hp, maxHP = e.CurHP, e.MaxHP
-				}
-			case botclient.PetStatusUpdate:
-				if e.ObjectID == servitor {
-					hp, maxHP = e.CurHP, e.MaxHP
-				}
 			case botclient.MagicSkillLaunched:
 				if e.CasterID == f.id && e.SkillID == skillServitorPDef && servitor != 0 {
-					for _, id := range e.Targets {
-						buffed = buffed || id == servitor
-					}
+					buffed = buffed || slices.Contains(e.Targets, servitor)
 				}
 			case botclient.Attack:
-				// The servitor's swing at the Crokian after the bot's
+				// The servitor's swing at the gremlin after the bot's
 				// attack order (22) went out.
 				if servitor != 0 && mob != 0 && e.AttackerID == servitor && len(e.Hits) > 0 && e.Hits[0].TargetID == mob {
 					struck = struck || orderedBy(f.watch.Sent(), s.SentBefore)
 				}
-			case botclient.MagicSkillUse:
-				healed = healed || e.CasterID == f.id && e.SkillID == skillServitorHeal && hurtSeen
 			case botclient.Die:
-				died = died || servitor != 0 && e.ObjectID == servitor
 				mobDied = mobDied || mob != 0 && e.ObjectID == mob
-			}
-			if !hurtSeen && servitor != 0 && maxHP > 0 && hp < maxHP {
-				hurtSeen, hurtAt = true, s.At
+				if servitor != 0 && e.ObjectID == servitor {
+					t.Fatalf("servitor %d died", servitor)
+				}
 			}
 		}
-		return died, mobDied, healed
+		return mobDied
 	}
 
 	waitForBy(t, ctx, f.name+" summoning Kat the Cat", time.Now().Add(2*time.Minute), func() bool {
@@ -171,46 +143,24 @@ func TestLiveServitorUpkeep(t *testing.T) {
 		return buffed
 	})
 
-	for n := 1; ; n++ {
+	for n := 1; !struck; n++ {
 		if n > upkeepFights {
-			t.Fatalf("servitor at %d/%d HP after %d Crokians: never healed", hp, maxHP, upkeepFights)
+			t.Fatalf("no swing of the servitor at a gremlin after its order, %d gremlins", upkeepFights)
 		}
-		// The summoner at full HP for each fight.
-		gmOn(t, ctx, gm, f, "heal")
-		spawned, err := gm.Spawn(ctx, crokian)
+		gmTo(t, ctx, gm, f)
+		spawned, err := gm.Spawn(ctx, gremlin)
 		if err != nil {
 			t.Fatal(err)
 		}
 		mob = spawned
 		mobs = append(mobs, mob)
 		gmTeleport(t, ctx, gm, townTI)
-		healed, over := false, false
-		waitForBy(t, ctx, fmt.Sprintf("Crokian %d fought and the servitor healed", n), time.Now().Add(fightBoundUpkeep), func() bool {
-			died, mobDied, h := scan()
-			if died {
-				t.Fatalf("servitor %d died before its heal", servitor)
-			}
-			healed, over = healed || h, over || mobDied
-			if over && hurtSeen && hp >= maxHP && !healed {
-				// It regenerated to full before the bot left combat: the
-				// next Crokian.
-				hurtSeen = false
-			}
-			return healed || over && !hurtSeen
+		waitForBy(t, ctx, fmt.Sprintf("gremlin %d fought with the servitor", n), time.Now().Add(fightBoundUpkeep), func() bool {
+			return scan() || struck
 		})
 		gm.Forget(mob)
-		if healed {
-			t.Logf("Servitor Heal %v after the servitor was hurt, Crokian %d (dead %v)", time.Since(hurtAt).Round(time.Second), n, over)
-			break
-		}
 	}
-	ordered = orderedBy(f.watch.Sent(), len(f.watch.Sent()))
-	if !ordered {
-		t.Error("the bot never ordered its servitor to attack (RequestActionUse 22)")
-	}
-	if !struck {
-		t.Error("the servitor never swung at a Crokian the bot fought")
-	}
+	t.Logf("%s ordered servitor %d onto gremlin %d and it swung", f.name, servitor, mob)
 }
 
 // orderedBy reports whether a servitor attack order (RequestActionUse 22)
