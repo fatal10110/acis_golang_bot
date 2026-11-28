@@ -72,7 +72,10 @@ stayed there.
   defender inside at the start stays while its lists are out.
 - **Routes.** Every walk keeps `siegeClear` (100) from each blocked battlefield the bot does not
   fight in (the walker's avoid area, beside a karma bot's town margin), but one the walk starts or
-  ends in or by: the walk out leaves straight, a walk to a point inside enters straight. 100 is past
+  ends in: the walk out leaves straight, a walk to a point inside enters straight. A walk that
+  starts or ends just outside one still keeps it out; only the ground outside it within
+  `siegePocket` (200) of that end stays open, so the walk reaches the end without crossing (no 283,
+  walk out, re-cross loop). 100 is past
   a geodata cell's diagonal, so a segment between two kept columns never clips the polygon, and
   short of `siegeMargin` less `siegeArrive`, so a bot that walked out stands clear of it. When no
   route keeps out (or the search runs out of budget), the walk crosses as before and the walk out

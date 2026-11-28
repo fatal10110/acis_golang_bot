@@ -27,7 +27,10 @@ import (
 // from a running battlefield they do not end in (siegeArea): past a
 // geodata cell's diagonal, so a segment between two columns kept out
 // never clips the polygon, and short of siegeMargin less siegeArrive, so a
-// bot that walked out stands clear of it.
+// bot that walked out stands clear of it. siegePocket is how far from a
+// walk's end just outside a battlefield the ground outside it stays open
+// (siegeArea): twice siegeClear, so the open ground reaches the clear
+// ground past siegeClear on any side of the end.
 const (
 	siegeLength   = 120 * time.Minute
 	siegeCastles  = 9
@@ -37,6 +40,7 @@ const (
 	siegeDepth    = 400
 	siegeArrive   = 100
 	siegeClear    = 100
+	siegePocket   = 2 * siegeClear
 )
 
 // siegeState is the bot's siege memory. fields are the battlefields (1-based,
@@ -256,8 +260,10 @@ func (b *Brain) siegeBlocks(p Point, now time.Time) bool {
 // siegeArea is the ground a walk from from to dest keeps out of at now
 // (docs/pvp/siege.md "Not taking part"), for the walker's avoid set: within
 // siegeClear of a running battlefield the bot does not fight in, but those
-// from or dest lie in or by, which the walk must leave (ruleSiegeLeave's
-// walk out) or enter. A battlefield is read flat, as zoneDist reads it:
+// from or dest lie in, which the walk must leave (ruleSiegeLeave's walk out)
+// or enter. An end just outside one keeps it out but for the ground outside
+// it within siegePocket of that end, so the walk still starts or ends there
+// without crossing it. A battlefield is read flat, as zoneDist reads it:
 // the planner's area callback carries no height. nil when no such
 // battlefield runs.
 func (b *Brain) siegeArea(from, dest Point, now time.Time) func(x, y int) bool {
@@ -268,7 +274,7 @@ func (b *Brain) siegeArea(from, dest Point, now time.Time) func(x, y int) bool {
 	var ks []keep
 	for _, f := range b.runningFields(now) {
 		z := b.fieldZone(f)
-		if b.takesPart(f) || zoneDist(z, from) < siegeClear || zoneDist(z, dest) < siegeClear {
+		if b.takesPart(f) || zoneDist(z, from) < 0 || zoneDist(z, dest) < 0 {
 			continue
 		}
 		k := keep{z: z, minX: slices.Min(z.X) - siegeClear, minY: slices.Min(z.Y) - siegeClear, maxX: slices.Max(z.X) + siegeClear, maxY: slices.Max(z.Y) + siegeClear}
@@ -280,7 +286,10 @@ func (b *Brain) siegeArea(from, dest Point, now time.Time) func(x, y int) bool {
 	return func(x, y int) bool {
 		p := Point{X: int32(x), Y: int32(y)}
 		for _, k := range ks {
-			if p.X >= k.minX && p.X <= k.maxX && p.Y >= k.minY && p.Y <= k.maxY && zoneDist(k.z, p) < siegeClear {
+			if p.X < k.minX || p.X > k.maxX || p.Y < k.minY || p.Y > k.maxY {
+				continue
+			}
+			if d := zoneDist(k.z, p); d < siegeClear && (d <= 0 || (dist2D(p, from) > siegePocket && dist2D(p, dest) > siegePocket)) {
 				return true
 			}
 		}

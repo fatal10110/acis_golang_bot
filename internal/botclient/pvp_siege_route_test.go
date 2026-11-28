@@ -34,8 +34,8 @@ func siegeRoute(t *testing.T, b *Brain, dest Point, now time.Time) ([]Point, wal
 }
 
 // TestPvPSiegeRoute checks the walk past a running battlefield the bot does
-// not fight in (docs/pvp/siege.md "Not taking part"): around it, and around
-// every one running; straight out of the one it stands in and into the one
+// not fight in (docs/pvp/siege.md "Not taking part"): around it, around it
+// from or to a point just outside it, and around every one running; straight out of the one it stands in and into the one
 // it walks to; straight through its own castle's; around a karma margin
 // and a battlefield together; straight across, as before, when no way
 // around is left; straight again once the block lapsed.
@@ -78,6 +78,26 @@ func TestPvPSiegeRoute(t *testing.T) {
 		}
 		if _, st := siegeRoute(t, b, dest, t0); st != walkWalking {
 			t.Fatalf("status %v (%s), want the walk out", st, b.walk.reason)
+		}
+	})
+	t.Run("end just outside it: around it, no segment inside", func(t *testing.T) {
+		// The walk ends 50 past the far edge, or starts 50 before the near
+		// one: the battlefield stays kept out, so no 283, walk out, re-cross.
+		for _, w := range []struct{ from, dest Point }{
+			{from, Point{X: 4050, Y: 2000}},
+			{Point{X: 2950, Y: 2000}, dest},
+		} {
+			b := siegeRouteBrain(t, w.from, running, field)
+			pts, st := siegeRoute(t, b, w.dest, t0)
+			if st != walkWalking {
+				t.Fatalf("%+v to %+v: status %v (%s), want a walk", w.from, w.dest, st, b.walk.reason)
+			}
+			if d := clearOf(pts, field, nil); d <= 0 {
+				t.Fatalf("%+v to %+v: route %v enters the battlefield, want it kept out", w.from, w.dest, pts)
+			}
+			if end := pts[len(pts)-1]; horizontal2(end, w.dest) > 100*100 {
+				t.Fatalf("%+v to %+v: route ends at %+v", w.from, w.dest, end)
+			}
 		}
 	})
 	t.Run("taking part: straight through its castle's", func(t *testing.T) {
