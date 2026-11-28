@@ -408,8 +408,10 @@ picks one per persona.
   Scrolls of Escape; the class's buff potion only when the budget's comfort tier allows it. The
   `pvp` preset adds `PvPPolicy.CureStock` (5) Antidotes (1831) and Bandages (1833), from level 20
   as many Greater Antidotes (1832) and Emergency Dressings (1834) where a merchant the shop errand
-  can visit sells them, and keeps every cure and its CP potions (5591, 5592; none bought)
-  (`docs/pvp/model.md` "Gear and consumables", D37).
+  can visit sells them, and keeps every cure and its CP potions (5591, 5592). It stocks
+  `PvPPolicy.CPStock` (10) CP Potions, a Greater one (5592) counted as 4: below `Supply.Refill`
+  percent of it the list asks for the difference, which only the market errand buys (section 8;
+  `docs/pvp/model.md` "Gear and consumables", D37, D43).
 - **HP potions** keep rule 3, with a persona threshold (`CrowdedHP`, default 80 %, above
   `OutmatchedHP`) that also allows drinking early when two or more attackers are on the bot; the
   heal and the flee stay under `CriticalHP`. Rules 3 and 4 do not flee while an attacker runs as
@@ -733,7 +735,9 @@ stores.
 - **Never** a karma or flagged owner, nor one whose last `RelationChanged` says the bot may attack it
   without force (a PvP zone, an arena, a duel): the second `Action` on one attacks it.
 - **What:** the use meter's trip targets carried under `Supply.Refill` percent, up to the target,
-  wherever they are sold, then the gear goal's pieces (`gearGoal`). Rows are taken cheapest first,
+  wherever they are sold, the `pvp` CP stock's difference (5591 and 5592, cheapest per CP first,
+  Greater first at an equal price per CP, never past the stock; `docs/pvp/cp-potions.md`), then
+  the gear goal's pieces (`gearGoal`). Rows are taken cheapest first,
   each tier above its budget floor (section 5); of the gear, one piece per slot, and a set piece only
   with the rest of the set still paid.
 - **Flow:** walk to within trade interaction distance (150) of the owner, then send `Action` twice

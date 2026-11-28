@@ -5,9 +5,10 @@ Plan for #427. Ships in X17-X19 (#612, #613, #614). Decision D43 (owner approved
 `internal/gameserver/signspriest/` and `model/actor/npc/folk_chat_signs.go`, its pages under
 `aCis_datapack/data/html/seven_signs/`.
 
-Today a `pvp` bot drinks CP potions 5591 and 5592 from stock and never buys them
+Before X17 a `pvp` bot drank CP potions 5591 and 5592 from stock and never bought them
 ([CP](layer.md#cp-cures-pool-break-off), [consumables](model.md#gear-and-consumables-x10)), so
-the stock runs out and stays out. A GM grant is the only source.
+the stock ran out and stayed out, a GM grant the only source. X17 (#612) buys them from player sell
+stores.
 
 ## Server facts
 
