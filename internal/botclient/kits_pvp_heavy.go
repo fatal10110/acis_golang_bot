@@ -6,7 +6,8 @@ import "slices"
 // AREA radius 80 around its target, POLE only, reuse 120 s. The server
 // takes its power (7 % at level 1 to 30 % at 10, levels 1 and 2 at 66)
 // of each player's current CP (handler/skill/resources.go
-// cpDamagePercentHandler), so it is worth most on full CP: the opener.
+// cpDamagePercentHandler), so it is worth most on full CP: the lead
+// damage step.
 const skillWrath int32 = 320
 
 // The heavy damage second-profession PvP rows (docs/pvp/rows-second.md,
@@ -28,11 +29,16 @@ var (
 		[]Step{{Skill: skillTripleSlash, Weapons: dualOnly, Interrupt: true}},
 	)
 	// warlordSecondPvP (WL): Lionheart at engage vs C, H, B; Wrath from 66
-	// as the opener (owner decision O2, D50); Thunder Storm (an aura stun)
-	// held for a caster's or healer's cast, at reuse otherwise.
+	// as the lead damage step (owner decision O2, D50): it opens the
+	// damage on full CP, first against a caster or healer (Thunder Storm
+	// held), right after the storm against a melee or archer (due control
+	// goes first, pvpLayer), and again at its reuse. Not an Opener step:
+	// the storm's cast would spend the opener and Wrath would never play
+	// against a melee or archer. Thunder Storm (an aura stun) held for a
+	// caster's or healer's cast, at reuse otherwise.
 	warlordSecondPvP = []Step{
 		{Skill: skillLionheart, Target: TargetSelf, Vs: vsCHB},
-		{Skill: skillWrath, From: 66, Weapons: poleOnly, Opener: true},
+		{Skill: skillWrath, From: 66, Weapons: poleOnly},
 		{Skill: skillThunderStorm, Weapons: poleOnly, Hold: true},
 	}
 	// destroyerPvP (DS): Rage and Lionheart at engage vs C, H, B (as OR);

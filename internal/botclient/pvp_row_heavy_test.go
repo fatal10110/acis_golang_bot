@@ -140,8 +140,10 @@ func TestPvPRowGL(t *testing.T) {
 // TestPvPRowWL checks the warlord's PvP row: Wrath from 66 opens in a
 // duel, not at 65; in the open world it opens with no bystander, and not
 // with a flagged karma-free bystander within its 80 of the target (the
-// area rule); Lionheart at engage on a caster; Thunder Storm held against
-// a Cleric until its Heal, at reuse against a Warrior.
+// area rule); it is a damage step, not an Opener, so it plays on an
+// opened fight too; Lionheart at engage on a caster; Thunder Storm held
+// against a Cleric until its Heal, at reuse against a Warrior, ahead of
+// Wrath at 66, which follows once the storm is cast.
 func TestPvPRowWL(t *testing.T) {
 	near := func(t *testing.T, b *Brain) { foeOf(t, b, lyrMystic, Point{X: 30}, 0) }
 	duel := func(t *testing.T, b *Brain) {
@@ -160,7 +162,7 @@ func TestPvPRowWL(t *testing.T) {
 		{"a duel at 65: no Wrath", 65, []func(*testing.T, *Brain){near, duel}, 0},
 		{"the open world at 66: Wrath opens", 66, []func(*testing.T, *Brain){near}, skillWrath},
 		{"a flagged bystander in Wrath's reach: no Wrath", 66, []func(*testing.T, *Brain){near, bystander}, 0},
-		{"at 66, opened: no Wrath", 66, []func(*testing.T, *Brain){near, opened}, 0},
+		{"at 66, opened: Wrath still plays (lead damage, not an Opener)", 66, []func(*testing.T, *Brain){near, opened}, skillWrath},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := pvpRowBrain(t, classWarlord, tc.level, "POLE", lyrMystic, skillWrath, skillThunderStorm)
@@ -175,6 +177,7 @@ func TestPvPRowWL(t *testing.T) {
 		})
 	}
 	all := []int32{skillLionheart, skillThunderStorm}
+	wrath := []int32{skillLionheart, skillWrath, skillThunderStorm}
 	playRow(t, classWarlord, []rowCase{
 		{name: "a Human Mystic: Lionheart", level: 60, weapon: "POLE", skills: all, opp: lyrMystic, want: skillLionheart},
 		{name: "a Cleric, Lionheart cooling: Thunder Storm held", level: 60, weapon: "POLE", skills: all, opp: lyrCleric, setup: cooling(skillLionheart), not: []int32{skillThunderStorm}},
@@ -183,6 +186,13 @@ func TestPvPRowWL(t *testing.T) {
 			setup: both(cooling(skillLionheart), func(t *testing.T, b *Brain) { foeOf(t, b, lyrCleric, Point{Y: 60}, 0) }), want: skillThunderStorm,
 		},
 		{name: "a Warrior: Thunder Storm at reuse", level: 60, weapon: "POLE", skills: all, opp: lyrWarrior, setup: warriorAt(60), want: skillThunderStorm, not: []int32{skillLionheart}},
+		// Due control goes ahead of the damage: the storm first, then Wrath
+		// on the opened fight (the storm's cast opened it; review r1).
+		{name: "a Warrior at 66: Thunder Storm first", level: 66, weapon: "POLE", skills: wrath, opp: lyrWarrior, setup: warriorAt(60), want: skillThunderStorm, not: []int32{skillWrath}},
+		{
+			name: "a Warrior at 66, the storm cast: Wrath", level: 66, weapon: "POLE", skills: wrath, opp: lyrWarrior,
+			setup: both(warriorAt(60), opened, cooling(skillThunderStorm)), want: skillWrath,
+		},
 	})
 }
 
