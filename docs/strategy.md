@@ -949,6 +949,12 @@ the werewolves after pulling a third wolf); a death there still teaches the bot 
 pack (`learnPack`).
 With no stats yet, no monster with stats, or a cast on the target it has no travel map to price,
 only the level bounds the spot.
+The kill is timed with the faster of the bot's melee and the first rotation step it knows that
+deals its target damage, passing over a step gated on its own HP (`SelfHPBelow`): the one rule the
+gear model and the party fit take their attack by (`killAttack`, #712; #676). Before #712 the fit
+timed the sustain drain: a Wizard, SN, SH, Necromancer or Warlock was judged by Vampiric Touch
+(12 s reuse) and kept fewer spots than its nukes earn, a human or dark mystic at 20 more than its
+Wind Strike earns. A bot that knows only its sustain step is priced by its melee.
 The model prices risk, not reach: a spot whose monsters all fall to other players, or stay out of
 reach, leaves the bot nothing to fight. The farmer takes farm targets anywhere in the spot's
 territory, not only within the leash of its centre (#447), and moves on after
