@@ -159,7 +159,8 @@ func TestPvPWarTarget(t *testing.T) {
 
 // TestPvPWarGuard checks the guards on a war enemy (docs/pvp/war.md
 // "Guards"): its mark cleared mid-fight on a clean target stops the fight
-// at once, Esc for a cast in its window, a move for a swing, with no
+// at once (a war's end, the enemy's CharInfo in another clan, the bot's
+// own clan change), Esc for a cast in its window, a move for a swing, with no
 // further Action, AttackRequest or cast; a flagged one is fought on under
 // the flag guard, which holds no damage while the mark stands.
 func TestPvPWarGuard(t *testing.T) {
@@ -189,6 +190,8 @@ func TestPvPWarGuard(t *testing.T) {
 	}{
 		{"1567", warEnded},
 		{"the enemy's CharInfo with clan 0", warFoe(foeName, 0, Point{Y: 300})},
+		{"the bot's UserInfo with clan 0", UserInfo{ObjectID: selfID, Name: "bot"}},
+		{"the bot joins another clan", JoinPledge{ClanID: 8}},
 	} {
 		t.Run(tc.name+" mid-cast: Esc, then a move", func(t *testing.T) {
 			b := warGuard(t, ws)

@@ -30,7 +30,7 @@ For a player `o` (monsters and folk NPCs as today except in a duel, rule 1; summ
 5. never a bot (nickname marker) unless it hit the bot first (an `Attack` or hostile cast in the
    attackers table, D38);
 6. `FightFlagged` and `o` flagged or with karma (today);
-   6b. `FightWar` (`War` mode) and `o` marked at mutual war ([war](war.md), X14, D40);
+   - 6b. `FightWar` (`War` mode) and `o` marked at mutual war ([war](war.md), X14, D40);
 7. PK mode (today's `ForceAttack`) on and the D39 limits pass ([PK mode](karma.md#pk-mode)), a clean attacker of a karma
    bot included ([with karma](karma.md#with-karma));
 8. else no.
