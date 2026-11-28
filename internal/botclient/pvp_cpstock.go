@@ -36,7 +36,15 @@ func (b *Brain) cpShort() int32 {
 	if stock <= 0 || !b.refills(have, stock) {
 		return 0
 	}
-	n := stock - have
+	return b.cpLack()
+}
+
+// cpLack is what the CP stock lacks, in CP Potions, at most what the
+// weight left under BuyLoad once the other supplies are carried takes: the
+// amount a purchase under way fills up to, cpShort without its refill
+// threshold (the priest stop's second row, priestAmount).
+func (b *Brain) cpLack() int32 {
+	n := max(b.persona.PvP.CPStock-b.cpHeld(), 0)
 	sup := b.supplies()
 	if room, capped := b.weightCap(sup); capped {
 		for _, s := range sup {

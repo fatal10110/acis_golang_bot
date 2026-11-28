@@ -25,7 +25,7 @@ stores.
 | Entering a dungeon | A Dungeon Gatekeeper at each entrance (`necro*`, `cata*` bypasses) admits a signed-up player of either cabal outside Seal Validation, and in it only a member of the winning cabal that owns the dungeon's seal (catacombs: Gnosis, necropolises: Avarice), any member after a tie; no sign-up, no entry. | `sevensigns/dungeon.go:20-45`; `model/actor/npc/folk_dungeon.go` |
 | Stones into Ancient Adena | On page `2a`/`2c`: `SevenSigns 17 4` turns every stone held into Ancient Adena at once (3/5/10 each, no cap); `SevenSigns 17 <1-3>` and `18 <id> <n>` one color. `SevenSigns 9` pays the stones contributed during the competition (`SevenSigns 6`, capped at `MaxPlayerContrib` 1 000 000 points) at the same rate, and contributing adds to the cabal's stone score. Stones held are never lost: a losing cabal's member keeps them for a later cycle. | `signspriest.go:356-420`, `:497-517`, `:535-620`; `sevensigns/players.go:80-111` |
 | Other Ancient Adena | The Festival of Darkness (party content). The Black Marketeer of Mammon trades Ancient Adena for adena 1:1 (`SevenSigns 7`), never the reverse. Players can sell it in private stores. | `blkmrkt_1.htm`; `signspriest.go:476-495` |
-| Multisell | `MultiSellList` pages (`multisell.PageSize` rows) after the bypass; `MultiSellChoose` (list, entry, amount) is dropped in silence when it falls inside `MultisellTime` (100 ms shipped) of the last one, or does not match the shown list, the NPC or its reach; weight and slot refusals answer with a `SystemMessage`. The bot has no multisell wire today. | `network/multisell.go:16-80`, `serverpackets/multisell.go`, `network/client_ingame.go:258`; `ops/docker/config/server.properties:222-223` |
+| Multisell | `MultiSellList` pages (`multisell.PageSize` rows) after the bypass; `MultiSellChoose` (list, entry, amount) is dropped in silence when it falls inside `MultisellTime` (100 ms shipped) of the last one, or does not match the shown list, the NPC or its reach; weight and slot refusals answer with a `SystemMessage`. The bot decodes `MultiSellList` and encodes `MultiSellChoose` in `internal/botwire/multisell.go` (X19). | `network/multisell.go:16-80`, `serverpackets/multisell.go`, `network/client_ingame.go:258`; `ops/docker/config/server.properties:222-223` |
 
 ## Options
 
@@ -129,8 +129,10 @@ owner. Pacing, refusals and cool-downs are the errand's ([items](../items.md#8-b
   reads (`indexKillValues`, at their reference price); only a member farms the monsters that drop
   them.
 
-**X19, the priest trip.** In Seal Validation, a `SevenSigns` bot holding stones or Ancient Adena,
-below its CP stock, adds a priest stop to its supply trip:
+**X19, the priest trip.** Shipped in `internal/botclient/sevensigns_priest.go` on the X18 visit
+(the `signs` rule), tested on unit tests and recorded frames of every priest page per the owner's
+answer to [question 3](#owner-questions). In Seal Validation, a `SevenSigns` bot holding stones or
+Ancient Adena, below its CP stock, adds a priest stop to its supply trip:
 
 1. Talk to the nearest Dusk Priestess. Only a page linking `_multisell 500` and `_SevenSigns 16`
    goes on (the bot reads links, not text); any other page ends the stop until the next
@@ -149,7 +151,10 @@ business, not this plan's.
 **Pacing.** Every priest bypass under `bypassGap` (500 ms, above `ServerBypassTime` 100 ms), at
 most one `MultiSellChoose` per answer and never two within 500 ms (above `MultisellTime` 100 ms),
 at most two per trip; the trip itself under `Travel.Gap`. Nothing new runs while the bot is not
-on a trip.
+on a trip. As shipped, the 500 ms is the pacer's multisell gate (`gateMultiSell`, `multiSellGap`);
+a stop starts at most once every `signsFresh` (12 h), however it ends; the adena it spends is the
+adena past the trip reserve; and the plain row fills what the stock lacks, below the refill
+threshold or not (`cpLack`).
 
 ## Tests
 

@@ -110,6 +110,9 @@ type (
 	ShopItem                       = botwire.ShopItem
 	BuyList                        = botwire.BuyList
 	SellList                       = botwire.SellList
+	MultiSellItem                  = botwire.MultiSellItem
+	MultiSellEntry                 = botwire.MultiSellEntry
+	MultiSellList                  = botwire.MultiSellList
 	StoreItem                      = botwire.StoreItem
 	PrivateStoreManageListSell     = botwire.PrivateStoreManageListSell
 	PrivateStoreListSell           = botwire.PrivateStoreListSell

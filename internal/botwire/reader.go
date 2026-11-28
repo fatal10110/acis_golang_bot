@@ -67,6 +67,7 @@ var eventDecoders = [256]func(*wire.Reader) Event{
 	OpGameAcquireSkillDone:          func(*wire.Reader) Event { return AcquireSkillDone{} },
 	OpGameBuyList:                   decodeBuyList,
 	OpGameSellList:                  decodeSellList,
+	OpGameMultiSellList:             decodeMultiSellList,
 	OpGameWarehouseDepositList:      decodeWarehouseDepositList,
 	OpGameWarehouseWithdrawList:     decodeWarehouseWithdrawList,
 	OpGameRecipeBookItemList:        decodeRecipeBookItemList,
